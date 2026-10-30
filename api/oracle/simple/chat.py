@@ -60,7 +60,6 @@ from oracle.simple.schemas import (
     ChatThreadOut,
     SimpleChangeIn,
     SimpleChangeResult,
-    SimpleFlag,
     SimpleItemFlags,
     SimplePersonRef,
     WalkDecision,
@@ -1655,20 +1654,6 @@ def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
     return None
 
 
-def _flags_out(flags: list[Any]) -> list[SimpleFlag]:
-    return [
-        SimpleFlag(
-            kind=f.kind,
-            reason=f.reason,
-            fixes=f.fixes,
-            state=f.state,
-            subject=f.subject,
-            risk_note=f.risk_note,
-        )  # fmt: skip
-        for f in flags
-    ]
-
-
 def _as_if(card: SimpleChatCard, read_: service.Read, overlays: dict) -> dict:
     """The reader's overlays with the card's item fields applied (the constraint check)."""
     if card.op not in CARD_OPS_ON_ITEMS or card.item_id is None:
@@ -1746,7 +1731,7 @@ async def cards_out(
             ae = by_id.get(e.row.id)
             if ae is not None:
                 flags = [
-                    SimpleItemFlags(item_id=i, flags=_flags_out(by_id[i].flags))
+                    SimpleItemFlags(item_id=i, flags=service.flags_out(by_id[i]))
                     for i in (ae.row.id, *ae.needed_by)
                     if i in by_id and by_id[i].flags
                 ]

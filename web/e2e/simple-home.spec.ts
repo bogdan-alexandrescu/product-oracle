@@ -84,12 +84,14 @@ for (const phone of [false, true]) {
           await expect(page.getByTestId("hop-drawer")).toBeVisible();
         }
 
-        await expect(page.getByTestId("home-sentence")).toContainText("3 proposals");
+        // fix4 review (qa-simple-home-15): the sentence names what waits; the count is the tile's alone.
+        await expect(page.getByTestId("home-sentence")).toContainText("proposals");
+        await expect(page.getByTestId("home-summary-proposals").locator(".simple-number")).toHaveText("3");
         const goals = page.getByTestId("home-goal");
         await expect(goals).toHaveCount(3);
         const retention = goals.filter({ hasText: "Grow retention" });
-        await expect(retention).toContainText("G-R");
-        await expect(retention.getByTestId("home-goal-weight")).toHaveText(/^\d+% of the score$/);
+        await expect(retention.getByTestId("home-goal-link")).toHaveAttribute("title", /^G-R · /);
+        await expect(retention.getByTestId("home-goal-weight")).toHaveText(/^Counts for \d+% of each feature's score$/);
         await expect(retention.getByTestId("home-goal-path")).toHaveText("From 50 teams · now 100 teams · target 200 teams with weekly alerts on");
         await expect(retention.getByTestId("home-goal-status")).toHaveText("At risk");
         await expect(retention.getByTestId("home-goal-need")).toContainText("need you");
@@ -128,24 +130,24 @@ for (const phone of [false, true]) {
         if (!phone) await expect(page.getByTestId("simple-nav-roadmap-count")).toHaveText("1");
 
         // A broken dependency: Move dependents applies into the roadmap's working draft, with Undo.
-        const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
+        const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
         await expect(broken).toContainText("which it depends on, ends");
-        await broken.getByRole("button", { name: "Move dependents" }).click();
+        await broken.getByRole("button", { name: "Move the dependents" }).first().click();
         await expect(page.getByText("Dependents moved in your working draft")).toBeVisible();
-        await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" })).toHaveCount(0);
+        await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ })).toHaveCount(0);
         await expect(page.getByTestId("home-draft")).toContainText("Your working draft of Alerts roadmap has 2 changes");
         await expect(page.getByTestId("home-draft").getByRole("link", { name: "Open draft" })).toBeVisible();
         await expect(card(page, "since").getByTestId("home-since-row").filter({ hasText: "Weekly alert digest and its dependents after what it depends on" })).toBeVisible();
         await page.getByRole("button", { name: "Undo" }).click();
-        await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" })).toBeVisible();
+        await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ })).toBeVisible();
 
         // Accept as risk asks for its one-line note.
-        const mobile = card(page, "plan").getByTestId("home-broken").filter({ hasText: "Mobile alert push" });
+        const mobile = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Mobile alert push: / });
         await mobile.getByRole("button", { name: "Accept as risk" }).click();
         await mobile.getByLabel("Why the risk is acceptable").fill("Push ships behind a flag");
-        await mobile.getByRole("button", { name: "Save risk note" }).click();
+        await mobile.getByRole("button", { name: "Accept as risk" }).click();
         await expect(page.getByText("Risk accepted in your working draft")).toBeVisible();
-        await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
+        await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Mobile alert push: / })).toHaveCount(0);
       });
 
       test(`an approver decides with the proposed option or chooses another (${where})`, async ({ page }) => {
@@ -166,9 +168,9 @@ for (const phone of [false, true]) {
         await expect(proposals.getByRole("heading", { name: "Your proposals waiting" })).toBeVisible();
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(3);
         await expect(page.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
-        const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-        await expect(broken).toContainText("Admin decides");
-        await broken.getByRole("button", { name: "Propose: Move dependents" }).click();
+        const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
+        await expect(card(page, "plan").getByTestId("home-broken-deciders")).toContainText(/Admin\b.*decides? the fixes you propose here/);
+        await broken.getByRole("button", { name: "Propose: move the dependents" }).first().click();
         await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
         // A long list: the top three, the rest behind "more".
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(3);
@@ -206,7 +208,7 @@ for (const phone of [false, true]) {
         await page.evaluate((fail) => localStorage.removeItem(fail), MOCK_FAIL_KEY);
         await card(page, "meeting").getByRole("button", { name: "Retry" }).click();
         await expect(card(page, "meeting").getByTestId("home-meeting-next")).toBeVisible();
-        await expect(card(page, "meeting").getByRole("link", { name: "Start review" })).toBeVisible();
+        await expect(card(page, "meeting").getByRole("link", { name: /^Start (review|now)$/ })).toBeVisible();
       });
     });
   }
@@ -216,7 +218,6 @@ test("a new company's Home says what it has not got yet", async ({ page, context
   await context.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
   await signIn(page, EMAILS.owner);
   await expect(page.getByTestId("home-goals-empty")).toBeVisible();
-  await expect(page.getByTestId("home-proposals-empty")).toBeVisible();
-  await expect(page.getByTestId("home-decisions-empty")).toBeVisible();
+  await expect(page.getByTestId("home-nothing-waits")).toBeVisible();
   await expect(page.getByTestId("home-since-empty")).toBeVisible();
 });

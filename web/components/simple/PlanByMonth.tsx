@@ -28,7 +28,18 @@ const rowName = (r: PlanStrip["rows"][number]) => (r.milestone && /^M\d{1,2}$/i.
  * the card round it. qa-simple-prd-39/40: the month axis has no label (the page names the
  * PRD), and the commitments past the edge name the rows they are in, as plain text.
  */
-export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanStrip; prd: { slug: string; title: string }; testId?: string }) {
+export function PlanByMonth({
+  plan,
+  prd,
+  testId = "plan-strip",
+  named = false,
+}: {
+  plan: PlanStrip;
+  prd: { slug: string; title: string };
+  testId?: string;
+  /** Home (qa-simple-home-17): the rows name their document ("Guided setup · no milestone · 4 items"). */
+  named?: boolean;
+}) {
   const from = ms(plan.start);
   const span = ms(plan.end) + DAY - from;
   const pct = (day: string) => Math.max(0, Math.min(100, ((ms(day) - from) / span) * 100));
@@ -69,7 +80,7 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
           const left = pct(r.start);
           const width = Math.max(1.5, pct(r.end) - left);
           const n = `${r.items} ${r.items === 1 ? "item" : "items"}`;
-          const label = `${rowName(r)} · ${n}`;
+          const label = named ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : `${rowName(r)} · ${n}`;
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
           return (
             <li key={`${r.name}|${r.date ?? ""}`}>

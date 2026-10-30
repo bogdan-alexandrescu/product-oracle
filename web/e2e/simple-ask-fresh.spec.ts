@@ -147,7 +147,7 @@ for (const [phone, dark] of [
       await signIn(page, "/simple/roadmap");
       const panel = await openAsk(page, phone);
       await tap(panel.getByRole("button", { name: "General", exact: true }));
-      await expect(panel.getByTestId("ask-about")).toHaveText("New chat about General");
+      await expect(panel.getByTestId("ask-about")).toHaveText("New general chat");
       await say(panel, "who owns Weekly alert digest?");
       await tap(panel.getByRole("button", { name: "New chat" }));
       // New chat keeps the scope the reader chose (qa-simple-home-18): back to the page by hand.

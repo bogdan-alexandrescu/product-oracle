@@ -3,9 +3,11 @@
 import Link from "next/link";
 
 import { Button, Panel } from "@/components/ds";
+import { api, unwrap } from "@/lib/api/client";
 import { useMe, type Role } from "@/lib/me";
 
-type Copy = { role: string; steps: { label: string; href: string }[] };
+export type WelcomeCopy = { role: string; steps: { label: string; href: string }[] };
+type Copy = WelcomeCopy;
 
 /**
  * The welcome's words (A1 welcome, #140), by role: what Oracle is for this person and the
@@ -49,14 +51,25 @@ const COPY: Record<Role, Copy> = {
 };
 
 /**
- * Home's welcome for a member who joined through an invite (A1 welcome): drawn first while
- * /v1/setup says so, until they dismiss it (their welcome_dismissed preference). Never an
- * email.
+ * qa-onboarding-6: the same steps on Simple's Home, each opening Simple's page where one
+ * exists; a Settings step carries ?from=simple-setup so its "Back to Home" returns to Simple.
  */
-export function WelcomePanel({ onDismiss, busy }: { onDismiss: () => void; busy: boolean }) {
+const SIMPLE_HREF: Record<string, string> = {
+  "/settings/connections": "/settings/connections?from=simple-setup",
+  "/settings/sources": "/settings/sources?from=simple-setup",
+  "/settings/members": "/settings/members?from=simple-setup",
+  "/documents": "/simple/one-pagers",
+  "/plan": "/simple/roadmap",
+};
+
+/**
+ * The welcome's words for the signed-in person, shared by Detailed's and Simple's Home (one
+ * source, one dismissal): the words of the most they may do, change the company's settings
+ * (an owner), approve a PRD (an approver), comment (a commenter), else read (a viewer).
+ * `mode` "simple" points the steps at Simple's pages where they exist.
+ */
+export function useWelcomeCopy(mode: "detailed" | "simple" = "detailed"): WelcomeCopy {
   const { can } = useMe();
-  // The words of the most a person may do: change the company's settings (an owner), approve
-  // a PRD (an approver), comment (a commenter), else read (a viewer).
   const words: Role = can("put_setting")
     ? "owner"
     : can("approve_version", true)
@@ -65,6 +78,25 @@ export function WelcomePanel({ onDismiss, busy }: { onDismiss: () => void; busy:
         ? "commenter"
         : "viewer";
   const copy = COPY[words];
+  if (mode === "detailed") return copy;
+  return { ...copy, steps: copy.steps.map((s) => ({ ...s, href: SIMPLE_HREF[s.href] ?? s.href })) };
+}
+
+/**
+ * Dismisses the welcome for good (the person's welcome_dismissed preference, read back by
+ * GET /v1/setup's `welcome`): dismissed in one mode, it is gone in both.
+ */
+export function dismissWelcome(): Promise<unknown> {
+  return unwrap(api.PATCH("/v1/me/preferences", { body: { welcome_dismissed: true } }));
+}
+
+/**
+ * Home's welcome for a member who joined through an invite (A1 welcome): drawn first while
+ * /v1/setup says so, until they dismiss it (their welcome_dismissed preference). Never an
+ * email.
+ */
+export function WelcomePanel({ onDismiss, busy }: { onDismiss: () => void; busy: boolean }) {
+  const copy = useWelcomeCopy();
   return (
     <Panel
       title="Welcome to Oracle"

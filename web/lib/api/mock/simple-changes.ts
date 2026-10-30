@@ -39,6 +39,7 @@ import {
   itemDeciderId,
   itemOwnerId,
   lookalikes,
+  shiftPlan,
   ownDates,
   prdCode,
   ROADMAP_SLUGS,
@@ -419,38 +420,12 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
 function fixPlan(db: SimpleDb, op: string, itemId: string, depId: string): Record<string, [string, string]> {
   const items = new Map(roadmapOut(db, "owner", new URLSearchParams())!.items.map((i) => [i.id, i]));
   const item = items.get(itemId)!;
-  const dep = items.get(depId)!;
   if (op === "move_dependency") {
+    const dep = items.get(depId)!;
     const end = addDays(item.start.date, -1);
     return { [depId]: [addDays(dep.start.date, days(dep.end.date, end)), end] };
   }
-  // #9: every direct dependent of `dep` that starts too early moves, not only the one whose
-  // callout was clicked (two items can share a dependency, each estimated or slice-dated);
-  // then the move walks forward transitively through each moved item's own dependents.
-  const moves: Record<string, [string, string]> = {};
-  const queue: string[] = [];
-  for (const n of dep.needed_by) {
-    const next = items.get(n);
-    if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
-    // A sibling whose order on dep was accepted as a risk stays where it is (as the API).
-    if (n !== itemId && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === depId)) continue;
-    const delta = days(next.start.date, addDays(dep.end.date, 1));
-    moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
-    queue.push(n);
-  }
-  while (queue.length) {
-    const cur = queue.shift()!;
-    for (const n of items.get(cur)!.needed_by) {
-      const next = items.get(n);
-      if (!next || moves[n] || next.status === "cut") continue;
-      if (next.start.date <= moves[cur][1]) {
-        const delta = days(next.start.date, addDays(moves[cur][1], 1));
-        moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
-        queue.push(n);
-      }
-    }
-  }
-  return moves;
+  return shiftPlan(items, itemId, depId);
 }
 
 function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {

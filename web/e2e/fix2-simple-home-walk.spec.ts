@@ -62,7 +62,8 @@ test("qa-onboarding-3: a new company's Simple Home has no plan, broken links or 
   await expect(page.getByTestId("home-plan-empty")).toBeVisible();
   await expect(page.getByTestId("home-strip")).toHaveCount(0);
   await expect(page.getByTestId("home-broken")).toHaveCount(0);
-  expect(await tile(page, "broken-links")).toBe(0);
+  // fix4 (qa-onboarding-21): no broken-links tile on a company with nothing planned.
+  await expect(page.getByTestId("home-summary-broken-links")).toHaveCount(0);
   await expect(page.getByTestId("home-sentence")).not.toContainText("broken link");
   await expect(page.getByTestId("home-meeting-empty")).toBeVisible();
   await expect(page.getByTestId("home-meeting-next")).toHaveCount(0);

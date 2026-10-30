@@ -39,14 +39,6 @@ async function openAsk(page: Page): Promise<Locator> {
   return panel;
 }
 
-/** How many lines an element's text takes (its height over its line height). */
-const lines = (l: Locator) =>
-  l.evaluate((el) => {
-    const s = getComputedStyle(el);
-    const line = parseFloat(s.lineHeight) || parseFloat(s.fontSize) * 1.2;
-    return Math.round(el.getBoundingClientRect().height / line);
-  });
-
 test("an established company's Simple Home has no Set up card; a new company's leads with it", async ({ page }) => {
   // fails_when: the 8-row Set up card closes every established owner's Simple Home while a step is open
   await signIn(page, ADMIN.email, null);
@@ -71,9 +63,10 @@ test("at 1440 px with Ask open, a goal card's code and its share of the score st
   const goals = page.getByTestId("home-goal");
   await expect(goals.getByTestId("home-goal-weight").first()).toBeVisible();
   for (const g of await goals.all()) {
-    expect(await lines(g.locator(".simple-code"))).toBe(1);
+    // fix4 (qa-simple-home-13, -26): no code on the card; the share in words wraps inside the card, never past it.
+    await expect(g.locator(".simple-code")).toHaveCount(0);
     const weight = g.getByTestId("home-goal-weight");
-    if (await weight.count()) expect(await lines(weight)).toBe(1);
+    if (await weight.count()) expect(await weight.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   }
 });
 

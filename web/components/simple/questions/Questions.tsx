@@ -90,8 +90,16 @@ export function useQuestionActions(onDone: () => unknown, sessionId?: string | n
 
 /** "Ask Oracle" on a question: Simple's Ask panel opens with the question in its box. */
 export function askAbout(q: Question) {
-  askWith(`${q.code} ${q.title} in ${q.prd.title}: what should we decide?${q.recommendation ? ` The PRD recommends: ${q.recommendation}.` : ""}`);
+  askWith(`${q.code} ${q.title} in ${q.prd.title}: what should we decide?${q.recommendation ? ` ${recommendsLine(q)}.` : ""}`);
 }
+
+/**
+ * qa-simple-home-4: who recommends what, said one way wherever a question shows (Home's row,
+ * Decisions, a meeting's agenda, the walk): "<document title> recommends".
+ */
+export const recommendsLabel = (q: Question): string => `${q.prd.title} recommends`;
+/** "<document title> recommends: <answer>"; null when the document recommends nothing yet. */
+export const recommendsLine = (q: Question): string | null => (q.recommendation ? `${recommendsLabel(q)}: ${q.recommendation}` : null);
 
 /** "Late · due Fri Oct 23" in the late tone, "Due Fri Nov 13" quiet: a chip, as the mock-up draws it. */
 export function DueLabel({ q }: { q: Question }) {
@@ -123,7 +131,13 @@ export function useSourceLine(questions: Question[]): string | null {
   return `From ${name}${last ? ` · read ${formatInZone(last, zone, { month: "short", day: "numeric" })}` : ""}`;
 }
 
-/** The question's alternatives as chips and "Something else…" (a text field and Decide). */
+/** A chosen chip (qa-simple-home-28): filled and solid, as the pressed state reads. */
+const CHIP_ON = "!border-solid !border-accent !bg-accent-soft !text-accent-ink";
+
+/**
+ * The question's answers as chips: the recommended one first (qa-simple-home-6: it stays offered
+ * while the others show), its alternatives, and "Something else…" (a text field and Decide).
+ */
 export function AnotherAnswer({ q, busy, onPick }: { q: Question; busy: boolean; onPick: (a: Answer) => void }) {
   const [other, setOther] = useState(false);
   const [text, setText] = useState("");
@@ -132,12 +146,23 @@ export function AnotherAnswer({ q, busy, onPick }: { q: Question; busy: boolean;
     <div data-testid="question-answers" className="mt-1.5 flex flex-col">
       <span className="simple-meta">Another answer:</span>
       <div role="group" aria-label={`Answers for ${q.code}`} className="simple-chips">
+        {q.recommendation && (
+          <button type="button" aria-pressed={false} disabled={busy} data-testid="question-answer-recommended" className="simple-chip" onClick={() => onPick({ option: "recommended" })}>
+            {q.recommendation} (recommended)
+          </button>
+        )}
         {q.alternatives.map((o) => (
-          <button key={o.key} type="button" role="radio" aria-checked={false} disabled={busy} className="simple-chip" onClick={() => onPick({ option: o.key })}>
+          <button key={o.key} type="button" aria-pressed={false} disabled={busy} className="simple-chip" onClick={() => onPick({ option: o.key })}>
             {o.label}
           </button>
         ))}
-        <button type="button" role="radio" aria-checked={other} disabled={busy} className="simple-chip simple-chip-dashed" onClick={() => setOther(true)}>
+        <button
+          type="button"
+          aria-pressed={other}
+          disabled={busy}
+          className={`simple-chip simple-chip-dashed ${other ? CHIP_ON : ""}`}
+          onClick={() => setOther((o) => !o)}
+        >
           Something else…
         </button>
       </div>
@@ -157,7 +182,7 @@ export function AnotherAnswer({ q, busy, onPick }: { q: Question; busy: boolean;
             placeholder="Your answer, in one line"
             className="h-10 min-w-0 flex-1 rounded-[10px] border border-line-strong bg-bg px-3 text-[16px] text-text"
           />
-          <button type="submit" className="simple-button simple-button-primary" disabled={busy || !text.trim()}>
+          <button type="submit" className="simple-button" disabled={busy || !text.trim()}>
             {verb}
           </button>
         </form>
@@ -221,21 +246,38 @@ type Mode = "list" | "needs_input" | "recommended" | "decided" | "due";
 
 /**
  * One question as the mock-up's row (option A): the round flag icon; "<code> <title>"; the
- * due chip and what it blocks; "PRD recommends" and its words; then, in a right-hand column
+ * due chip and what it blocks; "<document> recommends:" and its words; then, in a right-hand column
  * (under the row on a phone or in a Board column), the buttons the person's rights allow where
  * it is shown (`mode`): List, Home and a meeting's agenda ("due") have Decide as recommended,
  * Another answer (the alternatives as chips under the row) and Ask Oracle; the Board's columns
  * their own. A question decided in a meeting stays on its agenda, with Undo for who decided it.
  */
+const ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+
+/**
+ * "Blocks M1: F-03 Health log" in plain words: "Blocks Health log, first milestone" (qa-simple-home-13),
+ * from the blocks' own fields (the features' titles, the milestone's number), so no code shows,
+ * whatever form the label's codes take.
+ */
+export function plainBlocks(blocks: Schemas["SimpleQuestion"]["blocks"] & object): string {
+  const n = Number(/^M(\d{1,2})$/.exec(blocks.milestone ?? "")?.[1]);
+  const milestone = n ? (ORDINALS[n - 1] ? `${ORDINALS[n - 1]} milestone` : `milestone ${n}`) : (blocks.milestone_name ?? null);
+  const what = [(blocks.features ?? []).map((f) => f.title).join(", "), milestone].filter(Boolean).join(", ");
+  return what ? `Blocks ${what}` : "Blocks a milestone";
+}
+
 export function QuestionRow({
   q,
   mode,
   actions,
   as: Tag = "li",
   testId = "question-row",
+  plain = false,
 }: {
   q: Question;
   mode: Mode;
+  /** Simple's Home (qa-simple-home-13): names, no codes; the code stays in the title's tooltip. */
+  plain?: boolean;
   actions: ReturnType<typeof useQuestionActions>;
   as?: "li" | "div";
   testId?: string;
@@ -249,11 +291,33 @@ export function QuestionRow({
   // Cancel in a picker gives the focus back to the button it replaced.
   const nameRef = useRef<HTMLButtonElement>(null);
   const askRef = useRef<HTMLButtonElement>(null);
-  const refocus = useRef<"people" | "answerer" | null>(null);
+  const anotherRef = useRef<HTMLButtonElement>(null);
+  const answersRef = useRef<HTMLDivElement>(null);
+  const refocus = useRef<"people" | "answerer" | "answers" | null>(null);
   useEffect(() => {
     if (!refocus.current || open) return;
-    (refocus.current === "people" ? nameRef : askRef).current?.focus();
+    (refocus.current === "people" ? nameRef : refocus.current === "answers" ? anotherRef : askRef).current?.focus();
     refocus.current = null;
+  }, [open]);
+  // qa-simple-home-28: Escape, or a click anywhere else, closes the answers (Escape gives the focus back to Another answer).
+  useEffect(() => {
+    if (open !== "answers") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      refocus.current = "answers";
+      setOpen(null);
+    };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (t && (answersRef.current?.contains(t) || anotherRef.current?.contains(t))) return;
+      setOpen(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
   }, [open]);
   const done = q.column === "decided" || mode === "decided";
   const recommended = !!q.recommendation && writes && !done;
@@ -261,7 +325,7 @@ export function QuestionRow({
   // qa-simple-decide-44: the answer itself, not "as recommended".
   const here = [`Decided in this meeting${q.chosen ? `: ${q.chosen}` : ""}`, q.decided_by?.name, at].filter(Boolean).join(" · ");
   const another = (label: string) => (
-    <button type="button" aria-pressed={open === "answers"} aria-expanded={open === "answers"} className="simple-button" onClick={() => toggle("answers")}>
+    <button type="button" ref={anotherRef} aria-pressed={open === "answers"} aria-expanded={open === "answers"} className="simple-button" onClick={() => toggle("answers")}>
       {label}
     </button>
   );
@@ -278,7 +342,8 @@ export function QuestionRow({
   } else {
     const nameIt = q.missing === "decider" && q.can.name_decider;
     const askSomeone = q.missing === "recommendation" && writes;
-    const primary = recommended && open !== "answers";
+    // qa-simple-home-6: the column stays as it was while the answers show (the recommended one is a chip there too).
+    const primary = recommended;
     buttons = (
       <>
         {primary && (
@@ -288,12 +353,12 @@ export function QuestionRow({
         )}
         {writes && another("Another answer")}
         {nameIt && open !== "people" && (
-          <button type="button" ref={nameRef} className={`simple-button ${primary || open === "answers" ? "" : "simple-button-primary"}`} onClick={() => toggle("people")}>
+          <button type="button" ref={nameRef} className={`simple-button ${primary ? "" : "simple-button-primary"}`} onClick={() => toggle("people")}>
             Name a decider
           </button>
         )}
         {askSomeone && open !== "answerer" && (
-          <button type="button" ref={askRef} className={`simple-button ${primary || open === "answers" ? "" : "simple-button-primary"}`} onClick={() => toggle("answerer")}>
+          <button type="button" ref={askRef} className={`simple-button ${primary ? "" : "simple-button-primary"}`} onClick={() => toggle("answerer")}>
             Ask someone to answer
           </button>
         )}
@@ -308,7 +373,15 @@ export function QuestionRow({
       </span>
       <div className="simple-rb">
         <span className="break-words">
-          <span className="simple-code">{q.code}</span> <b className="font-[650]">{q.title}</b>
+          {plain ? (
+            <b className="font-[650]" title={`${q.code} · ${q.title}`}>
+              {q.title}
+            </b>
+          ) : (
+            <>
+              <span className="simple-code">{q.code}</span> <b className="font-[650]">{q.title}</b>
+            </>
+          )}
         </span>
         {done ? (
           <span className="simple-meta" data-testid="question-decided">
@@ -319,7 +392,7 @@ export function QuestionRow({
             <span className="simple-meta">
               <DueLabel q={q} />
               {q.due_label && q.blocks ? " · " : ""}
-              {q.blocks?.label}
+              {plain && q.blocks ? plainBlocks(q.blocks) : q.blocks?.label}
             </span>
           )
         )}
@@ -333,7 +406,7 @@ export function QuestionRow({
           )
         ) : q.recommendation ? (
           <span className="simple-rec">
-            <span className="simple-rec-label">PRD recommends</span>{" "}
+            <span className="simple-rec-label">{recommendsLabel(q)}:</span>{" "}
             {q.recommendation}
           </span>
         ) : (
@@ -346,14 +419,16 @@ export function QuestionRow({
           </span>
         )}
         {open === "answers" && (
-          <AnotherAnswer
-            q={q}
-            busy={busy}
-            onPick={(a) => {
-              setOpen(null);
-              void decide(q, a);
-            }}
-          />
+          <div ref={answersRef}>
+            <AnotherAnswer
+              q={q}
+              busy={busy}
+              onPick={(a) => {
+                setOpen(null);
+                void decide(q, a);
+              }}
+            />
+          </div>
         )}
         {(open === "people" || open === "answerer") && (
           <PersonPicker

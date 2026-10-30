@@ -1,20 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { setupOpen } from "@/app/home/_setup";
+import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
+import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { Icon } from "@/components/ds/Icon";
-import { toast } from "@/components/ds/Toast";
+import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import {
   beforeAfter,
@@ -37,8 +38,8 @@ import { invalidateWaiting, loadInbox, waitingChanged } from "@/lib/waiting";
 type Change = Schemas["SimpleChangeOut"];
 type Decision = Schemas["DecisionOut"];
 
-/** Where a proposal is reviewed: the roadmap's "Needs a decision" list. */
-const REVIEW = "/simple/roadmap?review=1";
+/** Where a proposal is reviewed: the roadmap's "Needs a decision" list, at its Proposals part (qa-simple-home-14). */
+const REVIEW = "/simple/roadmap?review=proposals";
 
 /** A broken link's one-click fixes, and what each did, in a toast ("Risk accepted in your working draft"). */
 type FixOp = "shift_dependents" | "move_dependency" | "accept_risk";
@@ -48,32 +49,51 @@ const FIX_DONE: Record<FixOp, string> = {
   move_dependency: "Dependency moved",
   accept_risk: "Risk accepted",
 };
-/** A fix's button words ("Move dependents"). */
+/** A fix's button words, the Roadmap's (qa-simple-home-12: OP_WORDS, one wording in both places). */
 const FIX_WORDS: Record<FixOp, string> = {
-  shift_dependents: "Move dependents",
-  move_dependency: "Move dependency",
+  shift_dependents: OP_WORDS.shift_dependents,
+  move_dependency: OP_WORDS.move_dependency,
   accept_risk: "Accept as risk",
 };
 
 /**
- * The Set up checklist's steps in Simple's words, each opening where it is done (the same
- * pages as Detailed Home's checklist, app/home/_setup.tsx). A step this build has no words for
- * keeps its row, under its key's words, with no link.
+ * Where each Set up step opens from Simple (the same pages as Detailed Home's checklist,
+ * app/home/_setup.tsx, whose words and figures the card reads: qa-onboarding-19), with
+ * from=simple-setup so the step's "Back to Home" returns here (qa-onboarding-34). A step this
+ * build has no page for keeps its row with no link.
  */
-const SETUP_STEPS: Record<string, { label: string; href: string }> = {
-  connect: { label: "Connect your tools", href: "/settings/connections?from=setup" },
-  sources: { label: "Pick your sources", href: "/settings/sources?from=setup" },
-  invite: { label: "Invite your team", href: "/settings/members?from=setup" },
-  domains: { label: "Add the company's email domains", href: "/settings/sources?from=setup#company-domains" },
-  eng_lead: { label: "Name the engineering lead", href: "/settings/members?from=setup#engineering-lead" },
-  horizons: { label: "Check the planning horizons", href: "/settings/company?from=setup#horizons" },
-  timezone: { label: "Set the company time zone", href: "/settings/company?from=setup#timezone" },
-  build_baseline: { label: "Build the baseline", href: "/baseline?build=1" },
+const SETUP_STEPS: Record<string, string> = {
+  connect: "/settings/connections?from=simple-setup",
+  sources: "/settings/sources?from=simple-setup",
+  invite: "/settings/members?from=simple-setup",
+  domains: "/settings/sources?from=simple-setup#company-domains",
+  eng_lead: "/settings/members?from=simple-setup#engineering-lead",
+  horizons: "/settings/company?from=simple-setup#horizons",
+  timezone: "/settings/company?from=simple-setup#timezone",
+  build_baseline: "/baseline?build=1",
 };
-const stepWords = (key: string) => {
-  const w = key.replace(/_/g, " ");
-  return w.charAt(0).toUpperCase() + w.slice(1);
-};
+
+/** An item code before a name ("F-06 Weekly alert digest"): Simple says the name alone (qa-simple-home-13). */
+const withoutCodes = (text: string) => text.replace(/\b[A-Z]{1,3}-\d{1,4}\s+/g, "");
+
+/** The sentence under a broken link's item, without the item's name the heading already says (qa-simple-home-11). */
+function problemWords(reason: string, title: string): string {
+  const own = [`'${title}' `, `'${title.length <= 40 ? title : `${title.slice(0, 39)}…`}' `].find((p) => reason.startsWith(p));
+  const rest = own ? reason.slice(own.length) : reason;
+  const plain = rest.replace(/(^|[\s(])'([^']+?)'(?=[\s,.)]|$)/g, "$1$2");
+  return plain.charAt(0).toUpperCase() + plain.slice(1);
+}
+
+const joinAnd = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : (xs[0] ?? ""));
+
+/**
+ * What "Move the dependents" moves (qa-simple-home-1): the items the flag names (SimpleFlag.moves),
+ * as the change engine moves them, the clicked item first.
+ */
+function shiftMoves(b: BrokenLink, items: Schemas["SimpleRoadmapItem"][]): Schemas["SimpleRoadmapItem"][] {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  return (b.flag.moves ?? []).map((id) => byId.get(id)).filter((i): i is Schemas["SimpleRoadmapItem"] => !!i);
+}
 
 const STATUS_TONE: Record<GoalTile["status"], string> = {
   "At risk": "simple-status-risk",
@@ -98,6 +118,8 @@ export default function SimpleHome() {
   // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
   const [walking, setWalking] = useState(false);
   const k = (name: string) => `simple-home|${name}|${stamp}`;
+  // qa-simple-home-30: Home's toasts sit bottom-left over the rail, clear of the rows' buttons.
+  useEffect(() => setToastPlace("rail"), []);
   const reloadAll = () => {
     invalidateWaiting();
     setStamp((s) => s + 1);
@@ -190,7 +212,7 @@ export default function SimpleHome() {
     [ranked, roadmap.data, priorities.data],
   );
   const plan = useMemo(
-    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").flatMap(planInputs), roadmap.data.today) : null),
+    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").flatMap(planInputs), roadmap.data.today, roadmap.data.windows.now.end) : null),
     [roadmap.data, planPrd],
   );
   const draft = (drafts.data ?? []).find((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
@@ -201,6 +223,8 @@ export default function SimpleHome() {
   const itemTitle = (id: unknown) => roadmap.data?.items.find((i) => i.id === id)?.title ?? "An item";
 
   const now = new Date();
+  /** A moment's day in the company zone, comparable ("2026-10-30"). */
+  const zoneDay = (iso: string) => formatInZone(iso, zone, { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/(\d+)\/(\d+)\/(\d+)/, "$3-$1-$2");
   const hour = Number(formatInZone(now.toISOString(), zone, { hour: "numeric", hourCycle: "h23" }).replace(/\D.*$/, "")) || 9;
   // A person with no name is greeted plainly, never by their email's local part.
   const firstName = (me?.name ?? "").trim().split(/\s/)[0];
@@ -213,22 +237,47 @@ export default function SimpleHome() {
     [proposalRows === toDecide ? toDecide.length : 0, "proposal", "proposals"],
     [brokenMine, "broken link", "broken links"],
   ]);
-  const proposable = `${brokenOthers} ${brokenOthers === 1 ? "broken link" : "broken links"} you can propose fixes for.`;
+  const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
   const sentence = reads
     ? "Here is where the plan stands."
     : brokenOthers === 0
       ? waits
       : brokenMine + decisionCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
-        ? proposable
-        : `${waits} Also ${proposable}`;
+        ? `You can propose fixes for ${brokenWords}.`
+        : `${waits} You can also propose fixes for ${brokenWords}.`;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
   const counted = [waiting, changes, roadmap, meeting].every((q) => q.data !== undefined || !!q.error);
   const nothingToWalk = counted && decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
+  // qa-simple-home-16: nothing waits on me (no decision, no proposal): one line, not two empty cards and two 0 tiles.
+  // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
+  const decisionRows = waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined;
+  const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
+  const proposalsEmpty = !!changes.data && proposalRows.length === 0;
+  const quiet = decisionsEmpty && proposalsEmpty && mineApart.length === 0;
+  // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
+  const tilesShown = (
+    [
+      ["decisions", waiting.data ? decisionCount : null, "decisions waiting for you", "decisions"],
+      ["proposals", changes.data ? proposalRows.length : null, proposalRows === toDecide ? "proposals on your items" : "of your proposals waiting", "proposals"],
+      ["broken-links", roadmap.data ? broken.length : null, "broken links", "broken links"],
+    ] as const
+  ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty : !proposalsEmpty));
   // The goal band's weights as their share of the score ("50% of the score").
   const weightSum = (tiles ?? []).reduce((n, g) => n + (g.weight != null && g.weight > 0 ? g.weight : 0), 0);
+  /** A goal's features on the roadmap (filtered to it), or Priorities when none is planned yet. */
+  const goalHref = (id: string) => {
+    const key = roadmap.data?.items.find((i) => i.goal?.id === id)?.goal?.key;
+    return key ? `/simple/roadmap?goal=${encodeURIComponent(key)}` : "/simple/priorities";
+  };
   const share = (w: number | null) => (w != null && w > 0 && weightSum > 0 ? Math.round((w / weightSum) * 100) : null);
   // The broken-links list's heading names the roadmaps they are on.
   const brokenRoadmaps = [...new Set(broken.map((b) => b.item.roadmap.title))];
+  const brokenByItem = useMemo(() => {
+    const by = new Map<string, BrokenLink[]>();
+    for (const b of broken) by.set(b.item.id, [...(by.get(b.item.id) ?? []), b]);
+    return [...by.values()];
+  }, [broken]);
+  const brokenDeciders = [...new Set(broken.filter((b) => !b.item.can_decide).flatMap((b) => (b.item.deciders.length ? b.item.deciders : ["the decider"])))];
 
   const proposalRow = (c: Change) => (
     <HomeRow
@@ -299,7 +348,7 @@ export default function SimpleHome() {
           };
     try {
       const r = await unwrap(api.POST("/v1/simple/changes", { body }));
-      const message = await changeResult(r, `${FIX_DONE[op]} in your working draft`);
+      const message = await changeResult(r, `${FIX_DONE[op]} in your working draft${op === "accept_risk" ? "" : await movedWords(r.change)}`);
       const id = r.change.status === "applied" && r.change.can_undo ? r.change.id : null;
       toast(
         id
@@ -310,6 +359,28 @@ export default function SimpleHome() {
       toast({ message: errorMessage(e) });
     }
     reloadAll();
+  }
+
+  /**
+   * qa-simple-home-2: what a move did, beyond the row clicked: each item moved and its new
+   * dates, and any of them now ending after its milestone (the roadmap read again).
+   */
+  async function movedWords(c: Change): Promise<string> {
+    if (c.status !== "applied") return "";
+    const after = c.after as Record<string, { start_date?: string | null; end_date?: string | null } | undefined>;
+    const ids = Object.keys(after).filter((id) => after[id]?.end_date);
+    if (!ids.length) return "";
+    const fresh = await unwrap(api.GET("/v1/simple/roadmap")).catch(() => roadmap.data);
+    const day = (d: string) => calendarDay(d, { month: "short", day: "numeric" });
+    const moved = ids.map((id) => {
+      const a = after[id]!;
+      return `${fresh?.items.find((i) => i.id === id)?.title ?? itemTitle(id)} now ${a.start_date ? `${day(a.start_date)} – ` : "ends "}${day(a.end_date!)}`;
+    });
+    const late = ids.flatMap((id) => {
+      const i = fresh?.items.find((x) => x.id === id);
+      return (i?.flags ?? []).filter((f) => f.kind === "outside_milestone" && f.state === "red").map((f) => `${i!.title} ${problemWords(f.reason, i!.title).replace(/^./, (x) => x.toLowerCase())}`);
+    });
+    return `: ${joinAnd(moved)}.${late.length ? ` ${late.join(". ")}.` : ""}`;
   }
 
   function decide(d: Decision, key: string) {
@@ -369,7 +440,9 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
-      {setupFirst && setup && <SetupCard setup={setup} onHide={() => void hideSetup()} />}
+      {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
+      <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
+      {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
 
       <section aria-label="Goals" data-testid="home-goals">
         <Block q={{ ...goals, data: tiles }} testId="home-goals" skeleton={<GoalBandSkeleton />}>
@@ -382,21 +455,26 @@ export default function SimpleHome() {
               <ul className="simple-goal-band">
                 {rows.map((g) => (
                   <li key={g.id} data-testid="home-goal" className="simple-goal">
-                    {/* With Ask open the cards narrow: the code and the share each keep one line, the share moving under. */}
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="simple-code whitespace-nowrap">{g.code}</span>
-                      {g.guardrail && <span className="simple-tag">guardrail</span>}
-                      {share(g.weight) != null && (
-                        <span
-                          data-testid="home-goal-weight"
-                          title="How much this goal counts in each feature's priority score"
-                          className="simple-small ml-auto tnum whitespace-nowrap"
-                        >
-                          {share(g.weight)}% of the score
-                        </span>
-                      )}
-                    </div>
-                    <span className="font-semibold">{g.name}</span>
+                    {/* With Ask open the cards narrow: the guardrail tag and the share each keep one line, the share moving under. */}
+                    {(g.guardrail || share(g.weight) != null) && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {g.guardrail && <span className="simple-tag">guardrail</span>}
+                        {share(g.weight) != null && (
+                          <span data-testid="home-goal-weight" className="simple-small tnum">
+                            Counts for {share(g.weight)}% of each feature&apos;s score
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* qa-simple-home-26: the goal opens its features on the roadmap; its code (qa-simple-home-13) only in the tooltip. */}
+                    <Link
+                      href={goalHref(g.id)}
+                      data-testid="home-goal-link"
+                      title={g.code ? `${g.code} · ${g.name}` : g.name}
+                      className="font-semibold text-text hover:underline"
+                    >
+                      {g.name}
+                    </Link>
                     {g.path && (
                       <span data-testid="home-goal-path" className="simple-small tnum">
                         {g.path}
@@ -421,26 +499,26 @@ export default function SimpleHome() {
         </Block>
       </section>
 
-      {!reads && (
+      {!reads && (tilesShown.length > 0 || draft) && (
         <section aria-label="Summary" data-testid="home-summary" className="simple-card">
-          <ul className="grid grid-cols-3 gap-3 max-[600px]:gap-2">
-            {[
-              ["decisions", waiting.data ? decisionCount : null, "decisions waiting for you"],
-              ["proposals", changes.data ? proposalRows.length : null, proposalRows === toDecide ? "proposals on your items" : "of your proposals waiting"],
-              ["broken-links", roadmap.data ? broken.length : null, "broken links"],
-            ].map(([id, n, label]) => (
-              <li key={id as string}>
+          {tilesShown.length > 0 && (
+          <ul className="grid gap-3 max-[600px]:gap-2" style={{ gridTemplateColumns: `repeat(${tilesShown.length}, minmax(0, 1fr))` }}>
+            {tilesShown.map(([id, n, label, short]) => (
+              <li key={id}>
                 <a
                   href={`#${id}`}
                   data-testid={`home-summary-${id}`}
                   className="flex h-full flex-col rounded-xl bg-surface2 px-4 py-3 hover:bg-accent-soft max-[600px]:px-2.5 max-[600px]:py-2"
                 >
                   <span className="simple-number tnum max-[600px]:text-[22px]! max-[600px]:leading-7!">{n ?? "–"}</span>
-                  <span className="simple-small max-[600px]:text-[13px]! max-[600px]:leading-4">{label}</span>
+                  {/* qa-onboarding-20: on a phone the label is its short form, on one line. */}
+                  <span className="simple-small max-[600px]:hidden">{label}</span>
+                  <span className="simple-small hidden max-[600px]:block max-[600px]:text-[13px]! max-[600px]:leading-4">{short}</span>
                 </a>
               </li>
             ))}
           </ul>
+          )}
           {draft && (
             <p data-testid="home-draft" className="flex flex-wrap items-center justify-between gap-3">
               <span>
@@ -459,16 +537,29 @@ export default function SimpleHome() {
         </section>
       )}
 
-      {!reads && (
+      {!reads && quiet && (
+        <section aria-label="Waiting for you" data-testid="home-nothing-waits" className="simple-card">
+          <p className="simple-small">
+            Nothing waits on you.{" "}
+            {decidesAll
+              ? "Decisions and proposals on your items show here when they come."
+              : "You can propose a change from the roadmap, or comment on a one-pager."}{" "}
+            <Link href="/simple/roadmap" className="simple-link">
+              Open the roadmap
+            </Link>
+          </p>
+        </section>
+      )}
+
+      {!reads && !decisionsEmpty && (
         <HomeCard
           id="decisions"
           icon="flag"
           title="Decisions waiting for you"
-          count={waiting.data?.count}
           all="/simple/decisions"
           allLabel="All decisions"
         >
-          <Block q={{ ...decisions, error: waiting.error ?? decisions.error, data: waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined }} testId="home-decisions">
+          <Block q={{ ...decisions, error: waiting.error ?? decisions.error, data: decisionRows }} testId="home-decisions">
             {(rows) =>
               rows.length === 0 ? (
                 <p className="simple-small" data-testid="home-decisions-empty">
@@ -478,7 +569,7 @@ export default function SimpleHome() {
                 <Top rows={rows} max={phone ? 2 : 3} more="/simple/decisions" what="of the decisions">
                   {(d) =>
                     "code" in d ? (
-                      <QuestionRow key={d.id} q={d} mode="list" testId="home-question" actions={questionActions} />
+                      <QuestionRow key={d.id} q={d} mode="list" testId="home-question" actions={questionActions} plain />
                     ) : (
                       <DecisionRow key={d.id} d={d} onDecide={decide} />
                     )
@@ -490,8 +581,8 @@ export default function SimpleHome() {
         </HomeCard>
       )}
 
-      {!reads && (
-        <HomeCard id="proposals" icon="comment" title={proposalTitle} count={changes.data ? proposalRows.length : null} all={REVIEW} allLabel="All proposals">
+      {!reads && !proposalsEmpty && (
+        <HomeCard id="proposals" icon="comment" title={proposalTitle} all={REVIEW} allLabel="All proposals">
           <Block q={changes} testId="home-proposals">
             {() =>
               proposalRows.length === 0 ? (
@@ -509,7 +600,7 @@ export default function SimpleHome() {
       )}
 
       {!reads && mineApart.length > 0 && (
-        <HomeCard id="my-proposals" icon="comment" title="Your proposals waiting" count={mineApart.length} all={REVIEW} allLabel="All your proposals">
+        <HomeCard id="my-proposals" icon="comment" title="Your proposals waiting" all={REVIEW} allLabel="All your proposals">
           <Block q={changes} testId="home-my-proposals">
             {() => (
               <Top rows={mineApart} more={REVIEW} what="of your proposals">
@@ -566,8 +657,9 @@ export default function SimpleHome() {
                         Open meeting
                       </Link>
                     ) : next.can_start ? (
+                      /* qa-simple-home-27: before its day the start is said as early ("Start now"). */
                       <Link href={`/simple/meetings?start=${next.ritual_id}`} className="simple-button simple-button-primary">
-                        Start review
+                        {zoneDay(next.due_at) > zoneDay(now.toISOString()) ? "Start now" : "Start review"}
                       </Link>
                     ) : undefined
                   }
@@ -599,7 +691,7 @@ export default function SimpleHome() {
               {planPrd === undefined ? (
                 <SkeletonRows />
               ) : plan && planPrd ? (
-                <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" />
+                <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" named />
               ) : (
                 <p className="simple-small" data-testid="home-plan-empty">
                   Nothing planned this quarter yet.
@@ -613,16 +705,35 @@ export default function SimpleHome() {
                       Broken links{brokenRoadmaps.length ? ` · ${brokenRoadmaps.join(", ")}` : ""}
                     </span>
                   </h3>
-                  {/* Every broken link the summary counts, never only the first three. */}
-                  <Top rows={broken} max={broken.length} more="/simple/roadmap">
-                    {(b) => (
-                      <BrokenRow
-                        key={`${b.item.id}-${b.flag.kind}-${b.flag.subject}`}
-                        b={b}
-                        reads={reads}
-                        onFix={fix}
-                        proposed={mine.find((c) => FIX_OPS.has(c.op) && c.target.item_id === b.item.id && (c.target.subject ?? null) === (b.flag.subject ?? null))}
-                        nameOf={nameOf}
+                  {/* qa-simple-home-9: who decides the fixes I may only propose, said once. */}
+                  {!reads && brokenDeciders.length > 0 && (
+                    <p data-testid="home-broken-deciders" className="simple-small">
+                      {joinAnd(brokenDeciders)} {brokenDeciders.length > 1 ? "decide" : "decides"} the fixes you propose here.
+                    </p>
+                  )}
+                  {/* Every broken link the summary counts, never only the first three; one heading per item (qa-simple-home-11). */}
+                  <Top rows={brokenByItem} max={brokenByItem.length} more="/simple/roadmap">
+                    {(links) => (
+                      <HomeRow
+                        key={links[0].item.id}
+                        testId="home-broken-item"
+                        lead={<RowIcon name="alert" />}
+                        title={<span className="text-crit">{links[0].item.title}</span>}
+                        meta={
+                          <ul className="flex flex-col gap-3">
+                            {links.map((b) => (
+                              <BrokenRow
+                                key={`${b.item.id}-${b.flag.kind}-${b.flag.subject}`}
+                                b={b}
+                                reads={reads}
+                                onFix={fix}
+                                moves={b.flag.fixes.includes("shift_dependents") ? shiftMoves(b, roadmap.data?.items ?? []) : []}
+                                proposed={mine.find((c) => FIX_OPS.has(c.op) && c.target.item_id === b.item.id && (c.target.subject ?? null) === (b.flag.subject ?? null))}
+                                nameOf={nameOf}
+                              />
+                            ))}
+                          </ul>
+                        }
                       />
                     )}
                   </Top>
@@ -729,7 +840,7 @@ export default function SimpleHome() {
                       key={r.key}
                       testId="home-since-row"
                       lead={<RowIcon name={r.icon} />}
-                      title={r.title}
+                      title={withoutCodes(r.title)}
                       meta={`${r.who && r.status ? `${r.who} · ${r.status} · ` : ""}${formatInZone(r.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
                     />
                   )}
@@ -745,29 +856,53 @@ export default function SimpleHome() {
   );
 }
 
-/** Set up (qa-onboarding-4): Detailed Home's checklist on Simple's Home, a welcome and each step, until all are done. */
-function SetupCard({ setup, onHide }: { setup: Schemas["SetupOut"]; onHide: () => void }) {
+/**
+ * Set up (qa-onboarding-4): Detailed Home's checklist on Simple's Home, a welcome and each
+ * step, until all are done. Its steps say Detailed's words and figures ("Connect tools · 1
+ * connected", qa-onboarding-19), its header a progress ring, not a tick; on a phone the count
+ * and Hide sit under the title (qa-onboarding-20). A member who is not an owner sees only their
+ * own steps, in their words.
+ */
+function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner: boolean; onHide: () => void }) {
+  const count = (
+    <>
+      <span data-testid="home-setup-progress" className="simple-small tnum whitespace-nowrap">
+        {setup.done} of {setup.total} done
+      </span>
+      <button type="button" className="simple-button simple-button-quiet" onClick={onHide}>
+        Hide
+      </button>
+    </>
+  );
+  const part = setup.total > 0 ? setup.done / setup.total : 0;
   return (
     <HomeCard
       id="setup"
       icon="check"
-      title="Welcome: set up Oracle"
+      badge={
+        <span role="img" aria-label={`${setup.done} of ${setup.total} done`} data-testid="home-setup-ring" className="grid size-9 flex-none place-items-center rounded-full bg-accent-soft">
+          <svg viewBox="0 0 36 36" className="size-7 -rotate-90" aria-hidden>
+            <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeWidth="4" className="text-line-strong" />
+            <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeWidth="4" className="text-accent-ink" strokeDasharray={`${(part * 88).toFixed(1)} 88`} strokeLinecap="round" />
+          </svg>
+        </span>
+      }
+      title={owner ? "Welcome: set up Oracle" : "Set up your own tools"}
       extra={
-        <>
-          <span data-testid="home-setup-progress" className="simple-small tnum whitespace-nowrap">
-            {setup.done} of {setup.total} done
-          </span>
-          <button type="button" className="simple-button simple-button-quiet" onClick={onHide}>
-            Hide
-          </button>
-        </>
+        <span data-testid="home-setup-count" className="flex items-center gap-3 max-[600px]:basis-full max-[600px]:pl-12">
+          {count}
+        </span>
       }
     >
-      <p className="simple-small">A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the baseline it plans from. Each step opens where it is done.</p>
+      <p className="simple-small">
+        {owner
+          ? "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the baseline it plans from. Each step opens where it is done."
+          : "Two steps make Oracle yours: connect your tools and pick the sources it reads for you. Each step opens where it is done."}
+      </p>
       <ul className="flex flex-col">
         {setup.steps.map((st) => {
-          const copy = SETUP_STEPS[st.key];
-          const label = copy?.label ?? stepWords(st.key);
+          const copy = copyOf(st);
+          const href = SETUP_STEPS[st.key];
           return (
             <HomeRow
               key={st.key}
@@ -782,15 +917,15 @@ function SetupCard({ setup, onHide }: { setup: Schemas["SetupOut"]; onHide: () =
                 )
               }
               title={
-                !st.done && copy ? (
-                  <Link href={copy.href} className="text-accent-ink hover:underline">
-                    {label}
+                !st.done && href ? (
+                  <Link href={href} className="text-accent-ink hover:underline">
+                    {copy.label}
                   </Link>
                 ) : (
-                  label
+                  copy.label
                 )
               }
-              meta={st.done ? "Done" : undefined}
+              meta={copy.status(st)}
             />
           );
         })}
@@ -819,12 +954,11 @@ function DecisionRow({ d, onDecide }: { d: Decision; onDecide: (d: Decision, key
       testId="home-decision"
       inlineActions
       lead={<RowIcon name="flag" />}
-      title={d.title}
+      title={<span title={d.ref ? `${d.ref} · ${d.title}` : undefined}>{d.title}</span>}
       meta={
         <>
-          {d.ref}
-          {d.question ? ` · ${d.question}` : ""}
-          {proposed ? ` · Proposed: ${proposed.label}` : ""}
+          {/* qa-simple-home-13: no code ("D-12") in Simple; the question and the proposal say it. */}
+          {[d.question, proposed ? `Proposed: ${proposed.label}` : null].filter(Boolean).join(" · ")}
           {other && (
             <span role="group" aria-label="Other options" className="mt-2 flex flex-wrap gap-2">
               {d.options
@@ -859,19 +993,25 @@ function DecisionRow({ d, onDecide }: { d: Decision; onDecide: (d: Decision, key
 }
 
 /**
- * A broken dependency: the item in red, its one-line reason, and its one-click fixes (proposals
- * for those who propose). Once I proposed a fix it says so, and waits, with no second Propose.
+ * One problem of a broken item, under the item's heading (qa-simple-home-11): its sentence
+ * without the item's name, its one-click fixes (proposals for those who propose) in one row
+ * under the sentence (qa-simple-home-9), and what "Move the dependents" moves (qa-simple-home-1).
+ * "Accept as risk" asks why, in one line, for every role, under the button's own words
+ * (qa-simple-home-10). Once I proposed a fix it says so, and waits, with no second Propose.
  */
 function BrokenRow({
   b,
   reads,
   onFix,
+  moves,
   proposed,
   nameOf,
 }: {
   b: BrokenLink;
   reads: boolean;
   onFix: (b: BrokenLink, op: FixOp, note?: string) => Promise<void>;
+  /** The items "Move the dependents" moves, the item first. */
+  moves: Schemas["SimpleRoadmapItem"][];
   /** My proposal waiting on this link (GET /v1/simple/changes: proposed, by me, its item and subject). */
   proposed?: Change;
   nameOf: (id: string, fallback: string) => string;
@@ -880,9 +1020,9 @@ function BrokenRow({
   const [note, setNote] = useState("");
   // The item says whether I decide it and who does (D-a), as a change's can_decide.
   const applies = b.item.can_decide;
-  const deciders = b.item.deciders.length ? b.item.deciders.join(", ") : "The decider";
-  const label = (text: string) => (applies ? text : `Propose: ${text}`);
+  const label = (text: string) => (applies ? text : `Propose: ${text.charAt(0).toLowerCase()}${text.slice(1)}`);
   const hintId = `risk-hint-${b.item.id}-${b.flag.subject ?? b.flag.kind}`;
+  const moveId = `moves-${b.item.id}-${b.flag.subject ?? b.flag.kind}`;
   const waitingFor = proposed
     ? proposed.routed_to.length
       ? proposed.routed_to.map((id) => nameOf(id, "the decider")).join(", ")
@@ -890,75 +1030,71 @@ function BrokenRow({
         ? b.item.deciders.join(", ")
         : "the decider"
     : "";
+  const showFixes = !reads && !proposed;
   return (
-    <HomeRow
-      testId="home-broken"
-      inlineActions
-      lead={<RowIcon name="alert" />}
-      title={<span className="text-crit">{b.item.title}</span>}
-      meta={
-        <>
-          {b.flag.reason}
-          {proposed && (
-            <span data-testid="home-broken-proposed" className="mt-1 block font-semibold text-text">
-              You proposed: {FIX_WORDS[proposed.op as FixOp] ?? OP_WORDS[proposed.op] ?? proposed.op} · waiting for {waitingFor}
-            </span>
+    <li data-testid="home-broken" className="flex flex-col gap-2">
+      <span className="text-text">
+        <span className="sr-only">{b.item.title}: </span>
+        {problemWords(b.flag.reason, b.item.title)}
+      </span>
+      {proposed && (
+        <span data-testid="home-broken-proposed" className="block font-semibold text-text">
+          You proposed: {FIX_WORDS[proposed.op as FixOp] ?? OP_WORDS[proposed.op] ?? proposed.op} · waiting for {waitingFor}
+        </span>
+      )}
+      {showFixes && b.flag.fixes.includes("shift_dependents") && b.dependency && moves.length > 0 && (
+        <span id={moveId} data-testid="home-broken-moves" className="simple-small">
+          Moving the dependents starts {joinAnd(moves.map((m) => m.title))} after {b.dependency.title} ends.
+        </span>
+      )}
+      {showFixes && (
+        <span data-testid="home-row-actions" className="flex flex-wrap items-center gap-2">
+          {b.flag.fixes.includes("shift_dependents") && (
+            <button type="button" className="simple-button" aria-describedby={moveId} onClick={() => void onFix(b, "shift_dependents")}>
+              {label(FIX_WORDS.shift_dependents)}
+            </button>
           )}
-          {noting && !proposed && (
-            <form
-              className="mt-2 flex flex-wrap items-center gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (note.trim()) void onFix(b, "accept_risk", note.trim());
-              }}
-            >
-              <input
-                aria-label="Why the risk is acceptable"
-                aria-describedby={hintId}
-                value={note}
-                maxLength={500}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Why it is acceptable, in one line"
-                className="h-10 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 text-text"
-              />
-              <button type="submit" className="simple-button simple-button-primary" disabled={!note.trim()}>
-                {applies ? "Save risk note" : "Propose risk note"}
-              </button>
-              <span id={hintId} data-testid="home-risk-hint" className="simple-small basis-full">
-                Say why, in one line, to save it.
-              </span>
-            </form>
+          {b.flag.fixes.includes("move_dependency") && (
+            <button type="button" className="simple-button" onClick={() => void onFix(b, "move_dependency")}>
+              {label(FIX_WORDS.move_dependency)}
+            </button>
           )}
-        </>
-      }
-      actions={
-        reads || proposed ? undefined : (
-          <>
-            {!applies && <span className="simple-small">{`${deciders} ${b.item.deciders.length > 1 ? "decide" : "decides"}`}</span>}
-            {b.flag.fixes.includes("shift_dependents") && (
-              <button type="button" className="simple-button" onClick={() => void onFix(b, "shift_dependents")}>
-                {label("Move dependents")}
-              </button>
-            )}
-            {b.flag.fixes.includes("move_dependency") && (
-              <button type="button" className="simple-button" onClick={() => void onFix(b, "move_dependency")}>
-                {label("Move dependency")}
-              </button>
-            )}
-            {b.flag.fixes.includes("accept_risk") && (
-              <button
-                type="button"
-                className="simple-button aria-pressed:border-accent! aria-pressed:text-accent-ink!"
-                aria-pressed={noting}
-                aria-expanded={noting}
-                onClick={() => setNoting((n) => !n)}
-              >
-                {label("Accept as risk")}
-              </button>
-            )}
-          </>
-        )
-      }
-    />
+          {/* Open, the reason line takes its place: one button with these words at a time. */}
+          {b.flag.fixes.includes("accept_risk") && !noting && (
+            <button type="button" className="simple-button" aria-expanded={false} onClick={() => setNoting(true)}>
+              {label(FIX_WORDS.accept_risk)}
+            </button>
+          )}
+        </span>
+      )}
+      {showFixes && noting && (
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (note.trim()) void onFix(b, "accept_risk", note.trim());
+          }}
+        >
+          <input
+            aria-label="Why the risk is acceptable"
+            aria-describedby={hintId}
+            value={note}
+            maxLength={500}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Why it is acceptable, in one line"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 text-text"
+          />
+          <button type="submit" className="simple-button simple-button-primary" disabled={!note.trim()}>
+            {label(FIX_WORDS.accept_risk)}
+          </button>
+          <button type="button" className="simple-button simple-button-quiet" onClick={() => setNoting(false)}>
+            Cancel
+          </button>
+          <span id={hintId} data-testid="home-risk-hint" className="simple-small basis-full">
+            Say why, in one line, to save it.
+          </span>
+        </form>
+      )}
+    </li>
   );
 }

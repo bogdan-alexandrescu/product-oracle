@@ -84,8 +84,10 @@ test.describe("desktop · Decisions", () => {
     await decisions(page, "list");
     const q5 = row(page, "Q5");
     await q5.getByRole("button", { name: "Another answer" }).click();
-    await q5.getByRole("radio", { name: "Something else…" }).click();
-    await expect(q5.getByRole("button", { name: "Decide as recommended" })).toHaveCount(0);
+    await q5.getByRole("button", { name: "Something else…" }).click();
+    // qa-simple-home-6: the row's column stays as it was: its Decide as recommended is the one primary button.
+    await expect(q5.locator(".simple-button-primary")).toHaveCount(1);
+    await expect(q5.locator(".simple-button-primary")).toHaveText("Decide as recommended");
     const decide = q5.getByRole("button", { name: "Decide", exact: true });
     await expect(decide).toBeDisabled();
     expect(await decide.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.5");

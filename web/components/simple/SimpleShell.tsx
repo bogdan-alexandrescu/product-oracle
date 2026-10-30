@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { Mark } from "@/components/ds/Brand";
 import { Icon, type IconName } from "@/components/ds/Icon";
@@ -16,6 +17,12 @@ import { api, unwrap } from "@/lib/api/client";
 import { loadInbox, onWaitingChanged } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
+
+/** The Ask panel the rail's Ask Oracle opens (its aria-controls; SimpleAsk.tsx sets it on the docked panel). */
+export const SIMPLE_ASK_PANEL_ID = "simple-ask-panel";
+
+const noSubscribe = () => () => undefined;
+
 
 /** Simple's destinations (#723, D10), in rail order: nothing of Detailed's rail. */
 export const SIMPLE_DESTINATIONS: Dest[] = [
@@ -168,6 +175,9 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
     setLastAsk(askOpen);
     if (askOpen) setMore(false);
   }
+  // qa-simple-home-18: the tab bar (and its More sheet) come after the page in the document, so
+  // Tab reaches the skip link, the header and the page first; it stays fixed at the bottom.
+  const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
   const off = !!me && capsReady && !simpleMode;
   useEffect(() => {
     if (off) router.replace(switchTarget(pathname, "detailed"));
@@ -254,11 +264,16 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           );
         })}
         <span className="flex-1" />
+        {/* qa-simple-home-24: says whether the Ask panel is open, which it controls, and looks pressed while it is. */}
         <button
           type="button"
           data-testid="simple-ask"
-          onClick={() => setPanelOpen(true)}
-          className="mb-2 flex h-12 items-center gap-3 rounded-xl border border-line px-3 text-[length:var(--simple-rail-label)] font-semibold text-rail-active-text hover:bg-rail-hover"
+          aria-expanded={askOpen}
+          aria-controls={SIMPLE_ASK_PANEL_ID}
+          onClick={() => setPanelOpen(!askOpen)}
+          className={`mb-2 flex h-12 items-center gap-3 rounded-xl border px-3 text-[length:var(--simple-rail-label)] font-semibold ${
+            askOpen ? "border-accent bg-accent-soft text-accent-ink" : "border-line text-rail-active-text hover:bg-rail-hover"
+          }`}
         >
           <Icon name="ask" stroke={1.7} />
           Ask Oracle
@@ -266,9 +281,15 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         <div data-testid="simple-person" className="flex items-center gap-3 border-t border-line pt-3">
           {account("rail")}
           <span className="flex min-w-0 flex-col pt-2 leading-5">
-            {/* qa-simple-home-25: the name (or email) in full, wrapped, never cut to "viewer@example.c…";
-                qa-shell-18: an email wraps before its "@", not mid-word ("viewer@example.co / m"). */}
-            <span data-testid="simple-person-name" title={me?.email || me?.name || undefined} className="text-[15px] font-semibold [overflow-wrap:anywhere] text-rail-active-text">
+            {/* qa-simple-home-25, 21: the name (or email) in full, never cut to "viewer@example.c…"; qa-shell-18: an
+                email breaks only before its "@" ("viewer" / "@example.com"), never mid-word. With no name the avatar
+                already says the email to a screen reader. */}
+            <span
+              data-testid="simple-person-name"
+              title={me?.email || me?.name || undefined}
+              aria-hidden={!me?.name && !!me?.email ? true : undefined}
+              className="text-[15px] font-semibold [overflow-wrap:break-word] text-rail-active-text"
+            >
               {me?.name || breakAtSign(me?.email ?? "")}
             </span>
             <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>
@@ -276,78 +297,86 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         </div>
       </nav>
 
-      <nav
-        aria-label="Simple"
-        data-testid="simple-tab-bar"
-        className="fixed inset-x-0 bottom-0 z-40 hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
-      >
-        {tabDests.map((d) => {
-          const active = isActive(pathname, d) && !more;
-          const id = `simple-tab-${d.testId.slice("simple-nav-".length)}`;
-          const n = countOf(d);
-          return (
-            <Link
-              key={d.href}
-              href={d.href}
-              data-testid={id}
-              aria-current={active ? "page" : undefined}
-              aria-label={d.label}
-              aria-describedby={n > 0 ? `${id}-count` : undefined}
-              className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
-                active ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
-              }`}
+      {mounted &&
+        createPortal(
+          <>
+            {/* z-39: last in the document now, it still paints under a page's own z-40 layers, as it did before the page. */}
+            <nav
+              aria-label="Simple"
+              data-testid="simple-tab-bar"
+              className="fixed inset-x-0 bottom-0 z-[39] hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
             >
-              <Icon name={d.icon} stroke={1.7} />
-              <span className="max-w-full truncate">{d.label}</span>
-              {tabBadge(`${id}-count`, n, countWords(d.label, n))}
-            </Link>
-          );
-        })}
-        <button
-          type="button"
-          aria-label="More"
-          aria-describedby={moreCount > 0 ? "simple-tab-more-count" : undefined}
-          aria-expanded={more}
-          aria-controls="simple-more-sheet"
-          data-testid="simple-tab-more"
-          onClick={() => setMore((m) => !m)}
-          className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
-            more || moreActive ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
-          }`}
-        >
-          <Icon name="more" stroke={1.7} />
-          More
-          {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`)}
-        </button>
-      </nav>
-      {/* qa-shell-17: Detailed's More sheet (a backdrop, a handle, the title and a close button); Escape, a tap outside or a swipe down closes it. */}
-      <Sheet open={more} title="More" onClose={() => setMore(false)} testId="simple-more-sheet" id="simple-more-sheet" above>
-        <div className="p-3">
-          <ModeSwitch placement="sheet" />
-          <ul className="mb-2 grid grid-cols-3 gap-1">
-            {moreDests.map((d) => {
-              const n = countOf(d);
-              const id = `simple-more-${d.testId.slice("simple-nav-".length)}-count`;
-              return (
-                <li key={d.href}>
+              {tabDests.map((d) => {
+                const active = isActive(pathname, d) && !more;
+                const id = `simple-tab-${d.testId.slice("simple-nav-".length)}`;
+                const n = countOf(d);
+                return (
                   <Link
+                    key={d.href}
                     href={d.href}
-                    aria-current={isActive(pathname, d) ? "page" : undefined}
+                    data-testid={id}
+                    aria-current={active ? "page" : undefined}
                     aria-label={d.label}
-                    aria-describedby={n > 0 ? id : undefined}
-                    className="relative flex flex-col items-center gap-1 rounded-xl py-2.5 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
+                    aria-describedby={n > 0 ? `${id}-count` : undefined}
+                    className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
+                      active ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
+                    }`}
                   >
-                    <Icon name={d.icon} />
-                    {d.label}
-                    {tabBadge(id, n, countWords(d.label, n))}
+                    <Icon name={d.icon} stroke={1.7} />
+                    {/* fix4 review: "One-pagers" fills a 390 px phone's fifth of the bar to the pixel; a hair tighter it is whole. */}
+                    <span className="max-w-full truncate tracking-[-0.02em]">{d.label}</span>
+                    {tabBadge(`${id}-count`, n, countWords(d.label, n))}
                   </Link>
-                </li>
-              );
-            })}
-          </ul>
-          {account("sheet")}
-        </div>
-      </Sheet>
+                );
+              })}
+              <button
+                type="button"
+                aria-label="More"
+                aria-describedby={moreCount > 0 ? "simple-tab-more-count" : undefined}
+                aria-expanded={more}
+                aria-controls="simple-more-sheet"
+                data-testid="simple-tab-more"
+                onClick={() => setMore((m) => !m)}
+                className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
+                  more || moreActive ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
+                }`}
+              >
+                <Icon name="more" stroke={1.7} />
+                More
+                {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`)}
+              </button>
+            </nav>
+            {/* qa-simple-home-19: Detailed's More sheet (its handle, title, close button and dimmed backdrop), sized to its links. */}
+            <Sheet open={more} title="More" onClose={() => setMore(false)} testId="simple-more-sheet" id="simple-more-sheet" above>
+              <div className="p-3">
+                <ModeSwitch placement="sheet" />
+                <ul className="grid grid-cols-2 gap-1">
+                  {moreDests.map((d) => {
+                    const n = countOf(d);
+                    const id = `simple-more-${d.testId.slice("simple-nav-".length)}-count`;
+                    return (
+                      <li key={d.href}>
+                        <Link
+                          href={d.href}
+                          aria-current={isActive(pathname, d) ? "page" : undefined}
+                          aria-label={d.label}
+                          aria-describedby={n > 0 ? id : undefined}
+                          className="relative flex flex-col items-center gap-1 rounded-xl py-2.5 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
+                        >
+                          <Icon name={d.icon} />
+                          {d.label}
+                          {tabBadge(id, n, countWords(d.label, n))}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {account("sheet")}
+              </div>
+            </Sheet>
+          </>,
+          document.body,
+        )}
     </>
   );
 }

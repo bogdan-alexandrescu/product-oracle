@@ -57,6 +57,9 @@ class SimpleFlag(BaseModel):
     # What the flag is about: the dependency's item id, the blocker's id, the milestone's name.
     subject: str | None = None
     risk_note: str | None = None
+    # qa-simple-home-1: the items "Move the dependents" (shift_dependents) moves, the
+    # flagged item first, as the change engine moves them; empty for other flags.
+    moves: list[uuid.UUID] = []
 
 
 class SimpleDocRef(BaseModel):

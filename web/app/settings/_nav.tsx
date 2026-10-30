@@ -5,12 +5,25 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { SELECT_FIELD } from "@/app/settings/_components/fields";
 import { LinkButton, ScrollStrip } from "@/components/ds";
+import { DETAILED_HOME, SIMPLE_HOME } from "@/lib/experience-paths";
 import { useSettingsTabs } from "@/lib/settings-tabs";
+
+/**
+ * Where a setup step's "Back to Home" goes (qa-onboarding-34), by the page's ?from: Detailed
+ * Home's checklist opens a step with from=setup, Simple Home's (its Set up card and welcome)
+ * with from=simple-setup, so the way back returns to the Home of the mode the person came
+ * from. Null when the page was not opened from a setup step.
+ */
+export function setupReturn(from: string | null | undefined): string | null {
+  if (from === "setup") return DETAILED_HOME;
+  if (from === "simple-setup") return SIMPLE_HOME;
+  return null;
+}
 
 /**
  * Settings' own sections: a strip under the page title (PageHeader draws it, see the
  * settings layout). Evidence search (/sources) lives under Sources. Opened from Home's Set
- * up checklist (?from=setup), it ends with the way back to Home; another tab drops it.
+ * up checklist (?from=setup, or Simple Home's ?from=simple-setup), it ends with the way back to Home; another tab drops it.
  * Only the tabs the signed-in role can read show (#370). qa-settings-11: from 1024 px the 13
  * tabs sit in tighter type so they fit one row beside the rail and the Ask strip at 1366 px
  * (narrower, they wrap: every tab in full view). qa-settings-41: on a phone a select lists
@@ -18,7 +31,7 @@ import { useSettingsTabs } from "@/lib/settings-tabs";
  */
 export function SettingsNav() {
   const pathname = usePathname();
-  const fromSetup = useSearchParams().get("from") === "setup";
+  const backHome = setupReturn(useSearchParams().get("from"));
   const router = useRouter();
   const { tabs } = useSettingsTabs();
   const isOn = (href: string) =>
@@ -53,8 +66,8 @@ export function SettingsNav() {
             ))}
           </select>
         </div>
-        {fromSetup && (
-          <LinkButton href="/home" variant="ghost" icon="home" className="flex-none">
+        {backHome && (
+          <LinkButton href={backHome} variant="ghost" icon="home" className="flex-none">
             Back to Home
           </LinkButton>
         )}
@@ -76,8 +89,8 @@ export function SettingsNav() {
             </Link>
           );
         })}
-        {fromSetup && (
-          <LinkButton href="/home" variant="ghost" icon="home" className="ml-auto flex-none" data-testid="nav-back-home">
+        {backHome && (
+          <LinkButton href={backHome} variant="ghost" icon="home" className="ml-auto flex-none" data-testid="nav-back-home">
             Back to Home
           </LinkButton>
         )}

@@ -57,7 +57,7 @@ for (const phone of [false, true]) {
         await expect(first.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
         await expect(first.getByTestId("question-due")).toHaveAttribute("data-late", "true");
         await expect(first).toContainText("Blocks M1: F-03 Health log");
-        await expect(first).toContainText("PRD recommends 9:00 in each person's zone");
+        await expect(first).toContainText("Guided setup recommends: 9:00 in each person's zone");
         await expect(mine.getByTestId("question-row").nth(1).getByTestId("question-due")).toHaveText("Due Mon Oct 26");
         await mine.getByRole("button", { name: "Show 4 more" }).click();
         await expect(mine.getByTestId("question-row")).toHaveCount(9);
@@ -175,12 +175,12 @@ for (const phone of [false, true]) {
         await row(page, "Q5").getByRole("button", { name: "Another answer" }).click();
         await expect(row(page, "Q5").getByRole("button", { name: "Another answer" })).toHaveAttribute("aria-pressed", "true");
         await expect(row(page, "Q5").getByTestId("question-answers")).toContainText("Another answer:");
-        await row(page, "Q5").getByRole("group", { name: "Answers for Q5" }).getByRole("radio", { name: "Noon" }).click();
+        await row(page, "Q5").getByRole("group", { name: "Answers for Q5" }).getByRole("button", { name: "Noon", exact: true }).click();
         await expect(page.getByText("Decided Q5: Noon")).toBeVisible();
         await expect(outside(page, "Q5")).toContainText("Noon · Admin");
 
         await row(page, "Q6").getByRole("button", { name: "Another answer" }).click();
-        await row(page, "Q6").getByRole("radio", { name: "Something else…" }).click();
+        await row(page, "Q6").getByRole("button", { name: "Something else…" }).click();
         await row(page, "Q6").getByLabel("Your answer to Q6").fill("Ten invites");
         await row(page, "Q6").getByRole("button", { name: "Decide", exact: true }).click();
         await expect(outside(page, "Q6")).toContainText("Ten invites · Admin");
@@ -199,17 +199,21 @@ for (const phone of [false, true]) {
         await login(page);
         await page.goto("/simple");
         const card = page.getByTestId("home-decisions");
-        const count = card.getByTestId("home-decisions-count");
+        // fix4 (qa-simple-home-15): the count is the summary tile's alone, not repeated in the header.
+        await expect(card.getByTestId("home-decisions-count")).toHaveCount(0);
+        const count = page.getByTestId("home-summary-decisions").locator(".simple-number");
         await expect(count).toHaveText(/^\d+$/);
         const n = Number(await count.textContent());
         expect(n).toBeGreaterThanOrEqual(9);
         await expect(page.getByTestId("home-summary-decisions")).toContainText(String(n));
         if (!phone) await expect(page.getByTestId("simple-nav-decisions-count")).toHaveText(String(n));
         const q5 = card.getByTestId("home-question").first();
-        await expect(q5).toContainText("Q5 Reminder default time");
+        // fix4 (qa-simple-home-13): Home names the question and what it blocks in words, no codes.
+        await expect(q5).toContainText("Reminder default time");
+        await expect(q5).not.toContainText("Q5");
         await expect(q5.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
         await expect(q5.getByTestId("question-due")).toHaveAttribute("data-late", "true");
-        await expect(q5).toContainText("Blocks M1: F-03 Health log");
+        await expect(q5).toContainText("Blocks Health log, first milestone");
         await expect(q5.getByRole("button", { name: "Another answer" })).toBeVisible();
         await expect(q5.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
         await q5.getByRole("button", { name: "Decide as recommended" }).click();

@@ -59,7 +59,6 @@ Ops and the fields they write (``before`` must name the key fields):
 """
 
 import uuid
-from collections import deque
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -78,7 +77,6 @@ from oracle.simple.schemas import (
     SimpleChangeIn,
     SimpleChangeOut,
     SimpleChangeResult,
-    SimpleFlag,
     SimpleItemFlags,
     SimpleSessionOut,
 )
@@ -435,51 +433,15 @@ def _uuid(value: Any, name: str) -> uuid.UUID:
         raise ChangeError(422, f"target.{name}: an id") from e
 
 
-def _accepted_order(n: service.Entry, dep: service.Entry) -> bool:
-    return any(
-        f.kind == "dependency_order" and f.state == "amber" and str(f.subject) == str(dep.row.id)
-        for f in n.flags
-    )
-
-
 def _fix_plan(
     op: str, entry: service.Entry, dep: service.Entry, by_id: dict[uuid.UUID, service.Entry]
 ) -> dict[uuid.UUID, tuple[date, date]]:
     """The new (start, end) of every item a fix moves."""
-    one = timedelta(days=1)
     if op == "move_dependency":
-        new_end = entry.resolved.start.date - one
+        new_end = entry.resolved.start.date - timedelta(days=1)
         shift = new_end - dep.resolved.end.date
         return {dep.row.id: (dep.resolved.start.date + shift, new_end)}
-    # #9: every direct dependent of `dep` that starts too early moves, not only the one
-    # whose callout was clicked (two items can share a dependency, each estimated or
-    # slice-dated); the move then walks forward transitively through each moved item's
-    # own dependents.
-    moves: dict[uuid.UUID, tuple[date, date]] = {}
-    queue: deque[uuid.UUID] = deque()
-    for nid in dep.needed_by:
-        n = by_id.get(nid)
-        if n is None or n.status == "cut" or n.resolved.start.date > dep.resolved.end.date:
-            continue
-        # A sibling whose order on `dep` was accepted as a risk stays where it is.
-        if nid != entry.row.id and _accepted_order(n, dep):
-            continue
-        delta = dep.resolved.end.date + one - n.resolved.start.date
-        moves[nid] = (n.resolved.start.date + delta, n.resolved.end.date + delta)
-        queue.append(nid)
-    while queue:
-        cur = queue.popleft()
-        end = moves[cur][1]
-        for nid in by_id[cur].needed_by:
-            n = by_id.get(nid)
-            if n is None or nid in moves or n.status == "cut":
-                continue
-            start = n.resolved.start.date
-            if start <= end:
-                delta = end + one - start
-                moves[nid] = (start + delta, n.resolved.end.date + delta)
-                queue.append(nid)
-    return moves
+    return service.shift_plan(entry, dep, by_id)
 
 
 async def _plan(
@@ -786,17 +748,7 @@ async def _flags(
     return [
         SimpleItemFlags(
             item_id=i,
-            flags=[
-                SimpleFlag(
-                    kind=f.kind,
-                    reason=f.reason,
-                    fixes=f.fixes,
-                    state=f.state,  # type: ignore[arg-type]
-                    subject=f.subject,
-                    risk_note=f.risk_note,
-                )  # fmt: skip
-                for f in by_id[i].flags
-            ],
+            flags=service.flags_out(by_id[i]),
         )
         for i in ids
     ]

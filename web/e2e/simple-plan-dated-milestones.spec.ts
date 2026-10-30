@@ -53,7 +53,8 @@ async function expectDatedRows(strip: Locator, testId: string) {
   await expect(strip.getByTestId(`${testId}-month`)).toHaveText(["Nov", "Dec", "Jan", "Feb"]);
   const labels = strip.getByTestId(`${testId}-label`);
   for (const [k, r] of ROWS.entries()) {
-    await expect(labels.nth(k)).toHaveText(new RegExp(`^${r.name} · \\d+ items?$`));
+    // fix4 (qa-simple-home-17): Home's row names its document first; the one-pager's does not.
+    await expect(labels.nth(k)).toHaveText(new RegExp(`^(Guided setup · )?${r.name} · \\d+ items?$`));
     const row = strip.getByTestId(`${testId}-row`).nth(k);
     await expect(row).toContainText(r.when);
     const bar = row.locator("span.top-2");

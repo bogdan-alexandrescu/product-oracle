@@ -88,17 +88,17 @@ test("qa-simple-home-2: the phone's More sheet closes on Escape, a tap outside a
   await expect(more).toBeFocused();
   await expect(more).toHaveAttribute("aria-expanded", "false");
 
-  // qa-shell-17: the sheet has Detailed's backdrop: a tap on it (over the page, the header's Ask) closes it.
+  // qa-simple-home-19: the sheet dims the page; a tap on the dimmed page (over the title) closes it.
   await more.click();
   await expect(sheet).toBeVisible();
-  const title = (await page.getByTestId("phone-title").boundingBox())!;
-  await page.mouse.click(title.x + title.width / 2, title.y + title.height / 2);
+  const title = await box(page.getByTestId("phone-title"));
+  await page.getByTestId("simple-more-sheet").getByTestId("sheet-scrim").click({ position: { x: title.x + 5, y: title.y + 5 } });
   await expect(sheet).toBeHidden();
 
+  // Its close button closes it too; the header's Ask then opens Ask.
   await more.click();
   await expect(sheet).toBeVisible();
-  const ask = (await page.getByTestId("phone-ask").boundingBox())!;
-  await page.mouse.click(ask.x + ask.width / 2, ask.y + ask.height / 2);
+  await sheet.getByRole("button", { name: "Close More" }).click();
   await expect(sheet).toBeHidden();
   await page.getByTestId("phone-ask").click();
   await expect(page.getByTestId("phone-ask-sheet")).toBeVisible();
@@ -189,11 +189,12 @@ test("qa-simple-home-31: the rail's, the More sheet's and the account menu's swi
   await page.getByTestId("simple-tab-more").click();
   const sheet = page.getByTestId("mode-switch-sheet");
   await expect(sheet).toBeVisible();
-  // qa-shell-17: the shared phone sheet gives every button its 44 px touch target; the rest is the rail's.
-  const butHeight = (look: string) => look.split(" | ").filter((_, i) => i !== 6).join(" | ");
-  expect(butHeight(await look(sheet.locator('[aria-checked="true"]')))).toBe(butHeight(railOn));
-  expect(butHeight(await look(sheet.locator('[aria-checked="false"]')))).toBe(butHeight(railOff));
-  expect(await sheet.locator('[aria-checked="true"]').evaluate((el) => getComputedStyle(el).height)).toBe("44px");
+  // fix4 (qa-simple-home-19): the More sheet is the ds Sheet, whose controls are 44 px touch
+  // targets; the rest of the look is the rail's.
+  const noHeight = (s: string) => s.split(" | ").filter((_, i) => i !== 6).join(" | ");
+  expect(noHeight(await look(sheet.locator('[aria-checked="true"]')))).toBe(noHeight(railOn));
+  expect(noHeight(await look(sheet.locator('[aria-checked="false"]')))).toBe(noHeight(railOff));
+  expect((await sheet.locator('[aria-checked="true"]').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await track(sheet)).toBe(railTrack);
 });
 
