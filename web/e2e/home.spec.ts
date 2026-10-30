@@ -53,6 +53,7 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
 
   // Approving from Home starts the run: the line leaves the list (the next item moves up).
   await rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve $53.00" }).click();
   await expect(rows.filter({ hasText: "$53.00 est." })).toHaveCount(0);
   await expect(needs.getByTestId("home-needs-more")).toHaveText("+4 more in Inbox");
   await expect(rows).toHaveCount(6);

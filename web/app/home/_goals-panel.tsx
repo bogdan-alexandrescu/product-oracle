@@ -44,7 +44,7 @@ function GoalCard({
           <Link
             href={`/baseline?entity=${g.id}`}
             data-testid="goal-open"
-            className="flex min-w-0 flex-1 items-start gap-1.5 rounded-goal font-semibold outline-offset-2 hover:underline"
+            className="flex min-h-6 min-w-0 flex-1 items-start gap-1.5 rounded-goal font-semibold outline-offset-2 hover:underline"
           >
             {g.code && <CodeTag code={g.code} proposed={g.proposed} />}
             <span className={`line-clamp-2 min-w-0 font-medium ${g.proposed && !g.code ? "text-warn" : ""}`}>{g.name || g.title}</span>

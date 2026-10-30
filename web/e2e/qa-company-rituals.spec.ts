@@ -59,7 +59,7 @@ test("qa-company-6: the check-in's pre-read gives paid conversion the current va
   await expect(goals).not.toContainText("No current value");
 });
 
-test("qa-company-7: Prepare now keeps Mon Nov 2 as Next with its pre-read ready; Last stays the held Oct 26", async ({ page }) => {
+test("qa-company-7: Prepare now keeps Mon Nov 2 as Next with its pre-read ready, and Latest pre-read names it", async ({ page }) => {
   // protects=qa-company-7; fails_when=Next jumps to Nov 9 or Last names the meeting not yet
   // held (Nov 2); no_claim=the API (test_rituals.py).
   await openRituals(page);
@@ -72,8 +72,9 @@ test("qa-company-7: Prepare now keeps Mon Nov 2 as Next with its pre-read ready;
   await page.getByRole("link", { name: "← Rituals" }).click();
   await expect(row.locator('[data-col="next"]')).toHaveText("Mon, Nov 2, 9:00 AM");
   await expect(row.getByTestId("next-pre-read")).toHaveText("Pre-read ready");
-  await expect(row).toContainText("Oct 26, 2026");
-  await expect(row).not.toContainText("Nov 2, 2026");
+  // qa3 qa-company-2: the column is "Latest pre-read" and names the one just prepared, as the
+  // panel does, so a ready pre-read never reads "None yet" beside it.
+  await expect(row.getByTestId("last-pre-read")).toHaveText("Nov 2, 2026");
   await expect(row).not.toContainText("Nov 9");
 });
 

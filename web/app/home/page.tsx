@@ -82,8 +82,9 @@ export default function HomePage() {
   // A1: the Set up checklist, read live; only the hide choice is stored (a preference).
   const setupQ = useQuery("home|setup", () => unwrap(api.GET("/v1/setup")));
   // qa-onboarding-3: Pick sources says the sources the Sources page lists (its own query), so
-  // the two never contradict; read only while the checklist holds that step.
-  const listSources = setupOpen(setupQ.data) && setupQ.data.steps.some((s) => s.key === "sources");
+  // the two never contradict; read only while the checklist holds that step not yet done (a
+  // done step says its own count, so Home's call budget stays as it was).
+  const listSources = setupOpen(setupQ.data) && setupQ.data.steps.some((s) => s.key === "sources" && !s.done);
   const sourcesQ = useQuery(listSources ? "sources" : "home|no-sources", () => (listSources ? unwrap(api.GET("/v1/sources")) : Promise.resolve(null)));
   const [setupBusy, setSetupBusy] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
