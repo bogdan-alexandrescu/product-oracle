@@ -990,7 +990,7 @@ function buildAdd(title: string, goal: string | null, milestone: string | null, 
   };
 }
 
-const NUMBERS: Record<string, number> = { a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+const NUMBERS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
 const countOf = (x: string) => NUMBERS[x.toLowerCase()] ?? Number(x);
 
 /** Oracle in an item's own talk: "it" and "this" mean the item (deterministic, the demo's sentences). */
@@ -1010,10 +1010,15 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
   if (ctx.role === "viewer") return { kind: "note", body: "Viewers ask questions here; changes need a commenter or above.", cards: [] };
   const one = (d: Draft): Reply => ({ kind: "cards", body: `I understood: ${d.summary.replace(/^./, (c) => c.toLowerCase())}.`, cards: [d] });
   let m: RegExpExecArray | null;
-  if ((m = new RegExp(`^(?:move|push|shift|slip) ${it}(?: by)? (a|one|two|three|four|five|six|\\d+) weeks? (later|earlier|out|back|sooner)$`, "i").exec(t))) {
-    const n = countOf(m[1]) * 7 * (/later|out/i.test(m[2]) ? 1 : -1);
-    const words = `${m[1].toLowerCase() === "a" ? "one" : m[1].toLowerCase()} week${countOf(m[1]) === 1 ? "" : "s"} ${n > 0 ? "later" : "earlier"}`;
-    return one(talkMove(db, i, addDays(i.start.date, n), addDays(i.end.date, n), words, [0, n]));
+  if ((m = new RegExp(`^(?:move|push|shift|slip) ${it}(?: by)? (a|an|one|two|three|four|five|six|\\d+) (day|week|month|quarter)s? (later|earlier|out|back|sooner)$`, "i").exec(t))) {
+    // As the API's roadmap_talk._move_kw: a shift of (months, days), as chat.parse_shift.
+    const count = countOf(m[1]);
+    const unit = m[2].toLowerCase();
+    const sign = /later|out/i.test(m[3]) ? 1 : -1;
+    const shift: [number, number] = [sign * (unit === "quarter" ? 3 * count : unit === "month" ? count : 0), sign * (unit === "week" ? 7 * count : unit === "day" ? count : 0)];
+    const moved = (day: string) => addDays(plusMonths(day, shift[0]), shift[1]);
+    const words = `${/^an?$/i.test(m[1]) ? "one" : m[1].toLowerCase()} ${unit}${count === 1 ? "" : "s"} ${sign > 0 ? "later" : "earlier"}`;
+    return one(talkMove(db, i, moved(i.start.date), moved(i.end.date), words, shift));
   }
   if ((m = new RegExp(`^(?:move|put) ${it} (?:in|into|to|under) (M\\d)\\b.*$`, "i").exec(t))) {
     const ms = milestoneNamed(m[1]);

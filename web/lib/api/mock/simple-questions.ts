@@ -307,7 +307,13 @@ export async function routeQuestionChanges(
       q.decided_at = iso(mockNowMs());
       q.pending = null;
       q.meeting_id = meetingId;
-    } else q.decider = String(after.decider_id);
+    } else {
+      q.decider = String(after.decider_id);
+      // As the API's current_route: an open proposal on the question goes to its decider now.
+      for (const c of db.changes) {
+        if (c.change.status === "proposed" && c.change.target.decision_id === target.decision_id) c.change.routed_to = [q.decider];
+      }
+    }
   } else if (b.op === "decide_question") q.pending = { change_id: change.id, by: ctx.me.id, answer };
   db.changes.push({ change, was });
   return json(201, { change, flags: [] });

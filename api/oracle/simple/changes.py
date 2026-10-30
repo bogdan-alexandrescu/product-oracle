@@ -385,12 +385,22 @@ def cut_entries(c: SimpleChange, by_id: dict[uuid.UUID, service.Entry]) -> list[
 
 
 def current_route(
-    c: SimpleChange, by_id: dict[uuid.UUID, service.Entry], deciders: dict, owners: list
+    c: SimpleChange,
+    by_id: dict[uuid.UUID, service.Entry],
+    deciders: dict,
+    owners: list,
+    questions: dict | None = None,
 ) -> list[uuid.UUID]:
     """An open proposal's decider now (S3a-minor: the decider may have changed since it
     was made); its stored route when its item is not read. A PRD question's proposal
-    (decide_question, name_decider) names no item: its stored route is the question's
-    decider (oracle.simple.questions), never the company's owners."""
+    (decide_question, name_decider) names no item: it goes to the question's decider now
+    (``questions``: its Decision by id; review major: a decider named since takes it),
+    else its stored route (the decider when made), never the company's owners."""
+    if c.status == "proposed" and c.op in QUESTION_OPS:
+        d = (questions or {}).get(str(c.target.get("decision_id")))
+        if d is not None and d.approver_id is not None:
+            return [d.approver_id]
+        return list(c.routed_to or [])
     if c.status != "proposed" or c.op in ("edit_line", *QUESTION_OPS) or c.op in KEY_DATE_OPS:
         return list(c.routed_to or [])
     if c.op == CUT_ALL:
@@ -1109,7 +1119,7 @@ class _View:
         self.questions: dict[str, Any] = {}
 
     def route(self, c: SimpleChange) -> list[uuid.UUID]:
-        return current_route(c, self.by_id, self.deciders, self.company_owners)
+        return current_route(c, self.by_id, self.deciders, self.company_owners, self.questions)
 
     def entry(self, c: SimpleChange) -> service.Entry | None:
         try:
@@ -1224,17 +1234,24 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
     people = {"drafts": participants, "owners": owners}
     company = await _company_owners(db) if any(c.status == "proposed" for c in changes) else []
     v = _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
-    qids = {
-        c.target.get("decision_id") for c in changes if c.op in ("decide_question", "name_decider")
-    }
-    if qids:
-        from oracle.decisions.models import Decision
-
-        ids = [uuid.UUID(i) for i in qids if i]
-        v.questions = {
-            str(d.id): d for d in await db.scalars(select(Decision).where(Decision.id.in_(ids)))
-        }
+    v.questions = await _questions(db, changes)
     return v
+
+
+async def _questions(db: AsyncSession, changes: list[SimpleChange]) -> dict[str, Any]:
+    """The PRD questions (Decision rows, by id) these changes are on."""
+    ids = set()
+    for c in changes:
+        if c.op in QUESTION_OPS:
+            try:
+                ids.add(uuid.UUID(str(c.target.get("decision_id"))))
+            except ValueError:
+                pass
+    if not ids:
+        return {}
+    from oracle.decisions.models import Decision
+
+    return {str(d.id): d for d in await db.scalars(select(Decision).where(Decision.id.in_(ids)))}
 
 
 async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeOut:
@@ -1294,7 +1311,8 @@ async def inbox_rows(
         read_ = await service.load(db)
         owners = await _company_owners(db)
         by_id = read_.by_id()
-        waiting = [c for c in waiting if me in current_route(c, by_id, read_.deciders, owners)]
+        qs = await _questions(db, waiting)
+        waiting = [c for c in waiting if me in current_route(c, by_id, read_.deciders, owners, qs)]
     decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
         return [], []
