@@ -322,18 +322,25 @@ export function QuestionRow({
       refocus.current = "answers";
       setOpen(null);
     };
-    // On the click, not the press: closing on the press shrank the row under the pointer, so a
-    // click on what moved up (Show N more) was lost.
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node | null;
-      if (t && (answersRef.current?.contains(t) || anotherRef.current?.contains(t))) return;
-      setOpen(null);
+    // On the release of a press that began outside, not on the press: closing on the press shrank
+    // the row under the pointer, so a click on what moved up (Show N more) was lost; a press that
+    // drags (a text selection) and ends elsewhere closes them too.
+    const outside = (t: EventTarget | null) => !(t instanceof Node && (answersRef.current?.contains(t) || anotherRef.current?.contains(t)));
+    let pressedOutside = false;
+    const onDown = (e: PointerEvent) => {
+      pressedOutside = outside(e.target);
+    };
+    const onUp = (e: PointerEvent) => {
+      if (pressedOutside && outside(e.target)) setOpen(null);
+      pressedOutside = false;
     };
     document.addEventListener("keydown", onKey);
-    document.addEventListener("click", onDown);
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("pointerup", onUp);
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.removeEventListener("click", onDown);
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("pointerup", onUp);
     };
   }, [open]);
   const done = q.column === "decided" || mode === "decided";
