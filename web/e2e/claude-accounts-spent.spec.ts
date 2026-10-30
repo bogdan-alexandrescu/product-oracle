@@ -7,7 +7,7 @@ import { login, openTab } from "./helpers";
 
 /*
  * #403 through the UI, on the mock layer. The "pool-spent" scenario has one account,
- * "weekly", at 9% of its 5-hour window and 95% of its weekly one (clears in 2d 13h), so
+ * "weekly", at 9% of its 5-hour window and all of its weekly one (clears in 2d 13h), so
  * the pool will not choose it; the "discussion-replies" seed's failed Oracle reply then
  * carries the gateway's refusal. The default pool's "work" account is 88% through its
  * week on an old reading, which the pool also refuses.

@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "./test";
 
+import { POOL_SPENT_SCENARIO } from "../lib/api/mock/claude-accounts";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+
 import { login, standInClaudePage } from "./helpers";
 
 /*
@@ -36,6 +39,21 @@ test("qa-settings-17: a spent account says why it is spent while its gauge reads
   await expect(spent).toContainText("88% of its 7-day window is used");
   await expect(spent).toContainText("less than 15% of a window is left");
   await expect(detail(page)).not.toContainText("Over its");
+});
+
+test("fix4 review: an account at 100% of its week reads At its weekly limit, without the 15% reason", async ({ page }) => {
+  // The "pool-spent" scenario's only account, "weekly", has used all of its 7-day window.
+  await page.addInitScript(([key, name]) => localStorage.setItem(key, name), [MOCK_SCENARIO_KEY, POOL_SPENT_SCENARIO]);
+  await openAccounts(page);
+  await expect(row(page, "weekly")).toContainText("Spent until");
+  await expect(row(page, "weekly").locator('[title^="At its weekly limit"]')).toHaveCount(1);
+  await row(page, "weekly").getByRole("button").click();
+  await expect(detail(page).getByTestId("tile-7d used")).toContainText("100%");
+  const spent = detail(page).getByTestId("fact-spent");
+  await expect(spent).toContainText("At its weekly limit");
+  await expect(spent).toContainText("100% of its 7-day window is used");
+  await expect(spent).not.toContainText("Near its");
+  await expect(spent).not.toContainText("15%");
 });
 
 test("qa-settings-18: the list and the pane read in plain words, no 5h, clears or 9d", async ({ page }) => {
