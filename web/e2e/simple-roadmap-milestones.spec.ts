@@ -84,8 +84,12 @@ for (const phone of [false, true]) {
         await expect(invites.getByTestId("label-title")).toHaveAttribute("title", "Team invites");
 
         await slice(page, "F-05a").scrollIntoViewIfNeeded();
-        await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText(/^Team/);
-        await expect(slice(page, "F-05b").getByTestId("slice-label")).toHaveText(/^Team/);
+        // A slice's name is cut with "…" to its bar (a phone's two-week bar reads "Tea…"), whole
+        // in its tooltip.
+        for (const code of ["F-05a", "F-05b"]) {
+          await expect(slice(page, code).getByTestId("slice-label")).toHaveText(/^Tea/);
+          await expect(slice(page, code).locator("title")).toHaveText(/^Team invites, part [12] of 2 · /);
+        }
         await expect(slice(page, "F-08").getByTestId("slice-label")).toHaveCount(0);
         await expect(page.getByTestId("slice-connector")).toHaveCount(0);
 
