@@ -24,15 +24,19 @@ test("role badge: a commenter on Quality reads that they can rate and save this 
   // The page offers what the badge says.
   await expect(page.getByRole("button", { name: /Save this check/ }).filter({ visible: true }).first()).toBeVisible();
 
-  await page.getByTestId("version-tab-document").filter({ visible: true }).click();
+  await page.goto("/documents/saved-carts/v/2");
   await expect(page.getByTestId("role-badge").filter({ visible: true })).toHaveText("Commenter: can comment");
 });
 
 test("new roadmap: Create draft before Oracle has picked a template says so instead of doing nothing", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await login(page);
-  // The clock stands still: the recommendation (asked for a moment after the last change) never comes.
-  await page.clock.pauseAt(new Date(Date.now() + 60_000));
+  // A slow connection: the recommendation (asked 250 ms after the form last changed) never comes.
+  await page.addInitScript(() => {
+    const later = window.setTimeout;
+    window.setTimeout = ((fn: TimerHandler, ms?: number, ...rest: unknown[]) =>
+      ms === 250 ? 0 : later(fn, ms, ...rest)) as typeof window.setTimeout;
+  });
   await page.goto("/documents/new?kind=roadmap");
   await title(page).fill("Next half's roadmap");
   await page.getByRole("button", { name: "Create draft" }).first().click();
