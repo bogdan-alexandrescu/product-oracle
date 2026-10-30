@@ -76,7 +76,7 @@ def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     assert script.get_revision(RESUMED).down_revision == "0066_webhook_delivery_sent"
-    assert script.get_heads() == ["0093_meeting_comments_as_notes"]
+    assert script.get_heads() == ["0093_dont_know_open"]
 
 
 def test_upgrade_and_downgrade(scratch_db):

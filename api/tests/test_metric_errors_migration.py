@@ -73,7 +73,7 @@ def _metric(tenant: uuid.UUID, title: str, error: str | None) -> uuid.UUID:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0093_meeting_comments_as_notes"]
+    assert script.get_heads() == ["0093_dont_know_open"]
 
 
 def test_old_posthog_text_becomes_the_fixed_sentence(scratch_db):

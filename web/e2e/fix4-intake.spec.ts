@@ -34,15 +34,15 @@ async function gapsTabCount(page: Page): Promise<number> {
   return Number(text.match(/(\d+)\s*$/)?.[1] ?? NaN);
 }
 
-test("qa-work-2: an I don't know answer counts as answered, and the status chip agrees with the counts", async ({ page }) => {
+test("qa-work-2: an I don't know answer counts as open (owner 2026-10-29), and the status chip agrees with the counts", async ({ page }) => {
   await openSaved(page);
-  await expect(inspector(page).getByTestId("stat-open")).toContainText("0");
-  await expect(inspector(page).getByTestId("stat-answered")).toContainText("1");
+  await expect(inspector(page).getByTestId("stat-open")).toContainText("1");
+  await expect(inspector(page).getByTestId("stat-answered")).toContainText("0");
   await expect(inspector(page).getByTestId("stat-critical")).toContainText("1");
-  // Nothing waits on anyone: the chip does not say "Waiting for answers".
-  await expect(page.getByTestId("intake-status")).toHaveText("Waiting for a decision");
-  await expect(inspector(page).getByTestId("answered-unknown")).toHaveText(
-    "1 answered “I don't know”: what it asks stays a gap until someone answers or decides",
+  // The "I don't know" question still waits on someone.
+  await expect(page.getByTestId("intake-status")).toHaveText("Waiting for answers");
+  await expect(inspector(page).getByTestId("open-unknown")).toHaveText(
+    "1 still open after “I don't know”: what it asks stays a gap until someone answers or decides",
   );
 });
 
@@ -59,7 +59,7 @@ test("qa-work-2 (review): a brief with critical questions not asked yet does not
 test("qa-work-2 (review): the chip with a critical gap open and nothing asked yet", () => {
   const s = { intake: { status: "awaiting_answers" }, readiness: { open_critical: 1 } } as unknown as Summary;
   expect(statusChip(s, { open: 0, answered: 0, unknown: 0 }).label).toBe("Nothing asked yet");
-  expect(statusChip(s, { open: 0, answered: 1, unknown: 1 }).label).toBe("Waiting for a decision");
+  expect(statusChip(s, { open: 0, answered: 1, unknown: 0 }).label).toBe("Waiting for a decision");
   expect(statusChip(s, { open: 1, answered: 0, unknown: 0 }).label).toBe("Waiting for answers");
 });
 
@@ -70,17 +70,17 @@ test("qa-work-2, qa-work-29 (phone): the summary card says what the inspector sa
   await expect(card).toContainText("Before drafting");
   await expect(card.getByRole("heading", { level: 2 })).toHaveText(/^(Not ready to draft|Can draft, with gaps|Ready to draft)$/);
   await expect(card).not.toContainText("Ready to draft?");
-  await expect(card.getByTestId("intake-readiness-counts")).toHaveText("0 open · 1 answered · 1 critical open");
-  await expect(card).toContainText("1 answered “I don't know”");
-  await expect(page.getByTestId("intake-status")).toHaveText("Waiting for a decision");
+  await expect(card.getByTestId("intake-readiness-counts")).toHaveText("1 open · 0 answered · 1 critical open");
+  await expect(card).toContainText("1 still open after “I don't know”");
+  await expect(page.getByTestId("intake-status")).toHaveText("Waiting for answers");
   await expect(card.getByRole("button", { name: /^Gaps/ })).toHaveCount(0);
   // The same title as the inspector in its sheet.
   const title = await card.getByRole("heading", { level: 2 }).textContent();
   await card.getByRole("button", { name: "Show details" }).click();
   const sheet = page.getByTestId("intake-sheet");
   await expect(sheet.getByTestId("intake-inspector")).toContainText(title!);
-  await expect(sheet.getByTestId("stat-open")).toContainText("0");
-  await expect(sheet.getByTestId("stat-answered")).toContainText("1");
+  await expect(sheet.getByTestId("stat-open")).toContainText("1");
+  await expect(sheet.getByTestId("stat-answered")).toContainText("0");
 });
 
 for (const size of [null, PHONE] as const) {
