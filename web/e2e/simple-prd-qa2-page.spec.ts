@@ -36,10 +36,11 @@ for (const scheme of ["light", "dark"] as const) {
   test.describe(`desktop · ${scheme}`, () => {
     test.use({ viewport: DESKTOP, colorScheme: scheme });
 
-    test("editing a bet warns its flow is detached; the margin quotes the line, fits, and diffs only the words (qa-1, 2, 17, 19)", async ({ page }) => {
+    test("editing a bet keeps its flow, with no detach note; the margin quotes the line, fits, and diffs only the words (qa-1, 2, 17, 19)", async ({ page }) => {
       await open(page);
       await editBet(page, "A setup checklist that shows the next step and how long it takes");
-      await expect(page.getByTestId("flow-detach-warning")).toContainText("its drawn flow stays with the old words");
+      // The owner's pick (qa-simple-prd-1, "Carry the flow over"): the flow stays with the bet.
+      await expect(page.getByTestId("flow-detach-warning")).toHaveCount(0);
       await page.getByRole("button", { name: "Save" }).click();
       const note = page.getByRole("complementary", { name: "Changes and proposals" }).getByRole("note").first();
       await expect(note).toContainText("You changed “A setup checklist that shows…”");

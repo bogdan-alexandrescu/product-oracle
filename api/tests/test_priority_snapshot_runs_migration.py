@@ -83,7 +83,7 @@ def _columns() -> list[str]:
 
 def test_the_chain_ends_here_after_feedback_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0092_rituals_wait_for_goal"]
+    assert script.get_heads() == ["0092_bet_flow_line_key"]
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 

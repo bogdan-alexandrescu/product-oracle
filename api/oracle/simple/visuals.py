@@ -89,8 +89,22 @@ def _me(principal: Any) -> uuid.UUID | None:
     return getattr(principal, "user_id", None)
 
 
-def line_subject(document_id: uuid.UUID, text: str) -> uuid.UUID:
-    """A one-pager line's subject id: its PRD and its words (an edited line is a new bet)."""
+def line_subject(document_id: uuid.UUID, key: str) -> uuid.UUID:
+    """A one-pager bet's subject id: its PRD and the bet's key (``bet_key``), never its
+    words: a bet keeps its drawn flow when its words change (qa-simple-prd-1, "Carry the
+    flow over")."""
+    return uuid.uuid5(document_id, "one_pager_line_id:" + key)
+
+
+def bet_key(line: dict[str, Any]) -> str:
+    """A built bet line's key: the one carried across rebuilds (``one_pager.carry_keys``),
+    or, on a page built before keys were carried, its line id."""
+    return str(line.get("flow_key") or line.get("id") or "")
+
+
+def words_subject(document_id: uuid.UUID, text: str) -> uuid.UUID:
+    """A bet's subject id before 0092_bet_flow_line_key: its PRD and its words. A flow that
+    migration left there (its words matched no line) is still found by them."""
     return uuid.uuid5(document_id, "one_pager_line:" + " ".join(text.split()).lower())
 
 
@@ -159,10 +173,9 @@ async def _subject(db: AsyncSession, kind: str, subject_id: uuid.UUID) -> Subjec
 async def bet_line(
     db: AsyncSession, principal: Any, document_id: uuid.UUID | None, subject_id: uuid.UUID
 ) -> tuple[uuid.UUID, str] | None:
-    """The bet ("What we will build") line of the PRD's one-pager whose subject this is, as
-    the caller reads the page: the published version's, or the working draft's for who
-    sees the draft, whose readers ask for the published bets too. None: no PRD given, or
-    no such bet."""
+    """The bet ("What we will build") line of the PRD's one-pager whose subject this is, and
+    its published words (never a working draft's: who reads only the published page reads
+    its drawing too). The caller must read the page. None: no PRD given, or no such bet."""
     from oracle.simple import one_pager
     from oracle.simple.changes import ChangeError
 
@@ -172,17 +185,24 @@ async def bet_line(
         page = await one_pager.read(db, principal, str(document_id))
     except ChangeError:
         return None
-    for b in page.blocks:
-        for x in b.lines:
-            if x.flow_subject == subject_id:
-                return page.document.id, x.text
-    # Who reads the working draft asks for the published version's bets too.
-    doc = await db.get(Document, page.document.id)
+    doc_id = page.document.id
+    shown = {x.id: x for b in page.blocks for x in b.lines if x.flow_subject is not None}
+    doc = await db.get(Document, doc_id)
     b = await one_pager.built(db, doc, queue=False, persist=False)  # type: ignore[arg-type]
+    bets = []
     for blk in [x for x in b.row.blocks or [] if x.get("key") == "bets"]:
         for x in blk.get("lines") or []:
-            if line_subject(page.document.id, x.get("text") or "") == subject_id:
-                return page.document.id, x["text"]
+            on_page = shown.get(str(x.get("id") or ""))
+            # The page's tidied words, unless they are the draft's: then the published.
+            words = on_page.text if on_page and on_page.state != "edited" else x.get("text")
+            bets.append((bet_key(x), str(words or "")))
+    for key, text in bets:
+        if line_subject(doc_id, key) == subject_id:
+            return doc_id, text
+    # A flow still keyed by a bet's words (one the migration did not move).
+    for _, text in bets + [(x.id, x.text) for x in shown.values()]:
+        if words_subject(doc_id, text) == subject_id:
+            return doc_id, text
     return None
 
 
@@ -231,8 +251,8 @@ async def may_read(db: AsyncSession, principal: Any, v: SimpleVisual) -> bool:
         me = _me(principal)
         return me is not None and (has_role(principal.role, "owner") or me == v.requested_by)
     if v.subject_kind == "one_pager_line" and v.document_id is not None:
-        # A bet's subject is its words: who has the PRD but not the page the bet is on (a
-        # working draft's) does not read its drawing.
+        # A bet's subject is its line: who has the PRD but finds no such bet on the page
+        # does not read its drawing.
         return await bet_line(db, principal, v.document_id, v.subject_id) is not None
     return True
 

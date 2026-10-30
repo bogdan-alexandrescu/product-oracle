@@ -69,7 +69,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0092_rituals_wait_for_goal"]
+    assert script.get_heads() == ["0092_bet_flow_line_key"]
 
 
 # protects=live_reads and browse_calls.kind come and go with the revision: an existing

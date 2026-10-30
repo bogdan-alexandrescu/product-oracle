@@ -376,12 +376,6 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                           <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
                             <label className="sr-only" htmlFor={`edit-${l.id}`}>New wording for {words.get(l.id)}</label>
                             <textarea id={`edit-${l.id}`} value={draftText} onChange={(e) => setDraftText(e.target.value)} rows={2} className="w-full rounded border border-[var(--simple-rule)] bg-transparent p-2" />
-                            {l.flow && draftText.trim() !== (l.full ?? l.text).trim() && (
-                              // qa-simple-prd-1: a bet's flow belongs to its words; say so before saving.
-                              <p role="note" data-testid="flow-detach-warning" className="text-sm text-text2">
-                                New words make this a new bet: its drawn flow stays with the old words and is no longer shown here. Undo brings it back.
-                              </p>
-                            )}
                             <div className="flex gap-2">
                               <Button type="submit" variant="primary" disabled={busy || !draftText.trim()}>{v.can_edit ? "Save" : "Propose"}</Button>
                               <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>

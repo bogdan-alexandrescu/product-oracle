@@ -274,7 +274,7 @@ for (const phone of [false, true]) {
 
       test(`a PRD bet line's states and the swap (${where})`, async ({ page }) => {
         await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, String(JOB_MS)] as const);
-        await page.addInitScript(([key, bet]) => localStorage.setItem(key, bet), [MOCK_VISUAL_FAIL_KEY, "Invite suggestions from the admin's calendar"] as const);
+        await page.addInitScript(([key, bet]) => localStorage.setItem(key, bet), [MOCK_VISUAL_FAIL_KEY, "bets-2"] as const);
         await login(page);
         await page.goto("/simple/prds/guided-setup");
         let loads = 0;
