@@ -286,8 +286,9 @@ for (const phone of [false, true]) {
         const drawn = page.getByRole("group", { name: "User flow of “A setup checklist that shows" });
         await expect(drawn.getByRole("button", { name: "Flow for “A setup checklist that shows" }).locator('[data-shape="decision"]')).toHaveCount(1);
         const row = page.getByRole("group", { name: "User flow of “A sample project created on" }).getByTestId("flow-row");
-        await expect(row.getByTestId("flow-empty")).toContainText("No flow yet");
-        await tap(row.getByRole("button", { name: "Ask Oracle to draw it" }));
+        // 2026-10-30: no "No flow yet" row under a bet; its line ends with "Draw the flow".
+        await expect(row).toHaveCount(0);
+        await tap(page.getByRole("button", { name: "Draw the flow for “A sample project created on" }));
         const stages = row.getByRole("list", { name: "Stages" });
         await expect(stages).toContainText("Read A sample project created on day one");
         await expect(stages).toContainText("Draw the screen");
@@ -298,7 +299,7 @@ for (const phone of [false, true]) {
         await expect(row.getByRole("button", { name: "Flow for “A sample project created on" }).locator('[data-shape="decision"]')).toHaveCount(1);
         // The failed state, on the line itself.
         const failing = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" }).getByTestId("flow-row");
-        await tap(failing.getByRole("button", { name: "Ask Oracle to draw it" }));
+        await tap(page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" }));
         await expect(failing.getByTestId("flow-empty")).toHaveText(/Oracle could not draw this flow\. Nothing changed on the item\./, { timeout: JOB_MS + 8000 });
         await tap(failing.getByRole("button", { name: "Retry" }));
         await expect(failing.getByTestId("flow-drawn")).toContainText("Version 1", { timeout: JOB_MS + 8000 });

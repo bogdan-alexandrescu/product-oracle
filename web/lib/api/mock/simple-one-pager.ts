@@ -22,6 +22,7 @@ import { planByMonth } from "@/lib/simple-home";
 import { planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
+import { annotate } from "./one-pager-checks";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 
 type Role = Schemas["Me"]["role"];
@@ -94,11 +95,18 @@ const DOC_ID = stableUuid("simple-one-pager-doc");
 export function seedOnePager(ownerless = false): OnePagerDb {
   const sections: Sec[] = [
     { key: "problem", heading: "Problem", body: "New workspace admins stall during setup and never invite a teammate in the first week." },
+    // ad-onepager review: stories before who has it are never who has it.
+    { key: "stories", heading: "User stories", body: "- As a new admin, I want a checklist so I know the next step" },
     { key: "who", heading: "Who has it", body: "Admins of new teams with fewer than ten people." },
     { key: "build", heading: "What we will build", body: "- A setup checklist that shows the next step\n- Invite suggestions from the admin's calendar\n- A sample project created on day one" },
-    { key: "outcomes", heading: "Outcomes", body: "- Teammate invited in week one from 48% to 65%\n- Setup finished in a day from 30% to 50%" },
+    { key: "outcomes", heading: "Outcomes", body: "- Teammate invited in week one from 48% to 65%\n- Setup finished in a day from 30% to 50%*" },
     { key: "not-doing", heading: "Not doing", body: "- Single sign-on setup\n- A mobile setup flow" },
-    { key: "risks", heading: "Risks and open decisions", body: "- Calendar access may scare admins away\n- Decide whether the sample project can be deleted" },
+    { key: "risks", heading: "Risks and open decisions", body: "- Calendar access may scare admins away\n- Decide whether the sample project can be deleted\n- F-26 may slip past M1†" },
+    // Reads clearly (2026-10-30): a measure, the codes' names and numbers that disagree.
+    { key: "definitions", heading: "Definitions", body: "- Teammate invited in week one: counted as admins whose first invite is accepted within 7 days; source: the product events table" },
+    { key: "glossary", heading: "Glossary", body: "| Code | Name |\n|---|---|\n| F-26 | Calendar invites |" },
+    { key: "targets", heading: "Targets", body: "Each region adds 40 paid workspaces a month. We sell in 5 regions. Company-wide target: 250 paid workspaces a month." },
+    { key: "later", heading: "Not this quarter", body: "Eight features wait for next quarter.\n\n- Single sign-on setup\n- A mobile setup flow\n- Setup in more languages\n- Bulk user import\n- Setup analytics\n- A guided tour video" },
   ];
   return {
     doc: { id: DOC_ID, slug: "guided-setup", title: "Guided setup" },
@@ -115,7 +123,7 @@ export function seedOnePager(ownerless = false): OnePagerDb {
       ] },
       { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", lines: [
         { id: "outcomes-1", text: "Teammate invited in week one from 48% to 65%", keys: ["outcomes"], metric: { name: "Teammate invited in week one", from: "48%", to: "65%" } },
-        { id: "outcomes-2", text: "Setup finished in a day from 30% to 50%", keys: ["outcomes"], metric: { name: "Setup finished in a day", from: "30%", to: "50%" } },
+        { id: "outcomes-2", text: "Setup finished in a day from 30% to 50%*", keys: ["outcomes"], metric: { name: "Setup finished in a day", from: "30%", to: "50%*" } },
       ] },
       { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", lines: [
         { id: "not_doing-1", text: "Single sign-on setup", keys: ["not-doing"] },
@@ -124,6 +132,7 @@ export function seedOnePager(ownerless = false): OnePagerDb {
       { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", lines: [
         { id: "risks-1", text: "Calendar access may scare admins away", keys: ["risks"] },
         { id: "risks-2", text: "Decide whether the sample project can be deleted", keys: ["risks"] },
+        { id: "risks-3", text: "F-26 may slip past M1†", keys: ["risks"] },
       ] },
       { key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] },
     ],
@@ -385,6 +394,27 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
   const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
   const span = milestoneSpan(db.slice ?? SLICE);
+  const blocks: Schemas["OnePagerBlock"][] = db.blocks.map((b) => ({
+      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null,
+      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
+        const edited = sees && db.draft?.lines[l.id] !== undefined;
+        const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");
+        const flow = b.key === "bets" ? onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(l.id))) : null;
+        return {
+          id: l.id, text, full: edited ? null : l.full ?? null, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
+          state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
+          // S10: each bet carries its visual, keyed by its line: an edit keeps the flow. Its
+          // brief is the published words (the API's bet_line): never a draft's.
+          ...(b.key === "bets" ? { flow_subject: betSubject(l.id, uncomment(l.text).split(/\s+/).filter(Boolean).join(" ")), flow } : {}),
+          decisions: [...(db.decisions?.[l.id] ?? [])],
+          measure: null, measure_source: null, footnotes: [],
+          // 2026-10-30: a bet with no flow offers "Draw the flow" to those who change the PRD (visuals.may_revise).
+          can_draw_flow: b.key === "bets" && !flow && decides(ctx),
+        };
+      }),
+    }));
+  // Reads clearly (2026-10-30): as one_pager_checks.annotate on the PRD's sections.
+  const looks = annotate(blocks, db.sections);
   return {
     document: db.doc,
     version: db.version,
@@ -395,27 +425,14 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     span_end: span?.[1] ?? null,
     built_by: "oracle",
     built_at: "2026-10-20T15:05:00Z",
-    blocks: db.blocks.map((b) => ({
-      key: b.key, title: b.title, rules: b.rules, kind: b.kind,
-      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
-        const edited = sees && db.draft?.lines[l.id] !== undefined;
-        const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");
-        return {
-          id: l.id, text, full: edited ? null : l.full ?? null, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
-          state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
-          // S10: each bet carries its visual, keyed by its line: an edit keeps the flow. Its
-          // brief is the published words (the API's bet_line): never a draft's.
-          ...(b.key === "bets" ? { flow_subject: betSubject(l.id, uncomment(l.text).split(/\s+/).filter(Boolean).join(" ")), flow: onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(l.id))) } : {}),
-          decisions: [...(db.decisions?.[l.id] ?? [])],
-        };
-      }),
-    })),
+    blocks,
     timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
       (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
       new Date(mockNowMs()).toISOString().slice(0, 10),
     ),
-    sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
+    // As the API: the sections the page's lines rest on.
+    sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
     notes,
     draft: sees && db.draft
       ? {
@@ -429,6 +446,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     can_edit: decides(ctx),
     can_propose: !decides(ctx) && RANK[ctx.role] >= RANK.commenter,
     can_start: starts(ctx),
+    // As one_pager.owns: a company owner, the PRD's track owners and its document owner.
+    needs_look: ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : [],
   };
 }
 

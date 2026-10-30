@@ -29765,6 +29765,8 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["OnePagerLine"][];
+            /** Who */
+            who?: string | null;
         };
         /** OnePagerDraft */
         OnePagerDraft: {
@@ -29879,6 +29881,43 @@ export interface components {
              * @default []
              */
             decisions: components["schemas"]["SimpleOpenDecision"][];
+            /** Measure */
+            measure?: string | null;
+            /** Measure Source */
+            measure_source?: string | null;
+            /**
+             * Footnotes
+             * @default []
+             */
+            footnotes: string[];
+            /**
+             * Can Draw Flow
+             * @default false
+             */
+            can_draw_flow: boolean;
+            /** Words */
+            words?: string | null;
+        };
+        /**
+         * OnePagerLook
+         * @description One "Needs a look" item for the PRD's owners (numbers that disagree, a code with no
+         *     name): what to look at, and the sections it is in. Shared by the one-pager's checks.
+         */
+        OnePagerLook: {
+            /** Kind */
+            kind: string;
+            /** Text */
+            text: string;
+            /**
+             * Where
+             * @default []
+             */
+            where: string[];
+            /**
+             * Source Keys
+             * @default []
+             */
+            source_keys: string[];
         };
         /** OnePagerMetric */
         OnePagerMetric: {
@@ -29983,6 +30022,11 @@ export interface components {
             can_propose: boolean;
             /** Can Start */
             can_start: boolean;
+            /**
+             * Needs Look
+             * @default []
+             */
+            needs_look: components["schemas"]["OnePagerLook"][];
         };
         /**
          * OnePagerRemindOut
