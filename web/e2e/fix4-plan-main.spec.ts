@@ -99,13 +99,18 @@ test.describe("desktop", () => {
     await openPlan(page);
     const scope = page.getByTestId("plan-scope-bar").filter({ visible: true });
     await expect(scope.getByRole("group", { name: "Plan scope" })).toBeVisible();
-    // In the same head as Group by, above the table.
-    // The head's other parts (the roadmaps' names) arrive with their own query: wait for it to settle.
-    const groupByGroup = page.getByRole("group", { name: "Group by" }).filter({ visible: true });
-    await expect.poll(async () => Math.abs((await box(scope)).y - (await box(groupByGroup)).y)).toBeLessThanOrEqual(40);
+    // In the Roadmap panel's head with Group by, above the table. The head wraps: at 1440 px,
+    // beside the inspector, Show ends its first line and Group by starts the second.
+    const roadmap = page.getByRole("region", { name: "Roadmap" }).filter({ visible: true });
+    await expect(roadmap.getByTestId("plan-scope-bar")).toBeVisible();
+    const groupBy = roadmap.getByRole("group", { name: "Group by" });
     const s = await box(scope);
-    const table = await box(page.getByTestId("plan-table"));
-    expect(s.y).toBeLessThan(table.y);
+    const g = await box(groupBy);
+    const table = await box(roadmap.getByTestId("plan-table"));
+    expect(s.y + s.height).toBeLessThanOrEqual(table.y);
+    expect(g.y + g.height).toBeLessThanOrEqual(table.y);
+    // At most a line apart: one head, not a bar of its own.
+    expect(Math.abs(s.y - g.y)).toBeLessThanOrEqual(s.height + 10);
     const goals = await box(page.getByTestId("plan-goals").filter({ visible: true }));
     expect(s.y, "below the goals, not between the tabs and Goals").toBeGreaterThan(goals.y + goals.height);
   });
