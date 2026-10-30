@@ -84,12 +84,12 @@ test("qa-work-46: Edit picks says it opens Settings, where picks read by name an
   const chat = page.getByRole("listitem", { name: "Product chat" });
   await expect(chat.getByTestId("source-picks")).toHaveText("#product, #customer-feedback");
   // The skipped channel reads by its name, never its Slack id.
-  await expect(chat.getByRole("list", { name: "Unreadable files of Product chat" })).toContainText("#partner-launch");
+  await expect(chat.getByRole("list", { name: "Sync notes for Product chat" })).toContainText("#partner-launch");
   await expect(chat).not.toContainText("C0777PARTNER");
-  // 120 channels saved before names were kept: counted, not listed by id.
+  // 120 channels saved before names were kept: counted as unknown (Settings' words, qa-settings-23), not listed by id.
   const legacy = page.getByRole("listitem", { name: "Legacy all-hands chat" });
-  await expect(legacy.getByTestId("source-picks")).toHaveText("120 channels");
-  await expect(legacy.getByTestId("source-picks")).toHaveAttribute("title", /saved before names were kept/);
+  await expect(legacy.getByTestId("source-picks")).toHaveText("120 unknown channels");
+  await expect(legacy.getByTestId("source-picks")).toHaveAttribute("title", /^No name saved for /);
   await expect(legacy).not.toContainText("LEGACY");
 });
 
@@ -98,7 +98,7 @@ test("qa-work-46 (phone): the picks stay one short line", async ({ page }) => {
   await login(page);
   await page.goto("/settings/sources");
   const legacy = page.getByRole("listitem", { name: "Legacy all-hands chat" });
-  await expect(legacy.getByTestId("source-picks")).toHaveText("120 channels");
+  await expect(legacy.getByTestId("source-picks")).toHaveText("120 unknown channels");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });

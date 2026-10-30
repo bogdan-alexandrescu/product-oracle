@@ -63,7 +63,8 @@ test("Pick sources: an empty Uploads source does not tick it, the build sheet wa
   await expect(sheet(page)).toBeVisible();
   await expect(sheet(page).getByTestId("build-no-items")).toContainText("Your sources have no items yet, so the build has nothing to read.");
   await sheet(page).getByRole("link", { name: "Add files or sync a source" }).click();
-  await expect(page).toHaveURL(/\/settings\/sources$/);
+  // Opened from Set up, the build sheet keeps the way back to Home (fix4-plan, qa-onboarding-17).
+  await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
 
   // A file in it: Pick sources is done and counts it.
   await notes.getByLabel("Upload files to Research notes").setInputFiles([

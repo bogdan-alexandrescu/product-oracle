@@ -73,7 +73,7 @@ test("sources › Google Docs: choose files and a folder from Drive, remove one,
   await form.getByRole("button", { name: "Add source" }).click();
   const row = page.getByRole("listitem", { name: "Planning docs" });
   // A pasted id has no name: it reads as unknown, the id only in the title (qa-settings-23).
-  await expect(row.getByTestId("source-picks")).toHaveText("Roadmap notes, Unknown file");
+  await expect(row.getByTestId("source-picks")).toHaveText("Roadmap notes, unknown file");
   await expect(row.getByTestId("source-picks")).toHaveAttribute("title", "Roadmap notes. No name saved for 1DocPastedExample");
   await expect(row).toContainText("FoldersPlanning");
   // The folder picked through the picker reads by its name, never its Drive id (qa-settings-23).

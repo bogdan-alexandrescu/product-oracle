@@ -47,7 +47,7 @@ test("qa-onboarding-33: a Simple owner's setup steps go back to Simple's Home", 
   await toSimple(page);
 
   // Time zone: pick Tokyo, Save, Back to Home from the save.
-  await simpleCard(page).getByRole("link", { name: "Set the company time zone", exact: true }).click();
+  await simpleCard(page).getByRole("link", { name: "Time zone", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=simple-setup#timezone$/);
   const zonePanel = page.getByTestId("timezone-panel");
   await pickZone(zonePanel, "Asia/Tokyo");
@@ -55,10 +55,10 @@ test("qa-onboarding-33: a Simple owner's setup steps go back to Simple's Home", 
   await expect(zonePanel.getByRole("status")).toHaveText("Saved · Back to Home");
   await zonePanel.getByRole("status").getByRole("link", { name: "Back to Home" }).click();
   await expect(page).toHaveURL(/\/simple$/);
-  await expect(simpleCard(page).getByTestId("home-setup-step").filter({ hasText: "Set the company time zone" })).toContainText("Done");
+  await expect(simpleCard(page).getByTestId("home-setup-step").filter({ hasText: "Time zone" }).getByRole("img", { name: "Done" })).toBeVisible();
 
   // Horizons: Save the defaults; the Settings bar's Back to Home also opens Simple's Home.
-  await simpleCard(page).getByRole("link", { name: "Check the planning horizons", exact: true }).click();
+  await simpleCard(page).getByRole("link", { name: "Horizons", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=simple-setup#horizons$/);
   const horizons = page.locator("#horizons");
   await horizons.getByRole("button", { name: "Save" }).click();
@@ -68,10 +68,10 @@ test("qa-onboarding-33: a Simple owner's setup steps go back to Simple's Home", 
   await expect(bar).toHaveAttribute("href", "/simple");
   await bar.click();
   await expect(page).toHaveURL(/\/simple$/);
-  await expect(simpleCard(page).getByTestId("home-setup-step").filter({ hasText: "Check the planning horizons" })).toContainText("Done");
+  await expect(simpleCard(page).getByTestId("home-setup-step").filter({ hasText: "Horizons" }).getByRole("img", { name: "Done" })).toBeVisible();
 
   // Another Simple step keeps the way back to Simple too.
-  await simpleCard(page).getByRole("link", { name: "Name the engineering lead", exact: true }).click();
+  await simpleCard(page).getByRole("link", { name: "Engineering lead", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Back to Home" })).toHaveAttribute("href", "/simple");
 });
 
