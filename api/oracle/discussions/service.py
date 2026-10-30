@@ -1162,15 +1162,37 @@ async def _is_first(db: AsyncSession, d: Discussion, message: DiscussionMessage)
 
 async def _withdraw_feedback(db: AsyncSession, principal: "Principal", d: Discussion) -> None:
     """The thread's first message is gone, or only the people picked read it now: the
-    whole-draft feedback it was is withdrawn (fix3-discuss review)."""
+    whole-draft feedback it was is withdrawn (fix3-discuss review). Only an item no one has
+    acted on goes (open, unanswered, not staged, no suggestion decided), its suggestions with
+    it; one someone acted on is kept with its text and leaves the thread, so an accepted or
+    dismissed suggestion and its record stay (fix3-discuss review 2, as late answers)."""
+    from oracle.jobs.models import LlmSuggestion
+
     item = await _feedback_item(db, d)
     if item is None:
         return
+    decided = await db.scalar(
+        select(LlmSuggestion.id)
+        .where(
+            LlmSuggestion.feedback_item_id == item.id,
+            LlmSuggestion.status.not_in(("open", "superseded")),
+        )
+        .limit(1)
+    )
+    acted = (
+        item.status != "open"
+        or item.resolution_note
+        or item.staged_for_agents_at
+        or decided is not None
+    )
     await audit.record(
-        db, principal, "feedback.withdraw", "feedback_item", item.id,
-        {"discussion_id": str(d.id), "status": item.status},
+        db, principal, "feedback.unlink" if acted else "feedback.withdraw", "feedback_item",
+        item.id, {"discussion_id": str(d.id), "status": item.status},
     )  # fmt: skip
-    await db.delete(item)
+    if acted:
+        item.discussion_id = None
+    else:
+        await db.delete(item)
     await db.flush()
 
 
