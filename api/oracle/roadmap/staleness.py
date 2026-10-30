@@ -24,6 +24,7 @@ section's hash are recorded as what the item was reconciled against, and later c
 are judged against them; the item's own trace is kept as built).
 """
 
+import json
 import re
 import uuid
 from collections.abc import Iterable
@@ -219,15 +220,43 @@ def for_reader(reasons: Iterable[str] | None, hidden: Any) -> list[str]:
     )
 
 
+def stored_detail(reasons: list[str]) -> str:
+    """A stale alert's reasons as stored: a JSON list, so a reason naming a title that
+    holds ``"; "`` is never cut in two when it is read (cld-4)."""
+    return json.dumps(reasons, ensure_ascii=False)
+
+
+def _stored_reasons(detail: str) -> list[str] | None:
+    """The reasons of a detail stored by :func:`stored_detail`; None for a line stored
+    before it, its reasons joined by ``"; "``."""
+    if not detail.startswith("["):
+        return None
+    try:
+        reasons = json.loads(detail)
+    except ValueError:
+        return None
+    if isinstance(reasons, list) and all(isinstance(r, str) for r in reasons):
+        return reasons
+    return None
+
+
 def detail_for_reader(detail: str | None, hidden: Any) -> str | None:
-    """A stored ``"; "``-joined reason line for the reader: what they may not see is
-    hidden first (:func:`for_reader`), then the rest is put into words (:func:`in_words`),
-    so a reader never learns the kind of a hidden item ("A decision ... changed"). A
-    reason stored in an older form (worded, or prod-6's literal refs) reads the same way,
-    with no migration needed."""
+    """A stored stale alert's reasons (:func:`stored_detail`) as one line for the reader:
+    what they may not see is hidden first (:func:`for_reader`), then the rest is put into
+    words (:func:`in_words`), so a reader never learns the kind of a hidden item ("A
+    decision ... changed"). A line stored before cld-4, its reasons joined by ``"; "``, is
+    split on it, and when the line read still names something hidden (a title holding
+    ``"; "``, cut in two and joined again) it is said only as :data:`HIDDEN_REASON`. A reason
+    stored in an older form (worded, or prod-6's literal refs) reads the same way, with
+    no migration needed."""
     if not detail:
         return detail
-    return "; ".join(in_words(one_count(for_reader(detail.split("; "), hidden))))
+    reasons = _stored_reasons(detail)
+    if reasons is None:
+        reasons = detail.split("; ")
+    line = "; ".join(in_words(one_count(for_reader(reasons, hidden))))
+    # The halves of a cut title, joined again, name it whole.
+    return HIDDEN_REASON if hidden is not None and hidden.names(line) else line
 
 
 def _mark(item: RoadmapItem, event: ChangeEvent, reason: str, now: datetime) -> None:
