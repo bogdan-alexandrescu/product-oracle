@@ -21,6 +21,10 @@ export default defineConfig({
   testDir: "./e2e",
   // e2e/real runs against the real stack: playwright.real.config.ts (`make e2e`).
   testIgnore: "real/**",
+  // Timing specs (tagged @timing, as the API's pytest `timing` mark) assert wall-clock
+  // budgets: the default run skips them; E2E_TIMING=1 runs them, alone, after it
+  // (`E2E_TIMING=1 npx playwright test --grep @timing --workers=1`).
+  grepInvert: process.env.E2E_TIMING === "1" ? undefined : /@timing/,
   fullyParallel: true,
   workers: WORKERS,
   forbidOnly: !!process.env.CI,

@@ -12,7 +12,10 @@ import {
   closedItem,
   DAY_MS,
   daysBetween,
+  liftBar,
   liveBreaks,
+  markDrag,
+  type Lifted,
   milestonePrd,
   ms,
   planMilestones,
@@ -366,7 +369,7 @@ export function Lanes(props: LanesProps) {
   return props.compact ? <PhoneLanes {...props} /> : <DesktopLanes {...props} />;
 }
 
-type Drag = { id: string; mode: "move" | "start" | "end"; x0: number; start: string; end: string; dx: number; moved: boolean; frame: number | null; pointer: number; touch: boolean; armed: boolean; timer: number | null };
+type Drag = { id: string; mode: "move" | "start" | "end"; x0: number; start: string; end: string; dx: number; moved: boolean; frame: number | null; pointer: number; touch: boolean; armed: boolean; timer: number | null; lift?: Lifted };
 
 declare global {
   interface Window {
@@ -711,8 +714,10 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     if (!d) return;
     d.frame = null;
     const t0w = performance.now();
-    const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
-    if (!g) return;
+    const own = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
+    if (!own) return;
+    d.lift ??= liftBar(own);
+    const g = d.lift.bar;
     const days = Math.round(d.dx / sc.px);
     const start = d.mode === "end" ? d.start : addDays(d.start, days);
     const end = d.mode === "start" ? d.end : addDays(d.end, days);
@@ -732,17 +737,16 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
       hit?.setAttribute("x", String(x));
       hit?.setAttribute("width", String(w + 6 + Number(label.dataset.w ?? 0)));
     }
-    g.dataset.dragStart = s;
-    g.dataset.dragEnd = e;
     const breaks = liveBreaks(items, d.id, s, e);
-    g.dataset.live = breaks.length ? "broken" : "ok";
+    markDrag(own, s, e, breaks.length > 0);
     rect?.setAttribute("stroke", breaks.length ? "var(--crit)" : "var(--accent-ink)");
     if (live.current) {
       live.current.hidden = false;
-      live.current.textContent = `${shortDay(s)} – ${shortDay(e)}${breaks.length ? ` · ${breaks[0]}` : " · no broken links"}`;
+      const words = `${shortDay(s)} – ${shortDay(e)}${breaks.length ? ` · ${breaks[0]}` : " · no broken links"}`;
+      if (live.current.textContent !== words) live.current.textContent = words;
       live.current.dataset.state = breaks.length ? "broken" : "ok";
-      live.current.style.left = `${Math.max(0, Math.min(x, W - 280))}px`;
-      live.current.style.top = `${(layout.y.get(d.id) ?? 0) - 22}px`;
+      // On its own layer, moved by a transform: no layout of the chart's box per frame.
+      live.current.style.transform = `translate(${Math.max(0, Math.min(x, W - 280))}px, ${(layout.y.get(d.id) ?? 0) - 22}px)`;
     }
     window.__poDragWork?.push(performance.now() - t0w);
   };
@@ -811,6 +815,8 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     if (d.frame != null) cancelAnimationFrame(d.frame);
     if (frames.current.raf != null) cancelAnimationFrame(frames.current.raf);
     if (live.current) live.current.hidden = true;
+    // The chart's bar back in place (its last move is still written to its dates below).
+    d.lift?.drop();
     const item = items.get(d.id);
     if (!item) return;
     const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
@@ -964,7 +970,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
               <PreviewGhost l={layout} sc={sc} items={items} preview={preview} data={data} inset={{ top: 4, h: BAR_H }} />
               <TodayPill x={xt} y={MONTH_H + 2} />
             </svg>
-            <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
+            <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute top-0 left-0 z-20 will-change-transform rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
             {/* fix4 qa-simple-roadmap-1: a callout under its pill writes its words whole, wrapping
                 (its fixes onto a line of their own) instead of cutting them, at its own width up
                 to the chart's; its lane's line grows to fit it (callH). */}

@@ -160,7 +160,7 @@ import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimple
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { itemSubjectName, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -547,7 +547,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
- * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
+ * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
+ * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
  * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts).
  */
@@ -2746,7 +2747,9 @@ function load(): Db {
   if (raw && hit && hit.raw === raw) return hit.db;
   if (raw) {
     try {
-      return JSON.parse(raw) as Db;
+      const db = JSON.parse(raw) as Db;
+      knowManyPlans(db.simple_roadmap);
+      return db;
     } catch {
       // fall through to a fresh seed
     }
@@ -2866,6 +2869,8 @@ function load(): Db {
                     ? seedNoStrategyScenario
                     : seed,
   );
+  // The 500-item scenario's plans, known only while its items are the roadmap's.
+  knowManyPlans(db.simple_roadmap);
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
   db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];

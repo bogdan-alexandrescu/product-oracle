@@ -450,47 +450,4 @@ test.describe("phone, long-press", () => {
   });
 });
 
-test.describe("500 items", () => {
-  test.beforeEach(async ({ context }) => {
-    await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
-  });
-
-  /**
-   * Card simple-roadmap-500: protects = a 500-item roadmap's first paint (navigation to
-   * 500 bars drawn) is under 2 s and a drag runs at 60 fps (median frame interval under
-   * 20 ms, each pointer move handled in under 4 ms on average); fails_when = the chart
-   * re-renders per move or paints slowly; no_claim = a real laptop's numbers (the mock in
-   * headless Chromium).
-   */
-  test("first paint under 2 s and a 60 fps drag", async ({ page }) => {
-    await login(page);
-    // fix4 review: the best of three loads, so a busy machine (other workers' builds and
-    // browsers) does not count against the chart; the budget itself stays 2 s.
-    const paints: number[] = [];
-    for (let n = 0; n < 3; n++) {
-      if (n) await page.goto("about:blank");
-      const t0 = Date.now();
-      await page.goto(URL);
-      await expect(page.locator('g[data-testid="bar"]')).toHaveCount(500);
-      paints.push(Date.now() - t0);
-      if (paints[n] < 2000) break;
-    }
-    const paint = Math.min(...paints);
-    console.log(`500 items: first paint in ${paints.join(", ")} ms`);
-    expect(paint).toBeLessThan(2000);
-    await page.evaluate(() => {
-      window.__poDragFrames = [];
-      window.__poDragWork = [];
-    });
-    const key = (await page.locator('g[data-testid="bar"][data-kind="dated"]').first().getAttribute("data-item"))!;
-    await drag(page, key, 120, 60);
-    const { frames, work } = await page.evaluate(() => ({ frames: window.__poDragFrames ?? [], work: window.__poDragWork ?? [] }));
-    const sorted = [...frames].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    const avgWork = work.reduce((a, b) => a + b, 0) / Math.max(1, work.length);
-    console.log(`drag: ${frames.length} frames, median ${median?.toFixed(1)} ms, ${work.length} moves at ${avgWork.toFixed(2)} ms each`);
-    expect(frames.length).toBeGreaterThan(5);
-    expect(median).toBeLessThan(20);
-    expect(avgWork).toBeLessThan(4);
-  });
-});
+// The 500-item first paint and drag speed: e2e/simple-roadmap-500-timing.spec.ts (@timing).

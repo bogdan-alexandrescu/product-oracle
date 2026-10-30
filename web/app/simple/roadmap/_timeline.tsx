@@ -11,7 +11,10 @@ import {
   broken,
   closedItem,
   daysBetween,
+  liftBar,
   liveBreaks,
+  markDrag,
+  type Lifted,
   milestonePrd,
   milestoneWords,
   ms,
@@ -328,6 +331,8 @@ type Drag = {
   touch: boolean;
   armed: boolean;
   timer: number | null;
+  /** The bar on its own layer while it is dragged (liftBar). */
+  lift?: Lifted;
 };
 
 declare global {
@@ -435,8 +440,10 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     if (!d) return;
     d.frame = null;
     const t0 = performance.now();
-    const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
-    if (!g) return;
+    const own = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
+    if (!own) return;
+    d.lift ??= liftBar(own);
+    const g = d.lift.bar;
     const days = Math.round(d.dx / sc.px);
     const start = d.mode === "end" ? d.start : addDays(d.start, days);
     const end = d.mode === "start" ? d.end : addDays(d.end, days);
@@ -449,17 +456,16 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     rect?.setAttribute("width", String(w));
     const it = items.get(d.id);
     if (format === "waterfall" && it) drawPhases(g, rephase(it, s, e), sc, x, w);
-    g.dataset.dragStart = s;
-    g.dataset.dragEnd = e;
     const breaks = liveBreaks(items, d.id, s, e);
-    g.dataset.live = breaks.length ? "broken" : "ok";
+    markDrag(own, s, e, breaks.length > 0);
     rect?.setAttribute("stroke", breaks.length ? "var(--crit)" : "var(--accent-ink)");
     if (live.current) {
       live.current.hidden = false;
-      live.current.textContent = `${shortDay(s)} – ${shortDay(e)}${breaks.length ? ` · ${breaks[0]}` : " · no broken links"}`;
+      const words = `${shortDay(s)} – ${shortDay(e)}${breaks.length ? ` · ${breaks[0]}` : " · no broken links"}`;
+      if (live.current.textContent !== words) live.current.textContent = words;
       live.current.dataset.state = breaks.length ? "broken" : "ok";
-      live.current.style.left = `${Math.min(x, sc.width - 280)}px`;
-      live.current.style.top = `${(l.y.get(d.id) ?? 0) - 24}px`;
+      // On its own layer, moved by a transform: no layout of the chart's box per frame.
+      live.current.style.transform = `translate(${Math.min(x, sc.width - 280)}px, ${(l.y.get(d.id) ?? 0) - 24}px)`;
     }
     window.__poDragWork?.push(performance.now() - t0);
   };
@@ -535,6 +541,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     if (d.frame != null) cancelAnimationFrame(d.frame);
     if (frames.current.raf != null) cancelAnimationFrame(frames.current.raf);
     if (live.current) live.current.hidden = true;
+    // The chart's bar back in place (its last move is still written to its dates below).
+    d.lift?.drop();
     const item = items.get(d.id);
     if (!item) return;
     const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
@@ -865,7 +873,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               )}
             </g>
           </svg>
-          <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
+          <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute top-0 left-0 z-20 will-change-transform rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
           {view &&
             l.rows.map((r) => {
               if (r.kind !== "item") return null;
