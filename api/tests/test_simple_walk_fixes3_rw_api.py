@@ -4,13 +4,12 @@ Against Postgres; the company's clock is fixed (Mon Nov 2, 2026, Pacific).
 Test cards (protects / fails_when / no_claim):
 
 - test_why_line_names_prd_draft_code_and_feature: protects=the item card's "Why" line
-  naming where an item came from reads "From <PRD> (draft N): F-01 Sign-up flow." (the
-  PRD's name, the number of the PRD draft the item was imported from, the code with the
-  feature's name); a coded section with no heading reads its code with the item's name;
-  a section key that is no code reads the item's own code (its feature's, F-12) with its
-  name, else its name alone; fails_when=any reason reads "section <key>" (a lowercase
-  anchor such as "section f-01"), or the draft number is missing; no_claim=the other
-  reasons (rationale, goal).
+  naming where an item came from reads "From <PRD> (draft N): Sign-up flow." (the
+  PRD's name, the number of the PRD draft the item was imported from, the feature's name
+  with no code: the card names an item by its title alone, qa-simple-roadmap-3); a section
+  with no heading reads the item's name; fails_when=any reason reads "section <key>" (a
+  lowercase anchor such as "section f-01") or a code ("F-01"), or the draft number is
+  missing; no_claim=the other reasons (rationale, goal).
 - test_later_starts_where_next_ends: protects=the roadmap's Later window starts the day
   after Next ends (Jul 1, 2027 when Next ends Jun 30, 2027) and ends where the long
   horizon ends (today + 24 months), and an undated Later item's estimated bar starts
@@ -54,9 +53,9 @@ async def test_why_line_names_prd_draft_code_and_feature(client):
         await s.commit()
     for role in ("owner", "viewer"):
         items = by_key(await get(client, ctx, role))
-        assert _from_line(items["sign-up"]) == "From Signup Prd (draft 5): F-01 Sign-up flow."
-        assert _from_line(items["invites"]) == "From Signup Prd (draft 5): F-02 Team invites."
-        assert _from_line(items["billing"]) == "From Signup Prd (draft 5): F-12 Billing page."
+        assert _from_line(items["sign-up"]) == "From Signup Prd (draft 5): Sign-up flow."
+        assert _from_line(items["invites"]) == "From Signup Prd (draft 5): Team invites."
+        assert _from_line(items["billing"]) == "From Signup Prd (draft 5): Billing page."
         assert _from_line(items["tour"]) == "From Signup Prd (draft 5): Product tour."
         for item in items.values():
             assert not any("section " in r for r in item["reasons"]), item["reasons"]

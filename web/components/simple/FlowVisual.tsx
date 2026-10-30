@@ -594,9 +594,15 @@ export function FlowPanel({
     </>
   );
 
-  // qa-simple-prd-p3-22: the opened view offers the viewer's Comment too (the comments, notes,
-  // versions and Revise), so the two views carry the same actions; it opens them full screen.
-  const commentButton = (
+  // The opened view's one Comment (the comments, notes, versions and Revise), as each page's own
+  // lane built it: on the Roadmap card (fix4 qa-simple-roadmap-47) it opens them in the opened
+  // view, after the screen on a phone; elsewhere (qa-simple-prd-p3-22) it opens them full screen.
+  const onCard = !!backLabel;
+  const commentButton = onCard ? (
+    <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
+      Comment
+    </button>
+  ) : (
     <button
       type="button"
       className={BTN}
@@ -633,7 +639,7 @@ export function FlowPanel({
             {phoneMeta(f)}
             {older}
           </p>
-          {commentButton}
+          {!onCard && commentButton}
         </div>
         <div className="mt-2">
           <FlowDiagram flow={f} layout="down" width={352} testId="flow-svg" />
@@ -643,7 +649,7 @@ export function FlowPanel({
         <p className={`mt-2 ${SUB}`}>Screen: {f.touches_screen ? f.screen.title : "none (it touches no screen)"}</p>
         <FlowScreen flow={f} size={12} />
         {/* The header has no room on a phone: Comment follows the screen. */}
-        <div className="mt-3">{commentButton}</div>
+        {onCard && <div className="mt-3">{commentButton}</div>}
         {commenting && !full && <div className="mt-3 border-t border-line pt-3">{commentsPanel(f, true)}</div>}
       </div>
     </div>
@@ -667,12 +673,12 @@ export function FlowPanel({
           {flowDrawn(f, zone)}
           {older}
         </span>
-        {commentButton}
+        {onCard && commentButton}
         <button type="button" className={BTN} data-first onClick={() => setFull(true)}>
           <Icon d={ICONS.expand} />
           Full screen
         </button>
-        {commentButton}
+        {!onCard && commentButton}
         <button type="button" className={BTN} onClick={() => setView(null)}>
           Close
         </button>

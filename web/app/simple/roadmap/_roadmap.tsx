@@ -1200,7 +1200,7 @@ export function SimpleRoadmap() {
           )}
         </p>
       )}
-            <div ref={wrap} className={blank ? "hidden" : "relative"}>
+      <div ref={wrap} className={blank ? "hidden" : "relative"}>
         {filtered && !data.items.length ? (
           // fix4 qa-simple-roadmap-12: no bare axis when the filters leave nothing: say so, and a way back.
           <div data-testid="filters-empty" className="flex flex-col items-start gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-6">
