@@ -422,6 +422,12 @@ async def test_delivery_choices(client, monkeypatch):
         return SimpleSlackState(connected=True, channel="#product")
 
     monkeypatch.setattr(meetings, "_slack_state", connected)
+    posts: list[str] = []
+
+    async def post(db, text):
+        posts.append(text)
+
+    monkeypatch.setattr(meetings, "_post_slack", post)
     m2 = await start(client, w, title="Second review")
     out = await end(client, w, m2["id"])
     assert out["email_available"] and out["slack"] == {"connected": True, "channel": "#product"}
@@ -430,12 +436,13 @@ async def test_delivery_choices(client, monkeypatch):
     assert r.status_code == 200, r.text
     assert r.json()["delivery"]["slack_channel"] == "#product"
     async with tenant_session(w.ctx.tenant_id) as s:
-        [post] = list(await s.scalars(select(SlackOutbox)))
-        assert post.payload["channel_post"] and "Second review" in post.payload["text"]
+        # dod-delivery: the post is tried with the emails (its own status), not the outbox.
+        assert list(await s.scalars(select(SlackOutbox))) == []
         await meetings.deliver_email(s, uuid.UUID(m2["id"]))
         await s.commit()
     got = await get(client, w, m2["id"])
     assert got["delivery"]["email_status"] == "sent"
+    assert got["delivery"]["slack_status"] == "sent" and "Second review" in posts[0]
     emails = {w.ctx.users[x].email for x in ("decider", "approver", "commenter")}
     assert sorted(x.to for x in fake.sent) == sorted(emails)
     assert all(x.subject == "Minutes: Second review" for x in fake.sent)

@@ -267,6 +267,7 @@ PER_ITEM: dict[str, Role | None] = {
     "remind_simple_one_pager_reviewers": "owner",
     "remove_evidence": "approver",
     "reopen_track_alert": None,
+    "retry_simple_meeting_delivery": "owner",
     "request_simple_visual": "owner",
     "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",

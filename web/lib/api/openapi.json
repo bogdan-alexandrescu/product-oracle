@@ -45175,6 +45175,70 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/meetings/{meeting_id}/delivery/retry": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Retry Simple Meeting Delivery",
+        "description": "Retry: whoever ended the meeting or an owner requeues the minutes' failed emails or\nSlack post (403 for others, 409 when nothing failed); the minute tick tries them.",
+        "operationId": "retry_simple_meeting_delivery",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleRetryDeliveryIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
     "/v1/simple/decisions": {
       "get": {
         "tags": [
@@ -113610,6 +113674,19 @@
             ],
             "title": "Email Status"
           },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleEmailDelivery"
+            },
+            "type": "array",
+            "title": "Emails",
+            "default": []
+          },
+          "email_sent": {
+            "type": "integer",
+            "title": "Email Sent",
+            "default": 0
+          },
           "slack": {
             "type": "boolean",
             "title": "Slack",
@@ -113948,6 +114025,30 @@
         ],
         "title": "SimpleDraftOut",
         "description": "A working draft of one roadmap (S3b): its changes until submitted, then the version\nin review and who it waits on."
+      },
+      "SimpleEmailDelivery": {
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "sent",
+              "retrying",
+              "failed"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "person",
+          "status"
+        ],
+        "title": "SimpleEmailDelivery",
+        "description": "One attendee's minutes email: queued, sent, retrying (a try failed, another is due\non the tick) or failed (three tries failed; Retry requeues it)."
       },
       "SimpleEvidence": {
         "properties": {
@@ -115213,6 +115314,11 @@
             "type": "boolean",
             "title": "Redraft",
             "default": false
+          },
+          "retry_delivery": {
+            "type": "boolean",
+            "title": "Retry Delivery",
+            "default": false
           }
         },
         "type": "object",
@@ -115332,6 +115438,21 @@
             },
             "type": "array",
             "title": "Decisions"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDelivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_retry_delivery": {
+            "type": "boolean",
+            "title": "Can Retry Delivery",
+            "default": false
           }
         },
         "type": "object",
@@ -117769,6 +117890,23 @@
           "draft"
         ],
         "title": "SimpleResumeOut"
+      },
+      "SimpleRetryDeliveryIn": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "enum": [
+              "email",
+              "slack"
+            ],
+            "title": "What"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what"
+        ],
+        "title": "SimpleRetryDeliveryIn"
       },
       "SimpleRoadmapItem": {
         "properties": {

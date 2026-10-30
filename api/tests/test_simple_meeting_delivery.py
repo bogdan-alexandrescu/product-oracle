@@ -82,7 +82,7 @@ async def _sent(client, w, monkeypatch, *, bad: set[str], slack_fails: int):
 
 
 def _by_name(d: dict) -> dict[str, str]:
-    return {e["person"]["name"]: e["status"] for e in d["emails"]}
+    return {e["person"]["id"]: e["status"] for e in d["emails"]}
 
 
 async def _tick(w, clock_, minutes: float = 0) -> None:
@@ -95,6 +95,8 @@ async def _tick(w, clock_, minutes: float = 0) -> None:
 async def test_partial_failure_retries_then_fails(client, monkeypatch, clock, caplog):  # noqa: F811
     w = await world()
     commenter = w.ctx.users["commenter"]
+    # Alembic's fileConfig (the test database's migrations) disables loggers made before it.
+    monkeypatch.setattr(meetings.log, "disabled", False)
     caplog.set_level(logging.WARNING)
     m, fake, slack = await _sent(client, w, monkeypatch, bad={commenter.email}, slack_fails=1)
     await _tick(w, clock)
@@ -102,7 +104,7 @@ async def test_partial_failure_retries_then_fails(client, monkeypatch, clock, ca
     # The first try: two of three went, the commenter's will be tried again; Slack too.
     assert d["email_status"] == "retrying" and d["email_sent"] == 2
     names = _by_name(d)
-    assert names[commenter.name] == "retrying"
+    assert names[str(commenter.id)] == "retrying"
     assert sorted(names.values()) == ["retrying", "sent", "sent"]
     assert d["slack_status"] == "retrying" and len(slack.posts) == 1
     # Not before the backoff.
@@ -119,7 +121,7 @@ async def test_partial_failure_retries_then_fails(client, monkeypatch, clock, ca
     await _tick(w, clock, 1)
     d = (await get(client, w, m["id"]))["delivery"]
     assert d["email_status"] == "failed" and d["email_sent"] == 2
-    assert _by_name(d)[commenter.name] == "failed"
+    assert _by_name(d)[str(commenter.id)] == "failed"
     assert fake.tried.count(commenter.email) == 3 and len(fake.sent) == 2
     await _tick(w, clock, 60)
     assert fake.tried.count(commenter.email) == 3 and len(slack.posts) == 2
@@ -173,7 +175,7 @@ async def test_retry_rights_and_requeue(client, monkeypatch, clock):  # noqa: F8
     r = await client.post(url, json={"what": "email"}, headers=w.ctx.as_("owner"))
     assert r.status_code == 200, r.text
     d = r.json()["delivery"]
-    assert _by_name(d)[commenter.name] == "queued" and d["email_status"] == "queued"
+    assert _by_name(d)[str(commenter.id)] == "queued" and d["email_status"] == "queued"
     assert sorted(_by_name(d).values()) == ["queued", "sent", "sent"]
     assert d["slack_status"] == "failed"
     await _tick(w, clock)

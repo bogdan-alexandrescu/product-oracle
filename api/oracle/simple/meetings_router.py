@@ -39,6 +39,7 @@ from oracle.simple.schemas import (
     SimpleMeetingRulesIn,
     SimpleMeetingsOut,
     SimpleMinutesIn,
+    SimpleRetryDeliveryIn,
     SimpleSendIn,
     SimpleStartOptions,
 )
@@ -196,8 +197,20 @@ async def send_simple_meeting_minutes(
     """Post the minutes to the Decisions page and each attendee's Inbox; email the
     attendees and post to Slack when chosen."""
     m = await _run(db, meetings.send(db, principal, meeting_id, body))
-    if (m.delivery or {}).get("email_status") == "queued":
+    d = m.delivery or {}
+    if d.get("email_status") == "queued" or d.get("slack_status") == "queued":
         background.add_task(_email, principal.tenant_id, meeting_id)
+    return await _out(db, principal, meeting_id)
+
+
+@router.post("/meetings/{meeting_id}/delivery/retry", response_model=SimpleMeetingOut,
+             name="retry_simple_meeting_delivery")  # fmt: skip
+async def retry_simple_meeting_delivery(
+    meeting_id: uuid.UUID, body: SimpleRetryDeliveryIn, principal: Commenter, db: TenantDB
+) -> SimpleMeetingOut:
+    """Retry: whoever ended the meeting or an owner requeues the minutes' failed emails or
+    Slack post (403 for others, 409 when nothing failed); the minute tick tries them."""
+    await _run(db, meetings.retry_delivery(db, principal, meeting_id, body.what))
     return await _out(db, principal, meeting_id)
 
 
