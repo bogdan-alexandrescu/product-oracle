@@ -66,6 +66,7 @@ export function PageHeader({
         </div>
       )}
       <h1
+        data-phone-title={phoneTitle ? "" : undefined}
         className={`min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading ${
           phoneTitle ? "break-words max-[600px]:text-[22px] max-[600px]:leading-7" : "max-[600px]:sr-only"
         }`}

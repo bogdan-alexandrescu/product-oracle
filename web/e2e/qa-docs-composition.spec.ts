@@ -133,7 +133,7 @@ test("qa-docs-27: the Modules and Catalog tabs speak in names and plain words", 
   // Order is a place (1, 2, 3 …), not the API's steps of ten.
   await expect(row(page, "decision.executive").locator("td").first()).toHaveText("1");
   await row(page, "decision.executive").click();
-  await expect(inspector(page)).toContainText("Mandatory in the Multi-tenant AI Agent Platform pack.");
+  await expect(inspector(page)).toContainText("Required in the Multi-tenant AI Agent Platform pack.");
   await row(page, "platform.tenant-isolation").click();
   await expect(inspector(page)).toContainText("Capabilities (scope) includes multi tenant");
   await expect(inspector(page)).not.toContainText("scope.capabilities contains");
@@ -180,7 +180,7 @@ test.describe("on a phone", () => {
   test("qa-docs-56: every tab is in view and History opens", async ({ page }) => {
     await open(page, VIEWER);
     const tabs = page.getByRole("group", { name: "Composition views" });
-    for (const name of ["Modules", "Catalog", "Policy", "History"]) {
+    for (const name of ["Modules", "Catalog", "Company policy", "History"]) {
       const box = await tabs.getByRole("link", { name, exact: true }).boundingBox();
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);

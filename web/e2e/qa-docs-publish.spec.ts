@@ -62,9 +62,9 @@ for (const viewport of [
       await expect(page.getByTestId("blocks-chip")).toHaveText("0 blocks");
       const headline = page.getByTestId("publish-ready");
       await expect(headline).toHaveText(
-        /^Publishable, but (\d+) sections are not reviewed and 1 advisory check is critical$/,
+        /^Publishable, but (\d+) of \1 sections are not reviewed and 1 advisory check is critical$/,
       );
-      const n = (await headline.innerText()).match(/(\d+) sections/)![1];
+      const n = (await headline.innerText()).match(/(\d+) of/)![1];
       await page.getByTestId("publish-button").click();
       const dialog = page.getByRole("dialog", { name: "Publish v2?" });
       await expect(dialog.getByTestId("unreviewed-sections")).toHaveText(

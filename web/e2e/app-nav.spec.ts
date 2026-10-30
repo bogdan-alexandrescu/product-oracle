@@ -223,9 +223,11 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   await expect(h1).toHaveCount(1);
   expect((await h1.boundingBox())!.height).toBeLessThanOrEqual(1);
 
-  // The title follows the open page, a document's name and version included.
+  // The title follows the open page; a document version draws its own wrapped H1 on a phone,
+  // so the bar names where it is instead of cutting the title a second time (qa-docs-78).
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(title).toHaveText("Checkout redesign PRD v2");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Checkout redesign PRD");
+  await expect(title).toHaveText("PRDs");
 
   const user = bar.getByTestId("phone-user-menu");
   await user.click();

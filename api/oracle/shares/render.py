@@ -49,6 +49,26 @@ _COMMENT = re.compile(r"<!--.*?-->", re.S)
 # A link that leaves the page (into the app or anywhere else): its words stay.
 _OUTBOUND = re.compile(r"<a\b[^>]*?\bhref=\"(?!#)[^\"]*\"[^>]*>(.*?)</a>", re.S | re.I)
 _cache: OrderedDict[tuple, str | bytes] = OrderedDict()
+# The left-out line an audience rendering opens with: for the company, not a link holder.
+_LEFT_OUT = re.compile(r"^\d+ items? serves? no confirmed goal and (?:is|are) left out\.$")
+# qa-docs-11, qa-docs-13, qa-docs-70: the link holder's page reads like the app (its sans
+# type, its dark theme when the reader prefers dark), and its tables fit a phone. Added
+# to the page only (never the PDF), after the export's own styles so it wins.
+READER_CSS = (
+    ":root{color-scheme:light dark}"
+    "body,body :not(code):not(pre):not(kbd){font-family:ui-sans-serif,system-ui,-apple-system,"
+    '"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif!important}'
+    "body{line-height:1.5}"
+    "table{border-collapse:collapse;width:100%}"
+    "th,td{word-break:normal;overflow-wrap:normal;hyphens:manual}"
+    "th:first-child,td:first-child{min-width:8rem}"
+    "@media (max-width:640px){body{margin:0;padding:0}"
+    "table{display:block;overflow-x:auto;max-width:100%}}"
+    "@media (prefers-color-scheme:dark){html,body{background:#0f172a!important;"
+    "color:#e2e8f0!important}body *{color:inherit!important;"
+    "background-color:transparent!important;border-color:#334155!important}"
+    "body a{color:#93c5fd!important}body th{background-color:#1e293b!important}}"
+)
 
 
 @dataclass(frozen=True)
@@ -89,8 +109,10 @@ def page(title: str, body: str) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         '<meta name="robots" content="noindex, nofollow">'
         f"<title>{html_lib.escape(title)}</title>"
-        "<style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;"
-        "padding:0 1rem;color:#1f2937}input,button{font:inherit;padding:.5rem}"
+        "<style>:root{color-scheme:light dark}body{font-family:system-ui,sans-serif;"
+        "max-width:40rem;margin:4rem auto;padding:0 1rem;color:#1f2937}"
+        "input,button{font:inherit;padding:.5rem}"
+        "@media (prefers-color-scheme:dark){body{background:#0f172a;color:#e2e8f0}}"
         "</style></head>"
         f"<body>{body}</body></html>"
     )
@@ -119,8 +141,9 @@ def day_with_year(moment: datetime, zone: str) -> str:
 
 
 def _footer(sender: str | None, ctx: ShareContext, zone: str) -> str:
-    shared = company_time.day_in_words(ctx.shared_at, zone)
-    expires = company_time.day_in_words(ctx.expires_at, zone)
+    # qa-docs-14: the same day as the page's header (the status's expires_on), in its words.
+    shared = day_with_year(ctx.shared_at, zone)
+    expires = day_with_year(ctx.expires_at, zone)
     by = f" by {html_lib.escape(sender)}" if sender else ""
     return (
         '<footer class="share-footer" style="margin-top:2rem;font-size:.85rem;color:#4b5563">'
@@ -137,6 +160,53 @@ def with_download(html: str, token: str) -> str:
         '<p class="share-download" style="margin-top:1rem">'
         f'<a href="{href}" download="roadmap.pdf">Download PDF</a></p>'
     ))  # fmt: skip
+
+
+def for_reader(html: str) -> str:
+    """The page as the link holder's browser shows it: :data:`READER_CSS` last in its head."""
+    style = f"<style>{READER_CSS}</style>"
+    if "</head>" in html:
+        return html.replace("</head>", style + "</head>", 1)
+    return style + html
+
+
+def reader_body(body_md: str, section_key: str) -> str:
+    """A section's text as a link holder reads it (qa-docs-12, qa-docs-13): no left-out
+    line (the company's note on what it left out), and in each table no column every row
+    leaves empty and, under a goal group's heading, no Goal column (it repeats the
+    heading). The first column always stays."""
+    from oracle.roadmap import variants
+
+    group = variants.spans_row(section_key)
+    lines = [ln for ln in (body_md or "").split("\n") if not _LEFT_OUT.match(ln.strip())]
+    parts = variants._table_rows(lines)
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        part = parts[i]
+        if part is None or part[0] != "head":
+            out.append(lines[i])
+            i += 1
+            continue
+        end = i + 2
+        while end < len(lines) and parts[end] is not None and parts[end][0] == "body":
+            end += 1
+        head = variants._split_row(lines[i])
+        rows = [variants._split_row(ln) + [""] * len(head) for ln in lines[i + 2 : end]]
+        keep = [
+            n
+            for n, name in enumerate(head)
+            if n == 0
+            or (
+                not (group and name.strip("* ").lower() in ("goal", "goals"))
+                and any(r[n].strip() for r in rows)
+            )
+        ]
+        out.append(variants._join_row([head[n] for n in keep]))
+        out.append("|" + "---|" * len(keep))
+        out += [variants._join_row([r[n] for n in keep]) for r in rows]
+        i = end
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip("\n")
 
 
 def _with_footer(html: str, footer: str) -> str:
@@ -157,7 +227,7 @@ def _for_link_holder(ev):
         for s in sections:
             if s.section_key in appendix:
                 continue
-            s.body_md = strip_citations(s.body_md or "")
+            s.body_md = reader_body(strip_citations(s.body_md or ""), s.section_key)
             s.citation_keys = []
             out.append(s)
         return out
@@ -225,13 +295,13 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
             if public.check_state(check, current) != "checked":
                 content = page(UPDATING, f"<p>{UPDATING}. Please look again later.</p>")
                 return content if fmt == "html" else b""
-            shared_on = company_time.day_in_words(ctx.shared_at, zone)
-            expires_on = company_time.day_in_words(ctx.expires_at, zone)
+            shared_on = day_with_year(ctx.shared_at, zone)
+            expires_on = day_with_year(ctx.expires_at, zone)
             key = (ctx.publication_id, "public", fmt, current, shared_on, expires_on)
             if key not in _cache:
                 _remember(key, await _on_pool(ctx, _render_public, review.page, fmt,
                                               shared_on, expires_on))  # fmt: skip
-            return _cache[key]
+            return for_reader(str(_cache[key])) if fmt == "html" else _cache[key]
         footer = _footer(sender, ctx, zone)
         ev = await load_export_version(db, str(document.id), version.number)
         ev = apply_layer(ev, "full")
@@ -242,13 +312,13 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
         key = (ctx.publication_id, ctx.audience, fmt, variants.render_key(ev.items))
         if key in _cache and fmt == "html":
             await db.commit()
-            return _with_footer(str(_cache[key]), footer)
+            return for_reader(_with_footer(str(_cache[key]), footer))
         ev = _for_link_holder(detached(ev))
         await db.commit()  # no connection held while it waits for the pool
     if fmt == "html":
         html = await _on_pool(ctx, _render_audience, ev, "html")
         _remember(key, html)
-        return _with_footer(str(html), footer)
+        return for_reader(_with_footer(str(html), footer))
     # The PDF carries the link's footer in its own text: rendered per link, not cached.
     html = _with_footer(str(await _on_pool(ctx, _render_audience, ev, "html")), footer)
     return await _on_pool(ctx, html_to_pdf, html)

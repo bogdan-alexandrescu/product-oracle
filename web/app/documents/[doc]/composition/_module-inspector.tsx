@@ -4,7 +4,7 @@ import { Button, Chip, Inspector, InspectorRow, InspectorSection } from "@/compo
 
 import { plural } from "@/lib/format";
 
-import { KNOWLEDGE, decidedByInWords, ORIGIN, PACK_POLICY, POLICY_SOURCE, ROLE, SELECTION_LABEL, missingInWords, reasonInWords, type Changes, type Module } from "./_lib";
+import { KNOWLEDGE, decidedByInWords, ORIGIN, PACK_POLICY, POLICY_SOURCE, ROLE, selectionInWords, missingInWords, reasonInWords, type Changes, type Module } from "./_lib";
 
 /** Modules by name under their label, wrapping (never cut, never squeezing the label). */
 function Names({ label, keys, titleOf }: { label: string; keys: string[]; titleOf: (key: string) => string }) {
@@ -95,7 +95,7 @@ export function ModuleDetail({
   const chips = (
     <>
       <Chip kind="acc" hero={!bare}>
-        {SELECTION_LABEL[m.selection]}
+        {selectionInWords(m)}
       </Chip>
       <Chip kind={m.included ? "pass" : "na"} hero={!bare}>
         {m.included ? "Included" : "Excluded"}
@@ -227,7 +227,7 @@ export function ModuleDetail({
             )}
             {mandatory && (
               <span data-testid="module-mandatory" className="text-sm text-text2">
-                Mandatory: it stays in the PRD. Change the company policy to make it optional first.
+                Required: it stays in the PRD. Change the company policy to make it optional first.
               </span>
             )}
             {!mandatory && !m.can_change && <span className="text-sm text-text2">Your role cannot add or remove it: it needs the {ROLE[m.required_review_role] ?? "Owner"} role.</span>}

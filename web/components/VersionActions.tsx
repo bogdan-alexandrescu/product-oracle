@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { InlineError, Menu } from "@/components/review/parts";
@@ -111,6 +112,7 @@ export function ApproveButton({
   isLatest,
   onApproved,
   blockedReason,
+  blockedFix,
   unreviewed,
 }: {
   doc: string;
@@ -120,6 +122,8 @@ export function ApproveButton({
   onApproved: () => void;
   /** Why the version cannot be approved now (a roadmap's marked dates, O4): Approve is disabled. */
   blockedReason?: string;
+  /** qa-docs-6: where what blocks it is fixed, a link after the reason. */
+  blockedFix?: { href: string; label: string };
   /** #254: sections not reviewed, of all; the confirm names them. */
   unreviewed?: { count: number; total: number };
 }) {
@@ -150,13 +154,35 @@ export function ApproveButton({
   }
 
   if (blockedReason) {
+    // qa-docs-7: the button sits in the header's row of actions, beside Discuss; the reason
+    // (and where to fix it) takes a line of its own below them, right-aligned (left on a phone).
     return (
-      <div className="flex min-w-0 max-w-[min(28rem,calc(100vw-2.5rem))] flex-col items-end gap-1 max-[600px]:w-full max-[600px]:items-start" data-testid="approve-blocked">
-        <Button variant="primary" icon="check" disabled aria-describedby="approve-blocked-reason" title={blockedReason}>
+      <div className="contents" data-testid="approve-blocked">
+        <Button
+          variant="primary"
+          icon="check"
+          disabled
+          aria-describedby="approve-blocked-reason"
+          title={blockedReason}
+          className="max-[600px]:mr-auto"
+        >
           Approve version
         </Button>
-        <span id="approve-blocked-reason" className="text-right text-sm font-medium break-words text-warn max-[600px]:text-left">
-          {blockedReason}
+        <span className="flex basis-full justify-end max-[600px]:justify-start">
+          <span
+            id="approve-blocked-reason"
+            className="w-[28rem] max-w-full text-right text-sm font-medium break-words text-warn max-[600px]:w-full max-[600px]:text-left"
+          >
+            {blockedReason}
+            {blockedFix && (
+              <>
+                {" "}
+                <Link href={blockedFix.href} data-testid="approve-blocked-fix" className="font-semibold underline underline-offset-2">
+                  {blockedFix.label}
+                </Link>
+              </>
+            )}
+          </span>
         </span>
       </div>
     );

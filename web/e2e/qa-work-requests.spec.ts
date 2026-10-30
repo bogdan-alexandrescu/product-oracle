@@ -155,7 +155,7 @@ test("qa-work-43, qa-work-44, qa-work-45: an interview's page says what to do, w
   await expect(page).toHaveURL(/\/requests\/interviews\/[^/]+$/);
   const header = page.locator("[data-page-header]");
   await expect(header.getByRole("heading", { name: /Ana Lima/ })).toBeAttached();
-  // The tabs are a way back; rirs-40 adds "← Interviews" above the name (its name is not the tab's).
+  // The tabs are a way back; rirs-40 adds "All interviews" above the name (its name is not the tab's).
   await expect(header.getByRole("link", { name: "Interviews", exact: true })).toHaveCount(1);
   await expect(header.getByRole("button", { name: "Withdraw link" })).toBeVisible();
   await expect(page.getByTestId("interview-link-note")).toContainText("can't be shown or copied again");

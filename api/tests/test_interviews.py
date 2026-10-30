@@ -170,6 +170,9 @@ async def test_a_commenter_creates_a_draft_and_queues_the_guide(client, ctx):
         assert job.kind == "interview_guide" and str(job.interview_id) == iv["id"]
     listed = await client.get("/v1/interviews?status=draft", headers=ctx.as_("viewer"))
     assert [i["id"] for i in listed.json()] == [iv["id"]]
+    # qa-docs-88: the creator by name, never their email.
+    assert iv["created_by_name"] and "@" not in iv["created_by_name"]
+    assert listed.json()[0]["created_by_name"] == iv["created_by_name"]
     two = await create(
         client, ctx, expect=422, subject={"topic": "a", "theme_id": str(uuid.uuid4())}
     )

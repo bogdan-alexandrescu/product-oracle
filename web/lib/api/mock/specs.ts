@@ -125,11 +125,11 @@ const FLOW_SVG =
   '<line x1="120" y1="40" x2="180" y2="40" stroke="#333"/></svg>\n';
 const wireframe = (n: number) =>
   `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Cart ${n}</title>` +
-  `<style>html{filter:grayscale(100%)!important}body{font-family:system-ui,sans-serif;padding:16px}</style></head>` +
+  `<style>html{filter:grayscale(100%)!important}body{font-family:system-ui,sans-serif;padding:16px}.oracle-annotations ol{list-style:none;margin:0;padding:0}</style></head>` +
   `<body><main data-oracle-wireframe="1"><h1 id="heading-${n}">Cart ${n}</h1><div data-annotation="cost">Shipping: $4.99 (mocked)</div>` +
   `<button type="button">Continue</button></main>` +
   // Oracle's sanitiser writes each annotation's label into the footer (api/oracle/specs/sanitize.py).
-  `<aside class="oracle-annotations"><ol><li><strong>1. cost-early [s-5-2]</strong> The quote shows before the address step.</li></ol></aside></body></html>\n`;
+  `<aside class="oracle-annotations"><ol><li><strong>1.</strong> The quote shows before the address step.</li></ol></aside></body></html>\n`;
 
 function version(id: string, requestId: string, freshness: Schemas["ArtifactVersionOut"]["freshness"], number = 1): Schemas["ArtifactVersionOut"] {
   return {
@@ -442,7 +442,7 @@ export async function routeSpecs(ctx: SpecsContext, req: Request, p: string[], q
           return json(409, { detail: `this version ${STALE} it`, refs: { artifact_version: d.version.id } });
         }
         if ((data.kind === "changes_requested" || data.kind === "rejected") && !data.body?.trim()) {
-          return fail(422, "say why: a note is required to request changes or reject");
+          return fail(422, "Add a note to request changes or reject.");
         }
       } else if (!data.body?.trim()) return fail(422, "a comment needs a body");
       const event: Schemas["DesignReviewEventOut"] = {

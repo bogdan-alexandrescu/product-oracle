@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Button, Chip, type IconName } from "@/components/ds";
 import { FIELD_LABEL, InlineError, LockedChip, TEXTAREA, VerdictChip } from "@/components/review/parts";
@@ -36,6 +36,12 @@ export function SectionReviewBar({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hintId = useId();
+  // qa-docs-9: the opened note and its Save scroll clear of a phone's bottom bars (the page's
+  // scroll padding), not left under them.
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (draft) formRef.current?.scrollIntoView({ block: "nearest" });
+  }, [draft]);
 
   async function save(e?: FormEvent) {
     e?.preventDefault();
@@ -110,7 +116,7 @@ export function SectionReviewBar({
         )}
       </div>
       {draft && (
-        <form onSubmit={save} className="flex flex-col gap-2 border-t border-line px-3 py-2.5">
+        <form ref={formRef} onSubmit={save} className="flex flex-col gap-2 border-t border-line px-3 py-2.5">
           <label className={FIELD_LABEL}>
             {draft === "approved" ? "Note (optional)" : "What should change?"}
             <textarea

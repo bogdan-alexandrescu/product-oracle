@@ -46,11 +46,11 @@ test("an approver opens the flow from the tech brief: sandboxed canvas, Approve 
   await expect(panel).toContainText("Potentially stale");
   await expect(page.getByTestId("stale-notice").filter({ visible: true })).toContainText('Section "5.2 Shipping step" changed in Checkout redesign PRD');
   await expect(panel.getByRole("button", { name: "Approve" })).toBeDisabled();
-  await expect(panel.getByRole("link", { name: "Go to the tech brief" })).toHaveAttribute("href", BRIEF);
+  await expect(page.getByTestId("stale-notice").filter({ visible: true }).getByRole("link", { name: "Open the tech brief" })).toHaveAttribute("href", BRIEF);
 
   // Request changes needs a note: the API's message is shown.
   await panel.getByRole("button", { name: "Request changes" }).click();
-  await expect(panel.getByRole("alert")).toContainText("say why: a note is required to request changes or reject");
+  await expect(panel.getByRole("alert")).toContainText("Add a note to request changes or reject.");
   await panel.getByLabel("Note (required to request changes or reject)").fill("The quote needs the postcode step first.");
   await panel.getByRole("button", { name: "Request changes" }).click();
   await expect(panel.getByTestId("version-reviews")).toContainText("Changes requested");
@@ -109,9 +109,9 @@ test("a viewer reads the review without composer or verdicts", async ({ page }) 
   await expect(panel.getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Approve" })).toHaveCount(0);
   // Provenance and version meta.
-  await panel.getByTestId("version-details").getByText("Technical details").click();
-  await expect(panel.getByTestId("version-meta")).toContainText("prd_to_spec/1");
-  await expect(panel.getByTestId("version-meta")).toContainText("claude-code");
+  // qa-docs-79: the run that made it holds the technical record.
+  await expect(panel.getByTestId("version-meta").getByRole("link", { name: "See how it was made" })).toHaveAttribute("href", /^\/runs\//);
+  await expect(panel.getByTestId("version-meta")).not.toContainText("prd_to_spec/1");
 });
 
 test("wireframes: switch screens, compare 2-4 side by side, see the sanitised notice, and an owner approves", async ({ page }) => {
@@ -121,7 +121,7 @@ test("wireframes: switch screens, compare 2-4 side by side, see the sanitised no
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Early shipping cost: wireframes");
   const files = page.getByRole("group", { name: "Files" });
   await expect(files.getByRole("button", { name: "Cart 1" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator(".oracle-annotations")).toContainText("1. cost-early [s-5-2]");
+  await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator(".oracle-annotations")).toContainText("1. The quote shows before the address step.");
   await files.getByRole("button", { name: "Cart 2" }).click();
   await expect(canvas(page).locator("iframe")).toHaveAttribute("title", /cart-2\.html/);
   await expect(page.getByTestId("sanitised").filter({ visible: true })).toContainText("Sanitised");
@@ -235,7 +235,7 @@ test.describe("phone", () => {
     await expect(canvas(page).locator("iframe")).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
-    await page.getByRole("button", { name: "Review" }).click();
+    await page.getByRole("button", { name: "Review the design" }).click();
     const sheet = page.getByRole("dialog", { name: /Review · Early shipping cost: user flows/ });
     await expect(sheet.getByRole("button", { name: "Approve" })).toBeDisabled();
     await expect(sheet.getByTestId("annotation")).toHaveCount(2);

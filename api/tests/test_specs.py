@@ -533,7 +533,8 @@ async def test_design_annotations_are_reviewable(client, runtime):
     resp = await client.post(
         url, json={"kind": "changes_requested"}, headers=world.ctx.as_("approver")
     )
-    assert resp.status_code == 422  # say why
+    assert resp.status_code == 422  # say why, in plain words (qa-docs-80)
+    assert resp.json()["detail"] == "Add a note to request changes or reject."
     resp = await client.post(url, json={"kind": "approved"}, headers=world.ctx.as_("approver"))
     assert resp.status_code == 201 and resp.json()["version"]["status"] == "approved"
 

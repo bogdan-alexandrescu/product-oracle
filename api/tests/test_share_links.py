@@ -910,3 +910,58 @@ def test_a_shared_items_milestone_date_reads_as_a_plain_day():
     named = variants.ItemView(key="x", title="X", outcome=None, horizon="now", position=2,
                               milestone={"name": "Beta"})  # fmt: skip
     assert variants._milestone(named) == "Beta"
+
+
+def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
+    """protects=qa-docs-12, qa-docs-13: on the link holder's page a goal group's table
+    keeps the item names but drops the Goal column (it repeats the group's heading) and
+    every column no row fills, and the left-out line is gone; fails_when=an empty Outcome
+    or Confidence column, the Goal column under its goal, or "serves no confirmed goal and
+    is left out" reaches the page; no_claim=the company's own audience view."""
+    from oracle.shares.render import reader_body
+
+    table = "\n".join([
+        "| Item | Outcome | Confidence | Goal |",
+        "|---|---|---|---|",
+        "| CSV parser |  |  | Grow activation |",
+        "| Bulk import | Faster setup |  | Grow activation |",
+    ])  # fmt: skip
+    got = reader_body(table, "now-group-1")
+    assert got.split("\n")[0] == "| Item | Outcome |"
+    assert "| CSV parser |  |" in got and "| Bulk import | Faster setup |" in got
+    assert "Confidence" not in got and "Grow activation" not in got
+    # Outside a goal group the Goal column says something the page does not.
+    assert "| Goal |" in reader_body(table, "brief-items")
+    note = "1 item serves no confirmed goal and is left out."
+    assert reader_body(note, "now") == ""
+    assert reader_body(f"{note}\n\nWe ship in order.", "roadmap") == "We ship in order."
+    assert "left out" not in reader_body("2 items serve no confirmed goal and are left out.", "x")
+
+
+def test_the_link_holders_page_follows_a_dark_reader_in_the_apps_type():
+    """protects=qa-docs-11, qa-docs-70: the link holder's page gets the reader styles last
+    in its head (sans type, a dark theme under prefers-color-scheme: dark); fails_when=the
+    page has no dark rule or no sans stack, or the styles go before the export's own."""
+    from oracle.shares.render import READER_CSS, for_reader
+
+    page = for_reader(
+        "<html><head><style>body{font-family:serif}</style></head><body></body></html>"
+    )
+    assert page.index("font-family:serif") < page.index(READER_CSS)
+    assert "prefers-color-scheme:dark" in READER_CSS and "system-ui" in READER_CSS
+
+
+async def test_the_footer_ends_on_the_headers_day_in_its_words(client, ctx):
+    """protects=qa-docs-14: the page's footer names the same end day as the status's
+    expires_on (the header), "Nov 12, 2026", and the day it was shared the same way;
+    fails_when=the footer reads "13 Nov 2026", "Nov 12" or another day than the header."""
+    await seed_roadmap(ctx, publish=True)
+    token = token_of((await create(client, ctx, "owner")).json())
+    cookie = await opened(client, token)
+    got = (await client.get(f"{PUBLIC}/{token}/status", headers=cookie)).json()
+    page = await client.get(f"{PUBLIC}/{token}", headers=cookie)
+    footer = re.search(r'<footer class="share-footer"[^>]*>(.*?)</footer>', page.text, re.S)
+    assert footer is not None, page.text
+    text = footer.group(1)
+    assert f"link expires {got['expires_on']}" in text, text
+    assert re.search(r" on [A-Z][a-z]{2} \d{1,2}, \d{4} · ", text), text

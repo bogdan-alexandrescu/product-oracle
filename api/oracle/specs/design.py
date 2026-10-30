@@ -222,10 +222,9 @@ def check_design(
                 f"{item.name}: requirements {', '.join(unknown_reqs)} are not in the spec request",
                 where,
             )
-        labels = [
-            (f"{n}. {a.id}" + (f" [{a.section_key}]" if a.section_key else ""), a.note)
-            for n, a in enumerate(item.annotations, start=1)
-        ]
+        # Numbered as the review lists them; the id and section key are Oracle's own, never
+        # shown to people (qa-docs-19).
+        labels = [(f"{n}.", a.note) for n, a in enumerate(item.annotations, start=1)]
         sanitized: Sanitized = (
             sanitize_svg(body, title=item.title)
             if ext == "svg"

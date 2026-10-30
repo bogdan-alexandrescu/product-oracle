@@ -224,6 +224,6 @@ test("a roadmap version with a marked date cannot be approved: Approve is disabl
   await page.goto("/documents/usage-alerts-roadmap/v/1");
   const blocked = page.getByTestId("approve-blocked").filter({ visible: true });
   await expect(blocked.getByRole("button", { name: "Approve version" })).toBeDisabled();
-  await expect(blocked).toContainText("Dec 15, 2026 (date withdrawn)");
-  await expect(blocked).toContainText("Record a basis");
+  await expect(blocked).toContainText("Dec 15, 2026 (its schedule was withdrawn)");
+  await expect(blocked).toContainText("Confirm a schedule for it");
 });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import { Button, Chip, confirmInPage, Dialog, Empty, Label, Page, PageHeader, Panel } from "@/components/ds";
+import { Button, Chip, confirmInPage, Dialog, Empty, Icon, Label, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewLink, type InterviewOut } from "@/lib/api/interviews";
@@ -15,7 +15,9 @@ import { expiresIn, LinkShown } from "../../_components/InterviewDialog";
 /**
  * One customer interview (C3): what it was about, the approved guide, the transcript, Oracle's
  * snapshot and the requests it created. Withdraw link: its creator or an approver, while the
- * link is open. "← Interviews" above the name goes back (rirs-40), as the Requests tabs do.
+ * link is open. "All interviews" above the name, with the shared back chevron, goes back
+ * (rirs-40; qa-docs-88: the icon back link other pages use, not a text arrow; named apart
+ * from the Interviews tab).
  * The link itself is shown once, when it is made, and only its hash is kept, so it cannot be
  * shown or copied again here (qa-work-43): the page says so and when it was made, and Make a
  * new link (its creator or an approver, while the link is open) shows a fresh one once, after
@@ -27,8 +29,9 @@ export function InterviewDetail({ id }: { id: string }) {
   const iv = q.data;
   // rirs-40: back to the Interviews tab, above the name.
   const back = (
-    <Link href="/requests/interviews" data-testid="interview-back" className="hover:underline">
-      ← Interviews
+    <Link href="/requests/interviews" data-testid="interview-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
+      <Icon name="back" size={16} />
+      All interviews
     </Link>
   );
   const requests = useQuery(`interview-requests:${iv?.request_ids.join(",") ?? ""}`, () =>

@@ -70,9 +70,9 @@ test("qa-onboarding-5: a new company with no approved baseline is offered only B
 
 test("qa-onboarding-28: the day's read cap shows before the first read", async ({ page }) => {
   await openIntake(page);
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("3 of 3 left today");
+  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("3 of 3 analyses left today");
   await readLine(page).getByRole("button", { name: "Read the brief again" }).click();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 of 3 left today");
+  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 of 3 analyses left today");
 });
 
 test("qa-onboarding-40: on a phone the read line never splits its date", async ({ page }) => {

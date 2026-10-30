@@ -16,6 +16,7 @@ import { ConfirmStep, EMPTY_INPUTS, PublishStep } from "./_confirm";
 import { HistoryTab } from "./_history";
 import {
   decidedByInWords,
+  selectionInWords,
   FILTER_LABEL,
   NO_CHANGES,
   PACKS_SOURCE,
@@ -61,10 +62,11 @@ function useIsPhone(): boolean {
 type Tab = "modules" | "catalog" | "policy" | "history";
 type Source = "working" | "current" | "preview";
 
-const TABS: { value: Tab; label: string; short?: string }[] = [
+const TABS: { value: Tab; label: string }[] = [
   { value: "modules", label: "Modules" },
   { value: "catalog", label: "Catalog" },
-  { value: "policy", label: "Company policy", short: "Policy" },
+  // qa-docs-44: one name on every screen (the four tabs still fit a 390 px phone).
+  { value: "policy", label: "Company policy" },
   { value: "history", label: "History" },
 ];
 
@@ -120,12 +122,12 @@ export function CompositionView({ doc }: { doc: string }) {
   const packNames = pack.map((id) => packsQ.data?.find((p) => p.id === id)?.title).filter(Boolean);
 
   const tabs = (
-    // On a phone the four tabs share the row's width (short labels), so none is cut at the edge.
+    // On a phone the four tabs share the row's width, so none is cut at the edge.
     <SegmentedControl
       label="Composition views"
       value={tab}
       fill={phone}
-      items={TABS.map((t) => ({ value: t.value, label: phone ? (t.short ?? t.label) : t.label, href: t.value === "modules" ? pathname : `${pathname}?tab=${t.value}` }))}
+      items={TABS.map((t) => ({ value: t.value, label: t.label, href: t.value === "modules" ? pathname : `${pathname}?tab=${t.value}` }))}
     />
   );
 
@@ -205,7 +207,7 @@ export function CompositionView({ doc }: { doc: string }) {
           </span>
         ),
       },
-      { key: "selection", header: "Selection", width: "110px", wrap: true, cell: (m) => SELECTION_LABEL[m.selection] },
+      { key: "selection", header: "Selection", width: "110px", wrap: true, cell: (m) => selectionInWords(m) },
       {
         key: "decided",
         header: "Why",
@@ -229,7 +231,8 @@ export function CompositionView({ doc }: { doc: string }) {
       {
         key: "state",
         header: "State",
-        width: "100px",
+        // qa-docs-42: room for the widest pill ("Excluded" and its dot) inside the cell's padding.
+        width: "124px",
         phone: "action",
         cell: (m) => (
           <Chip kind={m.included ? "pass" : "na"} dot>
@@ -249,10 +252,29 @@ export function CompositionView({ doc }: { doc: string }) {
         {data.legacy && data.recommendation && (
           <Notice testId="legacy-notice">
             This PRD has no composition yet. Oracle recommends {plural(data.recommendation.summary.included, "module")}
-            {packNames.length ? ` from ${packNames.join(", ")}` : ""}.{mayConfirm ? " Review them below; nothing is in force until you confirm." : ""}
+            {packNames.length ? ` from ${packNames.join(", ")}` : ""}.
+            {mayConfirm ? " Review them below; nothing is in force until you confirm." : " You can look at them and preview a new one. Only an approver can confirm them."}
           </Notice>
         )}
         {previewError && <Notice tone="error">{previewError}</Notice>}
+        {preview && source?.value === "preview" && (
+          // qa-docs-48: a preview says it is one; nothing is saved until someone confirms.
+          <Notice
+            testId="preview-banner"
+            action={
+              <Button
+                onClick={() => {
+                  setPreview(null);
+                  setView(null);
+                }}
+              >
+                Close preview
+              </Button>
+            }
+          >
+            <b>Preview.</b> This is Oracle&apos;s recommendation for this PRD today. Nothing is saved.
+          </Notice>
+        )}
         <Panel
           title="Modules"
           count={`${all.filter((m) => m.included).length} of ${all.length} included`}
@@ -261,11 +283,12 @@ export function CompositionView({ doc }: { doc: string }) {
               <div data-testid="composition-source">
                 <SegmentedControl label="Show" size="sm" value={source.value} onChange={setView} items={sources.map((s) => ({ value: s.value, label: s.label }))} />
               </div>
-            ) : (
-              <span data-testid="composition-source" className="text-sm text-text2">
-                {source?.label}
-              </span>
-            )
+            ) : source ? (
+              // qa-docs-43: what the table shows, as a status chip (not a bare label that reads as a control).
+              <Chip kind="line" data-testid="composition-source">
+                {source.value === "preview" ? "Recommendation, not in force" : source.label}
+              </Chip>
+            ) : null
           }
         >
           <div className="border-b border-line px-4 py-2.5">
@@ -417,8 +440,9 @@ export function CompositionView({ doc }: { doc: string }) {
       />
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
         <div className="min-w-0 max-w-full overflow-x-auto">{tabs}</div>
-        {data && !mayConfirm && (
-          <Notice testId="read-only">Read only. Preview writes nothing; confirming and publishing need an approver.</Notice>
+        {/* qa-docs-49: one plain banner; a PRD without a composition says it in its own notice. */}
+        {data && !mayConfirm && !(tab === "modules" && data.legacy && data.recommendation) && (
+          <Notice testId="read-only">You can look at this composition and preview a recommendation. Only an approver can change or publish it.</Notice>
         )}
         {result && (
           <div data-testid="composition-result" role="status" className="space-y-1.5 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">

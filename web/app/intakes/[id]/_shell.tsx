@@ -284,6 +284,7 @@ export function BeforeDrafting({ id }: { id: string }) {
         <ReadLine
           read={s.ai_read}
           mayRead={mayRead && !converted && !archived}
+          mayDraft={mayDraft && !converted && !archived}
           busy={busy}
           onPoll={changed}
           onRead={() => act(() => unwrap(api.POST("/v1/intakes/{intake_id}/ai-read", { params: { path: { intake_id: id } } })))}

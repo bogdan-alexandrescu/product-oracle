@@ -55,6 +55,8 @@ LOWFI_CSS = (
     "[data-annotation]{outline:1px dashed #777;outline-offset:2px}"
     ".oracle-annotations{margin-top:24px;border-top:1px solid #999;padding-top:8px;"
     "font-size:13px;color:#444}"
+    # The label numbers each note ("1."): the list adds no second number (qa-docs-19).
+    ".oracle-annotations ol{list-style:none;margin:0;padding:0}"
 )
 
 MAX_NODES = 5000

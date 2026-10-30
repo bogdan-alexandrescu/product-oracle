@@ -94,10 +94,13 @@ test.describe("desktop", () => {
 
   test("qa-docs-13: each review count says what it counts", async ({ page }) => {
     await openVersion(page, CARTS);
-    await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed, all sections");
-    await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/20/);
+    // qa-docs-5: the panel counts what the outline counts, in Brief and in Full.
+    await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed, brief sections");
+    await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/8/);
     await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/\d+ of 8 brief sections reviewed/);
     await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
+    await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed, all sections");
+    await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/20/);
     await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/\d+ of 20 sections reviewed/);
   });
 
