@@ -58,8 +58,9 @@ async function askForRewordedBet(page: Page, phone: boolean) {
   await page.getByRole("button", { name: "Save" }).click();
   await expect(bet).toHaveAttribute("data-state", "edited");
   const row = bet.getByTestId("flow-row");
-  await expect(row.getByTestId("flow-empty")).toContainText("No flow yet");
-  await tap(row.getByRole("button", { name: "Ask Oracle to draw it" }));
+  // 2026-10-30: no "No flow yet" row; the bet's line ends with a small "Draw the flow".
+  await expect(row).toHaveCount(0);
+  await tap(bet.getByRole("button", { name: /^Draw the flow for/ }));
   await expect(row.getByTestId("flow-drawn")).toContainText("Version 1 · drawn", { timeout: 15000 });
   return row;
 }
