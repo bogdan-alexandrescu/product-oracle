@@ -1376,7 +1376,14 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     if (id && ctx.names[id]) (db.people ??= {})[id] = ctx.names[id];
   }
   const res = await engine(db, ctx, "POST", "/v1/simple/changes", { op: use.op, target: use.target, before: use.before, after: use.after });
-  if (!res.ok) return res;
+  if (!res.ok) {
+    // dod-data: a card refused because its item changed since stays open, offered again on the new state (as the API's chat.rebase).
+    if (res.status === 409 && n == null && !withDependents) {
+      const current = ((await res.clone().json()) as { detail?: { current?: Record<string, unknown> } }).detail?.current;
+      if (current && Object.keys(current).length && Object.keys(current).every((k) => k in c.before)) c.before = { ...c.before, ...current };
+    }
+    return res;
+  }
   const result = (await res.json()) as Schemas["SimpleChangeResult"];
   afterApplied(db, c, result);
   if (withDependents) {

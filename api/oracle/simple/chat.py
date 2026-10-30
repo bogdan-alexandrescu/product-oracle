@@ -1588,7 +1588,12 @@ async def apply_all(
                 await apply(db, principal, card_id)
         except (ChatError, ChangeError) as e:
             await db.rollback()
-            stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(e.detail))
+            # dod-data: the engine's answer's words, not its raw detail (ids, raw dates);
+            # a card whose item changed is offered again on the new state.
+            why = e.detail.get("message") if isinstance(e.detail, dict) else e.detail
+            stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(why))
+            if isinstance(e, ChangeError) and e.status == 409:
+                await rebase(db, card_id, e.detail)
             break
         applied.append(card_id)
     return await _out(db, principal, meeting_id, page, discussion_id), applied, stopped
