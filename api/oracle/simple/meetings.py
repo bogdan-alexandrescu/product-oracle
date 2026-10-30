@@ -15,10 +15,13 @@ whose session closed for idleness (oracle.simple.changes.MEETING_IDLE) ends on i
 read, with Oracle's quick minutes (:func:`_settle`). Default attendees: the PRD's decider,
 its required reviewers and its owners (its tracks' owners); any member can be added.
 
-**Every action is a meeting decision**: each approve, cut, move, accept, decline, undo or
-comment made in the meeting is recorded by :func:`record_meeting_decision`: a
-``decisions`` row (origin ``meeting``, subjects the items and lines it changed, approver
-who decided), linked to the meeting and the changes (``simple_meeting_decisions``).
+**Every action is a meeting decision**: each approve, cut, move, accept, decline or undo
+made in the meeting is recorded by :func:`record_meeting_decision`: a ``decisions`` row
+(origin ``meeting``, subjects the items and lines it changed, approver who decided),
+linked to the meeting and the changes (``simple_meeting_decisions``). A comment
+(:func:`comment`) is not a decision: it is kept as a note (kind ``comment``), like a
+chat-actions note or open question, and stays out of minutes and the Decisions page
+(qa-simple-decide-1).
 
 **Approve** is the decider's, through :func:`oracle.simple.drafts.approve_in_meeting`: the
 required reviewers present approve there too; each absent one gets an Inbox request and
@@ -630,16 +633,21 @@ async def after_change(
 
 async def comment(
     db: AsyncSession, principal: Any, meeting_id: uuid.UUID, text: str, subjects: list[dict]
-) -> uuid.UUID:
-    """A comment made in the meeting is a meeting decision too (D7)."""
+) -> str:
+    """A comment made in the meeting is kept as a note, not a meeting decision
+    (qa-simple-decide-1): it does not appear in meeting_decisions, the minutes or the
+    Decisions page."""
     m, _ = await _get(db, principal, meeting_id)
     if not _rules(m).may_change(_me(principal)) and _me(principal) not in m.attendee_ids:
         raise MeetingError(403, "Join the meeting to comment in it")
-    did = await record_meeting_decision(
-        db, principal, m.id, f"Comment: {' '.join(text.split())}",
-        [*subjects, {"kind": "document", "id": str(m.prd_document_id)}], [],
-    )  # fmt: skip
-    return did
+    if m.status == "ended":
+        raise MeetingError(409, "This meeting has ended")
+    note = {"id": str(uuid.uuid4()), "kind": "comment", "text": " ".join(text.split())[:1000],
+            "by": str(_me(principal)), "at": company_time.now().isoformat(),
+            "card_id": None}  # fmt: skip
+    m.notes = [*(m.notes or []), note]
+    await db.flush()
+    return note["id"]
 
 
 def published_words(d: Any, names: dict[uuid.UUID, str]) -> str:
@@ -985,6 +993,7 @@ async def _notes_out(db: AsyncSession, m: SimpleMeeting) -> list:
             kind=n["kind"],
             text=n["text"],
             by_name=names.get(uuid.UUID(n["by"]), "someone") if n.get("by") else "someone",
+            at=n.get("at"),
             card_id=n.get("card_id"),
         )  # fmt: skip
         for n in notes
@@ -1222,20 +1231,15 @@ async def extract(db: AsyncSession, m: SimpleMeeting) -> dict[str, Any]:
     waits = await _waits(db, m)
     rec = await minutes.record(db, m, [d for _, d in reversed(links)], waits)
     if titles:
-        more = "…" if len(titles) > 6 else "."
-        # qa-simple-decide-32: the decisions themselves; the title and the count are
-        # beside it already.
-        summary = "; ".join(titles[:6]) + more
+        # qa-simple-decide-6: a short prose count, not the decisions' titles (the
+        # Decisions page already lists them) nor the notes' text.
+        n_notes = len([n for n in m.notes or [] if n.get("kind") == "note" and n.get("text")])
+        summary = minutes.summary_sentence(len(titles), n_notes, len(rec.questions()))
     elif rec.empty:
         summary = minutes.nothing(m.title)
     else:
         summary = f"{m.title}: no decision was taken."
     actions = [minutes.recorded(a) for a in rec.actions]
-    # chat-actions: the meeting's own notes ("note: ...") read in the summary; its open
-    # questions ("open question: ...") come with the record's questions.
-    meeting_notes = [n["text"] for n in m.notes or [] if n.get("kind") == "note" and n.get("text")]
-    if meeting_notes:
-        summary += "".join(f"\nNotes: {t}" for t in meeting_notes)
     return {
         "summary": summary[:SUMMARY_MAX],
         "open_questions": rec.questions()[:MAX_QUESTIONS],
@@ -1753,6 +1757,13 @@ def _row(d: Decision, names: dict) -> SimpleDecisionRow:
 _OPEN_DECISION = re.compile(r"^D-(\d+):")
 
 
+def _meeting_option_title(m: SimpleMeeting) -> str:
+    """The Decisions page's meeting filter (qa-simple-decide-11): the meeting's title,
+    its day in the company's zone ("Thu Oct 22"), and " · live" while it still is."""
+    words = company_time.date_in_words(company_time.day(m.started_at))
+    return f"{m.title} · {words}" + (" · live" if m.status == "live" else "")
+
+
 async def decisions_page(
     db: AsyncSession,
     principal: Any,
@@ -1867,7 +1878,8 @@ async def decisions_page(
               for d in sorted(docs.values(), key=lambda d: d.title) if d.id in readable],
         goals=[SimpleFilterOption(id=g.key, title=g.title)
                for g in sorted(goals.values(), key=lambda g: g.key)],
-        meeting_options=[SimpleFilterOption(id=str(m.id), title=m.title) for m in ms],
+        meeting_options=[SimpleFilterOption(id=str(m.id), title=_meeting_option_title(m))
+                         for m in ms],  # fmt: skip
     )  # fmt: skip
 
 

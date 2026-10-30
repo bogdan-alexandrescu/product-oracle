@@ -1565,12 +1565,15 @@ class SimpleMeetingCan(BaseModel):
 
 
 class SimpleMeetingNote(BaseModel):
-    """chat-actions: a minutes note or open question added during the meeting."""
+    """chat-actions: a minutes note or open question added during the meeting; also a
+    comment (qa-simple-decide-1), which is not a meeting decision and stays out of
+    minutes."""
 
     id: str
-    kind: Literal["note", "question"]
+    kind: Literal["note", "question", "comment"]
     text: str
     by_name: str
+    at: dt.datetime | None = None
     card_id: uuid.UUID | None = None
 
 
