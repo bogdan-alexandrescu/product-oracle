@@ -120,7 +120,7 @@ test("/sources: search ranks by confidence and explains the badge", async ({ pag
   await expect(factors).toContainText("Freshness");
   await expect(hits.nth(1).getByTestId("confidence")).toContainText("Medium confidence");
 
-  await page.getByLabel("Source").selectOption({ label: "Product chat" });
+  await page.getByRole("combobox", { name: /^Source/ }).selectOption({ label: "Product chat" });
   await page.getByRole("button", { name: "Search" }).click();
   await expect(hits).toHaveCount(1);
   await expect(hits.nth(0)).toContainText("Customer question");

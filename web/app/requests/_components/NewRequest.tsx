@@ -77,10 +77,8 @@ const CHANNELS = (Object.keys(CHANNEL_LABEL) as Request["channel"][]).filter((c)
  * in another channel whoever asked). The ds Dialog: typed words ask before they are thrown away.
  */
 /** Two titles that read the same: case, spaces and end punctuation aside (qa-work-37). */
-const sameTitle = (a: string, b: string) => {
-  const norm = (t: string) => t.toLowerCase().replace(/[\s]+/g, " ").trim().replace(/[.!?]+$/, "").trim();
-  return norm(a) === norm(b);
-};
+const titleWords = (t: string) => t.replace(/[\s]+/g, " ").trim().replace(/[.!?]+$/, "").trim();
+const sameTitle = (a: string, b: string) => titleWords(a).toLowerCase() === titleWords(b).toLowerCase();
 
 /** "just now", "5m ago". */
 function filedAgo(at: string): string {
@@ -147,7 +145,7 @@ function NewRequestDialog({
     try {
       // Asked once per title: File anyway files it.
       if (!twin || !sameTitle(twin.title, title)) {
-        const found = await unwrap(api.GET("/v1/requests", { params: { query: { q: title.trim(), limit: 50 } } }));
+        const found = await unwrap(api.GET("/v1/requests", { params: { query: { q: titleWords(title), limit: 50 } } }));
         const same = found.items.find((r) => r.state !== "merged" && sameTitle(r.title, title));
         if (same) {
           setTwin({ request: same, title });
