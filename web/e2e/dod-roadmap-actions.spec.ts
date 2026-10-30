@@ -313,3 +313,81 @@ test.describe("desktop Gantt", () => {
     await expect(bar(page, "alert-export")).toHaveAttribute("data-start", before!);
   });
 });
+
+const boardCard = (page: Page, key: string): Locator => page.locator(`[data-testid="board-card"][data-item="${key}"]`);
+
+/*
+ * Card dod-roadmap-commenter-add: protects = a commenter's title dropped on a quarter is a
+ * proposed addition (it waits for the owner; no draft bar appears); fails_when = a commenter's
+ * add applies or is refused; no_claim = the owner's add (simple-additions.spec).
+ */
+test.describe("desktop, a commenter adds", () => {
+  test.use(DESKTOP);
+  test("a commenter drops a title on a quarter: a proposed addition", async ({ page }) => {
+    await open(page, "commenter@example.com");
+    await page.getByLabel("Add an item").fill("Quiet hours setting");
+    await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
+    const chip = page.getByTestId("quick-add-chip");
+    await expect(chip).toHaveAttribute("aria-disabled", "false");
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const from = (await chip.boundingBox())!;
+    const to = (await page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]').boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, Math.min(to.y + 20, 888), { steps: 12 });
+    await page.mouse.up();
+    await expect(toast(page, /^Proposed Quiet hours setting .*: it waits for the roadmap's owner in Needs a decision/)).toBeVisible();
+    await expect(bar(page, "quiet-hours-setting")).toHaveCount(0);
+  });
+});
+
+test.describe("phone, proposals", () => {
+  test.use(PHONE);
+
+  /*
+   * Card dod-roadmap-approver-add-phone: protects = on a phone an approver's add from the sheet
+   * is a proposal waiting for the owner; fails_when = it applies or the sheet offers Add;
+   * no_claim = the commenter's (simple-additions.spec).
+   */
+  test("an approver adds from the sheet on a phone: a proposal", async ({ page }) => {
+    await open(page, "approver@example.com");
+    await page.getByTestId("quick-add-open").click();
+    const sheet = page.getByRole("dialog", { name: "Add an item" });
+    await sheet.getByLabel("Title").fill("Pause alerts on holidays");
+    await sheet.getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
+    await sheet.getByLabel("Where").selectOption({ label: "Keep alerts quiet" });
+    await expect(sheet.getByRole("button", { name: "Add", exact: true })).toHaveCount(0);
+    await sheet.getByRole("button", { name: "Propose", exact: true }).click();
+    await expect(toast(page, "Proposed Pause alerts on holidays (Keep alerts quiet): it waits for the roadmap's owner in Needs a decision")).toBeVisible();
+    await expect(page.locator('[data-item="pause-alerts-on-holidays"]')).toHaveCount(0);
+  });
+
+  /*
+   * Card dod-roadmap-commenter-board-phone: protects = on a phone a commenter's long press moves
+   * a board card to another horizon as a proposal: the card stays in its column, marked
+   * proposed; fails_when = it applies or nothing happens; no_claim = the desktop
+   * (simple-roadmap-formats.spec).
+   */
+  test("a commenter's long press on a board card is a proposal", async ({ page }) => {
+    await open(page, "commenter@example.com");
+    await page.getByTestId("format-board").click();
+    const c = boardCard(page, "alert-export");
+    await c.scrollIntoViewIfNeeded();
+    const from = (await c.boundingBox())!;
+    const header = page.locator('[data-horizon-column="now"]').locator("header");
+    await header.scrollIntoViewIfNeeded();
+    const target = (await header.boundingBox())!;
+    const x = from.x + from.width / 2;
+    const y = (await c.boundingBox())!.y + from.height / 2;
+    const ev = { pointerId: 11, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
+    await c.dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
+    await expect(c).toHaveAttribute("data-picked", "true");
+    const tx = target.x + target.width / 2;
+    const ty = target.y + target.height / 2;
+    for (let n = 1; n <= 8; n++) await c.dispatchEvent("pointermove", { ...ev, clientX: x + ((tx - x) * n) / 8, clientY: y + ((ty - y) * n) / 8 });
+    await c.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: tx, clientY: ty });
+    await expect(toast(page, /^Moved 'Alert history export' to Now proposed: it waits for .+ in Needs a decision$/)).toBeVisible();
+    await expect(page.locator('[data-horizon-column="next"]').locator('[data-item="alert-export"]')).toBeVisible();
+    await expect(c.getByTestId("board-pending")).toContainText("Proposed by Commenter: move to Now");
+  });
+});
