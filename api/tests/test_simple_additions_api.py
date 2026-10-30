@@ -532,9 +532,11 @@ async def test_a_cut_draft_item_reads_cut(client):
     protects = the cut wins over the draft in an item's status; fails_when = a cut draft
     still reads "draft" (it stays in its horizon with Cut); no_claim = merged items."""
     w = await World().build()
-    draft = (await w.add(client, "owner", "Import from spreadsheets"))["change"]["target"]["item_id"]
+    added = await w.add(client, "owner", "Import from spreadsheets")
+    draft = added["change"]["target"]["item_id"]
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
-        "op": "cut", "target": {"item_id": draft}, "before": {"cut": False}, "after": {}})  # fmt: skip
+        "op": "cut", "target": {"item_id": draft}, "before": {"cut": False},
+        "after": {}})  # fmt: skip
     assert r.status_code == 201, r.text
     assert (await w.items(client))[draft]["status"] == "cut"
     r = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo", headers=w.as_("owner"))
