@@ -107,7 +107,6 @@ export function LoginForm() {
       // mounted (hidden); pushing from /login left the address bar on /login, with Home drawn
       // over a hidden Sign in. A fresh load shows the one page at its own address, and nothing
       // the person signed in before had open.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign(target ?? (await loadLanding()));
       leaving = true;
     } catch {

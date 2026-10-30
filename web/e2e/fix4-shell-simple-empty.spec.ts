@@ -77,5 +77,5 @@ for (const [where, use] of [
       await expect(page).toHaveURL(/\/baseline$/);
       await expect(page.getByRole("heading", { name: "Baseline" }).first()).toBeVisible();
     });
-  }
+  });
 }
