@@ -661,6 +661,8 @@ async def accept_suggestion(
             item.status = "superseded"
             item.resolution_note = f"Duplicate of feedback item {row.duplicate_of}"
     await db.flush()
+    if closes and item.status != "open":
+        await _close_thread(db, principal, item)
     await audit.record(
         db,
         principal,
@@ -684,6 +686,15 @@ async def accept_suggestion(
 
         await capture.pushback_overridden(db, principal, row, reason or "")
     return row
+
+
+async def _close_thread(db: AsyncSession, principal: "Principal", item: FeedbackItem) -> None:
+    """fix3-discuss review: whole-draft feedback made in Discuss, closed by a decision on
+    Oracle's suggestion, closes its thread (as the item's own Resolve does)."""
+    if item.discussion_id is not None:
+        from oracle.discussions import service as discussions
+
+        await discussions.close_for_feedback(db, principal, item.discussion_id)
 
 
 async def _in_use(db: AsyncSession, row: LlmSuggestion) -> str | None:
@@ -804,6 +815,8 @@ async def dismiss_suggestion(
                 reason or (row.pushback or {}).get("reason") or "Declined on Oracle's suggestion"
             )
             item.addressed_in_version = await latest_number(db, row.document_id)
+            await db.flush()
+            await _close_thread(db, principal, item)
     await db.flush()
     await audit.record(
         db,
