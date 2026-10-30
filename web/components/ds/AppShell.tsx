@@ -10,6 +10,7 @@ import { closeTransientPanel, setPanelOpen, takeAskFocus, useAskDraft, usePanelO
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { homeOf, modeOf } from "@/lib/experience";
 import { resetMockData } from "@/lib/api/mock/server";
+import { leave } from "@/lib/leave-guard";
 import { useMe } from "@/lib/me";
 import { useSettingsTabs } from "@/lib/settings-tabs";
 import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/lib/waiting";
@@ -364,7 +365,7 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
       )}
       <button
         type="button"
-        onClick={signOut}
+        onClick={() => leave(() => void signOut())}
         className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
       >
         <Icon name="signout" size={16} />

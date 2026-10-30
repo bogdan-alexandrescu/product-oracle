@@ -50,7 +50,8 @@ test("qa-docs-22: a commenter reads one role badge, in the same words, on every 
     await page.goto(url);
     const badge = page.getByTestId("role-badge").filter({ visible: true });
     await expect(badge, url).toHaveCount(1);
-    await expect(badge, url).toHaveText("Commenter: can comment");
+    // Quality adds what else it lets a commenter do (fix4-docs review: read off can()).
+    await expect(badge, url).toHaveText(url.endsWith("/quality") ? "Commenter: can comment, rate and save this check" : "Commenter: can comment");
     await expect(page.getByText("View only", { exact: true }).filter({ visible: true }), url).toHaveCount(0);
     await expect(page.getByText(/Viewing as/).filter({ visible: true }), url).toHaveCount(0);
   }

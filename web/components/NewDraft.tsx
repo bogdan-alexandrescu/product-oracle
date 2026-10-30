@@ -29,6 +29,7 @@ import { namedText } from "@/lib/codes";
 import { unwrapProblems, ProblemsError } from "@/lib/api/problems";
 import { assess, goalViews } from "@/app/home/_goals";
 import { useMe } from "@/lib/me";
+import { holdLeaving } from "@/lib/leave-guard";
 import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -205,12 +206,21 @@ function NumberQuestion({
  */
 function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
   const router = useRouter();
-  const [leaving, setLeaving] = useState<string | null>(null);
+  // Where Discard goes: a link's page, the page before (browser Back) or a button's way out.
+  const [leaving, setLeaving] = useState<{ go: () => void } | null>(null);
   const sent = useRef(false);
-  const live = useRef({ dirty, onDiscard });
+  // A copy of this page's history entry is pushed while there is typed work: browser Back
+  // takes it off (same page) and the question is asked before going back for real.
+  const armed = useRef(false);
+  const live = useRef({ dirty, onDiscard, router });
   useEffect(() => {
-    live.current = { dirty, onDiscard };
+    live.current = { dirty, onDiscard, router };
   });
+  useEffect(() => {
+    if (!dirty || leaving || armed.current || sent.current) return;
+    window.history.pushState(window.history.state, "", window.location.href);
+    armed.current = true;
+  }, [dirty, leaving]);
   useEffect(() => {
     // Shown again (the router keeps a left page): a draft sent before is no longer in flight.
     sent.current = false;
@@ -226,7 +236,16 @@ function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
       // Before Next's Link sees the click: nothing navigates until the person answers.
       e.preventDefault();
       e.stopPropagation();
-      setLeaving(url.pathname + url.search + url.hash);
+      const to = url.pathname + url.search + url.hash;
+      setLeaving({ go: () => live.current.router.push(to) });
+    };
+    const onPop = (e: PopStateEvent) => {
+      if (!armed.current) return;
+      armed.current = false;
+      // Before Next's router sees it: the page stays while the person answers.
+      e.stopImmediatePropagation();
+      if (asks()) setLeaving({ go: () => window.history.back() });
+      else window.history.back();
     };
     const onUnload = (e: BeforeUnloadEvent) => {
       if (!asks()) return;
@@ -235,9 +254,18 @@ function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
     };
     window.addEventListener("click", onClick, true);
     window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("popstate", onPop, true);
+    // A button that navigates (the mode switch, Sign out) asks through lib/leave-guard.
+    holdLeaving((go) => {
+      if (!asks()) return false;
+      setLeaving({ go });
+      return true;
+    });
     return () => {
       window.removeEventListener("click", onClick, true);
       window.removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("popstate", onPop, true);
+      holdLeaving(null);
     };
   }, []);
 
@@ -251,11 +279,11 @@ function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
         <Button
           variant="danger"
           onClick={() => {
-            const to = leaving;
+            const { go } = leaving;
             setLeaving(null);
             sent.current = true;
             live.current.onDiscard();
-            router.push(to);
+            go();
           }}
         >
           Discard
@@ -761,7 +789,11 @@ export function NewDraft({ kind }: { kind: Kind }) {
       titleRef.current?.focus();
       return;
     }
-    if (!templateKey) return;
+    if (!templateKey) {
+      // The recommendation (which brings the templates) has not come yet, or failed: say so.
+      setError(choice.live.error ?? "Oracle is still choosing a template for this draft. Try Create draft again in a moment.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {

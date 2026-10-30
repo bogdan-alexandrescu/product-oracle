@@ -450,7 +450,12 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
       suffix={`v${n}`}
       status={
         <>
-          <RoleBadge />
+          <RoleBadge
+            also={[
+              { op: "create_human_rating", words: "rate" },
+              { op: "create_evaluation_report", words: "save this check" },
+            ]}
+          />
           {readiness && (
             <>
               <Chip kind="line" data-testid="policy-chip">

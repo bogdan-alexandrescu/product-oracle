@@ -360,7 +360,9 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
   const { sections, gaps, rows, selected, select, phone, data, links, citations, stale, result } = props;
   const [showLinks, setShowLinks] = useState(true);
   const [showCites, setShowCites] = useState(true);
-  const [staleOnly, setStaleOnly] = useState(false);
+  const [staleOnlyPicked, setStaleOnly] = useState(false);
+  // With no stale link left (the last one removed) the chip is disabled: it filters nothing then.
+  const staleOnly = staleOnlyPicked && stale > 0;
   const shown = rows.filter((r) => {
     if (staleOnly) return r.stale;
     return r.group === "citations" ? showCites : showLinks;
@@ -420,7 +422,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
             setStaleOnly(false);
             setShowCites((v) => !v);
           })}
-          {toggle("Stale only", stale, staleOnly, () => setStaleOnly((v) => !v))}
+          {toggle("Stale only", stale, staleOnly, () => setStaleOnly(!staleOnly))}
           <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-text2 max-[1100px]:hidden" aria-label="Legend">
             {/* qa-docs-53: words, not scores. */}
             <span className="font-semibold">Link confidence:</span>
