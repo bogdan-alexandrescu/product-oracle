@@ -426,7 +426,7 @@ test.describe("QA pass 3: simple-plan, the suggestions drawer", () => {
       await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Merge into it");
     }
     // qa-simple-plan-36: one scrollbar (the page behind does not scroll); an opened flow comes into view.
-    expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe("hidden");
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe("hidden");
     const flow = drawer.getByTestId("flow-open").first();
     if ((await flow.count()) > 0) {
       await flow.click();

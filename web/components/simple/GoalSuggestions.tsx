@@ -628,7 +628,11 @@ function useDrawerClose(onClose: () => void, lock: boolean) {
     return () => {
       document.removeEventListener("keydown", onKey);
       if (lock) body.overflow = overflow;
-      if (opener?.isConnected) requestAnimationFrame(() => opener.focus());
+      // Back to the opener, unless what closed it (Ask Oracle in the chat) moved focus into another dialog.
+      requestAnimationFrame(() => {
+        const at = document.activeElement;
+        if (opener?.isConnected && (!at || at === document.body)) opener.focus();
+      });
     };
   }, [opener, lock]);
 }
