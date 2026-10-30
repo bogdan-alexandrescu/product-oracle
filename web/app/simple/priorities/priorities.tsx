@@ -99,12 +99,13 @@ export function Priorities() {
   };
   // qa-simple-plan-42: while the URL still reads what it did at the pick (the line put back
   // meanwhile rewrote it without the tab), the pick is written again, so a reload keeps it.
-  const urlTabParam = params.get("tab");
+  const urlQuery = params.toString();
   useEffect(() => {
-    if (!tabPick || tabPick.from !== urlTabParam) return;
+    const now = new URLSearchParams(urlQuery).get("tab");
+    if (!tabPick || tabPick.from !== now) return;
     const want = tabPick.tab === "ranked" ? null : tabPick.tab;
-    if (urlTabParam !== want) setParams({ tab: want });
-  }, [tabPick, urlTabParam, setParams]);
+    if (now !== want) setParams({ tab: want });
+  }, [tabPick, urlQuery, setParams]);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // qa-simple-plan-41: the arrow keys (and Home / End) move between the tabs, as a WAI-ARIA tablist.
   const tabKey = (e: KeyboardEvent, k: number) => {
@@ -122,12 +123,12 @@ export function Priorities() {
   // Once the person picks, the URL alone says the line (Now: none).
   const [picked, setPicked] = useState(false);
   const line = params.get("line") ?? (picked ? null : remembered);
-  const restored = useRef(false);
+  // qa-simple-plan-42: put back until the URL holds it (a tab clicked meanwhile rewrites the URL
+  // too, and one of two quick rewrites can be lost), unless the person picks a line themselves.
   useEffect(() => {
-    if (restored.current || (!prefs.data && !prefs.error)) return;
-    restored.current = true;
-    if (!params.get("line") && remembered && remembered !== "now") setParams({ line: remembered });
-  }, [params, prefs.data, prefs.error, remembered, setParams]);
+    if (picked || new URLSearchParams(urlQuery).get("line") || !remembered || remembered === "now") return;
+    setParams({ line: remembered });
+  }, [picked, urlQuery, remembered, setParams]);
   const q = useQuery<Out>(`simple-priorities:${line ?? "now"}`, () => unwrap(api.GET("/v1/simple/priorities", { params: { query: line ? { line } : {} } })), { keepPrevious: true });
   const pickLine = (key: string) => {
     setPicked(true);

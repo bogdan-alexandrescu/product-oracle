@@ -50,7 +50,7 @@ test.describe("fix4-simple-plan review: Priorities", () => {
       for (const r of await rows.all()) {
         const conf = Number(/^confidence ([\d.]+)$/.exec((await r.getByTestId("prio-confidence").textContent()) ?? "")?.[1]);
         const m = /^value ([\d.]+) · ([\d.]+) wk · score ([\d.]+)$/.exec((await r.getByTestId("prio-numbers").textContent()) ?? "");
-        expect(m, await r.textContent()).not.toBeNull();
+        expect(m, (await r.textContent()) ?? "").not.toBeNull();
         const [, value, effort, score] = m!.map(Number);
         expect(conf).toBeGreaterThan(0);
         expect(conf).toBeLessThanOrEqual(1);
@@ -126,6 +126,8 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     const kd = (await select.locator("option").nth(1).getAttribute("value"))!;
     await select.selectOption(kd);
     await expect(page).toHaveURL(/line=/);
+    // Remembered (the mock keeps the person's pick in this browser's storage) before leaving.
+    await expect.poll(() => page.evaluate((v) => (localStorage.getItem("po-mock-db-v2") ?? "").includes(v), kd)).toBe(true);
     await page.goto("/home");
     await page.goto("/simple/priorities");
     await page.getByRole("tab", { name: "Value / effort" }).click();
