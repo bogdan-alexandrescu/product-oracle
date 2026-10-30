@@ -271,28 +271,18 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   useEffect(() => {
     const el = phoneBar;
     if (!el) return;
-    const root = document.documentElement;
-    const before = root.style.scrollPaddingBottom;
-    // What this bar set, so a hidden view (Next keeps visited routes mounted) only undoes its own.
-    let mine: string | null = null;
-    const release = () => {
-      if (mine !== null && root.style.scrollPaddingBottom === mine) root.style.scrollPaddingBottom = before;
-      mine = null;
-    };
-    const fit = () => {
-      const r = el.getBoundingClientRect();
-      if (r.height === 0) return release();
-      mine = `${Math.ceil(window.innerHeight - r.top)}px`;
-      root.style.scrollPaddingBottom = mine;
-    };
-    fit();
-    const watch = new ResizeObserver(fit);
+    // qa-docs-9: every mounted view's bar is counted, so the hidden one Next keeps of the
+    // version left (v2 -> v1) never clears the padding the shown one set.
+    PHONE_BARS.add(el);
+    fitPhoneBars();
+    const watch = new ResizeObserver(fitPhoneBars);
     watch.observe(el);
-    window.addEventListener("resize", fit);
+    window.addEventListener("resize", fitPhoneBars);
     return () => {
       watch.disconnect();
-      window.removeEventListener("resize", fit);
-      release();
+      window.removeEventListener("resize", fitPhoneBars);
+      PHONE_BARS.delete(el);
+      fitPhoneBars();
     };
   }, [phoneBar]);
   const panelRef = useRef<HTMLElement>(null);
@@ -1549,6 +1539,26 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     </div>
     </DateMarkContext.Provider>
   );
+}
+
+/** The phone's Sections / Review bars of the mounted version views (qa-docs-8, qa-docs-9). */
+const PHONE_BARS = new Set<HTMLElement>();
+/** The page's own bottom scroll padding, from before a bar set it. */
+let basePadding: string | null = null;
+/** The page's bottom scroll padding: the room from the shown bar's top to the screen's bottom. */
+function fitPhoneBars() {
+  const root = document.documentElement;
+  const rooms = [...PHONE_BARS]
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.height > 0)
+    .map((r) => Math.ceil(window.innerHeight - r.top));
+  if (rooms.length > 0) {
+    basePadding ??= root.style.scrollPaddingBottom;
+    root.style.scrollPaddingBottom = `${Math.max(...rooms)}px`;
+  } else if (basePadding !== null) {
+    root.style.scrollPaddingBottom = basePadding;
+    basePadding = null;
+  }
 }
 
 const NO_HIGHLIGHTS: Highlight[] = [];
