@@ -94,7 +94,7 @@ async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
         "M3 Open to all",
     ]
     m1 = parts[0]
-    assert "2 Nov – 27 Nov" in m1 and "Ten pilot teams finish setup" in m1
+    assert "Nov 2 – Nov 27" in m1 and "Ten pilot teams finish setup" in m1
     assert "Growth: 100 weekly active teams" in m1
     assert "<h3>New for people</h3>" in m1 and "F-01 Setup checklist" in m1
     assert "Ticks off setup steps" in m1 and m1.index("New for people") < m1.index("PM-owned")
