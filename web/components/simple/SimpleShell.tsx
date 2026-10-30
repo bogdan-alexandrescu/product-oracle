@@ -248,7 +248,8 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           <span className="flex min-w-0 flex-col pt-2 leading-5">
             {/* qa-simple-home-25: the name (or email) in full, wrapped, never cut to "viewer@example.c…". */}
             <span data-testid="simple-person-name" title={me?.email || me?.name || undefined} className="text-[15px] font-semibold [overflow-wrap:anywhere] text-rail-active-text">
-              {me?.name || me?.email || ""}
+              {/* qa-simple-plan-43: an email breaks after its "@", never mid-word. */}
+              {me?.name || (me?.email?.includes("@") ? <>{me.email.split("@")[0]}@<wbr />{me.email.split("@").slice(1).join("@")}</> : me?.email) || ""}
             </span>
             <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>
           </span>

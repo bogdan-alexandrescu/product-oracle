@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
@@ -224,9 +225,7 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
             </ul>
           )}
           {s.looks_like.map((m) => (
-            <p key={m.id} className="mt-1 text-warn" data-testid="suggestion-looks-like">
-              Looks like {`${m.code} ${m.title}`.trim()}
-            </p>
+            <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}: merged into it`))} />
           ))}
         </div>
         {(accepts || rejects || s.flow) && (
@@ -249,7 +248,12 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
           </span>
         )}
       </div>
-      {wide && !phone && s.flow && <FlowDetail flow={s.flow} />}
+      {wide && !phone && s.flow && (
+        // qa-simple-plan-36: the opened flow scrolls into view.
+        <div ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })} data-testid="flow-detail">
+          <FlowDetail flow={s.flow} />
+        </div>
+      )}
       {phone && s.flow && (
         <Sheet open={wide} title={s.flow.title} onClose={() => setWide(false)} full testId="flow-sheet">
           <div className="p-4">
@@ -271,6 +275,28 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
   );
 }
 
+/**
+ * qa-simple-plan-34: a look-alike feature, linked to the list it ranks in, with "Merge into it"
+ * for whoever decides (the suggestion is closed as the same as that feature).
+ */
+function LooksLike({ m, merges, busy, onMerge }: { m: GoalSuggestion["looks_like"][number]; merges: boolean; busy: boolean; onMerge: () => void }) {
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-warn" data-testid="suggestion-looks-like">
+      <span>
+        Looks like{" "}
+        <Link href="/simple/priorities" className="font-semibold underline" data-testid="looks-like-link">
+          {`${m.code} ${m.title}`.trim()}
+        </Link>
+      </span>
+      {merges && (
+        <button type="button" disabled={busy} onClick={onMerge} className="font-semibold text-accent-ink underline" data-testid="looks-like-merge">
+          Merge into it
+        </button>
+      )}
+    </p>
+  );
+}
+
 /** A goal's open suggestions: people's (origin "person") and Oracle's. */
 export function goalRows(a: GoalSuggestionsApi, goal: GoalBrief): { people: GoalSuggestion[]; oracle: GoalSuggestion[] } {
   const rows = (a.data?.suggestions ?? []).filter((s) => s.goal.id === goal.id || s.goal.key === goal.key);
@@ -286,7 +312,7 @@ function goalState(a: GoalSuggestionsApi, goal: GoalBrief) {
  * "Suggestions" at 0. While Oracle suggests it says so, and the count changes when it is done
  * (never under the reader without a reason).
  */
-export function SuggestionsButton({ goal, api: a, onOpen, className = "" }: { goal: GoalBrief; api: GoalSuggestionsApi; onOpen: (g: GoalBrief) => void; className?: string }) {
+export function SuggestionsButton({ goal, api: a, onOpen, className = "", label = "Suggestions" }: { goal: GoalBrief; api: GoalSuggestionsApi; onOpen: (g: GoalBrief) => void; className?: string; label?: string }) {
   const state = goalState(a, goal);
   if (!state) return null;
   const { people, oracle } = goalRows(a, goal);
@@ -300,7 +326,7 @@ export function SuggestionsButton({ goal, api: a, onOpen, className = "" }: { go
       onClick={() => onOpen(state.goal)}
       className={`simple-small rounded-lg border border-line bg-surface px-3 py-1.5 font-semibold text-accent-ink hover:bg-surface2 ${className}`}
     >
-      {state.pending ? "Oracle is suggesting..." : n ? `Suggestions · ${n}` : "Suggestions"}
+      {state.pending ? "Oracle is suggesting..." : n ? `${label} · ${n}` : label}
     </button>
   );
 }
@@ -308,7 +334,7 @@ export function SuggestionsButton({ goal, api: a, onOpen, className = "" }: { go
 /** "Suggest a feature": name, what it does and for whom, the goal set, who decides; folded to
  * one line (a button, "+ Suggest a feature") for the decider. `open` and `onOpen` are the
  * parent's, so the empty state's "Suggest the first feature" can open the same form. */
-function SuggestForm({ goal, decider, open, onOpen, focus = false, onSent }: { goal: GoalBrief; decider: string | null; open: boolean; onOpen: () => void; focus?: boolean; onSent: () => Promise<void> }) {
+function SuggestForm({ goal, decider, decides = false, open, onOpen, focus = false, onSent }: { goal: GoalBrief; decider: string | null; decides?: boolean; open: boolean; onOpen: () => void; focus?: boolean; onSent: () => Promise<void> }) {
   const [title, setTitle] = useState("");
   const [outcome, setOutcome] = useState("");
   const [busy, setBusy] = useState(false);
@@ -354,7 +380,8 @@ function SuggestForm({ goal, decider, open, onOpen, focus = false, onSent }: { g
         Goal: {goal.title}
       </p>
       <p className="simple-small text-text2" data-testid="suggest-decider">
-        {decider ? `${decider} will review your suggestion.` : "The company's owners will review your suggestion."}
+        {/* qa-simple-plan-33: the decider is not told someone else reviews their own suggestion. */}
+        {decides ? "You decide on this goal's suggestions: once sent, you can accept it below." : decider ? `${decider} will review your suggestion.` : "The company's owners will review your suggestion."}
       </p>
       <Button type="submit" variant="solid" className="self-start" disabled={busy || !title.trim() || !outcome.trim()}>
         Send suggestion
@@ -392,9 +419,7 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
             From {s.proposed_by_name ?? "someone"} · {zoneDateTime(s.created_at, zone)}
           </p>
           {s.looks_like.map((m) => (
-            <p key={m.id} className="mt-1 text-warn" data-testid="suggestion-looks-like">
-              Looks like {`${m.code} ${m.title}`.trim()}
-            </p>
+            <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}: merged into it`))} />
           ))}
         </div>
         {(accepts || rejects) && (
@@ -434,7 +459,8 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
   const { can } = useMe();
   const state = goalState(a, goal);
   const { people, oracle } = goalRows(a, goal);
-  const [tab, setTab] = useState<"people" | "oracle">(start === "oracle" ? "oracle" : "people");
+  // qa-simple-plan-10: opened without a start, on the tab that holds the suggestions.
+  const [tab, setTab] = useState<"people" | "oracle">(start === "oracle" || (start !== "form" && !people.length && oracle.length > 0) ? "oracle" : "people");
   const [asking, setAsking] = useState(false);
   // qa-simple-roadmap-24/44: "+ Suggest a feature" starts folded the same way it always did;
   // lifted here (not SuggestForm's own state) so the empty state's "Suggest the first feature"
@@ -449,7 +475,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
     <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
       {suggests && (
         <>
-          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} open={formOpen} onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={a.reload} />
+          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open={formOpen} onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={a.reload} />
           <Button
             variant="secondary"
             data-testid="suggest-from-chat"
@@ -459,7 +485,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
             }}
             className="self-start"
           >
-            Suggest from the chat
+            Ask Oracle in the chat
           </Button>
         </>
       )}
@@ -489,11 +515,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
           ) : (
             <p className="simple-small text-text2">
               No one has suggested a feature for {goal.title} yet.{" "}
-              {suggests && !formOpen && (
-                <button type="button" data-testid="suggest-first-feature" onClick={() => setFormOpen(true)} className="font-semibold text-accent-ink hover:underline">
-                  Suggest the first feature
-                </button>
-              )}
+              {/* qa-simple-plan-35: "+ Suggest a feature" above is the one control that opens the form. */}
             </p>
           )}
         </div>
@@ -544,9 +566,11 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
  */
 function useDrawerFocus(open: boolean) {
   const ref = useRef<HTMLElement>(null);
+  // The opener as it was before the drawer's own autofocus moved focus in (read while rendering).
+  const [first] = useState(() => (typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null));
   useEffect(() => {
     if (!open) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const opener = first;
     const p = ref.current;
     if (p && !p.contains(document.activeElement)) (p.querySelector<HTMLElement>("[autofocus], [data-autofocus]") ?? p).focus();
     const onKey = (e: KeyboardEvent) => {
@@ -570,13 +594,44 @@ function useDrawerFocus(open: boolean) {
       document.removeEventListener("keydown", onKey);
       if (opener?.isConnected) opener.focus();
     };
-  }, [open]);
+  }, [open, first]);
   return ref;
+}
+
+/**
+ * qa-simple-plan-9/36: Escape closes the drawer (a dialog opened over it closes first), focus
+ * goes back to the button that opened it (phone and desktop), and the page behind does not scroll
+ * (one scrollbar).
+ */
+function useDrawerClose(onClose: () => void) {
+  const [opener] = useState(() => (typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null));
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // A dialog over the drawer (Reject) has its own Escape.
+      if (document.querySelectorAll('[role="dialog"], [role="alertdialog"]').length > 1) return;
+      e.preventDefault();
+      close.current();
+    };
+    document.addEventListener("keydown", onKey);
+    const overflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.documentElement.style.overflow = overflow;
+      if (opener?.isConnected) requestAnimationFrame(() => opener.focus());
+    };
+  }, [opener]);
 }
 
 export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; api: GoalSuggestionsApi; onClose: () => void; start?: GoalPanelStart }) {
   const phone = usePhone();
   const drawer = useDrawerFocus(!phone);
+  useDrawerClose(onClose);
   const title = `Suggestions · ${goal.title}`;
   if (phone)
     return (

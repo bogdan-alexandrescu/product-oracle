@@ -94,17 +94,26 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
   return [ref, width];
 }
 
+/** qa-simple-plan-37: a code as the other tabs draw it (the Ranked list's chip), never grey monospace. */
+export function CodeTag({ code, title }: { code: string; title?: string }) {
+  return (
+    <span data-testid="prio-code" title={title} className="inline-block min-w-[3.25rem] flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-center align-middle text-[13px] font-semibold leading-5 tabular-nums text-text">
+      {code}
+    </span>
+  );
+}
+
 /** A segment's label shows when the segment is wider than it (13 px type, padded); a narrower one is blank, its words in its title. */
 const fits = (label: string, px: number) => px >= label.length * 8 + 12;
 
 function GoalBar({ plan, goal, code, parts, total, max }: { plan: Plan; goal: string; code: string | null; parts: { milestone: string; weeks: number }[]; total: number; max: number }) {
   const [track, width] = useWidth<HTMLDivElement>();
-  const label = (p: { milestone: string; weeks: number }) => `${p.milestone} ${wk(p.weeks)}`;
+  const label = (p: { milestone: string; weeks: number }) => `${p.milestone} · ${wk(p.weeks)} wk`;
   return (
     <li data-testid="goal-bar" data-goal={goal} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 py-1.5 sm:grid-cols-[170px_1fr_90px]">
       <div className="min-w-0 text-[17px] font-[650] leading-6">
         <span data-testid="goal-bar-name">{goalLabel(goal).name}</span>
-        {code && <span className="font-mono text-[12px] font-normal text-text2"> {code}</span>}
+        {code && <> <CodeTag code={code} /></>}
       </div>
       <div ref={track} data-testid="goal-bar-track" className="col-span-2 row-start-2 flex min-w-0 sm:col-span-1 sm:row-start-auto">
         {parts.map((p) => {
@@ -196,7 +205,7 @@ export function PlanFeatureList({ plan, goal }: { plan: Plan; goal: string | nul
         const milestones = [...new Set(f.slices.map((s) => s.milestone))];
         return (
           <li key={f.code} data-testid="plan-feature" data-code={f.code} className="flex items-center gap-2 border-b border-line py-[5px] text-[16px] leading-[22px]">
-            <span className="min-w-[38px] flex-none font-mono text-[13px] text-text2">{f.code}</span>{" "}
+            <CodeTag code={f.code} title={f.name} />{" "}
             <span data-testid="plan-feature-name" className="min-w-0 flex-1">
               {f.name}
             </span>

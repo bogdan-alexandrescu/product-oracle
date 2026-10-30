@@ -124,3 +124,13 @@ def test_docs_and_preferences_say_the_same_default_line():
     docs = (Path(__file__).resolve().parents[2] / "docs" / "mvp-app.md").read_text()
     assert said in docs
     assert said in " ".join((Preferences.__doc__ or "").split()).replace("``", "`")
+
+
+def test_a_half_typed_picked_day_is_no_line():
+    """qa-simple-plan-1: a picked day of year 1 (a field read mid-typing) is Now."""
+    from oracle.simple.priorities import NOW_LINE, pick_line
+
+    assert pick_line("date:0001-12-20", []) == NOW_LINE
+    assert pick_line("date:0202-12-01", []) == NOW_LINE
+    picked = pick_line("date:2026-12-01", [])
+    assert (picked.kind, picked.label) == ("date", "By Dec 1, 2026")

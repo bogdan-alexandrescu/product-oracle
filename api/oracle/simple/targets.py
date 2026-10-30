@@ -333,11 +333,14 @@ async def _plan(
         if row.feature_id is None:
             raise ChangeError(422, "This item has no feature in the baseline to rank")
         target["feature_id"] = str(row.feature_id)
+        clear = a.get("clear") is True
         pos = a.get("position")
-        if not isinstance(pos, int) or isinstance(pos, bool) or pos < 1:
+        if not clear and (not isinstance(pos, int) or isinstance(pos, bool) or pos < 1):
             raise ChangeError(422, "after.position: a rank from 1 (the top)")
         reason = str(a.get("reason") or "").strip()
-        if not reason or "\n" in reason or "\r" in reason or len(reason) > REASON_MAX:
+        if not clear and (
+            not reason or "\n" in reason or "\r" in reason or len(reason) > REASON_MAX
+        ):
             raise ChangeError(
                 422, f"after.reason: why, in one line of 1 to {REASON_MAX} characters"
             )
@@ -357,6 +360,13 @@ async def _plan(
         if seen != current["override"]:
             raise await _conflict(db, SimpleChange(op=op, target=target), current,
                                   "Changed since you saw it")  # fmt: skip
+        if clear:
+            # ``after.clear``: back to Oracle's rank (the active override ends; undo puts it back).
+            active = await _active(db, row.feature_id)
+            if active is None:
+                raise ChangeError(409, "It is at Oracle's rank already")
+            target["override_id"] = str(active.id)
+            return target, current, {"override": None}
         after = {"override": {"kind": "pin", "position": pos, "above_feature_id": None,
                               "reason": reason}}  # fmt: skip
         return target, current, after
@@ -492,6 +502,15 @@ async def _pin(db: AsyncSession, principal: Any, feature_id: str, o: dict, confi
         raise _fail(e) from e
 
 
+async def _unpin(db: AsyncSession, principal: Any, override_id: str) -> None:
+    """End the override ``override_id``: its feature goes back to Oracle's rank."""
+    try:
+        await priorities.remove_override(db, uuid.UUID(override_id), "Back to Oracle's rank",
+                                         principal)  # fmt: skip
+    except (priorities.ConflictError, priorities.NotFoundError) as e:
+        raise _fail(e) from e
+
+
 def _set(row: Any, values: dict[str, Any]) -> None:
     for k, v in values.items():
         if k == "owner_id":
@@ -527,7 +546,9 @@ async def _apply(
         await db.flush()
         return
     if kind == "override":
-        if not undo:
+        if not undo and values["override"] is None:
+            await _unpin(db, principal, t["override_id"])
+        elif not undo:
             oid = await _pin(db, principal, t["feature_id"], values["override"], True)
             c.target = {**t, "override_id": oid}
         elif values["override"] is not None:
@@ -648,7 +669,9 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
                      status="applied" if applies else "proposed", by=me, at=now,
                      reason=body.reason, routed_to=routed)  # fmt: skip
     if applies:
-        if KIND[body.op] == "override":
+        if KIND[body.op] == "override" and after["override"] is None:
+            await _unpin(db, principal, target["override_id"])
+        elif KIND[body.op] == "override":
             # Before the row exists: a pushback commits the reason check and raises.
             oid = await _pin(db, principal, target["feature_id"], after["override"],
                              bool(body.after.get("confirm")))  # fmt: skip
@@ -710,7 +733,13 @@ async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChang
         raise ChangeError(409, "Its task or action item is gone")
     if KIND[c.op] == "override":
         active = await _active(db, uuid.UUID(c.target["feature_id"]))
-        mine = active is not None and str(active.id) == c.target.get("override_id")
+        # A clear's undo needs the feature still at Oracle's rank; a pin's, its own pin active.
+        cleared = c.after.get("override", ...) is None
+        mine = (
+            active is None
+            if cleared
+            else (active is not None and str(active.id) == c.target.get("override_id"))
+        )
     else:
         mine = True
     if not mine or current != {k: c.after.get(k) for k in _keys(c)}:
