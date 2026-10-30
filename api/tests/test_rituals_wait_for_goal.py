@@ -143,3 +143,21 @@ async def test_a_goal_confirmed_another_way_turns_them_on_at_the_tick(client, ct
     assert (await rituals_of(ctx.tenant_id))["goals_checkin"].status == "paused"
     await tick(ctx.tenant_id)
     assert (await rituals_of(ctx.tenant_id))["goals_checkin"].status == "active"
+
+
+async def test_a_check_in_the_metrics_review_replaced_stays_paused(client, ctx, at):
+    """protects=H5's metrics review that replaced the waiting goals check-in keeps it
+    replaced: the first confirmed goal turns the other defaults on, not the check-in;
+    fails_when=the goal turns the replaced check-in on beside the review; no_claim=-."""
+    from oracle.metrics.activate import activate_review
+
+    await tick(ctx.tenant_id)
+    async with tenant_session(ctx.tenant_id) as db:
+        assert await activate_review(db)
+        await db.commit()
+    await confirm(client, ctx, await goal(client, ctx))
+    out = await listed(client, ctx)
+    assert out["metrics_review"]["status"] == "active"
+    assert out["goals_checkin"]["status"] == "paused"
+    assert out["goals_checkin"]["replaced_by"] == "Weekly metrics review"
+    assert out["roadmap_refresh"]["status"] == "active"
