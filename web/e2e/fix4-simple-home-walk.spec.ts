@@ -171,6 +171,20 @@ test("qa-simple-home-28: Another answer closes on Escape or a click elsewhere; t
   expect(chosenBorder).not.toBe(unchosen);
 });
 
+test("qa-simple-home-28: a press outside that drags (a text selection) still closes Another answer", async ({ page }) => {
+  // fails_when: the answers close only on a click, so a press that ends away from where it began leaves them open
+  await signIn(page, "simple-home");
+  const row = page.getByTestId("home-question").filter({ hasText: "Reminder default time" });
+  await row.getByRole("button", { name: "Another answer" }).click();
+  await expect(row.getByTestId("question-answers")).toBeVisible();
+  const greeting = (await page.getByTestId("home-greeting").boundingBox())!;
+  await page.mouse.move(greeting.x + 2, greeting.y + greeting.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(greeting.x + greeting.width - 2, greeting.y + greeting.height + 40, { steps: 8 });
+  await page.mouse.up();
+  await expect(row.getByTestId("question-answers")).toHaveCount(0);
+});
+
 test("qa-simple-home-7: skipping every step ends by saying what is left, and starts again from the first skipped", async ({ page }) => {
   // fails_when: the end says "That is everything for now." with "15 of 15" though nothing was decided, or offers no way back
   await signIn(page, "simple-home");

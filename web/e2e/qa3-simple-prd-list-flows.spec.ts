@@ -15,8 +15,8 @@ import { expect, test, type Locator, type Page } from "./test";
  *   (Guided setup, the newest in "simple-plan", not first).
  * - p3-31: protects = a member with no name reads their email once in the rail's person
  *   block; fails_when = the email twice (as the name and the avatar's line).
- * - p3-14: protects = a flow's time reads day first with its day and the zone's friendly name
- *   ("26 Oct, 8:00 AM PT"), today too; fails_when = "Oct 26, 8:00 AM PDT" or "7:13 PM PDT".
+ * - p3-14: protects = a flow's time reads month first with its day and the zone's friendly name
+ *   ("Oct 26, 8:00 AM PT", train AD's month-first call), today too; fails_when = "Oct 26, 8:00 AM PDT" or "7:13 PM PDT".
  * - p3-22: protects = full screen has one scroller and one way out, and the opened flow offers
  *   Comment as full screen does; fails_when = the page scrolls behind it, "Back" beside "Exit
  *   full screen", or no Comment in the opened flow.
@@ -191,19 +191,19 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("user-menu")).toHaveAccessibleName("Account viewer@example.com");
   });
 
-  test("qa-simple-prd-p3-14: a flow's time reads day first with its day and the friendly zone, today too", async ({ page }) => {
+  test("qa-simple-prd-p3-14: a flow's time reads month first with its day and the friendly zone, today too", async ({ page }) => {
     await setUp(page);
     await page.goto(ONE_PAGER);
     await expect(page.getByTestId("one-pager")).toBeVisible();
-    // Drawn 26 Oct (not today: the mock's today is 22 Oct).
-    await expect(bet(page, 2).getByTestId("flow-drawn")).toHaveText("Version 1 · drawn 26 Oct, 8:00 AM PT");
+    // Drawn Oct 26 (not today: the mock's today is Oct 22).
+    await expect(bet(page, 2).getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM PT");
     await bet(page, 2).getByRole("button", { name: "Open the flow", exact: true }).click();
-    await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toHaveText("Version 1 · drawn 26 Oct, 8:00 AM PT");
+    await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM PT");
     await page.getByTestId("flow-detail").getByRole("button", { name: "Close", exact: true }).click();
     // Drawn today: its day still shows.
     const row = bet(page, 3);
     await row.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-    await expect(row.getByTestId("flow-drawn")).toHaveText(/^Version 1 · drawn 22 Oct, \d{1,2}:\d{2} [AP]M PT$/, { timeout: 15_000 });
+    await expect(row.getByTestId("flow-drawn")).toHaveText(/^Version 1 · drawn Oct 22, \d{1,2}:\d{2} [AP]M PT$/, { timeout: 15_000 });
   });
 
   for (const scheme of ["light", "dark"] as const) {

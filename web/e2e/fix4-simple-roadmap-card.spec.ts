@@ -174,7 +174,8 @@ test.describe("desktop 1440x900", () => {
     const flag = c.getByTestId("chat-card-flag").first();
     await expect(flag).toBeVisible();
     await expect(flag).not.toContainText("'");
-    await expect(flag).toContainText("“");
+    // Curly, as the API writes a flag's names (‘Weekly alert digest’), the same on the company pages.
+    await expect(flag).toContainText("‘Weekly alert digest’");
     // A warning, not plain text: the red callout's tinted background.
     expect(await flag.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
   });

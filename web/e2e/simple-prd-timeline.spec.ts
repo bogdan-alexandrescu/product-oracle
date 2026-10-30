@@ -35,8 +35,8 @@ import { expect, test, type Page } from "./test";
  * worded with ids; no_claim = how a goal is measured.
  *
  * Card timeline-card (B1 + D1): protects = the timeline card carries the PRD's summary lines,
- * "When", the decisions with a date as diamonds with their words ("was due Oct 20", "at the M1
- * review, 27 Nov", "before M2 starts, Nov 30"), the legend, the count of decisions with no day
+ * "When", the decisions with a date as diamonds with their words ("was due Oct 20", "M2 decision, taken at the M1
+ * review, Nov 27", "before M2 starts, Nov 30"), the legend, the count of decisions with no day
  * and "Milestones: done when"; it is slim (a one-row lane is at most 34 px; a goal's lane at
  * most 64); the milestone's part is a separate card under it; fails_when = a part is missing,
  * a lane grows back to the old height or the milestone's part shares the timeline's card.
@@ -218,7 +218,7 @@ for (const phone of [false, true]) {
           // A compact summary: the milestone's part (Done when, targets) follows the timeline once.
           await expect(m1.getByTestId("part-done-when")).toHaveCount(0);
           await expect(m1.getByRole("link", { name: "6 features, 2 flows · 1 decision ›" })).toBeVisible();
-          await expect(down.getByTestId("timeline-decision")).toHaveText([/Q3 Which sample data to ship\s*was due Oct 20/, /Q8 The bulk import row limit\s*at the M1 review/, /Q7 Legal input on invite emails\s*before M2 starts/]);
+          await expect(down.getByTestId("timeline-decision")).toHaveText([/Q3 Which sample data to ship\s*was due Oct 20/, /Q8 The bulk import row limit\s*M2 decision, taken at the M1 review/, /Q7 Legal input on invite emails\s*before M2 starts/]);
           const order = await down.locator(':scope > [data-testid], :scope > div').allTextContents();
           const at = (words: string) => order.findIndex((t) => t.includes(words));
           expect(at("Q3 Which")).toBeLessThan(at("Today"));
@@ -238,7 +238,7 @@ for (const phone of [false, true]) {
           await expect(summary.first().locator("b")).toHaveText("Goal: setup in a day.");
           await expect(tl.getByRole("heading", { name: "When", exact: true })).toBeVisible();
           const decisions = tl.getByTestId("timeline-decision");
-          await expect(decisions).toHaveText([/Q3 Which sample data to ship\s*was due Oct 20/, /Q8 The bulk import row limit\s*at the M1 review, Nov 27/, /Q7 Legal input on invite emails\s*before M2 starts, Nov 30/]);
+          await expect(decisions).toHaveText([/Q3 Which sample data to ship\s*was due Oct 20/, /Q8 The bulk import row limit\s*M2 decision, taken at the M1 review, Nov 27/, /Q7 Legal input on invite emails\s*before M2 starts, Nov 30/]);
           await expect(tl).toContainText("1 more decision has no date yet; it is listed under its milestone.");
           const legend = tl.getByTestId("timeline-legend");
           for (const w of ["M1", "M2", "M3", "Product manager's work, no engineering", "Today Oct 22", "Holidays Dec 28 – Jan 1", "milestone end"]) await expect(legend).toContainText(w);

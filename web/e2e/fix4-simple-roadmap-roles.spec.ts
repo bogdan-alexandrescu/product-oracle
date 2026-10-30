@@ -102,7 +102,7 @@ test.describe("desktop", () => {
     });
   }
 
-  test("qa-simple-roadmap-51: the viewer's email wraps after its @, never mid-word", async ({ page }) => {
+  test("qa-simple-roadmap-51: the viewer's email wraps before its @, never mid-word", async ({ page }) => {
     await openRoadmap(page, "viewer@example.com");
     const name = page.getByTestId("simple-person-name");
     await expect(name).toHaveText("viewer@example.com");
@@ -125,7 +125,8 @@ test.describe("desktop", () => {
       }
       return out.map((l) => l.text);
     });
-    expect(["viewer@example.com", "viewer@|example.com"]).toContain(lines.join("|"));
+    // Train AD's call: the rail's person line breaks before the '@'.
+    expect(["viewer@example.com", "viewer|@example.com"]).toContain(lines.join("|"));
   });
 
   test("qa-simple-roadmap-53: the storyboard's cards are as tall as their words", async ({ page }) => {

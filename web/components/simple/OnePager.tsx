@@ -356,7 +356,6 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           )}
         </span>
       )}
-      {!sessionId && !v.can_start && <span id="start-review-why" className="text-[14px] text-text2">{startWhy}</span>}
       {/* qa-simple-prd-p3-28: the four actions in one style; in a meeting it opens in a new tab (qa-simple-decide). */}
       <Link className={`${btn(phone)} ${phone ? TAP44 : ""}`} href={`/documents/${v.document.slug}`} {...(sessionId ? { target: "_blank", rel: "noopener" } : {})}>
         Open the detailed view{sessionId ? " (new tab)" : ""}

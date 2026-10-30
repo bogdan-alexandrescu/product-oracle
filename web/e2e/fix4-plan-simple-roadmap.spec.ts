@@ -75,25 +75,15 @@ test.describe("desktop", () => {
     expect(empty.length === 0 || beside > 0, `empty pills: ${empty.join(", ")}`).toBe(true);
   });
 
-  test("qa-plan-56: a commenter's Start review reads as off beside its reason", async ({ page }) => {
+  // Train AD: the roadmap's own lane wins: whom may not start a review sees no Start review at all
+  // (over qa-plan-56's disabled button with a reason).
+  test("qa-plan-56: a commenter sees no Start review", async ({ page }) => {
     await login(page, "commenter@example.com");
     await page.goto("/simple/roadmap");
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-    const btn = page.getByRole("button", { name: "Start review" });
-    await expect(btn).not.toHaveAttribute("aria-busy", "true");
-    await expect(btn).toBeDisabled();
-    await expect(page.getByTestId("start-review-reason")).toHaveText("Only an owner or the PRD's decider can start a review");
-    // Off reads as off by the Button's own disabled look (muted fill, grey text), not by being
-    // dimmed: its words keep their contrast (only a ghost dims).
-    const look = (e: Element) => {
-      const cs = getComputedStyle(e);
-      return { opacity: Number(cs.opacity), bg: cs.backgroundColor, color: cs.color };
-    };
-    const [off, on] = await Promise.all([btn.evaluate(look), page.getByTestId("key-dates-open").evaluate(look)]);
-    expect(off.opacity).toBe(1);
-    expect(on.opacity).toBe(1);
-    expect(off.bg).not.toBe(on.bg);
-    expect(off.color).not.toBe(on.color);
+    await expect(page.getByTestId("key-dates-open")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+    await expect(page.getByTestId("start-review-reason")).toHaveCount(0);
   });
 
   test("qa-plan-56: an owner's Start review is on", async ({ page }) => {
@@ -108,12 +98,12 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use(PHONE);
 
-  test("qa-plan-54: an open lane's rows write days as 'Nov 2 → Nov 13'", async ({ page }) => {
+  test("qa-plan-54: an open lane's rows write days as 'Nov 2 – Nov 13'", async ({ page }) => {
     await lanes(page);
     const lane = page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: /^Reliability$/ }) });
     await expect(lane).toHaveAttribute("data-open", "true");
     const list = page.getByTestId("lane-list");
-    await expect(list.getByTestId("lane-row").first()).toContainText("Nov 2 → Nov 13");
+    await expect(list.getByTestId("lane-row").first()).toContainText("Nov 2 – Nov 13");
     await expect(list).not.toContainText(GB_DAY);
   });
 });

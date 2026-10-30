@@ -133,7 +133,7 @@ test.describe("desktop", () => {
     const ask = page.getByTestId("ask-chat").filter({ visible: true });
     await ask.getByLabel("Message Oracle").fill("move Weekly alert digest to Q4 2031");
     await ask.getByRole("button", { name: "Send" }).click();
-    const card = ask.getByTestId("chat-card").filter({ hasText: /Move Weekly alert digest to 1 Oct/ });
+    const card = ask.getByTestId("chat-card").filter({ hasText: /Move Weekly alert digest to Oct 1/ });
     await card.getByRole("button", { name: "Preview" }).click();
     const ghost = page.getByTestId("preview-ghost");
     await expect(ghost).toHaveAttribute("data-start", "2031-10-01");

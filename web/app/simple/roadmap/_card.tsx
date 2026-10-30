@@ -729,6 +729,7 @@ export function FloatingCard({
         code={null}
         name={item.title}
         backLabel="Roadmap"
+        inlineComments
         onOpenChange={setFlowOpen}
       />
     </Part>

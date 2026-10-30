@@ -322,16 +322,18 @@ export function QuestionRow({
       refocus.current = "answers";
       setOpen(null);
     };
-    const onDown = (e: PointerEvent) => {
+    // On the click, not the press: closing on the press shrank the row under the pointer, so a
+    // click on what moved up (Show N more) was lost.
+    const onDown = (e: MouseEvent) => {
       const t = e.target as Node | null;
       if (t && (answersRef.current?.contains(t) || anotherRef.current?.contains(t))) return;
       setOpen(null);
     };
     document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("click", onDown);
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("click", onDown);
     };
   }, [open]);
   const done = q.column === "decided" || mode === "decided";

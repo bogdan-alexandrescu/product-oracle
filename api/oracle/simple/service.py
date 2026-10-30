@@ -17,6 +17,7 @@ It reads in bulk, a fixed number of statements whatever the company's size, and 
 nothing. :func:`load` is also what the daily suggestions read, as Oracle (no principal).
 """
 
+import re
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -694,15 +695,19 @@ def prd_section_label(section_key: str, heading: str | None, name: str = "") -> 
     return f"{code or ''} {words}".strip()
 
 
+# A leading code ("F-06 ", "F-05b ") on a section's label.
+_LEADING_CODE = re.compile(r"^[A-Z][A-Z0-9]*-\d+[a-z]?\s+")
+
+
 def prd_provenance(e: Entry) -> str | None:
     """The card's "Why" line naming where the item came from: "From <PRD> (draft 5):
-    F-01 Sign-up flow." (the PRD, its draft, the code with the feature's name). The code is
-    the PRD section's, else the item's own; no section anchor is ever shown."""
+    Sign-up flow." (the PRD, its draft and the section's words). The card names an item by its
+    title alone (qa-simple-roadmap-3), so neither the code ("F-01") nor a section anchor shows."""
     if e.prd is None or not e.row.prd_section_key:
         return None
-    label = prd_section_label(e.row.prd_section_key, e.prd_heading, e.row.title or "")
-    if e.code and not _prd_code(e.row.prd_section_key) and not label.startswith(e.code):
-        label = f"{e.code} {label}".strip()
+    label = _LEADING_CODE.sub(
+        "", prd_section_label(e.row.prd_section_key, e.prd_heading, e.row.title or "")
+    )
     if not label:
         return None
     draft = f" (draft {e.prd_draft})" if e.prd_draft else ""
