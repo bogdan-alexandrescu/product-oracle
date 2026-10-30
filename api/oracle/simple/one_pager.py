@@ -709,12 +709,13 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     row.blocks, row.built_by, row.job_id = blocks, "oracle", job.id
     row.built_at = company_time.now()
     await s.flush()
-    # S10: Oracle drafts each bet's visual with the page (once per bet's words).
+    # S10: Oracle drafts each bet's visual with the page (once per bet: a bet keeps its flow
+    # when its words change).
     from oracle.simple import visuals
 
     for b in blocks:
         for line in b["lines"] if b["key"] == "bets" else []:
-            sid = visuals.line_subject(document.id, line["text"])
+            sid = visuals.line_subject(document.id, line["id"])
             await visuals.request_visual(
                 s, None, "one_pager_line", sid, line["text"], document_id=document.id
             )
@@ -1162,8 +1163,17 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     # S10: each bet ("What we will build") carries its visual.
     bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
     for x in bets:
-        x.flow_subject = visuals.line_subject(document.id, x.text)
+        x.flow_subject = visuals.line_subject(document.id, x.id)
     line_flows = await visuals.flows_for(db, "one_pager_line", [x.flow_subject for x in bets])
+    # A flow still keyed by a bet's words (0092_bet_flow_line_key left it: its words matched
+    # no line then) is read as before, by a bet with those words and no flow of its own.
+    by_words = {
+        visuals.words_subject(document.id, x.text): x
+        for x in bets
+        if x.flow_subject not in line_flows
+    }
+    for sid, flow in (await visuals.flows_for(db, "one_pager_line", list(by_words))).items():
+        by_words[sid].flow_subject, line_flows[sid] = sid, flow
     for x in bets:
         x.flow = visuals.one_pager_flow(line_flows.get(x.flow_subject))
     slice_ = await service.build(db, principal, prd=str(document.id))

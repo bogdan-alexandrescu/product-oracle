@@ -45,7 +45,7 @@ export interface VisualsDb {
 /** Tests set this localStorage key to how long (ms) a requested drawing's job runs. */
 export const MOCK_VISUAL_JOB_MS_KEY = "po-mock-visual-job-ms";
 
-/** Tests set this localStorage key to a one-pager bet's words: its first drawing fails, Retry draws it. */
+/** Tests set this localStorage key to a one-pager bet's line id ("bets-2"): its first drawing fails, Retry draws it. */
 export const MOCK_VISUAL_FAIL_KEY = "po-mock-visual-fail";
 
 const jobMs = (): number => (typeof localStorage === "undefined" ? 0 : Number(localStorage.getItem(MOCK_VISUAL_JOB_MS_KEY) ?? 0) || 0);
@@ -65,13 +65,14 @@ const RANK: Record<string, number> = { viewer: 0, commenter: 1, approver: 2, own
 const at = "2026-10-26T15:00:00Z";
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** Each bet subject's words, as the one-pager named them (the API's bet_line finds them). */
+/** Each bet subject's words, as the one-pager last named them (the API's bet_line finds them). */
 const BET_WORDS = new Map<string, string>();
 
-/** A one-pager bet's subject id (the API's is a uuid5 of the PRD and the bet's words). */
-export const betSubject = (text: string): string => {
-  const id = stableUuid(`simple-visual/bet/${text.trim().toLowerCase()}`);
-  BET_WORDS.set(id, text.split(/\s+/).filter(Boolean).join(" "));
+/** A one-pager bet's subject id: its line's own id, never its words, so a bet keeps its drawn
+ * flow when its words change (the API's line_subject, a uuid5 of the PRD and the line id). */
+export const betSubject = (lineId: string, text?: string): string => {
+  const id = stableUuid(`simple-visual/bet/${lineId}`);
+  if (text !== undefined) BET_WORDS.set(id, text.split(/\s+/).filter(Boolean).join(" "));
   return id;
 };
 
@@ -159,7 +160,7 @@ export function seedVisuals(): VisualsDb {
   };
   const failBet = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_VISUAL_FAIL_KEY);
   if (failBet) db.failOnce!.push(`one_pager_line:${betSubject(failBet)}`);
-  const bet = betSubject("A setup checklist that shows the next step");
+  const bet = betSubject("bets-1", "A setup checklist that shows the next step");
   add(db, "one_pager_line", bet, "A setup checklist that shows the next step", flowOf("one_pager_line", bet, 1, 1, {
     title: "Finish setup from the checklist",
     goal: "Setup finished in a day",
@@ -172,7 +173,7 @@ export function seedVisuals(): VisualsDb {
     ],
   }));
   // A bet Oracle queued with the page whose job drew nothing: a visual with no version yet.
-  add(db, "one_pager_line", betSubject("A sample project created on day one"), "A sample project created on day one");
+  add(db, "one_pager_line", betSubject("bets-3", "A sample project created on day one"), "A sample project created on day one");
   const mobile = stableUuid("simple-item/alert-mobile");
   add(db, "feature", mobile, "Mobile alert push", flowOf("feature", mobile, 1, 1, {
     title: "Act on a pushed alert",

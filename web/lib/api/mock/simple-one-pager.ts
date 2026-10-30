@@ -403,8 +403,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
         return {
           id: l.id, text, full: edited ? null : l.full ?? null, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
-          // S10: each bet carries its visual.
-          ...(b.key === "bets" ? { flow_subject: betSubject(text), flow: onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(text))) } : {}),
+          // S10: each bet carries its visual, keyed by its line: an edit keeps the flow.
+          ...(b.key === "bets" ? { flow_subject: betSubject(l.id, text), flow: onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(l.id))) } : {}),
           decisions: [...(db.decisions?.[l.id] ?? [])],
         };
       }),
