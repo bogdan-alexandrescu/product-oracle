@@ -36,12 +36,13 @@ test("app shell: hidden when signed out, the rail lists the nine destinations on
   await expect(nav.getByRole("link", { name: "Plan" })).toHaveAttribute("href", "/plan");
 });
 
-test("Requests: a new company's queue is a one-line empty state offering New request", async ({ page }) => {
+test("Requests: a new company's queue is a one-line empty state pointing to New request", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.goto("/requests");
-  await expect(page.getByTestId("requests-empty")).toContainText("Nothing yet");
-  await expect(page.getByTestId("requests-empty").getByRole("button", { name: "New request" })).toBeEnabled();
+  await expect(page.getByTestId("requests-empty")).toContainText("No requests yet. Add one with New request.");
+  // qa-shell-10: one New request, the header's.
+  await expect(page.getByRole("button", { name: "New request" })).toHaveCount(1);
   await expect(page.getByTestId("requests-empty").locator("svg").first()).toBeVisible();
 });
 

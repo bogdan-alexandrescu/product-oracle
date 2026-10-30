@@ -264,7 +264,8 @@ async def test_documents_and_runs_contexts(client):
 # fails_when=the header shows a raw path; no_claim=the panel's own label for the open page.
 async def test_a_screen_subject_is_labelled_by_its_page(client):
     ctx, _doc = await company(client)
-    for path, label in (("/", "General"), ("/settings/members", "Settings · Members")):
+    # qa-shell-2: a chat started on Detailed Home is titled "Home", never "/home".
+    for path, label in (("/", "General"), ("/home", "Home"), ("/settings/members", "Settings · Members")):
         resp = await client.post(
             "/v1/discussions",
             json={"subject_kind": "screen", "subject": {"path": path}, "origin": "panel"},

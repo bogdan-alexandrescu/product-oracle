@@ -83,15 +83,15 @@ test("New request: only an owner names someone else as the requester", async ({ 
   await expect(row(page, TITLE)).toContainText("Commenter");
 });
 
-test("Empty Requests: Nothing yet offers New request", async ({ page }) => {
-  // protects=#329 Done when 3; fails_when=the empty state has no New request;
-  // no_claim=the seeded company.
+test("Empty Requests: the empty state points to New request", async ({ page }) => {
+  // protects=#329 Done when 3; fails_when=the empty state does not lead to New request;
+  // no_claim=the seeded company. qa-shell-10: the header's New request is the one button.
   await page.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
   await login(page);
   await openRequests(page);
   const empty = page.getByTestId("requests-empty");
-  await expect(empty).toContainText("Nothing yet");
-  await empty.getByRole("button", { name: "New request" }).click();
+  await expect(empty).toContainText("No requests yet. Add one with New request.");
+  await page.getByTestId("requests-actions").getByRole("button", { name: "New request" }).click();
   const dialog = page.getByRole("dialog", { name: "New request" });
   await dialog.getByLabel("Title").fill(TITLE);
   await dialog.getByLabel("What it is and why").fill(WHY);

@@ -80,7 +80,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     test("one header and toolbar, one date style, no desk tint (qa-14, 43, 44)", async ({ page }) => {
       await open(page);
-      await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3 · 20 Oct 2026");
+      await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3 · Oct 20, 2026");
       await expect(page.getByTestId("one-pager-meta")).not.toContainText("published");
       await expect(page.getByRole("link", { name: "One-pagers" }).filter({ visible: true })).toHaveCount(2);
       const present = (await page.getByRole("button", { name: "Present" }).boundingBox())!;

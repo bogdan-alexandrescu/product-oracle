@@ -42,7 +42,7 @@ for (const phone of [false, true]) {
         await page.goto(URL);
         await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
         await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3");
-        await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3 · 20 Oct 2026");
+        await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3 · Oct 20, 2026");
         for (const title of ["Problem and who has it", "What we will build", "Outcomes and how we measure them", "Not doing", "Risks and open decisions", "Timeline"]) {
           await expect(page.getByRole("region", { name: title })).toBeVisible();
         }

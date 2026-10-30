@@ -187,16 +187,17 @@ test.describe("phone", () => {
     }
   });
 
-  test("qa-work-39, qa-work-40: header actions and filters stack full width; row controls are 44 px", async ({ page }) => {
+  test("qa-work-39, qa-work-40: header actions and filters fill the width; row controls are 44 px", async ({ page }) => {
     await login(page);
     await page.goto("/requests");
     await expect(rows(page).first()).toBeVisible();
+    // qa-shell-26: New request and More share one line that fills the width.
     const actions = await box(page, "requests-actions");
-    for (const name of ["Interview a customer", "New request"]) {
-      const b = (await page.getByTestId("requests-actions").getByRole("button", { name, exact: true }).boundingBox())!;
-      expect(Math.abs(b.width - actions.width)).toBeLessThan(1);
-      expect(b.height).toBeGreaterThanOrEqual(44);
-    }
+    const add = (await page.getByTestId("requests-actions").getByRole("button", { name: "New request", exact: true }).boundingBox())!;
+    const more = (await page.getByTestId("requests-more").boundingBox())!;
+    expect(Math.abs(add.x - actions.x)).toBeLessThan(1);
+    expect(Math.abs(more.x + more.width - (actions.x + actions.width))).toBeLessThan(1);
+    for (const b of [add, more]) expect(b.height).toBeGreaterThanOrEqual(44);
     const filters = page.getByTestId("request-filters");
     const widths = await Promise.all(
       ["Search requests", "State", "Goal", "Theme"].map(async (n) => (await filters.getByLabel(n, { exact: true }).boundingBox())!.width),

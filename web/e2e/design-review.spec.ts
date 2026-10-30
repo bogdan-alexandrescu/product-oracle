@@ -221,8 +221,10 @@ test("while a regeneration runs, the design page says so and links the run", asy
 test("an old link to a version that does not exist says so", async ({ page }) => {
   await login(page);
   await page.goto(`/specs/${SPEC_ID}/design/c3000000-0000-4000-8000-0000000000ff`);
-  await expect(page.getByRole("alert").filter({ hasText: "design artifact version not found" })).toBeVisible();
-  await page.getByRole("link", { name: "Back to the tech brief" }).click();
+  // qa-shell-7: the app's not-found pattern, not the API's words.
+  await expect(page.getByRole("heading", { level: 1, name: "Design not found" })).toHaveCount(1);
+  await expect(page.getByText("design artifact version not found")).toHaveCount(0);
+  await page.getByTestId("design-not-found").filter({ visible: true }).getByRole("link", { name: "Back to the tech brief" }).click();
   await expect(page).toHaveURL(new RegExp(`${BRIEF}$`));
 });
 

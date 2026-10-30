@@ -99,10 +99,11 @@ test.describe("desktop", () => {
   test("a missing PRD's address says so under a page title", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers/no-such-prd");
-    await expect(page.getByRole("heading", { level: 1, name: "One-pager" })).toBeVisible();
-    await expect(page.getByText("No PRD at this address. It may have been deleted, or the link is old.")).toBeVisible();
+    // qa-shell-11: the app's not-found pattern.
+    await expect(page.getByRole("heading", { level: 1, name: "One-pager not found" })).toBeVisible();
+    await expect(page.getByText("This one-pager doesn't exist or was deleted.")).toBeVisible();
     await expect(page.getByText(/^Not found$/)).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "One-pagers" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Back to One-pagers" })).toBeVisible();
   });
 });
 

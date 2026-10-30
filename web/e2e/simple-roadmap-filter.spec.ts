@@ -31,6 +31,9 @@ async function openBoard(page: Page) {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
+  // qa-shell-24: a phone's pickers sit behind the Filters button.
+  const toggle = page.getByTestId("filters-toggle");
+  if (await toggle.isVisible()) await toggle.click();
 }
 
 async function pick(page: Page, roadmap: string) {

@@ -88,16 +88,20 @@ test("qa-simple-home-2: the phone's More sheet closes on Escape, a tap outside a
   await expect(more).toBeFocused();
   await expect(more).toHaveAttribute("aria-expanded", "false");
 
+  // qa-shell-17: the sheet has Detailed's backdrop: a tap on it (over the page, the header's Ask) closes it.
   await more.click();
   await expect(sheet).toBeVisible();
-  await page.getByTestId("phone-title").click();
+  const title = (await page.getByTestId("phone-title").boundingBox())!;
+  await page.mouse.click(title.x + title.width / 2, title.y + title.height / 2);
   await expect(sheet).toBeHidden();
 
   await more.click();
   await expect(sheet).toBeVisible();
+  const ask = (await page.getByTestId("phone-ask").boundingBox())!;
+  await page.mouse.click(ask.x + ask.width / 2, ask.y + ask.height / 2);
+  await expect(sheet).toBeHidden();
   await page.getByTestId("phone-ask").click();
   await expect(page.getByTestId("phone-ask-sheet")).toBeVisible();
-  await expect(sheet).toBeHidden();
 });
 
 test("qa-simple-home-29: the phone's tabs and More sheet show the rail's counts", async ({ page }) => {
