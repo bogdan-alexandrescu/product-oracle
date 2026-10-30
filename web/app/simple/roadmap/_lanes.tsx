@@ -150,11 +150,13 @@ function pack(items: Item[], moved: Record<string, [string, string]>, callout: (
     // fix4 qa-simple-roadmap-2: a pill too short for its name writes it beside itself; that
     // room is the pill's too, so the next pill in its row starts after the name.
     if (dayPx > 0 && !u.item.slices.some((x) => x.start_date && x.end_date)) {
-      const p = u.pieces[0];
+      // From its dates as saved, not a pending move's: a key press or drag never reshuffles
+      // the other pills' rows before its change is answered.
+      const p = moved[u.item.id] ? piecesOf(u.item)[0] : u.pieces[0];
       const pillW = Math.max(MIN_PILL_W, (daysBetween(p.start, p.end) + 1) * dayPx);
       const name = u.item.draft && !closedItem(u.item) ? `Draft · ${p.name}` : p.name;
       const need = textWidth(name, 12, 650) + 16;
-      if (need > pillW) occ[0] = [occ[0][0], Math.max(occ[0][1], ms(p.start) + ((pillW + 6 + textWidth(name, 12, 600) + 8) / dayPx) * DAY)];
+      if (need > pillW) occ.push([ms(p.start), ms(p.start) + ((pillW + 6 + textWidth(name, 12, 600) + 8) / dayPx) * DAY]);
     }
     // fix4 qa-simple-roadmap-31: Oracle's suggestion (its dotted outline, and its "?" left of
     // it) takes its row too, so neither is ever drawn over another pill's name.
@@ -244,14 +246,28 @@ function look(p: Pick<Piece, "milestone" | "pm">, item: Item | null, cut: boolea
 }
 
 /** The days the chart spans: every piece, milestone, key date, suggestion and today, two days either side (B2: 17 Oct to 31 Jan for 19 Oct to 29 Jan). */
-function spanOf(data: Roadmap, lanes: LaneModel[], extra: string[] = [], before = 2): { t0: string; t1: string } {
+/** The grouped items' pieces, unpacked (the span needs their days, not their rows). */
+function groupedUnits(data: Roadmap, moved: Record<string, [string, string]>): { item: Item; pieces: Piece[] }[] {
+  const byId = new Map(data.items.map((i) => [i.id, i]));
+  const seen = new Set<string>();
+  const out: { item: Item; pieces: Piece[] }[] = [];
+  for (const g of data.groups)
+    for (const id of g.item_ids) {
+      const item = byId.get(id);
+      if (!item || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ item, pieces: piecesOf(item, moved[id]) });
+    }
+  return out;
+}
+
+function spanOf(data: Roadmap, units: { item: Item; pieces: Piece[] }[], extra: string[] = [], before = 2): { t0: string; t1: string } {
   // fix4 qa-simple-roadmap-10: a chat preview's ghost is inside the span (a move to Q2 2027 ghosts there).
   const days: string[] = [data.today, ...extra];
-  for (const l of lanes)
-    for (const u of l.units) {
-      for (const p of u.pieces) days.push(p.start, p.end);
-      if (u.item.suggestion) days.push(u.item.suggestion.start_date, u.item.suggestion.end_date);
-    }
+  for (const u of units) {
+    for (const p of u.pieces) days.push(p.start, p.end);
+    if (u.item.suggestion) days.push(u.item.suggestion.start_date, u.item.suggestion.end_date);
+  }
   for (const m of planMilestones(data)) days.push(m.start_date!, m.end_date!);
   for (const m of data.milestones) if (m.date) days.push(m.date);
   for (const k of data.key_dates ?? []) days.push(k.date);
@@ -608,8 +624,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   const previewDays = useMemo(() => previewSpan(preview, data), [preview, data]);
   // The span (and so the scale) does not depend on the rows: a first packing finds it, then the
   // lanes are packed with the scale's px a day (a name beside its pill takes room in its row).
-  const first = useMemo(() => laneModels(data, lane, moved), [data, lane, moved]);
-  const { t0, t1 } = useMemo(() => spanOf(data, first.lanes, previewDays), [data, first, previewDays]);
+  const { t0, t1 } = useMemo(() => spanOf(data, groupedUnits(data, moved), previewDays), [data, moved, previewDays]);
   const dayPx = W / daysBetween(t0, t1);
   const { lanes, places } = useMemo(() => (void fonts, laneModels(data, lane, moved, callH, dayPx)), [data, lane, moved, callH, dayPx, fonts]);
   const sc = useMemo(() => scale(t0, addDays(t1, -1), W / daysBetween(t0, t1)), [t0, t1, W]);
@@ -651,14 +666,25 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   // pill's "?"), where a name too long for its pill is written instead.
   const roomOf = useMemo(() => {
     const out = new Map<string, number>();
-    for (const l of lanes)
-      for (const u of l.units) {
-        const end = sc.x(u.pieces[u.pieces.length - 1].end);
-        const after = l.units.filter((o) => o.row === u.row && o !== u && sc.x(o.pieces[0].start) > end).map((o) => sc.x(o.pieces[0].start) - (o.item.suggestion ? 26 : 4));
-        out.set(u.item.id, Math.min(W, ...after));
+    // By the dates as saved (as pack reserves it): a pending move redraws only its own pill.
+    const saved = (o: Unit) => (moved[o.item.id] ? piecesOf(o.item) : o.pieces);
+    for (const l of lanes) {
+      // Each row's pills' starts, left to right (one pass per lane, not every pill against every pill: 500 items).
+      const starts = new Map<number, { x: number; stop: number }[]>();
+      for (const o of l.units) {
+        const x = sc.x(saved(o)[0].start);
+        (starts.get(o.row) ?? starts.set(o.row, []).get(o.row)!).push({ x, stop: x - (o.item.suggestion ? 26 : 4) });
       }
+      for (const list of starts.values()) list.sort((a, b) => a.x - b.x);
+      for (const u of l.units) {
+        const ps = saved(u);
+        const end = sc.x(ps[ps.length - 1].end);
+        const next = starts.get(u.row)!.find((o) => o.x > end);
+        out.set(u.item.id, Math.min(W, next ? next.stop : W));
+      }
+    }
     return out;
-  }, [lanes, sc, W]);
+  }, [lanes, sc, W, moved]);
 
   const svg = useRef<SVGSVGElement | null>(null);
   const live = useRef<HTMLDivElement>(null);
@@ -1359,7 +1385,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
   const { lanes } = useMemo(() => laneModels(data, lane, moved), [data, lane, moved]);
   // fix4 qa-simple-roadmap-45: ten days before the first date, so Today's line and a key date's
   // (often the first dates) stand clear of the chart's left edge and of where the bars start.
-  const { t0, t1 } = useMemo(() => spanOf(data, lanes, [], 10), [data, lanes]);
+  const { t0, t1 } = useMemo(() => spanOf(data, lanes.flatMap((l) => l.units), [], 10), [data, lanes]);
   const sc = useMemo(() => scale(t0, addDays(t1, -1), W / daysBetween(t0, t1)), [t0, t1, W]);
   const { months } = useMemo(() => calendar(t0, t1), [t0, t1]);
   const marks = useMarks(data, sc, W, true, fonts);

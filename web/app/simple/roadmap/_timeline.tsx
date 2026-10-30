@@ -972,7 +972,8 @@ function Arrows({ data, l, sc, moved }: { data: Roadmap; l: Layout; sc: Scale; m
       out.push(
         <path
           key={`${depId}-${it.id}`}
-          d={`M${x1},${y1} H${mid} V${y2} H${x2}`}
+          // Its last leg as an explicit point (x2,y2), the same line: the path's last pair is its head.
+          d={`M${x1},${y1} H${mid} V${y2} L${x2},${y2}`}
           fill="none"
           data-testid="dep-arrow"
           data-state={tone}

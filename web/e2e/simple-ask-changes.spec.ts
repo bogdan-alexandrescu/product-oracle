@@ -131,7 +131,8 @@ test.describe("desktop, dark", () => {
     await expect(ask.getByTestId("chat-hint")).toContainText("You can ask questions");
     await say(ask, "cut Alert history export");
     const card = ask.getByTestId("chat-card").filter({ hasText: "Cut Alert history export" });
-    await expect(card.getByRole("button", { name: "Apply" })).toBeDisabled();
+    // fix4 qa-simple-roadmap-24: a cut whose dependents stay red names that on its button.
+    await expect(card.getByRole("button", { name: "Cut it, keep the dependents" })).toBeDisabled();
     await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
     await page.goto("/home");
     // The panel's open state carries over from Simple; open it only if it is closed.

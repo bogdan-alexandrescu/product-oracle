@@ -158,7 +158,8 @@ for (const phone of [false, true]) {
           ];
           expect(sw).toBeLessThan(scale);
           expect(scale).toBeLessThan(chart);
-          expect(chart).toBeLessThan(actions);
+          // fix4 qa-simple-roadmap-44: a phone's page actions sit near the top, before the chart, as a desktop's do.
+          expect(actions).toBeLessThan(chart);
           // QA2 qa-simple-roadmap-36: the filters sit above the chart they control.
           expect(filters).toBeLessThan(chart);
           await page.getByTestId("group-milestone").click();

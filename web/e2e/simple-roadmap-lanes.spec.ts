@@ -195,7 +195,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(list).toContainText("Reliability");
       await expect(list.getByTestId("lane-list-count")).toHaveText("5 items, up to 1 at once");
       await expect(list.getByTestId("lane-row")).toHaveCount(5);
-      await expect(list.getByTestId("lane-row").first()).toContainText(/F-03\s*Setup failure alerts\s*2 Nov → 13 Nov/);
+      await expect(list.getByTestId("lane-row").first()).toContainText(/F-03\s*Setup failure alerts\s*Nov 2 – Nov 13/);
 
       await phoneLane(page, "Growth").click();
       await expect(phoneLane(page, "Growth")).toHaveAttribute("aria-expanded", "true");

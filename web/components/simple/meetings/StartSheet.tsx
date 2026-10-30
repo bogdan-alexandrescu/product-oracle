@@ -100,7 +100,7 @@ function Body({ prd, occurrence, ritual, origin, prefer, from, onClose }: { prd?
 function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, onClose }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; prefer?: string; from?: string; live: Schemas["SimpleMeetingBrief"][]; onClose: () => void }) {
   const router = useRouter();
   const zone = useCompanyZone();
-  const [slug, setSlug] = useState((options.prds.find((p) => p.document.slug === prefer) ?? options.prds[0])?.document.slug ?? "");
+  const [slug, setSlug] = useState((options.prds.find((p) => p.document.slug === prefer && p.can_start) ?? options.prds[0])?.document.slug ?? "");
   const chosen = options.prds.find((p) => p.document.slug === slug);
   const occ = options.occurrence ?? ritual ?? null;
   const defaults = (p = chosen) => [...new Set([...(p?.default_attendee_ids ?? []), ...(occ?.attendees.map((a) => a.id) ?? [])])];

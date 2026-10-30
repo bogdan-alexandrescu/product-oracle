@@ -120,7 +120,7 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM");
   });
 
-  test("qa-21: Ask Oracle to draw it titles the flow from the bet's words; drawn today, the time alone with its zone", async ({ page }) => {
+  test("qa-21: Ask Oracle to draw it titles the flow from the bet's words; drawn today, the time alone (fix4 qa-simple-roadmap-29: no zone name)", async ({ page }) => {
     await open(page);
     const row = bet(page, 3);
     await expect(row.getByTestId("flow-empty")).toContainText("No flow yet");
@@ -128,7 +128,7 @@ test.describe("desktop", () => {
     await expect(row.getByTestId("flow-row-drawn")).toBeVisible({ timeout: 15_000 });
     await expect(row.getByTestId("flow-row-drawn").locator("b").first()).toHaveText("Invite suggestions from the admin's calendar");
     await expect(row).not.toContainText("A bet of the one-pager");
-    await expect(row.getByTestId("flow-drawn")).toHaveText(/^Version 1 · drawn \d{1,2}:\d{2} [AP]M P[DS]T$/);
+    await expect(row.getByTestId("flow-drawn")).toHaveText(/^Version 1 · drawn \d{1,2}:\d{2} [AP]M$/);
   });
 
   test("qa-22: the opened flow and the storyboard dim the page behind; a click on it closes them", async ({ page }) => {

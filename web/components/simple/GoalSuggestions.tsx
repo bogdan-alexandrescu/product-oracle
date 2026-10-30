@@ -434,9 +434,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
   const { can } = useMe();
   const state = goalState(a, goal);
   const { people, oracle } = goalRows(a, goal);
-  // fix4 qa-simple-roadmap-17: opened from a count ("2 suggested features"), the drawer starts on
-  // the tab that holds them, not an empty People tab.
-  const [tab, setTab] = useState<"people" | "oracle">(start === "oracle" || (start !== "form" && !people.length && oracle.length > 0) ? "oracle" : "people");
+  const [tab, setTab] = useState<"people" | "oracle">(start === "oracle" ? "oracle" : "people");
   const [asking, setAsking] = useState(false);
   // qa-simple-roadmap-24/44: "+ Suggest a feature" starts folded the same way it always did;
   // lifted here (not SuggestForm's own state) so the empty state's "Suggest the first feature"

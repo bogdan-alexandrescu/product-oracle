@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
-import { GoalPanel, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
+import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
@@ -586,6 +586,7 @@ export function SimpleRoadmap() {
   // S7: Oracle's suggested features by goal; an accept (or its undo) changes the roadmap.
   const suggestions = useGoalSuggestions(reload);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  const [goalStart, setGoalStart] = useState<GoalPanelStart | undefined>(undefined);
   // S7: while Oracle drafts a quick-added item, the roadmap reads again until it is done.
   const drafting = !!roadmap.data?.items.some((i) => i.drafting);
   const { reload: reloadRoadmap } = roadmap;
@@ -895,15 +896,15 @@ export function SimpleRoadmap() {
     }
   };
   // fix4 qa-simple-roadmap-23: Start review opens on the working draft: the PRD of the items it
-  // changed (else of this roadmap's items), named in the sheet.
+  // changed (when the reader may start that one), named in the sheet.
   const workingDrafts = (drafts.data ?? []).filter((d) => d.status === "working" && d.changes > 0);
   const draftItems = workingDrafts.flatMap((d) => d.change_log.flatMap((c) => (c.item_id ? [byId.get(c.item_id)] : [])));
-  const reviewPrd = [...draftItems, ...data.items].find((i) => i?.prd)?.prd?.slug;
+  const reviewPrd = draftItems.find((i) => i?.prd)?.prd?.slug;
   const draftChanges = workingDrafts.reduce((n, d) => n + d.changes, 0);
   const reviewFrom = workingDrafts.length ? `Your roadmap's working draft · ${draftChanges} ${draftChanges === 1 ? "change" : "changes"}` : undefined;
   const goalCounts = new Map<string, number>();
   for (const s of suggestions.data?.suggestions ?? []) goalCounts.set(s.goal.id, (goalCounts.get(s.goal.id) ?? 0) + 1);
-  const openGoal = (id: string, title: string) => setGoalPanel(suggestions.data?.goals.find((g) => g.goal.id === id)?.goal ?? { id, key: id, title });
+  const openGoal = (id: string, title: string) => openCounted(suggestions.data?.goals.find((g) => g.goal.id === id)?.goal ?? { id, key: id, title });
 
   // D: the items a change waiting for its decider pulls into another horizon ("pending").
   const pulledIn = new Set(allProposals.filter((c) => c.op === "change_horizon" && c.target.item_id).map((c) => String(c.target.item_id)));
@@ -1026,7 +1027,13 @@ export function SimpleRoadmap() {
     </div>
   );
   const pickedGoal = f.goal ? { key: f.goal, title: seen.goal.find(([k]) => k === f.goal)?.[1] ?? f.goal } : null;
-  const goalCounters = <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={setGoalPanel} only={pickedGoal} />;
+  // fix4 qa-simple-roadmap-17: a card's "N suggested features" opens the drawer on the tab that holds them.
+  const openCounted = (g: GoalBrief) => {
+    const { people, oracle } = goalRows(suggestions, g);
+    setGoalStart(!people.length && oracle.length ? "oracle" : undefined);
+    setGoalPanel(g);
+  };
+  const goalCounters = <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={openCounted} only={pickedGoal} />;
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
@@ -1316,7 +1323,7 @@ export function SimpleRoadmap() {
           top={trayTop}
         />
       )}
-      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
+      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} start={goalStart} onClose={() => setGoalPanel(null)} />}
     </div>
   );
 }

@@ -222,6 +222,8 @@ for (const [where, use] of [
        * routing to a named decider (API tests).
        */
       test("a commenter proposes a key date, the owner accepts; a viewer reads", async ({ page }) => {
+        // Three people sign in one after another: more than the default 30 s on a loaded run.
+        test.slow();
         await openRoadmap(page, "gantt", COMMENTER);
         await page.getByTestId("key-dates-open").click();
         await expect(page.getByTestId("key-dates-hint")).toHaveText(
