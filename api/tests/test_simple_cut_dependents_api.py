@@ -165,3 +165,72 @@ async def test_cut_with_dependents_follows_roles(client):
             "before": {"cut": False}, "after": {}}  # fmt: skip
     r = await client.post(CHANGES, json=body, headers=ctx.as_("owner"))
     assert r.status_code == 409, r.text
+
+
+async def test_cut_with_dependents_needs_rights_on_every_item(client):
+    """Review major: the approver decides Ledger v2 (its own decider); the roadmap's decider
+    decides its dependents. Cutting Ledger v2 alone applies; cutting it with its dependents
+    is a proposal (the card says so), routed to the company's owners, who alone decide every
+    item it cuts: neither the approver nor the roadmap's decider accepts it."""
+    ctx, w = await world()
+    async with tenant_session(ctx.tenant_id) as s:
+        led = await s.get(RoadmapItem, w.ids["Ledger v2"])
+        led.decider_id = ctx.users["approver"].id
+        await s.commit()
+    card = (await say(client, ctx, "approver", "cut Ledger v2"))["cards"][0]
+    assert card["may"] == "apply"
+    assert card["may_with_dependents"] == "propose"
+    r = await client.post(f"{CARDS}/{card['id']}/apply", json={"with_dependents": True},
+                          headers=ctx.as_("approver"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    change = r.json()["result"]["change"]
+    assert (change["op"], change["status"]) == ("cut_with_dependents", "proposed")
+    assert change["routed_to"] == [str(ctx.users["owner"].id)]
+    assert await cut_titles(w) == set()
+    for who in ("approver", "decider"):
+        r = await client.post(f"{CHANGES}/{change['id']}/accept", json={}, headers=ctx.as_(who))
+        assert r.status_code == 403, r.text
+    assert await cut_titles(w) == set()
+    r = await client.post(f"{CHANGES}/{change['id']}/accept", json={}, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert await cut_titles(w) == set(FOUR)
+
+
+async def test_cut_with_dependents_refuses_dependents_the_card_never_listed(client):
+    """Review minor: the card lists the dependents it read; an item that came to wait on the
+    item since is not cut unseen: 409, nothing cut."""
+    ctx, w = await world()
+    card = (await say(client, ctx, "owner", "cut Ledger v2"))["cards"][0]
+    assert len(card["dependent_ids"]) == 3
+    async with tenant_session(ctx.tenant_id) as s:
+        alert = await s.get(RoadmapItem, w.ids["Alert export"])
+        alert.depends_on = ["bulk-export"]
+        await s.commit()
+    r = await client.post(f"{CARDS}/{card['id']}/apply",
+                          json={"with_dependents": True, "dependents": card["dependent_ids"]},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 409, r.text
+    assert await cut_titles(w) == set()
+    # As seen, it cuts.
+    card = (await say(client, ctx, "owner", "cut Ledger v2"))["cards"][-1]
+    assert len(card["dependent_ids"]) == 4
+    r = await client.post(f"{CARDS}/{card['id']}/apply",
+                          json={"with_dependents": True, "dependents": card["dependent_ids"]},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert await cut_titles(w) == {*FOUR, "Alert export"}
+
+
+async def test_a_meeting_decision_names_every_item_cut(client):
+    """Review minor: meetings.describe names every item a cut with its dependents cut."""
+    from oracle.simple import meetings
+
+    ctx, w = await world()
+    c = SimpleChange(op="cut_with_dependents",
+                     target={"item_id": w.ids["Ledger v2"], "titles": FOUR},
+                     before={w.ids[t]: {"cut": False} for t in FOUR},
+                     after={w.ids[t]: {"cut": True} for t in FOUR})  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        words, subjects = await meetings.describe(s, c)
+    assert words == "Cut with its dependents: Ledger v2, Bulk import, Bulk export and Shared report"
+    assert {x["id"] for x in subjects} == {w.ids[t] for t in FOUR}

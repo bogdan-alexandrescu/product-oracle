@@ -1,4 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { changeWords } from "../lib/simple-home";
 import { THEME_KEY } from "../lib/theme";
 import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
@@ -17,6 +18,12 @@ import { expect, test, type Locator, type Page } from "./test";
  * fails_when: the button is missing or shown on an item no one depends on, the dependents stay,
  *   the cut is several rows or the undo leaves one cut
  * no_claim: the API's own rules (api/tests/test_simple_cut_dependents_api.py)
+ *
+ * Review fixes: a person who decides the item but not every dependent proposes the cut with
+ *   its dependents (its button says so) while the plain cut still applies ("roadmap-talk-own-
+ *   decider": the approver is Alert rules engine's own decider, the owners decide the rest);
+ *   on a phone the lane's rows show every item cut and back again; Home's words for such a
+ *   change name every item it cut.
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
@@ -24,13 +31,13 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 const BOTH = "Cut it and its dependents";
 const KEEP = "Cut it, keep the dependents";
 
-async function open(page: Page, email?: string) {
+async function open(page: Page, email?: string, scenario = "roadmap-talk") {
   await page.context().addInitScript(
-    ([key, themeKey]) => {
-      localStorage.setItem(key, "roadmap-talk");
+    ([key, themeKey, scenario]) => {
+      localStorage.setItem(key, scenario);
       localStorage.setItem(themeKey, "light");
     },
-    [MOCK_SCENARIO_KEY, THEME_KEY] as const,
+    [MOCK_SCENARIO_KEY, THEME_KEY, scenario] as const,
   );
   await login(page, email);
   await page.goto("/simple/roadmap");
@@ -65,6 +72,22 @@ async function say(box: Locator, text: string) {
 
 const kind = (page: Page, key: string) => page.locator(`g[data-testid="bar"][data-item="${key}"]`).first();
 
+/** A phone's lane rows: the lane that holds the items, opened, and whether each row is struck (cut). */
+async function struck(page: Page, keys: string[], cut: boolean) {
+  const lane = page.locator(`[data-testid="phone-lane"][data-items~="${keys[0]}"]`);
+  if ((await lane.getAttribute("data-open")) !== "true") await lane.click();
+  for (const key of keys) {
+    const name = page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().locator("span.min-w-0");
+    if (cut) await expect(name).toHaveClass(/line-through/);
+    else await expect(name).not.toHaveClass(/line-through/);
+  }
+}
+
+test("Home's words for a cut with its dependents name every item it cut", () => {
+  const c = { op: "cut_with_dependents", after: {}, target: { item_id: "x", titles: ["Alert rules engine", "Weekly alert digest", "Mobile alert push"] } };
+  expect(changeWords(c as never, { title: "Alert rules engine" })).toBe("Cut with its dependents: Alert rules engine, Weekly alert digest and Mobile alert push");
+});
+
 for (const [where, use] of [
   ["desktop", DESKTOP],
   ["phone", PHONE],
@@ -88,10 +111,13 @@ for (const [where, use] of [
       await expect(cut.getByTestId("chat-card-summary")).toContainText("Mobile alert push");
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("floating-card")).toHaveCount(0);
-      // The chart's bars (a phone lists its lanes instead: the change list below says it).
+      // The chart's bars; a phone's lane rows, struck through.
       if (!phone(page)) {
         for (const key of ["alert-rules", "alert-digest", "alert-mobile"]) await expect(kind(page, key)).toHaveAttribute("data-kind", "cut");
         await expect(kind(page, "alert-export")).not.toHaveAttribute("data-kind", "cut");
+      } else {
+        await struck(page, ["alert-rules", "alert-digest", "alert-mobile"], true);
+        await struck(page, ["alert-export"], false);
       }
 
       const banner = page.getByTestId("draft-banner");
@@ -106,6 +132,7 @@ for (const [where, use] of [
       await banner.getByRole("button", { name: "Undo" }).click();
       await expect(page.getByTestId("draft-changes").getByText("Cut Alert rules engine and its dependents")).toHaveCount(0);
       if (!phone(page)) for (const key of ["alert-rules", "alert-digest", "alert-mobile"]) await expect(kind(page, key)).not.toHaveAttribute("data-kind", "cut");
+      else await struck(page, ["alert-rules", "alert-digest", "alert-mobile"], false);
     });
 
     test(`an item no one depends on has only its Apply (${where})`, async ({ page }) => {
@@ -129,6 +156,22 @@ for (const [where, use] of [
       // A proposal writes nothing: no working draft, no cut bar.
       await expect(page.getByTestId("draft-banner")).toHaveCount(0);
       if (!phone(page)) await expect(kind(page, "alert-digest")).not.toHaveAttribute("data-kind", "cut");
+    });
+
+    test(`deciding the item but not its dependents, the cut with them is a proposal (${where})`, async ({ page }) => {
+      await open(page, "approver@example.com", "roadmap-talk-own-decider");
+      const talk = await openTalk(page, "alert-rules");
+      await say(talk, "cut it");
+      const cut = talk.getByTestId("chat-card").filter({ hasText: "Cut Alert rules engine" });
+      // The plain cut is theirs; the dependents' cut goes to whoever decides them all.
+      await expect(cut.getByRole("button", { name: KEEP, exact: true })).toBeEnabled();
+      await expect(cut.getByRole("button", { name: BOTH, exact: true })).toHaveCount(0);
+      await cut.getByRole("button", { name: `Propose: ${BOTH.toLowerCase()}` }).click();
+      await expect(cut).toHaveAttribute("data-status", "proposed");
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("draft-banner")).toHaveCount(0);
+      if (!phone(page)) await expect(kind(page, "alert-digest")).not.toHaveAttribute("data-kind", "cut");
+      else await struck(page, ["alert-rules", "alert-digest"], false);
     });
   });
 }
