@@ -21,7 +21,11 @@ router = APIRouter(prefix="/v1", tags=["auth"])
 
 @router.post("/auth/login", response_model=Me)
 async def login(body: LoginRequest, response: Response) -> Me:
-    signed_in = await service.sign_in(body.email, body.password)
+    try:
+        signed_in = await service.sign_in(body.email, body.password)
+    except service.RemovedMemberError as e:
+        # qa-settings-42: only with the right password, so it tells nobody else anything.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, e.message) from e
     if signed_in is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     user, cookie = signed_in

@@ -183,6 +183,27 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
   );
 }
 
+/** What a pick without a saved name reads as: "Unknown channel", "3 unknown channels". */
+const UNKNOWN: Partial<Record<Kind | "folder", [string, string]>> = {
+  slack: ["Unknown channel", "unknown channels"],
+  google_docs: ["Unknown file", "unknown files"],
+  folder: ["Unknown folder", "unknown folders"],
+};
+
+/**
+ * Picks in words: their saved names, those without one counted as unknown (never their raw
+ * ids, qa-settings-23), and a title naming everything, the unnamed ones by id.
+ */
+function pickWords(picks: { id: string; name?: string }[], unknown?: [string, string]): { text: string; title: string } {
+  const named = picks.flatMap((p) => (p.name ? [p.name] : unknown ? [] : [p.id]));
+  const unnamed = unknown ? picks.filter((p) => !p.name).map((p) => p.id) : [];
+  const rest = unnamed.length === 0 ? [] : unnamed.length === 1 ? [unknown![0]] : [`${unnamed.length} ${unknown![1]}`];
+  return {
+    text: [...named, ...rest].join(", "),
+    title: [named.join(", "), unnamed.length ? `No name saved for ${unnamed.join(", ")}` : ""].filter(Boolean).join(". "),
+  };
+}
+
 function entries(config: Record<string, unknown>, key: string): string[] {
   if (key === "roots") return notionRoots(config);
   const value = config[key];
@@ -292,7 +313,10 @@ function AllowlistEditor({
       {Picker && <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />}
       {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-1.5">
-        <Button type="submit" variant="solid" disabled={busy || (notion && notionRoots(picked).length === 0)}>
+        <Button type="submit" variant="solid" disabled={
+            busy || (notion && notionRoots(picked).length === 0) || (source.kind === "slack" && entries(picked, "channels").length === 0)
+          }
+        >
           Save {spec.noun}
         </Button>
         {!notion && (
@@ -468,7 +492,11 @@ function SourceRow({
   const allowlist = source.kind === "upload" || source.kind === "fireflies" ? null : ALLOWLIST[source.kind];
   const drive = source.kind === "google_docs";
   const picked = drive ? driveFiles(source.config) : [];
-  const folders = picked.filter((f) => f.kind === "folder").map((f) => f.name);
+  // A Drive pick without a saved name carries its id as its name (driveFiles).
+  const folders = pickWords(
+    picked.filter((f) => f.kind === "folder").map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined })),
+    UNKNOWN.folder,
+  );
   const unavailable = source.unavailable_items ?? [];
 
   async function syncNow() {
@@ -479,7 +507,10 @@ function SourceRow({
     if (r.outcome === "completed") {
       setNotice({
         tone: "pass",
-        text: `Synced: ${count(r.upserted, "item")} seen, ${count(r.versions_written, "new version")}, ${r.deleted} deleted.`,
+        text:
+          r.upserted === 0 && r.deleted === 0
+            ? "Synced: nothing new."
+            : `Synced: ${count(r.upserted, "item")} seen, ${count(r.versions_written, "new version")}, ${r.deleted} deleted.`,
       });
     } else if (r.outcome === "rate_limited") {
       setNotice({ tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
@@ -524,14 +555,20 @@ function SourceRow({
     if (fresh) onChange(fresh);
   }
 
-  // Picks by name where the source saved one (labels), else by id (a source saved before
-  // names were kept shows ids until it is next saved).
+  // Picks by name where the source saved one (labels); a Slack channel or Drive file saved
+  // before names were kept reads as unknown, its id only in the title (qa-settings-23).
+  // GitHub repositories are named by their ids.
   const names = labelsOf(source.config);
-  const items = drive
-    ? picked.filter((f) => f.kind === "doc").map((f) => f.name)
+  const picks = drive
+    ? picked.filter((f) => f.kind === "doc").map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined }))
     : allowlist
-      ? entries(source.config, allowlist.key).map((id) => names[id] ?? id)
+      ? entries(source.config, allowlist.key).map((id) => ({ id, name: names[id] }))
       : [];
+  const items = picks.map((p) => p.name ?? p.id);
+  const pickText = pickWords(picks, UNKNOWN[source.kind]);
+  // The name of an unreadable pick: its own, its saved label, else unknown.
+  const noteName = (u: (typeof unavailable)[number]) =>
+    u.name ?? names[u.external_id] ?? (source.kind === "slack" ? "Unknown channel" : u.external_id);
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";
@@ -647,11 +684,12 @@ function SourceRow({
             </span>
           </span>
         )}
-        {allowlist && (items.length > 0 || folders.length === 0) && !(source.kind === "github" && items.length > 0) && (
+        {allowlist && (items.length > 0 || folders.text === "") && !(source.kind === "github" && items.length > 0) && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
-            <span className="min-w-0 truncate text-text" title={items.join(", ")} data-testid="source-picks">
-              {items.length ? items.join(", ") : "none yet"}
+            <span className="min-w-0 truncate text-text" title={pickText.title} data-testid="source-picks">
+              {/* A Slack source reads nothing until it has a channel (qa-onboarding-4). */}
+              {items.length ? pickText.text : source.kind === "slack" ? "Pick channels to read" : "none yet"}
             </span>
           </span>
         )}
@@ -663,11 +701,11 @@ function SourceRow({
             </span>
           </span>
         )}
-        {folders.length > 0 && (
+        {folders.text && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">Folders</Label>
-            <span className="min-w-0 truncate text-text" title={folders.join(", ")}>
-              {folders.join(", ")}
+            <span className="min-w-0 truncate text-text" title={folders.title} data-testid="source-folders">
+              {folders.text}
             </span>
           </span>
         )}
@@ -676,17 +714,41 @@ function SourceRow({
       {source.reconnect_reason && <ReconnectToChoose className="mt-2" />}
       {drive && <DriveNotes notes={unavailable} picked={picked} sourceName={source.name} />}
       {!drive && unavailable.length > 0 && (
-        <ul aria-label={`Unreadable files of ${source.name}`} className="mt-2 flex flex-col gap-1">
+        // What was left out and why, and what to do about it (qa-settings-25).
+        <ul aria-label={`Sync notes for ${source.name}`} className="mt-2 flex flex-col gap-1">
           {unavailable.map((u) => {
-            const name = picked.find((f) => f.id === u.external_id)?.name ?? u.external_id;
+            const name = noteName(u);
+            const skipped = u.status === "skipped";
+            const why = u.reason.replace(/^Skipped:\s*/, "");
             return (
-              <li key={u.external_id} className="flex min-w-0 items-center gap-2 text-sm">
-                <Chip kind="warn" title={u.reason}>
-                  No access
-                </Chip>
-                <span className="min-w-0 truncate font-medium" title={`${name}: ${u.reason}`}>
+              <li
+                key={u.external_id}
+                aria-label={`${skipped ? "Skipped" : "No access"}: ${name}`}
+                className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+              >
+                <Chip kind={skipped ? "line" : "warn"}>{skipped ? "Skipped" : "No access"}</Chip>
+                <span className="min-w-0 truncate font-medium" title={name}>
                   {name}
                 </span>
+                <span className="min-w-0 text-text2">
+                  {skipped
+                    ? `— ${why}. Nothing to do: Oracle never reads it.`
+                    : source.kind === "slack"
+                      ? "— Oracle can’t read it with your account. Rejoin it in Slack, or remove it from this source."
+                      : "— Oracle can’t read it with your account. Ask for access again, or remove it from this source."}
+                </span>
+                <InfoTip label={`why ${name} is ${skipped ? "skipped" : "not read"}`} align="start">
+                  {skipped
+                    ? source.kind === "slack"
+                      ? "A channel shared in from another company is left out on purpose: only the company's own channels are read."
+                      : u.reason
+                    : `${u.reason}. What was already pulled in from it is kept.`}
+                </InfoTip>
+                {!skipped && allowlist && !editing && (
+                  <Button onClick={() => setEditing(true)} aria-label={`Edit ${allowlist.noun} of ${source.name}`}>
+                    Edit {allowlist.noun}
+                  </Button>
+                )}
               </li>
             );
           })}
@@ -838,6 +900,8 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
     }
   }
 
+  // A Slack source reads at least one channel, as the API refuses one without (qa-onboarding-5).
+  const noChannels = kind === "slack" && entries(picked, "channels").length === 0;
   // Why Add source is greyed out, next to it (qa-onboarding-17); other blocks say so above.
   const reason = !name.trim()
     ? "Name the source to add it"
@@ -847,14 +911,17 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
         ? "Tick pages to add it"
         : kind === "fireflies" && usable.length > 0 && !firefliesReady(meetings)
           ? "Pick meetings to add it"
-          : null;
+          : noChannels && usable.length > 0
+            ? "Pick a channel to add it"
+            : null;
 
   const blocked =
     !option?.connector_available ||
     (needsConnection && usable.length === 0) ||
     (drive && (reconnect || files.length === 0)) ||
     (kind === "fireflies" && !firefliesReady(meetings)) ||
-    (kind === "notion" && notionRoots(picked).length === 0);
+    (kind === "notion" && notionRoots(picked).length === 0) ||
+    noChannels;
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source" id="add-source">
@@ -956,6 +1023,13 @@ function useTargetedSource(): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+/** The header's Add a source, the page's one way in (qa-onboarding-18): to the form, cursor
+ * in its name. On a phone the form sits below the list, so it is scrolled into view. */
+function toAddSource() {
+  document.getElementById("add-source")?.scrollIntoView({ block: "start", behavior: "smooth" });
+  document.getElementById("add-source-name")?.focus({ preventScroll: true });
+}
+
 export default function SourceSettingsPage() {
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
   const kinds = useQuery("source-kinds", () => unwrap(api.GET("/v1/sources/kinds")));
@@ -966,17 +1040,24 @@ export default function SourceSettingsPage() {
   const items = list.reduce((n, s) => n + s.item_count, 0);
 
   const target = useTargetedSource();
-  // The header's and the empty list's Add a source: to the form, cursor in its name.
-  const toAddSource = () => {
-    document.getElementById("add-source")?.scrollIntoView({ block: "center", behavior: "smooth" });
-    document.getElementById("add-source-name")?.focus({ preventScroll: true });
-  };
+  // Opened from Set up's Pick sources with nothing yet (qa-settings-44): straight to the form,
+  // which a phone would otherwise show only after the whole page.
+  const fromSetup = useSyncExternalStore(
+    subscribeHash,
+    () => new URLSearchParams(window.location.search).get("from") === "setup" && !window.location.hash,
+    () => false,
+  );
+  const empty = !!sources.data && list.length === 0;
+  const ready = !!kinds.data;
+  useEffect(() => {
+    if (fromSetup && empty && ready) toAddSource();
+  }, [fromSetup, empty, ready]);
   const replace = (s: Source) => sources.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)));
 
   const inspector = (
     <Inspector
-      eyebrow="Source · new"
-      title="Add a source"
+      eyebrow="Your sources"
+      title="New source"
       label="New source"
       chips={
         <>
@@ -1050,10 +1131,8 @@ export default function SourceSettingsPage() {
           )}
           {sources.data && list.length === 0 && (
             <div className="flex flex-col items-center gap-3 px-4 py-8 text-center" data-testid="sources-empty">
-              <p className="text-[15px] text-text2">No sources yet. Add one to give Oracle something to read.</p>
-              <Button variant="solid" icon="plus" onClick={toAddSource}>
-                Add a source
-              </Button>
+              {/* Just words: the header's Add a source is the one way in (qa-onboarding-18). */}
+              <p className="text-[15px] text-text2">No sources yet. Add one with Add a source to give Oracle something to read.</p>
             </div>
           )}
           {list.length > 0 && (

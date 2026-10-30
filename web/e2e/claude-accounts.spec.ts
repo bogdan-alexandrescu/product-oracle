@@ -28,16 +28,16 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
 
   // Measured and current: a plain figure with the window it is about.
   await expect(row(page, "personal")).toContainText("34%");
-  await expect(row(page, "personal").getByTestId("clears")).toContainText(/clears 1h \d\dm · 5h/);
+  await expect(row(page, "personal").getByTestId("clears")).toContainText(/5-hour window resets in 1h \d\dm/);
   // Real but old: marked ~, never shown as current.
   await expect(row(page, "work").getByTestId("tilde")).toBeVisible();
   await expect(row(page, "work")).toContainText("~61%");
-  await expect(row(page, "work").getByTestId("clears")).toContainText("clears ~");
+  await expect(row(page, "work").getByTestId("clears")).toContainText("resets in ~");
   // Never measured: an em dash, never a zero.
   await expect(row(page, "spare").getByTestId("fig-unmeasured")).toHaveText(/—/);
   await expect(row(page, "spare")).not.toContainText("0%");
-  await expect(row(page, "spare").getByTestId("clears")).toContainText("clears —");
-  await expect(row(page, "spare")).toContainText("never given out");
+  await expect(row(page, "spare").getByTestId("clears")).toContainText("Not measured");
+  await expect(row(page, "spare")).toContainText("Never given out");
   await expect(page.getByTestId("accounts-foot")).toContainText("~ is an old reading, not current");
 
   // With nothing chosen, the pane shows the most urgent account.
@@ -55,7 +55,7 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
   await expect(detail(page).getByRole("heading", { name: "personal" })).toBeVisible();
   await expect(detail(page).getByTestId("tile-5h used")).toContainText("34%");
   await expect(detail(page).getByTestId("tile-7d used")).toContainText("12%");
-  await expect(detail(page).getByTestId("tile-Clears")).toContainText("5h window");
+  await expect(detail(page).getByTestId("tile-Clears")).toContainText("5-hour window");
   await row(page, "spare").getByRole("button").click();
   await expect(detail(page).getByTestId("tile-5h used")).toContainText(/not measured/i);
   // The (i) sits on the label's line, after the label.
@@ -63,7 +63,7 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
     const label = detail(page).getByTestId(tile).locator("dt");
     const tip = label.getByTestId("info-tip");
     await expect(tip).toBeVisible();
-    const [l, t] = [(await label.getByText(/used$/).boundingBox())!, (await tip.boundingBox())!];
+    const [l, t] = [(await label.getByText(/use$/).boundingBox())!, (await tip.boundingBox())!];
     expect(Math.abs(l.y + l.height / 2 - (t.y + t.height / 2))).toBeLessThan(3);
     expect(t.x).toBeGreaterThan(l.x + l.width - 1);
   }

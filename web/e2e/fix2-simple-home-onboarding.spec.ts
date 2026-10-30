@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login } from "./helpers";
+import { ADMIN, login, pickZone } from "./helpers";
 
 /*
  * qa-onboarding-4 and qa-onboarding-48 (desktop, mock-backed, through the UI only): a new
@@ -49,7 +49,7 @@ async function openStep(page: Page, label: string, url: RegExp) {
 }
 
 async function connectTools(page: Page) {
-  await openStep(page, "Connect your tools", /\/settings\/connections\?from=setup$/);
+  await openStep(page, "Connect your tools", /\/settings\/connections\?from=setup&home=simple$/);
   const slack = page.getByTestId("connection-card-slack");
   await slack.getByRole("button", { name: "Paste a token" }).click();
   await slack.getByLabel("Token", { exact: true }).fill("example-slack-1234");
@@ -59,7 +59,7 @@ async function connectTools(page: Page) {
 }
 
 async function checkHorizons(page: Page) {
-  await openStep(page, "Check the planning horizons", /\/settings\/company\?from=setup#horizons$/);
+  await openStep(page, "Check the planning horizons", /\/settings\/company\?from=setup&home=simple#horizons$/);
   // Settings' panels all say Save; unchanged defaults are confirmed by it (qa-settings-18).
   await page.locator("#horizons").getByRole("button", { name: "Save" }).click();
   await expect(page.locator("#horizons").getByRole("button", { name: "Reset" })).toBeVisible();
@@ -67,16 +67,16 @@ async function checkHorizons(page: Page) {
 }
 
 async function setZone(page: Page) {
-  await openStep(page, "Set the company time zone", /\/settings\/company\?from=setup#timezone$/);
+  await openStep(page, "Set the company time zone", /\/settings\/company\?from=setup&home=simple#timezone$/);
   // Save waits for a zone to be picked (fix2-settings: "Not set" never stores Los Angeles).
-  await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
+  await pickZone(page, "America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
   await toSimple(page);
 }
 
 async function nameLead(page: Page) {
-  await openStep(page, "Name the engineering lead", /\/settings\/members\?from=setup#engineering-lead$/);
+  await openStep(page, "Name the engineering lead", /\/settings\/members\?from=setup&home=simple#engineering-lead$/);
   const box = page.getByRole("checkbox", { name: "Engineering lead: approver@example.com" });
   await box.check();
   await expect(box).toBeChecked();
@@ -129,7 +129,7 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
   await nameLead(page);
   await expect(progress(page)).toHaveText("6 of 8 done");
   // Sources and the baseline are still to do: the card stays, each still one click away.
-  await expect(setupCard(page).getByRole("link", { name: "Pick your sources", exact: true })).toHaveAttribute("href", "/settings/sources?from=setup");
+  await expect(setupCard(page).getByRole("link", { name: "Pick your sources", exact: true })).toHaveAttribute("href", "/settings/sources?from=setup&home=simple");
   await expect(setupCard(page).getByRole("link", { name: "Build the baseline", exact: true })).toHaveAttribute("href", "/baseline?build=1");
   await openStep(page, "Build the baseline", /\/baseline\?build=1$/);
 });

@@ -4,9 +4,9 @@
  * Settings > Claude accounts: the Claude subscriptions Oracle's built-in jobs run on.
  *
  * Ported from SwarmCloud's swarm-ui `src/Accounts.tsx`. The scan line is `cs status`'s:
- * the label, the five-hour figure and the state with when the binding window CLEARS.
- * Everything else lives in the chosen account's inspector: the 5h / 7d / Clears / Last
- * given out stats, the facts, Holding now | History, and an owner's controls (state with
+ * the label, the five-hour figure and the state with when the binding window resets.
+ * Everything else lives in the chosen account's inspector: the 5-hour use / 7-day use /
+ * Next reset / Last given out stats, the facts, Holding now | History, and an owner's controls (state with
  * a confirm and a reason, refresh, sign in again, remove by typing the label).
  *
  * Honesty marks, unchanged from SwarmCloud: an unmeasured window prints an em dash and
@@ -14,7 +14,7 @@
  * window past its reset says `reset`. Every change reloads the listing rather than
  * patching a local copy. No credential is ever rendered, not even its length.
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import {
   Button,
@@ -36,7 +36,7 @@ import {
 } from "@/components/ds";
 import { ClaudeOffNotice, limitWord } from "@/components/ClaudeOffNotice";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDateTime, inWords } from "@/lib/format";
+import { formatPercent, inWords } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -55,8 +55,10 @@ import {
   readingAges,
   readingOf,
   timeAgo,
+  windowWord,
   type Account,
   type AccountReading,
+  type Clears,
 } from "./_readings";
 
 type Page = Schemas["AccountsPage"];
@@ -192,15 +194,12 @@ function SummaryChips({ page }: { page: Page }) {
         {!sweep.readable
           ? "Last check unknown"
           : sweep.last_completed_at
-            ? `${sweep.last_outcome === "ok" ? "Last checked" : "Last check failed"} ${inMinutes(timeAgo(sweep.last_completed_at))}`
+            ? `${sweep.last_outcome === "ok" ? "Last checked" : "Last check failed"} ${timeAgo(sweep.last_completed_at)}`
             : "Not checked yet"}
       </Chip>
     </span>
   );
 }
-
-/** "6m ago" read out in words a person uses: "6 min ago". */
-const inMinutes = (ago: string) => ago.replace(/\b(\d+)m ago$/, "$1 min ago").replace(/\b(\d+)s ago$/, "$1 s ago");
 
 /** "anthropic" as a name: "Anthropic". */
 const providerName = (p: string) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : p);
@@ -275,6 +274,14 @@ function Pool({
     />
   ) : null;
   const showDetail = !!shown && !(adding && signin("add").kind === "idle");
+  // One column (phones, narrow windows) puts the pane under the whole list: a tap on a row
+  // brings it into view, as the side-by-side layout shows it at once (qa-settings-44).
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [tapped, setTapped] = useState(0);
+  useEffect(() => {
+    if (tapped === 0 || !window.matchMedia("(max-width: 1100px)").matches) return;
+    paneRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [tapped]);
 
   const columns: Column<Account>[] = [
     {
@@ -300,16 +307,16 @@ function Pool({
     },
     {
       key: "5h",
-      header: "5h",
-      phoneLabel: "5h",
-      width: "76px",
+      header: "5-hour use",
+      phoneLabel: "5-hour use",
+      width: "112px",
       align: "right",
       cell: (a) => <WindowFig reading={readingOf(a, FIVE_HOUR)} window="five-hour" />,
     },
     { key: "state", header: "State", width: "196px", wrap: true, cell: (a) => <AcctState account={a} zone={page.time_zone} stacked /> },
     {
       key: "clears",
-      header: "Clears",
+      header: "Next reset",
       width: "176px",
       wrap: true,
       hideOnPhone: true,
@@ -324,8 +331,8 @@ function Pool({
       hideOnPhone: true,
       className: "text-text2",
       cell: (a) => (
-        <span className="tnum" title={a.last_assigned_at ? formatDateTime(a.last_assigned_at) : undefined}>
-          {a.last_assigned_at ? `given out ${agoPastDay(a.last_assigned_at, now)}` : "never given out"}
+        <span className="tnum" title={a.last_assigned_at ? inWords(a.last_assigned_at, page.time_zone) : undefined}>
+          {a.last_assigned_at ? `Given out ${agoPastDay(a.last_assigned_at, now)}` : "Never given out"}
         </span>
       ),
     },
@@ -334,7 +341,7 @@ function Pool({
   const ages = readingAges(accounts, now);
   const inspector =
     (adding && addForm) || showDetail ? (
-      <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
+      <div ref={paneRef} className="flex min-w-0 scroll-mt-4 flex-col gap-4 max-[600px]:gap-3" data-testid="account-pane">
         {adding && addForm}
         {showDetail && shown && (
           <Detail
@@ -366,7 +373,10 @@ function Pool({
             rows={accounts}
             rowKey={(a) => a.account_id}
             selected={shown?.account_id ?? null}
-            onSelect={(id) => choose(id)}
+            onSelect={(id) => {
+              choose(id);
+              setTapped((n) => n + 1);
+            }}
             rowProps={(a) => ({ "data-testid": `account-row-${a.label}` })}
           />
         )}
@@ -376,7 +386,7 @@ function Pool({
             data-testid="accounts-foot"
           >
             <span>
-              {accounts.length} row{accounts.length === 1 ? "" : "s"}
+              {accounts.length} account{accounts.length === 1 ? "" : "s"}
               {page.unreadable_document_count > 0 && <> of {accounts.length + page.unreadable_document_count}</>}
               {ages && <> · {ages}</>}
             </span>
@@ -446,6 +456,17 @@ export function reasonLabel(reason: string): string {
 }
 
 /**
+ * Why a spent account is spent while its figure reads under 100% (qa-settings-17): the
+ * API (accounts.py spent_by) stops giving an account calls once a window has less than
+ * 15% left, so the job it starts can finish before Claude refuses.
+ */
+export function spentWhy(a: Account): string {
+  const w = a.spent_by ? a.windows[a.spent_by] : undefined;
+  const used = w ? `${formatPercent(w.utilization)} of its ${windowWord(a.spent_by!)} window is used. ` : "";
+  return `${used}Oracle stops giving an account new calls once less than 15% of a window is left, so a job it starts can finish.`;
+}
+
+/**
  * The state as a chip; the platform's spelling is the title. An AVAILABLE account the
  * pool will not choose because a window is spent reads "Spent until", as the gateway
  * treats it, never Available.
@@ -453,7 +474,7 @@ export function reasonLabel(reason: string): string {
 function AcctState({ account, zone, stacked }: { account: Account; zone: string; stacked?: boolean }) {
   const { state } = account;
   if (account.spent_until) {
-    const title = `Over its ${account.spent_by ? limitWord(account.spent_by) : "limit"}: Oracle gives it no calls until then.`;
+    const title = `Near its ${account.spent_by ? limitWord(account.spent_by) : "limit"}: Oracle gives it no new calls until then. ${spentWhy(account)}`;
     const when = inWords(account.spent_until, zone);
     // In a row the time goes under the chip, so the column stays narrow.
     return stacked ? (
@@ -517,13 +538,24 @@ function WindowFig({ reading, window }: { reading: AccountReading; window: strin
   );
 }
 
+/** When the binding window resets, in words: "in 1h 19m", "in ~29h 59m", "already", or null unmeasured. */
+function resetWords(c: Clears): string | null {
+  if (c.unmeasured) return null;
+  if (c.text === "cleared") return "already";
+  if (c.text === "now") return "~now";
+  return `in ${c.tilde ? "~" : ""}${c.text}`;
+}
+
 function ClearsLine({ account, now }: { account: Account; now: number }) {
   const c = clearsOf(account, now);
+  const when = resetWords(c);
   return (
     <span className="tnum" title={c.title} data-testid="clears">
-      clears {c.tilde && "~"}
-      {c.text}
-      {c.win && <> &middot; {c.win}</>}
+      {when === null
+        ? "Not measured"
+        : when === "already"
+          ? `${sentence(c.win ?? "")} window has reset`
+          : `${sentence(c.win ?? "")} window resets ${when}`}
     </span>
   );
 }
@@ -636,24 +668,23 @@ function Detail({
       }
       statColumns={2}
       stats={[
-        { label: "5h used", testId: "tile-5h used", ...windowStat(readingOf(account, FIVE_HOUR), "five-hour") },
-        { label: "7d used", testId: "tile-7d used", ...windowStat(readingOf(account, SEVEN_DAY), "seven-day") },
+        { label: "5-hour use", testId: "tile-5h used", ...windowStat(readingOf(account, FIVE_HOUR), "five-hour") },
+        { label: "7-day use", testId: "tile-7d used", ...windowStat(readingOf(account, SEVEN_DAY), "seven-day") },
         {
-          label: "Clears",
+          label: "Next reset",
           testId: "tile-Clears",
           figure: (
             <StatFig title={c.title} note={c.win ? `${c.win} window` : undefined} dim={c.unmeasured}>
-              {c.tilde && "~"}
-              {c.text}
+              {resetWords(c) ?? "—"}
             </StatFig>
           ),
         },
         {
-          label: "Given out",
+          label: "Last given out",
           testId: "tile-Last given out",
           figure: account.last_assigned_at ? (
-            <StatFig title={formatDateTime(account.last_assigned_at)} note={formatDateTime(account.last_assigned_at)}>
-              {agoPastDay(account.last_assigned_at, now).replace(" ago", "")}
+            <StatFig title={inWords(account.last_assigned_at, zone)} note={inWords(account.last_assigned_at, zone)}>
+              {timeAgo(account.last_assigned_at, now)}
             </StatFig>
           ) : (
             <StatFig title="No job has ever been handed it." dim>
@@ -674,7 +705,12 @@ function Detail({
             )}
           </Fact>
         )}
-        {account.spent_by && <Fact label="Spent">Over its {limitWord(account.spent_by)}</Fact>}
+        {account.spent_by && (
+          <div data-testid="fact-spent">
+            <Fact label="Spent">Near its {limitWord(account.spent_by)}</Fact>
+            <p className="pb-1 text-[13px] leading-4 text-text2">{spentWhy(account)}</p>
+          </div>
+        )}
         {account.reason && <Fact label="Reason">{reasonLabel(account.reason)}</Fact>}
         <Fact label="Jobs on it">{account.assigned}</Fact>
         <Fact label="Last read">
@@ -696,7 +732,7 @@ function Detail({
         </Fact>
         <CopyId id={account.account_id} />
       </InspectorSection>
-      <Holding account={account} now={now} />
+      <Holding account={account} now={now} zone={zone} />
       {owner ? (
         <>
           {needsAHuman(account) && (
@@ -742,7 +778,7 @@ const TAB = "h-8 max-sm:min-h-11 rounded-lg px-3 text-sm font-medium whitespace-
 const tabTone = (on: boolean) => (on ? "bg-accent text-on-accent" : "text-text2 hover:bg-surface2 hover:text-text");
 
 /** Holding now | History, both closed by default and loaded only when opened. */
-function Holding({ account, now }: { account: Account; now: number }) {
+function Holding({ account, now, zone }: { account: Account; now: number; zone: string }) {
   const [tab, setTab] = useState<"now" | "history" | null>(null);
   return (
     <InspectorSection label="Jobs">
@@ -765,8 +801,8 @@ function Holding({ account, now }: { account: Account; now: number }) {
           </button>
         ))}
       </div>
-      {tab === "now" && <HoldingNow account={account} now={now} />}
-      {tab === "history" && <HoldingHistory account={account} now={now} />}
+      {tab === "now" && <HoldingNow account={account} now={now} zone={zone} />}
+      {tab === "history" && <HoldingHistory account={account} now={now} zone={zone} />}
     </InspectorSection>
   );
 }
@@ -785,7 +821,7 @@ const JOB_LABEL: Record<string, string> = {
 
 const Quiet = ({ children }: { children: ReactNode }) => <p className="mt-2 text-sm text-text2">{children}</p>;
 
-function HoldingNow({ account, now }: { account: Account; now: number }) {
+function HoldingNow({ account, now, zone }: { account: Account; now: number; zone: string }) {
   const path = { params: { path: { account_id: account.account_id } } };
   const q = useQuery(`holders:${account.account_id}`, () =>
     unwrap(api.GET("/v1/claude-accounts/{account_id}/holders", path)),
@@ -810,7 +846,7 @@ function HoldingNow({ account, now }: { account: Account; now: number }) {
               {h.task_id ? (JOB_LABEL[h.task_id] ?? h.task_id) : <span className="text-text2">not recorded</span>}
             </span>
             {h.move === "drain" && <Chip kind="na">moving off</Chip>}
-            <span className="tnum flex-none text-sm text-text2" title={h.since ? formatDateTime(h.since) : undefined}>
+            <span className="tnum flex-none text-sm text-text2" title={h.since ? inWords(h.since, zone) : undefined}>
               {h.since ? heldFor(now - Date.parse(h.since)) : "—"}
             </span>
           </li>
@@ -820,7 +856,7 @@ function HoldingNow({ account, now }: { account: Account; now: number }) {
   );
 }
 
-function HoldingHistory({ account, now }: { account: Account; now: number }) {
+function HoldingHistory({ account, now, zone }: { account: Account; now: number; zone: string }) {
   const [cursor, setCursor] = useState<string | null>(null);
   const q = useQuery(`history:${account.account_id}:${cursor ?? ""}`, () =>
     unwrap(
@@ -867,7 +903,7 @@ function HoldingHistory({ account, now }: { account: Account; now: number }) {
                 <span className="flex min-h-7 items-center gap-2.5">
                   <span
                     className="min-w-0 flex-1 truncate"
-                    title={s.since ? `Started ${formatDateTime(s.since)}` : "start not recorded"}
+                    title={s.since ? `Started ${inWords(s.since, zone)}` : "start not recorded"}
                   >
                     {s.task_id ? (JOB_LABEL[s.task_id] ?? s.task_id) : "not recorded"}
                   </span>
@@ -906,6 +942,8 @@ const TARGETS: { to: StateName; verb: string; why: string }[] = [
   { to: "DRAINING", verb: "Drain", why: "no new jobs, and the ones on it are moved off" },
 ];
 
+const SIGN_IN_FIRST = "It can be made available once someone signs in to it again: until then it has no working sign-in.";
+
 /** Taking an account out of rotation is the move that has to say why. */
 export function stateNeedsReason(to: StateName): boolean {
   return to === "PAUSED" || to === "DRAINING";
@@ -920,6 +958,8 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
   const asked = TARGETS.find((t) => t.to === asking) ?? null;
   const needsReason = asking !== null && stateNeedsReason(asking);
   const jobs = `${account.assigned} job${account.assigned === 1 ? "" : "s"}`;
+  // An account whose sign-in is gone has nothing to call with: it is made available by signing in again.
+  const signInFirst = needsAHuman(account);
 
   async function move(to: StateName) {
     if (stateNeedsReason(to) && !reason.trim()) return;
@@ -946,11 +986,17 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
     <InspectorSection label="State">
       <div className="flex flex-wrap gap-2">
         {TARGETS.map((t) => (
-          <Button key={t.to} title={t.why} disabled={account.state === t.to} onClick={() => setAsking(t.to)}>
+          <Button
+            key={t.to}
+            title={t.to === "AVAILABLE" && signInFirst ? SIGN_IN_FIRST : t.why}
+            disabled={account.state === t.to || (t.to === "AVAILABLE" && signInFirst)}
+            onClick={() => setAsking(t.to)}
+          >
             {t.verb}
           </Button>
         ))}
       </div>
+      {signInFirst && <p className="mt-2 text-sm text-text2">{SIGN_IN_FIRST}</p>}
       {asked && (
         <div
           role="dialog"

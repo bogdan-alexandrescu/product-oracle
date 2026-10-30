@@ -78,7 +78,8 @@ test("branding: an owner uploads a logo and sets an accent, and the HTML export 
   await card.getByLabel("Accent").fill("#e0f2fe");
   await expect(card.getByTestId("accent-contrast")).toContainText("Too light");
   await card.getByRole("button", { name: "Save branding" }).click();
-  await expect(card.getByRole("alert")).toHaveText("This colour is too light to read on white. Pick a darker one.");
+  // qa-settings-14: said once, next to the field (fix4-company.spec).
+  await expect(card.getByRole("alert")).toHaveText(/^\d\.\d\d:1 · Too light to read on white\. Pick a darker one\.$/);
   await card.getByLabel("Accent").fill("#0369a1");
   await expect(card.getByTestId("accent-contrast")).toContainText("5.93:1");
   await card.getByLabel("Show 'Made with Product Oracle' on shared pages").uncheck();

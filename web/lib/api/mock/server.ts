@@ -4034,6 +4034,12 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         resent_at: now(),
         resend_count: (invite.resend_count ?? 0) + 1,
       });
+      // As the API: its email goes out again unless one is under way or under a minute old.
+      const recent = invite.email_status === "sent" && !!invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000;
+      if (invite.email_status !== "queued" && !recent) {
+        (db.invites_resent ??= []).push(invite.id);
+        Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
+      }
       return json(200, withInviter(invite));
     }
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
@@ -4593,6 +4599,12 @@ async function route(db: Db, req: Request): Promise<Response> {
       // qa-onboarding-14: an invite withdrawn or past its date is refused in words, naming who to ask.
       const refused = inviteRefusal(db, address);
       if (refused) return json(403, { detail: refused });
+    }
+    if (member?.status === "disabled" && passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
+      // qa-settings-42: as oracle.auth.service: a removed member with the right password hears why.
+      const by = db.members.find((x) => x.id === member.disabled_by && x.status !== "disabled");
+      const who = by ? displayName(by.email, by.name) : "an owner";
+      return json(403, { detail: `An owner removed you from this Oracle. Ask ${who} to restore you.` });
     }
     if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });

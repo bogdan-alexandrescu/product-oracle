@@ -82,6 +82,10 @@ export type ConfirmAsk = {
   message: string;
   /** Cancels or deletes something: Back has the focus (Enter does not confirm) and the action is drawn as danger. */
   destructive?: boolean;
+  /** The dialog's title when it is not the action's ("Remove example.com?"). */
+  title?: string;
+  /** The button that answers no, when not "Back" ("Cancel"). */
+  cancel?: string;
 };
 
 type Pending = ConfirmAsk & { resolve: (yes: boolean) => void };
@@ -150,7 +154,7 @@ function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boo
       >
         <div className="flex min-h-14 items-center border-b border-line px-5 max-[600px]:px-4">
           <h2 id={title} className="font-display text-lg font-bold tracking-heading">
-            {ask.action}
+            {ask.title ?? ask.action}
           </h2>
         </div>
         <p id={body} className="px-5 py-3.5 text-[15px] leading-6 max-[600px]:px-4">
@@ -158,7 +162,7 @@ function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boo
         </p>
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
           <Button variant="ghost" data-autofocus={ask.destructive ? true : undefined} onClick={() => onAnswer(false)}>
-            Back
+            {ask.cancel ?? "Back"}
           </Button>
           <Button
             variant={ask.destructive ? "danger" : "primary"}

@@ -40,6 +40,7 @@ export function Sheet({
   above = false,
   id,
   bare = false,
+  dialog = false,
 }: {
   open: boolean;
   title: string;
@@ -58,6 +59,8 @@ export function Sheet({
   id?: string;
   /** The whole screen with no handle or title row: the content draws its own head and close button (Simple's Ask sheet). */
   bare?: boolean;
+  /** A form: a bottom sheet on a phone, a centred dialog of readable width (640 px) from 640 px up (qa-settings-33). */
+  dialog?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number; captured?: boolean } | null>(null);
@@ -144,7 +147,7 @@ export function Sheet({
 
   return (
     <div
-      className={`fixed inset-x-0 top-0 z-50 flex flex-col justify-end ${above ? "bottom-[var(--phone-tab-bar)]" : "bottom-0"}`}
+      className={`fixed inset-x-0 top-0 z-50 flex flex-col justify-end ${above ? "bottom-[var(--phone-tab-bar)]" : "bottom-0"} ${dialog ? "sm:items-center sm:justify-center sm:p-6" : ""}`}
       data-testid={testId}
     >
       <div data-testid="sheet-scrim" aria-hidden className="absolute inset-0 bg-hero/50" onClick={onClose} />
@@ -162,7 +165,7 @@ export function Sheet({
         className={
           bare
             ? "relative flex h-dvh max-h-dvh min-h-0 flex-col bg-surface pt-[env(safe-area-inset-top)] text-text outline-none"
-            : `relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none`
+            : `relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none ${dialog ? "sm:w-full sm:max-w-[640px] sm:rounded-inspector sm:border" : ""}`
         }
       >
         {!bare && (
@@ -170,7 +173,7 @@ export function Sheet({
             <div
               data-testid="sheet-handle"
               aria-hidden
-              className="flex h-6 flex-none cursor-grab touch-none items-center justify-center"
+              className={`flex h-6 flex-none cursor-grab touch-none items-center justify-center ${dialog ? "sm:hidden" : ""}`}
               onPointerDown={onDown}
               onPointerMove={onMove}
               onPointerUp={onUp}

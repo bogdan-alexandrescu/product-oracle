@@ -17,9 +17,11 @@ const BASE =
  * no fill or outline to change, and its resting text is already text2: disabled, it is dimmed.
  * qa-docs-5: a disabled filled button also takes an outline in the strong line colour, so on a
  * surface2 panel (the same fill) it still reads as a button, not as plain text.
+ * qa-settings-38: that outline is dashed, so a disabled filled button never passes for an
+ * enabled secondary one (a solid outline on the page's fill).
  */
 const DISABLED_FILL =
-  "disabled:border disabled:border-line-strong aria-disabled:border aria-disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:brightness-100";
+  "disabled:border disabled:border-dashed disabled:border-line-strong aria-disabled:border aria-disabled:border-dashed aria-disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:brightness-100";
 const DISABLED_OUTLINE =
   "disabled:border-line disabled:text-text2 disabled:hover:bg-surface aria-disabled:border-line aria-disabled:text-text2 aria-disabled:hover:bg-surface";
 

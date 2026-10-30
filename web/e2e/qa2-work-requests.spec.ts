@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /*
  * QA findings on Requests (qa-onboarding-1, qa-onboarding-9, rirs-9 … rirs-40): the New request
@@ -91,7 +91,7 @@ test("qa-onboarding-9: the daily triage time is in the company's time zone, 12-h
   await expect(page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM PT/ })).toBeVisible();
 
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption("Europe/Berlin");
+  await pickZone(page, "Europe/Berlin");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
 

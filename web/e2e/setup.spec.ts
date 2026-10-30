@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * A1 First-run path: a new company's owner sets Oracle up from the Set up checklist on Home,
@@ -57,9 +57,9 @@ async function setZoneFromSetup(page: Page) {
   await row(page, "timezone").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#timezone$/);
   // Save waits for a pick: with none chosen the zone stays unset.
-  await page.getByTestId("timezone-panel").getByLabel("Company time zone").selectOption("America/Los_Angeles");
+  await pickZone(page.getByTestId("timezone-panel"), "America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
   await backToHome(page);
 }
 
@@ -154,7 +154,9 @@ test("setup: a change shows Save, a bad span shows the error, Reset reopens the 
   await confirmHorizonsFromSetup(page);
   await row(page, "horizons").getByRole("link", { name: "Change" }).click();
   const horizons = page.locator("#horizons");
-  await expect(horizons.getByRole("button", { name: "Save" })).toHaveCount(0);
+  // qa-settings-13: unchanged, Save waits (the hint is fix4-company.spec's: here the earlier
+  // save's "Saved" still stands in its place); a change enables it.
+  await expect(horizons.getByRole("button", { name: "Save" })).toBeDisabled();
   await horizons.getByLabel("From").fill("6");
   await horizons.getByRole("button", { name: "Save" }).click();
   await expect(horizons.getByRole("alert")).toContainText("'From' must start after Next ends (at least 9 months)");
@@ -162,11 +164,11 @@ test("setup: a change shows Save, a bad span shows the error, Reset reopens the 
   await horizons.getByLabel("To").fill("30");
   await horizons.getByRole("button", { name: "Save" }).click();
   await expect(horizons.getByRole("alert")).toHaveCount(0);
-  await expect(horizons.getByRole("button", { name: "Save" })).toHaveCount(0);
+  await expect(horizons.getByRole("button", { name: "Save" })).toBeDisabled();
   await horizons.getByRole("button", { name: "Reset to defaults" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Reset to defaults" }).click();
   await expect(horizons.getByLabel("From")).toHaveValue("12");
-  await expect(horizons.getByRole("button", { name: "Save" })).toBeVisible();
+  await expect(horizons.getByRole("button", { name: "Save" })).toBeEnabled();
   await backToHome(page);
   await expect(row(page, "horizons")).toHaveAttribute("data-done", "false");
 });

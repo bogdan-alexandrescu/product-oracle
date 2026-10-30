@@ -458,7 +458,8 @@ function Navs() {
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);
   const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];
-  const moreActive = moreDests.some((d) => isActive(pathname, d, home));
+  // qa-settings-39: the bar has no tab for My account; like Settings, it lights More.
+  const moreActive = moreDests.some((d) => isActive(pathname, d, home)) || pathname === "/account" || pathname.startsWith("/account/");
 
   return (
     <>

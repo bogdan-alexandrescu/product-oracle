@@ -29,7 +29,9 @@ test("consent: signed out goes to sign-in first, then approve returns a code", a
   await expect(consent).toContainText("Write");
   await expect(page.getByTestId("consent-user")).toHaveText(ADMIN.email);
   await expect(consent).toContainText("Owner");
-  await expect(consent).toContainText(CALLBACK.host);
+  // qa-settings-41: a loopback address reads as an app on this computer, the address in a title.
+  await expect(page.getByTestId("consent-return")).toHaveText("an app on this computer");
+  await expect(page.getByTestId("consent-return")).toHaveAttribute("title", CALLBACK.host);
   await expect(page.getByTestId("consent-effective-role")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Approve" }).click();

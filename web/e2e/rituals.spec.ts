@@ -4,7 +4,7 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
 import { displayName } from "../lib/names";
 
-import { ADMIN, login } from "./helpers";
+import { ADMIN, login, pickZone } from "./helpers";
 
 /*
  * H2 Cadence engine: Company › Rituals and the occurrence page, driven through the UI as a
@@ -268,7 +268,7 @@ test("H2 review: the rituals follow a change of the Company time zone", async ({
   await withRituals(page);
   await login(page);
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption("Asia/Tokyo");
+  await pickZone(page, "Asia/Tokyo");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await openRituals(page);

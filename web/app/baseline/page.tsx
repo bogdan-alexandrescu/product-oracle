@@ -57,6 +57,13 @@ function BuildFromUrl({ onBuild }: { onBuild: () => void }) {
   return null;
 }
 
+/** qa-onboarding-25: ?build=1 for a role that cannot build says who can, instead of nothing. */
+function BuildRefusedFromUrl() {
+  const build = useSearchParams().get("build") === "1";
+  if (!build) return null;
+  return <Notice testId="build-refused">Approvers and owners build the baseline.</Notice>;
+}
+
 /** ?entity=<id> opens that item (Publish's Resolve links here); ?blocker=<id> that blocker (its Open blocker). */
 function OpenFromUrl({ onOpen, onBlocker }: { onOpen: (id: string) => void; onBlocker: (id: string) => void }) {
   const params = useSearchParams();
@@ -506,6 +513,11 @@ export default function BaselinePage() {
           <KpiStrip label="Counts" items={kpis} />
         </div>
 
+        {capsReady && !canWrite && (
+          <Suspense fallback={null}>
+            <BuildRefusedFromUrl />
+          </Suspense>
+        )}
         {build && <BuildBanner build={build} />}
         {view && <FromRunBand view={view} />}
         {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}

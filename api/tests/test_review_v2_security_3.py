@@ -126,7 +126,10 @@ async def test_a_disabled_member_keeps_their_row_and_cannot_sign_in_anywhere(cli
 
     for headers in (pm.headers, bearer, oauth):
         assert (await client.get(f"/v1/documents/{DOC}", headers=headers)).status_code == 401
-    assert (await client.post("/v1/auth/login", json=login)).status_code == 401
+    # qa-settings-42: refused in words (the right password), never signed in.
+    refused = await client.post("/v1/auth/login", json=login)
+    assert refused.status_code == 403 and "removed you" in refused.json()["detail"]
+    assert (await client.post("/v1/auth/login", json={**login, "password": "x"})).status_code == 401
 
     async with tenant_session(ctx.tenant_id) as s:
         user = await s.get(User, pm.user_id)

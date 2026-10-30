@@ -274,7 +274,8 @@ function seed(): SourcesDb {
     kind: "google_docs",
     name: "Drive folders",
     connection_id: CONNECTIONS.google[1].id,
-    config: { folders: ["1FolderProductExample"] },
+    // Picked by name, as the Drive picker saves picks (qa-settings-23: the row reads the name).
+    config: { folders: ["1FolderProductExample"], names: { "1FolderProductExample": "Product planning" } },
     status: "active",
     last_error: null,
     last_synced_at: "2026-10-12T08:00:00Z",
@@ -535,7 +536,9 @@ function badConfig(kind: Source["kind"], config: Record<string, unknown>): strin
   }
   if (kind !== "slack") return null;
   const channels = config.channels;
-  if (Array.isArray(channels) && channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;
+  // As the Slack connector's _channels: a source reads at least one channel (qa-onboarding-4).
+  if (!Array.isArray(channels) || channels.length === 0) return "allowlist at least one channel id";
+  if (channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;
   for (const key of ["since", "until"] as const) {
     const v = config[key];
     if (v == null) continue;
@@ -751,7 +754,10 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         content: "Teams want to set their own alert thresholds.",
       });
     }
-    return json(200, { source_id: s.id, outcome: "completed", upserted: 2, versions_written: 1, deleted, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
+    // What it saw is what the source holds, so the result and the row agree (qa-onboarding-4).
+    const out = counted(db, s);
+    const seen = out.item_count;
+    return json(200, { source_id: s.id, outcome: "completed", upserted: seen, versions_written: seen ? 1 : 0, deleted, checkpoints: 1, retry_after: null, error: null, source: out });
   }
   if (sub === "coverage" && m === "GET") {
     const limit = Number(q.get("limit") ?? 50);

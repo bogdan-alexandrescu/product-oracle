@@ -97,7 +97,7 @@ test("qa-settings-31: a template shows when it is suggested, and its sections by
   );
 
   await page.goto("/settings/templates/new");
-  await expect(page.getByTestId("section-names")).toHaveText("<Title>, Problem, Solution, Sources and data points");
+  await expect(page.getByTestId("section-names")).toHaveText("Title, Problem, Solution, Sources and data points");
   await expect(page.getByTestId("brief-sections")).toHaveText("Problem, Solution");
 });
 
@@ -127,9 +127,8 @@ test("qa-settings-33: the theme list's preview scrolls in full; fonts are named 
   await page.goto("/settings/themes/clean-document");
   const hint = page.getByTestId("font-heading-hint");
   await expect(hint).toHaveText("Uses DejaVu Sans; without it, Helvetica, then Arial, then sans-serif.");
-  const heading = page.getByLabel("Heading font");
-  await expect(heading).toHaveAttribute("title", '"DejaVu Sans", Helvetica, Arial, sans-serif');
-  await expectNotClipped(heading);
+  // qa-settings-32: a picker names the font; the CSS stack sits under Advanced.
+  await expect(page.getByLabel("Heading font", { exact: true })).toHaveValue("DejaVu Sans");
 });
 
 test.describe("phone", () => {

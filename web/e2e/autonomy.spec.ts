@@ -26,7 +26,10 @@ const step = (page: Page, key: string, label: string) =>
 // no_claim=the API's 422 (pytest covers it).
 test("autonomy: an owner sees the five groups and the vision locked at Draft", async ({ page }) => {
   await openAutonomy(page);
-  await expect(page.getByText("How far Oracle goes on its own. You can change this any time.")).toBeVisible();
+  // qa-settings-11: the intro is in the page's tip, as on every Settings tab.
+  await page.getByRole("button", { name: "About autonomy" }).click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "How far Oracle goes on its own. You can change this any time." })).toBeVisible();
+  await page.getByRole("button", { name: "About autonomy" }).click();
   for (const name of ["Knowledge", "Planning", "Documents", "Operating", "Outside the company"]) {
     await expect(page.getByRole("heading", { level: 2, name, exact: true })).toBeVisible();
   }

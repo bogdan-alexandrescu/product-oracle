@@ -7,6 +7,7 @@ import { TEXTAREA } from "@/app/settings/_components/fields";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { problemText, type Problem } from "@/lib/api/problems";
 import { useLive, type Live } from "@/lib/use-live";
+import { useQuery } from "@/lib/use-query";
 
 export type TemplateCheck = Schemas["TemplateValidateOut"];
 
@@ -43,6 +44,32 @@ export function sectionTitles(body: string): Map<string, string> {
     if (m && !out.has(m[2])) out.set(m[2], m[1].trim() || m[2]);
   }
   return out;
+}
+
+/**
+ * A section's name for people (qa-settings-27): its heading as written, except a placeholder
+ * heading ("<Feature> PRD", "<Title>"), which names the title section "Title" (others lose the
+ * angle brackets). A section without a heading keeps its id.
+ */
+export function sectionName(titles: Map<string, string>, key: string): string {
+  const heading = titles.get(key);
+  if (!heading) return key === "title" ? "Title" : key;
+  if (!/<[^>]*>/.test(heading)) return heading;
+  return key === "title" ? "Title" : heading.replace(/[<>]/g, "").trim() || key;
+}
+
+/** Section ids as their names, comma-separated ("none" when there are none). */
+export function sectionNames(titles: Map<string, string>, keys: string[]): string {
+  return keys.map((k) => sectionName(titles, k)).join(", ") || "none";
+}
+
+/**
+ * Theme names by key (qa-settings-26): templates suggest a theme by its key, people read its
+ * name. Archived themes included, so an old suggestion still reads as a name.
+ */
+export function useThemeNames(): (key: string | null | undefined) => string {
+  const q = useQuery("themes|all", () => unwrap(api.GET("/v1/themes", { params: { query: { include_archived: true } } })));
+  return (key) => (key ? (q.data?.find((t) => t.key === key)?.name ?? (q.data ? key : "…")) : "—");
 }
 
 const validateBody = (body: string) => unwrap(api.POST("/v1/templates/validate", { body: { body } }));
@@ -124,7 +151,8 @@ export function TemplateBodyEditor({
   const live = given ?? own;
   const check = live.data;
   const titles = sectionTitles(value);
-  const named = (keys: string[]) => keys.map((k) => titles.get(k) ?? k).join(", ");
+  const named = (keys: string[]) => keys.map((k) => sectionName(titles, k)).join(", ");
+  const themeName = useThemeNames();
   return (
     <div className="flex flex-col gap-2">
       <span className="flex items-center gap-1.5">
@@ -160,7 +188,7 @@ export function TemplateBodyEditor({
             {check.suggested_theme && (
               <>
                 <Label>· theme</Label>
-                <span className="font-mono text-[13px]">{check.suggested_theme}</span>
+                <span data-testid="check-theme">{themeName(check.suggested_theme)}</span>
               </>
             )}
             {check.brief_sections.length > 0 && (

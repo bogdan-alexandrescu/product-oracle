@@ -31,7 +31,7 @@ export function EditWebhookSheet({
   onSaved: (hook: Webhook) => void;
 }) {
   return (
-    <Sheet open={open} title="Edit webhook" onClose={onClose} testId="edit-webhook-sheet">
+    <Sheet open={open} dialog title="Edit webhook" onClose={onClose} testId="edit-webhook-sheet">
       {/* Mounted while open only, so each opening starts from the webhook as it is now. */}
       {open && <EditForm hook={hook} eventTypes={eventTypes} ownerChoices={ownerChoices} onClose={onClose} onSaved={onSaved} />}
     </Sheet>

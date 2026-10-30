@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
 import { normaliseDomain } from "@/app/settings/sources/CompanyDrive";
@@ -29,6 +29,13 @@ const writeSetting = (key: string, value: unknown) =>
 
 const H3 = "text-[15px] font-semibold";
 
+/** qa-settings-9: a choice here applies at once; this says it landed. */
+const Saved = () => (
+  <span role="status" data-testid="sign-in-saved" className="text-sm font-semibold text-pass">
+    Saved
+  </span>
+);
+
 /**
  * Settings › Members › Sign-in (A5, 3.10; owners): the company's email domains (a deployment
  * domain is locked: it is set where Oracle is deployed), what happens to a Google sign-in
@@ -41,15 +48,23 @@ export function SignInRules() {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const inputId = useId();
+  // The setting just saved, whose "Saved" shows for a moment.
+  const [saved, setSaved] = useState<string | null>(null);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (savedTimer.current && clearTimeout(savedTimer.current)), []);
   const rules = q.data;
   const off = !!rules && (!rules.google_sign_in || rules.new_sign_ins_off);
 
   async function save(key: string, value: unknown) {
     setBusy(true);
     setError(null);
+    setSaved(null);
     try {
       await writeSetting(key, value);
       await q.reload();
+      setSaved(key);
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setSaved(null), 4000);
       return true;
     } catch (e) {
       setError(errorMessage(e));
@@ -91,11 +106,17 @@ export function SignInRules() {
         {rules && (
           <>
             <section aria-label="Company domains" className="flex flex-col gap-2">
-              <h3 className={H3}>Company domains</h3>
+              <span className="flex flex-wrap items-center gap-2">
+                <h3 className={H3}>Company domains</h3>
+                {saved === DOMAINS_KEY && <Saved />}
+              </span>
               {/* qa-settings-17: Sources › Google Drive shows the same list as "Company email domains". */}
               <p data-testid="sign-in-domains-hint" className="text-sm text-text2">
                 Who may sign in from Google. It is the same list as Company email domains in{" "}
-                <Link href="/settings/sources#company-domains" className="font-semibold text-accent-ink hover:underline">
+                <Link
+                  href="/settings/sources#company-domains"
+                  className="font-semibold text-accent-ink hover:underline max-[600px]:inline-flex max-[600px]:min-h-11 max-[600px]:items-center"
+                >
                   Settings › Sources
                 </Link>
                 , where it also decides which Google Drive docs Oracle reads.
@@ -169,7 +190,10 @@ export function SignInRules() {
               </p>
             )}
             <section aria-label="Without an invite" className="flex flex-col gap-2">
-              <h3 className={H3}>Without an invite</h3>
+              <span className="flex flex-wrap items-center gap-2">
+                <h3 className={H3}>Without an invite</h3>
+                {saved === "sign_in_without_invite" && <Saved />}
+              </span>
               {/* On a phone the three choices wrap onto rows of their own. */}
               <div className="max-[600px]:[&_[role=group]]:flex-col max-[600px]:[&_[role=group]]:items-stretch">
                 <SegmentedControl
@@ -197,6 +221,7 @@ export function SignInRules() {
                   <option value="commenter">Commenter</option>
                 </select>
               </Field>
+              {saved === "iap_default_role" && <Saved />}
               <p className="text-sm text-text2">The role an approved request starts with, and the role of anyone who joins at once.</p>
               {(rules.default_role === "approver" || rules.default_role === "owner") && (
                 <Notice tone="warn">

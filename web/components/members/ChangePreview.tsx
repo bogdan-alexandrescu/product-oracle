@@ -8,6 +8,7 @@ import { Chip } from "@/components/ds";
 import { MemberApprovals } from "@/components/members/MemberApprovals";
 import type { Member } from "@/lib/api/client";
 import { hasRole, membersApi, type HandOver, type Impact, type Responsibility, type Role } from "@/lib/api/members-types";
+import { displayName } from "@/lib/names";
 import { errorMessage } from "@/lib/use-query";
 
 /*
@@ -35,8 +36,11 @@ const kindWord = (kind: string) => {
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
-/** "Admin" or the email: the one name rule on a member row. */
-export const personName = (m: Pick<Member, "email" | "name">) => m.name?.trim() || m.email;
+/**
+ * "Admin", or "Viewer" for viewer@example.com with no name: the one name rule (lib/names, the
+ * API's), as GET /v1/people names everyone for every role (qa-settings-5).
+ */
+export const personName = (m: Pick<Member, "email" | "name">) => displayName(m.email, m.name);
 
 function Group({ title, testId, children }: { title: string; testId: string; children: ReactNode }) {
   return (
@@ -289,13 +293,20 @@ export function RemoveDialog({
       confirmLabel="Remove member"
       pendingLabel="Removing…"
       pending={pending}
-      waiting={!impact && !readError ? "Checking what this ends…" : null}
+      // qa-settings-10: the button keeps its label while the preview loads; a note says so.
+      waiting={!impact && !readError ? "Remove member" : null}
       error={error ?? readError}
       onClose={onClose}
       onConfirm={() => onConfirm(movesOf(choices))}
       consequences={[]}
       note="History keeps their name. An owner can restore them; revoked tokens and connections stay revoked."
     >
+      {!impact && !readError && member && (
+        <p role="status" data-testid="preview-checking" className="flex items-center gap-2 text-[13px] text-text2">
+          <span aria-hidden className="size-3.5 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
+          Checking what this ends…
+        </p>
+      )}
       {impact && member && (
         <>
           {impact.ends && <EndsNow ends={impact.ends} />}

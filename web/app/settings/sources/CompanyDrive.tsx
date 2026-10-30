@@ -110,12 +110,18 @@ function CompanyDomains() {
   }
 
   async function remove(domain: string) {
+    // The same list decides Google sign-in (Members › Sign-in): say both, and who loses access (qa-onboarding-10).
+    const drive =
+      list.length === 1
+        ? "With no company domain, every doc in a picked Drive folder is skipped, and the ones already pulled in are hidden now."
+        : `Docs in picked Drive folders owned at ${domain} are skipped, and the ones already pulled in are hidden now.`;
     if (
-      list.length === 1 &&
       !(await confirmInPage({
         destructive: true,
-        action: "Remove",
-        message: `Remove ${domain}? With no company domain, every doc in a picked folder is skipped, and the ones already pulled in are hidden now.`,
+        title: `Remove ${domain}?`,
+        action: "Remove domain",
+        cancel: "Cancel",
+        message: `${drive} Anyone at ${domain} who is not a member yet can no longer sign in with Google, even with an invite. Members already in keep their access.`,
       }))
     ) {
       return;

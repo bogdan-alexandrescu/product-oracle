@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /*
  * QA pass 2 on /baseline and the impact page (qa-plan-2, 8, 9, 23-28, 52; qa-onboarding-25-27,
@@ -124,7 +124,7 @@ test.describe("desktop", () => {
   test("Berlin: the build banner's time says CET, not GMT+1", async ({ page }) => {
     await login(page);
     await page.goto("/settings/company");
-    await page.getByLabel("Company time zone").selectOption("Europe/Berlin");
+    await pickZone(page, "Europe/Berlin");
     await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
     await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
     await page.goto("/baseline?build=1");

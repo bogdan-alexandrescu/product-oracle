@@ -1,6 +1,6 @@
 import { expect, type Page, test, mockNow } from "./test";
 
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * #463: days the API writes into text a person reads are the Company time zone's day. The
@@ -12,7 +12,7 @@ const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
 
 async function setZone(page: Page, zone: string) {
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption(zone);
+  await pickZone(page, zone);
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
 }

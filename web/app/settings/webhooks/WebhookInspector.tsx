@@ -205,7 +205,7 @@ export function WebhookInspector({
           ownerChoices={can("take_over_webhook")}
           onSaved={onChanged}
         />
-        <Sheet open={!!secret} title="New signing secret" onClose={() => setSecret(null)} testId="rotated-secret-sheet">
+        <Sheet open={!!secret} dialog title="New signing secret" onClose={() => setSecret(null)} testId="rotated-secret-sheet">
           {secret && (
             <div className="flex flex-col gap-4 p-4">
               <SecretOnce secret={secret} />

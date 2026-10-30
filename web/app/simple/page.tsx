@@ -58,16 +58,17 @@ const FIX_WORDS: Record<FixOp, string> = {
 /**
  * The Set up checklist's steps in Simple's words, each opening where it is done (the same
  * pages as Detailed Home's checklist, app/home/_setup.tsx). A step this build has no words for
- * keeps its row, under its key's words, with no link.
+ * keeps its row, under its key's words, with no link. qa-onboarding-33: &home=simple brings a
+ * step's Back to Home here, not to Detailed's Home.
  */
 const SETUP_STEPS: Record<string, { label: string; href: string }> = {
-  connect: { label: "Connect your tools", href: "/settings/connections?from=setup" },
-  sources: { label: "Pick your sources", href: "/settings/sources?from=setup" },
-  invite: { label: "Invite your team", href: "/settings/members?from=setup" },
-  domains: { label: "Add the company's email domains", href: "/settings/sources?from=setup#company-domains" },
-  eng_lead: { label: "Name the engineering lead", href: "/settings/members?from=setup#engineering-lead" },
-  horizons: { label: "Check the planning horizons", href: "/settings/company?from=setup#horizons" },
-  timezone: { label: "Set the company time zone", href: "/settings/company?from=setup#timezone" },
+  connect: { label: "Connect your tools", href: "/settings/connections?from=setup&home=simple" },
+  sources: { label: "Pick your sources", href: "/settings/sources?from=setup&home=simple" },
+  invite: { label: "Invite your team", href: "/settings/members?from=setup&home=simple" },
+  domains: { label: "Add the company's email domains", href: "/settings/sources?from=setup&home=simple#company-domains" },
+  eng_lead: { label: "Name the engineering lead", href: "/settings/members?from=setup&home=simple#engineering-lead" },
+  horizons: { label: "Check the planning horizons", href: "/settings/company?from=setup&home=simple#horizons" },
+  timezone: { label: "Set the company time zone", href: "/settings/company?from=setup&home=simple#timezone" },
   build_baseline: { label: "Build the baseline", href: "/baseline?build=1" },
 };
 const stepWords = (key: string) => {

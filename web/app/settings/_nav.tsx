@@ -5,7 +5,17 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { SELECT_FIELD } from "@/app/settings/_components/fields";
 import { LinkButton, ScrollStrip } from "@/components/ds";
+import { homeOf } from "@/lib/experience-paths";
 import { useSettingsTabs } from "@/lib/settings-tabs";
+
+/**
+ * The Home a Set up link came from (?from=setup), or null when none did. qa-onboarding-33:
+ * Simple's setup card adds &home=simple, so its way back opens Simple's Home, not Detailed's.
+ */
+export function setupHome(params: URLSearchParams | null): string | null {
+  if (params?.get("from") !== "setup") return null;
+  return homeOf(params.get("home") === "simple" ? "simple" : "detailed");
+}
 
 /**
  * Settings' own sections: a strip under the page title (PageHeader draws it, see the
@@ -14,11 +24,12 @@ import { useSettingsTabs } from "@/lib/settings-tabs";
  * Only the tabs the signed-in role can read show (#370). qa-settings-11: from 1024 px the 13
  * tabs sit in tighter type so they fit one row beside the rail and the Ask strip at 1366 px
  * (narrower, they wrap: every tab in full view). qa-settings-41: on a phone a select lists
- * every Settings page instead of a strip that shows two or three.
+ * every Settings page instead of a strip that shows two or three; qa-onboarding-35: it takes the
+ * row, so it shows the whole page name, with Back to Home below it.
  */
 export function SettingsNav() {
   const pathname = usePathname();
-  const fromSetup = useSearchParams().get("from") === "setup";
+  const home = setupHome(useSearchParams());
   const router = useRouter();
   const { tabs } = useSettingsTabs();
   const isOn = (href: string) =>
@@ -32,9 +43,9 @@ export function SettingsNav() {
       data-testid="settings-nav"
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
-      <div className="hidden flex-wrap items-center gap-2 max-[600px]:flex">
+      <div className="hidden flex-col items-start gap-1.5 max-[600px]:flex">
         {/* The label does not wrap the select: its options' words would join its name. */}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex w-full min-w-0 items-center gap-2">
           <label htmlFor="settings-nav-select" className="flex-none text-[13px] font-semibold text-text2">
             Settings page
           </label>
@@ -53,8 +64,8 @@ export function SettingsNav() {
             ))}
           </select>
         </div>
-        {fromSetup && (
-          <LinkButton href="/home" variant="ghost" icon="home" className="flex-none">
+        {home && (
+          <LinkButton href={home} variant="ghost" icon="home" className="flex-none" data-testid="nav-back-home-phone">
             Back to Home
           </LinkButton>
         )}
@@ -76,8 +87,8 @@ export function SettingsNav() {
             </Link>
           );
         })}
-        {fromSetup && (
-          <LinkButton href="/home" variant="ghost" icon="home" className="ml-auto flex-none" data-testid="nav-back-home">
+        {home && (
+          <LinkButton href={home} variant="ghost" icon="home" className="ml-auto flex-none" data-testid="nav-back-home">
             Back to Home
           </LinkButton>
         )}
