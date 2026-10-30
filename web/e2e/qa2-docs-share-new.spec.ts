@@ -121,7 +121,8 @@ test.describe("desktop", () => {
     await expect(page.getByText("Share makes one")).toHaveCount(0);
   });
 
-  for (const kind of ["prd", "roadmap"] as const) {
+  // New roadmap offers one theme, named as text with no picker (qa-docs-39, qa3-docs-new.spec.ts).
+  for (const kind of ["prd"] as const) {
     for (const scheme of ["light", "dark"] as const) {
       // qa-docs-2: each theme tile shows a picture of its page, never an empty box.
       test(`qa-docs-2 (${kind}, ${scheme}): every theme thumbnail shows a picture of the page`, async ({ page }) => {
