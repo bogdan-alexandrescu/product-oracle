@@ -590,6 +590,63 @@ async def _sections(db: AsyncSession, v: DocumentVersion) -> list[Section]:
     )
 
 
+def _said(text: str) -> str:
+    return " ".join(str(text or "").split()).lower()
+
+
+async def carry_keys(
+    db: AsyncSession,
+    document: Document,
+    v: DocumentVersion,
+    blocks: list[dict[str, Any]],
+    row: SimpleOnePager | None = None,
+) -> list[dict[str, Any]]:
+    """Each new bet line takes the key (``visuals.bet_key``) of the bet it is on the page
+    built before (the document's latest other row): line ids are positions, renumbered on
+    every build, so a bet keeps its drawn flow when bets are added, dropped or reordered.
+    Matched by words (the earlier bet's, or the words the published draft gave it); then,
+    with as many bets as before, by place (a reworded bet); else a new key."""
+    from oracle.simple import visuals
+
+    q = select(SimpleOnePager).where(SimpleOnePager.document_id == document.id)
+    if row is not None and row.id is not None:
+        q = q.where(SimpleOnePager.id != row.id)
+    prev = row if row is not None and row.blocks else None
+    prev = prev or await db.scalar(q.order_by(SimpleOnePager.built_at.desc()).limit(1))
+    new = [x for b in blocks if b["key"] == "bets" for x in b["lines"]]
+    if prev is None:
+        return blocks
+    old = [x for b in prev.blocks or [] if b.get("key") == "bets" for x in b.get("lines") or []]
+    edited = {}
+    d = await db.scalar(select(SimpleDraft).where(SimpleDraft.version_id == v.id))
+    if d is not None:
+        edited = (d.overlay or {}).get("lines") or {}
+    words: dict[str, str] = {}
+    for x in old:
+        for t in (edited.get(x.get("id")), x.get("text")):
+            if t:
+                words.setdefault(_said(t), visuals.bet_key(x))
+    used: set[str] = set()
+    for x in new:
+        key = words.get(_said(x["text"]))
+        if key and key not in used:
+            x["flow_key"] = key
+            used.add(key)
+    by_place = {str(x.get("id")): visuals.bet_key(x) for x in old} if len(old) == len(new) else {}
+    taken = {visuals.bet_key(x) for x in old}
+    for x in new:
+        if "flow_key" not in x:
+            key = by_place.get(x["id"])
+            if not key or key in used:
+                # A new bet: a key of its own, the same on every read of this version.
+                key, n = f"{v.id.hex}-{x['id']}", 1
+                while key in used or key in taken:
+                    key, n = f"{v.id.hex}-{x['id']}-{n}", n + 1
+            x["flow_key"] = key
+            used.add(key)
+    return blocks
+
+
 @dataclass
 class Built:
     document: Document
@@ -625,7 +682,7 @@ async def built(
             document_id=document.id,
             version_id=v.id,
             sections_hash=h,
-            blocks=_numbered(extract(specs, mapped)),
+            blocks=await carry_keys(db, document, v, _numbered(extract(specs, mapped))),
             built_by="extract",
             built_at=company_time.now(),
         )
@@ -703,6 +760,7 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
             SimpleOnePager.version_id == v.id, SimpleOnePager.sections_hash == h
         )
     )
+    blocks = await carry_keys(s, document, v, blocks, row)
     if row is None:
         row = SimpleOnePager(document_id=document.id, version_id=v.id, sections_hash=h)
         s.add(row)
@@ -715,7 +773,7 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
 
     for b in blocks:
         for line in b["lines"] if b["key"] == "bets" else []:
-            sid = visuals.line_subject(document.id, line["id"])
+            sid = visuals.line_subject(document.id, visuals.bet_key(line))
             await visuals.request_visual(
                 s, None, "one_pager_line", sid, line["text"], document_id=document.id
             )
@@ -1162,8 +1220,9 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         )  # type: ignore[arg-type]
     # S10: each bet ("What we will build") carries its visual.
     bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
+    keys = {x["id"]: visuals.bet_key(x) for blk in b.row.blocks for x in blk["lines"]}
     for x in bets:
-        x.flow_subject = visuals.line_subject(document.id, x.id)
+        x.flow_subject = visuals.line_subject(document.id, keys.get(x.id, x.id))
     line_flows = await visuals.flows_for(db, "one_pager_line", [x.flow_subject for x in bets])
     # A flow still keyed by a bet's words (0092_bet_flow_line_key left it: its words matched
     # no line then) is read as before, by a bet with those words and no flow of its own.

@@ -265,9 +265,9 @@ async def test_one_pager_job_queues_bet_visuals_only_when_built(client):
         assert {v.subject_kind for v in rows} == {"one_pager_line"}
         doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
         assert {v.document_id for v in rows} == {doc.id}
-        assert {v.subject_id for v in rows} == {
-            visuals.line_subject(doc.id, f"bets-{i}") for i in (1, 2, 3)
-        }
+        subjects = {v.subject_id for v in rows}
+    page = await get(client, ctx, "owner")
+    assert subjects == {uuid.UUID(line(page, f"bets-{i}")["flow_subject"]) for i in (1, 2, 3)}
 
 
 async def test_reordered_bets_keep_their_flows(client):
