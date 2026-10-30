@@ -50,7 +50,9 @@ for (const [name, viewport] of [
       const link = (await more.getByTestId("home-needs-more").boundingBox())!;
       // One line, the icon first, as on a desktop.
       expect(label.x + label.width).toBeLessThanOrEqual(link.x);
-      expect(Math.abs(label.y + label.height / 2 - (link.y + link.height / 2))).toBeLessThan(12);
+      // On one line as Home's own spec reads it (qa3-company-home): the icon beside the link's text.
+      expect(label.y).toBeLessThan(link.y + link.height);
+      expect(label.y + label.height).toBeGreaterThan(link.y);
     });
   });
 }
