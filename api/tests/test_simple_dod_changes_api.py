@@ -31,6 +31,14 @@ Test cards (protects / fails_when / no_claim):
 - test_constraint_flags_on_a_broken_date: protects=a move that breaks a dependency is
   applied (or proposed) with the dependent's red flag, its one-line reason and its fixes;
   fails_when=the flag, reason or fixes are missing; no_claim=the flags' wording.
+- test_every_op_returns_the_checker_flags: protects=every op, applied or proposed, answers
+  the constraint checker's flags of the items it touched and their dependents, as the
+  roadmap shows them once applied (a proposal's as if applied); fails_when=an op skips the
+  check or answers stale flags; no_claim=which flags each op raises (S2's tests).
+- test_every_op_refuses_a_stale_before: protects=every op made on values that changed
+  since (another session applied the same op first) answers a conflict with the current
+  values and writes nothing; fails_when=a stale op lands or writes a change row;
+  no_claim=ops whose before is read, not given (merge_item).
 """
 
 import typing
@@ -271,3 +279,46 @@ async def test_constraint_flags_on_a_broken_date(client):
         assert red, flags
         assert red[0]["state"] == "red" and red[0]["reason"]
         assert {"shift_dependents", "move_dependency"} <= set(red[0]["fixes"])
+
+
+def item_flags(view: dict) -> dict[str, list]:
+    return {i["id"]: i["flags"] for i in view["items"]}
+
+
+@pytest.mark.parametrize("op", ALL)
+async def test_every_op_returns_the_checker_flags(client, op):
+    w = await world(ops=[op])
+    r = await w.post(client, "commenter", op)
+    assert r.status_code == 201, r.text
+    proposed = {f["item_id"]: f["flags"] for f in r.json()["flags"]}
+    r = await w.post(client, "decider", op)
+    assert r.status_code == 201, r.text
+    applied = {f["item_id"]: f["flags"] for f in r.json()["flags"]}
+    # The item the op writes (a fix and a risk: the flagged item b, or its dependency a).
+    written = {"accept_risk": "b", "shift_dependents": "b", "accept_date_suggestion": "u"}
+    touched = {w.ids[f"{op}-{written.get(op, 'a')}"]}
+    assert touched <= set(applied), (op, applied)
+    if op != "accept_date_suggestion":
+        # The item and its dependent (b waits on a).
+        assert w.ids[f"{op}-b"] in applied, (op, applied)
+    shown = item_flags((await client.get(ROADMAP, headers=w.ctx.as_("decider"))).json())
+    for item_id, flags in applied.items():
+        assert flags == shown[item_id], (op, item_id)
+    assert proposed == applied, op
+
+
+@pytest.mark.parametrize("op", ALL)
+async def test_every_op_refuses_a_stale_before(client, op):
+    w = await world(ops=[op])
+    r = await w.post(client, "decider", op)
+    assert r.status_code == 201, r.text
+    seen = await snapshot(w, op)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        n = len(list(await s.scalars(select(SimpleChange))))
+    r = await w.post(client, "owner", op)
+    assert r.status_code == 409, (op, r.text)
+    detail = r.json()["detail"]
+    assert detail["message"] and detail["current"], detail
+    assert await snapshot(w, op) == seen
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert len(list(await s.scalars(select(SimpleChange)))) == n
