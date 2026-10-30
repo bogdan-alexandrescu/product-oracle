@@ -8,7 +8,7 @@ import { assess, type GoalView } from "@/app/home/_goals";
 import { CompanyEmpty } from "../../_empty";
 import { BELIEF, DOC, plural, shortDate, type Choice, type DocKind, type DocRef, type Stack } from "./lib";
 
-/** The card's document buttons: Open, and for owners New (none yet) or Draft next version. */
+/** The card's footer of document buttons: Open, and for owners New (none yet) or Draft next version; none when neither. */
 function DocButtons({
   kind,
   doc,
@@ -21,8 +21,10 @@ function DocButtons({
   onDraft: (kind: DocKind) => void;
 }) {
   const open = kind === "vision" ? "Open vision" : "Open strategy";
+  // qa-company-22: no footer bar at all when there is nothing to open and no New button.
+  if (!doc && !owner) return null;
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div data-testid={`${kind}-actions`} className="mt-auto flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
       {doc && (
         <LinkButton href={`/documents/${doc.slug}`} variant="secondary">
           {open}
@@ -124,9 +126,7 @@ export function VisionCard({
       ) : (
         <NotApproved kind="vision" doc={doc} owner={owner} />
       )}
-      <div className="mt-auto border-t border-line px-4 py-3 max-[600px]:px-3">
-        <DocButtons kind="vision" doc={doc} owner={owner} onDraft={onDraft} />
-      </div>
+      <DocButtons kind="vision" doc={doc} owner={owner} onDraft={onDraft} />
     </Panel>
   );
 }
@@ -251,9 +251,7 @@ export function StrategyCard({
       ) : (
         <NotApproved kind="strategy" doc={doc} owner={owner} />
       )}
-      <div className="mt-auto border-t border-line px-4 py-3 max-[600px]:px-3">
-        <DocButtons kind="strategy" doc={doc} owner={owner} onDraft={onDraft} />
-      </div>
+      <DocButtons kind="strategy" doc={doc} owner={owner} onDraft={onDraft} />
     </Panel>
   );
 }

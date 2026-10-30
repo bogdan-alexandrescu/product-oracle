@@ -1018,6 +1018,8 @@ export const UPDATE_DOCUMENTS: UpdateSeed[] = [
       {
         number: 1,
         created_at: "2026-10-02T09:00:00Z",
+        // qa-company-39: Oracle's update_draft run wrote it, so the version names Oracle, not the API token.
+        by: { id: "9c2f4b1d-7a3e-4f60-8d15-b2e9a0c7f312", name: "Oracle" },
         brief: ["metrics", "asks", "highlights", "lowlights", "product"],
         citations: UPDATE_SEED_CITATIONS,
         sections: [
@@ -1078,7 +1080,9 @@ export const UPDATE_DOCUMENTS: UpdateSeed[] = [
     versions: [
       {
         number: 1,
-        created_at: "2026-10-20T07:00:00Z",
+        // qa-company-39: a real time of day, not a fake midnight (07:00Z is 12:00 AM PDT).
+        created_at: "2026-10-20T16:40:00Z",
+        by: { id: "9c2f4b1d-7a3e-4f60-8d15-b2e9a0c7f312", name: "Oracle" },
         brief: ["headline", "goals", "timeline", "shipped", "lowlights", "asks"],
         citations: UPDATE_SEED_CITATIONS,
         sections: [

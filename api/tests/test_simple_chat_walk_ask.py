@@ -169,5 +169,5 @@ async def test_constraint_line_names_the_dependent_and_the_dependency(client):
     m = await say(client, ctx, "owner", "move Ledger v2 to next quarter")
     (card,) = m["cards"]
     lines = [f["reason"] for x in card["flags"] for f in x["flags"] if f["state"] == "red"]
-    assert lines == ["'Bulk import' starts Nov 20 2026, but 'Ledger v2', which it depends on, "
+    assert lines == ["‘Bulk import’ starts Nov 20 2026, but ‘Ledger v2’, which it depends on, "
                      "ends Feb 15 2027"]  # fmt: skip

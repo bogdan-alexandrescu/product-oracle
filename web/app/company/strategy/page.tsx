@@ -86,7 +86,7 @@ export default function StrategyPage() {
           tools={
             <InfoTip label="the strategy stack" align="end">
               The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and each
-              roadmap item from a goal; what does not shows as drift. One line per goal under the focus choice it derives from, with the
+              roadmap item from a goal; anything that does not shows up as drift. One line per goal under the focus choice it derives from, with the
               roadmap items serving it. The last group lists the goals and items not under the strategy.
             </InfoTip>
           }

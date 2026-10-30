@@ -54,7 +54,7 @@ test("autonomy: at Act Oracle decides a reversible call and Undo hands it back",
   await expect(did).toBeVisible();
   await did.click();
   // The question is the approver's again: a new proposal waits on them.
-  await expect(page.getByText(/^Decision needs you · D-\d+ Ship usage caps before anomaly detection$/)).toBeVisible();
+  await expect(page.getByText(/^Decision needs you · Ship usage caps before anomaly detection$/)).toBeVisible();
   await expect(did).toHaveCount(0);
 
   await page.goto("/company/decisions");

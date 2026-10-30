@@ -117,7 +117,7 @@ test.describe("desktop", () => {
     await page.getByTestId("needs-decision").click();
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
     // What is left on the digest (if anything) is no longer its order after Alert rules engine.
-    await expect(tray.getByTestId("tray-broken").filter({ hasText: /'Alert rules engine'/ })).toHaveCount(0);
+    await expect(tray.getByTestId("tray-broken").filter({ hasText: /‘Alert rules engine’/ })).toHaveCount(0);
   });
 
   /**

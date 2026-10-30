@@ -184,11 +184,11 @@ export function liveBreaks(items: Map<string, Item>, id: string, start: string, 
   const out: string[] = [];
   for (const d of it.depends_on) {
     const dep = items.get(d);
-    if (dep && dep.status !== "cut" && dep.end.date >= start) out.push(`Starts ${shortDay(start)}, but '${dep.title}' it depends on ends ${shortDay(dep.end.date)}`);
+    if (dep && dep.status !== "cut" && dep.end.date >= start) out.push(`Starts ${shortDay(start)}, but ‘${dep.title}’ it depends on ends ${shortDay(dep.end.date)}`);
   }
   for (const n of it.needed_by) {
     const next = items.get(n);
-    if (next && next.status !== "cut" && end >= next.start.date) out.push(`Ends ${shortDay(end)}, after '${next.title}' that depends on it starts ${shortDay(next.start.date)}`);
+    if (next && next.status !== "cut" && end >= next.start.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it starts ${shortDay(next.start.date)}`);
   }
   return out;
 }

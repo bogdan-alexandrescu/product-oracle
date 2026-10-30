@@ -416,9 +416,10 @@ export function itemsChangedSince(since: string, owner: string, me: string): num
   return items.filter((i) => (i.fetched_at && Date.parse(i.fetched_at) > at) || (i.deleted_at && Date.parse(i.deleted_at) > at)).length;
 }
 
-/** How many sources there are (A1's Pick sources step). */
 /** The sources holding at least one live item, as oracle.setup's Pick sources step counts
  * them: an empty source (an Uploads source with no files) gives the baseline nothing. */
+// qa-onboarding-3: as oracle/setup.py's _sources (the join on SourceItem, deleted_at null);
+// Home says the sources with nothing read beside it, from the Sources list itself.
 export function sourceCount(): number {
   const db = load();
   return db.sources.filter((s) => db.items.some((i) => i.source_id === s.id && !i.deleted_at)).length;
@@ -486,6 +487,9 @@ function hideOutsidePicks(db: SourcesDb, s: Source): number {
   }
   return deleted;
 }
+
+/** What a Slack source's first sync reads from its channels (invented messages). */
+const FIRST_SLACK_READ = ["Customers keep asking for a weekly summary email.", "The export button is hard to find on a phone."];
 
 function counted(db: SourcesDb, s: Source): Source {
   return { ...s, item_count: db.items.filter((i) => i.source_id === s.id && !i.deleted_at).length };
@@ -751,7 +755,35 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         content: "Teams want to set their own alert thresholds.",
       });
     }
-    return json(200, { source_id: s.id, outcome: "completed", upserted: 2, versions_written: 1, deleted, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
+    // qa-onboarding-3: a Slack source just added reads its channels' messages on its first
+    // sync, as the connector does, so a new company's Pick sources is done once it syncs.
+    if (s.kind === "slack" && channels.length && !db.items.some((i) => i.source_id === s.id)) {
+      for (const [n, content] of FIRST_SLACK_READ.entries()) {
+        db.items.push({
+          id: uuid(),
+          source_id: s.id,
+          source_kind: s.kind,
+          source_name: s.name,
+          external_id: `${channels[0]}-first-${n + 1}`,
+          kind: "message",
+          title: null,
+          url: null,
+          author: "someone",
+          acl: {},
+          occurred_at: now(),
+          source_updated_at: null,
+          deleted_at: null,
+          version_id: uuid(),
+          fetched_at: now(),
+          confidence: confidence(s.kind, 1),
+          content,
+        });
+      }
+    }
+    // A source the mock holds nothing for read nothing, and says so, as Home's Pick sources
+    // does ("nothing read yet"): never "2 items seen" with none kept.
+    const read = counted(db, s).item_count > 0;
+    return json(200, { source_id: s.id, outcome: "completed", upserted: read ? 2 : 0, versions_written: read ? 1 : 0, deleted, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
   }
   if (sub === "coverage" && m === "GET") {
     const limit = Number(q.get("limit") ?? 50);

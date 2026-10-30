@@ -22,7 +22,7 @@ async function startFromSetup(page: Page) {
   const row = setupRow(page);
   await expect(row.getByTestId("setup-status")).toHaveText("Not built");
   // One baseline action before the build: the row's Open; the Goals card points at it.
-  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("Build it from Set up, above");
+  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("Build the baseline from Set up, above");
   await expect(goals(page).getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
   // Start waits for a source with items (qa-onboarding-2): Pick sources first, a file in an upload source.
   await page.getByTestId("setup-row-sources").getByRole("link", { name: "Open" }).click();
@@ -49,7 +49,7 @@ async function startFromSetup(page: Page) {
   await expect(page).toHaveURL(/\/home$/);
 }
 
-/** The row says Building… and links to the run; the Goals card says Open the build, to the same run. */
+/** The row says Building… and links to the run; the Goals card points at it (qa-onboarding-14: one Open the build). */
 async function seeBuilding(page: Page): Promise<string> {
   const row = setupRow(page);
   await expect(row.getByTestId("setup-status")).toHaveText("Building…");
@@ -60,21 +60,21 @@ async function seeBuilding(page: Page): Promise<string> {
   // No "Not built" and no second start anywhere on Home.
   await expect(row).not.toContainText("Not built");
   await expect(page.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
-  const open = goals(page).getByRole("link", { name: "Open the build" });
-  await expect(open).toHaveAttribute("href", href);
-  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveCount(0);
+  await expect(goals(page).getByRole("link", { name: "Open the build" })).toHaveCount(0);
+  await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("The baseline is building: open it from Set up, above");
+  await expect(page.getByRole("link", { name: "Open the build" })).toHaveCount(1);
   return href;
 }
 
-test("while the first build runs, Set up says Building… and the Goals card opens the build", async ({ page }) => {
+test("while the first build runs, Set up says Building… and opens the build; the Goals card points there", async ({ page }) => {
   // protects=qa-onboarding-10/-51 on a desktop; fails_when=the row still says Not built, its
   // button starts another build, or the Goals card offers Build the baseline (the sheet's
   // already-under-way error); no_claim=the run's own page.
   await startFromSetup(page);
   const href = await seeBuilding(page);
-  // In flight lists the build once; Open the build on the Goals card lands on that run.
+  // In flight lists the build once; Open the build on the Set up row lands on that run.
   await expect(page.getByTestId("home-in-flight-table").getByTestId("flight-row")).toHaveCount(1);
-  await goals(page).getByRole("link", { name: "Open the build" }).click();
+  await setupRow(page).getByRole("link", { name: "Open the build" }).click();
   await expect(page).toHaveURL(new RegExp(`${href}$`));
   await expect(page.getByRole("heading", { name: "Build the baseline" }).first()).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Build the baseline" })).toHaveCount(0);

@@ -182,7 +182,7 @@ KIND_TEMPLATES: tuple[BuiltinTemplate, ...] = (
     BuiltinTemplate(
         "board-product",
         "update",
-        "Board product section",
+        "Board update",
         "The product section of a board update: goals against target, a timeline with "
         "verified dates only, what shipped and what slipped, in two slides",
         "A board meeting is coming (every 6 to 8 weeks)",

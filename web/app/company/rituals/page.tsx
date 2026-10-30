@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 
-import { Button, Chip, type Column, DataTable, Empty, InfoTip, PageSkeleton, Panel, SegmentedControl, Sheet, Split, confirmInPage } from "@/components/ds";
+import { Button, Chip, type Column, DataTable, Empty, InfoTip, PageSkeleton, Panel, SegmentedControl, Sheet, Split, ViewOnly, confirmInPage } from "@/components/ds";
 import { usePhone } from "@/components/ds/page-info";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
@@ -16,6 +16,7 @@ import { CompanyHeader } from "../_nav";
 import { RitualInspector } from "./_components/RitualInspector";
 import {
   estimateText,
+  latestPreRead,
   localDate,
   localTime,
   monthlyText,
@@ -45,7 +46,7 @@ export default function RitualsPage() {
  * the Company time zone, named once above the table (qa-company-21).
  */
 function Rituals() {
-  const { can } = useMe();
+  const { can, capsReady, capsError } = useMe();
   // #370: editing rituals is the ritual routes' role (owners).
   const owner = can("update_ritual");
   const ritualsQ = useQuery("rituals", () => unwrap(api.GET("/v1/rituals")));
@@ -138,25 +139,29 @@ function Rituals() {
     { key: "attendees", header: "Attendees", width: "88px", phone: "hide", narrow: "laptop", align: "right", cell: (r) => <span className="tnum text-sm">{r.attendee_ids.length}</span> },
     {
       key: "last",
-      header: "Last pre-read",
-      width: "120px",
+      // qa-company-2: the newest pre-read, a ready one for the next meeting too, so the row
+      // never says "None yet" beside "Pre-read ready" (the panel's newest occurrence is the same).
+      header: "Latest pre-read",
+      width: "128px",
       phone: "meta",
-      phoneLabel: "Last pre-read",
+      phoneLabel: "Latest pre-read",
       // qa-company-34: on a phone, a line of its own under When and Next.
       className: "max-[600px]:basis-full",
-      cell: (r) =>
-        r.last_pre_read ? (
+      cell: (r) => {
+        const latest = latestPreRead(r);
+        return latest ? (
           <Link
-            href={`/company/rituals/${r.last_pre_read.id}`}
+            href={`/company/rituals/${latest.id}`}
             data-testid="last-pre-read"
             className="tnum text-sm text-accent-ink hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
-            {localDate(r.last_pre_read.due_at)}
+            {localDate(latest.due_at)}
           </Link>
         ) : (
           <span className="text-sm text-text2">None yet</span>
-        ),
+        );
+      },
     },
     {
       key: "state",
@@ -165,17 +170,30 @@ function Rituals() {
       // On a phone the state sits right of the name.
       phone: "action",
       // H5: the goals check-in the metrics review replaced says so (an owner may resume it).
+      // qa-company-32: a thin edge in the chip's own colour keeps the pill seen on the selected
+      // row's tint too (the pass and accent tints are near alike, in light and dark).
       cell: (r) => (
-        <Chip kind={r.status === "active" ? "pass" : "na"} dot wrap={!!r.replaced_by} title={r.replaced_by ? `Replaced by ${r.replaced_by}` : undefined}>
+        <Chip
+          kind={r.status === "active" ? "pass" : "na"}
+          dot
+          wrap={!!r.replaced_by}
+          title={r.replaced_by ? `Replaced by ${r.replaced_by}` : undefined}
+          className="shadow-[inset_0_0_0_1px_color-mix(in_srgb,currentColor_35%,transparent)]"
+          data-testid="ritual-state"
+        >
           {r.status === "active" ? "On" : r.replaced_by ? `Replaced by ${r.replaced_by}` : "Paused"}
         </Chip>
       ),
     },
   ];
 
+  // fix4-company review (qa-company-34): the page is drawn once the role is known, so the
+  // owner's "+ Ritual" joining the tab strip (a second line on a phone) never moves it.
+  if (!capsReady && !capsError) return <PageSkeleton bare />;
   return (
     <>
       <CompanyHeader
+        status={capsReady && !owner && <ViewOnly />}
         action={
           owner && (
             <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>
@@ -223,7 +241,8 @@ function Rituals() {
               rows={ritualsQ.data ? rows : undefined}
               loading={ritualsQ.loading}
               rowKey={(r) => r.id}
-              selected={selected?.id ?? null}
+              // qa-company-33: on a phone a row is marked only while its sheet is open.
+              selected={phone && !sheetOpen ? null : (selected?.id ?? null)}
               onSelect={(_, r) => {
                 setPicked(r.id);
                 if (phone) setSheetOpen(true);
@@ -235,15 +254,16 @@ function Rituals() {
       </Split>
       {phone && (
         <Sheet open={sheetOpen && !!selected} title={selected?.title ?? "Ritual"} onClose={() => setSheetOpen(false)} testId="ritual-sheet">
-          {selected && inspectorOf(selected)}
+          {selected && inspectorOf(selected, true)}
         </Sheet>
       )}
     </>
   );
 
-  function inspectorOf(r: Ritual) {
+  function inspectorOf(r: Ritual, inSheet = false) {
     return (
       <RitualInspector
+        inSheet={inSheet}
         key={`${r.id}|${r.lock_version}`}
         ritual={r}
         members={membersQ.data}

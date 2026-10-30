@@ -238,7 +238,7 @@ def suggest(
     if deps:
         title, latest = max(deps, key=lambda d: d[1])
         if latest + DAY > start:
-            start, why = latest + DAY, f"starts the day after '{title[:60]}' ends"
+            start, why = latest + DAY, f"starts the day after ‘{title[:60]}’ ends"
     days = median_days(durations)
     conf = f"{confidence}-confidence" if confidence else "unrated"
     # finding 30: plain words, not statistics jargon ("median").

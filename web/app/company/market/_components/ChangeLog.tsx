@@ -71,6 +71,10 @@ export function ChangeLog({
     [changes.data, label, month, zone],
   );
 
+  // Nothing has changed at all (no filter on and the list is empty).
+  const nothingYet = !filtered && !!changes.data && changes.data.length === 0;
+  const months = useMemo(() => lastMonths(todayIn(zone).slice(0, 7), 24), [zone]);
+
   const columns: Column<Change>[] = [
     { key: "alternative", header: "Alternative", width: "160px", phone: "title", cell: (c) => <span className="truncate font-medium">{c.competitor_name}</span> },
     { key: "origin", header: "From", width: "220px", phone: "meta", wrap: true, cell: (c) => <span className="text-sm">{originOf(c)}</span> },
@@ -105,55 +109,66 @@ export function ChangeLog({
       }
     >
       <div className="flex flex-col gap-2 border-b border-line px-4 py-3 max-[600px]:px-3" data-testid="change-filters">
-        <SegmentedControl<ChangeView>
-          label="View"
-          size="sm"
-          items={[
-            { value: "changes", label: "Changes" },
-            { value: "web", label: "From the web", count: findings.data ? open.length : null },
-          ]}
-          value={view}
-          onChange={onView}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <Filter label="Alternative" value={alternative ?? ""} onChange={(v) => onAlternative(v || null)}>
-            <option value="">Every alternative</option>
-            {(competitors.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Filter>
-          {view === "changes" && (
-            <>
-              <Filter label="Origin" value={origin} onChange={(v) => setOrigin(v as Origin | "")}>
-                <option value="">Pages and the web</option>
-                <option value="page">Pages</option>
-                <option value="web">From the web</option>
-              </Filter>
-              <Filter label="Page label" value={label} onChange={(v) => setLabel(v as Label | "")}>
-                <option value="">Every label</option>
-                {LABELS.map((l) => (
-                  <option key={l} value={l}>
-                    {LABEL_TITLE[l]}
-                  </option>
-                ))}
-              </Filter>
-              <Filter label="Rating" value={rating} onChange={(v) => setRating(v as Rating | "")}>
-                <option value="">Every rating</option>
-                {RATINGS.map((r) => (
-                  <option key={r} value={r}>
-                    {RATING_LABEL[r]}
-                  </option>
-                ))}
-              </Filter>
-              <label className="flex items-center gap-2 text-sm font-semibold text-text2">
-                Month
-                <input type="month" aria-label="Month" className={`${INPUT} w-auto`} value={month} max={todayIn(zone).slice(0, 7)} onChange={(e) => setMonth(e.target.value)} />
-              </label>
-            </>
-          )}
+        {/* qa-company-41: the toggle is as wide as its two choices, not the card. */}
+        <div data-testid="change-view">
+          <SegmentedControl<ChangeView>
+            label="View"
+            size="sm"
+            items={[
+              { value: "changes", label: "Changes" },
+              { value: "web", label: "From the web", count: findings.data ? open.length : null },
+            ]}
+            value={view}
+            onChange={onView}
+          />
         </div>
+        {/* qa-company-41: no filters over an empty change log; they show once there is a change to narrow. */}
+        {!(view === "changes" && nothingYet) && (
+          <div className="flex flex-wrap items-center gap-2" data-testid="change-filter-row">
+            <Filter label="Alternative" value={alternative ?? ""} onChange={(v) => onAlternative(v || null)}>
+              <option value="">Every alternative</option>
+              {(competitors.data ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Filter>
+            {view === "changes" && (
+              <>
+                <Filter label="Origin" value={origin} onChange={(v) => setOrigin(v as Origin | "")}>
+                  <option value="">Pages and the web</option>
+                  <option value="page">Pages</option>
+                  <option value="web">From the web</option>
+                </Filter>
+                <Filter label="Page label" value={label} onChange={(v) => setLabel(v as Label | "")}>
+                  <option value="">Every label</option>
+                  {LABELS.map((l) => (
+                    <option key={l} value={l}>
+                      {LABEL_TITLE[l]}
+                    </option>
+                  ))}
+                </Filter>
+                <Filter label="Rating" value={rating} onChange={(v) => setRating(v as Rating | "")}>
+                  <option value="">Every rating</option>
+                  {RATINGS.map((r) => (
+                    <option key={r} value={r}>
+                      {RATING_LABEL[r]}
+                    </option>
+                  ))}
+                </Filter>
+                {/* qa-company-41: the month as words ("October 2026"), never an empty month field's dashes. */}
+                <Filter label="Month" value={month} onChange={setMonth}>
+                  <option value="">Every month</option>
+                  {months.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </Filter>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {view === "changes" ? (
         <>
@@ -223,6 +238,22 @@ export function ChangeLog({
       )}
     </Panel>
   );
+}
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** The `n` months up to `current` (YYYY-MM), newest first, as values and words. */
+function lastMonths(current: string, n: number): { value: string; label: string }[] {
+  let [y, m] = current.split("-").map(Number);
+  const out: { value: string; label: string }[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push({ value: `${y}-${String(m).padStart(2, "0")}`, label: `${MONTH_NAMES[m - 1]} ${y}` });
+    if (--m === 0) {
+      m = 12;
+      y--;
+    }
+  }
+  return out;
 }
 
 function nextMonth(month: string): string {

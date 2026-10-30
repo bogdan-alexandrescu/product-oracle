@@ -67,7 +67,7 @@ test.describe("desktop", () => {
     await expect(dialog.getByText("What changed since the last one")).toHaveCount(0);
   });
 
-  test("qa-company-15, -16, -41: titles look like links, one Share button instead of a ⋯ menu, an outlined visibility chip", async ({ page }) => {
+  test("qa-company-15, -16, -41: titles look like links, one Share button instead of a ⋯ menu, a flat visibility chip", async ({ page }) => {
     await login(page);
     await openTab(page, "updates");
     const row = page.getByTestId("update-row").filter({ hasText: "Board update · October 2026" });
@@ -78,16 +78,16 @@ test.describe("desktop", () => {
     await link.hover();
     await expect(link).toHaveCSS("text-decoration-line", "underline");
 
-    // The visibility chip is outlined and clear, never the state chip's blue fill.
+    // The visibility chip is never the state chip's blue fill, and flat, not outlined like a button (qa-company-37).
     const visibility = row.getByTestId("update-visibility").locator(":scope > *");
     await expect(visibility).toHaveText("Owners and approvers");
-    await expect(visibility).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await expect(visibility).toHaveCSS("border-top-width", "1px");
+    await expect(visibility).toHaveAttribute("data-kind", "na");
+    await expect(visibility).toHaveCSS("border-top-width", "0px");
 
     // One action: a labelled button, no menu.
     await expect(row.locator('[aria-haspopup="menu"]')).toHaveCount(0);
     const share = row.getByRole("button", { name: "Share Board update · October 2026 with the whole company" });
-    await expect(share).toHaveText("Share…");
+    await expect(share).toHaveText("Share with company…");
     await share.click();
     await expect(page.getByRole("dialog", { name: "Share with the whole company" })).toBeVisible();
   });
@@ -100,7 +100,7 @@ test.describe("desktop", () => {
     await expect(dialog.getByTestId("update-cost")).toContainText("one Oracle run of about $4.50");
     await expect(dialog.getByRole("button", { name: "Draft with Oracle · $4.50" })).toBeVisible();
     // A board update drafts at standard depth: it costs more, and the dialog says so.
-    await dialog.getByRole("radio", { name: /Board product section/ }).check();
+    await dialog.getByRole("radio", { name: /Board update/ }).check();
     await expect(dialog.getByTestId("update-cost")).toContainText("$9.00");
     await expect(dialog.getByRole("button", { name: "Draft with Oracle · $9.00" })).toBeVisible();
   });
@@ -156,42 +156,17 @@ test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test("qa-company-33: the current Company tab is never under the strip's fade, and no sliver of the next tab shows", async ({ page }) => {
+    // qa3 qa-company-44: on a phone the Company tabs wrap (no scrolling strip, no fade), so every
+    // tab, the current one among them, shows whole inside the window.
     await login(page);
     for (const key of ["updates", "rituals"] as const) {
       await page.goto(`/company/${key}`);
       const tab = nav(page).getByTestId(`company-tab-${key}`);
       await expect(tab).toHaveAttribute("aria-current", "page");
-      // Let the strip settle (reveal, then the chevrons' width).
-      await page.waitForTimeout(300);
-      const out = await nav(page).evaluate((n) => {
-        const strip = n.querySelector<HTMLElement>("[id]")!;
-        // Each fade length as the mask reads it (a max() resolved by laying it out as a width).
-        const px = (name: string) => {
-          const probe = document.createElement("span");
-          probe.style.cssText = `position:absolute;display:block;height:0;width:var(${name})`;
-          strip.appendChild(probe);
-          const w = probe.getBoundingClientRect().width;
-          probe.remove();
-          return w;
-        };
-        const r = strip.getBoundingClientRect();
-        // The fully visible band: past the fades on either side.
-        const solid = [r.left + px("--fade-l1"), r.right - px("--fade-r1")];
-        // Anything at all visible: before the fully transparent edges.
-        const seen = [r.left + px("--fade-l0"), r.right - px("--fade-r0")];
-        const tabs = [...strip.querySelectorAll<HTMLElement>("a")].map((a) => {
-          const b = a.getBoundingClientRect();
-          return { current: a.getAttribute("aria-current") === "page", left: b.left, right: b.right };
-        });
-        return { solid, seen, tabs };
-      });
-      const current = out.tabs.find((t) => t.current)!;
-      expect(current.left).toBeGreaterThanOrEqual(out.solid[0] - 0.5);
-      expect(current.right).toBeLessThanOrEqual(out.solid[1] + 0.5);
-      for (const t of out.tabs) {
-        const shown = Math.max(0, Math.min(t.right, out.seen[1]) - Math.max(t.left, out.seen[0]));
-        // A tab shows whole or not at all: no part of one beside the chevron.
-        expect(shown === 0 || shown >= t.right - t.left - 1).toBe(true);
+      for (const a of await nav(page).getByRole("link").all()) {
+        const b = (await a.boundingBox())!;
+        expect(b.x).toBeGreaterThanOrEqual(0);
+        expect(b.x + b.width).toBeLessThanOrEqual(390);
       }
     }
   });

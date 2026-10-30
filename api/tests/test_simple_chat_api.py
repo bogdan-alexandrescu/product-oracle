@@ -709,7 +709,7 @@ async def test_walk_order_undo_and_fixes(client, meetings):
     assert [s["kind"] for s in steps] == ["broken_link", "agenda_decision", "proposal"]
     # The problem said once: the item's name, then its one line.
     assert steps[0]["title"] == "Bulk import"
-    assert steps[0]["why"].startswith("'Bulk import' starts")
+    assert steps[0]["why"].startswith("‘Bulk import’ starts")
     link = steps[0]["card"]
     assert link["op"] == "shift_dependents" and link["may"] == "apply"
     assert [f["op"] for f in link["fixes"]] == ["shift_dependents", "move_dependency",
@@ -747,7 +747,7 @@ async def test_walk_lists_every_broken_link_home_counts(client):
     steps = (await client.get("/v1/simple/walk", headers=ctx.as_("decider"))).json()["steps"]
     links = [s for s in steps if s["kind"] == "broken_link"]
     assert [s["title"] for s in links] == ["Ledger v2"]
-    assert links[0]["why"] == "Cut, but 'Bulk import' depends on it"
+    assert links[0]["why"] == "Cut, but ‘Bulk import’ depends on it"
     assert links[0]["card"]["op"] == "accept_risk"
     assert links[0]["card"]["target"]["flag"] == "cut_with_dependents"
     r = await client.post(f"{CARDS}/{links[0]['card']['id']}/apply", headers=ctx.as_("decider"))

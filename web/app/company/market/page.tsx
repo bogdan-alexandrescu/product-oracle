@@ -4,8 +4,11 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState, type KeyboardEvent } from "react";
 
 import { Button, PageSkeleton, ScrollStrip, ViewOnly } from "@/components/ds";
+import { usePhone } from "@/components/ds/page-info";
 import { Loading } from "@/components/ui";
+import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { useQuery } from "@/lib/use-query";
 import { useSetParams } from "@/lib/use-set-params";
 
 import { CompanyHeader } from "../_nav";
@@ -51,6 +54,14 @@ function Market() {
   const [adding, setAdding] = useState(false);
   // qa-company-20: an empty list shows its own Add button, so the header drops its one.
   const [noAlternatives, setNoAlternatives] = useState(false);
+  // qa-company-43: the header's Add alternative shows on the alternatives' own sub-tabs too
+  // (Change log, Positioning), unless there is none yet: then the empty list's button is the one.
+  // Read again on each of those sub-tabs, so one added on Alternatives counts on the Change log;
+  // Pricing and Win and loss show no such button and read nothing again for it.
+  const shownTab = params.get("tab") ?? "";
+  const [readOn, setReadOn] = useState(shownTab);
+  if (shownTab !== readOn && !NO_ADD_TABS.includes(shownTab)) setReadOn(shownTab);
+  const competitors = useQuery(`competitors|${readOn}`, () => unwrap(api.GET("/v1/competitors")), { keepPrevious: true });
   if (!capsReady && !capsError) return <Loading />;
   const pricing = can("list_pricing_memos");
   const winLoss = pricing && can("list_deal_outcomes");
@@ -65,6 +76,11 @@ function Market() {
   const alternative = params.get("alternative");
   const change = params.get("change");
   const mayWrite = can("create_competitor");
+  /** Opens Alternatives with its Add form, from whichever sub-tab. */
+  const addAlternative = () => {
+    if (tab !== "alternatives") setParams({ tab: null, view: null, alternative: null });
+    setAdding(true);
+  };
 
   return (
     <>
@@ -72,9 +88,8 @@ function Market() {
         status={capsReady && !mayWrite ? <ViewOnly /> : undefined}
         action={
           mayWrite &&
-          tab === "alternatives" &&
-          !noAlternatives && (
-            <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>
+          (tab === "alternatives" ? !noAlternatives : (tab === "changes" || tab === "positioning") && !!competitors.data?.length) && (
+            <Button variant="primary" icon="plus" onClick={addAlternative}>
               Add alternative
             </Button>
           )
@@ -98,14 +113,7 @@ function Market() {
           alternative={alternative}
           onAlternative={(id) => setParams({ alternative: id })}
           onOpenChange={(id) => setParams({ change: id })}
-          onAddAlternative={
-            mayWrite
-              ? () => {
-                  setParams({ tab: null, view: null, alternative: null });
-                  setAdding(true);
-                }
-              : undefined
-          }
+          onAddAlternative={mayWrite ? addAlternative : undefined}
         />
       )}
       {tab === "positioning" && <Positioning />}
@@ -119,11 +127,14 @@ function Market() {
 /**
  * Market's own sub-tabs, a second level under the Company tabs: underlined, not the Company
  * pills (qa-company-38), their labels lined up with the cards' content (16 px in, 12 px on a
- * phone). On a phone they scroll sideways in a ScrollStrip, with no native scrollbar and no
- * label cut (qa-shell-34).
+ * phone). On a phone they wrap onto a second line, so every sub-tab shows (qa-company-44).
  */
+/** The sub-tabs whose header has no Add alternative, so the alternatives are not read again for it. */
+const NO_ADD_TABS = ["pricing", "win-loss"];
+
 function MarketTabs({ tabs, value, onChange }: { tabs: { value: Tab; label: string; testId: string }[]; value: Tab; onChange: (v: Tab) => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const phone = usePhone();
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     const els = [...(ref.current?.querySelectorAll<HTMLElement>("[role=tab]") ?? [])];
@@ -134,7 +145,7 @@ function MarketTabs({ tabs, value, onChange }: { tabs: { value: Tab; label: stri
   };
   return (
     <div data-testid="market-tabs" className="mb-3 border-b border-line">
-      <ScrollStrip ref={ref} role="tablist" aria-label="Market" onKeyDown={onKey} stripClassName="gap-1 px-1 max-[600px]:px-0">
+      <ScrollStrip wrap={phone} ref={ref} role="tablist" aria-label="Market" onKeyDown={onKey} stripClassName="gap-1 px-1 max-[600px]:px-0">
         {tabs.map((t) => {
           const on = t.value === value;
           return (

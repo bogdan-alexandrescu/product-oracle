@@ -26,8 +26,8 @@ async function openRitual(page: Page, title: string) {
   await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByTestId("company-tab-rituals").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/company\/rituals$/);
-  await page.getByTestId("ritual-row").filter({ hasText: title }).getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await page.getByTestId("ritual-row").filter({ hasText: title }).getByTestId("last-pre-read").click();
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
 }
 
 /** The written summary: a heading, bold text and a list; no literal # or **; the unsafe links are text. */

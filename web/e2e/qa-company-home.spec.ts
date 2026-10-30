@@ -18,20 +18,21 @@ async function openHome(page: Page) {
 const flight = (page: Page, slug: string, kind: "prd" | "run" = "run") =>
   page.locator(`[data-testid="flight-row"][data-kind="${kind}"][data-document="${slug}"]`);
 
-// qa-company-4, qa-shell-31: Tab passes a goal chip without opening its card; one stop per control.
-test("goal chips: Tab moves on past the chip, Enter opens its card, Tab leaves the card", async ({ page }) => {
+// qa-company-4, qa-shell-31, qa-company-10: a goal's name is one Tab stop, a link that opens
+// the goal; no card that only repeats the name and target over the figure.
+test("goal names: one Tab stop each, Enter opens the goal, no card covers the figure", async ({ page }) => {
   await openHome(page);
-  const chip = page.getByTestId("home-goal-G1").getByTestId("code-chip");
-  const card = page.getByTestId("code-card");
-  await chip.focus();
-  await expect(chip).toBeFocused();
-  await expect(card).toHaveCount(0);
+  const link = page.getByTestId("home-goal-G1").getByTestId("goal-open");
+  await expect(link).toHaveAttribute("href", /^\/baseline\?entity=/);
+  await expect(page.getByTestId("home-goal-G1").getByTestId("code-chip")).toHaveCount(0);
+  await link.focus();
+  await expect(link).toBeFocused();
 
-  // Ten Tabs from the chip: never a card, never the same element twice.
+  // Ten Tabs from the link: never a card, never the same element twice.
   const stops: string[] = [];
   for (let i = 0; i < 10; i++) {
     await page.keyboard.press("Tab");
-    await expect(card).toHaveCount(0);
+    await expect(page.getByTestId("code-card")).toHaveCount(0);
     stops.push(
       await page.evaluate(() => {
         const el = document.activeElement as HTMLElement | null;
@@ -43,15 +44,13 @@ test("goal chips: Tab moves on past the chip, Enter opens its card, Tab leaves t
   }
   expect(new Set(stops).size).toBe(stops.length);
 
-  // Enter opens the card with focus on its Open link; Tab past it closes it and goes on.
-  await chip.focus();
+  // Hovering the name draws no card over the figure; Enter opens the goal on the Baseline.
+  await link.hover();
+  await page.waitForTimeout(400);
+  await expect(page.getByTestId("code-card")).toHaveCount(0);
+  await link.focus();
   await page.keyboard.press("Enter");
-  const open = card.getByRole("link", { name: "Open" });
-  await expect(open).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(card).toHaveCount(0);
-  await expect(chip).not.toBeFocused();
-  await expect(open).toHaveCount(0);
+  await expect(page).toHaveURL(/\/baseline\?entity=/);
 });
 
 // prod-2, qa-company-44: the ring says it is confidence, and shows only once there is a value.
@@ -98,7 +97,7 @@ test("in flight: the PRD's step and its sections approved are labelled apart", a
   await expect(table.getByRole("columnheader", { name: "Progress" })).toBeAttached();
   const checkout = flight(page, "checkout-redesign", "prd");
   await expect(checkout).toHaveAttribute("aria-selected", "true");
-  await expect(checkout.getByTestId("row-journey")).toContainText("Step 8/9");
+  await expect(checkout.getByTestId("row-journey")).toContainText("Step 8 of 9");
   const inspector = page.getByTestId("home-inspector");
   await expect(inspector.getByTestId("inspector-journey")).toContainText("step 8 of 9");
   await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
@@ -157,7 +156,7 @@ test.describe("on a phone", () => {
     await expect(page.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toHaveCount(0);
     await expect(page.getByTestId("home-goal-G1").getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
     await expect(flight(page, "team-workspaces").getByTestId("row-paused")).toBeVisible();
-    await expect(flight(page, "checkout-redesign", "prd").getByTestId("row-journey")).toContainText("Step 8/9");
+    await expect(flight(page, "checkout-redesign", "prd").getByTestId("row-journey")).toContainText("Step 8 of 9");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });

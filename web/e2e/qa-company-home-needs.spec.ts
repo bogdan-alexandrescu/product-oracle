@@ -40,9 +40,11 @@ test("an overrun is one Open on Home, as the Inbox's run page holds Resume and C
   await expect(lines(page).filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
 });
 
-test("the more line has no age and no dash; items carry no section key", async ({ page }) => {
+test("the more footer has no age and no dash; items carry no section key", async ({ page }) => {
   await openHome(page);
-  const more = lines(page).filter({ has: page.getByTestId("home-needs-more") });
+  // qa-company-12: '+N more in Inbox' is a footer under the lines, not a line of its own.
+  await expect(lines(page).filter({ has: page.getByTestId("home-needs-more") })).toHaveCount(0);
+  const more = page.getByTestId("home-needs-footer");
   await expect(more).toHaveCount(1);
   await expect(more).not.toContainText("–");
   const table = page.getByTestId("home-needs-table");

@@ -25,7 +25,7 @@ async function open(page: Page, path: string, title: string) {
 }
 
 async function expectViewOnly(page: Page, shown: boolean) {
-  if (shown) await expect(viewOnly(page)).toHaveText("View only");
+  if (shown) await expect(viewOnly(page)).toHaveText(/^View only(: .+)?$/);
   else await expect(viewOnly(page)).toHaveCount(0);
 }
 

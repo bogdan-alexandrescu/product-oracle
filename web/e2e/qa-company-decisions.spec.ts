@@ -67,7 +67,7 @@ test("filtered to nothing: says which filter hides rows, keeps the total, Clear 
   await search.press("Enter");
   const empty = page.getByTestId("decisions-empty");
   await expect(empty).toContainText("No decisions match");
-  await expect(empty).toContainText("Search: “nothing matches this”");
+  await expect(empty).toContainText("No decisions match “nothing matches this”.");
   await expect(empty).not.toContainText("No decisions here");
   // The header keeps the total: "0 of 5", never a bare 0.
   await expect(page.getByTestId("panel-count").first()).toHaveText(/^0 of \d+\+?$/);

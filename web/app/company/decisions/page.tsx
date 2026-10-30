@@ -109,7 +109,11 @@ function Decisions() {
   const params = useSearchParams();
   // Rewrites the URL's filters (null removes one) from the latest URL; the view follows the URL.
   const setParams = useSetParams();
-  const { me, can } = useMe();
+  const { me, can, capsReady } = useMe();
+  // qa-company-30: Needs me is for who can be named approver (approver and above, as the API's
+  // approver-level decision operation says); a viewer or a commenter never sees it.
+  const mayApprove = can("recommend_decision_options");
+  const stateFilters = STATE_FILTERS.filter((s) => s.value !== "needs_me" || mayApprove);
   const phone = useIsPhone();
   const run = params.get("run");
   const subjectParam = params.get("subject");
@@ -154,7 +158,8 @@ function Decisions() {
     const p = people.find((x) => x.id === id);
     return p ? personName(p) : email ? displayName(email) : null;
   };
-  const stateParam = params.get("state") as StateFilter | null;
+  const urlState = params.get("state") as StateFilter | null;
+  const stateParam: StateFilter | null = urlState === "needs_me" && capsReady && !mayApprove ? "all" : urlState;
   const state: StateFilter | null = stateParam ?? (mineQ.data ? (mineQ.data.length > 0 && !run ? "needs_me" : "all") : null);
 
   // Every filter runs in the API, so an old decision is found however many newer ones there are.
@@ -186,11 +191,14 @@ function Decisions() {
   const total = totalQ.data ? `${totalQ.data.rows.length}${totalQ.data.more ? "+" : ""}` : null;
   const filtered = (state !== null && state !== "all") || !!from || !!q;
   // What hides rows, in words, for the empty list.
+  // qa-company-27: the search reads as itself ("No decisions match “zzzz”."), the filters by name.
   const hiding = [
     state && state !== "all" ? `State: ${STATE_FILTERS.find((s) => s.value === state)?.label}` : null,
     fromDef ? `From: ${fromDef.label}` : null,
-    q ? `Search: \u201c${q}\u201d` : null,
   ].filter((x): x is string => !!x);
+  const noMatch = q
+    ? `No decisions match \u201c${q}\u201d${hiding.length > 0 ? ` with ${hiding.join(", ")}` : ""}.`
+    : `No decisions match ${hiding.join(", ")}.`;
   const clsLabel = cls === "checkpoint" ? "checkpoint decisions" : "judgement calls";
   const clearFilters = () => {
     setSearch("");
@@ -329,7 +337,7 @@ function Decisions() {
                     value={state ?? "all"}
                     onChange={(e) => setParams({ state: e.target.value, d: null })}
                   >
-                    {STATE_FILTERS.map((s) => (
+                    {stateFilters.map((s) => (
                       <option key={s.value} value={s.value}>
                         {s.label}
                       </option>
@@ -352,30 +360,37 @@ function Decisions() {
                   <FilterChips
                     label="State"
                     testId="decision-state"
-                    items={STATE_FILTERS.map((s) => ({ value: s.value, label: s.label }))}
+                    items={stateFilters.map((s) => ({ value: s.value, label: s.label }))}
                     value={state ?? "all"}
                     onChange={(v) => setParams({ state: v, d: null })}
+                  />
+                </FilterRow>
+                {/* qa-company-28: From is chips too, like Kind and State. */}
+                <FilterRow label="From">
+                  <FilterChips
+                    label="From"
+                    testId="decision-from"
+                    items={[{ value: "", label: "Anywhere" }, ...FROM.map((f) => ({ value: f.value, label: f.label }))]}
+                    value={from}
+                    onChange={(v) => setParams({ from: v || null, d: null })}
                   />
                 </FilterRow>
               </>
             )}
             <div className="flex flex-wrap items-center gap-2 max-[600px]:flex-col max-[600px]:items-stretch">
-              <label className="flex items-center gap-2 text-sm font-semibold text-text2 max-[600px]:flex-col max-[600px]:items-stretch max-[600px]:gap-1">
-                From
-                <select
-                  aria-label="From"
-                  className={`${INPUT} w-auto max-[600px]:w-full`}
-                  value={from}
-                  onChange={(e) => setParams({ from: e.target.value || null, d: null })}
-                >
-                  <option value="">Anywhere</option>
-                  {FROM.map((f) => (
-                    <option key={f.value} value={f.value}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {phone && (
+                <label className="flex flex-col items-stretch gap-1 text-sm font-semibold text-text2">
+                  From
+                  <select aria-label="From" className={INPUT} value={from} onChange={(e) => setParams({ from: e.target.value || null, d: null })}>
+                    <option value="">Anywhere</option>
+                    {FROM.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <form
                 role="search"
                 className="min-w-0 flex-1 max-[600px]:w-full"
@@ -417,8 +432,8 @@ function Decisions() {
                 </p>
               ) : (
                 <p>
-                  {hiding.length > 0
-                    ? `No decisions match ${hiding.join(", ")}.`
+                  {hiding.length > 0 || q
+                    ? noMatch
                     : cls === "all"
                       ? "No decisions here yet."
                       : `No ${clsLabel}.`}

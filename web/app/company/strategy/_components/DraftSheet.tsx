@@ -8,7 +8,8 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
 import { todayIn, useCompanyZone } from "@/lib/dates";
-import { errorMessage } from "@/lib/use-query";
+import { formatMoney } from "@/lib/format";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { DOC, type DocKind, type DocRef } from "./lib";
 
@@ -65,6 +66,16 @@ export function DraftSheet({
   const observing = useAutonomyLevel(kind) === "observe";
   // qa-company-14: typed work asks before it is thrown away (the ds Dialog's discard guard).
   const dirty = !!changed.trim() || years !== "5" || span.from !== initialSpan.from || span.to !== initialSpan.to;
+  // qa-company-24: Draft with Oracle is a paid run: the button says what it costs, as New
+  // update's does (the flow catalog's roles at standard depth, as the run's estimate counts them).
+  const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
+  const cost = (() => {
+    const c = catalog.data;
+    const flow = c?.flows.find((f) => f.key === "strategy_draft");
+    if (!c || !flow) return null;
+    const base = flow.segments.reduce((sum, seg) => sum + seg.roles.reduce((n, r) => n + (c.roles.find((x) => x.key === r)?.base_usd ?? 0), 0), 0);
+    return Math.round(base * (c.depths.standard ?? 1) * 100) / 100;
+  })();
   const valid = vision ? Number.isInteger(yearsN) && yearsN >= 1 && yearsN <= 10 : !!span.from && !!span.to && span.to > span.from;
 
   /** The document's slug: the existing one, or a new one from the built-in template. */
@@ -118,6 +129,8 @@ export function DraftSheet({
       title={title}
       onClose={onClose}
       testId="strategy-draft-sheet"
+      // qa-company-24: one way to close, Cancel, as the other Company dialogs.
+      closeButton={false}
       dirty={dirty}
       busy={busy !== null}
       onSubmit={() => {
@@ -132,7 +145,7 @@ export function DraftSheet({
           )}
           {!observing && (
             <Button type="submit" variant="primary" disabled={!valid || busy !== null}>
-              {busy === "oracle" ? "Starting…" : "Draft with Oracle"}
+              {busy === "oracle" ? "Starting…" : cost != null ? `Draft with Oracle · ${formatMoney(cost)}` : "Draft with Oracle"}
             </Button>
           )}
         </>

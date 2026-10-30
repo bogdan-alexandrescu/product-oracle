@@ -71,8 +71,8 @@ async function openReview(page: Page) {
   await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByTestId("company-tab-rituals").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/company\/rituals$/);
-  await page.getByTestId("ritual-row").filter({ hasText: "Weekly metrics review" }).getByRole("link").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Weekly metrics review" })).toBeVisible();
+  await page.getByTestId("ritual-row").filter({ hasText: "Weekly metrics review" }).getByTestId("last-pre-read").click();
+  await expect(page.getByRole("heading", { level: 2, name: "Weekly metrics review" })).toBeVisible();
 }
 
 test("13a: an owner connects PostHog in Settings › Analytics and the key is never shown again", async ({ page }) => {
@@ -169,7 +169,7 @@ test("13c: the metric's owner explains a variance from the Inbox and the badge d
   await expect(row).toHaveCount(1);
   await row.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Weekly metrics review" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Weekly metrics review" })).toBeVisible();
   const c = card(page, "Weekly active teams");
   await expect(c.getByTestId("variance-direction")).toHaveText("Better");
   await expect(c.getByTestId("variance-cause")).toHaveCount(2);
@@ -266,7 +266,7 @@ test("13h: at 390 px the Metrics table and the variance cards have no horizontal
   expect(await wide()).toBeLessThanOrEqual(0);
   await tabs.getByTestId("company-tab-rituals").click();
   await expect(page).toHaveURL(/\/company\/rituals$/);
-  await page.getByTestId("ritual-row").filter({ hasText: "Weekly metrics review" }).getByRole("link").click();
+  await page.getByTestId("ritual-row").filter({ hasText: "Weekly metrics review" }).getByTestId("last-pre-read").click();
   await expect(page.getByTestId("variance-card")).toHaveCount(2);
   expect(await wide()).toBeLessThanOrEqual(0);
 });
