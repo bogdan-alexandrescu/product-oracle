@@ -147,10 +147,21 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     document.addEventListener("fullscreenchange", on);
     return () => document.removeEventListener("fullscreenchange", on);
   }, []);
+  const root = useRef<HTMLDivElement>(null);
   // qa-simple-prd-p3-19: Escape stops presenting, full screen granted or not.
   useEffect(() => {
     if (!presenting) return;
     const on = (e: KeyboardEvent) => {
+      // qa-simple-prd-p3-18: Tab goes round the presented page.
+      if (e.key === "Tab" && root.current) {
+        const all = Array.from(root.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])')).filter((x) => x.offsetParent !== null);
+        const at = all.indexOf(document.activeElement as HTMLElement);
+        if (all.length && (e.shiftKey ? at <= 0 : at === all.length - 1 || at < 0)) {
+          e.preventDefault();
+          all[e.shiftKey ? all.length - 1 : 0].focus();
+        }
+        return;
+      }
       if (e.key === "Escape" && !document.querySelector('[role="dialog"], dialog[open]')) {
         setPresenting(false);
         if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
@@ -160,7 +171,6 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     return () => document.removeEventListener("keydown", on);
   }, [presenting]);
   // qa-simple-prd-p3-18: while presenting, the shell behind the page (its rail) takes no focus.
-  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!presenting || !root.current) return;
     const off: HTMLElement[] = [];
@@ -601,6 +611,8 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions }: { v:
   const caps = (plan?.milestones ?? []).map((m) => m.effort_weeks).filter((x): x is number => x != null);
   const total = caps.length ? caps.reduce((a, b) => a + b, 0) : null;
   const published = v.published_at ? dmy(v.published_at.slice(0, 10)) : null;
+  // qa-simple-prd-p3-16: "Approved" only where the One-pagers list says so too (one summary for both).
+  const approved = !!published && (!summary || !!summary.approved_version || summary.status === "approved");
   // qa-simple-prd-47: separators at the meta line's own 4.5:1 colour.
   const sep = phone ? null : <span aria-hidden className="text-text2">·</span>;
   return (
@@ -618,7 +630,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions }: { v:
         <h1 className="text-[34px] leading-[42px] font-bold tracking-[-.01em]">{v.document.title}</h1>
       )}
       <div data-testid="one-pager-meta" className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[15px] leading-[22px] text-text2">
-        {published && (
+        {approved && (
           <span className="inline-flex h-6 items-center gap-[5px] rounded-xl bg-pass-bg px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap text-pass">
             <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -627,9 +639,9 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions }: { v:
           </span>
         )}
         {/* qa-simple-prd-9: the same state the One-pagers list names. */}
-        {published && draft && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
+        {approved && draft && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
         {/* qa-simple-prd-p3-16: never approved, it shows the status the list shows ("In review", "Draft"). */}
-        {!published && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
+        {!approved && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
         <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
         {sep}
         {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}

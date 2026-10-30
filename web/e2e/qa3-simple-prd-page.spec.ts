@@ -25,7 +25,7 @@ async function plan(page: Page, scenario = "simple-plan", email: string = ADMIN.
 async function paper(page: Page, email: string = ADMIN.email) {
   await login(page, email);
   await page.goto("/simple/one-pagers");
-  await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Guided setup" }).click();
+  await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Team workspaces PRD" }).click();
   await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
 }
 
@@ -171,10 +171,11 @@ test.describe("desktop, no plan", () => {
   test("the same header as a plan's, its status as the list's; the strip's legend (p3-16, 15)", async ({ page }) => {
     await login(page);
     await page.goto("/simple/one-pagers");
-    const row = page.getByTestId("one-pager-row").filter({ hasText: "Guided setup" });
-    const listed = (await row.locator("[data-status], .inline-flex").first().innerText()).split(/\s|·/)[0];
-    await row.getByRole("link", { name: "Guided setup" }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
+    const row = page.getByTestId("one-pager-row").filter({ hasText: "Team workspaces PRD" });
+    await expect(row).toContainText("In review");
+    const listed = "In review";
+    await row.getByRole("link", { name: "Team workspaces PRD" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Team workspaces PRD" })).toBeVisible();
     await expect(page.getByRole("article", { name: "One-pager" }).getByRole("heading", { level: 1 })).toHaveCount(0);
     await expect(page.getByTestId("one-pager-meta")).toContainText(listed);
     await expect(page.getByTestId("one-pager-meta").locator("b").filter({ hasText: /\S/ }).first()).toBeVisible();
@@ -211,6 +212,10 @@ test.describe("desktop, no plan", () => {
 
   test("presenting keeps focus on the page, and Escape stops it (p3-18, 19)", async ({ page }) => {
     await paper(page);
+    // Where full screen is refused (an iPhone's Safari), presenting still starts and Escape ends it.
+    await page.evaluate(() => {
+      document.documentElement.requestFullscreen = () => Promise.reject(new Error("refused"));
+    });
     await page.getByRole("button", { name: "Present" }).click();
     const stop = page.getByRole("button", { name: "Stop presenting" });
     await stop.focus();
@@ -218,7 +223,6 @@ test.describe("desktop, no plan", () => {
       await page.keyboard.press("Shift+Tab");
       expect(await page.evaluate(() => !!document.activeElement?.closest('[data-testid="one-pager"]'))).toBe(true);
     }
-    await page.evaluate(() => document.exitFullscreen?.().catch(() => undefined));
     await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("one-pager")).not.toHaveAttribute("data-presenting", "true");
@@ -233,6 +237,8 @@ test.describe("phone, no plan", () => {
     await paper(page);
     const row = line(page, "bets-1");
     const edit = row.locator("[data-edit-for]");
+    // A phone has no pointer resting on the page.
+    await page.mouse.move(1, 1);
     const b = (await row.getByTestId("one-pager-line-text").boundingBox())!;
     const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest("[data-edit-for]") != null, [b.x + b.width - 10, b.y + 10]);
     expect(hit).toBe(false);

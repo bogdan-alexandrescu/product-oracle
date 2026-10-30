@@ -90,7 +90,8 @@ for (const [where, viewport] of [
       ]) {
         expect(await linkAt(page, x, y), `the point ${Math.round(x)},${Math.round(y)}`).toBe(href);
       }
-      await updated.click();
+      // As a person does: a click where "Updated ..." reads.
+      await page.mouse.click(u.x + u.width / 2, u.y + u.height / 2);
       await expect(page).toHaveURL(new RegExp(`${href}$`));
       await expect(page.getByTestId("one-pager")).toBeVisible();
     });
