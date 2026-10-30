@@ -71,10 +71,11 @@ for (const phone of [false, true]) {
           const labels = plan.getByTestId("home-strip-label");
           await expect(labels.first()).toBeVisible();
           const texts = await labels.allTextContents();
-          expect(texts.slice(0, 2)).toEqual(["M1 · Measure it, make it safe · 3 items", "M2 · Ship to beta · 2 items"]);
-          expect(texts).toContain("Beta launch · 3 items");
+          // fix4 (qa-simple-home-17): each row names its document first.
+          expect(texts.slice(0, 2)).toEqual(["Guided setup · M1 · Measure it, make it safe · 3 items", "Guided setup · M2 · Ship to beta · 2 items"]);
+          expect(texts.some((t) => /^.+ · Beta launch · 3 items$/.test(t))).toBe(true);
           for (const t of texts) expect(t).not.toMatch(/two teams first|after legal/);
-          expect(texts.at(-1)).toMatch(/^No milestone · \d+ items?$/);
+          expect(texts.at(-1)).toMatch(/^.+ · no milestone · \d+ items?$/);
           expect(new Set(texts).size).toBe(texts.length);
           for (const t of texts) expect(t).not.toMatch(/[(;]/);
           await plan.getByTestId("home-strip-row").first().click();
