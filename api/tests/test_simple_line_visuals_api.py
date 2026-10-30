@@ -33,6 +33,13 @@ Test cards (protects / fails_when / no_claim):
 - test_words_keyed_flow_still_found: protects=a flow left keyed by a bet's words (one the
   migration did not move) is still read by who finds a bet with those words on the page;
   fails_when=such a flow becomes unreadable.
+- test_migrated_draft_words_flow_stays_with_the_draft: protects=a flow drawn, before
+  migration 0092_bet_flow_line_key, from the words an open working draft gave a bet
+  (keyed by those words) is, after the migration, read by the decider who sees the draft
+  and by no viewer of the published page, by the bet's line or by those words;
+  fails_when=the migration moves it onto the bet's line, where who reads the published
+  page reads a drawing made from words they may not see; no_claim=the migration's other
+  moves (test_bet_flow_line_key_migration).
 - test_one_pager_job_queues_no_bet_visuals_when_lines_in_use: protects=the one_pager
   job's good answer rejected as ``built: false`` because a working draft holds the page's
   lines queues no bet visual; fails_when=the rejected answer's bets are drawn;
@@ -45,6 +52,7 @@ import pytest
 from sqlalchemy import delete, select
 
 from oracle import company_time
+from oracle.db import get_engine
 from oracle.docs.models import Document
 from oracle.jobs.models import LlmJob
 from oracle.review.models import DocumentReviewPolicy
@@ -319,6 +327,51 @@ async def test_words_keyed_flow_still_found(client):
     await run_visual_jobs(ctx)
     out = await panel(client, ctx, "viewer", old, str(doc_id))
     assert out["flow"]["version"] == 1
+
+
+def _upgrade_0092(conn) -> None:
+    """Migration 0092's upgrade on the test database (already at head), through Alembic's
+    op on this connection."""
+    import importlib.util
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from tests.conftest import API_DIR
+
+    path = API_DIR / "migrations" / "versions" / "0092_bet_flow_line_key.py"
+    spec = importlib.util.spec_from_file_location("migration_0092", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with Operations.context(MigrationContext.configure(conn)):
+        module.upgrade()
+
+
+async def test_migrated_draft_words_flow_stays_with_the_draft(client):
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    doc_id = uuid.UUID(view["document"]["id"])
+    said = "A checklist that invites a teammate"
+    r = await edit(client, ctx, "decider", view, "bets-1", said)
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    # Before 0092 who saw the draft asked by the draft's words: a flow drawn from them.
+    old = visuals.words_subject(doc_id, said)
+    async with tenant_session(ctx.tenant_id) as s:
+        await visuals.request_visual(s, None, "one_pager_line", old, said,
+                                     document_id=doc_id)  # fmt: skip
+        await s.commit()
+    await run_visual_jobs(ctx)
+    async with get_engine().begin() as conn:
+        await conn.run_sync(_upgrade_0092)
+    bet = visuals.line_subject(doc_id, "bets-1")
+    for sid in (bet, old):
+        out = await panel(client, ctx, "viewer", sid, str(doc_id))
+        assert out["flow"] is None, sid
+        assert said.lower() not in str(out).lower()
+    assert line(await get(client, ctx, "viewer"), "bets-1")["flow"] is None
+    mine = line(await get(client, ctx, "decider"), "bets-1")
+    assert mine["text"] == said
+    assert (await panel(client, ctx, "decider", old, str(doc_id)))["flow"]["version"] == 1
 
 
 async def test_one_pager_job_queues_no_bet_visuals_when_lines_in_use(client):

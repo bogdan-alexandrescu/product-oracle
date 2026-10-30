@@ -4,10 +4,13 @@ moves from the bet's words to the line's own id (qa-simple-prd-1, "Carry the flo
 Card: protects=an old flow keyed by a bet's words moves to that bet's line (its versions and
 comments with it); two bets with the same words each get the flow (the second a copy); a
 flow whose words match no current line (a renamed or deleted bet) stays keyed by its words;
-the downgrade moves each line's flow back to its words, leaving a copy where the words are
-taken; up again changes nothing more; chained on 0090_interview_new_link as the single
-head; fails_when=a flow stays on the words of a current bet, is lost, lands on the wrong
-line, or the downgrade leaves it on the line; no_claim=the reads (test_simple_line_visuals_api).
+a flow keyed by the words an open working draft gave a bet stays on them (drawn from
+unpublished words: never on the published bet's line); the downgrade moves each line's
+flow back to its words, leaving a copy where the words are taken; up again changes nothing
+more; chained on 0090_interview_new_link as the single head; fails_when=a flow stays on
+the words of a current bet, is lost, lands on the wrong line, a draft's words' flow lands
+on the published bet's line, or the downgrade leaves it on the line; no_claim=the reads
+(test_simple_line_visuals_api).
 
 Sync on purpose (Alembic runs its own event loop); its own scratch database."""
 
@@ -202,8 +205,9 @@ def test_flows_move_to_the_line_and_back(scratch_db):
 
 def test_the_published_page_its_keys_and_the_draft(scratch_db):
     """The published page is read, not the newest build (a later version not approved);
-    a line's carried key is moved back on the way down; the words an open working draft
-    gives a bet keep its flow both ways."""
+    a line's carried key is moved back on the way down; a flow keyed by the words an open
+    working draft gives a bet stays on those words both ways (drawn from unpublished
+    words, it never reaches the published bet's line)."""
     cfg = _cfg()
     command.upgrade(cfg, PREVIOUS)
     t, d, u = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
@@ -240,14 +244,18 @@ def test_the_published_page_its_keys_and_the_draft(scratch_db):
     _flow(t, d, words(d, "Checklist"), "Checklist")
     _flow(t, d, words(d, "Invites for teams"), "Invites")
     command.upgrade(cfg, REVISION)
-    moved = {key(d, "bets-2"): flow("Checklist"), key(d, "bets-1"): flow("Invites")}
+    # The draft's words' flow was drawn from unpublished words: it stays keyed by them
+    # (read by who sees the draft), never moved to the bet's line on the published page.
+    moved = {
+        key(d, "bets-2"): flow("Checklist"),
+        words(d, "Invites for teams"): flow("Invites"),
+    }
     assert _flows() == moved
     # A bet whose key was carried over from an earlier build.
     _flow(t, d, key(d, "carried"), "A guide")
     command.downgrade(cfg, PREVIOUS)
     assert _flows() == {
         words(d, "Checklist"): flow("Checklist"),
-        words(d, "Invites"): flow("Invites"),
         words(d, "Invites for teams"): flow("Invites"),
         words(d, "A guide"): flow("A guide"),
     }
