@@ -86,7 +86,7 @@ test.describe("desktop", () => {
     await expect(admin.getByText("Moved Alert history export (AE) to rank 1")).toBeVisible();
     expect((await codes(admin))[0]).toBe("alert-export");
     await expect(row(admin, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
-    await expect(row(admin, "alert-export").getByTestId("prio-override")).toHaveText("Moved by Admin: “Two large customers asked for it this month”");
+    await expect(row(admin, "alert-export").getByTestId("prio-override")).toContainText("Moved by Admin: “Two large customers asked for it this month”");
 
     await admin.getByRole("switch", { name: "Compare with Oracle" }).click();
     const oracle = admin.getByRole("region", { name: "Oracle's order" });
@@ -134,18 +134,18 @@ test.describe("desktop", () => {
     await expect(card.getByRole("img", { name: /^Wireframe of Alert on a phone/ })).toBeVisible();
     await expect(card.getByTestId("flow-regions")).toContainText("Snooze and Assign buttons");
 
-    // An estimate with no flow bundle: "No flow yet".
+    // QA pass 3 (qa-simple-plan-30): no 'No flow yet' chip on a proposal.
     await cory.getByRole("tab", { name: "Value / effort" }).click();
     await cory.locator('[data-testid="vxe-point"][data-code="setup-import"]').focus();
     await cory.keyboard.press("ArrowUp");
     await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     await cory.getByRole("tab", { name: "Ranked list" }).click();
     await expect(row(cory, "setup-import").getByTestId("prio-proposal")).toContainText("Commenter proposes goal value 6.5");
-    await expect(row(cory, "setup-import").getByTestId("flow-none")).toHaveText("No flow yet");
+    await expect(row(cory, "setup-import").getByTestId("flow-none")).toHaveCount(0);
 
     const admin = await as(page, "admin@example.com");
     const waiting = row(admin, "alert-mobile").getByTestId("prio-proposal");
-    await expect(waiting).toContainText("waiting for Admin");
+    await expect(waiting).toContainText("waiting for you");
     await waiting.getByRole("button", { name: "Accept" }).click();
     await expect(admin.getByText("Accepted the proposal for Mobile alert push")).toBeVisible();
     await expect.poll(async () => (await codes(admin)).indexOf("alert-mobile")).toBe(2);
@@ -177,7 +177,7 @@ test.describe("desktop", () => {
     await admin.mouse.move(at.x + at.width / 2 - (plot.width * 0.92 * 2) / 5, at.y + at.height / 2 + 3, { steps: 10 });
     await admin.mouse.up();
     await expect(admin.getByText("Re-estimated Sample data import (F-12): effort 1 wk")).toBeVisible();
-    await expect(admin.getByRole("button", { name: "#2 Sample data import (F-12): goal value 6, effort 1 weeks" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#2 Sample data import (F-12): goal value 6, effort 1 week" })).toBeVisible();
     expect((await codes(admin, "side-row"))[1]).toBe("setup-import");
     await admin.getByRole("button", { name: "Undo" }).click();
     await expect(admin.getByRole("button", { name: "#5 Sample data import (F-12): goal value 6, effort 3 weeks" })).toBeVisible();
@@ -202,8 +202,8 @@ test.describe("desktop", () => {
     await expect(drafts).toHaveCount(0);
     await admin.getByRole("button", { name: "Undo" }).click();
     await expect(draft).toBeVisible();
-    await draft.getByRole("button", { name: "Confirm" }).click();
-    await expect(admin.getByText("Confirmed Team invite nudges")).toBeVisible();
+    await draft.getByRole("button", { name: "Add to the ranking" }).click();
+    await expect(admin.getByText("Added Team invite nudges to the ranking")).toBeVisible();
     await expect(drafts).toHaveCount(0);
     await expect(row(admin, "setup-ideas")).toContainText("Team invite nudges");
   });
@@ -217,15 +217,14 @@ test.describe("desktop", () => {
   test("a commenter's Confirm and Merge on a draft wait inline for the decider", async ({ page }) => {
     const cory = await as(page, "commenter@example.com");
     const draft = cory.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
-    await draft.getByRole("button", { name: "Confirm" }).click();
+    await draft.getByRole("button", { name: "Propose adding" }).click();
     await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
-    await draft.getByRole("button", { name: "Merge into…" }).click();
-    await draft.getByLabel("Merge into").selectOption({ label: "Setup checklist" });
-    await draft.getByRole("button", { name: "Merge", exact: true }).click();
+    // QA pass 3 (qa-simple-plan-29): no second proposal while one waits.
+    await expect(draft.getByRole("button", { name: "Propose adding" })).toBeDisabled();
+    await expect(draft.getByRole("button", { name: "Propose a merge…" })).toBeDisabled();
     const cards = draft.getByTestId("prio-proposal");
-    await expect(cards).toHaveCount(2);
+    await expect(cards).toHaveCount(1);
     await expect(cards.nth(0)).toContainText("Commenter proposes confirming it · waiting for Admin");
-    await expect(cards.nth(1)).toContainText("Commenter proposes merging it: “Merged into Setup checklist” · waiting for Admin");
     await expect(cards.nth(0).getByRole("button", { name: "Accept" })).toHaveCount(0);
 
     const admin = await as(page, "admin@example.com");

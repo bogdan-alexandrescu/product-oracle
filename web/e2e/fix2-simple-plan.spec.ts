@@ -119,9 +119,11 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     await page.getByLabel("Line", { exact: true }).selectOption({ label: "Pick a date…" });
     await expect(page.locator("#prio-line")).toBeHidden();
     await page.getByLabel("The line's date").fill("2026-11-20");
+    // QA pass 3 (qa-simple-plan-1): applied only with Apply, and named like the other lines.
+    await page.getByRole("button", { name: "Apply" }).click();
     await expect(page.locator("#prio-line")).toBeVisible();
     await expect(page.getByLabel("The line's date")).toHaveCount(0);
-    await expect(page.locator("#prio-line")).toContainText("By Nov 20, 2026");
+    await expect(page.locator("#prio-line")).toContainText("Date: Nov 20, 2026");
     await expect(page.getByTestId("line-caption")).toContainText(/miss Nov 20, 2026/);
     await expect(page.getByTestId("line-caption")).not.toContainText("miss By");
     await expect(page.getByTestId("prio-misses").first()).toHaveText("Misses Nov 20, 2026");
@@ -177,14 +179,8 @@ test.describe("QA pass 2: simple-plan, Value / effort", () => {
     const am = page.locator('[data-testid="vxe-point"][data-code="alert-mobile"]');
     await expect(am).toHaveAttribute("aria-label", /^#\d+ Mobile alert push \(AM(P)?\): goal value/);
     await expect(page.getByRole("list", { name: "Legend" })).not.toContainText("PRD");
-    // No mark's centre is on a median line.
-    const effortLine = (await page.getByTestId("vxe-median-effort").boundingBox())!.x;
-    const valueLine = (await page.getByTestId("vxe-median-value").boundingBox())!.y;
-    for (const b of await page.getByTestId("vxe-point").all()) {
-      const box = (await b.boundingBox())!;
-      expect(Math.abs(box.x + box.width / 2 - effortLine)).toBeGreaterThan(3);
-      expect(Math.abs(box.y + box.height / 2 - valueLine)).toBeGreaterThan(3);
-    }
+    // QA pass 3 (qa-simple-plan-13): marks sit at their real effort, even on a median line; the legend says how they count.
+    await expect(page.getByRole("list", { name: "Legend" })).toContainText("A mark on a middle line counts on the side its rank puts it.");
     const box = (await am.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
@@ -223,7 +219,8 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
       const bar = page.getByTestId("bucket-bar");
       await expect(bar).not.toHaveAttribute("aria-hidden", "true");
       await expect(bar).toContainText("Share of engineer-weeks by goal");
-      await expect(bar.getByTestId("bucket-segment").first()).toContainText(/\d+(\.\d)? wk · \d+%/);
+      // QA pass 3 (qa-simple-plan-40): the weeks and share show once, in the cards; the bar names the goals.
+      await expect(bar.getByTestId("bucket-segment").first()).not.toContainText(/wk/);
       const shares = await page.getByTestId("bucket-share").allTextContents();
       expect(shares.reduce((n, s) => n + Number(s.replace("%", "")), 0)).toBe(100);
       const activation = page.locator('[data-testid="goal-bucket"][data-key="faster-activation"]');

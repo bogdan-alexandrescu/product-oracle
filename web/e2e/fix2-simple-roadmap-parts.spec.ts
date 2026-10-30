@@ -148,7 +148,7 @@ test.describe("ChatCard", () => {
 test.describe("GoalSuggestions", () => {
   test.use(DESKTOP);
 
-  test("qa-simple-roadmap-24/44: '+ Suggest a feature' and 'Suggest from the chat' look like buttons; a goal with none points to the action", async ({ page, context }) => {
+  test("qa-simple-roadmap-24/44: '+ Suggest a feature' and 'Ask Oracle in the chat' look like buttons; a goal with none points to the action", async ({ page, context }) => {
     await context.addInitScript(([key]) => localStorage.setItem(key, "simple-home"), [MOCK_SCENARIO_KEY]);
     await login(page);
     await page.goto("/simple");
@@ -158,7 +158,7 @@ test.describe("GoalSuggestions", () => {
     await expect(drawer).toBeVisible();
 
     const openForm = drawer.getByRole("button", { name: "+ Suggest a feature" });
-    const chat = drawer.getByRole("button", { name: "Suggest from the chat" });
+    const chat = drawer.getByRole("button", { name: "Ask Oracle in the chat" });
     await expect(openForm).toBeVisible();
     await expect(chat).toBeVisible();
     // Before the fix these read as bare bold/underlined text (no border at all: 0px).
@@ -167,16 +167,18 @@ test.describe("GoalSuggestions", () => {
 
     // Keep alerts quiet starts with no person-suggested feature (only Oracle's own, "auto").
     await expect(drawer.getByRole("tab", { name: "People · 0" })).toBeVisible();
+    // QA pass 3 (qa-simple-plan-10): the drawer opens where the suggestions are; People is a click away.
+    await drawer.getByRole("tab", { name: "People · 0" }).click();
     const empty = drawer.getByRole("tabpanel", { name: "People's suggestions" });
     await expect(empty).toContainText("No one has suggested a feature for Keep alerts quiet yet.");
-    const cta = drawer.getByTestId("suggest-first-feature");
-    await expect(cta).toBeVisible();
+    // QA pass 3 (qa-simple-plan-35): '+ Suggest a feature' is the one control that opens the form.
+    await expect(drawer.getByTestId("suggest-first-feature")).toHaveCount(0);
     await expect(drawer.getByTestId("suggest-form")).toHaveCount(0);
-    await cta.click();
+    await openForm.click();
     await expect(drawer.getByTestId("suggest-form")).toBeVisible();
     await expect(drawer.getByTestId("suggest-form-open")).toHaveCount(0);
-    // qa-simple-roadmap-24: the form says what happens next, not a bare "<role> decides."
-    await expect(drawer.getByTestId("suggest-decider")).toHaveText(/ will review your suggestion\.$/);
+    // qa-simple-roadmap-24, qa-simple-plan-33: the form says what happens next; the owner decides themselves.
+    await expect(drawer.getByTestId("suggest-decider")).toHaveText("You decide on this goal's suggestions: once sent, you can accept it below.");
   });
 });
 
