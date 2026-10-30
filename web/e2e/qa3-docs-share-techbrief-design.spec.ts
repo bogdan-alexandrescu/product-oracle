@@ -155,6 +155,15 @@ test.describe("phone", () => {
         return Math.round(p.y - (b.y + b.height));
       })
       .toBeGreaterThanOrEqual(-1);
+    // Scrolled to the page's end, the verdict buttons sit above the phone bar and the bottom nav.
+    for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 3000);
+    const nav = page.getByRole("navigation", { name: "Oracle" }).filter({ visible: true }).last();
+    for (const name of ["Approve", "Request changes", "Reject"]) {
+      const b = (await bar.getByRole("button", { name, exact: true }).boundingBox())!;
+      const p = (await phoneBar.boundingBox())!;
+      const n = (await nav.boundingBox())!;
+      expect(b.y + b.height).toBeLessThanOrEqual(Math.min(p.y, n.y) + 1);
+    }
     // Opening a verdict's note brings its Save clear of the bars too.
     await bar.getByRole("button", { name: "Request changes" }).click();
     const save = bar.getByRole("button", { name: /^Save/ });
