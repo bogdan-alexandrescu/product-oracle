@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { AfterMain } from "@/components/ds/after-main";
 import { Mark } from "@/components/ds/Brand";
 import { Icon, type IconName } from "@/components/ds/Icon";
 import { ModeSwitch } from "@/components/ds/ModeSwitch";
@@ -256,8 +255,6 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         </div>
       </nav>
 
-      {/* qa-work-42: the phone's tab bar and More sheet follow the page in Tab order. */}
-      <AfterMain>
       <nav
         aria-label="Simple"
         data-testid="simple-tab-bar"
@@ -337,7 +334,6 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           {account("sheet")}
         </div>
       )}
-      </AfterMain>
     </>
   );
 }

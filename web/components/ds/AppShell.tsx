@@ -16,7 +16,6 @@ import { loadInbox, loadMyQuestions, onWaitingChanged, waitingCount } from "@/li
 import { ScreenSubjectProvider } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
-import { AFTER_MAIN_ID, AfterMain } from "./after-main";
 import { Mark } from "./Brand";
 import { ConfirmHost, confirmInPage } from "./ConfirmDialog";
 import { ToastHost } from "./Toast";
@@ -482,8 +481,6 @@ function Navs() {
         <UserMenu placement="rail" />
       </nav>
 
-      {/* qa-work-42: the phone's tab bar and More sheet follow the page in Tab order. */}
-      <AfterMain>
       <nav
         aria-label="Oracle"
         data-testid="tab-bar"
@@ -542,7 +539,6 @@ function Navs() {
           </ul>
         </div>
       </Sheet>
-      </AfterMain>
     </>
   );
 }
@@ -922,8 +918,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <CapsError />
           {children}
         </main>
-        {/* qa-work-42: the phone's bottom bar renders here, after the page; it is fixed, so this only orders Tab. */}
-        <div id={AFTER_MAIN_ID} className="contents" />
         <Suspense fallback={null}>
           <HopDock />
         </Suspense>
