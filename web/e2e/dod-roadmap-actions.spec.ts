@@ -245,19 +245,20 @@ for (const [where, use] of [
     });
 
     /*
-     * Card dod-roadmap-fix-approver: protects = an approver who does not decide the roadmap
-     * proposes a broken link's fix ("Propose: move the dependency"): it waits for the decider and
-     * nothing applies; fails_when = an approver's fix applies or is refused; no_claim = the
-     * commenter's (simple-roadmap.spec).
+     * Card dod-roadmap-fix-proposer: protects = an approver or a commenter, who do not decide the
+     * roadmap, propose a broken link's fix from the item's card ("Propose: move the dependency"):
+     * it waits for the decider and nothing applies; fails_when = their fix applies or is refused;
+     * no_claim = the callout's "Move the dependents" (simple-roadmap.spec).
      */
-    test(`an approver proposes a broken link's fix (${where})`, async ({ page }) => {
-      await open(page, "approver@example.com");
-      // An approver has no "Needs a decision" tray: the digest's own card offers the fixes.
-      const card = await openCard(page, "alert-digest");
-      await card.getByRole("button", { name: "Propose: move the dependency" }).first().click();
-      await expect(toast(page, /proposed: it waits for .+ in Needs a decision/)).toBeVisible();
-      await expect(page.getByTestId("draft-banner")).toHaveCount(0);
-    });
+    for (const role of ["approver", "commenter"] as const)
+      test(`${role === "approver" ? "an approver" : "a commenter"} proposes a broken link's fix (${where})`, async ({ page }) => {
+        await open(page, `${role}@example.com`);
+        // No "Needs a decision" tray for those who propose: the digest's own card offers the fixes.
+        const card = await openCard(page, "alert-digest");
+        await card.getByRole("button", { name: "Propose: move the dependency" }).first().click();
+        await expect(toast(page, /proposed: it waits for .+ in Needs a decision/)).toBeVisible();
+        await expect(page.getByTestId("draft-banner")).toHaveCount(0);
+      });
 
     /*
      * Card dod-roadmap-approver-drag: protects = an approver's drag of a bar (the Gantt's compact
