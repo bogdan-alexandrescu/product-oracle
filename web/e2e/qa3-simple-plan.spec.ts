@@ -56,7 +56,8 @@ test.describe("QA pass 3: simple-plan, the line", () => {
     await open(page);
     await page.getByLabel("Line", { exact: true }).selectOption({ label: "Pick a date…" });
     const field = page.getByLabel("The line's date");
-    await field.click();
+    // Start on the month part, as a person clicking the field's left edge does.
+    await field.click({ position: { x: 12, y: 16 } });
     await page.keyboard.type("12012026");
     // Nothing applied while typing: the field is still open, the caption still reads this quarter.
     await expect(field).toBeVisible();
