@@ -778,6 +778,9 @@ async def test_a_link_holder_sees_no_other_document_status_or_version(client, ct
                  "Superseded", "Version 1", 'class="banner-source"',
                  'class="banner-status"', 'class="banner-version"'):  # fmt: skip
         assert leak not in page.text, leak
+    # fix4-docs-share review (qa-docs-12): the tab's title names no audience either.
+    title = re.search(r"<title>(.*?)</title>", page.text, re.S).group(1)
+    assert "(" not in title, title
     hrefs = re.findall(r'href="([^"]*)"', page.text)
     # The one link that is not an anchor is the link's own PDF (owner decision 2026-10-26:
     # Download PDF on a link that allows downloads), on the link's path.
@@ -936,6 +939,18 @@ def test_a_link_holder_reads_no_left_out_line_no_empty_or_repeated_column():
     assert reader_body(note, "now") == ""
     assert reader_body(f"{note}\n\nWe ship in order.", "roadmap") == "We ship in order."
     assert "left out" not in reader_body("2 items serve no confirmed goal and are left out.", "x")
+
+
+def test_a_link_holder_reads_no_per_item_no_goal_flag():
+    """protects=qa-docs-12 (fix4-docs-share review): a Team card's "⚑ Serves no confirmed
+    goal." flag is the company's note, so the link holder's page drops it; fails_when=the
+    flag line reaches the page; no_claim=the company's own audience view keeps the flag."""
+    from oracle.roadmap import variants
+    from oracle.shares.render import reader_body
+
+    card = f"Kept for the support team.\n\n{variants.NO_GOAL_FLAG}"
+    assert reader_body(card, "later-item-ops") == "Kept for the support team."
+    assert reader_body(variants.NO_GOAL_FLAG, "later-item-ops") == ""
 
 
 def test_the_link_holders_page_follows_a_dark_reader_in_the_apps_type():

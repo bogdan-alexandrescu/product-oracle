@@ -55,7 +55,7 @@ export const SHARING_SECTIONS: SectionSeed[] = [
   { key: "item-ledger", level: 3, heading: "Billing ledger v2", body: "Owner: Admin. Serves G1. Depends on Falcon alerts rework." },
   { key: "item-partner", level: 3, heading: "Partner API beta", body: "Owner: Approver. Serves G2." },
   { key: "later", level: 2, heading: "Later", body: "Ideas we keep." },
-  { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Admin. This item serves no confirmed goal." },
+  { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Admin. Kept for the support team." },
   {
     key: "dependencies",
     level: 2,

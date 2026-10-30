@@ -79,6 +79,29 @@ test.describe("desktop", () => {
     expect(text).not.toContain("serves no confirmed goal");
   });
 
+  test("qa-docs-12: a Team link shows no item's no-goal flag, which the company's Team view keeps", async ({ page }) => {
+    await sharing(page);
+    await page.goto(`${DOC}?audience=team`);
+    const own = page.frameLocator('iframe[title="Roadmap for Team"]');
+    await expect(own.getByText("\u2691 Serves no confirmed goal.")).toBeVisible();
+    await page.getByRole("button", { name: "Share a link", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Share roadmap" });
+    await sheet.getByLabel("Label").fill("Team, November");
+    await sheet.getByRole("button", { name: "Create link" }).click();
+    const url = await sheet.getByLabel("Link", { exact: true }).inputValue();
+    const code = await sheet.getByLabel("Passcode", { exact: true }).inputValue();
+    await sheet.getByRole("button", { name: "Done" }).click();
+    await page.goto(new URL(url).pathname);
+    await page.getByLabel("Passcode").fill(code);
+    await page.getByRole("button", { name: "Open" }).click();
+    const frame = page.frameLocator(FRAME);
+    await expect(frame.getByRole("heading", { name: "Ops console cleanup" })).toBeVisible();
+    const text = await frame.locator("body").innerText();
+    expect(text).toContain("Kept for the support team.");
+    expect(text).not.toMatch(/serves no confirmed goal/i);
+    expect(text).not.toContain("\u2691");
+  });
+
   test("qa-docs-13: the shared tables have no empty column and no Goal column under the goal", async ({ page }) => {
     const frame = await openShared(page);
     const tables = frame.getByRole("table");

@@ -226,7 +226,8 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   // The title follows the open page; a document version draws its own wrapped H1 on a phone,
   // so the bar names where it is instead of cutting the title a second time (qa-docs-78).
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Checkout redesign PRD");
+  // The page's own H1 (its sections draw an H1 of their own once they load).
+  await expect(page.getByRole("heading", { level: 1, name: /Checkout redesign PRD/ })).toBeVisible();
   await expect(title).toHaveText("PRDs");
 
   const user = bar.getByTestId("phone-user-menu");
