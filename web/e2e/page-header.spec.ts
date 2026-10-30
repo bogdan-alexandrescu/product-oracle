@@ -95,9 +95,11 @@ for (const scheme of ["light", "dark"] as const) {
     await page.goto("/runs");
     await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
     await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
-    // One way to decide (rirs-21): the decision below; the header's Decide only goes to it, so
-    // neither is drawn as a second primary.
+    // One way to decide (rirs-21): the decision below; the header's Decide only goes to it, so it
+    // is not drawn as a second primary. The decision's Approve and continue is the page's one
+    // filled primary (cld-5).
     await expect(page.getByTestId("run-go-decide")).not.toHaveAttribute("data-variant", "primary");
-    await expect(page.locator("#decide").getByRole("button", { name: "Approve and continue" })).toBeVisible();
+    await expect(page.locator("#decide").getByRole("button", { name: "Approve and continue" })).toHaveAttribute("data-variant", "primary");
+    await expectOnePrimaryOnPage(page, "a run waiting at a checkpoint");
   });
 }
