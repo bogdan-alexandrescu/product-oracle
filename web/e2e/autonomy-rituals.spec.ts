@@ -47,5 +47,5 @@ test("autonomy: an Oracle did row of a ritual opens the ritual", async ({ page }
   await expect(did).toContainText("Run rituals");
   await did.getByRole("link", { name: /^Started a summary of the pre-read for 'Monthly roadmap refresh'/ }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Monthly roadmap refresh" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Monthly roadmap refresh" })).toBeVisible();
 });

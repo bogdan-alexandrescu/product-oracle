@@ -58,6 +58,8 @@ def test_dependency_order():
     assert flag.state == "red"
     assert flag.subject == "ledger"
     assert "Ledger" in flag.reason and "Nov 10" in flag.reason
+    # qa-company-47: names in curly quotes, as everywhere else people read them.
+    assert flag.reason == "‘Import’ starts Nov 10, but ‘Ledger’, which it depends on, ends Nov 10"
     assert out["export"] == [] and out["ledger"] == []
 
 
@@ -76,7 +78,7 @@ def test_blocker_date():
     assert (flag.kind, flag.fixes, flag.subject) == ("blocker_date", ["accept_risk"], "b1")
     assert "Rate limit" in flag.reason and "Nov 20" in flag.reason
     # Named: a change card lists a dependent's lines under the moved item.
-    assert flag.reason.startswith("'Import' starts Nov 1, but blocker 'Rate limit'")
+    assert flag.reason.startswith("‘Import’ starts Nov 1, but blocker ‘Rate limit’")
 
 
 def test_outside_milestone():
@@ -86,7 +88,7 @@ def test_outside_milestone():
     (flag,) = out["import"]
     assert (flag.kind, flag.fixes) == ("outside_milestone", ["accept_risk"])
     assert "Beta" in flag.reason and "Nov 15" in flag.reason
-    assert flag.reason == "'Import' ends Dec 1, after its milestone 'Beta' (Nov 15)"
+    assert flag.reason == "‘Import’ ends Dec 1, after its milestone ‘Beta’ (Nov 15)"
     assert out["export"] == []
 
 
@@ -98,6 +100,7 @@ def test_cut_with_dependents():
     (flag,) = out["ledger"]
     assert (flag.kind, flag.fixes) == ("cut_with_dependents", ["accept_risk"])
     assert "Import" in flag.reason and "1 other" in flag.reason
+    assert flag.reason.startswith("Cut, but ‘Import’ and 1 other")
     lone = node("solo", d(2026, 10, 1), d(2026, 10, 20), status="cut")
     assert constraints.check([lone])["solo"] == []
 

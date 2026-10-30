@@ -70,7 +70,9 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
 
   await row.getByRole("button", { name: "Answer" }).click();
   const form = page.getByTestId("answer-question");
-  await expect(form).toContainText(CLINIC);
+  // qa-company-3 (round 3): the question once, in the row, not again above the form.
+  await expect(row.getByTestId("question-prompt")).toHaveText(CLINIC);
+  await expect(form.getByTestId("answer-prompt")).toHaveCount(0);
   await expect(form).toContainText("Why Oracle asks");
   for (const name of ["Send answer", "I don't know", "Defer", "Ask someone", "Research this"]) {
     await expect(form.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();

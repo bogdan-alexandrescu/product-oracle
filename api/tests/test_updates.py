@@ -89,6 +89,14 @@ def test_builtin_update_templates_mark_their_brief_and_end_with_sources(key, the
     assert flows.KIND_NAMES["update"] == "update"
 
 
+def test_builtin_update_template_names_match_their_titles():
+    """protects=qa-company-38: each update template is called what its updates are titled
+    ("Board update", "Investor update"), as Company › Updates names it; fails_when=the board
+    template is called something else ("Board product section"); no_claim=the web's labels."""
+    names = {k: builtins.BUILTIN_TEMPLATES_BY_KEY[k].name for k in ("board-product", "investor-update")}
+    assert names == {"board-product": "Board update", "investor-update": "Investor update"}
+
+
 # --------------------------------------------------------------------------- unit: checks
 
 

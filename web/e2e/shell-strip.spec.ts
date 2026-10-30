@@ -78,52 +78,19 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("Company's strip: named, focusable chevrons page it by whole tabs", async ({ page }) => {
-    // protects=the chevrons are buttons named Scroll tabs left/right, reachable by keyboard, and
-    // paging leaves no tab cut mid-word at an edge; all six tabs reachable (qa-company-32,
-    // qa-shell-11, qa-shell-13); fails_when=a chevron is aria-hidden/untabbable/unnamed, or a tab
-    // is cut by the strip's edge after paging; no_claim=the fade's exact look.
+  test("Company's strip: every tab shows whole, wrapping onto a second line, with no chevrons", async ({ page }) => {
+    // protects=qa-company-44 (was qa-company-32, qa-shell-11, qa-shell-13: a scrolling strip
+    // showed three of six tabs); fails_when=a tab is hidden, cut, or the strip scrolls with
+    // chevrons; no_claim=which tabs share a line.
     await login(page);
     await page.goto("/company/strategy");
     const nav = page.getByRole("navigation", { name: "Company" }).filter({ visible: true });
     await expect(nav.getByTestId("company-tab-strategy")).toHaveAttribute("aria-current", "page");
-    const right = nav.getByRole("button", { name: "Scroll tabs right" });
-    const left = nav.getByRole("button", { name: "Scroll tabs left" });
-    await expect(right).toBeVisible();
-    await expect(right).toHaveAttribute("data-testid", "strip-more-right");
-    await expect(left).toHaveAttribute("data-testid", "strip-more-left");
-    for (const b of [left, right]) {
-      await expect(b).not.toHaveAttribute("aria-hidden");
-      await expect(b).not.toHaveAttribute("tabindex", "-1");
-      const box = (await b.boundingBox())!;
-      expect(box.width).toBeGreaterThanOrEqual(24);
-      expect(box.height).toBeGreaterThanOrEqual(24);
+    for (const key of ["strategy", "decisions", "rituals", "updates", "metrics", "market"]) {
+      await expect(nav.getByTestId(`company-tab-${key}`)).toBeInViewport({ ratio: 1 });
     }
-    await expect(scroller(nav)).toHaveCSS("scrollbar-width", "none");
-    await settle(page, nav);
-    expect((await cutTabs(nav)).cut).toEqual([]);
-
-    // The left chevron sits beside the strip, not over its first tab.
-    const strip = (await scroller(nav).boundingBox())!;
-    const lb = (await left.boundingBox())!;
-    expect(lb.x + lb.width).toBeLessThanOrEqual(strip.x + 0.5);
-
-    // Keyboard: focus the right chevron and page with Enter until the end.
-    await right.focus();
-    await expect(right).toBeFocused();
-    for (let i = 0; i < 6 && (await scroller(nav).getAttribute("data-more-right")) !== null; i++) {
-      await page.keyboard.press("Enter");
-      await settle(page, nav);
-      expect((await cutTabs(nav)).cut, `after page ${i + 1}`).toEqual([]);
-    }
-    await expect(right).toBeFocused();
-    await expect(scroller(nav)).not.toHaveAttribute("data-more-right");
-    await expect(nav.getByTestId("company-tab-market")).toBeInViewport({ ratio: 1 });
-
-    // And back with the left chevron (a click this time).
-    await left.click();
-    await settle(page, nav);
-    expect((await cutTabs(nav)).cut).toEqual([]);
+    await expect(nav.getByRole("button", { name: /^Scroll tabs/ })).toHaveCount(0);
+    await expect(nav.locator("[data-wrap]")).toHaveCount(1);
   });
 
   // qa-settings-41: Settings on a phone is a page picker, not a strip (fix2-shell.spec.ts).

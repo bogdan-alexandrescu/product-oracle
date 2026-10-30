@@ -45,7 +45,7 @@ async function resumeAndPrepare(page: Page, cost: string | null) {
     await ask.getByRole("button", { name: "Prepare now" }).click();
   }
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline rebuild" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Baseline rebuild" })).toBeVisible();
 }
 
 // protects=at the default level (Act) the occurrence starts B1's build with its estimate shown,

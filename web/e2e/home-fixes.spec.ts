@@ -235,8 +235,8 @@ test("Questions asked of me: a failing call shows the block's error, never an em
   const needs = page.getByTestId("home-needs");
   await expect(needs.getByTestId("home-questions-error")).toContainText("Mock failure");
   // The inbox rows still show: 9 items (the pending access request among them, A5), six
-  // lines and '+3 more in Inbox'.
-  await expect(needs.getByTestId("home-needs-table").locator("tr[data-row]")).toHaveCount(7);
+  // lines and '+3 more in Inbox' under them.
+  await expect(needs.getByTestId("home-needs-table").locator("tr[data-row]")).toHaveCount(6);
   await expect(needs.getByTestId("home-needs-more")).toHaveText("+3 more in Inbox");
   await page.goto("/inbox");
   await expect(page.getByTestId("inbox-questions-error")).toContainText("Mock failure");

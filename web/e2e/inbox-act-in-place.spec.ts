@@ -213,7 +213,7 @@ for (const [width, height] of [
   });
 }
 
-test("phone (390 px): the buttons stack full width and the field opens under the row; Home has one action per row", async ({ page }) => {
+test("phone (390 px): the buttons keep one line under the row and the field opens under the row; Home has one action per row", async ({ page }) => {
   await suggestions(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/inbox");
@@ -224,9 +224,10 @@ test("phone (390 px): the buttons stack full width and the field opens under the
   const a = (await accept.boundingBox())!;
   const d = (await decline.boundingBox())!;
   const r = (await metric.boundingBox())!;
-  // Stacked, each about the row's width.
-  expect(d.y).toBeGreaterThan(a.y + a.height - 1);
-  expect(a.width).toBeGreaterThan(r.width * 0.8);
+  // qa-company-4 (round 3): one line, Accept first, then the text buttons; none the row's width.
+  expect(Math.abs(d.y - a.y)).toBeLessThan(4);
+  expect(d.x).toBeGreaterThan(a.x);
+  expect(a.width).toBeLessThan(r.width * 0.5);
   await decline.click();
   const field = metric.getByLabel("Why? (optional)");
   await expect(field).toBeVisible();

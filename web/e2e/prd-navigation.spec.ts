@@ -465,9 +465,10 @@ test("legacy #s-key links open their section, and in-page section links use #key
 test("scroll strip: the chevrons scroll it and it stays where they leave it", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
-  // qa-settings-41: Settings on a phone is a page picker now; Company's tabs are a strip.
-  await page.goto("/company/strategy");
-  const strip = page.getByRole("navigation", { name: "Company" }).filter({ visible: true });
+  // qa-settings-41: Settings on a phone is a page picker now; qa-company-44: Company's tabs
+  // wrap on a phone. Requests' tabs are still a strip there.
+  await page.goto("/requests");
+  const strip = page.getByRole("navigation", { name: "Requests" }).filter({ visible: true });
   const more = strip.getByTestId("strip-more-right");
   await expect(more).toBeVisible();
   const scroller = strip.locator(".scroll-fade");
