@@ -482,6 +482,15 @@ async def test_shift_dependents_moves_every_sibling_but_an_accepted_risk(client)
         await s.commit()
         for r_ in rows:
             w.ids[r_.item_key] = str(r_.id)
+    # fix4 review (qa-simple-home-1): b's order flag names what Move the dependents moves,
+    # b first, as the engine moves them below (Home reads it; no copy of the plan in the web).
+    rm = await client.get("/v1/simple/roadmap", headers=ctx.as_("decider"))
+    assert rm.status_code == 200, rm.text
+    b_item = next(i for i in rm.json()["items"] if i["id"] == w.ids["shift_dependents-b"])
+    order = next(f for f in b_item["flags"] if f["kind"] == "dependency_order")
+    assert order["moves"][0] == w.ids["shift_dependents-b"]
+    assert set(order["moves"]) == {w.ids[k] for k in ("shift_dependents-b", "sib-s", "sib-d")}
+    assert all(f["moves"] == [] for f in b_item["flags"] if f["kind"] != "dependency_order")
     r = await w.post(client, "decider", "shift_dependents")
     assert r.status_code == 201, r.text
     moved = {k: await w.item(k) for k in ("shift_dependents-b", "sib-s", "sib-d", "sib-r")}
