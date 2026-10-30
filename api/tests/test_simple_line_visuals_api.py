@@ -13,10 +13,15 @@ Test cards (protects / fails_when / no_claim):
   fails_when=a role is offered or granted an ask its rule does not give, the job is not
   queued, or a line of another page is drawn; no_claim=the web's button (the spec).
 - test_line_ask_working_draft: protects=a bet reworded by the decider into the working
-  draft is asked for by its draft words (its own subject), by who sees the draft; a
-  viewer, who reads the published version, finds no such bet (404) and is offered no
-  ask; fails_when=a draft line cannot be asked for, or a draft's words leak to a viewer;
+  draft keeps its subject (the line's own id, never its words: qa-simple-prd-1, "Carry
+  the flow over"); who sees the draft asks with the draft's words as the brief, once;
+  fails_when=the edit gives the bet a new subject, or the ask is queued twice;
   no_claim=publishing (S3b's tests).
+- test_editing_a_bet_keeps_its_flow: protects=a bet with a drawn flow, reworded into the
+  working draft, still shows that flow (its versions and comments) to who sees the draft
+  and to who reads the published page, and after the draft is published; no new drawing
+  is queued; fails_when=the edit or the publish detaches the flow ("No flow yet");
+  no_claim=the web (simple-bet-flow-carry.spec.ts).
 - test_line_ask_track_owner_without_decider: protects=with no decider, the track owner
   of the PRD (an approver) asks; a plain approver does not; fails_when=the fallback is
   missed or given to everyone; no_claim=the roadmap's own rule (S3a's tests).
@@ -25,12 +30,9 @@ Test cards (protects / fails_when / no_claim):
   a good answer queues one per bet, each with its line's words and the PRD;
   fails_when=a rejected answer queues visuals or a built page queues none;
   no_claim=the drawing (test_simple_visuals_api).
-- test_draft_line_visual_hidden_from_who_reads_the_published_page: protects=a visual
-  drawn for a working draft's bet (its subject is the draft's words) is read only by who
-  sees that bet on the page: a viewer of the PRD who has the subject id reads "nothing
-  drawn" (with or without the PRD), its version 404, a comment 404; the published bet's
-  visual stays readable to the viewer; fails_when=the PRD's readers alone are enough to
-  read a draft bet's drawing; no_claim=publishing (S3b's tests).
+- test_words_keyed_flow_still_found: protects=a flow left keyed by a bet's words (one the
+  migration did not move) is still read by who finds a bet with those words on the page;
+  fails_when=such a flow becomes unreadable.
 - test_one_pager_job_queues_no_bet_visuals_when_lines_in_use: protects=the one_pager
   job's good answer rejected as ``built: false`` because a working draft holds the page's
   lines queues no bet visual; fails_when=the rejected answer's bets are drawn;
@@ -122,19 +124,64 @@ async def test_line_ask_working_draft(client):
     mine = line(await get(client, ctx, "decider"), "bets-1")
     assert mine["text"] == "A checklist that invites a teammate"
     sid = mine["flow_subject"]
-    assert sid == str(visuals.line_subject(uuid.UUID(doc_id), mine["text"]))
+    # The bet's subject is its line, not its words: the edit keeps it.
+    assert sid == str(visuals.line_subject(uuid.UUID(doc_id), "bets-1"))
+    assert sid != str(visuals.words_subject(uuid.UUID(doc_id), mine["text"]))
     published = line(await get(client, ctx, "viewer"), "bets-1")
-    assert published["flow_subject"] != sid
+    assert published["flow_subject"] == sid
     assert (await panel(client, ctx, "decider", sid, doc_id))["can_revise"] is True
     assert (await panel(client, ctx, "viewer", sid, doc_id))["can_revise"] is False
     before = len(await jobs(ctx))
     r = await ask(client, ctx, "decider", sid, doc_id)
     assert r.status_code == 202 and r.json()["pending"] is True, r.text
     assert len(await jobs(ctx)) == before + 1
-    # The published version's line is asked for too (its own subject).
-    r = await ask(client, ctx, "decider", published["flow_subject"], doc_id)
-    assert r.status_code == 202, r.text
-    assert len(await jobs(ctx)) == before + 2
+    async with tenant_session(ctx.tenant_id) as s:
+        v = await s.scalar(select(SimpleVisual).where(SimpleVisual.subject_id == uuid.UUID(sid)))
+        assert v.brief == "A checklist that invites a teammate"
+    # Twice is once.
+    assert (await ask(client, ctx, "owner", sid, doc_id)).status_code == 202
+    assert len(await jobs(ctx)) == before + 1
+
+
+async def test_editing_a_bet_keeps_its_flow(client):
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    doc_id = view["document"]["id"]
+    sid = line(view, "bets-1")["flow_subject"]
+    assert (await ask(client, ctx, "decider", sid, doc_id)).status_code == 202
+    await run_visual_jobs(ctx)
+    r = await client.post(f"{URL}/{sid}/comments", json={"body": "Show the skip path"},
+                          headers=ctx.as_("commenter"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await edit(client, ctx, "decider", view, "bets-1", "A checklist that invites a teammate")
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    queued = len(await jobs(ctx))
+    for who in ("decider", "viewer"):
+        bet = line(await get(client, ctx, who), "bets-1")
+        assert bet["flow_subject"] == sid, who
+        assert bet["flow"] is not None and bet["flow"]["title"] == ANSWER["title"], who
+        out = await panel(client, ctx, who, sid, doc_id)
+        assert out["flow"]["version"] == 1 and len(out["versions"]) == 1, who
+        assert [c["body"] for c in out["comments"]] == ["Show the skip path"], who
+    assert line(await get(client, ctx, "decider"), "bets-1")["text"] == (
+        "A checklist that invites a teammate"
+    )
+    # Published: the bet's new words keep the flow.
+    draft_id = (await get(client, ctx, "decider"))["draft"]["id"]
+    sub = await client.post(f"/v1/simple/drafts/{draft_id}/submit", headers=ctx.as_("decider"))
+    assert sub.status_code == 200, sub.text
+    ok = await client.post(f"/v1/simple/drafts/{draft_id}/approve", headers=ctx.as_("decider"))
+    assert ok.status_code == 200, ok.text
+    after = line(await get(client, ctx, "viewer"), "bets-1")
+    assert after["text"] == "A checklist that invites a teammate"
+    assert after["flow_subject"] == sid and after["flow"]["title"] == ANSWER["title"]
+    assert (await panel(client, ctx, "viewer", sid, doc_id))["flow"]["version"] == 1
+    # Carried over, never drawn again.
+    assert len(await jobs(ctx)) == queued
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = list(await s.scalars(select(SimpleVisual).where(
+            SimpleVisual.subject_kind == "one_pager_line")))  # fmt: skip
+        assert [v.subject_id for v in rows] == [uuid.UUID(sid)]
 
 
 async def test_line_ask_track_owner_without_decider(client):
@@ -199,34 +246,23 @@ async def test_one_pager_job_queues_bet_visuals_only_when_built(client):
         doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
         assert {v.document_id for v in rows} == {doc.id}
         assert {v.subject_id for v in rows} == {
-            visuals.line_subject(doc.id, t) for t in ("Checklist", "Invites", "Sample")
+            visuals.line_subject(doc.id, f"bets-{i}") for i in (1, 2, 3)
         }
 
 
-async def test_draft_line_visual_hidden_from_who_reads_the_published_page(client):
+async def test_words_keyed_flow_still_found(client):
     ctx = await world(client)
     view = await get(client, ctx, "decider")
-    doc_id = view["document"]["id"]
-    r = await edit(client, ctx, "decider", view, "bets-1", "A checklist that invites a teammate")
-    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
-    sid = line(await get(client, ctx, "decider"), "bets-1")["flow_subject"]
-    published = line(await get(client, ctx, "viewer"), "bets-1")["flow_subject"]
-    assert (await ask(client, ctx, "decider", sid, doc_id)).status_code == 202
-    assert (await ask(client, ctx, "decider", published, doc_id)).status_code == 202
+    doc_id = uuid.UUID(view["document"]["id"])
+    bet = line(view, "bets-2")
+    old = visuals.words_subject(doc_id, bet["text"])
+    async with tenant_session(ctx.tenant_id) as s:
+        await visuals.request_visual(s, None, "one_pager_line", old, bet["text"],
+                                     document_id=doc_id)  # fmt: skip
+        await s.commit()
     await run_visual_jobs(ctx)
-    assert (await panel(client, ctx, "decider", sid, doc_id))["flow"]["version"] == 1
-    # The viewer reads the published page: the draft bet's drawing is not there for them.
-    out = await panel(client, ctx, "viewer", sid, doc_id)
-    assert out["flow"] is None and out["versions"] == [] and out.get("brief") is None
-    r = await client.get(f"{URL}/{sid}", headers=ctx.as_("viewer"))
-    assert r.status_code == 200 and r.json()["flow"] is None, r.text
-    r = await client.get(f"{URL}/{sid}/versions/1", headers=ctx.as_("viewer"))
-    assert r.status_code == 404, r.text
-    r = await client.post(f"{URL}/{sid}/comments", json={"body": "Looks right"},
-                          headers=ctx.as_("commenter"))  # fmt: skip
-    assert r.status_code == 404, r.text
-    # The published bet's drawing is the viewer's to read.
-    assert (await panel(client, ctx, "viewer", published, doc_id))["flow"]["version"] == 1
+    out = await panel(client, ctx, "viewer", old, str(doc_id))
+    assert out["flow"]["version"] == 1
 
 
 async def test_one_pager_job_queues_no_bet_visuals_when_lines_in_use(client):
