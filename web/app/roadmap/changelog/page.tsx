@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, Chip, Empty, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, toast, type ChipKind } from "@/components/ds";
+import { Button, Chip, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, toast, type ChipKind } from "@/components/ds";
 import { PlanCrumb } from "@/app/plan/_crumb";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate, plural } from "@/lib/format";
@@ -57,7 +57,13 @@ export default function ChangelogPage() {
   const entries = q.data ?? [];
   // Export gives the published public entries (GET /v1/changelog/export?audience=public): none, nothing to export.
   const exportable = entries.filter((e) => e.audience === "public" && e.status === "published").length;
-  const exportWhy = q.data && exportable === 0 ? "Nothing to export yet: export gives the published public entries." : null;
+  // fix4 qa-plan-57: the Export buttons and their hint are for those who can publish an entry
+  // (who can make one to export); others see Export only once there is something to export.
+  const canPublish = can("publish_changelog_entry");
+  const showExport = canPublish || exportable > 0;
+  const exportWhy = canPublish && q.data && exportable === 0 ? "Nothing to export yet: export gives the published public entries." : null;
+  const canCreate = can("create_changelog_entry");
+  const empty = !!q.data && entries.length === 0;
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
@@ -122,27 +128,32 @@ export default function ChangelogPage() {
             <LinkButton href="/roadmap/launches" icon="flag" className={HEADER_BUTTON} data-testid="launches-link">
               Launches
             </LinkButton>
-            <Button
-              disabled={busy !== null || exportable === 0}
-              title={exportWhy ?? undefined}
-              aria-describedby={exportWhy ? "export-why" : undefined}
-              className={EXPORT_BUTTON}
-              onClick={() => exportAs("md")}
-              data-testid="export-md"
-            >
-              Export Markdown
-            </Button>
-            <Button
-              disabled={busy !== null || exportable === 0}
-              title={exportWhy ?? undefined}
-              aria-describedby={exportWhy ? "export-why" : undefined}
-              className={EXPORT_BUTTON}
-              onClick={() => exportAs("html")}
-              data-testid="export-html"
-            >
-              Export HTML
-            </Button>
-            {can("create_changelog_entry") && (
+            {showExport && (
+              <>
+                <Button
+                  disabled={busy !== null || exportable === 0}
+                  title={exportWhy ?? undefined}
+                  aria-describedby={exportWhy ? "export-why" : undefined}
+                  className={EXPORT_BUTTON}
+                  onClick={() => exportAs("md")}
+                  data-testid="export-md"
+                >
+                  Export Markdown
+                </Button>
+                <Button
+                  disabled={busy !== null || exportable === 0}
+                  title={exportWhy ?? undefined}
+                  aria-describedby={exportWhy ? "export-why" : undefined}
+                  className={EXPORT_BUTTON}
+                  onClick={() => exportAs("html")}
+                  data-testid="export-html"
+                >
+                  Export HTML
+                </Button>
+              </>
+            )}
+            {/* fix4 qa-plan-15, qa-plan-58: while empty, New entry is in the empty card only. */}
+            {canCreate && !empty && (
               <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-entry">
                 New entry
               </Button>
@@ -154,17 +165,23 @@ export default function ChangelogPage() {
         {(q.error || error) && <Notice tone="error">{q.error ?? error}</Notice>}
         {exportWhy && (
           <p id="export-why" className="text-sm text-text2" data-testid="export-why">
-            {exportWhy}
-            {can("publish_changelog_entry") ? " Publish a public entry to export it." : ""}
+            {exportWhy} Publish a public entry to export it.
           </p>
         )}
         <Panel testId="changelog">
-          {q.data && entries.length === 0 && (
-            <Empty testId="changelog-empty">
-              {can("create_changelog_entry")
-                ? "No entries yet. Use New entry to add the first; Oracle adds one when it drafts a launch's kit."
-                : "No entries yet. Oracle adds one when it drafts a launch's kit, and approvers add their own."}
-            </Empty>
+          {empty && (
+            <div data-testid="changelog-empty" className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+              <p data-testid="changelog-empty-text" className="text-[15px] text-text2">
+                {canCreate
+                  ? "No entries yet. Add the first; Oracle adds one when it drafts a launch's kit."
+                  : "No entries yet. Oracle adds one when it drafts a launch's kit, and approvers add their own."}
+              </p>
+              {canCreate && (
+                <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-entry">
+                  New entry
+                </Button>
+              )}
+            </div>
           )}
           {grouped(entries).map(([day, groups]) => (
             <section key={day} aria-label={formatDate(day)} data-testid="changelog-day" className="border-b border-line px-4 py-3 last:border-b-0 max-[600px]:px-3">

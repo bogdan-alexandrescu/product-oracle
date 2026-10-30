@@ -15,8 +15,10 @@ import {
   describeAction,
   fixesFor,
   goalName,
+  includeFeature,
   LEAVE_OUT_REASONS,
   pct,
+  proposedText,
   reasonText,
   setDecision,
   type Feature,
@@ -40,8 +42,8 @@ export function FixButtons({ fixes, small = true }: { fixes: Fix[]; small?: bool
         <Button
           key={f.label}
           title={f.title}
-          // rirs-1: a long label ("Include Shared address book export") wraps inside its column.
-          className={`h-auto! max-w-full min-h-8 py-1 text-left break-words whitespace-normal! ${small ? "px-2.5 text-sm max-[600px]:min-h-10" : ""}`}
+          // qa-work-12: short labels on one line ("Include dependency"); the buttons wrap as a group.
+          className={`min-h-8 max-w-full whitespace-nowrap ${small ? "h-8 px-2.5 text-sm max-[600px]:h-10" : ""}`}
           disabled={busy}
           onClick={async (e) => {
             e.stopPropagation();
@@ -470,8 +472,7 @@ export function ScopeInspector({
   const write = mode !== "viewer";
   // rirs-14: a row the person has not decided yet shows what the agents proposed, not a decision.
   const undecided = f.needs_you && !f.edited;
-  const proposedWord: Record<string, string> = { include: "include", exclude: "leave out", defer: "defer to a later PRD" };
-  const proposed = `Proposed: ${proposedWord[f.decision] ?? "include"}`;
+  const proposed = proposedText(f.decision);
   return (
     <Inspector
       eyebrow="Feature · selected"
@@ -510,7 +511,7 @@ export function ScopeInspector({
                   </span>
                   {r.answered && answer ? (
                     <p className="mt-1.5 flex items-center gap-1.5 text-sm text-pass">
-                      ✓ {answer.kind === "waive" ? `Waived: ${((answer.value ?? {}) as { reason?: string }).reason ?? answer.note ?? ""}` : "Kept"}
+                      ✓ {answer.kind === "waive" ? `Waived: ${((answer.value ?? {}) as { reason?: string }).reason ?? answer.note ?? ""}` : "Included"}
                       {mode === "approver" && (
                         <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void ops.removeAction(answer.id)}>
                           Undo
@@ -518,11 +519,17 @@ export function ScopeInspector({
                       )}
                     </p>
                   ) : (
-                    write && (
-                      <div className="mt-1.5">
-                        <FixButtons fixes={fixesFor(r, f, scope, mode, ops, ui)} />
-                      </div>
-                    )
+                    // qa-work-9: the feature's own decision (Include, Leave out, Defer) is the Decision
+                    // control below, once; a reason card keeps the other fixes (a goal, a dependency, Waive).
+                    write &&
+                    (() => {
+                      const other = fixesFor(r, f, scope, mode, ops, ui).filter((x) => !x.decision);
+                      return other.length ? (
+                        <div className="mt-1.5">
+                          <FixButtons fixes={other} />
+                        </div>
+                      ) : null;
+                    })()
                   )}
                   {waiving === r.code && mode === "approver" && <WaiveForm feature={f} code={r.code} ops={ops} onDone={onWaiveDone} />}
                 </li>
@@ -547,7 +554,7 @@ export function ScopeInspector({
             { value: "exclude", label: "Leave out", disabled: mode !== "approver" },
             { value: "defer", label: "Defer to a later PRD", disabled: mode !== "approver" },
           ]}
-          onChange={(v) => (v === "exclude" ? ui.leaveOut(f) : void setDecision(mode, ops, f, v))}
+          onChange={(v) => (v === "exclude" ? ui.leaveOut(f) : v === "include" ? void includeFeature(mode, ops, f) : void setDecision(mode, ops, f, v))}
         />
         {mode !== "approver" && (
           <p className="mt-1.5 text-sm text-text2" data-testid="who-decides">

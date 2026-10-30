@@ -155,7 +155,7 @@ export function DateBasisDialog({
 
   return (
     <Dialog
-      title="Record basis"
+      title="Add a date source"
       onClose={onClose}
       testId="date-basis-dialog"
       dirty={dirty}

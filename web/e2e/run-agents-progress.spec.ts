@@ -24,6 +24,8 @@ test("a running segment shows its agents and the cost so far, and Refresh progre
   const progress = items.getByTestId("segment-progress");
   await expect(progress).toContainText("$0.00 spent so far");
   await expect(progress).toContainText("Not checked yet");
+  // fix4 qa-work-16: in plain words.
+  await expect(progress).not.toContainText("Oracle reads the agents");
 
   // The first check: the agents are working; each shows its role, state, elapsed time and
   // last heartbeat, and the cost so far reaches the segment and the run.
@@ -58,7 +60,7 @@ test("a segment that starts during Refresh progress shows what that check read",
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
   await page.getByRole("textbox", { name: "Title" }).fill("Saved carts across devices");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Shoppers lose their cart when they switch from phone to laptop.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });

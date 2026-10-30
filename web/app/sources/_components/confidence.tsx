@@ -58,6 +58,23 @@ export function confidenceLevel(c: Confidence): { label: string; kind: ChipKind 
 
 export const pct = formatPercent;
 
+/** A 0..1 factor in words (qa-work-33): High, Medium or Low, never a raw score. */
+export function factorLevel(v: number): string {
+  if (v >= 0.7) return "High";
+  if (v >= 0.4) return "Medium";
+  return "Low";
+}
+
+/**
+ * How well a hit's words match, in words, against the best match of the same search
+ * (text relevance has no fixed scale, so it reads only next to the other hits).
+ */
+export function matchLevel(relevance: number, best: number): string {
+  if (!best || relevance >= best * 0.67) return "Strong";
+  if (relevance >= best * 0.34) return "Fair";
+  return "Weak";
+}
+
 /** The factors behind a confidence value with their share of the weight. */
 export function confidenceFactors(c: Confidence) {
   const factors = Object.entries(c.breakdown);
@@ -84,15 +101,15 @@ export function ConfidenceBadge({ confidence }: { confidence: Confidence }) {
           <thead className="text-left text-[13px] text-text2">
             <tr>
               <th className="pb-1.5 font-semibold">Factor</th>
-              <th className="pb-1.5 text-right font-semibold">Value</th>
-              <th className="pb-1.5 text-right font-semibold">Weight</th>
+              <th className="pb-1.5 text-right font-semibold">Level</th>
+              <th className="pb-1.5 text-right font-semibold">Counts for</th>
             </tr>
           </thead>
           <tbody>
             {factors.map((f) => (
               <tr key={f.key} className="border-t border-line">
                 <td className="py-1 text-text">{f.label}</td>
-                <td className="py-1 text-right font-semibold">{f.value.toFixed(2)}</td>
+                <td className="py-1 text-right font-semibold">{factorLevel(f.value)}</td>
                 <td className="py-1 text-right text-text2">{pct(f.share)}</td>
               </tr>
             ))}

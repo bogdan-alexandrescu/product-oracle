@@ -167,6 +167,7 @@ function ProviderCard({
         </>
       }
     >
+      {provider.key === "slack" && <CompanySlack />}
       {connections.length === 0 ? (
         <p className="px-4 py-3 text-[15px] text-text2">Not connected</p>
       ) : (
@@ -186,7 +187,7 @@ function ProviderCard({
         {!pasting && (
           // With an account already here, its row's Reconnect is the one way to renew it;
           // this adds another account (qa-onboarding-22).
-          <Button variant="ghost" className="first:-ml-2.5" onClick={() => setPasting(true)}>
+          <Button onClick={() => setPasting(true)}>
             {connections.length ? "Add another account" : "Paste a token"}
           </Button>
         )}
@@ -197,6 +198,45 @@ function ProviderCard({
         </div>
       )}
     </Panel>
+  );
+}
+
+/**
+ * Oracle's own Slack app beside the person's Slack account (qa-settings-21): read from the
+ * same status the Notifications page reads, so the two pages never disagree. The app is the
+ * company's (it posts reports and mirrors discussions); the rows below are this person's own
+ * Slack, which pulls channels they pick into Oracle.
+ */
+function CompanySlack() {
+  const status = useQuery("slack-status", () => unwrap(api.GET("/v1/company-integrations/slack/status")));
+  const owner = useMe().can("list_company_integrations");
+  if (!status.data) return null;
+  const s = status.data;
+  return (
+    <div data-testid="company-slack" className="flex flex-col gap-1 border-b border-line px-4 py-3 text-sm max-[600px]:px-3">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">Oracle&apos;s Slack app</span>
+        <Chip kind={s.connected ? (s.needs_reconnect ? "warn" : "pass") : "na"} dot>
+          {s.connected ? (s.needs_reconnect ? "Installed, needs a reconnect" : "Installed for notifications") : "Not installed"}
+        </Chip>
+      </p>
+      <p className="text-text2">
+        {s.connected ? (s.label ? <>Installed for the company in {s.label}: it </> : "Installed for the company, it ") : "Once installed for the company, it "}
+        posts the weekly report and mirrors discussions.{" "}
+        {owner ? (
+          <>
+            It is set up on{" "}
+            <Link href="/settings/notifications" className="font-medium text-accent underline underline-offset-2">
+              Notifications
+            </Link>
+            .
+          </>
+        ) : (
+          "An owner sets it up on Notifications."
+        )}{" "}
+        Your own Slack account, below, pulls channels you pick into Oracle.
+      </p>
+    </div>
   );
 }
 

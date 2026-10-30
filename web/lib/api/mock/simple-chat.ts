@@ -20,15 +20,24 @@ import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, stableUuid } from "./ids";
-import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
+import { changePhrase } from "./simple-change-words";
+import { CUT_ALL, cutDependents, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
 type Values = Record<string, unknown>;
 type Item = Schemas["SimpleRoadmapItem"];
+
+/** fix4 qa-simple-roadmap-9: the dates an item stores as the reader reads it (their roadmap's
+ * item: the working draft's for those who see it, else the published version's), the
+ * `before` a card sends, so a commenter proposes against the dates their roadmap shows. */
+function seenDates(i: Item): { start: string | null; end: string | null } {
+  const own = (d: Item["start"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
+  return { start: own(i.start), end: own(i.end) };
+}
 type Role = Schemas["Me"]["role"];
 type Preview =
-  | { kind: "dates"; item_id: string; start_date: string; end_date: string }
+  | { kind: "dates"; item_id: string; start_date: string; end_date: string; shift?: [number, number] }
   | { kind: "horizon"; item_id: string; horizon: string }
   | { kind: "title"; item_id: string; title: string }
   | { kind: "milestone"; item_id: string; name: string; date: string }
@@ -231,8 +240,9 @@ const addDays = (day: string, n: number) => isoDay(msOf(day) + n * DAY);
 const now = () => new Date(mockNowMs()).toISOString();
 // The company's day (its time zone), as oracle.company_time.company_today.
 const today = () => companyDayIso(new Date(mockNowMs()));
+// "Nov 20", "Dec 20, 2026": month first, as the API's chat._day_words.
 const dayWords = (day: string, year = false) =>
-  new Date(msOf(day)).toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" });
+  new Date(msOf(day)).toLocaleDateString("en-US", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" });
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -358,7 +368,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     cards: [{ op, target, before, after, summary, item_id: item?.id ?? null, item_title: item?.title ?? null, preview, flow, fixes: [] }],
   });
   const stored = (i: Item) => {
-    const s = storedDates(db, i.key);
+    const s = seenDates(i);
     return { start_date: s.start, end_date: s.end };
   };
   const move = (i: Item, start: string, end: string) =>
@@ -655,13 +665,29 @@ function plusMonths(day: string, n: number): string {
   return isoDay(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, Math.min(d.getUTCDate(), last)));
 }
 
-function moveDraft(db: SimpleDb, i: Item, start: string, end: string): Draft {
-  const s = storedDates(db, i.key);
+function moveDraft(db: SimpleDb, i: Item, start: string, end: string, shift?: [number, number]): Draft {
+  const s = seenDates(i);
   return {
     op: "move_dates", target: { item_id: i.id }, before: { start_date: s.start, end_date: s.end }, after: { start_date: start, end_date: end },
     summary: `Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, item_id: i.id, item_title: i.title,
-    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end }, flow: null, fixes: [],
+    // A move by a span carries it (as the API's chat._b_move): offered again on newer dates, it moves from those.
+    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end, ...(shift ? { shift } : {}) }, flow: null, fixes: [],
   };
+}
+
+/** A move by a span offered again: that span from the item's current dates, in its after, preview and words (the API's chat.rebase). */
+function rebaseShift(c: StoredCard, current: Record<string, unknown>) {
+  const p = c.preview;
+  const [from, to] = [current.start_date, current.end_date];
+  if (c.op !== "move_dates" || p?.kind !== "dates" || !p.shift || typeof from !== "string" || typeof to !== "string") return;
+  const shift = p.shift;
+  const [a, b] = [addDays(plusMonths(from, shift[0]), shift[1]), addDays(plusMonths(to, shift[0]), shift[1])];
+  const [oa, ob] = [String(c.after.start_date), String(c.after.end_date)];
+  c.after = { start_date: a, end_date: b };
+  c.preview = { ...p, start_date: a, end_date: b };
+  c.summary = c.summary.replace(`${dayWords(oa)} – ${dayWords(ob, true)}`, `${dayWords(a)} – ${dayWords(b, true)}`).replace(usSpan(oa, ob), usSpan(a, b));
+  if (c.change_words) c.change_words = { ...c.change_words, after: usSpan(a, b) };
+  if (c.correct) c.correct = { ...c.correct, values: { start_date: a, end_date: b } };
 }
 
 /** A builder's args: `item` is null for an op about no item (a decision, a minutes note). */
@@ -676,7 +702,7 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
       const len = Math.round((msOf(item.end.date) - msOf(item.start.date)) / DAY);
       return { card: moveDraft(db, item, period[0], dated(item) ? addDays(period[0], len) : period[1]) };
     }
-    return { card: moveDraft(db, item, plusMonths(item.start.date, n ?? 3), plusMonths(item.end.date, n ?? 3)) };
+    return { card: moveDraft(db, item, plusMonths(item.start.date, n ?? 3), plusMonths(item.end.date, n ?? 3), [n ?? 3, 0]) };
   },
   cut: ({ item }) =>
     !item
@@ -722,11 +748,15 @@ const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question", "a
 
 type Clause = { op: string; x: string; months?: number; period?: [string, string]; rest?: string };
 
-/** The line's changes, one clause per verb ("… and cut …"; an item's own "and" stays). */
-function clauses(text: string): Clause[] {
-  const t = text.trim().replace(/\s+/g, " ").replace(/[?.!]+$/, "");
+/**
+ * The line's changes, one clause per verb ("… and cut …"; an item's own "and" stays), each
+ * line or ";" its own part; qa-simple-decide-24: a part it cannot read goes to `skipped`.
+ */
+function clauses(text: string, skipped: string[] = []): Clause[] {
   const out: Clause[] = [];
-  for (const part of t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make|let'?s|skip|note|we decided|add)\b)/i)) {
+  const lines = text.split(/\n|;/).map((l) => l.trim().replace(/\s+/g, " ").replace(/[?.!]+$/, "")).filter(Boolean);
+  for (const part of lines.flatMap((t) => t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make|let'?s|skip|note|we decided|add)\b)/i))) {
+    const had = out.length;
     let m: RegExpExecArray | null;
     // roadmap-talk: "push X after Y" (start the day after Y ends), "add a(n) X item to M2 under Growth".
     if ((m = /^(?:push|move|shift|slip)\s+(.+?)\s+(?:to\s+start\s+)?after\s+(.+)$/i.exec(part))) {
@@ -766,9 +796,13 @@ function clauses(text: string): Clause[] {
     else if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:to|into)\s+(.+)$/i.exec(part)) && parsePeriod(m[2])) out.push({ op: "move_dates", x: m[1], period: parsePeriod(m[2])! });
     else if ((m = /\b(?:cut|drop)\s+(.+)$/i.exec(part))) out.push({ op: "cut", x: m[1] });
     else if ((m = /\bmake\s+(.+?)\s+(?:the\s+owner\s+of|own)\s+(.+)$/i.exec(part))) out.push({ op: "set_owner", x: m[2], rest: m[1] });
+    if (out.length === had) skipped.push(part);
   }
   return out;
 }
+
+/** qa-simple-decide-24: the parts of a line the reader could not read, said back (as chat.interpret's `skipped`). */
+const unread = (skipped: string[]) => skipped.slice(0, 3).map((p) => `I did not understand: “${p.slice(0, 120)}”.`);
 
 const QUESTION = /^(why|how|what|who|when|where|which|should|is|are|does|do)\b/i;
 const SAY_AGAIN = "I could not tell what to change. Say it another way.";
@@ -784,7 +818,8 @@ function named(items: Item[], x: string): Item[] {
 
 /** The reader's reply to one line (deterministic). */
 function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["reading"]>, items: Item[], meeting: Meeting | null): Reply {
-  const cs = clauses(r.text);
+  const skipped: string[] = [];
+  const cs = clauses(r.text, skipped);
   // "What should we cut first?" is a question, whatever verbs it holds.
   if (!cs.length || QUESTION.test(r.text.trim())) {
     if (QUESTION.test(r.text.trim()) || r.text.trim().endsWith("?"))
@@ -820,9 +855,11 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
     if ("card" in o) drafts.push(o.card);
     else refusals.push(o.refusal);
   }
-  if (!drafts.length) return { kind: "note", body: refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, cards: [] };
+  if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...unread(skipped)].join(" "), cards: [] };
   const n = drafts.length;
-  return { kind: "cards", body: `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`, cards: drafts };
+  // The valid cards stay; the line says which ones it cannot do and what it did not read.
+  const cant = refusals.length ? [`${["One", "Two", "Three"][refusals.length - 1] ?? refusals.length} I can't do: ${refusals.join(" ")}`] : [];
+  return { kind: "cards", body: [...cant, ...unread(skipped), `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`].join(" "), cards: drafts };
 }
 
 let readerWrote = false;
@@ -896,7 +933,8 @@ function goalNamed(x: string): string | null {
   return Object.keys(GOALS).find((k) => k === q || GOALS[k].toLowerCase() === q) ?? null;
 }
 
-const about = (i: Item) => (i.code ? `${i.code} ${i.title}` : i.title);
+// fix4 qa-simple-roadmap-3: the talk names an item by its title alone, no code (api roadmap_talk.label).
+const about = (i: Item) => i.title;
 
 /**
  * The "roadmap-talk" scenario's invented items (on "simple-chat"): F-16 Adaptive pacing ending
@@ -918,8 +956,8 @@ export function seedTalkItems(db: SimpleDb): void {
 }
 
 /** A move restated ("Move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11, 2026"), its words and Correct. */
-function talkMove(db: SimpleDb, i: Item, start: string, end: string, how = ""): Draft {
-  const d = moveDraft(db, i, start, end);
+function talkMove(db: SimpleDb, i: Item, start: string, end: string, how = "", shift?: [number, number]): Draft {
+  const d = moveDraft(db, i, start, end, shift);
   return {
     ...d,
     summary: `Move ${about(i)}${how ? ` ${how},` : ""} to ${usSpan(start, end)}`,
@@ -952,7 +990,7 @@ function buildAdd(title: string, goal: string | null, milestone: string | null, 
   };
 }
 
-const NUMBERS: Record<string, number> = { a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+const NUMBERS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
 const countOf = (x: string) => NUMBERS[x.toLowerCase()] ?? Number(x);
 
 /** Oracle in an item's own talk: "it" and "this" mean the item (deterministic, the demo's sentences). */
@@ -972,10 +1010,15 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
   if (ctx.role === "viewer") return { kind: "note", body: "Viewers ask questions here; changes need a commenter or above.", cards: [] };
   const one = (d: Draft): Reply => ({ kind: "cards", body: `I understood: ${d.summary.replace(/^./, (c) => c.toLowerCase())}.`, cards: [d] });
   let m: RegExpExecArray | null;
-  if ((m = new RegExp(`^(?:move|push|shift|slip) ${it}(?: by)? (a|one|two|three|four|five|six|\\d+) weeks? (later|earlier|out|back|sooner)$`, "i").exec(t))) {
-    const n = countOf(m[1]) * 7 * (/later|out/i.test(m[2]) ? 1 : -1);
-    const words = `${m[1].toLowerCase() === "a" ? "one" : m[1].toLowerCase()} week${countOf(m[1]) === 1 ? "" : "s"} ${n > 0 ? "later" : "earlier"}`;
-    return one(talkMove(db, i, addDays(i.start.date, n), addDays(i.end.date, n), words));
+  if ((m = new RegExp(`^(?:move|push|shift|slip) ${it}(?: by)? (a|an|one|two|three|four|five|six|\\d+) (day|week|month|quarter)s? (later|earlier|out|back|sooner)$`, "i").exec(t))) {
+    // As the API's roadmap_talk._move_kw: a shift of (months, days), as chat.parse_shift.
+    const count = countOf(m[1]);
+    const unit = m[2].toLowerCase();
+    const sign = /later|out/i.test(m[3]) ? 1 : -1;
+    const shift: [number, number] = [sign * (unit === "quarter" ? 3 * count : unit === "month" ? count : 0), sign * (unit === "week" ? 7 * count : unit === "day" ? count : 0)];
+    const moved = (day: string) => addDays(plusMonths(day, shift[0]), shift[1]);
+    const words = `${/^an?$/i.test(m[1]) ? "one" : m[1].toLowerCase()} ${unit}${count === 1 ? "" : "s"} ${sign > 0 ? "later" : "earlier"}`;
+    return one(talkMove(db, i, moved(i.start.date), moved(i.end.date), words, shift));
   }
   if ((m = new RegExp(`^(?:move|put) ${it} (?:in|into|to|under) (M\\d)\\b.*$`, "i").exec(t))) {
     const ms = milestoneNamed(m[1]);
@@ -1216,7 +1259,14 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   void _flag;
   void _thread;
   void _meeting;
-  return { change_words: null, correct: null, ...rest, ...mayOf(db, chat, c, ctx), flags: check.flags };
+  // fix5-cut-dependents: what "Cut it and its dependents" cuts with the item (chat.cards_out).
+  const items = c.status === "open" && c.op === "cut" && c.item_id ? itemsFor(db, ctx) : [];
+  const waiting = c.item_id && items.length ? cutDependents(items, c.item_id) : [];
+  const may = mayOf(db, chat, c, ctx);
+  // Review major (chat.cards_out): "Cut it and its dependents" applies only when the reader decides every item it cuts.
+  const allMine = [c.item_id, ...waiting.map((i) => i.id)].every((id) => !!items.find((i) => i.id === id)?.can_decide);
+  const may_with_dependents = waiting.length && may.may ? (allMine ? "apply" : "propose") : null;
+  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -1319,8 +1369,9 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 }
 
 /** One card through the change engine (or its fix n): the card out and the result, or the engine's refusal. */
-async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
-  const use = n == null ? c : c.fixes[n];
+async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings, withDependents: boolean | string[] = false): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
+  // fix5-cut-dependents: a cut card applies as cut_with_dependents (one change), and then names every item it cut.
+  const use = withDependents ? { op: CUT_ALL, target: c.target, before: withDependents === true ? c.before : { ...c.before, dependents: withDependents }, after: {} } : n == null ? c : c.fixes[n];
   if (c.op === "suggest_feature") {
     // Filed as the person's own suggestion (origin "person"): it lands under People.
     const goal = Object.keys(GOALS).find((k) => goalId(k) === c.target.goal_id) ?? "";
@@ -1346,9 +1397,24 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     if (id && ctx.names[id]) (db.people ??= {})[id] = ctx.names[id];
   }
   const res = await engine(db, ctx, "POST", "/v1/simple/changes", { op: use.op, target: use.target, before: use.before, after: use.after });
-  if (!res.ok) return res;
+  if (!res.ok) {
+    // dod-data: a card refused because its item changed since stays open, offered again on the new state (as the API's chat.rebase).
+    if (res.status === 409 && n == null && !withDependents) {
+      const current = ((await res.clone().json()) as { detail?: { current?: Record<string, unknown> } }).detail?.current;
+      if (current && Object.keys(current).length && Object.keys(current).every((k) => k in c.before)) {
+        c.before = { ...c.before, ...current };
+        rebaseShift(c, current);
+      }
+    }
+    return res;
+  }
   const result = (await res.json()) as Schemas["SimpleChangeResult"];
   afterApplied(db, c, result);
+  if (withDependents) {
+    const t = result.change.target as Record<string, unknown>;
+    const said = changePhrase(CUT_ALL, t, {}, {}, ((t.titles as string[] | undefined) ?? [])[0] ?? null);
+    c.summary = said.slice(0, 1).toUpperCase() + said.slice(1);
+  }
   Object.assign(c, {
     status: result.change.status === "applied" ? "applied" : "proposed", change_id: result.change.id,
     decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: now(),
@@ -1394,14 +1460,14 @@ async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
     for (const f of i.flags.filter((x) => x.state === "red" && x.fixes.length > 0)) {
       const dep = f.subject ? byId.get(f.subject) : undefined;
       const sd = (it: Item) => {
-        const s = storedDates(db, it.key);
+        const s = seenDates(it);
         return { start_date: s.start, end_date: s.end };
       };
       const fixes: Fix[] = f.fixes.map((op) =>
         op === "accept_risk"
           ? { label: "Accept as risk", op, target: { item_id: i.id, flag: f.kind, subject: f.subject ?? null }, before: { risk: null }, after: { risk: { note: "Accepted as a risk in a walk-through" } } }
           : {
-              label: op === "shift_dependents" ? "Move dependents" : "Move dependency", op, target: { item_id: i.id, subject: f.subject ?? null },
+              label: op === "shift_dependents" ? "Move the dependents" : "Move the dependency", op, target: { item_id: i.id, subject: f.subject ?? null },
               before: { [i.id]: sd(i), ...(dep ? { [dep.id]: sd(dep) } : {}) }, after: {},
             },
       );
@@ -1699,6 +1765,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const b = await body();
       const n = b.fix == null ? null : Number(b.fix);
       if (n != null && !c.fixes[n]) return json(422, { detail: "fix: one of the card's fixes" });
+      const withDependents = b.with_dependents === true;
+      if (withDependents && (c.op !== "cut" || n != null || b.values)) return json(422, { detail: "Only a cut card cuts its dependents too" });
       // roadmap-talk: Correct's values rebuild the card (summary, after) before it applies.
       if (n == null && b.values && typeof b.values === "object") {
         if (!c.correct) return json(422, { detail: "This change has nothing to correct" });
@@ -1709,7 +1777,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
         if (said && said.card_ids.length === 1 && said.body.startsWith("I understood: ")) said.body = `I understood: ${c.summary.replace(/^./, (x) => x.toLowerCase())}.`;
         c.fixes = asIf(db, c).fixes;
       }
-      const out = await applyOne(db, chat, c, ctx, n, s8);
+      const out = await applyOne(db, chat, c, ctx, n, s8, withDependents && Array.isArray(b.dependents) ? b.dependents.map(String) : withDependents);
       return out instanceof Response ? out : json(200, out);
     }
   }

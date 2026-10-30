@@ -7,12 +7,13 @@ import { Button, Chip, FilterChips, LinkButton, InspectorSection, Page, PageHead
 import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
+import { RunBackLink } from "@/components/review/parts";
 import { RawFileSheet } from "@/components/review/RawFileSheet";
 import type { Horizon, ItemRow as TableRow } from "@/components/roadmap/item-row";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatCount } from "@/lib/format";
-import { docLabel, runLabel } from "@/lib/labels";
+import { docLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -374,17 +375,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   return (
     <Page>
       <PageHeader
-        back={
-          <span>
-            <Link href="/runs" className="hover:underline">
-              Runs
-            </Link>{" "}
-            /{" "}
-            <Link href={`/runs/${run.id}`} className="hover:underline">
-              {runLabel(run)}
-            </Link>
-          </span>
-        }
+        back={<RunBackLink run={run} />}
         title="Roadmap items"
         status={
           <span data-testid="review-status">{cp.status === "pending" ? waitChip(review, mode) : <Chip kind={cp.status === "approved" ? "pass" : "na"}>{decidedText(cp)}</Chip>}</span>

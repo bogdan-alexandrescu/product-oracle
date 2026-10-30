@@ -32,7 +32,7 @@ async function meeting(page: Page, email: string): Promise<Locator> {
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(MEETING);
-  await expect(page.getByTestId("chat-rules")).toBeVisible();
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
   return page.getByTestId("meeting-chat");
 }
 
@@ -55,7 +55,7 @@ async function oneChange(box: Locator, text: string, summary: string, ...lines: 
   await tap(card.getByRole("button", { name: "Preview" }));
   for (const l of lines) await expect(card.getByTestId("chat-card-preview")).toContainText(l);
   await tap(card.getByRole("button", { name: "Apply", exact: true }));
-  await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by Admin");
+  await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 }
 
 for (const [phone, dark] of [

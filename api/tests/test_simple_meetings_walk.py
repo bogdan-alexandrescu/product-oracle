@@ -44,6 +44,9 @@ Test cards (protects / fails_when / no_claim):
   e2e/simple-meetings-walk.spec.ts); fails_when=Approve leaves the PRD's draft working or
   the page on version 1; no_claim=the meeting screen's refresh, absent reviewers
   (test_simple_meetings_api's approve test).
+- test_withdrawn_in_meeting_is_a_withdrawal: protects=a commenter's one-pager proposal
+  withdrawn in the meeting is recorded as "Withdrawn: ..." (fix4-simple-prd review);
+  fails_when=it is announced as "Undone"; no_claim=the web's margin note.
 """
 
 import uuid
@@ -52,6 +55,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select, update
 
 from oracle import company_time
+from oracle.decisions.models import Decision
 from oracle.jobs.models import LlmJob
 from oracle.rituals.models import Ritual, RitualOccurrence
 from oracle.simple import meetings
@@ -286,3 +290,32 @@ async def test_approve_in_meeting_publishes_the_one_pager(client):
     after = await op.get(client, ctx, "decider")
     assert after["version"] == 2 and after["draft"] is None, (after["version"], after["draft"])
     assert op.line(after, "bets-1")["text"] == "A checklist with two steps"
+
+
+async def test_withdrawn_in_meeting_is_a_withdrawal(client):
+    from tests import test_simple_one_pager_api as op
+
+    ctx = await op.world(client)
+    body = {"prd": "guided-setup", "title": "Setup review",
+            "attendee_ids": [str(ctx.users["commenter"].id)]}  # fmt: skip
+    r = await client.post(MEETINGS, json=body, headers=ctx.as_("decider"))
+    assert r.status_code == 201, r.text
+    m = r.json()
+    view = await op.get(client, ctx, "commenter")
+    r = await client.post("/v1/simple/changes", json={
+        "op": "edit_line", "session_id": m["session_id"],
+        "target": {"document_id": view["document"]["id"], "line_id": "risks-1"},
+        "before": {"line": op.line(view, "risks-1")["text"]},
+        "after": {"line": "Calendar access may worry admins"},
+    }, headers=ctx.as_("commenter"))  # fmt: skip
+    assert r.status_code == 201 and r.json()["change"]["status"] == "proposed", r.text
+    prop = r.json()["change"]
+    u = await client.post(f"/v1/simple/changes/{prop['id']}/undo", headers=ctx.as_("commenter"))
+    assert u.status_code == 201, u.text
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = await s.scalars(
+            select(Decision).where(Decision.origin == "meeting").order_by(Decision.number)
+        )
+        titles = [d.title for d in rows]
+    assert len(titles) == 2 and titles[0].startswith("Proposed: "), titles
+    assert titles[1] == "Withdrawn: " + titles[0].removeprefix("Proposed: "), titles

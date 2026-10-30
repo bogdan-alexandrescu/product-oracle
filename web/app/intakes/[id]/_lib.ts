@@ -95,21 +95,21 @@ const WAITING = new Set<Card["question"]["status"]>(["asked", "delegated"]);
 /** The answer that stands on a question: its latest. */
 const lastAnswer = (c: Card) => c.answers[c.answers.length - 1];
 
-/** The questions asked so far: still open, answered, and of those answered "I don't know" (unknown). */
+/** The questions asked so far: still open, answered, and of the open ones those answered "I don't know" (unknown). */
 export type Tally = { open: number; answered: number; unknown: number };
 
 /**
- * qa-work-21: what the asked questions stand at, read off the thread when it is loaded: a
- * question answered "I don't know" counts as answered, as unknown, never as still open; the
- * summary's counts until the thread is read.
+ * qa-work-21: what the asked questions stand at, read off the thread when it is loaded; the
+ * summary's counts until the thread is read. A question answered "I don't know" stays open
+ * until someone gives a real answer (owner 2026-10-29, qa-work-2), as the API counts it.
  */
 export function tally(s: Summary, batches: Batch[] | undefined): Tally {
   if (!batches) return { open: s.batch.asked, answered: s.batch.answered, unknown: 0 };
   const cards = batches.flatMap((b) => b.questions);
-  const unknown = cards.filter((c) => lastAnswer(c)?.kind === "dont_know" && (c.question.status === "answered" || WAITING.has(c.question.status)));
-  const known = cards.filter((c) => c.question.status === "answered" && lastAnswer(c)?.kind !== "dont_know").length;
-  const open = cards.filter((c) => WAITING.has(c.question.status) && lastAnswer(c)?.kind !== "dont_know").length;
-  return { open, answered: known + unknown.length, unknown: unknown.length };
+  const answered = cards.filter((c) => c.question.status === "answered" && lastAnswer(c)?.kind !== "dont_know").length;
+  const waiting = cards.filter((c) => WAITING.has(c.question.status) || (c.question.status === "answered" && lastAnswer(c)?.kind === "dont_know"));
+  const unknown = waiting.filter((c) => lastAnswer(c)?.kind === "dont_know").length;
+  return { open: waiting.length, answered, unknown };
 }
 
 /** The gaps whose question was answered "I don't know", by gap id. */
@@ -120,6 +120,23 @@ export function unknownGaps(batches: Batch[] | undefined): Set<string> {
       .filter((c) => lastAnswer(c)?.kind === "dont_know" && c.question.gap_id)
       .map((c) => c.question.gap_id!),
   );
+}
+
+/**
+ * qa-work-2: the header's chip, in step with the counts beside it. "Waiting for answers" while
+ * a question is open (an "I don't know" among them); with none open but a critical question
+ * still open, the brief waits for a decision; with no question asked yet, it says so.
+ */
+export function statusChip(s: Summary, counts: Tally): { label: string; kind: ChipKind } {
+  if (s.intake.status === "awaiting_answers" && counts.open === 0 && counts.answered === 0) return { label: "Nothing asked yet", kind: "warn" };
+  if (s.intake.status === "awaiting_answers" && counts.open === 0 && s.readiness.open_critical > 0) return { label: "Waiting for a decision", kind: "warn" };
+  return STATUS[s.intake.status];
+}
+
+/** Why a question answered "I don't know" still counts open (qa-work-2), or null. */
+export function unknownNote(counts: Tally): string | null {
+  if (counts.unknown === 0) return null;
+  return `${counts.unknown} still open after “I don't know”: what ${counts.unknown === 1 ? "it asks stays" : "they ask stays"} a gap until someone answers or decides`;
 }
 
 /** "1 critical question holds the draft" / "2 critical questions hold the draft". */

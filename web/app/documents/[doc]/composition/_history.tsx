@@ -1,6 +1,6 @@
 "use client";
 
-import { Chip, Empty, Panel } from "@/components/ds";
+import { Chip, Panel } from "@/components/ds";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 
@@ -20,7 +20,11 @@ export function HistoryTab({ data }: { data: InspectorOut }) {
   return (
     <Panel title="History" count={data.revisions.length}>
       {data.revisions.length === 0 ? (
-        <Empty>No revisions yet</Empty>
+        // qa-docs-46: say how a revision comes to be.
+        <div data-testid="history-empty" className="px-4 py-8 text-center">
+          <p className="font-medium">No revisions yet</p>
+          <p className="mt-1 text-sm text-text2">An approver makes the first revision by choosing Use these modules on the Modules tab and confirming.</p>
+        </div>
       ) : (
         <ol>
           {data.revisions.map((r) => (

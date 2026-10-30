@@ -41,12 +41,13 @@ test("the PRD diff page shows what changed in the roadmap items", async ({ page 
 });
 
 // Card prd-diff-items-what-changed: protects = each changed item says field by field what
-// changed; fails_when = the line is missing or names the wrong values; no_claim = notes order.
+// changed, a day month first ("Nov 30, 2026"); fails_when = the line is missing, names the
+// wrong values or writes a day first; no_claim = notes order.
 test("an item on the diff page lists what changed", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/diff?from=1&to=2");
   await expect(item(page, "Guest checkout")).toContainText("Horizon: Next → Now");
-  await expect(item(page, "Shipping step")).toContainText("Date: 30 Nov 2026 → none");
+  await expect(item(page, "Shipping step")).toContainText("Date: Nov 30, 2026 → none");
 });
 
 // Card roadmap-diff-items: protects = a roadmap's diff page compares its versions' items too,

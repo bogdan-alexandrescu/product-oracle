@@ -74,44 +74,56 @@ export function ReportsPanel({
   const r = q.data.resolution;
   const c = q.data.changes;
   const busy = job?.status === "queued" || job?.status === "running";
+  const failed = job?.status === "failed" ? job : null;
 
   return (
     <div className="flex flex-col gap-3" data-testid="reports-panel">
-      <div className="flex flex-wrap items-center gap-2">
-        {q.data.generated_at ? (
-          <span className="tnum text-[13px] font-semibold text-text2">Written {formatDateTime(q.data.generated_at)}</span>
-        ) : (
-          <span className="text-sm font-semibold text-text2">No reports yet.</span>
-        )}
-        {job && job.status !== "succeeded" && <JobStatusChip status={job.status} at={job.finished_at} />}
-        <span className="ml-auto flex gap-1.5">
-          {/* qa-docs-13: after a failed job the alert's Retry is the one way to write again. */}
-          {canAct && job?.status !== "failed" && (
-            <Button disabled={busy} onClick={generate}>
-              {r ? "Write again" : "Write reports"}
-            </Button>
-          )}
-          {r && (
-            <>
-              {/* qa-docs-53: the export order used everywhere: HTML before MD. */}
-              <Button variant="ghost" onClick={() => download("html")} aria-label="Export reports HTML">
-                HTML
+      {/* qa-docs-20: a failed write is one state, saying what failed and when, with its Try
+          again (the same write as "Write reports"): no "No reports yet." or Failed chip beside it. */}
+      {(!failed || r) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {!failed &&
+            (q.data.generated_at ? (
+              <span className="tnum text-[13px] font-semibold text-text2">Written {formatDateTime(q.data.generated_at)}</span>
+            ) : (
+              <span className="text-sm font-semibold text-text2">No reports yet.</span>
+            ))}
+          {job && !failed && job.status !== "succeeded" && <JobStatusChip status={job.status} />}
+          <span className="ml-auto flex gap-1.5">
+            {canAct && !failed && (
+              <Button disabled={busy} onClick={generate}>
+                {r ? "Write again" : "Write reports"}
               </Button>
-              <Button variant="ghost" onClick={() => download("md")} aria-label="Export reports MD">
-                MD
-              </Button>
-            </>
-          )}
-        </span>
-      </div>
-      {/* qa-docs-4: plain words and a Retry; why it failed (the Claude accounts, a stored
-          error) is Oracle's work's to say, not this panel's. */}
-      {job?.status === "failed" && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-button bg-crit-bg px-3 py-2" role="alert">
-          <p className="min-w-0 flex-1 text-sm font-medium text-crit">The reports could not be written.{canAct && " Try again."}</p>
+            )}
+            {r && (
+              <>
+                {/* qa-docs-53: the export order used everywhere: HTML before MD. */}
+                <Button variant="ghost" onClick={() => download("html")} aria-label="Export reports HTML">
+                  HTML
+                </Button>
+                <Button variant="ghost" onClick={() => download("md")} aria-label="Export reports MD">
+                  MD
+                </Button>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+      {failed && (
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-button bg-crit-bg px-3 py-2"
+          role="alert"
+          data-testid="reports-failed"
+        >
+          <p className="min-w-0 flex-1 text-sm font-medium text-crit">
+            {r ? "The reports could not be written again" : "The reports could not be written"}
+            {failed.finished_at ? ` on ${formatDateTime(failed.finished_at)}.` : "."}
+            {r && " These are the earlier ones."}
+            {!canAct && " An approver can try again."}
+          </p>
           {canAct && (
             <Button variant="danger" onClick={generate} data-testid="reports-retry">
-              Retry
+              Try again
             </Button>
           )}
         </div>

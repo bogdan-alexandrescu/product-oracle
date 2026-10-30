@@ -175,8 +175,8 @@ export const planSlices = (): Slice[] =>
     }),
   );
 
-/** "2 Nov - 12 Feb" (the plan's span, as the API labels it). */
-const dayMonth = (day: string) => new Date(ms(day)).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+/** "Nov 2 - Feb 12" (the plan's span, as the API labels it). */
+const dayMonth = (day: string) => new Date(ms(day)).toLocaleDateString("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
 export const planSpan = (): Schemas["SimplePlanSpan"] => {
   const start = minOf(MILESTONES.map((m) => m.start));
   const end = maxOf(MILESTONES.map((m) => m.end));

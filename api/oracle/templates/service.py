@@ -627,8 +627,8 @@ def recommend_roadmap(
     elif a.audience == "engineering":
         key, reason = (
             "release-plan",
-            "Engineering reads it first: releases with target dates, "
-            "scope, readiness and estimate drift.",
+            "Engineering reads it first: each release with its target date, "
+            "what is in it, what is left and whether it is on schedule.",
         )
     elif a.external_dates:
         key, reason = (

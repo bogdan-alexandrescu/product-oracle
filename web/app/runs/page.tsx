@@ -13,16 +13,16 @@ import {
   Inspector,
   InspectorRow,
   InspectorSection,
-  LinkButton,
   Page,
   PageHeader,
   Panel,
   Split,
   type Column,
 } from "@/components/ds";
+import { usePhone } from "@/components/ds/page-info";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime, plural } from "@/lib/format";
+import { formatDateTime, formatShortDate, plural } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -30,11 +30,13 @@ import { useQuery } from "@/lib/use-query";
 import {
   CHECKPOINT_LABEL,
   COST_DECISION_STATUSES,
+  costText,
   isDelivering,
   reviewHref,
   runStatusKind,
   runStatusLabel,
   RunCost,
+  usd,
   runName,
   RunStatusBadge,
   RunsWhere,
@@ -62,7 +64,7 @@ export default function RunsPage() {
   // Document titles, to name each run by its document; the slug in words until they load.
   const docsQ = useQuery("runs|documents", () => unwrap(api.GET("/v1/documents")).catch(() => []));
   const docs = new Map<string, DocNamed>((docsQ.data ?? []).map((d) => [d.id, d]));
-  const { can } = useMe();
+  const { can, capsReady } = useMe();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -70,6 +72,7 @@ export default function RunsPage() {
   // A run delivering a decision recorded at its checkpoint waits on no one.
   const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status) && !isDelivering(r));
   const selected = runs.find((r) => r.id === picked) ?? waiting[0] ?? runs[0];
+  const phone = usePhone();
 
   /**
    * qa-work-1/17: a row's button says what it does, as the run page does, and shows only to
@@ -98,6 +101,20 @@ export default function RunsPage() {
     return null;
   };
 
+  /**
+   * qa-onboarding-24: a run waiting on someone else's cost decision says who decides, and on
+   * how much, where the action would be: "Owner approves $53.00", "Owner resumes".
+   */
+  const rowWaitsOn = (r: RunSummary): string | null => {
+    if (r.status === "awaiting_approval") return `Owner approves ${usd(r.estimate_usd)}`;
+    if (r.status === "paused_overrun") return "Owner resumes";
+    return null;
+  };
+
+  // qa-work-10: the badge counts only the runs this person can act on; the rest wait on others.
+  const mine = waiting.filter((r) => rowAction(r) !== null);
+  const others = waiting.length - mine.length;
+
   const columns: Column<RunSummary>[] = [
     {
       key: "for",
@@ -124,7 +141,9 @@ export default function RunsPage() {
       header: "Flow",
       width: "140px",
       phone: "meta",
-      narrow: "hide",
+      // qa-work-24/26: dropped first when the table is narrow (the selected run names it), so the
+      // state stays on one line beside the Updated and action columns.
+      narrow: "wide",
       // qa-work-23: wide enough for the flows' names; one cut short shows in full on hover.
       cell: (r) => (
         <span className="block truncate" title={r.flow_title}>
@@ -135,37 +154,73 @@ export default function RunsPage() {
     {
       key: "state",
       header: "State",
-      width: "330px",
+      width: "366px",
       phone: "meta",
+      // qa-work-24: one line on a desktop (the cost a chip of the state chip's size); a phone wraps.
       cell: (r) => (
-        <span className="flex min-w-0 flex-wrap items-center gap-2.5 gap-y-1">
+        <span className="flex min-w-0 flex-nowrap items-center gap-2 max-[600px]:flex-wrap max-[600px]:gap-y-1">
           <RunStatusBadge run={r} />
-          {r.waiting_on && !isDelivering(r) && <span className="text-sm text-text2">{CHECKPOINT_LABEL[r.waiting_on]}</span>}
+          {r.waiting_on && !isDelivering(r) && <span className="min-w-0 truncate text-sm text-text2">{CHECKPOINT_LABEL[r.waiting_on]}</span>}
           {r.draft_rejected && <DraftRejectedChip summary={r.draft_rejected} />}
           {r.sent_back && <SentBackChip summary={r.sent_back} />}
           {r.queue_wait && <QueueWaitNote wait={r.queue_wait} testId="run-queue-wait" />}
           {/* P3d Cost prominence: cost only where it needs a decision; on every size. */}
-          {COST_DECISION_STATUSES.includes(r.status) && <RunCost run={r} />}
+          {COST_DECISION_STATUSES.includes(r.status) && (
+            <Chip
+              kind={r.status === "paused_overrun" ? "crit" : "warn"}
+              className="min-w-0"
+              title={costText(r)}
+              data-cost="prominent"
+            >
+              <span className="min-w-0 truncate">{costText(r)}</span>
+            </Chip>
+          )}
         </span>
       ),
     },
     {
+      // qa-work-26: when each run last moved, in the company's time zone.
+      key: "updated",
+      header: "Updated",
+      width: "72px",
+      phone: "meta",
+      phoneLabel: "Updated",
+      narrow: "hide",
+      cell: (r) => {
+        const at = r.finished_at ?? r.started_at ?? r.created_at;
+        return (
+          <span className="tnum text-sm text-text2" title={formatDateTime(at)} data-testid="run-updated">
+            {formatShortDate(at)}
+          </span>
+        );
+      },
+    },
+    {
       key: "act",
       header: <span className="sr-only">Action</span>,
-      width: "120px",
+      width: "160px",
       align: "right",
       phone: "action",
+      // qa-work-24: one button style, one width, right-aligned; who decides when it is not you.
       cell: (r) => {
         const a = rowAction(r);
-        return a ? (
-          <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              a.go();
-            }}
-          >
-            {a.label}
-          </Button>
+        if (a)
+          return (
+            <Button
+              className="min-w-24"
+              onClick={(e) => {
+                e.stopPropagation();
+                a.go();
+              }}
+            >
+              {a.label}
+            </Button>
+          );
+        const who = rowWaitsOn(r);
+        return who ? (
+          <span className="text-[13px] whitespace-nowrap text-text2" data-testid="run-waits-on">
+            {who}
+          </span>
         ) : null;
       },
     },
@@ -187,18 +242,23 @@ export default function RunsPage() {
           </InfoTip>
         }
         status={
-          // qa-work-10: one count, said once: the runs waiting on a person's decision.
-          waiting.length > 0 && (
+          // qa-work-10: one count, said once. Only the runs this person can decide count (qa-work-10); the rest wait on others.
+          mine.length > 0 ? (
             <Chip kind="warn" data-testid="runs-waiting">
-              {plural(waiting.length, "run")} {waiting.length === 1 ? "needs" : "need"} a decision
+              {plural(mine.length, "run")} {mine.length === 1 ? "needs" : "need"} a decision
             </Chip>
-          )
+          ) : capsReady && others > 0 ? (
+            <Chip kind="na" data-testid="runs-waiting-others">
+              {plural(others, "run")} waiting on others
+            </Chip>
+          ) : null
         }
         action={
           // #370: an approver starts any run but an update draft (the run decides), as Plan does.
           can("create_run", true) && (
+            // qa-work-7: it opens a dialog that starts a run (or says where each one starts).
             <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
-              New run
+              Start a run…
             </Button>
           )
         }
@@ -207,32 +267,55 @@ export default function RunsPage() {
       {/* byRoom: the inspector goes below when the Split is too narrow for it and the table,
           as with the Ask panel docked, so the table keeps its button column (its narrow columns
           go first, by the table's width); with the panel closed it sits beside over 1100 px. */}
-      <Split byRoom inspector={selected && <RunInspector run={selected} name={runTitle(selected, docs)} />}>
+      {/* qa-work-25: on a phone a row tap opens the run, so the selected-run panel is not shown. */}
+      <Split
+        byRoom
+        inspector={
+          selected && (
+            <div className="max-[600px]:hidden">
+              <RunInspector run={selected} name={runTitle(selected, docs)} />
+            </div>
+          )
+        }
+      >
         <Panel
           title="Runs"
           count={q.data ? runs.length : undefined}
         >
           {q.data && runs.length === 0 ? (
-            <Empty>
-              No runs yet{" "}
+            <Empty testId="runs-empty">
+              No runs yet.{" "}
+              {can("create_run", true) ? "Start one from Start a run… or from the page it works on." : "Runs show here once an approver starts one."}{" "}
               <InfoTip label="runs" align="start">
                 Runs turn the baseline into a PRD draft: each one plans the work, gathers evidence from your sources and
                 writes a cited draft for review.
               </InfoTip>
             </Empty>
           ) : (
-            <DataTable
-              label="Runs"
-              testId="runs-table"
-              columns={columns}
-              rows={q.data ? runs : undefined}
-              loading={q.loading}
-              rowKey={(r) => r.id}
-              selected={selected?.id ?? null}
-              onSelect={(k) => setPicked(k)}
-              onActivate={(k) => router.push(`/runs/${k}`)}
-              rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
-            />
+            // qa-work-25: on a phone a tap on a row (not its link or button) opens the run.
+            <div
+              className="contents"
+              onClick={(e) => {
+                if (!phone) return;
+                const t = e.target as HTMLElement;
+                if (t.closest("a,button")) return;
+                const key = t.closest<HTMLElement>("tr[data-key]")?.dataset.key;
+                if (key) router.push(`/runs/${key}`);
+              }}
+            >
+              <DataTable
+                label="Runs"
+                testId="runs-table"
+                columns={columns}
+                rows={q.data ? runs : undefined}
+                loading={q.loading}
+                rowKey={(r) => r.id}
+                selected={selected?.id ?? null}
+                onSelect={(k) => setPicked(k)}
+                onActivate={(k) => router.push(`/runs/${k}`)}
+                rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
+              />
+            </div>
           )}
         </Panel>
       </Split>
@@ -247,11 +330,6 @@ function RunInspector({ run, name }: { run: RunSummary; name: string }) {
       label="Run"
       eyebrow="Selected run"
       title={name}
-      action={
-        <LinkButton variant="hero" href={`/runs/${run.id}`}>
-          Open
-        </LinkButton>
-      }
       chips={
         <Chip hero kind={runStatusKind(run)}>
           {runStatusLabel(run)}
@@ -275,7 +353,11 @@ function RunInspector({ run, name }: { run: RunSummary; name: string }) {
       )}
       {/* rirs-18: the cost is one row of the details, not a section repeating its only row. */}
       <InspectorSection label="Details">
+        <InspectorRow value={run.flow_title}>Flow</InspectorRow>
         <InspectorRow value={<RunCost run={run} />}>Cost</InspectorRow>
+        {/* qa-onboarding-24: who decides on the cost, said beside it. */}
+        {run.status === "awaiting_approval" && <InspectorRow value="An owner">Approves the cost</InspectorRow>}
+        {run.status === "paused_overrun" && <InspectorRow value="An owner">Resumes or stops it</InspectorRow>}
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
         {run.started_at && <InspectorRow value={formatDateTime(run.started_at)}>Started</InspectorRow>}
         {run.finished_at && <InspectorRow value={formatDateTime(run.finished_at)}>Finished</InspectorRow>}

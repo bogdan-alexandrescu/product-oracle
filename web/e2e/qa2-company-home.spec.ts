@@ -99,7 +99,8 @@ test.describe("at 1440", () => {
       nextCol,
     );
     expect(chips).toBe(0);
-    await expect(prd.locator("td").nth(nextCol)).toHaveText("Review");
+    // qa-company-9: the step after the one it is at (Review), not Review again.
+    await expect(prd.locator("td").nth(nextCol)).toHaveText("Publish");
   });
 
   test("Set up: Invite team counts open invites, done rows say Change or Review", async ({ page }) => {

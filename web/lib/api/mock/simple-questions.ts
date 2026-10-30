@@ -1,5 +1,6 @@
 import type { Schemas } from "../client";
 import { mockNowMs } from "./clock";
+import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
 
 /**
@@ -89,7 +90,7 @@ export function seedQuestions(ctx: QuestionsCtx): QuestionsDb {
       q(5, "Reminder default time", owner, -6, "M1", ["F-03", "Health log"], "9:00 in each person's zone", ["Noon", "Let each person pick"]),
       q(6, "Invite limit on the free plan", owner, 4, "M1", ["F-05", "Invite teammates"], "5 invites", ["3 invites", "No limit"]),
       q(7, "Legal input on health notes", approver, -2, "M1", ["F-03", "Health log"], "Ask outside counsel", ["Use our own template"]),
-      q(8, "Sign in with Google at launch", owner, 7, "M1", ["F-01", "Sign in"], "Yes, at launch", ["After launch"]),
+      q(8, "Sign-in choice: Google at launch", owner, 7, "M1", ["F-01", "Sign in"], "Yes, at launch", ["After launch"]),
       q(9, "Onboarding checklist length", owner, 12, "M1", ["F-04", "Onboarding checklist"], "Five steps", ["Three steps", "Seven steps"]),
       q(10, "Weekly summary email", owner, 15, "M2", ["F-08", "Weekly summary"], "Monday mornings", ["Friday afternoons"]),
       q(11, "Dark mode in the first release", owner, 20, "M2", ["F-12", "Themes"], "Yes", ["Later"]),
@@ -144,7 +145,9 @@ function out(ctx: QuestionsCtx, q: Q): Question {
     chosen: chosenLabel ?? null,
     decided_at: q.decided_at ?? null,
     decided_by: q.decided_by ? ref(ctx, q.decided_by) : null,
-    decided_label: decided(q) && q.decided_at ? `Decided ${q.in_prd ? "in the PRD on " : ""}${dayWords(Date.parse(q.decided_at))} by ${nameOf(ctx, q.decided_by)}` : null,
+    // qa-simple-decide-7: decided_at is a real moment (unlike a due day), so its day reads
+    // the company's zone (America/Los_Angeles), not UTC, as the API's company_time.day does.
+    decided_label: decided(q) && q.decided_at ? `Decided ${q.in_prd ? "in the PRD " : ""}on ${companyDateInWords(q.decided_at)} by ${nameOf(ctx, q.decided_by)}` : null,
     waiting_for_me: !decided(q) && !!q.decider && q.decider === ctx.me.id && RANK[ctx.me.role] >= RANK.approver,
     pending: q.pending ? { change_id: q.pending.change_id, by: ref(ctx, q.pending.by), answer: q.pending.answer } : null,
     can: canOf(ctx, q),
@@ -239,7 +242,7 @@ export async function routeQuestionChanges(
   db: QuestionsDb,
   req: Request,
   p: string[],
-  inMeeting: (sessionId: string, title: string) => string | false | "ended",
+  inMeeting: (sessionId: string, title: string, own?: { code: string; title: string; chosen: string }) => string | false | "ended",
 ): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
   if (p.length === 5 && p[4] === "undo") {
@@ -291,7 +294,9 @@ export async function routeQuestionChanges(
   let meetingId: string | null = null;
   if (change.session_id) {
     const words = b.op === "decide_question" ? `Q${q.n} ${q.title}: ${answer}` : `Q${q.n} ${q.title}: ${nameOf(ctx, String(after.decider_id))} decides`;
-    const ok = inMeeting(change.session_id, applies ? `Decided ${words}` : `Proposed: ${words}`);
+    // As the API, a question decided in the meeting is the question's own decision there: its code, title and answer.
+    const own = applies && b.op === "decide_question" ? { code: `Q${q.n}`, title: q.title, chosen: answer } : undefined;
+    const ok = inMeeting(change.session_id, applies ? `Decided ${words}` : `Proposed: ${words}`, own);
     if (ok === "ended") return json(409, { detail: "This meeting has ended" });
     if (ok) meetingId = ok;
   }
@@ -302,7 +307,13 @@ export async function routeQuestionChanges(
       q.decided_at = iso(mockNowMs());
       q.pending = null;
       q.meeting_id = meetingId;
-    } else q.decider = String(after.decider_id);
+    } else {
+      q.decider = String(after.decider_id);
+      // As the API's current_route: an open proposal on the question goes to its decider now.
+      for (const c of db.changes) {
+        if (c.change.status === "proposed" && c.change.target.decision_id === target.decision_id) c.change.routed_to = [q.decider];
+      }
+    }
   } else if (b.op === "decide_question") q.pending = { change_id: change.id, by: ctx.me.id, answer };
   db.changes.push({ change, was });
   return json(201, { change, flags: [] });

@@ -69,14 +69,14 @@ test("sections: one review bar on screen; evidence and refine sit in the ⋯ men
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
   await expect(page.getByTestId("review-bar").filter({ visible: true })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /^Add evidence link|^Refine section/ }).filter({ visible: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Add evidence link|^Ask Oracle to rewrite/ }).filter({ visible: true })).toHaveCount(0);
   const problem = await openSection(page, "problem");
   await expect(page.getByTestId("review-bar").filter({ visible: true })).toHaveCount(1);
   await expect(page.getByRole("group", { name: /^Verdict for/ }).filter({ visible: true })).toHaveCount(1);
 
   await problem.getByRole("button", { name: "Actions for 2. Problem" }).click();
   await expect(problem.getByRole("menuitem", { name: "Add evidence link to 2. Problem" })).toBeVisible();
-  await problem.getByRole("menuitem", { name: "Refine section 2. Problem" }).click();
+  await problem.getByRole("menuitem", { name: "Ask Oracle to rewrite" }).click();
   await expect(problem.getByTestId("refine-panel")).toBeVisible();
   await problem.getByTestId("refine-panel").getByRole("button", { name: "Close" }).click();
   await expect(problem.getByTestId("refine-panel")).toHaveCount(0);
@@ -97,7 +97,7 @@ test("sections: reviewing the open section marks it in the outline and counts it
 
   const bar = users.getByTestId("review-bar");
   await bar.getByRole("button", { name: "Approve" }).click();
-  await bar.getByRole("button", { name: /^Save/ }).click();
+  await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
   await expect(stripItem(page, "users")).toHaveAttribute("data-state", "approved");
   await expect(count).toHaveText(`${before + 1} of 11 reviewed`);

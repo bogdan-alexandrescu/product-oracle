@@ -96,7 +96,7 @@ test("a Review due row is reaffirmed in place in the Inbox: it moves to Done and
   await login(page, APPROVER);
   await page.goto("/inbox");
   const decisions = page.getByTestId("inbox-decisions");
-  const due = decisions.locator("tr[data-row]").filter({ hasText: "Review due · D-4 Price the team plan per seat" });
+  const due = decisions.locator("tr[data-row]").filter({ hasText: "Review due · Price the team plan per seat" });
   await expect(due).toBeVisible();
   // The review date reads like the Inbox's other dates, never a raw ISO date.
   const was = mockNow();
@@ -106,10 +106,10 @@ test("a Review due row is reaffirmed in place in the Inbox: it moves to Done and
   await expect(due).not.toContainText(/\d{4}-\d{2}-\d{2}/);
   const before = await badgeCount(page);
   await due.getByRole("button", { name: /^Reaffirm/ }).click();
-  await expect(page.getByTestId("inbox-decisions").locator("tr[data-row]").filter({ hasText: "D-4 Price the team plan per seat" })).toHaveCount(0);
+  await expect(page.getByTestId("inbox-decisions").locator("tr[data-row]").filter({ hasText: "Price the team plan per seat" })).toHaveCount(0);
   await expect(badge(page)).toHaveText(String(before - 1));
   await page.getByRole("tab", { name: /^Done/ }).click();
-  await expect(page.getByTestId("inbox-tab-done").getByTestId("inbox-decisions")).toContainText("D-4 Price the team plan per seat");
+  await expect(page.getByTestId("inbox-tab-done").getByTestId("inbox-decisions")).toContainText("Price the team plan per seat");
 });
 
 test("phone: the table keeps D-number, title and state, no sideways scroll, the inspector opens as a sheet", async ({ page }) => {
@@ -152,17 +152,17 @@ test("the class switch keeps checkpoint records apart; From and the URL keep the
 
   // Two quick picks: From is picked before All has taken, and both stay.
   await chip(page, "Kind", "All kinds").click();
-  await page.getByLabel("From").selectOption({ label: "Pushback overrides" });
+  await chip(page, "From", "Pushback overrides").click();
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first()).toContainText("Keep the reviewer's call over Oracle's pushback");
   await expect(page).toHaveURL(/from=pushback_override/);
 
   await page.reload();
-  await expect(page.getByLabel("From")).toHaveValue("pushback_override");
+  await expect(chip(page, "From", "Pushback overrides")).toHaveAttribute("aria-pressed", "true");
   await expect(chip(page, "Kind", "All kinds")).toHaveAttribute("aria-pressed", "true");
   await expect(rows(page)).toHaveCount(1);
 
-  await page.getByLabel("From").selectOption({ label: "Checkpoint send-backs" });
+  await chip(page, "From", "Checkpoint send-backs").click();
   await row(page, "Send back Feature set · Checkout redesign PRD run").click();
   const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
   await expect(inspector).toContainText("Size the export feature again");

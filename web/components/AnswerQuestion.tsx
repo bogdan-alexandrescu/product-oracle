@@ -51,12 +51,15 @@ export function AnswerQuestion({
   onSettled,
   onCancel,
   sendAnswer,
+  showPrompt = true,
 }: {
   question: InboxQuestion;
   onSettled: (kind: Kind, label: string) => void;
   onCancel?: () => void;
   /** Send answer goes here instead (C3 team follow-ups); false while Oracle waits for a reply. */
   sendAnswer?: (body: string) => Promise<boolean>;
+  /** False where the question is already on screen right above the form (an Inbox row opened in place). */
+  showPrompt?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState<Kind | null>(null);
@@ -93,9 +96,11 @@ export function AnswerQuestion({
 
   return (
     <div className="flex min-w-0 flex-col gap-2.5 whitespace-normal" data-testid="answer-question">
-      <p className="text-[15px] leading-[22px] font-semibold break-words text-text" data-testid="answer-prompt">
-        {prompt}
-      </p>
+      {showPrompt && (
+        <p className="text-[15px] leading-[22px] font-semibold break-words text-text" data-testid="answer-prompt">
+          {prompt}
+        </p>
+      )}
       {q.question.rationale && (
         <p className="flex items-center gap-1 text-sm text-text2">
           Why {askerName(q)} asks

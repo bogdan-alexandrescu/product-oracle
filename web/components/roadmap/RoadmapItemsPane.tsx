@@ -13,7 +13,7 @@ import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { baseName, CompareBar } from "./CompareBar";
-import { HORIZONS, needsAttention, sectionFor, toItemRow, type ItemRow } from "./item-row";
+import { HORIZONS, needsAttention, sectionFor, toItemRow, withUnbacked, type ItemRow } from "./item-row";
 import { ChangeChips, ItemHistory, WhatChanged } from "./ItemChanges";
 import { CHANGED, useItemsDiff, type Compare } from "./useItemsDiff";
 
@@ -34,12 +34,15 @@ export function RoadmapItemsPane({
   n,
   sections,
   canDecide,
+  dateMarks,
 }: {
   doc: string;
   n: number;
   /** The version's sections: "Open in document" links to the one naming the item. */
   sections: readonly { section_key: string; heading: string }[];
   canDecide: boolean;
+  /** qa-docs-6: the version's date marks; an item whose section writes an unconfirmed date needs attention. */
+  dateMarks?: readonly Schemas["DateMarkOut"][];
 }) {
   const itemsQ = useQuery(`roadmap-items|${doc}|${n}`, () =>
     unwrap(api.GET("/v1/roadmaps/{doc}/items", { params: { path: { doc }, query: { version: n, view: "full" } } })),
@@ -60,7 +63,10 @@ export function RoadmapItemsPane({
 
   const items = useMemo(() => itemsQ.data?.items ?? [], [itemsQ.data]);
   const headings = useMemo(() => new Map((prdQ.data?.sections ?? []).map((s) => [s.section_key, s.heading])), [prdQ.data]);
-  const rows = useMemo(() => items.map((i) => toItemRow(i, headings)), [items, headings]);
+  const rows = useMemo(
+    () => withUnbacked(items.map((i) => toItemRow(i, headings)), dateMarks, sections),
+    [items, headings, dateMarks, sections],
+  );
   const attention = rows.filter(needsAttention).length;
 
   const router = useRouter();

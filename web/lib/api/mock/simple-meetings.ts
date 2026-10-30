@@ -13,7 +13,13 @@
  * (the "simple-deciders" scenario); its required reviewer is the approver.
  *
  * Delivery: email is available unless localStorage MOCK_MEETINGS_KEY holds "no-email";
- * Slack is connected (to #product-reviews) when it holds "slack".
+ * Slack is connected (to #product-reviews) when it holds "slack". dod-delivery (as
+ * meetings.deliver): each attendee's email and the Slack post are tried when read on or after
+ * their next try, again 5 then 10 minutes (mock clock) after a failure, then failed; with
+ * "delivery-fails" every try fails; with "delivery-failed" the past meeting's minutes went to
+ * all but the approver and its Slack post failed ("delivery-legacy-failed": its email failed
+ * as stored before each attendee carried a status). Retry (whoever ended it or an owner)
+ * requeues what failed, and the next read sends it.
  *
  * The minutes job (production walk): ending a meeting answers at once unless the key holds
  * "minutes-failed" (the job fails: "failed", Draft again requeues it, which then answers) or
@@ -39,6 +45,7 @@ import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, que
 import { plainFlow } from "./simple-visuals";
 import { seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
+import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
@@ -52,7 +59,9 @@ export const MINUTES_LATER_MS = 20_000;
 type Role = Schemas["Me"]["role"];
 type Ref = Schemas["SimplePersonRef"];
 type Minutes = Schemas["SimpleMinutes"];
-type Delivery = Schemas["SimpleDelivery"];
+/** As meetings.py stores it: each attendee's email and the Slack post with their tries and next try (ms). */
+type Try = { status: "queued" | "sent" | "retrying" | "failed"; tries: number; next_at: number | null };
+type Delivery = Omit<Schemas["SimpleDelivery"], "emails" | "email_sent"> & { email_to?: Record<string, Try>; slack_try?: Try; email_sent?: number };
 type Change = Schemas["SimpleChangeOut"];
 
 export interface MeetingsCtx {
@@ -114,6 +123,8 @@ interface Decision {
   change_ids: string[];
   /** The roadmap items its changes touched (meetings.decided_flows reads them). */
   item_ids?: string[];
+  /** A PRD's question decided in the meeting: its code, title and answer (the Decisions page's row, as the API's). */
+  question?: { code: string; title: string; chosen: string };
 }
 
 interface Occurrence {
@@ -225,20 +236,22 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
       d(2, "Keep the free plan's alert limit at three", { subjects: [{ kind: "document", id: alerts.id }] }),
       d(3, "Should muted teams still get the weekly digest?", { origin: "oracle", status: "proposed", approver_id: null, subjects: [{ kind: "document", id: alerts.id }] }),
       d(4, `Moved ${digest?.title ?? "Alert digest"}`, { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 20 * 60_000), subjects: [...(digest ? [{ kind: "roadmap_item", id: digest.id, ref: digest.key }] : []), { kind: "document", id: alerts.id }] }),
-      d(5, "Comment: keep quiet hours on by default", { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 35 * 60_000), subjects: [{ kind: "document", id: alerts.id }] }),
     ],
     meetings: [{
       id: past, title: "Review: Usage alerts", prd: "usage-alerts", origin: "one_pager", occurrence_id: null, session_id: stableUuid("simple-meeting-session/past"),
       presenter_id: owner, attendee_ids: people, absent_ids: [], change_mode: "everyone", change_people: [], length_min: 60, status: "ended",
       started_at: startedAt, ended_at: iso(Date.parse(startedAt) + 50 * 60_000), ended_by: owner,
+      // qa-simple-decide-1: the comment made in this meeting is a note, not a decision.
+      notes: [{ id: stableUuid("simple-meeting-note/past-comment"), kind: "comment", text: "keep quiet hours on by default", by_name: nameOf(ctx, approver ?? owner), at: iso(Date.parse(startedAt) + 35 * 60_000), card_id: null }],
       minutes: {
-        summary: `Moved ${digest?.title ?? "Alert digest"}; Comment: keep quiet hours on by default.`,
+        // qa-simple-decide-6: a short prose count, never the decision's own title or a note's text.
+        summary: "1 decision taken.",
         open_questions: ["D-3: Should muted teams still get the weekly digest?"],
         action_items: commenter ? [{ title: "Draft the quiet hours copy", owner_id: commenter.id, owner_name: nameOf(ctx, commenter.id), due_date: iso(now + 7 * day).slice(0, 10) }] : [],
         waits: [{ what: "Usage alerts: the working draft is not approved yet", on: [] }],
         written_by: "oracle",
       },
-      minutes_state: "sent", delivery: { decisions: true, inbox: true, email: true, email_status: "sent", slack: false, slack_status: null, slack_channel: null },
+      minutes_state: "sent", delivery: seededDelivery(people, approver),
       sent_at: iso(Date.parse(startedAt) + 55 * 60_000), approved: null,
     }],
     inbox_seen: {},
@@ -267,6 +280,71 @@ function mayChange(m: Meeting, id: string): boolean {
   if (m.change_mode === "everyone") return m.attendee_ids.includes(id);
   if (m.change_mode === "named") return m.change_people.includes(id);
   return false;
+}
+
+/** The past meeting's delivery: all sent, or ("delivery-failed") the approver's email and the Slack post failed. */
+function seededDelivery(people: string[], approver: string | undefined): Delivery {
+  // As stored before each attendee carried a status (no email_to): its email failed.
+  if (flags().includes("delivery-legacy-failed")) return { decisions: true, inbox: true, email: true, email_status: "failed", email_sent: 0, slack: false, slack_status: null, slack_channel: null };
+  const failed = flags().includes("delivery-failed");
+  const sent: Try = { status: "sent", tries: 1, next_at: null };
+  const bad: Try = { status: "failed", tries: TRIES, next_at: null };
+  return {
+    decisions: true, inbox: true, email: true, email_status: failed ? "failed" : "sent",
+    email_to: Object.fromEntries(people.map((i) => [i, failed && i === approver ? { ...bad } : { ...sent }])),
+    slack: failed, slack_status: failed ? "failed" : null, slack_channel: failed ? "#product-reviews" : null,
+    ...(failed ? { slack_try: { ...bad } } : {}),
+  };
+}
+
+/** dod-delivery (meetings.RETRY_AFTER_MINUTES): a failed try waits 5, then 10 minutes; the third is the last. */
+const RETRY_AFTER_MS = [5 * 60_000, 10 * 60_000];
+const TRIES = RETRY_AFTER_MS.length + 1;
+
+function tryOnce(t: Try, now: number): Try {
+  if (!flags().includes("delivery-fails")) return { status: "sent", tries: t.tries + 1, next_at: null };
+  const tries = t.tries + 1;
+  return tries >= TRIES ? { status: "failed", tries, next_at: null } : { status: "retrying", tries, next_at: now + RETRY_AFTER_MS[tries - 1] };
+}
+
+// Strictly after its time: Retry answers "queued" (as the API, whose tick tries it later); a later read tries it.
+const pending = (t: Try | undefined, now: number) => !!t && (t.status === "queued" || t.status === "retrying") && (t.next_at ?? 0) < now;
+
+function emailStatus(to: Record<string, Try>): string {
+  const states = new Set(Object.values(to).map((t) => t.status));
+  return (["retrying", "queued", "failed"] as const).find((x) => states.has(x)) ?? "sent";
+}
+
+/** meetings.deliver on the tick: each due email and the Slack post tried once. */
+function deliverDue(m: Meeting): void {
+  const d = m.delivery;
+  if (!d) return;
+  const now = mockNowMs();
+  if (d.email_to && (d.email_status === "queued" || d.email_status === "retrying")) {
+    for (const [k, t] of Object.entries(d.email_to)) if (pending(t, now)) d.email_to[k] = tryOnce(t, now);
+    d.email_status = emailStatus(d.email_to);
+  }
+  // Queued before the post carried its tries: the old outbox posted it.
+  if (!d.slack_try && (d.slack_status === "queued" || d.slack_status === "retrying")) d.slack_status = "sent";
+  if (d.slack && pending(d.slack_try, now)) {
+    d.slack_try = tryOnce(d.slack_try!, now);
+    d.slack_status = d.slack_try.status;
+  }
+}
+
+/** meetings.delivery_out: each attendee's email named, with how many went. */
+function deliveryOut(ctx: MeetingsCtx, m: Meeting): Schemas["SimpleDelivery"] | null {
+  deliverDue(m);
+  if (!m.delivery) return null;
+  const { email_to, slack_try: _slack, ...rest } = m.delivery;
+  void _slack;
+  const emails = Object.entries(email_to ?? {}).map(([id, t]) => ({ person: ref(ctx, id), status: t.status }));
+  return { ...rest, emails, email_sent: email_to ? emails.filter((e) => e.status === "sent").length : (rest.email_sent ?? 0) };
+}
+
+/** meetings.may_retry: whoever ended the meeting or an owner. */
+function mayRetry(ctx: MeetingsCtx, m: Meeting): boolean {
+  return m.minutes_state === "sent" && (ctx.me.id === m.ended_by || ctx.me.role === "owner");
 }
 
 function presenterOrDecider(ctx: MeetingsCtx, m: Meeting, p: Prd): boolean {
@@ -355,7 +433,7 @@ function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
     const quick = extract(ctx, db, m);
     const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
     // An empty record: the plain line, no model's words (meetings.run_job); notes and open questions count as the record.
-    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? withNotes(m, `Oracle's minutes of ${m.title}: ${n} decisions taken.`) : quick.summary, written_by: "oracle" };
+    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
   }
@@ -385,7 +463,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
     minutes: m.minutes,
     minutes_job: m.status === "ended" && m.minutes_state === "drafting" ? (m.minutes_job ?? "drafting") : null,
-    delivery: m.delivery,
+    delivery: deliveryOut(ctx, m),
     slack: slackState(),
     email_available: emailAvailable(),
     can: {
@@ -394,6 +472,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       approve: m.status === "live" && deciderOrOwner,
       end: presenterOrDecider(ctx, m, p) && m.minutes_state !== "sent" && RANK[ctx.me.role] >= RANK.commenter,
       redraft: m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed" && presenterOrDecider(ctx, m, p),
+      retry_delivery: mayRetry(ctx, m),
     },
     not_approved: [],
     notes: m.notes ?? [],
@@ -526,6 +605,7 @@ function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, sub
 const OP_WORDS: Record<string, string> = {
   move_dates: "New dates for", accept_date_suggestion: "Accepted Oracle's dates for", change_horizon: "Moved", reorder: "Reordered", cut: "Cut",
   restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for",
+  cut_with_dependents: "Cut with its dependents:",
 };
 
 /** A change in words and the subjects it names (as meetings.describe). */
@@ -540,6 +620,14 @@ function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
   if (c.op === "edit_line") {
     name = `a line of ${ctx.onePager.doc.title}: “${String(c.after.line ?? "").slice(0, 120)}”`;
     subjects.push({ kind: "section", id: ctx.onePager.doc.id, ref: `line:${String(c.target.line_id)}` });
+  } else if (c.op === "cut_with_dependents") {
+    // Review minor: every item the one change cut, the item first, each a subject.
+    const titles = Array.isArray(c.target.titles) && c.target.titles.length ? c.target.titles.map(String) : name ? [name] : [];
+    name = titles.length === 1 ? titles[0] : `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
+    for (const id of Object.keys(c.after)) {
+      const other = id !== c.target.item_id ? items(ctx).find((i) => i.id === id) : undefined;
+      if (other) subjects.push({ kind: "roadmap_item", id: other.id, ref: other.key });
+    }
   } else if (!name) name = String(c.after.title ?? c.target.title ?? "");
   const words = OP_WORDS[c.op] ?? c.op.replace(/_/g, " ");
   return [`${words} ${name}`.trim(), subjects];
@@ -580,10 +668,18 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   return res;
 }
 
-/** The chat's minutes notes, as "Notes: <text>" lines after the summary. */
-function withNotes(m: Meeting, summary: string): string {
-  const lines = (m.notes ?? []).filter((n) => n.kind === "note").map((n) => `Notes: ${n.text}`);
-  return [summary, ...lines].join("\n");
+/**
+ * qa-simple-decide-6: a short prose count ("4 decisions taken, 2 notes and 1 open
+ * question."), matching the API's minutes.summary_sentence; never the decisions'
+ * titles or a note's own text.
+ */
+function summarySentence(nDecisions: number, nNotes: number, nQuestions: number): string {
+  let out = `${nDecisions} ${nDecisions === 1 ? "decision" : "decisions"} taken`;
+  const extra: string[] = [];
+  if (nNotes) extra.push(`${nNotes} ${nNotes === 1 ? "note" : "notes"}`);
+  if (nQuestions) extra.push(`${nQuestions} open ${nQuestions === 1 ? "question" : "questions"}`);
+  if (extra.length) out += `, ${extra.join(" and ")}`;
+  return `${out}.`;
 }
 
 /** The chat's open questions, for the minutes' open_questions. */
@@ -671,8 +767,12 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const titles = db.decisions.filter((d) => d.meeting_id === m.id).sort((a, b) => -newestFirst(a, b)).map((d) => d.title);
   // Only the meeting's own record (minutes.record): its decisions and its chat's lines.
   const lines = ctx.chatLines?.(m.id) ?? [];
+  // Only the meeting's own record: its open questions, then the chat's questions.
+  // qa-simple-decide-4 (minutes.Record.questions): each once; a chat command is not asked again with its prefix.
+  const allQuestions = [...new Map([...questionsOf(m), ...lines.filter((x) => x.trim().endsWith("?") && !/^\s*(open question|question|note)\s*:/i.test(x))].map((x) => [x.toLowerCase().split(/\s+/).join(" "), x])).values()];
+  const nNotes = (m.notes ?? []).filter((n) => n.kind === "note" && n.text).length;
   const summary = titles.length
-    ? `${titles.slice(0, 6).join("; ")}${titles.length > 6 ? "…" : "."}`
+    ? summarySentence(titles.length, nNotes, allQuestions.length)
     : lines.length || (m.notes ?? []).length
       ? `${m.title}: no decision was taken.`
       : `${m.title}: nothing was decided or recorded.`;
@@ -686,10 +786,8 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
     if (made.has(c.id) && c.status === "proposed") waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
   }
   return {
-    summary: withNotes(m, summary).slice(0, 4000),
-    // Only the meeting's own record: its open questions, then the chat's questions.
-    // qa-simple-decide-4 (minutes.Record.questions): each once; a chat command is not asked again with its prefix.
-    open_questions: [...new Map([...questionsOf(m), ...lines.filter((x) => x.trim().endsWith("?") && !/^\s*(open question|question|note)\s*:/i.test(x))].map((x) => [x.toLowerCase().split(/\s+/).join(" "), x])).values()].slice(0, 5),
+    summary: summary.slice(0, 4000),
+    open_questions: allQuestions.slice(0, 5),
     action_items: [],
     waits,
     written_by: "extract",
@@ -702,15 +800,16 @@ export function meetingInboxRows(db: MeetingsDb | undefined, me: string, seen: s
     .filter((m) => m.minutes_state === "sent" && m.attendee_ids.includes(me))
     .sort((a, b) => ((a.sent_at ?? "") < (b.sent_at ?? "") ? 1 : -1))
     .map((m) => ({
-      meeting_id: m.id, title: m.title, ended_at: m.ended_at, decisions: db!.decisions.filter((d) => d.meeting_id === m.id).length,
+      meeting_id: m.id, title: m.title, ended_at: m.ended_at, sent_at: m.sent_at, decisions: db!.decisions.filter((d) => d.meeting_id === m.id).length,
       state: !seen || (m.sent_at ?? "") > seen ? "new" : "open",
     }));
 }
 
 function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
   return {
-    id: d.id, number: d.number, title: d.title, origin: d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
+    id: d.id, number: d.number, title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
     decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
+    code: d.question?.code ?? null, chosen: d.question?.chosen ?? null,
   };
 }
 
@@ -755,13 +854,18 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const out: Schemas["SimpleDecisionsOut"] = {
     meetings: shown.map((m) => {
       const whole = !!prd && !goal && m.prd === prd.slug;
-      return { meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)) };
+      return {
+        meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)),
+        delivery: m.minutes_state === "sent" ? deliveryOut(ctx, m) : null, can_retry_delivery: mayRetry(ctx, m),
+      };
     }),
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
     prds: [...ps].sort((a, b) => a.title.localeCompare(b.title)).map((x) => ({ id: x.slug, title: x.title })),
     goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
-    meeting_options: ms.map((m) => ({ id: m.id, title: m.title })),
+    // qa-simple-decide-11: the meeting's title carries its day (the company's zone) and,
+    // while it is still live, " · live".
+    meeting_options: ms.map((m) => ({ id: m.id, title: `${m.title} · ${companyDateInWords(m.started_at)}${m.status === "live" ? " · live" : ""}` })),
     // prd-questions: the PRD's open questions (List and Board), counts and the remembered view.
     questions: qs,
     ...(({ waiting_count, late_count, approvals_waiting, approvals_example }) => ({ waiting_count, late_count, approvals_waiting, approvals_example }))(questionsCounts(ctx, qd, qs)),
@@ -880,7 +984,10 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (!text || text.length > 1000) return json(422, { detail: "text: 1 to 1000 characters" });
     if (!mayChange(m, ctx.me.id) && !m.attendee_ids.includes(ctx.me.id)) return json(403, { detail: "Join the meeting to comment in it" });
     if (m.status === "ended") return json(409, { detail: "This meeting has ended" });
-    record(db, ctx, m, `Comment: ${text}`, [...((b.subjects ?? []) as Decision["subjects"]), { kind: "document", id: prd.id }], []);
+    // qa-simple-decide-1: a comment is kept as a note, not a meeting decision; it stays
+    // out of meeting_decisions, the minutes and the Decisions page.
+    const note: MeetingNote = { id: `comment-${crypto.randomUUID()}`, kind: "comment", text, by_name: nameOf(ctx, ctx.me.id), at: iso(mockNowMs()), card_id: null };
+    (m.notes ??= []).push(note);
     return json(201, one(ctx, db, m));
   }
   if (p[4] === "approve" && method === "POST") {
@@ -926,7 +1033,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const quick = extract(ctx, db, m);
     const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
     // An empty record: the plain line, no model's words (meetings.run_job); notes and open questions count as the record.
-    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? withNotes(m, `Oracle's minutes of ${m.title}: ${n} decisions taken.`) : quick.summary, written_by: "oracle" };
+    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
     return ok();
@@ -950,6 +1057,24 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.minutes_job = null;
     return ok();
   }
+  if (p[4] === "delivery" && p[5] === "retry" && method === "POST") {
+    // meetings.retry_delivery: requeue the failed emails or the Slack post for the tick.
+    if (!mayRetry(ctx, m)) return json(403, { detail: "Only whoever ended the meeting or an owner retries it" });
+    const b = (await body(req)) as Partial<Schemas["SimpleRetryDeliveryIn"]>;
+    const d = m.delivery!;
+    const fresh = (): Try => ({ status: "queued", tries: 0, next_at: mockNowMs() });
+    if (b.what === "email") {
+      const failed = Object.entries(d.email_to ?? {}).filter(([, t]) => t.status === "failed");
+      if (d.email_status !== "failed" || !failed.length) return json(409, { detail: "No email is left to retry" });
+      for (const [k] of failed) d.email_to![k] = fresh();
+      d.email_status = emailStatus(d.email_to!);
+    } else {
+      if (d.slack_status !== "failed") return json(409, { detail: "The Slack post is not left to retry" });
+      d.slack_try = fresh();
+      d.slack_status = "queued";
+    }
+    return json(200, one(ctx, db, m));
+  }
   if (p[4] === "send" && method === "POST") {
     if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner sends them" });
     if (m.status !== "ended") return json(409, { detail: "End the meeting first" });
@@ -958,9 +1083,13 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const slack = slackState();
     if (b.slack && !(slack.connected && slack.channel)) return json(422, { detail: slack.connected ? "No Slack channel is set in Settings › Notifications" : "Slack is not connected" });
     m.minutes ??= extract(ctx, db, m);
+    const fresh = (): Try => ({ status: "queued", tries: 0, next_at: mockNowMs() });
+    const emailing = !!b.email && emailAvailable();
     m.delivery = {
-      decisions: true, inbox: true, email: !!b.email, email_status: b.email ? (emailAvailable() ? "queued" : "unavailable") : null,
+      decisions: true, inbox: true, email: !!b.email, email_status: b.email ? (emailing ? "queued" : "unavailable") : null,
+      ...(emailing ? { email_to: Object.fromEntries(m.attendee_ids.map((i) => [i, fresh()])) } : {}),
       slack: !!b.slack, slack_status: b.slack ? "queued" : null, slack_channel: b.slack ? slack.channel : null,
+      ...(b.slack ? { slack_try: fresh() } : {}),
     };
     m.minutes_state = "sent";
     m.minutes_job = null;
@@ -980,12 +1109,13 @@ function qdb(ctx: MeetingsCtx, db: MeetingsDb): QuestionsDb {
  * undo); with a live meeting's session_id the decision lands in that meeting's minutes.
  */
 export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
-  return routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title) => {
+  return routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title, own) => {
     const m = db.meetings.find((x) => x.session_id === sessionId);
     if (!m) return false;
     if (m.status !== "live") return "ended";
     const prd = prds(ctx).find((x) => x.slug === m.prd);
-    record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+    const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+    if (own) d.question = own;
     return m.id;
   });
 }

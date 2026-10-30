@@ -84,8 +84,10 @@ test.describe("desktop · Decisions", () => {
     await decisions(page, "list");
     const q5 = row(page, "Q5");
     await q5.getByRole("button", { name: "Another answer" }).click();
-    await q5.getByRole("radio", { name: "Something else…" }).click();
-    await expect(q5.getByRole("button", { name: "Decide as recommended" })).toHaveCount(0);
+    await q5.getByRole("button", { name: "Something else…" }).click();
+    // qa-simple-home-6: the row's column stays as it was: its Decide as recommended is the one primary button.
+    await expect(q5.locator(".simple-button-primary")).toHaveCount(1);
+    await expect(q5.locator(".simple-button-primary")).toHaveText("Decide as recommended");
     const decide = q5.getByRole("button", { name: "Decide", exact: true });
     await expect(decide).toBeDisabled();
     expect(await decide.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.5");
@@ -118,11 +120,13 @@ test.describe("desktop · Decisions", () => {
   test("filters: Clear filters when nothing matches; a filtered meeting says so", async ({ page }) => {
     await decisions(page, "meetings");
     await page.getByRole("combobox", { name: "Goal" }).selectOption({ index: 1 });
-    const group = page.getByTestId("meeting-group").first();
-    if (await group.count()) await expect(group.getByTestId("meeting-group-filtered")).toContainText("of this meeting match");
+    // Wait for the filter to settle: a filtered meeting says so, or nothing matches (no count read mid-render).
+    const filtered = page.getByTestId("meeting-group").first().getByTestId("meeting-group-filtered");
+    await expect(filtered.or(page.getByTestId("decisions-empty"))).toBeVisible();
+    if (await filtered.count()) await expect(filtered).toContainText(/of this meeting match(es)?\./);
     await page.getByRole("combobox", { name: "Goal" }).selectOption({ index: 0 });
     await page.getByRole("combobox", { name: "PRD" }).selectOption({ label: "Guided setup" });
-    await page.getByRole("combobox", { name: "Meeting" }).selectOption({ label: "Review: Usage alerts" });
+    await page.getByRole("combobox", { name: "Meeting" }).selectOption({ index: 1 });
     await expect(page.getByTestId("decisions-empty")).toContainText("No decision matches.");
     await page.getByTestId("decisions-clear-filters").click();
     await expect(page.getByTestId("decisions-empty")).toHaveCount(0);

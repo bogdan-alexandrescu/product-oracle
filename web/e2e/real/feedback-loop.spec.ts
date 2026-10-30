@@ -46,13 +46,14 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
 
   const goal = (await openSection(page, "goal")).getByTestId("review-bar");
   await goal.getByRole("button", { name: "Approve" }).click();
-  await goal.getByRole("button", { name: /^Save/ }).click();
+  // The opened note's button says the action it takes (qa-docs-74).
+  await goal.getByTestId("verdict-submit").click();
   await expect(goal.getByTestId("verdict-state")).toContainText("Locked");
 
   const metrics = (await openSection(page, "metrics")).getByTestId("review-bar");
   await metrics.getByRole("button", { name: "Request changes" }).click();
   await metrics.getByLabel(/What should change/).fill("Give the ticket metric a number and a deadline.");
-  await metrics.getByRole("button", { name: /^Save/ }).click();
+  await metrics.getByTestId("verdict-submit").click();
   await expect(metrics.getByTestId("verdict-state")).toContainText("Changes requested");
 
   // Both survive a reload, i.e. they are stored by the API.
@@ -93,7 +94,8 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/v/1\\?feedback=open#solution$`));
   const review = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
   await expect(review.getByRole("tab", { name: /^Feedback\s*2$/ })).toHaveAttribute("aria-selected", "true");
-  await expect(review.getByTestId("feedback-state").getByRole("button", { name: /^Open/ })).toHaveAttribute("aria-pressed", "true");
+  // Two items draw no filters (qa-docs-72): the open ones are listed as they are.
+  await expect(review.getByTestId("feedback-state")).toHaveCount(0);
   const open = review.getByTestId("feedback-item");
   await expect(open).toHaveCount(2);
   await expect(open.first().getByRole("button", { name: "Resolve", exact: true })).toBeInViewport();

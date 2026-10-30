@@ -153,7 +153,7 @@ test("expand: a feature row and a milestone show their detail in place; comments
   const summary = await openSection(page, "summary");
   const bar = summary.getByTestId("review-bar");
   await bar.getByRole("button", { name: "Approve" }).click();
-  await bar.getByRole("button", { name: /^Save/ }).click();
+  await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
   const roadmap = await openSection(page, "brief-roadmap");
   await roadmap.getByRole("button", { name: "Expand General release" }).click();
@@ -164,7 +164,7 @@ test("expand: a feature row and a milestone show their detail in place; comments
   const detailBar = section(page, "milestone-ga").getByTestId("review-bar");
   await detailBar.getByRole("button", { name: "Request changes" }).click();
   await detailBar.getByLabel(/What should change/).fill("Name the opt-out source.");
-  await detailBar.getByRole("button", { name: /^Save/ }).click();
+  await detailBar.getByTestId("verdict-submit").click();
   await expect(detailBar.getByTestId("verdict-state")).toContainText("Changes requested");
 
   // Back on the brief, Collapse hides the detail again; a comment on it opens it from the panel.
@@ -328,5 +328,5 @@ test("templates: the editor shows the brief sections and refuses a template with
   await expect(create).toBeEnabled();
   await create.click();
   await expect(page).toHaveURL(/\/settings\/templates\/no-brief$/);
-  await expect(page.getByTestId("version-brief")).toHaveText("problem");
+  await expect(page.getByTestId("version-brief")).toHaveText("Problem");
 });

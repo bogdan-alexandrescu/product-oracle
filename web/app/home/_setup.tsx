@@ -11,7 +11,12 @@ type Step = Schemas["SetupStep"];
  * A step's words. `href` is where its button goes while the step is open ("Open"); once done
  * the button says `doneAction` ("Change", or "Review") and goes to `doneHref` when set.
  */
-type Copy = { label: string; href?: string; status: (s: Step) => string; doneAction?: string; doneHref?: string };
+type Copy = { label: string; href?: string; status: (s: Step, mine: Mine) => string; doneAction?: string; doneHref?: string };
+
+/** What Home knows besides the step: how many sources the Sources page lists as the person's. */
+export type Mine = { sources?: number };
+
+const sourcesText = (n: number) => `${n} ${n === 1 ? "source" : "sources"}`;
 
 /**
  * The web's copy of each setup step the API names (A1): label, where Open goes, and the
@@ -27,7 +32,18 @@ const STEPS: Record<string, Copy> = {
   sources: {
     label: "Pick sources",
     href: "/settings/sources?from=setup",
-    status: (s) => (s.done ? `${s.count} ${s.count === 1 ? "source" : "sources"}` : "None"),
+    // qa-onboarding-3: the step counts the sources with something read; Sources lists them
+    // all. Both say the same number: a source with nothing read yet is said as such. Home
+    // lists the sources only while the step is open (its call budget); a done step says how
+    // many are read, which never contradicts a longer list on Sources.
+    status: (s, mine) => {
+      const read = s.count ?? 0;
+      if (s.done) return `${sourcesText(read)} read`;
+      const all = Math.max(mine.sources ?? read, read);
+      if (all === 0) return "None";
+      if (read === 0) return `${sourcesText(all)} · nothing read yet`;
+      return all > read ? `${sourcesText(all)} · ${read} read` : sourcesText(read);
+    },
   },
   invite: {
     label: "Invite team",
@@ -66,7 +82,7 @@ const STEPS: Record<string, Copy> = {
   // B1: done once a Build the baseline run succeeded; detail is when the last one finished.
   build_baseline: {
     label: "Build baseline",
-    href: "/baseline?build=1",
+    href: "/baseline?build=1&from=setup",
     // qa-onboarding-10: a build under way says so (its row opens the run, see stepAction).
     status: (s) => (s.run_id ? "Building…" : !s.done ? "Not built" : s.detail ? `Built ${formatDay(s.detail)}` : "Built"),
     // Built: the row reviews the baseline, never starts a second build from Home.
@@ -76,7 +92,7 @@ const STEPS: Record<string, Copy> = {
 };
 
 /** A step's copy; a step this build has no words for keeps its row: "Calendar", Done or Not done, no Open. */
-function copyOf(s: Step): Copy {
+export function copyOf(s: Step): Copy {
   const known = STEPS[s.key];
   if (known) return known;
   const words = String(s.key).replace(/_/g, " ");
@@ -122,7 +138,8 @@ export function SetupChip({ setup, onShow, busy }: { setup: Schemas["SetupOut"];
       disabled={busy}
       className="tnum inline-flex h-[26px] items-center gap-1.5 rounded-full bg-accent-soft px-2.5 text-[13px] leading-none font-semibold whitespace-nowrap text-accent-ink hover:brightness-95 disabled:opacity-70"
     >
-      Set up {setup.done}/{setup.total}
+      {/* qa-company-13: the same words as the open checklist's count. */}
+      Set up {setup.done} of {setup.total}
     </button>
   );
 }
@@ -131,7 +148,7 @@ export function SetupChip({ setup, onShow, busy }: { setup: Schemas["SetupOut"];
  * Set up (A1): the first steps of this company's Oracle, done or open, each one click
  * away. Drawn first on Home while a step is open and the person has not hidden it.
  */
-export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]; onHide: () => void; busy: boolean }) {
+export function SetupPanel({ setup, onHide, busy, mine = {} }: { setup: Schemas["SetupOut"]; onHide: () => void; busy: boolean; mine?: Mine }) {
   return (
     <Panel
       title="Set up"
@@ -146,7 +163,7 @@ export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]
       <ul>
         {setup.steps.map((s) => {
           const copy = copyOf(s);
-          const status = copy.status(s);
+          const status = copy.status(s, mine);
           const action = stepAction(s, copy);
           return (
             <li
@@ -171,7 +188,13 @@ export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]
                   {status}
                 </span>
                 {action && (
-                  <LinkButton href={action.href} className="flex-none" data-testid="setup-action">
+                  // qa-onboarding-13: each button named for its step ("Open Connect tools").
+                  <LinkButton
+                    href={action.href}
+                    className="flex-none"
+                    data-testid="setup-action"
+                    aria-label={s.run_id ? action.label : `${action.label} ${copy.label}`}
+                  >
                     {action.label}
                   </LinkButton>
                 )}

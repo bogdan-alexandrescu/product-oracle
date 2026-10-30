@@ -108,8 +108,11 @@ export function useAccessRequestRows(requests: AccessRequest[], reload: () => Pr
       at: r.requested_at,
       // The Inbox: Done or Declined at once, counted there; Home: in place, not counted.
       ...(done ? (onActed ? { state: done.declined ? "declined" : "done" } : { counted: false }) : {}),
+      // qa-company-19: on a phone the role, Approve and Decline go under the row, left-aligned
+      // with its text (data-inbox-actions: the Inbox's row actions, D14). qa-company-18: Approve
+      // is outlined like every row's first action; filled is for the page's primary.
       action: done ? null : (
-        <>
+        <span data-inbox-actions className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:flex max-[600px]:w-full max-[600px]:justify-start" data-testid="access-actions">
           <select
             aria-label={`Role for ${r.email}`}
             value={chosen[r.id] ?? r.default_role}
@@ -123,13 +126,13 @@ export function useAccessRequestRows(requests: AccessRequest[], reload: () => Pr
               </option>
             ))}
           </select>
-          <Button variant="primary" disabled={busy === r.id} onClick={() => decide(r, "approve")}>
+          <Button disabled={busy === r.id} onClick={() => decide(r, "approve")}>
             Approve
           </Button>
           <Button variant="ghost" disabled={busy === r.id} onClick={() => decide(r, "decline")}>
             Decline
           </Button>
-        </>
+        </span>
       ),
     };
   });

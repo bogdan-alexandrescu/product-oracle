@@ -77,7 +77,11 @@ async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
     assert "oracle-page-fit" not in html
     assert "class='plan'" not in html
     tl = html[html.index("<div class='tl'>") : html.index("<section class='part'>")]
-    for flag in ("M1 ends 27 Nov", "M2 ends 25 Dec", "M3 ends 12 Feb"):
+    for flag in (
+        "M1 ends Nov 27",
+        "M2 ends Dec 25",
+        "M3 ends Feb 12",
+    ):  # month first, as the app writes days (qa-shell-21)
         assert flag in tl
     assert "M1 100 weekly active teams → M2 250 weekly active teams" in tl
     assert "Not counted yet" in tl and "PM-owned · no engineering" in tl
@@ -90,7 +94,7 @@ async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
         "M3 Open to all",
     ]
     m1 = parts[0]
-    assert "2 Nov – 27 Nov" in m1 and "Ten pilot teams finish setup" in m1
+    assert "Nov 2 – Nov 27" in m1 and "Ten pilot teams finish setup" in m1
     assert "Growth: 100 weekly active teams" in m1
     assert "<h3>New for people</h3>" in m1 and "F-01 Setup checklist" in m1
     assert "Ticks off setup steps" in m1 and m1.index("New for people") < m1.index("PM-owned")

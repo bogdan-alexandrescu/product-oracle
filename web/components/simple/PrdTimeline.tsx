@@ -28,10 +28,10 @@ type Risk = Schemas["SimplePlanRisk"];
 const DAY = 86_400_000;
 const PM_LANE = "Product manager's work";
 const ms = (day: string) => Date.parse(`${day.slice(0, 10)}T00:00:00Z`);
-/** "27 Nov". */
-const dm = (day: string) => calendarDay(day, { day: "numeric", month: "short" }, "en-GB");
-/** "27 Nov 2026". */
-export const dmy = (day: string) => calendarDay(day, { day: "numeric", month: "short", year: "numeric" }, "en-GB");
+/** "Nov 27": a day written as everywhere else in the app (qa-shell-21). */
+const dm = (day: string) => calendarDay(day);
+/** "Nov 27, 2026". */
+export const dmy = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
 /** "56", "2.5": a number of weeks with no pointless ".0". */
 const weeks = (n: number) => String(Math.round(n * 10) / 10);
 /** "56 engineer-weeks", "2.5 engineer-weeks", "1 engineer-week". */
@@ -138,6 +138,8 @@ function measuredWords(goal: Goal | null): string {
 }
 
 const dated = (m: Milestone) => !!(m.start_date && m.end_date);
+/** "M2 and M3", "M1, M2 and M3". */
+const andList = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : (xs[0] ?? ""));
 
 /** The milestone running today, else the next to start, else (none dated) the first, else the last. */
 function currentOf(plan: Plan, today: string): string | null {
@@ -181,7 +183,7 @@ function ewWords(m: Milestone): string | null {
   return ew(cap);
 }
 
-/** "2 Nov → 27 Nov 2026"; across a year end "28 Dec 2026 → 12 Feb 2027". */
+/** "Nov 2 → Nov 27, 2026"; across a year end "Dec 28, 2026 → Feb 12, 2027". */
 function spanWords(start: string, end: string): string {
   return start.slice(0, 4) === end.slice(0, 4) ? `${dm(start)} → ${dmy(end)}` : `${dmy(start)} → ${dmy(end)}`;
 }
@@ -212,24 +214,44 @@ function dueWords(plan: Plan, day: string, today: string, withDay = true): { wor
 }
 
 /**
- * The decisions with a due day, one entry per day (D1 joins "Q4 M1 trigger · Q8 numbers"). A
- * milestone with no dates keeps its decisions under it (they are worded against milestones).
+ * The decisions with a due day, one entry per day (D1 joins "Q4 M1 trigger · Q8 numbers").
+ * qa-simple-prd-p3-6: every dated decision, whatever its milestone (an undated milestone's too,
+ * also listed under it). qa-simple-prd-p3-10: `owner` is the milestone the day's decisions
+ * belong to, when they share one.
  */
-function datedDecisions(plan: Plan): { day: string; label: string; codes: string[] }[] {
-  const by = new Map<string, Decision[]>();
-  for (const m of plan.milestones.filter(dated)) for (const d of m.decisions) if (d.due_on && !by.get(d.due_on)?.some((x) => x.code === d.code)) by.set(d.due_on, [...(by.get(d.due_on) ?? []), d]);
-  return [...by.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, ds]) => ({ day, codes: ds.map((d) => d.code), label: ds.map((d) => `${d.code} ${d.title}`).join(" · ") }));
+function datedDecisions(plan: Plan): { day: string; label: string; codes: string[]; owner: string | null }[] {
+  const by = new Map<string, [Decision, string][]>();
+  for (const m of plan.milestones) for (const d of m.decisions) if (d.due_on && !by.get(d.due_on)?.some(([x]) => x.code === d.code)) by.set(d.due_on, [...(by.get(d.due_on) ?? []), [d, m.code]]);
+  return [...by.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, ds]) => ({
+    day,
+    codes: ds.map(([d]) => d.code),
+    label: ds.map(([d]) => `${d.code} ${d.title}`).join(" · "),
+    owner: ds.every(([, o]) => o === ds[0][1]) ? ds[0][1] : null,
+  }));
+}
+
+/**
+ * qa-simple-prd-p3-10: a decision's day on the timeline says whose decision it is when it falls
+ * on another milestone ("M2 decision, taken at the M1 review, 27 Nov").
+ */
+function timelineDue(plan: Plan, d: { day: string; owner: string | null }, today: string, withDay = true): { words: string; late: boolean } {
+  const due = dueWords(plan, d.day, today, withDay);
+  const place = placeOf(plan, d.day);
+  if (!d.owner || !place || place.includes(d.owner) || due.late) return due;
+  return { ...due, words: `${d.owner} decision, taken ${due.words}` };
 }
 
 const named = (s: Slice) => `${s.code} ${s.name}`;
 
-/** A bar's label, longest first: every feature by code and name, then fewer with "+N", then the count. */
+/**
+ * A bar's label, longest first: every feature by name, then fewer with "+N". qa-simple-prd-p3-3:
+ * never a code alone: the last one ends in "…" where it does not fit (its codes on hover).
+ */
 function barVariants(p: Piece): string[] {
   const sl = p.slices;
-  if (sl.length === 1) return [named(sl[0]), sl[0].name, sl[0].code];
-  const out = [sl.map(named).join(" · ")];
-  for (let k = sl.length - 1; k >= 1; k--) out.push(`${sl.slice(0, k).map(named).join(" · ")} +${sl.length - k}`);
-  out.push(`${sl[0].name} +${sl.length - 1}`, `${sl[0].code} +${sl.length - 1}`, `${sl.length} features`);
+  if (sl.length === 1) return [sl[0].name];
+  const out = [sl.map((s) => s.name).join(" · ")];
+  for (let k = sl.length - 1; k >= 1; k--) out.push(`${sl.slice(0, k).map((s) => s.name).join(" · ")} +${sl.length - k}`);
   return out;
 }
 
@@ -248,6 +270,23 @@ function Bolded({ text }: { text: string }) {
 }
 
 // ---------------------------------------------------------------- shared pieces
+
+/** qa-simple-prd-p3-21: a phone's tap area is 44 px tall round a small link (it looks the same). */
+export const TAP44 = "relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']";
+/** qa-simple-prd-p3-20: "16 engineer-weeks" and "part 2 of 2" never break inside. */
+const keep = (words: string) => words.replace(/ (\d+)$/, "\u00a0$1");
+function Facts({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(" · ").map((x, i) => (
+        <span key={i}>
+          {i > 0 && " · "}
+          <span className="whitespace-nowrap">{x}</span>
+        </span>
+      ))}
+    </>
+  );
+}
 
 const SEC_H = "text-[13px] leading-[18px] font-bold uppercase tracking-[.07em] text-text-faint";
 const H3 = "text-[20px] leading-[28px] font-[650]";
@@ -294,6 +333,8 @@ export function PrdPlan({ plan, title, onPlan }: { plan: Plan; title: string; on
   // Today in the company's time zone.
   const [today] = useState(() => todayIn(zone));
   const [picked, setPicked] = useState<string | null>(null);
+  // qa-simple-prd-p3-9: the features of the bar last clicked, marked in the milestone's card.
+  const [marked, setMarked] = useState<string[]>([]);
   const pick = picked ?? currentOf(plan, today);
   const m = plan.milestones.find((x) => x.code === pick) ?? null;
   return phone ? (
@@ -305,13 +346,14 @@ export function PrdPlan({ plan, title, onPlan }: { plan: Plan; title: string; on
         today={today}
         pick={pick}
         onPick={setPicked}
-        onShow={(c) => {
+        onShow={(c, codes) => {
           setPicked(c);
+          setMarked(codes ?? []);
           showPart();
         }}
         onPlan={onPlan}
       />
-      {m && <MilestoneCard plan={plan} m={m} today={today} phone={false} />}
+      {m && <MilestoneCard plan={plan} m={m} today={today} phone={false} marked={marked} />}
     </>
   );
 }
@@ -361,7 +403,12 @@ function NoDates({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
           {busy ? "Reading the plan…" : "Read the plan again"}
         </button>
       )}
-      {again && <span role="status" className="text-[14px] text-text-faint">Read again: the PRD still gives no dates.</span>}
+      {again && (
+        // qa-simple-prd-p3-5: with some milestones dated, it names the ones still without.
+        <span role="status" className="text-[14px] text-text-faint">
+          {plan.milestones.some(dated) ? `Read again: ${andList(undated.map((x) => x.code))} still ${undated.length === 1 ? "has" : "have"} no dates.` : "Read again: the PRD still gives no dates."}
+        </span>
+      )}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
@@ -388,21 +435,25 @@ function GoalList({ plan }: { plan: Plan }) {
   );
 }
 
-/** A decision's line under its milestone: its code and title, and its day when it has one. */
-function DecisionLine({ d }: { d: Decision }) {
+/**
+ * A decision's line under its milestone: its code and title, and its day when it has one.
+ * qa-simple-prd-p3-11: one overdue style everywhere ("was due 20 Oct" in red, as the timeline).
+ */
+function DecisionLine({ plan, d, today }: { plan: Plan; d: Decision; today: string }) {
+  const due = d.due_on ? dueWords(plan, d.due_on, today) : null;
   return (
     <li className="relative list-none pl-[18px] text-[14px] leading-5">
-      <span aria-hidden className="absolute top-[5px] left-0.5 h-2.5 w-2.5 rotate-45 rounded-[2px]" style={{ background: "var(--warn)" }} />
+      <span aria-hidden className="absolute top-[5px] left-0.5 h-2.5 w-2.5 rotate-45 rounded-[2px]" style={{ background: due?.late ? "var(--crit)" : "var(--warn)" }} />
       <b className="font-bold">
         {d.code} {d.title}
       </b>
-      <span className="text-text-faint">{d.due_on ? ` · due ${dm(d.due_on)}` : " · no date yet"}</span>
+      <span className={due?.late ? "font-[650] text-crit" : "text-text-faint"}>{" · "}<span className="whitespace-nowrap">{due ? (due.late ? due.words : `due ${dm(d.due_on!)}`) : "no date yet"}</span></span>
     </li>
   );
 }
 
 /** The milestones with no dates, in order (D3): each with its targets and the decisions it needs. */
-function UndatedList({ plan }: { plan: Plan }) {
+function UndatedList({ plan, today }: { plan: Plan; today: string }) {
   const undated = plan.milestones.filter((x) => !dated(x));
   if (!undated.length) return null;
   return (
@@ -420,7 +471,7 @@ function UndatedList({ plan }: { plan: Plan }) {
           {x.decisions.length > 0 && (
             <ul className="mt-1 flex flex-col gap-1" aria-label={`Decisions ${x.code} needs`}>
               {x.decisions.map((d) => (
-                <DecisionLine key={d.code} d={d} />
+                <DecisionLine key={d.code} plan={plan} d={d} today={today} />
               ))}
             </ul>
           )}
@@ -430,10 +481,10 @@ function UndatedList({ plan }: { plan: Plan }) {
   );
 }
 
-function TimelineCard({ plan, today, pick, onPick, onShow, onPlan }: { plan: Plan; today: string; pick: string | null; onPick: (c: string) => void; onShow: (c: string) => void; onPlan: (p: Plan) => void }) {
+function TimelineCard({ plan, today, pick, onShow, onPlan }: { plan: Plan; today: string; pick: string | null; onPick: (c: string) => void; onShow: (c: string, codes?: string[]) => void; onPlan: (p: Plan) => void }) {
   const lanes = lanesOf(plan);
   const anyDated = plan.milestones.some(dated);
-  const undatedDecisions = plan.milestones.filter(dated).reduce((n, x) => n + x.decisions.filter((d) => !d.due_on).length, 0);
+  const undatedDecisions = plan.milestones.reduce((n, x) => n + x.decisions.filter((d) => !d.due_on).length, 0);
   return (
     <section aria-label="Timeline" className={`${PAPER} flex flex-col gap-4 px-7 py-6`}>
       {plan.summary.length > 0 && (
@@ -448,7 +499,7 @@ function TimelineCard({ plan, today, pick, onPick, onShow, onPlan }: { plan: Pla
       <h3 className={SEC_H}>When</h3>
       {anyDated && <Strip plan={plan} lanes={lanes} today={today} onPick={onShow} />}
       {plan.milestones.some((x) => !dated(x)) && <NoDates plan={plan} onPlan={onPlan} />}
-      <UndatedList plan={plan} />
+      <UndatedList plan={plan} today={today} />
       {!anyDated && <GoalList plan={plan} />}
       {anyDated && undatedDecisions > 0 && (
         <p className="-mt-2 text-[14px] leading-5 text-text-faint">
@@ -460,7 +511,8 @@ function TimelineCard({ plan, today, pick, onPick, onShow, onPlan }: { plan: Pla
         {plan.milestones.map((x) => {
           const on = pick === x.code;
           return (
-            <button key={x.code} type="button" aria-pressed={on} onClick={() => onPick(x.code)} className="flex items-center gap-2.5 rounded-[8px] text-left text-[18px] leading-6 font-[650]">
+            // qa-simple-prd-p3-8: picking a milestone brings its card into view, as its bar does.
+            <button key={x.code} type="button" aria-pressed={on} onClick={() => onShow(x.code)} className="flex items-center gap-2.5 rounded-[8px] text-left text-[18px] leading-6 font-[650]">
               <span
                 className="inline-grid h-[26px] min-w-9 flex-none place-items-center rounded-[8px] px-[7px] font-mono text-[14px] leading-none font-bold"
                 style={{ background: hue(plan, x.code).line, color: "var(--simple-paper)", boxShadow: on ? `0 0 0 3px var(--simple-paper), 0 0 0 5px ${hue(plan, x.code).line}` : undefined }}
@@ -485,7 +537,7 @@ const SH = 22;
 const SG = 4;
 const DIA_LEVEL = 40;
 
-function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; today: string; onPick: (c: string) => void }) {
+function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; today: string; onPick: (c: string, codes?: string[]) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [w0, setW0] = useState(0);
   useLayoutEffect(() => {
@@ -501,17 +553,22 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   const ds = plan.milestones.filter(dated);
   const allDecisions = datedDecisions(plan);
   // The axis: every dated milestone, today and every decision's due day, two days either side.
-  const first = Math.min(...ds.map((x) => ms(x.start_date!)), ms(today), ...allDecisions.map((d) => ms(d.day)));
+  const start = Math.min(...ds.map((x) => ms(x.start_date!)));
+  let first = Math.min(start, ms(today), ...allDecisions.map((d) => ms(d.day)));
   const last = Math.max(...ds.map((x) => ms(x.end_date!)), ms(today), ...allDecisions.map((d) => ms(d.day)));
+  // qa-simple-prd-p3-7: a long run-up before the plan starts (only today or a late decision in
+  // it) does not squeeze the plan: the axis starts a week before it, and what is earlier sits
+  // at its left edge (its words keep its day).
+  if (start - first > 0.25 * (last - first)) first = start - 5 * DAY;
   const T0 = first - 2 * DAY;
   const T1 = last + 3 * DAY;
-  const X = (day: string) => ((ms(day) - T0) / (T1 - T0)) * W;
+  const X = (day: string) => Math.max(0, ((ms(day) - T0) / (T1 - T0)) * W);
   const XE = (day: string) => ((ms(day) + DAY - T0) / (T1 - T0)) * W;
-  const XT = X(today) + ((0.5 * DAY) / (T1 - T0)) * W;
+  const XT = Math.max(1, X(today) + ((0.5 * DAY) / (T1 - T0)) * W);
   const months: { label: string; x: number; at: number }[] = [];
   for (let d = new Date(T0); d.getTime() < T1; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
     const at = Math.max(T0, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-    months.push({ label: calendarDay(new Date(at).toISOString().slice(0, 10), { month: "short" }, "en-GB"), x: ((at - T0) / (T1 - T0)) * W, at });
+    months.push({ label: calendarDay(new Date(at).toISOString().slice(0, 10), { month: "short" }), x: ((at - T0) / (T1 - T0)) * W, at });
   }
   // The first month's label gives way when the next one starts within a label's width; a
   // label the Today pill would cover moves just past the pill.
@@ -528,8 +585,8 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   // Decision labels: one level unless they would overlap, then the next.
   const levels: [number, number][][] = [];
   const placed = decisions.map((d) => {
-    const x = X(d.day) + ((0.5 * DAY) / (T1 - T0)) * W;
-    const due = dueWords(plan, d.day, today);
+    const x = Math.max(6, X(d.day) + ((0.5 * DAY) / (T1 - T0)) * W);
+    const due = timelineDue(plan, d, today);
     // Its drawn width: the diamond, the gap, the words' padding and the longer line.
     const w = 23 + Math.max(textWidth(d.label, 13, 700), textWidth(due.words, 13, 400));
     // The first level where its words fit, after the diamond, else (D1's Q4 · Q8) before it.
@@ -605,7 +662,8 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
                     {l.pieces.map((p) => {
                       const c = hue(plan, p.milestone);
                       const x0 = X(p.start);
-                      const room = Math.max(XE(p.end) - x0, textWidth(p.slices[0].code, 12, 650) + 22);
+                      // A bar too short for its name still shows its first four letters ("Sett…"), never "Se…".
+                      const room = Math.max(XE(p.end) - x0, textWidth(`${p.slices[0].name.slice(0, 4)}…`, 12, 650) + 22);
                       const mile = plan.milestones.find((x) => x.code === p.milestone);
                       return (
                         <button
@@ -617,7 +675,7 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
                           data-pm={p.pm ? "true" : undefined}
                           aria-label={`${p.slices.map(named).join(", ")} (${p.milestone} ${mile?.name ?? ""})`}
                           title={p.slices.map(named).join("\n")}
-                          onClick={() => onPick(p.milestone)}
+                          onClick={() => onPick(p.milestone, p.slices.map((s) => s.code))}
                           className={`absolute z-[2] flex items-center overflow-hidden rounded-full px-[9px] text-[12px] leading-none font-[650] whitespace-nowrap ${p.pm ? "border-[1.5px] border-dashed bg-[var(--simple-paper)] text-text2" : "border-[1.5px] border-solid"}`}
                           style={{
                             left: x0,
@@ -759,8 +817,9 @@ function PhonePlan({ plan, title, today, pick, onPick, onPlan, m }: { plan: Plan
     if (x.start_date) events.push({ day: x.start_date, order: 2, node });
     else undated.push(node);
   }
-  for (const d of datedDecisions(plan)) {
-    const due = dueWords(plan, d.day, today, false);
+  // With no milestone dated there is no line to put them on (as on a desktop): they stay under their milestone.
+  for (const d of plan.milestones.some(dated) ? datedDecisions(plan) : []) {
+    const due = timelineDue(plan, d, today, false);
     events.push({
       day: d.day,
       order: 0,
@@ -801,12 +860,21 @@ function PhonePlan({ plan, title, today, pick, onPick, onPlan, m }: { plan: Plan
       <section aria-label="Timeline" data-testid="timeline-vertical" className="relative flex flex-col gap-3 pl-16">
         <span aria-hidden className="absolute top-1.5 bottom-0 left-[52px] border-l-2 border-[var(--simple-rule)]" />
         {events.map((e) => e.node)}
-        {undated}
+        {/* qa-simple-prd-p3-13: the note first, as on a desktop (it says why they are not on the line). */}
         {plan.milestones.some((x) => !dated(x)) && <NoDates plan={plan} onPlan={onPlan} />}
+        {undated}
       </section>
       <div ref={card}>{m && <MilestoneCard plan={plan} m={m} today={today} phone />}</div>
     </>
   );
+}
+
+/** qa-simple-prd-p3-12: "6 features, 2 flows · 1 decision ›" with no "0 …" parts ("1 decision ›"; nothing: "Nothing planned yet ›"). */
+function linkWords(features: number, flows: number, decisions: number): string {
+  const n = (k: number, one: string) => `${k} ${k === 1 ? one : `${one}s`}`;
+  const built = [features ? n(features, "feature") : null, flows ? n(flows, "flow") : null].filter(Boolean).join(", ");
+  const words = [built || null, decisions ? n(decisions, "decision") : null].filter(Boolean).join(" · ");
+  return `${words || "Nothing planned yet"} ›`;
 }
 
 /** A milestone in the vertical timeline: a compact summary (its part follows the timeline in full). */
@@ -826,7 +894,7 @@ function PhoneMilestone({ plan, m, today, open, onPick, onShow }: { plan: Plan; 
           <b className="text-[16px] leading-[21px] font-bold">{m.name}</b>
         </button>
         <div className="text-[14px] leading-5 text-text2">
-          {facts}
+          <Facts text={facts} />
           {open && st.week && (
             <>
               {" · "}
@@ -838,7 +906,7 @@ function PhoneMilestone({ plan, m, today, open, onPick, onShow }: { plan: Plan; 
           // With no dates, the decisions worded against it stay under it.
           <ul className="flex flex-col gap-1" aria-label={`Decisions ${m.code} needs`}>
             {m.decisions.map((d) => (
-              <DecisionLine key={d.code} d={d} />
+              <DecisionLine key={d.code} plan={plan} d={d} today={today} />
             ))}
           </ul>
         )}
@@ -848,9 +916,9 @@ function PhoneMilestone({ plan, m, today, open, onPick, onShow }: { plan: Plan; 
             e.preventDefault();
             onShow(m.code);
           }}
-          className="self-start text-[14px] font-semibold whitespace-nowrap text-accent underline underline-offset-[3px]"
+          className={`${TAP44} self-start text-[14px] font-semibold whitespace-nowrap text-accent underline underline-offset-[3px]`}
         >
-          {slices.length} {slices.length === 1 ? "feature" : "features"}, {flows} {flows === 1 ? "flow" : "flows"} · {m.decisions.length} {m.decisions.length === 1 ? "decision" : "decisions"} ›
+          {linkWords(slices.length, flows, m.decisions.length)}
         </a>
       </div>
     </div>
@@ -877,7 +945,7 @@ function Checks({ items, small }: { items: string[]; small?: boolean }) {
 
 const PM_KIND = "Product manager's work, no new engineering";
 
-export function MilestoneCard({ plan, m, today, phone }: { plan: Plan; m: Milestone; today: string; phone: boolean }) {
+export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Plan; m: Milestone; today: string; phone: boolean; marked?: string[] }) {
   const c = hue(plan, m.code);
   const st = stateOf(plan, m, today);
   const slices = plan.slices.filter((s) => s.milestone === m.code);
@@ -890,7 +958,8 @@ export function MilestoneCard({ plan, m, today, phone }: { plan: Plan; m: Milest
   }
   groups.sort(([a], [b]) => Number(a === PM_KIND) - Number(b === PM_KIND));
   const flows = slices.filter((s) => s.flow_steps.length);
-  const facts = [dated(m) ? null : "No dates yet", dated(m) ? weeksWords(plan, m) : null, ewWords(m)].filter(Boolean).join(" · ");
+  // qa-simple-prd-p3-12: "No dates yet" once, in the chip.
+  const facts = [dated(m) ? weeksWords(plan, m) : null, ewWords(m)].filter(Boolean).join(" · ");
   return (
     <section id="milestone-part" aria-label={`${m.code} ${m.name}`} data-testid="milestone-part" className={`${PAPER} flex scroll-mt-28 flex-col gap-[18px] border-t-[5px] ${phone ? "px-4 py-5" : "px-7 py-6"}`} style={{ borderTopColor: c.line }}>
       <div className="flex flex-wrap items-center gap-3">
@@ -899,11 +968,13 @@ export function MilestoneCard({ plan, m, today, phone }: { plan: Plan; m: Milest
         </h2>
         <span className={`inline-flex h-6 items-center rounded-xl px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap ${st.now ? "bg-accent-soft text-accent-ink" : "bg-na-bg text-na"}`}>{st.words}</span>
       </div>
-      <p className="-mt-1 text-[15px] leading-[22px] text-text2" data-testid="part-dates">
-        {dated(m) && <b className="font-bold text-text">{spanWords(m.start_date!, m.end_date!)}</b>}
-        {dated(m) && facts ? " · " : ""}
-        {facts}
-      </p>
+      {(dated(m) || facts) && (
+        <p className="-mt-1 text-[15px] leading-[22px] text-text2" data-testid="part-dates">
+          {dated(m) && <b className="font-bold text-text">{spanWords(m.start_date!, m.end_date!)}</b>}
+          {dated(m) && facts ? " · " : ""}
+          <Facts text={facts} />
+        </p>
+      )}
       {m.why && (
         <p data-testid="part-why" className="flex items-baseline gap-3 text-[17px] leading-[26px]">
           <span className="w-[72px] flex-none text-[12px] leading-[18px] font-[750] tracking-[.07em] text-text-faint uppercase">Why now</span>
@@ -934,27 +1005,34 @@ export function MilestoneCard({ plan, m, today, phone }: { plan: Plan; m: Milest
         </div>
         <div data-testid="part-builds">
           <h3 className={`${H3} mb-2`}>
-            What we build <span className="text-[16px] font-medium text-text-faint">· {slices.length} {slices.length === 1 ? "feature" : "features"}, by kind</span>
+            What we build{" "}
+            {slices.length > 0 && <span className="text-[16px] font-medium text-text-faint">· {slices.length} {slices.length === 1 ? "feature" : "features"}, by kind</span>}
           </h3>
           <div className="flex flex-col gap-3.5">
             {groups.map(([kind, of]) => (
               <div key={kind}>
-                <h4 className="mb-1 flex items-center gap-2 text-[12px] leading-4 font-[750] tracking-[.07em] text-text-faint uppercase">
-                  {kind} <span className="font-semibold">· {of.length}</span>
+                <h4 className="mb-1 text-[12px] leading-4 font-[750] tracking-[.07em] text-text-faint uppercase">
+                  {kind.split(" ").slice(0, -1).join(" ")}{" "}
+                  <span data-testid="kind-tail" className="whitespace-nowrap">
+                    {kind.split(" ").at(-1)} <span className="font-semibold">· {of.length}</span>
+                  </span>
                 </h4>
                 <ul>
                   {of.map((s) => (
-                    <li key={s.code} className={`grid list-none gap-x-2.5 border-t border-[var(--simple-rule)] py-1.5 text-[15px] leading-[21px] ${phone ? "grid-cols-[62px_minmax(0,1fr)] gap-y-0.5" : "grid-cols-[62px_250px_minmax(0,1fr)] gap-y-2.5"}`}>
+                    <li
+                      key={s.code}
+                      data-marked={marked.includes(s.code) ? "true" : undefined}
+                      className={`grid list-none gap-x-2.5 border-t ${marked.includes(s.code) ? "bg-accent-soft" : ""} border-[var(--simple-rule)] py-1.5 text-[15px] leading-[21px] ${phone ? "grid-cols-[62px_minmax(0,1fr)] gap-y-0.5" : "grid-cols-[62px_250px_minmax(0,1fr)] gap-y-2.5"}`}>
                       <span className={`${CODE} border border-line bg-surface2 text-text`}>{s.code}</span>
                       <b className="font-[650]">
-                        {s.name}
+                        {keep(s.name)}
                         {s.flow_steps.length > 0 && (
                           <span className="text-[13px] font-[650] whitespace-nowrap">
                             {" · "}
                             <button
                               type="button"
                               onClick={() => document.getElementById(`flow-${s.code}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                              className="text-accent underline underline-offset-[3px]"
+                              className={`${phone ? TAP44 : ""} text-accent underline underline-offset-[3px]`}
                             >
                               flow below
                             </button>
@@ -967,7 +1045,7 @@ export function MilestoneCard({ plan, m, today, phone }: { plan: Plan; m: Milest
                 </ul>
               </div>
             ))}
-            {!groups.length && <p className="text-[15px] text-text-faint">Nothing planned in it yet</p>}
+            {!groups.length && <p className="text-[15px] text-text-faint">Nothing planned yet</p>}
           </div>
         </div>
       </div>
@@ -1014,7 +1092,7 @@ export function MilestoneCard({ plan, m, today, phone }: { plan: Plan; m: Milest
                       </div>
                     )}
                   </div>
-                  <span className={`pt-0.5 text-[13px] leading-[18px] whitespace-nowrap ${phone ? "col-start-2" : "text-right"} ${when.late ? "font-[650] text-warn" : "text-text-faint"}`}>{when.words}</span>
+                  <span className={`pt-0.5 text-[13px] leading-[18px] whitespace-nowrap ${phone ? "col-start-2" : "text-right"} ${when.late ? "font-[650] text-crit" : "text-text-faint"}`}>{when.words}</span>
                 </li>
               );
             })}

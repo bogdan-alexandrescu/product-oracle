@@ -102,8 +102,8 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await expect(templates.getByRole("radio", { name: /Now \/ Next \/ Later/ })).toBeChecked();
   await dialog.getByTestId("template-option-outcome-roadmap").click();
   await expect(templates.getByRole("radio", { name: /Outcome roadmap/ })).toBeChecked();
-  await dialog.getByTestId("theme-option-roadmap-board").click();
-  await expect(dialog.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: "Roadmap board" })).toBeChecked();
+  // qa-docs-39: the one roadmap theme is named, not offered as a lone radio.
+  await expect(dialog.getByTestId("theme-only")).toHaveText("Roadmap board");
 
   // Estimate before start: per segment and the total.
   await expect(dialog.getByRole("button", { name: "Start run" })).toBeDisabled();
@@ -146,9 +146,9 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await page.getByRole("button", { name: "Refresh progress" }).click();
   const draft = page.getByTestId("segment-roadmap_draft");
   await expect(draft.getByTestId("checkpoint-roadmap_review")).toContainText("Roadmap review");
-  await expect(draft).toContainText("Imported as usage-alerts-roadmap v2");
+  await expect(draft).toContainText(/Imported as (?!usage-alerts-roadmap).+ v2/);
   await expect(draft.getByTestId("prd-links")).toContainText("6 links to PRD sections");
-  await draft.getByRole("link", { name: "usage-alerts-roadmap v2" }).click();
+  await draft.getByRole("link", { name: / v2$/ }).click();
   await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap\/v\/2$/);
   await expect(source(page)).toHaveText("From Usage alerts PRD v1");
 });
@@ -224,6 +224,6 @@ test("a roadmap version with a marked date cannot be approved: Approve is disabl
   await page.goto("/documents/usage-alerts-roadmap/v/1");
   const blocked = page.getByTestId("approve-blocked").filter({ visible: true });
   await expect(blocked.getByRole("button", { name: "Approve version" })).toBeDisabled();
-  await expect(blocked).toContainText("Dec 15, 2026 (date withdrawn)");
-  await expect(blocked).toContainText("Record a basis");
+  await expect(blocked).toContainText("Dec 15, 2026 (its schedule was withdrawn)");
+  await expect(blocked).toContainText("Confirm a schedule for it");
 });

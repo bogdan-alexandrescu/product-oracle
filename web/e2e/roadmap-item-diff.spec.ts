@@ -75,11 +75,10 @@ test("the first version has nothing to compare with", async ({ page }) => {
   await login(page);
   await page.goto(V1);
   await expect(visible(page, "roadmap-item-row")).toHaveCount(3);
-  const previous = visible(page, "compare-previous");
-  await expect(previous).toHaveText("Previous version");
-  await expect(previous).toBeDisabled();
-  await expect(previous).toHaveAttribute("title", "No earlier version with items");
-  await expect(visible(page, "compare-approved")).toBeDisabled();
+  // qa-docs-66: no comparison control at all, just "No earlier version".
+  await expect(visible(page, "compare-none")).toHaveText("No earlier version");
+  await expect(page.getByTestId("compare-previous")).toHaveCount(0);
+  await expect(page.getByTestId("compare-approved")).toHaveCount(0);
   await expect(page.getByTestId("filter-changed")).toHaveCount(0);
   await expect(page.getByTestId("roadmap-item-ghost")).toHaveCount(0);
 });

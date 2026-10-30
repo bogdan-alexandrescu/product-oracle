@@ -48,13 +48,25 @@ function TabFromUrl({ onTab, onFrom, onRun }: { onTab: (tab: Tab) => void; onFro
   return null;
 }
 
-/** ?build=1 opens the Build the baseline sheet (Home, Set up and the New run dialog link here). */
-function BuildFromUrl({ onBuild }: { onBuild: () => void }) {
-  const build = useSearchParams().get("build") === "1";
+/**
+ * ?build=1 opens the Build the baseline sheet (Home, Set up and the New run dialog link here);
+ * with ?from=setup (Home's Set up row) its links keep the way back to Home (qa-onboarding-17).
+ */
+function BuildFromUrl({ onBuild }: { onBuild: (fromSetup: boolean) => void }) {
+  const params = useSearchParams();
+  const build = params.get("build") === "1";
+  const fromSetup = params.get("from") === "setup";
   useEffect(() => {
-    if (build) onBuild();
-  }, [build, onBuild]);
+    if (build) onBuild(fromSetup);
+  }, [build, fromSetup, onBuild]);
   return null;
+}
+
+/** qa-onboarding-25: ?build=1 for a role that cannot build says who can, instead of nothing. */
+function BuildRefusedFromUrl() {
+  const build = useSearchParams().get("build") === "1";
+  if (!build) return null;
+  return <Notice testId="build-refused">Approvers and owners build the baseline.</Notice>;
 }
 
 /** ?entity=<id> opens that item (Publish's Resolve links here); ?blocker=<id> that blocker (its Open blocker). */
@@ -153,9 +165,14 @@ export default function BaselinePage() {
   const runs = useQuery("baseline-builds", () => unwrap(api.GET("/v1/runs")));
   const build = currentBuild(runs.data);
   const [building, setBuilding] = useState(false);
-  const openBuild = useCallback(() => setBuilding(true), []);
+  const [buildFromSetup, setBuildFromSetup] = useState(false);
+  const openBuild = useCallback((fromSetup: boolean) => {
+    setBuildFromSetup(fromSetup);
+    setBuilding(true);
+  }, []);
   const closeBuild = () => {
     setBuilding(false);
+    setBuildFromSetup(false);
     router.replace("/baseline", { scroll: false });
   };
   const started = () => {
@@ -380,9 +397,15 @@ export default function BaselinePage() {
         .filter((e) => e.status !== "rejected")
         .reduce((n, e) => n + (e.evidence_count ?? 0), 0)
     : undefined;
+  // qa-shell-30: a count of nothing reads "No goals yet", never "0/0".
+  const none = (text: string) => <span className="font-sans text-[15px] font-semibold tracking-normal text-text2">{text}</span>;
   const kpis: Kpi[] = [
-    { label: "Goals confirmed", value: s?.confirmed_goals ?? "–", of: s?.goals, testId: "kpi-goals" },
-    { label: "Features traced", value: traced ?? "–", of: s?.features, testId: "kpi-traced" },
+    s?.goals === 0
+      ? { label: "Goals", value: none("No goals yet"), testId: "kpi-goals" }
+      : { label: "Goals confirmed", value: s?.confirmed_goals ?? "–", of: s?.goals, testId: "kpi-goals" },
+    s?.features === 0
+      ? { label: "Features", value: none("No features yet"), testId: "kpi-traced" }
+      : { label: "Features traced", value: traced ?? "–", of: s?.features, testId: "kpi-traced" },
     { label: "Evidence items", value: evidence ?? "–", testId: "kpi-evidence" },
     {
       label: "Weak evidence",
@@ -414,7 +437,7 @@ export default function BaselinePage() {
         {canInterview && <InterviewFromUrl onGoal={makeMeasurable} onVague={() => void interviewVague()} />}
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
       </Suspense>
-      {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} />}
+      {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} fromSetup={buildFromSetup} />}
       {adding && canWrite && (
         <AddItemSheet kind={adding} graph={graph.data} tags={tags} onClose={() => setAdding(null)} onAdded={added} />
       )}
@@ -438,7 +461,7 @@ export default function BaselinePage() {
               (build && build.status !== "failed" ? (
                 <BuildChip build={build} />
               ) : (
-                <Button variant="primary" icon="baseline" onClick={openBuild}>
+                <Button variant="primary" icon="baseline" onClick={() => openBuild(false)}>
                   Build baseline
                 </Button>
               ))}
@@ -448,7 +471,7 @@ export default function BaselinePage() {
           <>
             {/* On a phone the Counts strip right below says it ("Goals confirmed"): the chip
                 would stand on a line by itself above the actions (qa-plan-50). */}
-            {s && (
+            {s && s.goals > 0 && (
               <span className="inline-flex max-[600px]:hidden">
                 <Chip kind="pass" data-testid="confirmed-chip">
                   {s.confirmed_goals} confirmed
@@ -506,6 +529,11 @@ export default function BaselinePage() {
           <KpiStrip label="Counts" items={kpis} />
         </div>
 
+        {capsReady && !canWrite && (
+          <Suspense fallback={null}>
+            <BuildRefusedFromUrl />
+          </Suspense>
+        )}
         {build && <BuildBanner build={build} />}
         {view && <FromRunBand view={view} />}
         {runId && fromRun.error && <Notice tone="error">{fromRun.error}</Notice>}

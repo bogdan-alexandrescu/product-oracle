@@ -1416,7 +1416,7 @@ async def review_design(
                 f"this version {wording.STALE} it", refs={"artifact_version": str(av.id)}
             )
         if body.kind in ("changes_requested", "rejected") and not (body.body or "").strip():
-            raise Invalid("say why: a note is required to request changes or reject")
+            raise Invalid("Add a note to request changes or reject.")
     elif not (body.body or "").strip():
         raise Invalid("a comment needs a body")
     event = lineage.review_event(av, body.kind, principal.actor, body.body, data)

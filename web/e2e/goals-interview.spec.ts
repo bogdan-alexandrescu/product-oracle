@@ -205,7 +205,7 @@ test("an approver dismisses a version: the card says Dismissed and the other sta
 // goal is checked only for not being created.
 test("Interview vague goals (2) steps Goal 1 of 2 · Next, creating each discussion when reached", async ({ page }) => {
   await openBaseline(page);
-  await page.getByRole("button", { name: "Interview vague goals (2)" }).click();
+  await page.getByRole("button", { name: "Ask Oracle to sharpen 2 goals" }).click();
   const stepper = discuss(page).getByTestId("interview-stepper");
   await expect(stepper.getByTestId("stepper-position")).toHaveText("Goal 1 of 2");
   await expect(stepper.getByRole("button", { name: "Next" })).toBeVisible();
@@ -269,7 +269,7 @@ test("a viewer sees neither Make measurable nor Interview vague goals", async ({
   await openBaseline(page, VIEWER);
   await expect(churnRow(page).getByTestId("not-measurable")).toBeVisible();
   await expect(page.getByRole("button", { name: "Make measurable" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Interview vague goals/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Ask Oracle to sharpen/ })).toHaveCount(0);
   await churnRow(page).getByRole("button", { name: "Cut early churn" }).click();
   await expect(page.getByRole("dialog", { name: "Cut early churn" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Make measurable" })).toHaveCount(0);

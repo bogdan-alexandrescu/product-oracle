@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { InlineError, Menu } from "@/components/review/parts";
@@ -71,32 +72,30 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
   }
 
   const groups = GROUPS.filter((g) => hasBrief || g.layer === "full");
+  // qa-docs-75: a grid, so a format sits in the same column on every row: PDF, HTML, then the
+  // row's own (MD, PPTX). The panel opens clear of the review panel's totals.
+  const COLUMN: Record<Format, string> = { pdf: "col-start-2", html: "col-start-3", md: "col-start-4", pptx: "col-start-4" };
   return (
-    <Menu label="Export">
+    <Menu label="Export" avoid='[data-testid="review-panel"]'>
       <div className="flex flex-col gap-2.5">
-        {groups.map((g) => (
-          <div
-            key={g.layer}
-            role="group"
-            aria-label={`Export ${g.label.toLowerCase()}`}
-            className="flex items-center justify-between gap-4"
-          >
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">{g.label}</span>
-            <span className="flex gap-1.5">
+        <div className="grid grid-cols-[auto_repeat(3,minmax(3.5rem,auto))] items-center gap-x-1.5 gap-y-2.5">
+          {groups.map((g) => (
+            <div key={g.layer} role="group" aria-label={`Export ${g.label.toLowerCase()}`} className="contents">
+              <span className="col-start-1 pr-2.5 text-[13px] font-semibold tracking-[0.02em] text-text2">{g.label}</span>
               {g.formats.map((f) => (
                 <Button
                   key={f.format}
                   disabled={busy !== null}
                   onClick={() => download(g.layer, f.format)}
                   aria-label={g.layer === "full" ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`}
-                  className="min-w-14"
+                  className={`${COLUMN[f.format]} min-w-14`}
                 >
                   {busy === `${g.layer}.${f.format}` ? "…" : f.label}
                 </Button>
               ))}
-            </span>
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
         {error && <InlineError>{error}</InlineError>}
       </div>
     </Menu>
@@ -111,6 +110,7 @@ export function ApproveButton({
   isLatest,
   onApproved,
   blockedReason,
+  blockedFix,
   unreviewed,
 }: {
   doc: string;
@@ -120,6 +120,8 @@ export function ApproveButton({
   onApproved: () => void;
   /** Why the version cannot be approved now (a roadmap's marked dates, O4): Approve is disabled. */
   blockedReason?: string;
+  /** qa-docs-6: where what blocks it is fixed, a link after the reason. */
+  blockedFix?: { href: string; label: string };
   /** #254: sections not reviewed, of all; the confirm names them. */
   unreviewed?: { count: number; total: number };
 }) {
@@ -150,13 +152,35 @@ export function ApproveButton({
   }
 
   if (blockedReason) {
+    // qa-docs-7: the button sits in the header's row of actions, beside Discuss; the reason
+    // (and where to fix it) takes a line of its own below them, right-aligned (left on a phone).
     return (
-      <div className="flex min-w-0 max-w-[min(28rem,calc(100vw-2.5rem))] flex-col items-end gap-1 max-[600px]:w-full max-[600px]:items-start" data-testid="approve-blocked">
-        <Button variant="primary" icon="check" disabled aria-describedby="approve-blocked-reason" title={blockedReason}>
+      <div className="contents" data-testid="approve-blocked">
+        <Button
+          variant="primary"
+          icon="check"
+          disabled
+          aria-describedby="approve-blocked-reason"
+          title={blockedReason}
+          className="max-[600px]:mr-auto"
+        >
           Approve version
         </Button>
-        <span id="approve-blocked-reason" className="text-right text-sm font-medium break-words text-warn max-[600px]:text-left">
-          {blockedReason}
+        <span className="flex basis-full justify-end max-[600px]:justify-start">
+          <span
+            id="approve-blocked-reason"
+            className="w-[28rem] max-w-full text-right text-sm font-medium break-words text-warn max-[600px]:w-full max-[600px]:text-left"
+          >
+            {blockedReason}
+            {blockedFix && (
+              <>
+                {" "}
+                <Link href={blockedFix.href} data-testid="approve-blocked-fix" className="font-semibold underline underline-offset-2">
+                  {blockedFix.label}
+                </Link>
+              </>
+            )}
+          </span>
         </span>
       </div>
     );

@@ -48,7 +48,7 @@ test.describe("desktop", () => {
     await expect(inspector(page)).not.toContainText("Hash");
     await expect(inspector(page)).not.toContainText(/\b[0-9a-f]{8}\b/);
     const by = inspector(page).getByTestId("version-importer");
-    await expect(by).toHaveText(/^(API token .+|Oracle|.+@.+|[A-Z].*)$/);
+    await expect(by).toHaveText(/^(An integration|Oracle|.+@.+|[A-Z].*)$/);
     await expect(by).not.toHaveText("agent-track");
     await expect(by).not.toHaveAttribute("title", /.+/);
     await expect(inspector(page)).toContainText("Imported by");
@@ -83,8 +83,9 @@ test.describe("desktop", () => {
     page,
   }) => {
     await open(page, "checkout-redesign");
+    // qa-docs-29: a technical brief is listed under Tech briefs.
     const spec = page
-      .getByTestId("engineering-specs")
+      .getByTestId("tech-briefs")
       .getByTestId("engineering-spec")
       .first();
     const link = spec.getByRole("link", {

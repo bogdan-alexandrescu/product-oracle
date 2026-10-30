@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -33,6 +34,7 @@ import {
   CATEGORY,
   FRESH,
   GROUP_AT,
+  kindOf,
   keyOf,
   outputTitle,
   proposalOf,
@@ -46,7 +48,7 @@ import {
   type Report,
   type Upstream,
 } from "./_lib";
-import { NamesContext, subjectWords, useNames, useNamesOf, type SubjectWords } from "./_names";
+import { NamesContext, fromSlug, parseFrom, subjectWords, useNames, useNamesOf, type SubjectWords } from "./_names";
 import { PlanSteps, type RowResult } from "./_steps";
 
 type View = "lineage" | "table";
@@ -104,11 +106,17 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
     onChanged: reload,
   });
 
-  const names = useNames(report);
+  // qa-plan-12: a recorded change opened from a PRD version's Impact ("Recorded change" carries
+  // ?from=) leads back there, and the rail stays on PRDs; opened any other way, it leads back to
+  // what the change is about.
+  const fromParam = useSearchParams().get("from");
+  const names = useNames(report, source.kind === "change" ? fromSlug(fromParam) : null);
   const subject = report ? subjectWords(report, names) : null;
+  const from = parseFrom(fromParam, names);
   // qa-plan-59: every Impact page leads back to what it is about (the version, Baseline or
   // Sources); a version's by its breadcrumb (below).
-  const backTo = source.kind === "entity" ? { href: "/baseline", label: "Baseline" } : source.kind === "change" ? subject?.back : undefined;
+  const backTo =
+    source.kind === "entity" ? { href: "/baseline", label: "Baseline" } : source.kind === "change" ? (from ?? subject?.back) : undefined;
   // qa-plan-59 / review: the rail highlights by what a recorded change's impact is about (a
   // PRD version, Baseline, Sources), once the report has said so; nothing it can't place.
   useChangeDestination(source.kind === "change" ? source.id : undefined, source.kind === "change" ? backTo?.href : undefined);
@@ -136,12 +144,19 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
           Recorded
         </Chip>
       )}
-      {counts!.potentially_stale > 0 && (
-        <Chip kind="warn" dot>
-          {counts!.potentially_stale} potentially stale
-        </Chip>
-      )}
-      {counts!.under_review > 0 && <Chip kind="na">{counts!.under_review} under review</Chip>}
+      {/* qa-plan-42: a preview marks nothing, so its chip says what would be affected, not "stale". */}
+      {report.preview
+        ? report.affected.length > 0 && (
+            <Chip kind="warn" dot data-testid="impact-count">
+              {report.affected.length} would be affected
+            </Chip>
+          )
+        : counts!.potentially_stale > 0 && (
+            <Chip kind="warn" dot data-testid="impact-count">
+              {counts!.potentially_stale} potentially stale
+            </Chip>
+          )}
+      {!report.preview && counts!.under_review > 0 && <Chip kind="na">{counts!.under_review} under review</Chip>}
     </>
   );
   // qa-plan-61: one sentence, "Impact: Guided setup", not the title and a suffix run together.
@@ -156,6 +171,8 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
         // qa-plan-11: Baseline's and a change's back link (‹, like the Plan crumb) sit on the
         // title row, so the title does not move down; a version's crumb keeps its own line.
         backInline={source.kind !== "version"}
+        // qa-plan-62: on a phone the top bar cuts a long title; the page's H1 says it in full.
+        phoneTitle
         status={status}
         action={
           report && report.affected.length > 0 ? (
@@ -188,9 +205,15 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
           {report.affected.length === 0 ? (
             <Panel>
               <Empty icon="check" testId="impact-empty">
-                {source.kind === "version"
-                  ? `No outputs depend on what v${source.n} changed. Nothing to regenerate. When a roadmap, spec or other output is built from this version, Impact shows what a new version would change for it.`
-                  : "No outputs depend on this. Nothing to regenerate."}
+                {/* qa-docs-54: a readable measure, not one line across the page. */}
+                <span data-testid="impact-empty-text" className="mx-auto block max-w-[70ch]">
+                  {source.kind === "version"
+                    ? `No outputs depend on what v${source.n} changed. Nothing to regenerate. When a roadmap, spec or other output is built from this version, Impact shows what a new version would change for it.`
+                    : source.kind === "entity"
+                      ? // qa-plan-47: say why, and when it will show something, as a version's does.
+                        "No outputs depend on this item yet. Nothing to regenerate. When a roadmap, spec or other output is built from it, Impact shows what a change to it would reach."
+                      : "This change reached no outputs. Nothing to regenerate."}
+                </span>
               </Empty>
             </Panel>
           ) : view === "lineage" ? (
@@ -325,7 +348,7 @@ function Lineage({
       const by = new Map<Output["category"], Output[]>();
       for (const o of report.affected) by.set(o.category, [...(by.get(o.category) ?? []), o]);
       return [...by.entries()].map(([c, os]) => ({
-        key: `c:${c}`, label: CATEGORY[c], sub: `${os.length} outputs`, category: c, count: os.length,
+        key: `c:${c}`, label: new Set(os.map(kindOf)).size === 1 ? kindOf(os[0]) : CATEGORY[c], sub: `${os.length} outputs`, category: c, count: os.length,
         freshness: stalest(os.map((o) => o.freshness)), ups: new Set(os.flatMap((o) => upstreamsOfIn(o, names).map((u) => u.key))),
       }));
     }
@@ -337,7 +360,8 @@ function Lineage({
   const shownUps = ups.filter((u) => nodes.some((n) => n.ups.has(u.key)));
   const path = new Set(selected ? upstreamsOf(selected).map((u) => u.key) : []);
   const rows = Math.max(shownUps.length, nodes.length, 1);
-  const height = rows * ROW;
+  // qa-plan-11: room for the subject node, which grows with its title.
+  const height = Math.max(rows * ROW, subjectHeight(report, subject) + 12);
   const y = (i: number, count: number) => (height - count * ROW) / 2 + i * ROW + NODE / 2 + 6;
   const subjectY = height / 2;
   const upY = new Map(shownUps.map((u, i) => [u.key, y(i, shownUps.length)]));
@@ -407,13 +431,13 @@ function Lineage({
               }),
             )}
           </svg>
-          <SubjectNode report={report} subject={subject} style={{ left: `${COL.subject[0]}%`, width: `${COL.subject[1] - COL.subject[0]}%`, top: subjectY - NODE / 2 }} />
+          <SubjectNode report={report} subject={subject} style={{ left: `${COL.subject[0]}%`, width: `${COL.subject[1] - COL.subject[0]}%`, top: subjectY }} />
           {shownUps.map((u, i) => (
             <div
               key={u.key}
               data-testid="lineage-upstream"
               data-on-path={path.has(u.key) ? "true" : "false"}
-              className={`absolute flex flex-col justify-center rounded-button border bg-surface px-3 py-1.5 ${
+              className={`absolute flex flex-col justify-center rounded-button border bg-surface px-3 ${u.entityId && !u.deleted ? "py-1" : "py-1.5"} ${
                 u.deleted ? "border-crit" : path.has(u.key) ? "border-accent" : "border-line"
               }`}
               style={{ left: `${COL.upstream[0]}%`, width: `${COL.upstream[1] - COL.upstream[0]}%`, top: y(i, shownUps.length) - NODE / 2, height: NODE }}
@@ -421,10 +445,12 @@ function Lineage({
               <span className="truncate text-sm font-semibold" title={u.label}>
                 {u.label}
               </span>
-              <span className="flex min-w-0 items-center gap-1.5 truncate text-[13px] text-text2">
+              {/* qa-plan-46: the kind ("Feature · locked") has its own line; the what-if link the next. */}
+              <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-4 text-text2">
                 {u.deleted && <Chip kind="crit">Deleted</Chip>}
                 {(() => {
-                  const sub = u.deleted && u.deletedAt ? `${u.entityKey ?? u.label} · ${formatDate(u.deletedAt)}` : u.sub;
+                  // A deleted item: its kind and when it went, never its baseline key (qa-plan-10).
+                  const sub = u.deleted && u.deletedAt ? `${u.typeLabel ?? "Removed"} · ${formatDate(u.deletedAt)}` : u.sub;
                   const built = u.builtOn;
                   return (
                     <span className="truncate" data-testid="lineage-upstream-sub" title={built ? `${sub}. ${built}.` : sub}>
@@ -432,12 +458,16 @@ function Lineage({
                     </span>
                   );
                 })()}
-                {u.entityId && !u.deleted && (
-                  <Link href={`/impact/entities/${u.entityId}`} className="ml-auto flex-none font-medium text-accent-ink hover:underline">
-                    What if {u.label} changed?
-                  </Link>
-                )}
               </span>
+              {u.entityId && !u.deleted && (
+                <Link
+                  href={`/impact/entities/${u.entityId}`}
+                  title={`What if ${u.label} changed?`}
+                  className="truncate text-[13px] leading-4 font-medium text-accent-ink hover:underline"
+                >
+                  What if {u.label} changed?
+                </Link>
+              )}
             </div>
           ))}
           {nodes.map((n, i) => {
@@ -498,18 +528,33 @@ const BAR: Record<Output["freshness"], string> = {
 };
 
 /** The subject in words (qa-plan-10): "Checkout redesign PRD v2 › Success metrics section edited". */
-function SubjectNode({ report, subject, style }: { report: Report; subject: SubjectWords; style: React.CSSProperties }) {
+function subjectSub(report: Report): string | null {
   const c = report.change;
-  const sub = c ? `Recorded ${formatDate(c.created_at)}` : report.preview ? "Preview" : null;
+  return c ? `Recorded ${formatDate(c.created_at)}` : report.preview ? "Preview" : null;
+}
+
+/** The subject node's height, roughly, at the narrowest graph (640 px: ~16 characters a line). */
+function subjectHeight(report: Report, subject: SubjectWords): number {
+  const lines = Math.max(1, Math.ceil(subject.title.length / 16));
+  return Math.max(NODE, lines * 20 + (subjectSub(report) ? 18 : 0) + 14);
+}
+
+/**
+ * The subject in words (qa-plan-10): "Checkout redesign PRD v2 › Success metrics section edited".
+ * qa-plan-11: it grows to fit its title and date (centred on the subject's row), never clipping a
+ * word or running the title into the date.
+ */
+function SubjectNode({ report, subject, style }: { report: Report; subject: SubjectWords; style: React.CSSProperties }) {
+  const sub = subjectSub(report);
   return (
     <div
       data-testid="lineage-subject"
       title={subject.title}
-      className="absolute flex flex-col justify-center rounded-button border border-accent bg-accent-soft px-3 py-1.5 text-accent-ink"
-      style={{ ...style, height: NODE }}
+      className="absolute flex -translate-y-1/2 flex-col justify-center gap-0.5 rounded-button border border-accent bg-accent-soft px-3 py-1.5 text-accent-ink"
+      style={{ ...style, minHeight: NODE }}
     >
-      <span className={`text-sm leading-5 font-semibold [overflow-wrap:anywhere] ${sub ? "line-clamp-2" : "line-clamp-3"}`}>{subject.title}</span>
-      {sub && <span className="truncate text-[13px]">{sub}</span>}
+      <span className="text-sm leading-5 font-semibold [overflow-wrap:break-word]">{subject.title}</span>
+      {sub && <span className="text-[13px] leading-4">{sub}</span>}
     </div>
   );
 }
@@ -620,7 +665,7 @@ function PlanSidebar({
               <button type="button" aria-expanded={open} onClick={() => o && onPick(o)} className="flex w-full items-start gap-2.5 text-left">
                 <span className="tnum grid size-6 flex-none place-items-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-ink">{i + 1}</span>
                 <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">{o ? outputTitle(o) : p.title}</span>
-                <Chip kind={p.action === "review" ? "warn" : "acc"}>{p.action === "review" ? "Review" : "Regenerate"}</Chip>
+                <PlanChip action={p.action} />
               </button>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-8">
                 {o && (
@@ -655,6 +700,15 @@ function PlanSidebar({
         ))}
       </ol>
     </Inspector>
+  );
+}
+
+/** qa-plan-44: what the plan proposes, as a neutral status chip ("Plan: regenerate"), not a blue pill that reads as a button. */
+function PlanChip({ action }: { action: string }) {
+  return (
+    <Chip kind="line" data-testid="plan-action">
+      {action === "review" ? "Plan: review" : "Plan: regenerate"}
+    </Chip>
   );
 }
 
@@ -758,7 +812,13 @@ function OutputTable({ report, selected, onPick }: { report: Report; selected: O
         selected={selected ? keyOf(selected) : null}
         onSelect={(_, o) => onPick(o)}
         group={(o) => o.category}
-        groupLabel={(g) => `${CATEGORY[g as Output["category"]] ?? g} · ${rows.filter((o) => o.category === g).length}`}
+        groupLabel={(g) => {
+          // qa-plan-41: the group says the kind its outputs' titles say ("User flow"), or the category for a mix.
+          const of = rows.filter((o) => o.category === g);
+          const kinds = new Set(of.map(kindOf));
+          const name = kinds.size === 1 ? [...kinds][0] : (CATEGORY[g as Output["category"]] ?? g);
+          return `${name} · ${of.length}`;
+        }}
       />
     </Panel>
   );
@@ -778,7 +838,7 @@ function PlanList({ report }: { report: Report }) {
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold [overflow-wrap:anywhere]">{o ? outputTitle(o) : p.title}</span>
-                  <Chip kind={p.action === "review" ? "warn" : "acc"}>{p.action === "review" ? "Review" : "Regenerate"}</Chip>
+                  <PlanChip action={p.action} />
                   {p.section_keys.map((k) => (
                     <Chip key={k} kind="line">
                       {names.section(k)}
@@ -834,7 +894,7 @@ function OutputInspector({ report, output, ...steps }: { report: Report; output:
   return (
     <Inspector
       label={outputTitle(output)}
-      eyebrow={`${CATEGORY[output.category]} · v${output.number}`}
+      eyebrow={`${kindOf(output)} · v${output.number}`}
       title={outputTitle(output)}
       chips={
         <>
@@ -856,6 +916,8 @@ function OutputInspector({ report, output, ...steps }: { report: Report; output:
 /** The inspector's (and the phone sheet's) sections: why, built from, proposal, the stages. */
 function OutputSections({ report, output, ...steps }: { report: Report; output: Output } & ReturnType<RowPropsOf>) {
   const names = useNamesOf();
+  // qa-plan-12: the change's page leads back here.
+  const here = usePathname();
   const proposal = proposalOf(report, output);
   return (
     <>
@@ -885,7 +947,10 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
                   {d.reconciled_at && <span>Reconciled {formatDate(d.reconciled_at)}</span>}
                   {d.upstream.composition_revision != null && !d.stale_since && <span>Composition revision {d.upstream.composition_revision}</span>}
                   {d.caused_by_change_id && (
-                    <Link href={`/impact/changes/${d.caused_by_change_id}`} className="font-medium text-accent-ink hover:underline">
+                    <Link
+                      href={`/impact/changes/${d.caused_by_change_id}${here ? `?from=${encodeURIComponent(here)}` : ""}`}
+                      className="font-medium text-accent-ink hover:underline"
+                    >
                       Recorded change
                     </Link>
                   )}
@@ -925,7 +990,7 @@ function OutputDetail({ report, output, ...steps }: { report: Report; output: Ou
       <div className="flex flex-wrap gap-1.5 border-b border-line px-4 py-3">
         <Chip kind={FRESH[output.freshness].kind} dot>{FRESH[output.freshness].label}</Chip>
         <Chip kind="line">{statusLabel(output.status)}</Chip>
-        {proposal && <Chip kind={proposal.action === "review" ? "warn" : "acc"}>{proposal.action === "review" ? "Review" : "Regenerate"}</Chip>}
+        {proposal && <PlanChip action={proposal.action} />}
       </div>
       <OutputSections report={report} output={output} {...steps} />
     </div>

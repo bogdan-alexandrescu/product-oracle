@@ -37,8 +37,16 @@ export function waitingCount(inbox: Inbox, questions: readonly unknown[]): numbe
   return inbox.total + questions.length;
 }
 
-/** Records this Inbox visit as my last one (C1e: what "new" is measured from next time). */
-export const markInboxSeen = () => unwrap(api.GET("/v1/inbox", { params: { query: { mark_seen: true } } }));
+/**
+ * Records this Inbox visit as my last one (C1e: what "new" is measured from next time). A
+ * shared read from before the mark is dropped, so coming back within FRESH_MS (Home and back,
+ * qa-company-17) measures "new" from this visit, not the one before.
+ */
+export const markInboxSeen = () =>
+  unwrap(api.GET("/v1/inbox", { params: { query: { mark_seen: true } } })).then((d) => {
+    cache.delete("inbox");
+    return d;
+  });
 
 /**
  * Questions still open and asked of me (asked, or delegated to me: C2), each with who asks,

@@ -56,15 +56,17 @@ test("qa-plan-42: the withdrawal reason is the one recorded, as the Dates tab sh
   await expect(track).not.toContainText("Estimate replaced");
 });
 
-test("qa-plan-43: a PRD that moved on says which version is approved and links to updating the roadmap", async ({ page }) => {
-  await start(page, { scenario: "alignment-report" });
+test("qa-plan-43: a PRD that moved on says which version is approved and links to building the roadmap from it", async ({ page }) => {
+  // fix4 qa-plan-2, qa-plan-3: "report-prd-moved" has the PRD's v2 approved (the Plan says so too);
+  // the link lands on that PRD's Build roadmap.
+  await start(page, { scenario: "report-prd-moved" });
   const track = await openReport(page);
   const moved = track.getByTestId("report-prd-moved");
-  await expect(moved).toHaveText("v2 of the PRD is approved · Update the roadmap");
-  const update = moved.getByRole("link", { name: "Update the roadmap" });
-  await expect(update).toHaveAttribute("href", "/plan?item=usage-alerts");
+  await expect(moved).toHaveText("v2 of the PRD is approved · Build the roadmap from it");
+  const update = moved.getByRole("link", { name: "Build the roadmap from it" });
+  await expect(update).toHaveAttribute("href", "/plan/documents?prd=usage-alerts");
   await update.click();
-  await expect(page).toHaveURL(/\/plan(\?|$)/);
+  await expect(page).toHaveURL(/\/plan\/documents\?prd=usage-alerts$/);
 });
 
 test("qa-plan-44: Covers reads 'Oct 12 – Oct 18' with the time zone said once, nothing wrapped mid-time", async ({ page }) => {
@@ -163,15 +165,17 @@ test("qa-plan-46: the actions column is labelled and a withdrawal's reason sits 
   expect(b.y - (r.y + r.height)).toBeLessThan(8);
 });
 
-test("qa-plan-47: a filter with nothing in it is dimmed and cannot be picked", async ({ page }) => {
+// fix4 qa-plan-19 supersedes qa-plan-47's dimming: a zero filter is an ordinary chip reading 0.
+test("qa-plan-47, qa-plan-19: a filter with nothing in it reads 0 as an ordinary chip and shows an empty table", async ({ page }) => {
   await start(page, { scenario: DATE_BASES_SCENARIO });
   await page.goto("/plan/dates");
   const filter = page.getByTestId("dates-filter");
   const withdrawn = filter.getByRole("button", { name: /^Withdrawn/ });
   await expect(withdrawn).toHaveText(/^Withdrawn\s*0$/);
-  await expect(withdrawn).toBeDisabled();
-  expect(Number(await withdrawn.evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
-  await expect(filter.getByRole("button", { name: /^Verified/ })).toBeEnabled();
+  await expect(withdrawn).toBeEnabled();
+  expect(Number(await withdrawn.evaluate((el) => getComputedStyle(el).opacity))).toBe(1);
+  await withdrawn.click();
+  await expect(page.getByTestId("dates-table").filter({ visible: true })).toContainText("No date bases here yet.");
 });
 
 /* ------------------------------------------ Outcomes ------------------------------------------ */

@@ -18,8 +18,8 @@ Test cards (protects / fails_when / no_claim):
   panel's thread, the item is not in the payload or the answer has no source;
   no_claim=the model's words.
 - test_item_talk_move_restated_per_role: protects="move it two weeks later" in the item's
-  talk is restated in one line ("I understood: move … two weeks later, to 15 Oct – 29
-  Nov.") with one card showing before -> after, what it breaks and its Correct fields;
+  talk is restated in one line ("I understood: move … two weeks later, to Oct 15 – Nov
+  29.") with one card showing before -> after, what it breaks and its Correct fields;
   Apply applies for the owner and the decider, proposes for approvers and commenters; a
   viewer gets a note and no card; fails_when=the card is built for a viewer, the
   restatement is missing or Apply bypasses the change engine's rights; no_claim=the web's
@@ -55,6 +55,12 @@ Test cards (protects / fails_when / no_claim):
   field jargon ("values: ..."); a cut on the roadmap is a roadmap card with nothing to
   correct (the web says Reject); fails_when=a refusal starts with an internal field name or
   a roadmap cut has no Correct data; no_claim=the exact wording.
+- test_talk_move_by_a_span_moves_from_newer_dates: protects=a talk card's "two weeks
+  later" carries its span (preview.shift, as the mock's talkMove), so when someone moves
+  the item before it is applied, it is offered again two weeks after the item's new dates
+  and Apply lands there; fails_when=the card keeps its old absolute dates (the API and
+  the mock disagree on what the card does); no_claim=a card naming a day (it keeps that
+  day).
 """
 
 import uuid
@@ -152,7 +158,7 @@ async def test_item_talk_answers_with_its_source(client):
     assert m["source"] in ("From the PRD · Adaptive pacing", "From the roadmap · Adaptive pacing")
     # A question parse() answers at once says its source too.
     m = await say(client, w, "commenter", "when is it?", page(w))
-    assert m["kind"] == "answer" and m["body"].startswith("Adaptive pacing: 1 Oct")
+    assert m["kind"] == "answer" and m["body"].startswith("Adaptive pacing: Oct 1")
     assert m["source"] == "From the roadmap · Adaptive pacing"
     # The talk is kept with this item and this person.
     r = await client.get(CHAT, params={"page": page(w, "b")}, headers=w.ctx.as_("commenter"))
@@ -172,11 +178,11 @@ async def test_item_talk_move_restated_per_role(client, who):
         assert m["body"].startswith("Viewers ask questions here")
         return
     assert m["kind"] == "cards"
-    assert m["body"] == "I understood: move Adaptive pacing two weeks later, to 15 Oct – 29 Nov."
+    assert m["body"] == "I understood: move Adaptive pacing two weeks later, to Oct 15 – Nov 29."
     [card] = m["cards"]
     assert card["op"] == "move_dates" and card["after"] == {"start_date": "2026-10-15",
                                                            "end_date": "2026-11-29"}  # fmt: skip
-    assert card["change_words"] == {"before": "1 Oct – 15 Nov", "after": "15 Oct – 29 Nov"}
+    assert card["change_words"] == {"before": "Oct 1 – Nov 15", "after": "Oct 15 – Nov 29"}
     assert card["correct"]["fields"] == ["start_date", "end_date"]
     assert card["correct"]["values"] == {"start_date": "2026-10-15", "end_date": "2026-11-29"}
     kinds = {f["kind"] for x in card["flags"] for f in x["flags"] if f["state"] == "red"}
@@ -205,9 +211,9 @@ async def test_new_actions_per_role(client, who):
     ops = [c["op"] for c in m["cards"]]
     assert ops == ["set_milestone", "add_item", "move_dates", "add_item", "move_dates"], ops
     ms, add, first, slice2, after = m["cards"]
-    assert ms["summary"] == "Move Adaptive pacing to M2 Scale volume (18 Dec)"
+    assert ms["summary"] == "Move Adaptive pacing to M2 Scale volume (Dec 18)"
     assert ms["change_words"] == {"before": "M1 Launch prep", "after": "M2 Scale volume"}
-    assert add["summary"] == "Add Dashboard under Growth to M2 Scale volume, 5 Dec – 18 Dec"
+    assert add["summary"] == "Add Dashboard under Growth to M2 Scale volume, Dec 5 – Dec 18"
     assert add["correct"]["values"] == {
         "title": "Dashboard", "goal": "Growth", "milestone": "M2 Scale volume",
         "start_date": "2026-12-05", "end_date": "2026-12-18",
@@ -249,7 +255,7 @@ async def test_two_actions_one_corrected_one_rejected(client):
     assert r.status_code == 200, r.text
     card = r.json()["card"]
     assert card["status"] == "applied" and card["summary"] == (
-        "Move Reliability work to 20 Nov – 20 Dec"
+        "Move Reliability work to Nov 20 – Dec 20"
     )
     assert card["after"] == {"start_date": "2026-11-20", "end_date": "2026-12-20"}
     rb = await row(w, "b")
@@ -266,7 +272,7 @@ async def test_two_actions_one_corrected_one_rejected(client):
                      "start_date": "2026-11-03", "end_date": "2026-11-13"})  # fmt: skip
     assert r.status_code == 200, r.text
     assert r.json()["card"]["summary"] == (
-        "Add Growth dashboard under Growth to M1 Launch prep, 3 Nov – 13 Nov"
+        "Add Growth dashboard under Growth to M1 Launch prep, Nov 3 – Nov 13"
     )
     d = await added(w, "Growth dashboard")
     assert d is not None and (d.start_date, d.end_date) == (date(2026, 11, 3), date(2026, 11, 13))
@@ -311,13 +317,13 @@ async def test_correct_refuses_what_the_engine_would(client):
 async def test_correct_restates_the_item_talk_line(client):
     w = await world()
     m = await say(client, w, "owner", "move it two weeks later", page(w))
-    assert m["body"] == "I understood: move Adaptive pacing two weeks later, to 15 Oct – 29 Nov."
+    assert m["body"] == "I understood: move Adaptive pacing two weeks later, to Oct 15 – Nov 29."
     r = await apply(client, w, "owner", m["cards"][0]["id"],
                     {"start_date": "2026-11-20", "end_date": "2026-12-04"})  # fmt: skip
     assert r.status_code == 200, r.text
-    assert r.json()["card"]["summary"] == "Move Adaptive pacing to 20 Nov – 4 Dec"
+    assert r.json()["card"]["summary"] == "Move Adaptive pacing to Nov 20 – Dec 4"
     line = await last(client, w, "owner", page(w))
-    assert line["body"] == "I understood: move Adaptive pacing to 20 Nov – 4 Dec."
+    assert line["body"] == "I understood: move Adaptive pacing to Nov 20 – Dec 4."
 
 
 async def test_applied_add_item_names_its_item(client):
@@ -370,3 +376,24 @@ async def test_correct_refusals_are_plain(client):
     assert cut["correct"] == {"fields": [], "values": {}}
     r = await apply(client, w, "owner", cut["id"], {"title": "x"})
     assert r.status_code == 422 and r.json()["detail"] == "The title cannot be corrected here"
+
+
+async def test_talk_move_by_a_span_moves_from_newer_dates(client):
+    w = await world()
+    m = await say(client, w, "owner", "move it two weeks later", page(w))
+    [card] = m["cards"]
+    assert card["preview"]["shift"] == [0, 14]
+    moved = {"start_date": "2026-10-08", "end_date": "2026-11-22"}
+    r = await client.post("/v1/simple/changes", json={
+        "op": "move_dates", "target": {"item_id": w.ids["move_dates-a"]},
+        "before": card["before"], "after": moved}, headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await apply(client, w, "owner", card["id"])
+    assert r.status_code == 409, r.text
+    again = (await last(client, w, "owner", page(w)))["cards"][0]
+    assert again["before"] == moved
+    assert again["after"] == {"start_date": "2026-10-22", "end_date": "2026-12-06"}
+    r = await apply(client, w, "owner", card["id"])
+    assert r.status_code == 200, r.text
+    a = await row(w, "a")
+    assert (a.start_date, a.end_date) == (date(2026, 10, 22), date(2026, 12, 6))

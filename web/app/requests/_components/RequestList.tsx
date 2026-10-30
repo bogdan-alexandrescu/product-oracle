@@ -36,6 +36,14 @@ function notFree(r: Request): string {
   return `Already behind a brief or a PRD. ${which}`;
 }
 
+/** The same reason, short and shown on the row (qa-work-8: not only in a hover tip). */
+function notFreeShort(r: Request): string {
+  if (r.state === "new") return "Qualify it to start a PRD";
+  if (r.state === "merged") return "Merged: no PRD from it";
+  if (r.state === "disqualified") return "Disqualified: no PRD from it";
+  return "Already behind a brief or PRD";
+}
+
 /** rirs-9: on a phone a value wraps at word breaks instead of being cut. */
 const PHONE_WRAP = "max-[600px]:whitespace-normal max-[600px]:break-words max-[600px]:overflow-visible";
 /** A chip that wraps on a phone, as Chip's `wrap` does. */
@@ -55,8 +63,11 @@ const META_COLS = [
 const META_GRID =
   "grid min-w-0 flex-1 grid-cols-[6.5rem_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_5.5rem_3rem] items-center gap-x-3 max-[600px]:grid-cols-2 max-[600px]:gap-y-1.5";
 
-/** The checkbox slot: on every row when ticking is offered, so titles line up (qa-work-35); 44 px on a phone. */
-const BOX_SLOT = "mt-1 flex size-6 flex-none items-center justify-center max-[600px]:mt-0 max-[600px]:-ml-2.5 max-[600px]:size-11";
+/**
+ * The checkbox slot: on every row when ticking is offered, so titles line up (qa-work-35), as
+ * wide as its "Start a PRD" header (qa-work-8); 44 px on a phone (qa-work-43).
+ */
+const BOX_SLOT = "mt-1 flex h-6 w-12 flex-none items-center justify-center max-[600px]:mt-0 max-[600px]:-ml-2.5 max-[600px]:size-11";
 
 const none = <span className="text-text2">—</span>;
 
@@ -92,14 +103,22 @@ export function RequestList({
       <div
         aria-hidden
         data-testid="request-list-head"
-        className="flex items-center gap-3 border-b border-line bg-surface2 px-4 py-1.5 text-[13px] leading-4 font-semibold text-text2 max-[600px]:hidden"
+        className={`flex items-start gap-3 border-b border-line bg-surface2 px-4 py-1.5 text-[13px] leading-4 font-semibold text-text2 ${ticking ? "max-[600px]:px-3" : "max-[600px]:hidden"}`}
       >
-        {ticking && <span className="w-6 flex-none" />}
-        {/* The title is the row's first line; these name the columns of its second. */}
-        <div className={META_GRID}>
-          {META_COLS.map((c) => (
-            <span key={c.key}>{c.label}</span>
-          ))}
+        {/* qa-work-8: the boxes' column says what ticking does. */}
+        {ticking && (
+          <span data-testid="request-list-head-choose" className="w-12 flex-none text-center max-[600px]:w-auto max-[600px]:text-left">
+            Start a PRD
+          </span>
+        )}
+        {/* qa-work-39: "Request" over the titles (the row's first line), the columns of its second under it. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1 max-[600px]:hidden">
+          <span data-testid="request-list-head-title">Request</span>
+          <div className={META_GRID}>
+            {META_COLS.map((c) => (
+              <span key={c.key}>{c.label}</span>
+            ))}
+          </div>
         </div>
       </div>
       <ul className="divide-y divide-line" data-testid="request-list">
@@ -170,7 +189,7 @@ export function RequestList({
                 >
                   <input
                     type="checkbox"
-                    className="size-4 accent-[var(--accent)] disabled:cursor-not-allowed"
+                    className="size-4 accent-[var(--accent)] disabled:cursor-not-allowed max-[600px]:size-5"
                     aria-label={`Select ${r.title}`}
                     title={free(r) ? "Tick to start a PRD from it" : notFree(r)}
                     disabled={!free(r)}
@@ -193,6 +212,11 @@ export function RequestList({
                     {r.title}
                   </button>
                 </div>
+                {ticking && !free(r) && (
+                  <span data-testid="request-choose-why" className="text-[13px] leading-4 text-text2">
+                    {notFreeShort(r)}
+                  </span>
+                )}
                 <div className={`${META_GRID} text-sm text-text2`}>
                   {META_COLS.map((c) => (
                     <div key={c.key} data-field={c.key} className="flex min-w-0 items-center gap-1.5">

@@ -24,15 +24,18 @@ const ITEMS = [
  * layout draws them first, at the top of every Requests page, above the header's status and
  * stacked actions (qa-shell-33), so `where` hides each copy where the other one shows.
  */
+// qa-docs-88: under the title the header's copy keeps 16 px from it (the page's gap), not 8.
 export function RequestsNav({ where }: { where: "header" | "top" }) {
   const pathname = usePathname();
   // The Themes tab counts the themes in use (not archived), as the queue's Themes tab did.
   const themes = useRequestsState().themes.data?.filter((t) => !t.archived).length || null;
+  // qa-work-44: an interview's own page has one way back, its "← Interviews", not the tabs too.
+  if (/^\/requests\/interviews\/[^/]+/.test(pathname ?? "")) return null;
   return (
     <nav
       aria-label="Requests"
       data-testid={where === "top" ? "requests-nav-top" : "requests-nav"}
-      className={`rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel ${where === "top" ? "hidden max-[600px]:block" : "max-[600px]:hidden"}`}
+      className={`rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel ${where === "top" ? "hidden max-[600px]:block" : "mt-2 max-[600px]:hidden"}`}
     >
       <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
         {ITEMS.map((it) => {

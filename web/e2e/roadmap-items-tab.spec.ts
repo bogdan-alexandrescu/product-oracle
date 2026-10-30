@@ -117,13 +117,14 @@ test("Items lists the version's items grouped by horizon, one line each", async 
   await expect(deps.locator("[title]")).toHaveAttribute("title", "Behaviour");
   await expect(await cell(page, metrics, "State")).toHaveText("May be stale");
 
-  // All 2 · Needs attention 1; the filter shows only what needs attention.
+  // All 2 · Needs attention 2 (qa-docs-6: Behaviour's text writes GA Dec 15, 2026, whose
+  // schedule basis was withdrawn; Success metrics may be stale); the filter shows only those.
   const filter = visible(page, "items-filter");
   await expect(filter.getByRole("button", { name: /^All/ })).toHaveText("All2");
-  await expect(attention(page)).toHaveText("Needs attention1");
+  await expect(attention(page)).toHaveText("Needs attention2");
   await attention(page).click();
-  await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page).first()).toHaveAttribute("data-key", "item-metrics");
+  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page).nth(1)).toHaveAttribute("data-key", "item-metrics");
   await filter.getByRole("button", { name: /^All/ }).click();
   await expect(rows(page)).toHaveCount(2);
 });
@@ -168,7 +169,8 @@ test("a date whose basis was withdrawn shows struck through as Date unverified",
   await scenario(page);
   await login(page);
   await page.goto(ITEMS);
-  await expect(attention(page)).toHaveText("Needs attention1");
+  // Success metrics may be stale; Behaviour's text writes GA Dec 15, 2026, whose basis was withdrawn (qa-docs-6).
+  await expect(attention(page)).toHaveText("Needs attention2");
   await withdrawBasis(page, "ENG-412");
   await page.reload();
   const milestone = await cell(page, row(page, "item-behaviour"), "Milestone");
@@ -204,7 +206,8 @@ test("approvers mark a stale item under review, then still valid; viewers and co
   await insp.getByRole("button", { name: "Mark still valid" }).click();
   // qa-docs-34: no item is stale or under review any more: the empty State column goes.
   await expect(visible(page, "roadmap-items-table").locator("thead th").filter({ hasText: /^State$/ })).toHaveCount(0);
-  await expect(attention(page)).toHaveText("Needs attention0");
+  // Behaviour still needs attention: its text writes GA Dec 15, 2026, with no confirmed schedule (qa-docs-6).
+  await expect(attention(page)).toHaveText("Needs attention1");
   await expect(insp.getByTestId("item-freshness")).toHaveCount(0);
 
   // Viewers and commenters read the item, without the actions (each in a fresh browser).
@@ -246,7 +249,7 @@ test("the version switcher keeps the Items tab; a version with no items says so"
   await expect(page.getByTestId("review-status")).toHaveText("Approved");
   await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
   await page.getByRole("button", { name: "Refresh progress" }).click();
-  await page.getByTestId("segment-roadmap_draft").getByRole("link", { name: "usage-alerts-roadmap v2" }).click();
+  await page.getByTestId("segment-roadmap_draft").getByRole("link", { name: / v2$/ }).click();
   await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap\/v\/2$/);
 
   // v2 has no items file: the empty state, no table.
@@ -342,6 +345,6 @@ test("Items tab: a roadmap version with a marked date cannot be approved", async
   await expect(rows(page)).toHaveCount(2);
   const blocked = page.getByTestId("approve-blocked").filter({ visible: true });
   await expect(blocked.getByRole("button", { name: "Approve version" })).toBeDisabled();
-  await expect(blocked).toContainText("Dec 15, 2026 (date withdrawn)");
-  await expect(blocked).toContainText("Record a basis");
+  await expect(blocked).toContainText("Dec 15, 2026 (its schedule was withdrawn)");
+  await expect(blocked).toContainText("Confirm a schedule for it");
 });

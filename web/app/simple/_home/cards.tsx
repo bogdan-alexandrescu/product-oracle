@@ -23,10 +23,13 @@ export function HomeCard({
   all,
   allLabel,
   extra,
+  badge,
   children,
 }: {
   id: string;
   icon: IconName;
+  /** In the icon's place (Set up's progress ring). */
+  badge?: ReactNode;
   title: string;
   count?: number | null;
   /** Beside the count ("1 late"). */
@@ -38,10 +41,13 @@ export function HomeCard({
 }) {
   return (
     <section id={id} aria-label={title} data-testid={`home-${id}`} className="simple-card scroll-mt-6">
-      <header className="flex items-center gap-3">
-        <span aria-hidden className="grid size-9 flex-none place-items-center rounded-full bg-accent-soft text-accent-ink">
-          <Icon name={icon} size={20} />
-        </span>
+      {/* flex-wrap: an extra that asks for a line of its own on a phone (Set up's count and Hide) takes one. */}
+      <header className="flex flex-wrap items-center gap-3">
+        {badge ?? (
+          <span aria-hidden className="grid size-9 flex-none place-items-center rounded-full bg-accent-soft text-accent-ink">
+            <Icon name={icon} size={20} />
+          </span>
+        )}
         <h2 className="simple-h2 min-w-0 flex-1">{title}</h2>
         {count != null && count > 0 && (
           <span data-testid={`home-${id}-count`} className="simple-count tnum">

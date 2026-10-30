@@ -146,7 +146,8 @@ function reasonOf(ctx: TraceContext, dep: Schemas["ArtifactDependencyOut"]): str
   if (dep.freshness !== "potentially_stale") return [];
   const up = upstreamOf(ctx, dep);
   if (up.section_key) return [`section ${up.section_key} changed in ${up.document_slug ?? "the PRD"}`];
-  if (up.entity) return [`${up.entity.type.replace("_", " ")} ${up.entity.key} ${up.deleted ? "was deleted" : "changed"}`];
+  // As oracle.trace.staleness._label: the item by its title, never its baseline key (qa-plan-10).
+  if (up.entity) return [`${up.entity.title || `${up.entity.type.replace("_", " ")} ${up.entity.key}`} ${up.deleted ? "was deleted" : "changed"}`];
   return [`${up.document_slug ?? "the PRD"} has a newer version (depends on all of it)`];
 }
 
@@ -194,6 +195,12 @@ export function describe(ctx: TraceContext, deps: Schemas["ArtifactDependencyOut
   return [...views.values()].sort((a, b) => ORDER[b.freshness] - ORDER[a.freshness] || a.title.localeCompare(b.title));
 }
 
+/** "these acceptance tests", "this user flow" (oracle.trace.impact, qa-plan-43). */
+function thisOf(v: Schemas["TraceOutput"]): string {
+  const label = (v.artifact_kind ?? v.category).replace("_", " ");
+  return `${label.endsWith("tests") ? "these" : "this"} ${label}`;
+}
+
 function plan(views: Schemas["TraceOutput"][], subjectKind: string): Schemas["RegenerationProposal"][] {
   return views
     .filter((v) => v.status !== "superseded" && v.status !== "rejected")
@@ -211,7 +218,7 @@ function plan(views: Schemas["TraceOutput"][], subjectKind: string): Schemas["Re
           ? `Check the claims that relied on the changed source (${scope}); regenerate only if they no longer hold. Nothing changes until you decide; ${keeps}.`
           : v.category === "roadmap"
           ? `Start a roadmap run from the approved PRD version (flow prd_to_roadmap), focused on ${scope}; it imports a new version for review, and ${keeps} until a reviewer approves the new one.`
-          : `Propose a new version of this ${(v.artifact_kind ?? v.category).replace("_", " ")} covering only ${scope}, from the current upstream; ${keeps} until a reviewer approves the new one.`,
+          : `Propose a new version of ${thisOf(v)} covering only ${scope}, from the current upstream; ${keeps} until a reviewer approves the new one.`,
       };
     });
 }
@@ -419,7 +426,19 @@ export async function routeTrace(ctx: TraceContext, req: Request, p: string[], q
     const change = v2.change_events.find((c) => c.id === p[3]);
     if (!change) return notFound("Change event");
     const deps = v2.artifact_dependencies.filter((x) => x.caused_by_change_id === change.id);
-    const subject = { kind: change.subject_kind, id: change.subject_id ?? null, ref: change.subject_ref ?? null, title: null, document_id: change.document_id ?? null };
+    // As oracle.trace.impact._subject_of_event: an entity change names the item by its title (a
+    // deleted one by the title it had), a version by "<document> v<n>".
+    let title: string | null = null;
+    if (change.subject_id && ["requirement", "decision", "entity", "blocker_status"].includes(change.subject_kind)) {
+      const e = ctx.entities.find((x) => x.id === change.subject_id) ?? v2.deleted_entities?.find((x) => x.id === change.subject_id);
+      const recorded = (change.data as { entity?: { title?: string } } | null)?.entity?.title;
+      title = e?.title ?? recorded ?? null;
+    } else if (change.subject_id && change.subject_kind === "document_version") {
+      const v = ctx.versions.find((x) => x.id === change.subject_id);
+      const d = v && ctx.documents.find((x) => x.id === v.document_id);
+      title = v && d ? `${d.title} v${v.number}` : null;
+    }
+    const subject = { kind: change.subject_kind, id: change.subject_id ?? null, ref: change.subject_ref ?? null, title, document_id: change.document_id ?? null };
     return json(200, report(ctx, subject, deps, { change, preview: false }));
   }
   if (p[2] === "staleness" && p.length === 3 && m === "GET") {

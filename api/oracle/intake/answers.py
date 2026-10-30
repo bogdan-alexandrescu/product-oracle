@@ -3,7 +3,9 @@
 
 An answer is one of five paths: ``answer``, ``dont_know``, ``defer``, ``delegate`` (to
 another person of the company) or ``research`` ("Research this"). Every path is kept in
-the ledger and updates its gap. What an answer implies elsewhere is only ever
+the ledger and updates its gap. A "don't know" leaves its question open (asked, or still
+delegated) until someone gives a real answer: every count of open and answered questions
+reads the question's status. What an answer implies elsewhere is only ever
 *proposed* (§5 step 7):
 
 - the baseline: an entity proposal (outcome, constraint, risk or decision), decided by
@@ -64,7 +66,9 @@ ANSWERABLE = frozenset({"draft", "asked", "delegated", "deferred", "researching"
 # Answer kind -> (question status, gap status or None to keep).
 EFFECTS: dict[str, tuple[str, str | None]] = {
     "answer": ("answered", "answered"),
-    "dont_know": ("answered", "unknown"),
+    # Still open until someone gives a real answer (owner 2026-10-29, qa-work-2): the
+    # question keeps waiting (``delegated`` stays with its delegate), the answer is kept.
+    "dont_know": ("asked", "unknown"),
     "defer": ("deferred", "deferred"),
     "delegate": ("delegated", None),
     "research": ("researching", "under_investigation"),
@@ -221,6 +225,11 @@ async def answer(
         raise IntakeError(409, f"A {question.status} question cannot be answered")
     if question.asked_to is not None and question.asked_to != principal.id and not approver:
         raise IntakeError(403, "This question was asked of someone else")
+    if body.kind == "dont_know":
+        from oracle.intake.questions import SAID_DONT_KNOW, said_dont_know
+
+        if question.id in await said_dont_know(db, [question.id], principal.id):
+            raise IntakeError(409, SAID_DONT_KNOW)
     if body.kind == "answer" and not (body.body or "").strip():
         raise IntakeError(422, "An answer needs a body")
     if body.kind == "research" and gap is None:
@@ -243,6 +252,8 @@ async def answer(
     )
     db.add(row)
     question_status, gap_status = EFFECTS[body.kind]
+    if body.kind == "dont_know" and question.status == "delegated":
+        question_status = "delegated"
     question.status = question_status
     if body.kind == "delegate":
         question.asked_to = body.delegated_to

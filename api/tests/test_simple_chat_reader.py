@@ -536,8 +536,36 @@ async def test_reader_prompt_is_a_new_version(client):
     from oracle.jobs import prompting
 
     name, text = prompting.current("chat_reader")
-    assert name == "chat_reader.v3"
+    assert name == "chat_reader.v4"
     assert "under_discussion" in text and "open_decisions" in text
+    # fix4-simple-decide review (qa-simple-decide-24): a part no op does is listed, not left out.
+    assert "`skipped`" in text and "leave it out" not in text
+
+
+async def test_review_nothing_is_dropped_without_a_word(client):
+    # protects (qa-simple-decide-24): every refusal is said, the part of the line the reader
+    # could not read is named, and changes past the fifth are said to wait; fails_when: only
+    # the first refusal is said, a skipped part or the sixth change vanishes silently.
+    ctx = await make_people()
+    w = await World(ctx).build()
+    await post(
+        client, ctx, "owner", "push ledger out a quarter, erase it all, fly and make it better"
+    )
+    answer = actions(act("move_dates", item=w.ids["Ledger v2"], shift="1 quarter"),
+                     act("erase_everything", item=w.ids["Bulk import"]),
+                     act("fly_away", item=w.ids["Bulk import"]))  # fmt: skip
+    answer["skipped"] = ["make it better"]
+    await read(ctx, answer)
+    m = await last(client, ctx, "owner")
+    assert m["kind"] == "cards" and [c["op"] for c in m["cards"]] == ["move_dates"]
+    assert m["body"].startswith("Two I can't do: "), m["body"]
+    assert "I did not understand: “make it better”." in m["body"]
+    assert m["body"].endswith("I understood one change:")
+    await post(client, ctx, "owner", "push ledger out a quarter six times")
+    await read(ctx, actions(*[act("move_dates", item=w.ids["Ledger v2"], shift="1 quarter")] * 6))
+    m = await last(client, ctx, "owner")
+    assert len(m["cards"]) == 5
+    assert "I read the first five changes; say the rest again." in m["body"]
 
 
 async def test_review_choice_labels_are_oracles_words(client):

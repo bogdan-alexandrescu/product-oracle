@@ -28,7 +28,7 @@ test("asked about the document, Oracle's streamed reply cites it and never shows
   await login(page, COMMENTER);
   await page.goto(DOC);
   const s = await openSection(page, "problem");
-  await sectionAction(s, "2. Problem", "Discuss this section");
+  await sectionAction(s, "2. Problem", "Start a discussion");
   await page.getByTestId("start-discussion").filter({ visible: true }).getByRole("button", { name: "Start discussion" }).click();
   await expect(thread(page)).toBeVisible();
   await thread(page).getByRole("textbox", { name: "Message" }).fill(QUESTION);

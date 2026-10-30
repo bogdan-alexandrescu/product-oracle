@@ -76,7 +76,7 @@ test("Sort now: an approver starts triage and sees it finish", async ({ page }) 
   await openRequests(page);
   await expect(found(page)).toHaveCount(0);
   await page.getByTestId("triage-menu").click();
-  await page.getByRole("button", { name: "About Sort now" }).click();
+  await page.getByRole("button", { name: "About Auto-sort and Sort now" }).click();
   await expect(page.getByText("Oracle also sorts new requests every day at 7:00 AM PT")).toBeVisible();
   await page.getByRole("button", { name: "Sort now", exact: true }).click();
   const status = page.getByTestId("triage-status");
@@ -167,7 +167,7 @@ test("daily triage: a commenter reads its state, with no switch to turn", async 
   await login(page, "commenter@example.com");
   await openRequests(page);
   await expect(dailySwitch(page)).toHaveCount(0);
-  await expect(page.getByTestId("daily-triage-state")).toHaveText("Auto-sort off");
+  await expect(page.getByTestId("daily-triage-state")).toHaveText("Auto-sort: Off");
   await expect(page.getByTestId("daily-triage-said")).toHaveCount(0);
 });
 

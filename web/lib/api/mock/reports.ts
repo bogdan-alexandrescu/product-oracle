@@ -48,7 +48,6 @@ const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const shortDay = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 const title = (kind: Report["kind"], week: string) => `${kind === "weekly" ? "Weekly alignment" : "Alignment so far"} · week of ${shortDay(week)}`;
-const plan = (prd: string, key?: string) => `/plan?item=${prd}${key ? `:${key}` : ""}`;
 
 function headline(s: Schemas["ReportSummaryFigures"]): string {
   const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
@@ -59,81 +58,32 @@ function headline(s: Schemas["ReportSummaryFigures"]): string {
   )} no issue.`;
 }
 
-/** The mock company's two tracks, this week: Usage alerts slipping, Checkout on track. */
-function tracks(atRisk: boolean): Track[] {
-  const alerts: Track = {
-    track_id: "5e7a0000-0000-4000-8000-00000000a1e7",
-    status: "active",
-    prd: { slug: "usage-alerts", title: "Usage alerts PRD" },
-    link: plan("usage-alerts"),
-    health: atRisk ? "at_risk" : "on_track",
-    health_before: "on_track",
-    headline: atRisk ? "At risk: 1 of 3 items need attention (1 slipping). Next milestone: First release, Nov 30." : "On track: 3 items. Next milestone: First release, Nov 30.",
-    next_milestone: { name: "First release", date: "2026-11-30", verified: true },
-    alignment: atRisk ? { aligned: 1, drift: 1, untracked: 1, done: 0 } : { aligned: 2, drift: 0, untracked: 1, done: 0 },
-    needs_attention: atRisk
-      ? [
-          {
-            // qa-plan-3, qa-plan-41: ENG-405 is the Daily alert digest email's issue, named as on the Plan.
-            item_key: "alert-digest",
-            title: "Daily alert digest email",
-            horizon: "now",
-            kind: "slipping",
-            detail: "ENG-405 targets Dec 9, after the milestone date Nov 30.",
-            alert_id: null,
-            link: plan("usage-alerts", "alert-digest"),
-          },
-        ]
-      : [],
-    drift: atRisk
-      ? [
-          {
-            kind: "ahead",
-            item_key: "spend-forecast",
-            tracker_ref: null,
-            detail: "Engineering has started work planned for Next.",
-            title: "Spend forecast for the month",
-            link: plan("usage-alerts", "spend-forecast"),
-          },
-          { kind: "unplanned", item_key: null, tracker_ref: "ENG-431", detail: "ENG-431 (Alert storage cleanup) is not on the roadmap.", title: null, link: null },
-        ]
-      : [],
-    dates: atRisk
-      ? {
-          verified: [{ reference: "ENG-412", supports_date: "2026-11-30", reason: null }],
-          withdrawn: [{ reference: "ENG-413", supports_date: "2026-12-15", reason: "The team re-estimated" }],
-        }
-      : { verified: [], withdrawn: [] },
-    prd_moved: atRisk,
-    // qa-plan-43: the approved version the roadmap is behind, as the API keeps it.
-    prd_moved_to: atRisk ? 2 : null,
-  };
-  const checkout: Track = {
-    track_id: "5e7a0000-0000-4000-8000-0000000c4ec0",
-    status: "active",
-    prd: { slug: "checkout-redesign", title: "Checkout redesign PRD" },
-    link: plan("checkout-redesign"),
-    health: "on_track",
-    health_before: "on_track",
-    headline: "On track: 4 items. Next milestone: Beta, Nov 30.",
-    next_milestone: { name: "Beta", date: "2026-11-30", verified: true },
-    alignment: { aligned: 3, drift: 0, untracked: 1, done: 0 },
-    needs_attention: [],
-    drift: [],
-    dates: { verified: [], withdrawn: [] },
-    prd_moved: false,
-    prd_moved_to: null,
-  };
-  return [alerts, checkout];
+/**
+ * fix4 qa-plan-1, qa-plan-2: a report's tracks come from the roadmap mock's track overviews
+ * (./roadmap.ts reportTracks), the ones the Plan reads, as the API's _track_content reads
+ * views.overview. `calm` is a quiet week (the seeded week of Oct 5). Each part carries its
+ * Now items without an issue for the figures; worst health first, as the API sorts them.
+ */
+export type LiveTracks = (calm: boolean) => (Track & { untracked_now?: number })[];
+
+const HEALTH_ORDER: Record<string, number> = { off_track: 0, at_risk: 1, no_roadmap: 2, on_track: 3, paused: 4 };
+
+function tracks(live: LiveTracks, calm: boolean): { ts: Track[]; untrackedNow: number } {
+  const parts = live(calm).sort((a, b) => (HEALTH_ORDER[a.health] ?? 9) - (HEALTH_ORDER[b.health] ?? 9) || a.prd.title.toLowerCase().localeCompare(b.prd.title.toLowerCase()));
+  let untrackedNow = 0;
+  const ts = parts.map(({ untracked_now, ...t }) => {
+    untrackedNow += untracked_now ?? 0;
+    return t;
+  });
+  return { ts, untrackedNow };
 }
 
 /**
  * The figures, from the tracks as the API counts them (qa-plan-56): slips are the slipping
- * items listed under Needs attention, and every untracked item of the mock's tracks is a Now item.
+ * items listed under Needs attention; untracked Now items as each track counted them.
  */
-function summaryOf(ts: Track[]): Schemas["ReportSummaryFigures"] {
+function summaryOf(ts: Track[], untrackedNow: number): Schemas["ReportSummaryFigures"] {
   const slips = ts.flatMap((t) => t.needs_attention).filter((n) => n.kind === "slipping").length;
-  const untrackedNow = ts.reduce((n, t) => n + t.alignment.untracked, 0);
   return {
     tracks: ts.length,
     at_risk: ts.filter((t) => t.health === "at_risk").length,
@@ -148,6 +98,17 @@ function summaryOf(ts: Track[]): Schemas["ReportSummaryFigures"] {
 
 /** As oracle.reports.alignment.prd_moved_text (qa-plan-43). */
 const prdMovedText = (t: Track) => (t.prd_moved_to ? `v${t.prd_moved_to} of the PRD is approved` : "A newer version of the PRD is approved");
+/** As oracle.reports.alignment.rebuild_link (fix4 qa-plan-3): the PRD's Build roadmap, on Plan › Roadmap documents. */
+export const rebuildLink = (slug: string) => `/plan/documents?prd=${encodeURIComponent(slug)}`;
+
+type Need = Track["needs_attention"][number];
+const REASON_ORDER: Record<string, number> = { slipping: 0, blocked: 1, stale: 2 };
+/** As oracle.reports.alignment.needs_by_item: one entry per item, its reasons slipping first. */
+function needsByItem(needs: Need[]): [Need, Need[]][] {
+  const out = new Map<string, Need[]>();
+  for (const n of needs) out.set(n.item_key, [...(out.get(n.item_key) ?? []), n]);
+  return [...out.values()].map((rs) => [rs[0]!, [...rs].sort((a, b) => (REASON_ORDER[a.kind] ?? 9) - (REASON_ORDER[b.kind] ?? 9))]);
+}
 
 function markdown(r: Omit<Report, "read" | "markdown">): string {
   const parts = r.tracks.map((t) =>
@@ -155,8 +116,8 @@ function markdown(r: Omit<Report, "read" | "markdown">): string {
       `## ${t.prd.title}`,
       "",
       t.headline,
-      ...(t.prd_moved ? [`- ${prdMovedText(t)} · [Update the roadmap](${t.link})`] : []),
-      ...t.needs_attention.map((n) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${n.detail}`),
+      ...(t.prd_moved ? [`- ${prdMovedText(t)} · [Build the roadmap from it](${rebuildLink(t.prd.slug)})`] : []),
+      ...needsByItem(t.needs_attention).map(([n, rs]) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${rs.map((r) => r.detail).join(" ")}`),
     ].join("\n"),
   );
   return [`# ${r.title}`, "", r.headline, "", ...parts].join("\n") + "\n";
@@ -170,9 +131,10 @@ function makeReport(input: {
   at: string;
   atRisk: boolean;
   slack: Schemas["ReportSlack"];
+  live: LiveTracks;
 }): Omit<Report, "read"> {
-  const ts = tracks(input.atRisk);
-  const summary = summaryOf(ts);
+  const { ts, untrackedNow } = tracks(input.live, !input.atRisk);
+  const summary = summaryOf(ts, untrackedNow);
   const base = {
     id: mockUuid(),
     kind: input.kind,
@@ -193,12 +155,19 @@ function makeReport(input: {
 
 const PLAN_CHANNEL = { id: "C0PLAN", name: "plan" };
 
-function seedReports(ownerId: string): ReportsDb {
+/** The "alignment-report" scenarios: the default company with two weekly reports seeded (fix4: "report-prd-moved" has the Usage alerts PRD's v2 approved too). */
+export const REPORT_PRD_MOVED_SCENARIO = "report-prd-moved";
+const reportScenario = () => [REPORT_SCENARIO, REPORT_PRD_MOVED_SCENARIO].includes(localStorage.getItem(SCENARIO_KEY) ?? "");
+
+function seedReports(ownerId: string, live: LiveTracks): ReportsDb {
+  // Read the tracks before the seed's id scope: reading them may seed the roadmap mock, whose ids stay its own.
+  const read = reportScenario() ? { calm: live(true), busy: live(false) } : null;
+  const snapshot: LiveTracks = (calm) => structuredClone(calm ? read!.calm : read!.busy);
   return seeded("reports", () => {
     const db: ReportsDb = { reports: [], reads: {}, integration: null };
     // G8 "slack-bridge": the install with the bridge's scopes, and no reports.
     if (localStorage.getItem(SCENARIO_KEY) === SLACK_SCENARIO) db.integration = slackInstall(ownerId, mockUuid(), "2026-10-01T09:00:00Z");
-    if (localStorage.getItem(SCENARIO_KEY) !== REPORT_SCENARIO) return db;
+    if (!read) return db;
     const failed = makeReport({
       kind: "weekly",
       week: "2026-10-05",
@@ -206,6 +175,7 @@ function seedReports(ownerId: string): ReportsDb {
       to: "2026-10-12T07:00:00Z",
       at: "2026-10-12T15:00:12Z",
       atRisk: false,
+      live: snapshot,
       slack: { status: "failed", channel: PLAN_CHANNEL, posted_at: null, attempts: 12, error: "channel_not_found", next_attempt_at: null },
     });
     const posted = makeReport({
@@ -215,6 +185,7 @@ function seedReports(ownerId: string): ReportsDb {
       to: "2026-10-19T07:00:00Z",
       at: "2026-10-19T15:00:12Z",
       atRisk: true,
+      live: snapshot,
       slack: { status: "posted", channel: PLAN_CHANNEL, posted_at: "2026-10-19T15:00:14Z", attempts: 1, error: null, next_attempt_at: null },
     });
     db.reports = [failed, posted];
@@ -232,8 +203,9 @@ function reportSetting(): ReportSetting {
   return mockSettingValue(SETTING) as ReportSetting;
 }
 
-export function ensureReports(holder: { reports?: ReportsDb }, ownerId: string): ReportsDb {
-  holder.reports ??= seedReports(ownerId);
+/** `live` reads the tracks' parts now (./roadmap.ts reportTracks, through the server's roadmap db). */
+export function ensureReports(holder: { reports?: ReportsDb }, ownerId: string, live: LiveTracks): ReportsDb {
+  holder.reports ??= seedReports(ownerId, live);
   return holder.reports;
 }
 
@@ -284,9 +256,9 @@ function post(db: ReportsDb, channel: ReportSetting["slack_channel"]): Schemas["
 }
 
 /** Handles /v1/alignment-reports… and /v1/company-integrations…; null for other routes. */
-export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: DiscussionsDb }, ownerId: string, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: DiscussionsDb }, ownerId: string, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams, live: LiveTracks): Promise<Response | null> {
   if (p[1] !== "alignment-reports" && p[1] !== "company-integrations") return null;
-  const db = ensureReports(holder, ownerId);
+  const db = ensureReports(holder, ownerId, live);
   const m = req.method;
   const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
 
@@ -347,6 +319,7 @@ export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: 
         to: at,
         at,
         atRisk: true,
+        live,
         slack: post_to_slack
           ? post(db, reportSetting().slack_channel)
           : { status: "not_requested", channel: null, posted_at: null, attempts: 0, error: null, next_attempt_at: null },

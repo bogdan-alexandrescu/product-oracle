@@ -1,6 +1,6 @@
 import { expect, type Page, test, mockNow } from "./test";
 
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * #463: days the API writes into text a person reads are the Company time zone's day. The
@@ -12,7 +12,7 @@ const AGENT_RUN = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a291";
 
 async function setZone(page: Page, zone: string) {
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption(zone);
+  await pickZone(page, zone);
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
 }
@@ -67,7 +67,7 @@ test("reuse: the baseline's approval day is the Company day in the sheet and on 
   await page.getByRole("link", { name: "New PRD" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for late shoppers");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
 
@@ -75,7 +75,7 @@ test("reuse: the baseline's approval day is the Company day in the sheet and on 
   await expect(sheet.getByRole("radio", { name: `Use the current baseline (approved ${day})` })).toBeChecked();
   await sheet.getByRole("button", { name: "Estimate" }).click();
   // F4 (#181): the Engineering check and the Engineering dates are on by default, $5.00 each in the estimate (eng-review.spec.ts, eng-dates.spec.ts).
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $29.50");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$29.50 estimated");
   await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(`Reused (approved ${day})`);

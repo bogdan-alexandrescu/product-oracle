@@ -79,6 +79,8 @@ export interface InterviewsContext {
   /** The company's name, as the customer page shows it. */
   company: string;
   memberEmail: (id: string) => string | null;
+  /** A member's display name (api/oracle/members/names.py): their own name, else the email's. */
+  memberName?: (id: string) => string | null;
   intakeTitle: (id: string) => string | null;
   themeTitle: (id: string) => string | null;
   /** Files a need as a request; returns its id. */
@@ -332,10 +334,12 @@ const canManageRow = (r: Row, ctx: InterviewsContext) => r.created_by === ctx.us
 function outOf(r: Row, ctx: InterviewsContext): WithPreset<InterviewOut> {
   const { token: _t, replaced_tokens: _r, opener: _o, position: _p, followed_up: _f, customer_messages: _c, guide_ready_at: _g, interviewee_user_id: _u, ...rest } = r;
   void [_t, _r, _o, _p, _f, _c, _g, _u];
+  // qa-docs-88: the creator's own name, as the API's _names (display_name), not the email's.
   const email = ctx.memberEmail(r.created_by);
+  const createdBy = ctx.memberName?.(r.created_by) ?? (email ? displayName(email) : null);
   // As the API's InterviewOut: a job's stored error read through the refusal rewrite (#604 re-review).
   const job = (j: JobState | null) => (j ? jobOut({ finished_at: null, ...j }) : null);
-  return { ...rest, link_created_at: rest.link_created_at ?? null, guide_job: job(rest.guide_job), snapshot_job: job(rest.snapshot_job), preset: r.preset ?? null, created_by_name: email ? displayName(email) : null, can_manage: canManageRow(r, ctx) };
+  return { ...rest, link_created_at: rest.link_created_at ?? null, guide_job: job(rest.guide_job), snapshot_job: job(rest.snapshot_job), preset: r.preset ?? null, created_by_name: createdBy, can_manage: canManageRow(r, ctx) };
 }
 
 /** The members' routes (/v1/interviews...); null when the path is not one of them. */

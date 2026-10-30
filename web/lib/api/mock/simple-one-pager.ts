@@ -22,6 +22,7 @@ import { planByMonth } from "@/lib/simple-home";
 import { planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
+import { annotate } from "./one-pager-checks";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 
 type Role = Schemas["Me"]["role"];
@@ -66,7 +67,8 @@ export interface OnePagerDb {
   doc: { id: string; slug: string; title: string };
   version: number;
   sections: Sec[];
-  blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[] }[];
+  /** `missing`: Oracle marked the block "Not in the PRD yet" (nothing of the PRD maps to it). */
+  blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean }[];
   draft: null | {
     id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
@@ -85,6 +87,12 @@ export interface OnePagerDb {
   owner?: string;
   /** The PRD's roadmap slice, when not the default invented one (SLICE). */
   slice?: SliceItem[];
+  /**
+   * oracle.simple.quality: Oracle's build failed its checks twice: its blocks and the failed
+   * checks' plain words. Owners read it with a "Needs a look" note; everyone else `blocks`
+   * (the last good version).
+   */
+  held?: { blocks: OnePagerDb["blocks"]; checks: string[] } | null;
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
   approval?: { approved_in: string; waiting_on: { id: string; name: string }[]; blocked_by?: string[] } | null;
 }
@@ -94,11 +102,18 @@ const DOC_ID = stableUuid("simple-one-pager-doc");
 export function seedOnePager(ownerless = false): OnePagerDb {
   const sections: Sec[] = [
     { key: "problem", heading: "Problem", body: "New workspace admins stall during setup and never invite a teammate in the first week." },
+    // ad-onepager review: stories before who has it are never who has it.
+    { key: "stories", heading: "User stories", body: "- As a new admin, I want a checklist so I know the next step" },
     { key: "who", heading: "Who has it", body: "Admins of new teams with fewer than ten people." },
     { key: "build", heading: "What we will build", body: "- A setup checklist that shows the next step\n- Invite suggestions from the admin's calendar\n- A sample project created on day one" },
-    { key: "outcomes", heading: "Outcomes", body: "- Teammate invited in week one from 48% to 65%\n- Setup finished in a day from 30% to 50%" },
+    { key: "outcomes", heading: "Outcomes", body: "- Teammate invited in week one from 48% to 65%\n- Setup finished in a day from 30% to 50%*" },
     { key: "not-doing", heading: "Not doing", body: "- Single sign-on setup\n- A mobile setup flow" },
-    { key: "risks", heading: "Risks and open decisions", body: "- Calendar access may scare admins away\n- Decide whether the sample project can be deleted" },
+    { key: "risks", heading: "Risks and open decisions", body: "- Calendar access may scare admins away\n- Decide whether the sample project can be deleted\n- F-26 may slip past M1†" },
+    // Reads clearly (2026-10-30): a measure, the codes' names and numbers that disagree.
+    { key: "definitions", heading: "Definitions", body: "- Teammate invited in week one: counted as admins whose first invite is accepted within 7 days; source: the product events table" },
+    { key: "glossary", heading: "Glossary", body: "| Code | Name |\n|---|---|\n| F-26 | Calendar invites |" },
+    { key: "targets", heading: "Targets", body: "Each region adds 40 paid workspaces a month. We sell in 5 regions. Company-wide target: 250 paid workspaces a month." },
+    { key: "later", heading: "Not this quarter", body: "Eight features wait for next quarter.\n\n- Single sign-on setup\n- A mobile setup flow\n- Setup in more languages\n- Bulk user import\n- Setup analytics\n- A guided tour video" },
   ];
   return {
     doc: { id: DOC_ID, slug: "guided-setup", title: "Guided setup" },
@@ -115,7 +130,7 @@ export function seedOnePager(ownerless = false): OnePagerDb {
       ] },
       { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", lines: [
         { id: "outcomes-1", text: "Teammate invited in week one from 48% to 65%", keys: ["outcomes"], metric: { name: "Teammate invited in week one", from: "48%", to: "65%" } },
-        { id: "outcomes-2", text: "Setup finished in a day from 30% to 50%", keys: ["outcomes"], metric: { name: "Setup finished in a day", from: "30%", to: "50%" } },
+        { id: "outcomes-2", text: "Setup finished in a day from 30% to 50%*", keys: ["outcomes"], metric: { name: "Setup finished in a day", from: "30%", to: "50%*" } },
       ] },
       { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", lines: [
         { id: "not_doing-1", text: "Single sign-on setup", keys: ["not-doing"] },
@@ -124,6 +139,7 @@ export function seedOnePager(ownerless = false): OnePagerDb {
       { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", lines: [
         { id: "risks-1", text: "Calendar access may scare admins away", keys: ["risks"] },
         { id: "risks-2", text: "Decide whether the sample project can be deleted", keys: ["risks"] },
+        { id: "risks-3", text: "F-26 may slip past M1†", keys: ["risks"] },
       ] },
       { key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] },
     ],
@@ -190,6 +206,32 @@ const NOTED_SLICE: SliceItem[] = [
 ];
 export const WALK_PROBLEM =
   "New workspace admins stall during setup because the checklist hides the invite step. The queue of half-set-up teams grows every week a cohort lands; teams with more than ten people wait the longest, and the promise we make is a first teammate invited within a 48-hour window that we miss for most new teams after a weekend signup.";
+
+/**
+ * The "one-pager-needs-look" scenario: Oracle's build failed its checks twice (two bets, a
+ * risk saying "TBD"), so it is held: owners read it with the failed checks; everyone else
+ * the last good page. Invented data.
+ */
+export function seedNeedsLookOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  const blocks = db.blocks.map((b) => ({ ...b, lines: b.lines.map((l) => ({ ...l })) }));
+  const bets = blocks.find((b) => b.key === "bets")!;
+  bets.lines = bets.lines.slice(0, 2);
+  blocks.find((b) => b.key === "risks")!.lines = [{ id: "risks-1", text: "Pricing for teams is TBD", keys: ["risks"] }];
+  db.held = { blocks, checks: ["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"] };
+  return db;
+}
+
+/**
+ * The "one-pager-not-in-prd" scenario: the PRD has no "Not doing" section, and Oracle marked
+ * that block "Not in the PRD yet" (the API's OnePagerBlock.missing). Invented data.
+ */
+export function seedNotInPrdOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  db.sections = db.sections.filter((x) => x.key !== "not-doing");
+  db.blocks = db.blocks.map((b) => (b.key === "not_doing" ? { ...b, lines: [], missing: true } : b));
+  return db;
+}
 
 export function seedWalkOnePager(): OnePagerDb {
   const db = seedOnePager();
@@ -375,7 +417,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     return {
       change_id: c.id, line_id: lineId, kind, by: c.by, by_name: c.by_name, at: c.at, in_meeting: c.in_meeting,
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
-      can_undo: kind === "change" && c.by === ctx.id && c.session_open,
+      can_undo: kind === "proposal" ? c.by === ctx.id : c.by === ctx.id && c.session_open,
       can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
       adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)), meeting_title: c.meeting_title ?? null,
     };
@@ -385,6 +427,29 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
   const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
   const span = milestoneSpan(db.slice ?? SLICE);
+  const held = ctx.role === "owner" ? db.held ?? null : null;
+  // A build held for owners (oracle.simple.quality) is what owners read; others the last good.
+  const blocks: Schemas["OnePagerBlock"][] = (held?.blocks ?? db.blocks).map((b) => ({
+      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null, missing: !!b.missing && b.lines.length === 0,
+      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
+        const edited = sees && db.draft?.lines[l.id] !== undefined;
+        const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");
+        const flow = b.key === "bets" ? onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(l.id))) : null;
+        return {
+          id: l.id, text, full: edited ? null : l.full ?? null, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
+          state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
+          // S10: each bet carries its visual, keyed by its line: an edit keeps the flow. Its
+          // brief is the published words (the API's bet_line): never a draft's.
+          ...(b.key === "bets" ? { flow_subject: betSubject(l.id, uncomment(l.text).split(/\s+/).filter(Boolean).join(" ")), flow } : {}),
+          decisions: [...(db.decisions?.[l.id] ?? [])],
+          measure: null, measure_source: null, footnotes: [],
+          // 2026-10-30: a bet with no flow offers "Draw the flow" to those who change the PRD (visuals.may_revise).
+          can_draw_flow: b.key === "bets" && !flow && decides(ctx),
+        };
+      }),
+    }));
+  // Reads clearly (2026-10-30): as one_pager_checks.annotate on the PRD's sections.
+  const looks = annotate(blocks, db.sections);
   return {
     document: db.doc,
     version: db.version,
@@ -395,27 +460,14 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     span_end: span?.[1] ?? null,
     built_by: "oracle",
     built_at: "2026-10-20T15:05:00Z",
-    blocks: db.blocks.map((b) => ({
-      key: b.key, title: b.title, rules: b.rules, kind: b.kind,
-      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
-        const edited = sees && db.draft?.lines[l.id] !== undefined;
-        const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");
-        return {
-          id: l.id, text, full: edited ? null : l.full ?? null, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
-          state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
-          // S10: each bet carries its visual, keyed by its line: an edit keeps the flow. Its
-          // brief is the published words (the API's bet_line): never a draft's.
-          ...(b.key === "bets" ? { flow_subject: betSubject(l.id, uncomment(l.text).split(/\s+/).filter(Boolean).join(" ")), flow: onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(l.id))) } : {}),
-          decisions: [...(db.decisions?.[l.id] ?? [])],
-        };
-      }),
-    })),
+    blocks,
     timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
       (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
       new Date(mockNowMs()).toISOString().slice(0, 10),
     ),
-    sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
+    // As the API: the sections the page's lines rest on.
+    sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
     notes,
     draft: sees && db.draft
       ? {
@@ -429,6 +481,12 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     can_edit: decides(ctx),
     can_propose: !decides(ctx) && RANK[ctx.role] >= RANK.commenter,
     can_start: starts(ctx),
+    // As one_pager.owns: a company owner, the PRD's track owners and its document owner read the
+    // PRD's numbers and codes to look at; owners also read the checks a held build failed.
+    needs_look: [
+      ...(ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : []),
+      ...(held ? held.checks.map((text) => ({ kind: "check", text, where: [], source_keys: [] })) : []),
+    ],
   };
 }
 
@@ -534,6 +592,15 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     return json(200, { change: out(db, ctx, c), flags: [] });
   }
   if (p[4] === "undo") {
+    // qa-simple-prd-p3-17: a proposal is withdrawn by its author (declined, the PRD untouched).
+    if (c.status === "proposed") {
+      if (c.by !== ctx.id) return json(403, { detail: "Only the person who proposed it withdraws it" });
+      c.status = "declined";
+      c.decided_by = ctx.id;
+      c.decided_at = new Date(mockNowMs()).toISOString();
+      c.decision_reason = "Withdrawn by its author";
+      return json(201, { change: out(db, ctx, c), flags: [] });
+    }
     if (c.status !== "applied") return json(409, { detail: `Only an applied change undoes; this one is ${c.status}` });
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who made a change undoes it" });
     if (db.changes.some((u) => u.undoes_id === c.id)) return json(409, { detail: "This change is undone already" });

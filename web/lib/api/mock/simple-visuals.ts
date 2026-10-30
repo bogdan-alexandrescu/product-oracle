@@ -56,6 +56,8 @@ interface Ctx {
   names: Record<string, string>;
   /** A roadmap item's name as the API's subject_name ("F-06 Weekly alert digest", or its title). */
   itemName?: (id: string) => string | null;
+  /** As visuals.may_revise of a one-pager line: who changes the PRD directly (an owner, its decider, its track owner while an approver). */
+  edits?: (documentId: string) => boolean;
 }
 
 /** Subjects drawn with their proposal, never asked for by id (the API's UNASKABLE_KINDS);
@@ -318,9 +320,10 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   }
   if (p[5] === "request") {
     if (UNASKABLE.includes(kind)) return json(422, { detail: "Oracle draws this visual with its proposal; it is not asked for" });
-    if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly asks Oracle for its visual" });
+    const prd = kind === "one_pager_line" && b.document_id ? String(b.document_id) : null;
+    if ((RANK[ctx.role] ?? 0) < RANK.owner && !(prd && ctx.edits?.(prd))) return json(403, { detail: "Only who changes this directly asks Oracle for its visual" });
     if (kind === "one_pager_line") {
-      const doc = b.document_id ? String(b.document_id) : null;
+      const doc = prd;
       if (!doc) return json(422, { detail: "A one-pager line's visual is asked for with its PRD" });
       // Queued once: a visual with no drawing (its job drew nothing) is drawn again. As the
       // API's ask_for: the bet's own words are the brief (qa-simple-prd-21), whatever was sent.

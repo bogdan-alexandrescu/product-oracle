@@ -119,7 +119,9 @@ test.describe("desktop", () => {
     await open(page);
     const tiles = page.getByTestId("goal-counter");
     await expect(tiles.first()).toBeVisible();
-    await expect(tiles.filter({ hasText: "Faster activation" })).toContainText("3 items · 1 broken");
+    // fix4 qa-simple-roadmap-8: Team invite nudges is a draft with no owner, not a broken link.
+    await expect(tiles.filter({ hasText: "Faster activation" })).toContainText("3 items");
+    await expect(tiles.filter({ hasText: "Faster activation" })).not.toContainText("broken");
     await expect(tiles.filter({ hasText: "Grow retention" })).toContainText("4 items · 3 broken");
   });
 });

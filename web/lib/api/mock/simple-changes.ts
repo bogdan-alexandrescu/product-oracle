@@ -31,6 +31,7 @@ import {
   canDecideItem,
   canEditRoadmap,
   closed,
+  companyToday,
   deciderIds,
   draftChanges,
   GOALS,
@@ -38,9 +39,11 @@ import {
   itemDeciderId,
   itemOwnerId,
   lookalikes,
+  shiftPlan,
   ownDates,
   prdCode,
   ROADMAP_SLUGS,
+  readerDb,
   readsRoadmap,
   roadmapId,
   roadmapOut,
@@ -87,6 +90,28 @@ const FIELDS: Record<string, string[]> = {
   confirm_item: ["draft"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
+/** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
+export const CUT_ALL = "cut_with_dependents";
+/** The ops that key before/after by item id (changes.py KEYED). */
+const KEYED = [...FIXES, CUT_ALL];
+
+/** changes.dependents: every item waiting on `id`, transitively (breadth first), but those cut or merged already. */
+export function cutDependents(items: Schemas["SimpleRoadmapItem"][], id: string): Schemas["SimpleRoadmapItem"][] {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const seen = new Set([id]);
+  const out: Schemas["SimpleRoadmapItem"][] = [];
+  const queue = [id];
+  while (queue.length) {
+    for (const n of byId.get(queue.shift()!)?.needed_by ?? []) {
+      const next = byId.get(n);
+      if (!next || seen.has(n) || next.status === "cut" || next.status === "merged") continue;
+      seen.add(n);
+      out.push(next);
+      queue.push(n);
+    }
+  }
+  return out;
+}
 /** S3b: non-versioned ops (api/oracle/simple/targets.py) and the target id each creates. */
 const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   add_item_task: { id: "task_id", adds: true },
@@ -145,7 +170,9 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
  * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to">>): boolean {
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
+  // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
+  if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   if (KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
@@ -161,10 +188,22 @@ function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c:
     const decider = db.deciders?.[slugOf(c.target.roadmap_id) ?? ""];
     return decider ? [decider] : ctx.owners;
   }
+  if (c.op === CUT_ALL) return cutRoute(db, ctx, Object.keys(c.after));
   const key = c.target.item_id ? keyOf(db, c.target.item_id) : undefined;
   if (!key) return ctx.owners;
   const ids = deciderIds(db, seed(db, key), ctx.roles);
   return ids.length ? ids : ctx.owners;
+}
+
+/** changes.cut_route: the deciders every item of a cut with its dependents shares, else the company's owners. */
+function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
+  let common: string[] | null = null;
+  for (const id of itemIds) {
+    const key = keyOf(db, id);
+    const ids = key ? deciderIds(db, seed(db, key), ctx.roles) : [];
+    common = common === null ? ids : common.filter((i) => ids.includes(i));
+  }
+  return common?.length ? common : ctx.owners;
 }
 
 /** The stored values of one item's fields (the API's changes.read). */
@@ -208,7 +247,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
 }
 
 function touched(c: Pick<Change, "op" | "target" | "after" | "before">): string[] {
-  return FIXES.includes(c.op) ? [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])] : [String(c.target.item_id)];
+  return KEYED.includes(c.op) ? [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])] : [String(c.target.item_id)];
 }
 
 function idle(s: Session): boolean {
@@ -313,7 +352,8 @@ function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
     .sort((a, b) => (a.at < b.at ? -1 : 1))
     .map((c) => {
       const kind = (db.sessions ?? []).find((x) => x.id === c.session_id)?.kind ?? null;
-      return { id: c.id, op: c.op, item_id: (c.target.item_id as string) ?? null, by: c.by, by_name: c.by_name, at: c.at, session_kind: kind, in_meeting: kind === "meeting" };
+      const titles = c.op === CUT_ALL ? ((c.target.titles as string[] | undefined) ?? []) : [];
+      return { id: c.id, op: c.op, item_id: (c.target.item_id as string) ?? null, by: c.by, by_name: c.by_name, at: c.at, session_kind: kind, in_meeting: kind === "meeting", titles };
     });
 }
 
@@ -392,6 +432,7 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
         : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
   const seen = ranking ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
   if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  if (body.op === "override_priority" && after.override === null && !before.override) return json(409, { detail: "It is at Oracle's rank already" });
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
     draft_ids: [], op: body.op, target, before, after, status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
@@ -418,42 +459,16 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
 function fixPlan(db: SimpleDb, op: string, itemId: string, depId: string): Record<string, [string, string]> {
   const items = new Map(roadmapOut(db, "owner", new URLSearchParams())!.items.map((i) => [i.id, i]));
   const item = items.get(itemId)!;
-  const dep = items.get(depId)!;
   if (op === "move_dependency") {
+    const dep = items.get(depId)!;
     const end = addDays(item.start.date, -1);
     return { [depId]: [addDays(dep.start.date, days(dep.end.date, end)), end] };
   }
-  // #9: every direct dependent of `dep` that starts too early moves, not only the one whose
-  // callout was clicked (two items can share a dependency, each estimated or slice-dated);
-  // then the move walks forward transitively through each moved item's own dependents.
-  const moves: Record<string, [string, string]> = {};
-  const queue: string[] = [];
-  for (const n of dep.needed_by) {
-    const next = items.get(n);
-    if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
-    // A sibling whose order on dep was accepted as a risk stays where it is (as the API).
-    if (n !== itemId && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === depId)) continue;
-    const delta = days(next.start.date, addDays(dep.end.date, 1));
-    moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
-    queue.push(n);
-  }
-  while (queue.length) {
-    const cur = queue.shift()!;
-    for (const n of items.get(cur)!.needed_by) {
-      const next = items.get(n);
-      if (!next || moves[n] || next.status === "cut") continue;
-      if (next.start.date <= moves[cur][1]) {
-        const delta = days(next.start.date, addDays(moves[cur][1], 1));
-        moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
-        queue.push(n);
-      }
-    }
-  }
-  return moves;
+  return shiftPlan(items, itemId, depId);
 }
 
 function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
-  if (FIXES.includes(c.op)) for (const [id, v] of Object.entries(values)) write(db, keyOf(db, id)!, v as Values, c.target);
+  if (KEYED.includes(c.op)) for (const [id, v] of Object.entries(values)) write(db, keyOf(db, id)!, v as Values, c.target);
   else write(db, keyOf(db, c.target.item_id)!, values, c.target);
   if (c.op === "accept_date_suggestion") {
     const s = db.suggestions.find((x) => x.id === c.target.suggestion_id);
@@ -468,7 +483,7 @@ function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
 }
 
 function current(db: SimpleDb, c: Change, like: Values): Values {
-  if (FIXES.includes(c.op)) return Object.fromEntries(Object.entries(like).map(([id, v]) => [id, read(db, keyOf(db, id)!, Object.keys(v as Values), c.target)]));
+  if (KEYED.includes(c.op)) return Object.fromEntries(Object.entries(like).map(([id, v]) => [id, read(db, keyOf(db, id)!, Object.keys(v as Values), c.target)]));
   return read(db, keyOf(db, c.target.item_id)!, Object.keys(like), c.target);
 }
 
@@ -559,7 +574,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const target: Values = { ...body.target };
   const key = TARGETS[body.op] ? "" : keyOf(db, target.item_id);
   if (key === undefined) return json(404, { detail: "No such roadmap item" });
-  const applies = decides(db, ctx, target.item_id);
+  // Review major (changes.create): a cut with its dependents applies when the caller decides every item it cuts.
+  const cutAll = body.op === CUT_ALL && key ? [String(target.item_id), ...cutDependents(roadmapOut(readerDb(db, ctx), "owner", new URLSearchParams())!.items, String(target.item_id)).map((i) => i.id)] : null;
+  const applies = cutAll ? cutAll.every((id) => decides(db, ctx, id)) : decides(db, ctx, target.item_id);
   let session: Session | undefined;
   if (body.session_id) {
     session = (db.sessions ?? []).find((s) => s.id === body.session_id && s.started_by === ctx.id);
@@ -570,28 +587,49 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     }
   } else if (applies) session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
   if (TARGETS[body.op]) return createTarget(db, ctx, body, session);
+  // fix4 qa-simple-roadmap-9: as the API (changes.create reads through drafts.overlays_for), the
+  // stale check and a fix's plan read the items as the caller reads them: a commenter who may
+  // not see the working draft is checked against the published items their roadmap shows.
+  const seen = readerDb(db, ctx);
+  if (!seen.items.some((s) => s.key === key)) return json(404, { detail: "No such roadmap item" });
   let before: Values;
   let after: Values;
   if (FIXES.includes(body.op)) {
     const dep = String(target.subject ?? "");
-    const deps = roadmapOut(db, "owner", new URLSearchParams())!.items.find((i) => i.id === target.item_id)?.depends_on ?? [];
+    const deps = roadmapOut(seen, "owner", new URLSearchParams())!.items.find((i) => i.id === target.item_id)?.depends_on ?? [];
     if (!deps.includes(dep)) return json(422, { detail: "target.subject: an item the target depends on" });
     const stale: Values = {};
     for (const id of [String(target.item_id), dep]) {
       const given = body.before[id] as Values | undefined;
       if (!given || !("start_date" in given) || !("end_date" in given)) return json(422, { detail: `before.${id}: start_date and end_date as seen` });
-      const now_ = read(db, keyOf(db, id)!, ["start_date", "end_date"], target);
+      const now_ = read(seen, keyOf(db, id)!, ["start_date", "end_date"], target);
       if (!same(normal(["start_date", "end_date"], given), now_)) stale[id] = now_;
     }
     if (Object.keys(stale).length) return conflict(db, ctx, stale, Object.keys(stale), "Changed since you saw it");
-    const moves = fixPlan(db, body.op, String(target.item_id), dep);
-    before = Object.fromEntries(Object.keys(moves).map((id) => [id, read(db, keyOf(db, id)!, ["start_date", "end_date", "date_source"], target)]));
+    const moves = fixPlan(seen, body.op, String(target.item_id), dep);
+    before = Object.fromEntries(Object.keys(moves).map((id) => [id, read(seen, keyOf(db, id)!, ["start_date", "end_date", "date_source"], target)]));
     after = Object.fromEntries(Object.entries(moves).map(([id, [s, e]]) => [id, { start_date: s, end_date: e, date_source: "typed" }]));
+  } else if (body.op === CUT_ALL) {
+    // As a cut: before is the item's own {cut} as seen; keyed by item id, the item and its dependents.
+    if (!("cut" in body.before)) return json(422, { detail: "before: cut as you saw it" });
+    const now_ = read(seen, key, ["cut"], target);
+    if (!same(normal(["cut"], body.before), now_)) return conflict(db, ctx, now_, [String(target.item_id)], "Changed since you saw it");
+    const items = roadmapOut(seen, "owner", new URLSearchParams())!.items;
+    const deps = cutDependents(items, String(target.item_id));
+    if (!deps.length) return json(422, { detail: "No item depends on this one: cut it alone" });
+    // Review minor: the dependents the caller saw; others waiting on it now are refused.
+    const saw = body.before.dependents;
+    const now_ids = deps.map((i) => i.id);
+    if (Array.isArray(saw) && [...saw].map(String).sort().join() !== [...now_ids].sort().join()) return conflict(db, ctx, { dependents: now_ids }, now_ids, "Changed since you saw it");
+    const cut = [items.find((i) => i.id === target.item_id)!, ...deps];
+    target.titles = cut.map((i) => i.title);
+    before = Object.fromEntries(cut.map((i) => [i.id, read(seen, keyOf(db, i.id)!, ["cut"], target)]));
+    after = Object.fromEntries(cut.map((i) => [i.id, { cut: true }]));
   } else {
     const fields = FIELDS[body.op];
     const missing = fields.filter((f) => !(f in body.before));
     if (missing.length) return json(422, { detail: `before: ${missing.join(", ")} as you saw them` });
-    const now_ = read(db, key, fields, target);
+    const now_ = read(seen, key, fields, target);
     // A suggestion accepted after the item got dates is "outdated" (S2-minor).
     const lead = body.op === "accept_date_suggestion" ? "outdated" : "Changed since you saw it";
     if (!same(normal(fields, body.before), now_)) return conflict(db, ctx, now_, [String(target.item_id)], lead);
@@ -626,7 +664,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     } else if (body.op === "reorder") after = { position: Number(a.position) };
     else if (body.op === "cut" || body.op === "restore") after = { cut: body.op === "cut" };
     else if (body.op === "confirm_item") {
-      if (!seed(db, key).draft) return json(422, { detail: "Only a draft item is confirmed" });
+      if (!seed(seen, key).draft) return json(422, { detail: "Only a draft item is confirmed" });
       after = { draft: false };
     }
     else if (body.op === "edit_title") {
@@ -640,7 +678,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       target.subject = target.subject ?? null;
       after = { risk: { flag: target.flag, subject: target.subject, note, by: ctx.id, at: now } };
     }
-    before = read(db, key, stored, target);
+    before = read(seen, key, stored, target);
   }
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: stableUuid(`simple-doc/${seed(db, key).roadmap}`), draft_ids: [], op: body.op, target, before, after,
@@ -724,8 +762,16 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     return json(200, rows.map((c) => view(db, ctx, c)));
   }
   const c = (db.changes ?? []).find((x) => x.id === p[3]);
-  if (m !== "POST" || !["undo", "accept", "decline"].includes(p[4] ?? "")) return null;
+  if (m !== "POST" || !["undo", "accept", "decline", "withdraw"].includes(p[4] ?? "")) return null;
   if (!c) return json(404, { detail: "No such change" });
+  // qa-simple-plan-30: the proposer takes it back (changes.py `withdraw`): closed as declined.
+  if (p[4] === "withdraw") {
+    if (c.by !== ctx.id) return json(403, { detail: "Only the person who proposed it withdraws it" });
+    if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
+    if (c.op === "add_item") return json(409, { detail: "This kind of proposal is not withdrawn here" });
+    Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: "Withdrawn by the person who proposed it" });
+    return json(200, { change: view(db, ctx, c), flags: [] });
+  }
   if (p[4] === "undo") {
     if (c.status !== "applied") return json(409, { detail: `Only an applied change undoes; this one is ${c.status}` });
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who made a change undoes it" });
@@ -884,7 +930,7 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     if (!title || title.length > 200) return json(422, { detail: "after.title: 1 to 200 characters" });
     const where = target.where as { kind?: string; value?: string } | undefined;
     const value = String(where?.value ?? "");
-    const w = simpleWindows(new Date(mockNowMs()).toISOString().slice(0, 10));
+    const w = simpleWindows(companyToday());
     let horizon: SeedItem["horizon"] = "next";
     let goal: string | undefined;
     let quarter: { start: string; end: string } | null = null;

@@ -54,7 +54,7 @@ test("goals autonomy: at Observe the Baseline shows the sentence instead of Make
   await expect(page.getByTestId("goals-observe")).toHaveText(OBSERVING);
   await expect(churnRow(page).getByTestId("not-measurable")).toHaveText("Not measurable");
   await expect(page.getByRole("button", { name: "Make measurable" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Interview vague goals/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Ask Oracle to sharpen/ })).toHaveCount(0);
 
   await churnRow(page).getByRole("button", { name: /Cut early churn/ }).first().click();
   const drawer = page.getByTestId("entity-drawer");

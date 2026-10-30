@@ -26,6 +26,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -420,11 +421,32 @@ def slips_in(needs: list[dict[str, Any]]) -> int:
     return sum(1 for n in needs if n.get("kind") == "slipping")
 
 
+REASON_ORDER = {"slipping": 0, "blocked": 1, "stale": 2}
+
+
+def needs_by_item(needs: list[dict[str, Any]]) -> list[tuple[dict[str, Any], list[dict[str, Any]]]]:
+    """fix4: an item at risk for two reasons is listed once, with both (slipping first, then
+    blocked, then stale), not twice. The stored needs_attention keeps one row per reason."""
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for n in needs:
+        grouped.setdefault(n["item_key"], []).append(n)
+    return [
+        (rows[0], sorted(rows, key=lambda r: REASON_ORDER.get(r.get("kind") or "", 9)))
+        for rows in grouped.values()
+    ]
+
+
 def prd_moved_text(track: dict[str, Any]) -> str:
     """qa-plan-43: "v2 of the PRD is approved": which newer version the roadmap is behind
     (a report made before the version was kept says only that a newer one is)."""
     n = track.get("prd_moved_to")
     return f"v{n} of the PRD is approved" if n else "A newer version of the PRD is approved"
+
+
+def rebuild_link(prd_slug: str) -> str:
+    """fix4 qa-plan-3: where the roadmap is built again from the newer approved version: the
+    PRD's Build roadmap on Plan > Roadmap documents, the PRD picked."""
+    return f"/plan/documents?prd={quote(prd_slug, safe='')}"
 
 
 def _link_text(text: str | None) -> str:
@@ -468,13 +490,15 @@ def markdown(content: dict[str, Any]) -> str:
             f"{a['untracked']} untracked, {a['done']} done"
         )
         if t.get("prd_moved"):
-            lines.append(f"- {prd_moved_text(t)} · [Update the roadmap]({t['link']})")
+            link = rebuild_link(t["prd"]["slug"])
+            lines.append(f"- {prd_moved_text(t)} · [Build the roadmap from it]({link})")
         if t["needs_attention"]:
             lines += ["", f"### Needs attention ({when})", ""]
             lines += [
                 f"- [{_link_text(n['title'])}]({n['link']}) · "
-                f"{HORIZON_LABEL.get(n['horizon'], n['horizon'])}: {_line(n['detail'])}"
-                for n in t["needs_attention"]
+                f"{HORIZON_LABEL.get(n['horizon'], n['horizon'])}: "
+                + " ".join(_line(r["detail"]) for r in reasons)
+                for n, reasons in needs_by_item(t["needs_attention"])
             ]
         if t["drift"]:
             lines += ["", "### Drift", ""]

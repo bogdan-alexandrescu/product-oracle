@@ -41,7 +41,7 @@ test("qa-work-11: the header has one overflow menu, Delete in it", async ({ page
   }
 });
 
-test("qa-work-21: a question answered I don't know counts as answered, as unknown, in plain words", async ({ page }) => {
+test("qa-work-21: a question answered I don't know stays open (owner 2026-10-29), in plain words", async ({ page }) => {
   await openIntake(page);
   const gate = inspector(page).getByTestId("ready-to-draft");
   // Decide the blocker so the critical questions still open are listed.
@@ -59,20 +59,21 @@ test("qa-work-21: a question answered I don't know counts as answered, as unknow
   await mine.getByRole("button", { name: "Answer", exact: true }).click();
   await mine.getByTestId("answer-question").getByRole("button", { name: /^I don't know/ }).click();
   await expect(mine.getByTestId("answer")).toBeVisible();
-  await expect(inspector(page).getByTestId("answered-unknown")).toContainText("1 answered as unknown");
-  await expect(answered).toContainText("3");
+  // Owner 2026-10-29: an "I don't know" leaves the question open; Answered stays.
+  await expect(inspector(page).getByTestId("open-unknown")).toContainText("1 still open after “I don't know”");
+  await expect(answered).toContainText("2");
   await expect(gate.getByTestId("missing-gap").filter({ hasText: "answered “I don't know”" })).toHaveCount(1);
 });
 
-test("qa-work-22: on a phone, Ready to draft? stays on the page above the questions", async ({ page }) => {
+test("qa-work-22: on a phone, the Before drafting summary stays on the page above the questions", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openIntake(page);
   const ready = page.getByTestId("intake-readiness");
   await expect(ready).toBeVisible();
-  await expect(ready.getByRole("heading", { name: "Ready to draft?" })).toBeVisible();
+  await expect(ready.getByRole("heading", { name: "Not ready to draft" })).toBeVisible();
   await expect(ready).toContainText("1 critical question holds the draft");
   await expect(ready.getByTestId("intake-readiness-counts")).toContainText("answered");
-  await ready.getByRole("button", { name: /^Gaps \d+ open$/ }).click();
+  await ready.getByRole("button", { name: "Show details" }).click();
   await expect(page.getByTestId("intake-sheet").getByTestId("ready-to-draft")).toBeVisible();
 });
 

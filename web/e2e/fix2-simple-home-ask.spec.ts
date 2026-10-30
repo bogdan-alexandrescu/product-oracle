@@ -85,7 +85,7 @@ test.describe("simple-chat", () => {
     await panel.getByRole("button", { name: "New chat" }).click();
     await expect(panel.getByTestId("chat-message")).toHaveCount(0);
     await expect(about.getByRole("button", { name: "General", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(panel.getByTestId("ask-about")).toHaveText("New chat about General");
+    await expect(panel.getByTestId("ask-about")).toHaveText("New general chat");
   });
 
   test("qa-simple-home-19: a Home chat reopened on Roadmap names Home on the switch", async ({ page }) => {

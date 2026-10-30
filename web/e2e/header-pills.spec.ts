@@ -32,7 +32,11 @@ const SIZES = [
 async function setPanel(page: Page, open: boolean) {
   const dock = page.getByTestId("hop-dock");
   await expect(dock).toBeVisible();
-  if ((await dock.getAttribute("data-open")) !== String(open)) await page.getByTestId("hop-strip").click();
+  // The strip opens it; open, the panel's own Close closes it (qa-shell-13: the drawer lies over the strip).
+  if ((await dock.getAttribute("data-open")) !== String(open)) {
+    if (open) await page.getByTestId("hop-strip").click();
+    else await page.getByTestId("hop-panel").filter({ visible: true }).getByRole("button", { name: "Close Ask Oracle" }).click();
+  }
   await expect(dock).toHaveAttribute("data-open", String(open));
   if (open) await expect(page.getByTestId("hop-panel").filter({ visible: true })).toBeVisible();
 }

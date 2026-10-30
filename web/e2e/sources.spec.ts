@@ -28,7 +28,8 @@ test("settings › sources: my sources, status and last error, sync, allowlist, 
   await chat.getByLabel("Channel ids (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
   await chat.getByRole("button", { name: "Save channels" }).click();
   await expect(chat.getByRole("status")).toHaveText("Channels saved.");
-  await expect(chat.getByTestId("source-picks")).toHaveText("#product, C0789ROADMAP");
+  // A pasted id no list named reads as unknown (Settings' words, qa-settings-23), never by its id.
+  await expect(chat.getByTestId("source-picks")).toHaveText("#product, unknown channel");
 
   await chat.getByRole("button", { name: "Pause" }).click();
   await expect(chat).toContainText("Paused");
@@ -115,12 +116,12 @@ test("/sources: search ranks by confidence and explains the badge", async ({ pag
   await badge.locator("summary").click();
   const factors = badge.getByRole("table", { name: "Confidence factors" });
   await expect(factors).toBeVisible();
-  await expect(factors).toContainText("Kind of source");
-  await expect(factors).toContainText("0.85");
+  await expect(factors.getByRole("row").filter({ hasText: "Kind of source" })).toContainText("High");
+  await expect(factors).not.toContainText("0.85");
   await expect(factors).toContainText("Freshness");
   await expect(hits.nth(1).getByTestId("confidence")).toContainText("Medium confidence");
 
-  await page.getByLabel("Source").selectOption({ label: "Product chat" });
+  await page.getByRole("combobox", { name: /^Source/ }).selectOption({ label: "Product chat" });
   await page.getByRole("button", { name: "Search" }).click();
   await expect(hits).toHaveCount(1);
   await expect(hits.nth(0)).toContainText("Customer question");

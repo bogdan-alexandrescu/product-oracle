@@ -5,6 +5,7 @@ import { useId } from "react";
 import { Icon } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
+import { zoneName } from "@/lib/format";
 
 import { INPUT } from "../_components/fields";
 import { BrowseList, labelsOf, listOf, type BrowsePage, type PickerProps } from "./_browse-list";
@@ -113,7 +114,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
             </p>
           ) : (
             <p id={hintId} className="text-[13px] leading-5 text-text2">
-              Optional, whole days in the Company time zone ({zone}). Nothing posted after Until is read, thread replies included. Narrowing the
+              Optional, whole days in the Company time zone ({zoneName(zone)}). Nothing posted after Until is read, thread replies included. Narrowing the
               range removes messages outside it when you save.
             </p>
           )}

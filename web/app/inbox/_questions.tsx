@@ -6,7 +6,7 @@ import { AnswerQuestion, askerName, type InboxQuestion } from "@/components/Answ
 import { Button, Chip, LinkButton, Sheet } from "@/components/ds";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import { discussionHref, type Need } from "./_needs";
+import { CODE_LIKE, discussionHref, type Need } from "./_needs";
 
 /** A question answered here: shown in place, with its outcome, until the tab changes; then under Done. */
 type Settled = { q: InboxQuestion; label: string; moved: boolean };
@@ -55,14 +55,18 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
     // G6: a question asked from a discussion names it, and opens it.
     const from = q.question.discussion_id && q.question.discussion_title ? q.question.discussion_title : null;
     const context = from ? `From discussion ${from}` : q.subject.title;
+    const opened = open === q.question.id && !done;
     return {
       key: q.question.id,
       icon: "ask",
       kind: `${askerName(q)} asks`,
-      quote: q.asked_by.kind === "oracle" ? prompt : null,
+      // qa-company-3 (round 3): "Show the text" only where it adds something: Oracle's text
+      // names codes (each carrying its card there), as on an "Oracle did" row.
+      quote: q.asked_by.kind === "oracle" && CODE_LIKE.test(prompt) ? prompt : null,
       item: (
         <>
-          <span className="min-w-0 truncate" title={prompt}>
+          {/* Opened to answer, the row's line is the question in full; the form does not repeat it. */}
+          <span className={opened ? "min-w-0 break-words whitespace-normal" : "min-w-0 truncate"} title={prompt} data-testid="question-prompt">
             {prompt}
           </span>
           {done && (
@@ -87,8 +91,10 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
               Answer
             </Button>
           )}
+          {/* qa-company-7 (round 3): Open is outlined, as on every other row's Open. */}
           {href && (
-            <LinkButton variant="ghost" href={href} aria-label={`Open ${q.subject.title}`}>
+            // qa-shell-23: bordered, as every other row's Open; a ghost one read as disabled.
+            <LinkButton href={href} aria-label={`Open ${q.subject.title}`}>
               Open
             </LinkButton>
           )}
@@ -100,8 +106,8 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
         </>
       ),
       detail:
-        open === q.question.id && !done ? (
-          <AnswerQuestion question={q} onSettled={(_, label) => settle(q, label)} onCancel={() => setOpen(null)} />
+        opened ? (
+          <AnswerQuestion question={q} showPrompt={false} onSettled={(_, label) => settle(q, label)} onCancel={() => setOpen(null)} />
         ) : undefined,
     };
   });

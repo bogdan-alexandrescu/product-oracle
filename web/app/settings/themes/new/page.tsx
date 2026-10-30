@@ -9,6 +9,7 @@ import { ThemePreview } from "@/components/ThemePreview";
 import { KeyField, keyValid } from "@/app/settings/_components/KeyField";
 import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
+import { FormActions } from "@/app/settings/_components/FormActions";
 import { Button, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
@@ -32,6 +33,18 @@ export default function NewThemePage() {
   const [keyError, setKeyError] = useState<string | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const base = themes.data?.find((t) => t.key === (from ?? "clean-document")) ?? themes.data?.[0];
+  // qa-settings-28: why Create is disabled, said next to it.
+  const reason = busy
+    ? null
+    : !key
+      ? "Enter a key to create the theme."
+      : !keyValid(key)
+        ? "Fix the key to create the theme."
+        : !name.trim()
+          ? "Enter a name to create the theme."
+          : !base
+            ? "Loading the themes to start from…"
+            : null;
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -73,11 +86,6 @@ export default function NewThemePage() {
           </Link>
         }
         title="New theme"
-        action={
-          <Button type="submit" form="new-theme" variant="primary" icon="plus" disabled={busy || !base || !keyValid(key) || !name.trim()}>
-            {busy ? "Creating…" : "Create theme"}
-          </Button>
-        }
       />
       {themes.error && <Notice tone="error">{themes.error}</Notice>}
       <div className="grid grid-cols-[420px_minmax(0,1fr)] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3">
@@ -133,6 +141,17 @@ export default function NewThemePage() {
                   </select>
                 )}
               </Field>
+              <FormActions id="create-theme-reason" reason={reason} className="mt-1">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  icon="plus"
+                  disabled={busy || !base || !keyValid(key) || !name.trim()}
+                  aria-describedby={reason ? "create-theme-reason" : undefined}
+                >
+                  {busy ? "Creating…" : "Create theme"}
+                </Button>
+              </FormActions>
             </form>
           </Panel>
           {error && <Notice tone="error">{error}</Notice>}

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * qa-onboarding-44: a new company's owner walks Home's whole Set up checklist, from "2 of 8"
@@ -58,7 +58,7 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(row(page, "build_baseline").getByTestId("setup-status")).toHaveText("Not built");
   // With no goals and the step on screen, the Goals card points at Set up, no second start.
   const goals = page.getByTestId("home-goals");
-  await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("Build it from Set up, above");
+  await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("Build the baseline from Set up, above");
   await expect(goals.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
 
   // 1. Connect tools: Slack with a pasted token.
@@ -85,7 +85,7 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   ]);
   await expect(notes.getByTestId("source-items")).toHaveText("1 item");
   await backToHome(page);
-  await seeDone(page, "sources", "1 source", 4);
+  await seeDone(page, "sources", "1 source read", 4);
 
   // 3. Engineering lead: the approver.
   await openStep(page, "eng_lead", /\/settings\/members\?from=setup#engineering-lead$/);
@@ -107,9 +107,9 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(row(page, "timezone").getByTestId("setup-status")).toHaveText("Not set · Pacific is used");
   await openStep(page, "timezone", /\/settings\/company\?from=setup#timezone$/);
   // Save waits for a zone to be picked (fix2-settings: "Not set" never stores Los Angeles).
-  await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
+  await pickZone(page, "America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
   await backToHome(page);
   await seeDone(page, "timezone", /Pacific/, 7);
 
@@ -118,7 +118,7 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(build).toHaveAttribute("data-done", "false");
   await expect(build.getByTestId("setup-action")).toHaveText("Open");
   await build.getByTestId("setup-action").click();
-  await expect(page).toHaveURL(/\/baseline\?build=1$/);
+  await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
   const sheet = page.getByRole("dialog", { name: "Build the baseline" });
   await expect(sheet).toBeVisible();
   await sheet.getByRole("button", { name: "Start" }).click();
@@ -126,7 +126,8 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   // The build banner says it, with the Inbox item to come (qa-onboarding-25: one line, not a toast too).
   await expect(page.getByTestId("baseline-build-banner")).toContainText("You'll get an Inbox item when it's ready to review.");
 
-  // Home while it builds: the row says so and opens the run; the Goals card opens it too.
+  // Home while it builds: the row says so and opens the run; the Goals card points at it
+  // (qa-onboarding-14: one way to open the build).
   await page.getByTestId("nav-home").filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/home$/);
   await expect(count(page)).toHaveText("7 of 8");
@@ -136,9 +137,9 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(openBuild).toHaveText("Open the build");
   await expect(openBuild).toHaveAttribute("href", /^\/runs\/[0-9a-f-]+$/);
   const runHref = await openBuild.getAttribute("href");
-  await expect(goals.getByTestId("goals-open-build")).toHaveText("Open the build");
-  await expect(goals.getByTestId("goals-open-build")).toHaveAttribute("href", runHref!);
-  await expect(goals.getByTestId("goals-build-in-setup")).toHaveCount(0);
+  await expect(goals.getByTestId("goals-open-build")).toHaveCount(0);
+  await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("The baseline is building: open it from Set up, above");
+  await expect(page.getByRole("link", { name: "Open the build" })).toHaveCount(1);
 
   // The run: the agents finish, it stops at Confirm the baseline, and the owner approves it.
   await openBuild.click();

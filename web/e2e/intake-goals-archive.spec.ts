@@ -24,7 +24,7 @@ test("goal from the door, then Archive asks and the page says it is archived", a
     .getByRole("textbox", { name: "What problem does it solve?" })
     .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
   await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Raise activation/ }).check();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
   const goals = page.getByTestId("intake-goals");

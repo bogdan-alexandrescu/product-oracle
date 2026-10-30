@@ -53,7 +53,8 @@ async function expectDatedRows(strip: Locator, testId: string) {
   await expect(strip.getByTestId(`${testId}-month`)).toHaveText(["Nov", "Dec", "Jan", "Feb"]);
   const labels = strip.getByTestId(`${testId}-label`);
   for (const [k, r] of ROWS.entries()) {
-    await expect(labels.nth(k)).toHaveText(new RegExp(`^${r.name} · \\d+ items?$`));
+    // fix4 (qa-simple-home-17): Home's row names its document first; the one-pager's does not.
+    await expect(labels.nth(k)).toHaveText(new RegExp(`^(Guided setup · )?${r.name} · \\d+ items?$`));
     const row = strip.getByTestId(`${testId}-row`).nth(k);
     await expect(row).toContainText(r.when);
     const bar = row.locator("span.top-2");
@@ -82,7 +83,7 @@ for (const phone of [false, true]) {
           await page.goto("/simple");
           const card = page.getByTestId("home-plan");
           await expect(page.getByRole("heading", { name: "The plan this quarter" })).toBeVisible();
-          await expect(card.getByTestId("home-plan-span")).toHaveText("2 Nov - 12 Feb");
+          await expect(card.getByTestId("home-plan-span")).toHaveText("Nov 2 - Feb 12");
           await expectDatedRows(card, "home-strip");
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -97,9 +98,9 @@ for (const phone of [false, true]) {
           const timeline = page.getByRole("region", { name: "Timeline" });
           if (!phone) {
             await expect(timeline.getByRole("group", { name: "Milestones" }).getByRole("button")).toHaveText(["M1 Prove it", "M2 Scale volume", "M3 Open to all"]);
-            for (const f of ["M1 ends 27 Nov", "M2 ends 25 Dec", "M3 ends 12 Feb"]) await expect(timeline.getByRole("button", { name: f })).toBeVisible();
+            for (const f of ["M1 ends Nov 27", "M2 ends Dec 25", "M3 ends Feb 12"]) await expect(timeline.getByRole("button", { name: f })).toBeVisible();
           } else {
-            await expect(timeline.getByTestId("timeline-step")).toHaveText([/^2 Nov.*M1 Prove it/, /^30 Nov.*M2 Scale volume/, /^28 Dec.*M3 Open to all/]);
+            await expect(timeline.getByTestId("timeline-step")).toHaveText([/^Nov 2.*M1 Prove it/, /^Nov 30.*M2 Scale volume/, /^Dec 28.*M3 Open to all/]);
           }
           await expect(page.getByLabel("Timeline strip")).toHaveCount(0);
         });

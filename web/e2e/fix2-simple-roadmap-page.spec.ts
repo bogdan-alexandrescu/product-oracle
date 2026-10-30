@@ -61,26 +61,21 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("start-not-allowed")).toHaveCount(0);
   });
 
+  // fix4 qa-simple-roadmap-22: someone who may not start a review no longer sees the button (was: disabled with a reason).
   test("Start review is off for a track owner who decides no PRD", async ({ page, context }) => {
     await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
     await open(page, "avery.lane@example.com");
-    const btn = page.getByRole("button", { name: "Start review" });
-    // Read only once the start options have answered (train AB review): disabled while loading proves nothing.
-    await expect(btn).not.toHaveAttribute("aria-busy", "true");
-    await expect(btn).toBeDisabled();
-    await expect(page.getByTestId("start-review-reason")).toHaveText("Only an owner or the PRD's decider can start a review");
+    await expect(page.getByTestId("key-dates-open")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+    await expect(page.getByTestId("start-review-reason")).toHaveCount(0);
   });
 
   for (const email of ["commenter@example.com", "viewer@example.com"]) {
-    test(`Start review is disabled with a reason for ${email.split("@")[0]}`, async ({ page }) => {
+    test(`Start review is hidden for ${email.split("@")[0]}`, async ({ page }) => {
       await open(page, email);
-      const btn = page.getByRole("button", { name: "Start review" });
-      await expect(btn).not.toHaveAttribute("aria-busy", "true");
-      await expect(btn).toBeDisabled();
-      expect(await btn.getAttribute("title")).toMatch(/owner|decider/i);
-      // fix2 review, #13: the reason is on screen too, not only a hover title.
-      await expect(page.getByTestId("start-review-reason")).toBeVisible();
-      await expect(page.getByTestId("start-review-reason")).toHaveText("Only an owner or the PRD's decider can start a review");
+      await expect(page.getByTestId("key-dates-open")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+      await expect(page.getByTestId("start-review-reason")).toHaveCount(0);
     });
   }
 
@@ -122,7 +117,7 @@ test.describe("desktop", () => {
     await page.getByTestId("needs-decision").click();
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
     // What is left on the digest (if anything) is no longer its order after Alert rules engine.
-    await expect(tray.getByTestId("tray-broken").filter({ hasText: /'Alert rules engine'/ })).toHaveCount(0);
+    await expect(tray.getByTestId("tray-broken").filter({ hasText: /‘Alert rules engine’/ })).toHaveCount(0);
   });
 
   /**
@@ -137,7 +132,7 @@ test.describe("desktop", () => {
     const text = (await legend.textContent())!;
     expect(text).not.toMatch(/PM-owned/);
     expect(text).not.toMatch(/validation gate/);
-    expect(text).toMatch(/dates Oracle suggests/);
+    expect(text).toMatch(/Dates Oracle suggests/);
   });
 
   /**

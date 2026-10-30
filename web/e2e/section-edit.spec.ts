@@ -12,7 +12,7 @@ const NEW_TEXT = "Buyers leave checkout when shipping cost appears late [c:c1]. 
 async function openEditor(page: Page, key: string, heading: string) {
   const s = await openSection(page, key);
   await s.getByRole("button", { name: `Actions for ${heading}` }).click();
-  await s.getByRole("menuitem", { name: `Edit section ${heading}` }).click();
+  await s.getByRole("menuitem", { name: "Edit the text yourself" }).click();
   const editor = s.getByTestId("section-editor");
   await expect(editor).toBeVisible();
   return { s, editor };
@@ -25,7 +25,7 @@ test("edit a section by hand: the preview keeps citation chips, Save makes the n
   const problem = await openSection(page, "problem");
   const bar = problem.getByTestId("review-bar");
   await bar.getByRole("button", { name: "Approve" }).click();
-  await bar.getByRole("button", { name: /^Save/ }).click();
+  await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
 
   const chips = await problem.locator("[data-section-body]").getByRole("button", { name: /^Citation/ }).count();
@@ -166,5 +166,5 @@ test("a commenter edits the section they own, and has no Edit section on others"
   const problem = await openSection(page, "problem");
   await problem.getByRole("button", { name: "Actions for 2. Problem" }).click();
   await expect(problem.getByRole("menuitem", { name: "Add evidence link" })).toBeVisible();
-  await expect(problem.getByRole("menuitem", { name: /^Edit section/ })).toHaveCount(0);
+  await expect(problem.getByRole("menuitem", { name: /^Edit the text yourself/ })).toHaveCount(0);
 });

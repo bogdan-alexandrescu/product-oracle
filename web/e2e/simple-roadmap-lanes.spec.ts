@@ -57,7 +57,7 @@ for (const scheme of ["light", "dark"] as const) {
      * dotted line; pieces that overlap stack (Setup checklist and Sample data import take two
      * rows of Faster activation), pieces one after the other share a row (Setup failure alerts
      * and Setup error report); the month row, the week row with the Today pill, each milestone's
-     * end a flag "M1 ends 27 Nov" with a dashed line, the year-end break hatched, the legend in
+     * end a flag "M1 ends Nov 27" with a dashed line, the year-end break hatched, the legend in
      * the card (M1, M2, M3, PM-owned, Today, Holidays, slices of one feature) and the Group by's
      * hint; fails_when = a lane, a count, the PM-owned lane, a colour, the connector, the
      * stacking, a flag or a legend entry is missing or wrong; no_claim = pixels.
@@ -89,21 +89,22 @@ for (const scheme of ["light", "dark"] as const) {
       const b = (await slice(page, "F-05b").locator("rect[data-slice-body]").boundingBox())!;
       expect(Math.abs(a.y - b.y)).toBeLessThan(1);
       await expect(page.locator('[data-testid="slice-connector"][data-feature="F-05"]')).toHaveAttribute("stroke-dasharray", /\d/);
-      await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText(/^F-05a/);
+      // fix4 qa-simple-roadmap-3: a slice is labelled by its name, never its code.
+      await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText(/^Team invites/);
       // The axis: months, weeks, Today; the milestones' flags; the holidays.
       await expect(page.getByTestId("axis-tick").filter({ hasText: "Dec" })).toHaveCount(1);
       await expect(page.getByTestId("axis-week").filter({ hasText: /^16$/ })).toHaveCount(1);
       await expect(page.getByTestId("today-pill")).toHaveText("Today");
       const ends = page.getByTestId("milestone-end");
       await expect(ends).toHaveCount(3);
-      await expect(ends.nth(0).getByTestId("milestone-end-label")).toHaveText("M1 ends 27 Nov");
-      await expect(ends.nth(1).getByTestId("milestone-end-label")).toHaveText("M2 ends 25 Dec");
-      await expect(ends.nth(2).getByTestId("milestone-end-label")).toHaveText("M3 ends 12 Feb");
+      await expect(ends.nth(0).getByTestId("milestone-end-label")).toHaveText("M1 ends Nov 27");
+      await expect(ends.nth(1).getByTestId("milestone-end-label")).toHaveText("M2 ends Dec 25");
+      await expect(ends.nth(2).getByTestId("milestone-end-label")).toHaveText("M3 ends Feb 12, 2027");
       await expect(ends.nth(0).getByTestId("milestone-flag")).toBeAttached();
       await expect(ends.nth(0).getByTestId("milestone-end-line")).toHaveAttribute("stroke-dasharray", /\d/);
       await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
       const legend = page.getByTestId("simple-chart").getByTestId("legend");
-      for (const words of ["M1", "M2", "M3", "PM-owned, no engineering", /^Today \d+ \w{3}$/, "Holidays 28 Dec – 1 Jan", "slices of one feature"])
+      for (const words of ["M1", "M2", "M3", "PM-owned, no engineering", /^Today \w{3} \d+$/, "Holidays Dec 28 – Jan 1, 2027", "slices of one feature"])
         await expect(legend.getByTestId("legend-item").filter({ hasText: words })).toHaveCount(1);
       await expect(page.getByTestId("lanes-hint")).toHaveText("Pieces stack inside a lane when they run at once");
       const w = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -194,11 +195,11 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(list).toContainText("Reliability");
       await expect(list.getByTestId("lane-list-count")).toHaveText("5 items, up to 1 at once");
       await expect(list.getByTestId("lane-row")).toHaveCount(5);
-      await expect(list.getByTestId("lane-row").first()).toContainText(/F-03\s*Setup failure alerts\s*2 Nov → 13 Nov/);
+      await expect(list.getByTestId("lane-row").first()).toContainText(/F-03\s*Setup failure alerts\s*Nov 2 – Nov 13/);
 
       await phoneLane(page, "Growth").click();
       await expect(phoneLane(page, "Growth")).toHaveAttribute("aria-expanded", "true");
-      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items, up to 2 at once");
+      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items, up to 1 at once");
       await expect(list.getByTestId("lane-row")).toHaveCount(6);
       await list.locator('[data-testid="lane-row"][data-code="F-05b"]').click();
       const card = page.getByTestId("floating-card");

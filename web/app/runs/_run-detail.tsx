@@ -111,6 +111,14 @@ type Decide = (
  */
 const decidedOnScreen = (cp: CheckpointOut) => cp.kind === "roadmap_items" && !cp.console;
 
+/**
+ * cld-7: the Roadmap items line's Review items is the page's one filled primary: on a stop decided
+ * on its review screen, and on a console answer waiting on Redo or Continue (whose Continue is
+ * then an outline row action). A console answer to confirm keeps Confirm as the primary.
+ */
+const reviewItemsPrimary = (cp: CheckpointOut) =>
+  cp.kind === "roadmap_items" && cp.can_decide && (decidedOnScreen(cp) || cp.console?.needs === "redo_or_continue");
+
 /** qa-work-54: a run's depth in words. */
 const DEPTH_WORDS: Record<string, string> = { quick: "Quick pass", standard: "Standard", deep: "Deep dive", thorough: "Thorough" };
 
@@ -221,14 +229,13 @@ export function RunDetail({ id }: { id: string }) {
     </Link>
   );
 
-  // qa-shell-8: a missing run in the app's one not-found pattern.
+  // qa-shell-8: a missing run in the app's one not-found pattern; one way back (qa-shell-11).
   if (!run && q.error === RUN_MISSING) {
     return (
       <NotFoundPanel
         title="Run not found"
         icon="search"
         testId="run-not-found"
-        back={back}
         actions={
           <LinkButton href="/runs" variant="primary" icon="back">
             Back to Runs
@@ -289,6 +296,8 @@ export function RunDetail({ id }: { id: string }) {
         back={back}
         // rirs-24: on a phone the run's name shows in full under the bar, wrapping.
         phoneTitle
+        // qa-work-22: the actions on the title's line on every run, the status line under them.
+        statusBelow
         // The run by its human name, never an id (qa-company-11).
         title={
           <span className="break-words" data-testid="run-name">
@@ -309,8 +318,13 @@ export function RunDetail({ id }: { id: string }) {
                   </Link>
                 </span>
               ) : (
-                <span className="inline-flex min-h-6 items-center text-sm text-text2" data-testid="run-document" title="This run writes the first version of this document">
-                  {runDocName(run)} (written by this run)
+                // qa-work-20: the same "For <document>" as a run on a document that exists; the
+                // document has no page until this run imports its first version, so no link yet.
+                <span className="inline-flex min-h-6 items-center gap-1 text-sm text-text2" title="This run writes the first version of this document">
+                  For
+                  <span className="font-medium text-text" data-testid="run-document">
+                    {runDocName(run)} (written by this run)
+                  </span>
                 </span>
               ))}
             {run.source && (
@@ -331,16 +345,19 @@ export function RunDetail({ id }: { id: string }) {
             )}
             {/* H1: the stops this run had approved or sent back, in the decision log. */}
             {/* rirs-17: set apart from the document; rirs-25: a 24 px tap target. */}
-            <span aria-hidden className="text-sm text-text2" data-testid="run-header-sep">
-              ·
+            {/* qa-work-20: the separator wraps with its link, never left at a line's end; a phone's wrapping row has none. */}
+            <span className="inline-flex min-h-6 items-center gap-2 whitespace-nowrap">
+              <span aria-hidden className="text-sm text-text2 max-[600px]:hidden" data-testid="run-header-sep">
+                ·
+              </span>
+              <Link
+                href={`/company/decisions?run=${run.id}`}
+                data-testid="run-decision-log"
+                className="inline-flex min-h-6 items-center text-sm font-medium text-accent-ink hover:underline"
+              >
+                Decisions in this run
+              </Link>
             </span>
-            <Link
-              href={`/company/decisions?run=${run.id}`}
-              data-testid="run-decision-log"
-              className="inline-flex min-h-6 items-center text-sm font-medium text-accent-ink hover:underline"
-            >
-              Decisions in this run
-            </Link>
           </>
         }
         action={
@@ -506,9 +523,16 @@ export function RunDetail({ id }: { id: string }) {
           title="Segments"
           tools={
             <>
-              <span className="tnum text-sm font-semibold text-text2" data-testid="segments-done">
-                {done} of {run.segments.length} done
-              </span>
+              {/* qa-work-5: a run paused over budget is not done, whatever its segments finished. */}
+              {run.status === "paused_overrun" ? (
+                <span className="tnum text-sm font-semibold text-warn" data-testid="segments-done">
+                  Paused: {done} of {run.segments.length} finished, over budget
+                </span>
+              ) : (
+                <span className="tnum text-sm font-semibold text-text2" data-testid="segments-done">
+                  {done} of {run.segments.length} done
+                </span>
+              )}
               {/* qa-onboarding-31, rirs-20: only once agents have started; Cancel run and Delete sit in the header. */}
               {can("tick") && open && run.segments.some((s) => s.status !== "pending") && (
                 <Button
@@ -567,8 +591,19 @@ export function RunDetail({ id }: { id: string }) {
 }
 
 /**
- * rirs-19: what Resume lets go on, beside it: "Spent $14.20, past the $13.50 limit. The PRD
- * review is held until you resume; resuming allows up to $4.50 more."
+ * qa-work-4: the limit and the estimate it comes from, together, as the banner and the Overrun
+ * panel both say it: "Estimate $9.00, limit $13.50 (150%)".
+ */
+function limitText(run: RunOut): string | null {
+  if (run.overrun_ceiling_usd == null) return null;
+  const est = run.estimate_usd;
+  if (est == null || est <= 0) return `Limit ${usd(run.overrun_ceiling_usd)}`;
+  return `Estimate ${usd(est)}, limit ${usd(run.overrun_ceiling_usd)} (${Math.round((run.overrun_ceiling_usd / est) * 100)}%)`;
+}
+
+/**
+ * rirs-19: what Resume lets go on, beside it: "Spent $14.20, past its limit. Estimate $9.00,
+ * limit $13.50 (150%). The PRD review is held until you resume it. Resuming allows up to $4.50 more; …"
  */
 function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
   const last = [...run.segments].reverse().find((s) => s.status === "succeeded");
@@ -581,11 +616,11 @@ function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
         })();
   const who = mayResume ? "you resume it" : "an owner resumes it";
   // A resumed run may spend half its estimate more before it pauses again (the 1.5× rule).
+  const limit = limitText(run);
   const more = run.estimate_usd != null ? ` Resuming allows up to ${usd(run.estimate_usd * 0.5)} more; Cancel run stops it.` : "";
   return (
     <Notice testId="run-overrun-held">
-      Spent {usd(run.spent_usd)}
-      {run.overrun_ceiling_usd != null && <>, past the {usd(run.overrun_ceiling_usd)} limit</>}. {next} is held until {who}.{more}
+      {`Spent ${usd(run.spent_usd)}${limit ? `, past its limit. ${limit}` : ""}. ${next} is held until ${who}.${more}`}
     </Notice>
   );
 }
@@ -681,6 +716,12 @@ function RunInspector({ run }: { run: RunOut }) {
           }
         >
           <RunCost run={run} />
+          {overrun && limitText(run) && (
+            // qa-work-4: where the limit comes from, beside the spend: the estimate and the limit together.
+            <p className="tnum mt-1.5 text-sm text-text" data-testid="run-overrun-limit">
+              {limitText(run)}
+            </p>
+          )}
           {approval && (
             // qa-onboarding-13: who approves, for everyone; the owner's Approve is in the header.
             <p className="mt-1.5 text-sm text-text" data-testid="run-approval-who">
@@ -697,7 +738,8 @@ function RunInspector({ run }: { run: RunOut }) {
           <InspectorRow
             value={
               // qa-work-25: one format, in the normal font: "$4.90 of $14.50 estimated".
-              <span data-testid="run-cost" data-cost="small" className="tnum text-sm text-text2">
+              // qa-work-23: the value's weight and colour, as every other Details value.
+              <span data-testid="run-cost" data-cost="small" className="tnum">
                 {run.estimate_usd == null ? (
                   costText(run)
                 ) : (
@@ -840,7 +882,7 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
     <div data-testid="segment-progress" className="space-y-1 text-text2">
       <p className="tnum">
         {usd(s.cost_usd)} spent so far ·{" "}
-        {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: Oracle reads the agents on each check"}
+        {s.checked_at ? `checked ${since(s.checked_at)} ago` : "Not checked yet: the agents' progress shows after the next check"}
       </p>
       {s.checked_at &&
         (s.agents.length > 0 ? (
@@ -1012,17 +1054,22 @@ function SegmentItem({
     >
       <div className="grid min-h-12 grid-cols-[40px_minmax(0,1fr)_minmax(0,170px)_120px_minmax(0,240px)] items-center gap-2 px-4 py-1.5 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3">
         <span className="tnum font-semibold">{s.seq}</span>
-        <span className="flex min-w-0 items-center gap-2">
+        {/* qa-work-45: on a phone the attempt chip sits under the name, which keeps the row's width. */}
+        <span className="flex min-w-0 items-center gap-2 max-[600px]:flex-col max-[600px]:items-start max-[600px]:gap-1">
           {/* qa-work-24: the segment's name wraps rather than being cut. */}
           <span className="min-w-0 font-medium break-words" title={s.title} data-testid="segment-title">
             {s.title}
           </span>
-          {s.attempts.length > 1 && <Chip kind="na">attempt {s.attempts.length}</Chip>}
+          {s.attempts.length > 1 && (
+            <Chip kind="na" data-testid="segment-attempt">
+              attempt {s.attempts.length}
+            </Chip>
+          )}
         </span>
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:hidden">
           {s.roles.map((r) => (
-            // On the tinted waiting row an accent chip would vanish into the tint.
-            <Chip key={r} kind={waiting ? "line" : "acc"} data-testid="segment-role">
+            // qa-work-21: one style on every row, a neutral chip that shows on the tinted waiting row too.
+            <Chip key={r} kind="na" data-testid="segment-role">
               {roleName(r)}
             </Chip>
           ))}
@@ -1056,11 +1103,21 @@ function SegmentItem({
         <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:col-span-full max-[600px]:col-start-2">
           {checkpoints.length === 0 &&
             kind &&
-            (s.checkpoint_on ? (
-              <Chip kind="line" title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className={WRAP_CHIP} data-testid="segment-checkpoint">
+            (s.checkpoint_on && run.status === "paused_overrun" && s.status === "succeeded" ? (
+              // qa-work-5: the stop the overrun holds: its state, not a stop still to come.
+              <Chip kind="warn" title={`${CHECKPOINT_LABEL[kind]} is held until the run is resumed`} className={WRAP_CHIP} data-testid="segment-checkpoint">
+                <Icon name="clock" size={16} />
+                <span>
+                  <span className="sr-only">{CHECKPOINT_LABEL[kind]}: </span>
+                  Held: over budget
+                </span>
+              </Chip>
+            ) : s.checkpoint_on ? (
+              // qa-work-21: a stop still to come is plain text, not a pill that looks like a button.
+              <span title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className="min-w-0 text-[13px] text-text2 break-words" data-testid="segment-checkpoint">
                 <span className="sr-only">Stops for </span>
                 {CHECKPOINT_LABEL[kind]}
-              </Chip>
+              </span>
             ) : (
               // rirs-15: in words, with why on hover.
               <Chip
@@ -1172,6 +1229,14 @@ function SegmentItem({
           {s.draft_import && (
             <DraftImportLine
               imp={s.draft_import}
+              // qa-work-18: the version by its document's title, never its slug.
+              docName={
+                runDocName(
+                  s.draft_import.slug === run.document_slug
+                    ? run
+                    : { flow_title: run.flow_title, document_slug: s.draft_import.slug ?? null, document_kind: run.document_kind },
+                ) ?? "the document"
+              }
               busy={busy}
               sentBack={s.sent_back}
               onRetry={s.can_retry_draft_import ? () => onRetryImport(s.seq) : undefined}
@@ -1249,8 +1314,8 @@ function ItemsReviewLine({ run, cp, open, anchor }: { run: RunOut; cp: Checkpoin
       <span className="font-semibold" data-testid="items-open">
         {openText(open)}
       </span>
-      {/* A console answer is decided in the row below, whose button is then the page's one primary. */}
-      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} icon="flag" variant={cp.can_decide && decidedOnScreen(cp) ? "primary" : "secondary"}>
+      {/* A console answer to confirm is decided in the row below, whose Confirm is then the page's one primary (cld-7). */}
+      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} icon="flag" variant={reviewItemsPrimary(cp) ? "primary" : "secondary"}>
         Review items
       </LinkButton>
       <Button icon="doc" onClick={() => setRaw(true)}>
@@ -1337,6 +1402,7 @@ function DeliveryLine({ cp }: { cp: CheckpointOut }) {
 
 function DraftImportLine({
   imp,
+  docName,
   busy,
   sentBack = false,
   onRetry,
@@ -1345,6 +1411,8 @@ function DraftImportLine({
   newRun,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
+  /** The document's name in words ("Checkout redesign PRD"). */
+  docName: string;
   /** A finished run imported a version already: why this draft stays refused (owner, 2026-10-25). */
   retryRefused?: string | null;
   /** A finished run's: where Start a new run opens the New run dialog, for those who may start one. */
@@ -1364,7 +1432,7 @@ function DraftImportLine({
       <span>
         Imported as{" "}
         <Link href={`/documents/${imp.slug}/v/${imp.version}`} className="font-medium text-accent-ink underline-offset-2 hover:underline">
-          {imp.slug} v{imp.version}
+          {docName} v{imp.version}
         </Link>
       </span>
       {imp.created === false && <Chip kind="na">Same content</Chip>}
@@ -1485,7 +1553,7 @@ function DraftRejected({
 type ItemsCheck = NonNullable<SegmentOut["items_check"]>;
 type ItemReason = ItemsCheck["reasons"][number];
 
-/** A reason's fixes as plain words, until the items review makes them buttons: "Fix: Remove date or Record basis". */
+/** A reason's fixes as plain words, until the items review makes them buttons: "Fix: Remove date or Add a date source". */
 function fixText(reason: ItemReason): string | null {
   const labels = reason.fixes.map((f) => f.label);
   if (labels.length === 0) return null;
@@ -1621,7 +1689,7 @@ function ItemsCheckLine({
           {counts.map((c) => ` · ${c}`).join("")}
         </span>
         {check.problems.length === 0 && reasons.length === 0 ? (
-          <Chip kind="pass">no problems</Chip>
+          <Chip kind="pass">No problems</Chip>
         ) : (
           boxed.length > 0 && (
             <Chip kind="warn">
@@ -1781,8 +1849,16 @@ function SharedDraftLine({ review }: { review: CheckpointReview }) {
   return (
     <div data-testid="shared-draft" className="space-y-1 text-sm">
       <p className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{CHECKPOINT_LABEL[review.kind]}: shared decision</span>
+        <span className="font-medium">{CHECKPOINT_LABEL[review.kind]}: waiting for a decision</span>
         <WaitChip wait={review.wait} forYou={false} role={review.approver_role} />
+      </p>
+      {/* qa-work-27: who decides, and that this person reads it only. */}
+      <p className="flex flex-wrap items-center gap-2" data-testid="shared-who">
+        <Chip kind="line" data-testid="checkpoint-who">
+          <Icon name="user" size={16} />
+          {WHO_DECIDES[review.approver_role] ?? "Owners can decide"}
+        </Chip>
+        <span className="text-text2">You can read it; you can&apos;t decide it.</span>
       </p>
       <p className="break-words text-text2" data-testid="shared-note">
         {review.note ? `Note for the agents: ${review.note}` : "No note for the agents yet."}
@@ -1837,7 +1913,7 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
   const listId = useId();
   const n = check.problems.length;
   const counts = `Feature set: ${plural(check.features, "feature")}, ${plural(check.requirements, "requirement")}, ${check.excluded} left out`;
-  const problems = n === 0 ? "no problems" : plural(n, "problem");
+  const problems = n === 0 ? "No problems" : plural(n, "problem");
   const flagged = Object.entries(check.flags ?? {}).filter(([, f]) => f.length > 0);
   return (
     <div data-testid="feature-set-check">
@@ -1895,7 +1971,8 @@ function FromRunLink({ runId }: { runId: string }) {
   const q = useQuery(`baseline-from-run:${runId}`, () => unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })));
   return (
     <p className="mt-2">
-      <LinkButton href={`/baseline?run=${runId}`} icon="baseline">
+      {/* qa-work-45: a long label wraps inside the card's padding on a phone. */}
+      <LinkButton href={`/baseline?run=${runId}`} icon="baseline" className="h-auto! min-h-8 max-w-full py-1 text-left whitespace-normal!" data-testid="from-run-link">
         {q.data && q.data.summary.need_you === 0
           ? "Open the baseline (nothing flagged for you)"
           : `Review in Baseline${q.data ? ` · ${q.data.summary.need_you} need you` : ""}`}
@@ -2006,6 +2083,7 @@ function Artifacts({
     });
     setContent(response.ok ? (data as string) : `Could not load ${fileLabel(name)}. Try again.`);
   }
+  const rawLabel = names.length + edited.length === 1 ? "Raw file" : "Raw files";
   const file = (name: string, attempt: number | null) => {
     const on = isOpen(name, attempt);
     return (
@@ -2028,7 +2106,12 @@ function Artifacts({
   return (
     <div>
       {names.length > 0 && (
-        <div className="flex flex-wrap gap-1.5" data-testid="artifacts-current">
+        // qa-work-19: the files open as the agents wrote them (raw text), said before them as the
+        // review page's Raw file does; the imported version above is the draft read as a document.
+        <div role="group" aria-label={rawLabel} className="flex flex-wrap items-center gap-1.5" data-testid="artifacts-current">
+          <span className="text-[13px] text-text2" data-testid="artifacts-raw-label">
+            {rawLabel}:
+          </span>
           {names.map((n) => file(n, null))}
           {edited.map((n) => (
             // D7: an approver's edits changed this file; the agents' original is kept.
@@ -2126,6 +2209,8 @@ function CheckpointRow({
   const answer = cp.console;
   // A counted console change request the workflow went on past: Redo or Continue only.
   const redoOrContinue = answer?.needs === "redo_or_continue";
+  // cld-7: Continue is the page's primary unless the Roadmap items line's Review items is.
+  const continuePrimary = redoOrContinue && !reviewItemsPrimary(cp);
   // D4: a send-back carries the staged actions as a structured review; with none, the note.
   const staged = !!review?.items.some((i) => i.actions.some((a) => a.state === "staged"));
   // Redo carries the console's findings, else the note: the API refuses it without either.
@@ -2238,7 +2323,7 @@ function CheckpointRow({
         {redoOrContinue ? (
           <>
             <Button
-              variant="solid"
+              variant={continuePrimary ? "primary" : "secondary"}
               icon="check"
               disabled={busy || !!approveBlocked}
               title={approveBlocked ?? undefined}
@@ -2247,6 +2332,7 @@ function CheckpointRow({
               Continue
             </Button>
             <Button
+              className={continuePrimary ? DECIDE_ROW : ""}
               disabled={busy || redoBlocked}
               title={redoBlocked ? "No findings were recorded: write a note to redo" : undefined}
               onClick={() => decideWith("redo")}
@@ -2294,7 +2380,7 @@ function CheckpointRow({
             )}
           </>
         )}
-        <Button variant="ghost" icon="comment" className={redoOrContinue ? "" : DECIDE_ROW} onClick={() => setDiscussing(true)}>
+        <Button variant="ghost" icon="comment" className={redoOrContinue && !continuePrimary ? "" : DECIDE_ROW} onClick={() => setDiscussing(true)}>
           Discuss
         </Button>
       </div>

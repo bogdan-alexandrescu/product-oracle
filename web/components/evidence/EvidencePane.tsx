@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import {
   Button,
@@ -18,7 +18,6 @@ import {
   SegmentedControl,
   Sheet,
   Split,
-  ViewOnly,
   type Column,
 } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
@@ -248,8 +247,6 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
           { value: "sections", label: "Sections" },
         ]}
       />
-      {/* The header shows View only to someone who can do nothing; a commenter sees it here. */}
-      {capsReady && !canAdd && !approved && can("create_comment") && <ViewOnly />}
       {stale > 0 && (
         <Chip kind="warn">
           {stale} stale link{stale === 1 ? "" : "s"}
@@ -363,7 +360,9 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
   const { sections, gaps, rows, selected, select, phone, data, links, citations, stale, result } = props;
   const [showLinks, setShowLinks] = useState(true);
   const [showCites, setShowCites] = useState(true);
-  const [staleOnly, setStaleOnly] = useState(false);
+  const [staleOnlyPicked, setStaleOnly] = useState(false);
+  // With no stale link left (the last one removed) the chip is disabled: it filters nothing then.
+  const staleOnly = staleOnlyPicked && stale > 0;
   const shown = rows.filter((r) => {
     if (staleOnly) return r.stale;
     return r.group === "citations" ? showCites : showLinks;
@@ -371,18 +370,28 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
   const row = rows.find((r) => r.id === selected) ?? null;
   const groups = (["baseline", "evidence", "citations"] as MatrixGroup[]).filter((g) => shown.some((r) => r.group === g));
 
-  const toggle = (label: string, count: number, on: boolean, flip: () => void) => (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={flip}
-      className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm font-medium whitespace-nowrap max-[600px]:h-11 max-[600px]:px-3.5 ${
-        on ? "border-accent bg-accent text-on-accent" : "border-line-strong bg-surface text-text hover:bg-surface2"
-      }`}
-    >
-      {label} <b className={`tnum font-semibold ${on ? "text-on-accent" : "text-text2"}`}>{count}</b>
-    </button>
-  );
+  // qa-docs-53: a chip with nothing to show (count 0) never looks switched on; it is disabled.
+  const toggle = (label: string, count: number, on: boolean, flip: () => void) => {
+    const active = on && count > 0;
+    return (
+      <button
+        type="button"
+        aria-pressed={active}
+        disabled={count === 0}
+        title={count === 0 ? `No ${label.toLowerCase()} in this version` : undefined}
+        onClick={flip}
+        className={`flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm font-medium whitespace-nowrap max-[600px]:h-11 max-[600px]:px-3.5 ${
+          active
+            ? "border-accent bg-accent text-on-accent"
+            : count === 0
+              ? "cursor-not-allowed border-line bg-surface text-text2"
+              : "border-line-strong bg-surface text-text hover:bg-surface2"
+        }`}
+      >
+        {label} <b className={`tnum font-semibold ${active ? "text-on-accent" : "text-text2"}`}>{count}</b>
+      </button>
+    );
+  };
 
   const inspector = row ? <TargetInspector key={row.id} row={row} {...props} /> : null;
 
@@ -413,18 +422,13 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
             setStaleOnly(false);
             setShowCites((v) => !v);
           })}
-          {toggle("Stale only", stale, staleOnly, () => setStaleOnly((v) => !v))}
+          {toggle("Stale only", stale, staleOnly, () => setStaleOnly(!staleOnly))}
           <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-text2 max-[1100px]:hidden" aria-label="Legend">
-            <span className="font-semibold">Link confidence, 0 to 1:</span>
-            <span className="flex items-center gap-1.5">
-              <Cell tone="pass">Strong</Cell>0.70 or more
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Cell tone="warn">Fair</Cell>0.40 to 0.70
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Cell tone="crit">Weak</Cell>below 0.40
-            </span>
+            {/* qa-docs-53: words, not scores. */}
+            <span className="font-semibold">Link confidence:</span>
+            <Cell tone="pass">Strong</Cell>
+            <Cell tone="warn">Medium</Cell>
+            <Cell tone="crit">Weak</Cell>
             <span className="flex items-center gap-1.5">
               <Cell tone="na" stale>
                 Stale
@@ -469,7 +473,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
             ))}
           </ul>
         ) : (
-          <div data-testid="evidence-matrix-scroll" className="max-w-full overflow-x-auto">
+          <SideScroll>
             <table data-testid="evidence-matrix" className="w-max min-w-full border-collapse text-[15px]" aria-label="Coverage">
               <thead>
                 <tr className="border-b border-line">
@@ -488,7 +492,9 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                       >
                         {/* qa-docs-7: a red column needs no repeated word under its name; the
                             note under the table says what red means (screen readers hear it). */}
-                        <span className="block [overflow-wrap:anywhere]">{s.heading}</span>
+                        <span className="block [overflow-wrap:anywhere]" title={s.heading}>
+                          {s.heading}
+                        </span>
                         {gap && <span className="sr-only">, no links or citations</span>}
                       </th>
                     );
@@ -508,18 +514,23 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                       data-gap={gaps.has(s.section_key) ? "true" : undefined}
                       className={`tnum px-1 py-2 text-center ${gaps.has(s.section_key) ? "bg-crit-bg text-crit" : ""}`}
                     >
-                      {plural(s.links.length, "link")}, {plural(s.citations.length, "citation")}
+                      {/* qa-docs-52: each count stays whole; the two may stack. */}
+                      <span className="inline-block whitespace-nowrap">{plural(s.links.length, "link")},</span>{" "}
+                      <span className="inline-block whitespace-nowrap">{plural(s.citations.length, "citation")}</span>
                     </td>
                   ))}
                 </tr>
               </tbody>
             </table>
-          </div>
+          </SideScroll>
         )}
-        <p className="border-t border-line px-4 py-2 text-[13px] text-text2">
-          {/* qa-docs-7: one or two plain sentences. */}
-          A red column is a section with no links or citations. Readers never see these links on the page; exports list them under &ldquo;Sources and data
-          points&rdquo;. {sourcesAsOf(data.snapshot)}
+        <p data-testid="evidence-footnote" className="border-t border-line px-4 py-2 text-[13px] text-text2">
+          {/* qa-docs-7: one or two plain sentences. qa-docs-21: the rule the red follows (unsupportedKeys).
+              qa-docs-53: the phone's list has no columns, so its note says what a row shows. */}
+          {phone
+            ? "Each row lists the sections it is linked in."
+            : "A red column is a section with no links or citations, in it or in its subsections (the title is never red)."}{" "}
+          Readers never see these links on the page; exports list them under &ldquo;Sources and data points&rdquo;. {sourcesAsOf(data.snapshot)}
         </p>
       </Panel>
       {!phone && !row && <p className="sr-only">Pick a cell to see every section that links its target.</p>}
@@ -1202,5 +1213,49 @@ function AddSectionLinkForm({ section, rows, add }: { section: SectionEvidence; 
         </div>
       </form>
     </InspectorSection>
+  );
+}
+
+/**
+ * qa-docs-52: the coverage table scrolls sideways; while more of it sits past the right edge, an
+ * edge shadow and a hint say so.
+ */
+function SideScroll({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      ro.disconnect();
+    };
+  }, []);
+  return (
+    <>
+      {more && (
+        <p data-testid="evidence-scroll-hint" className="border-b border-line px-4 py-1.5 text-right text-[13px] text-text2">
+          Scroll sideways for more →
+        </p>
+      )}
+      <div className="relative">
+        <div ref={ref} data-testid="evidence-matrix-scroll" className="max-w-full overflow-x-auto">
+          {children}
+        </div>
+        {more && (
+          <span
+            aria-hidden
+            data-testid="evidence-scroll-shadow"
+            className="pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-linear-to-l from-[color-mix(in_srgb,var(--color-text)_18%,transparent)] to-transparent"
+          />
+        )}
+      </div>
+    </>
   );
 }

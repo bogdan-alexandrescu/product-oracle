@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import Link from "next/link";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { Button, Chip, Icon, StatusMark, type ChipKind, type MarkState } from "@/components/ds";
 import type { FeedbackStatus, LlmJob, Verdict } from "@/lib/api/client";
 import { formatDateTime, JOB_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
+import { runLabel } from "@/lib/labels";
 
 /*
  * Small parts of the version / review view built on the ds kit. Candidates for the kit:
@@ -178,7 +180,8 @@ export function TabBar<T extends string>({
 /**
  * A secondary button that opens a small panel of actions; Escape or a click outside closes
  * it. `iconOnly` shows just the icon (the label becomes its accessible name); children may
- * be a function that gets `close`, for items that act and then close the panel.
+ * be a function that gets `close`, for items that act and then close the panel. `avoid` (a
+ * CSS selector) names what the open panel must not cover: it moves left of it when it would.
  */
 export function Menu({
   label,
@@ -186,15 +189,31 @@ export function Menu({
   children,
   align = "end",
   iconOnly = false,
+  avoid,
 }: {
   label: string;
   icon?: Parameters<typeof Button>[0]["icon"];
   children: ReactNode | ((close: () => void) => ReactNode);
   align?: "start" | "end";
   iconOnly?: boolean;
+  avoid?: string;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState(0);
+  // qa-docs-75: a panel opening over what it must not cover (the review panel's totals) moves
+  // left of it, as long as it stays on screen.
+  useLayoutEffect(() => {
+    if (!open || !avoid || !pop.current) return;
+    const p = pop.current.getBoundingClientRect();
+    const other = [...document.querySelectorAll<HTMLElement>(avoid)].find((el) => el.checkVisibility());
+    if (!other) return;
+    const o = other.getBoundingClientRect();
+    const covers = p.left < o.right && p.right > o.left && p.top < o.bottom && p.bottom > o.top;
+    const dx = o.left - 8 - p.right;
+    if (covers && p.left + dx >= 8) setShift(dx);
+  }, [open, avoid]);
   useEffect(() => {
     if (!open) return;
     // Escape closes the menu only: preventDefault tells the Ask Oracle panel (listening on
@@ -222,12 +241,17 @@ export function Menu({
         aria-label={iconOnly ? label : undefined}
         title={iconOnly ? label : undefined}
         className={iconOnly ? "w-8 px-0" : ""}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setShift(0);
+          setOpen((o) => !o);
+        }}
       >
         {!iconOnly && label}
       </Button>
       {open && (
         <div
+          ref={pop}
+          style={shift ? { transform: `translateX(${shift}px)` } : undefined}
           className={`absolute top-[calc(100%+6px)] z-40 w-max max-w-[calc(100vw-24px)] rounded-panel border border-line bg-surface p-3 shadow-tip ${
             align === "end" ? "right-0" : "left-0"
           }`}
@@ -236,5 +260,18 @@ export function Menu({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * qa-work-17: a review's way back, in the run page's style ("← Runs" there): an arrow and the
+ * run's name ("← Saved addresses PRD · Baseline to PRD"), back to the run.
+ */
+export function RunBackLink({ run }: { run: Parameters<typeof runLabel>[0] & { id: string } }) {
+  return (
+    <Link href={`/runs/${run.id}`} className="inline-flex min-h-6 max-w-full items-center gap-1 break-words hover:text-text hover:underline" data-testid="review-back">
+      <Icon name="back" size={16} />
+      <span className="min-w-0 break-words">{runLabel(run)}</span>
+    </Link>
   );
 }

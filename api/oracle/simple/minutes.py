@@ -256,3 +256,18 @@ def recorded(a: dict[str, Any]) -> dict[str, Any]:
 
 def nothing(title: str) -> str:
     return f"{title}: nothing was decided or recorded."
+
+
+def summary_sentence(n_decisions: int, n_notes: int, n_questions: int) -> str:
+    """A short prose summary for an ended meeting's quick minutes (qa-simple-decide-6):
+    "4 decisions taken, 2 notes and 1 open question." — never the decision titles
+    themselves (the Decisions page already lists them) nor the notes' text."""
+    out = f"{n_decisions} {'decision' if n_decisions == 1 else 'decisions'} taken"
+    extra = []
+    if n_notes:
+        extra.append(f"{n_notes} {'note' if n_notes == 1 else 'notes'}")
+    if n_questions:
+        extra.append(f"{n_questions} open {'question' if n_questions == 1 else 'questions'}")
+    if extra:
+        out += ", " + " and ".join(extra)
+    return out + "."

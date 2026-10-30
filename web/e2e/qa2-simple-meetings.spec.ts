@@ -127,14 +127,15 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("timer", { name: "Meeting clock" })).toBeVisible();
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
         await expect(page.getByRole("combobox", { name: "Who changes things" })).toHaveCount(0);
-        await expect(chat(page).getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Type “note: …” or “open question: …”");
+        await expect(chat(page).getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask a question about what is on screen");
         await page.goto("/simple/meetings");
         await expect(page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" })).toHaveCount(0);
         // The live review is listed under Live only.
         await expect(page.getByRole("region", { name: "Live" })).toContainText("Review: Guided setup");
         await expect(page.getByRole("region", { name: "Upcoming" }).getByRole("link", { name: "Open" })).toHaveCount(0);
-        await tap(page.getByRole("button", { name: "Start review" }).first());
-        await expect(sheet(page)).not.toContainText("Only Admin can start");
+        // qa-simple-decide-8: no Start review that ends in "Only Admin can start"; the reason stands in its place.
+        await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+        await expect(page.getByTestId("meetings-start-why")).toBeVisible();
       });
     });
   }
@@ -175,6 +176,7 @@ test.describe("desktop · the live meeting", () => {
     const first = slice.locator("li").first();
     const title = (await first.locator("strong").innerText()).trim();
     await first.getByRole("button", { name: `Cut ${title}` }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }).click();
     await expect(slice.getByRole("button", { name: `Restore ${title}` })).toBeVisible();
     await expect(page.getByRole("region", { name: "All decisions" }).getByTestId("meeting-decision").first()).toContainText(/[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}/);
 
@@ -197,7 +199,7 @@ test.describe("desktop · the live meeting", () => {
     await steps(page).getByRole("button", { name: "3 Decisions" }).click();
     const agenda = page.getByTestId("decisions-due");
     const row = agenda.getByTestId("question-row").filter({ has: page.getByRole("button", { name: "Decide as recommended" }) }).first();
-    const rec = (await row.locator(".simple-rec").innerText()).replace(/^PRD recommends\s*/, "").trim();
+    const rec = (await row.locator(".simple-rec").innerText()).replace(/^.+? recommends:\s*/, "").trim();
     await row.getByRole("button", { name: "Decide as recommended" }).click();
     await expect(agenda.getByTestId("question-decided").filter({ hasText: `Decided in this meeting: ${rec}` })).toBeVisible();
 

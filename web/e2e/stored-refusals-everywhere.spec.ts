@@ -60,7 +60,7 @@ test("a next-draft build that failed says when on its chip, the refusal in the p
 test("a refinement the pool refused says when it failed, the refusal in the past", async ({ page }) => {
   await page.goto("/documents/checkout-redesign/v/2");
   const users = await openSection(page, "users");
-  await sectionAction(users, "3. Users and jobs", /^Refine section/);
+  await sectionAction(users, "3. Users and jobs", /^Ask Oracle to rewrite/);
   const refine = users.getByTestId("refine-panel");
   await refine.getByLabel("Instruction").fill("Name the first-time buyer segment explicitly.");
   await refine.getByRole("button", { name: "Refine", exact: true }).click();

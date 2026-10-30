@@ -85,6 +85,8 @@ export function LoginForm() {
     e.preventDefault();
     setPending(true);
     setError(null);
+    // Signing in still shows while the next page loads.
+    let leaving = false;
     try {
       const { error: err, response } = await api.POST("/v1/auth/login", {
         body: { email, password },
@@ -101,11 +103,16 @@ export function LoginForm() {
         );
         return;
       }
-      router.push(target ?? (await loadLanding()));
+      // qa-shell-1: a full load, not router.push. Next keeps the routes visited before sign-in
+      // mounted (hidden); pushing from /login left the address bar on /login, with Home drawn
+      // over a hidden Sign in. A fresh load shows the one page at its own address, and nothing
+      // the person signed in before had open.
+      window.location.assign(target ?? (await loadLanding()));
+      leaving = true;
     } catch {
       setError("Cannot reach the API.");
     } finally {
-      setPending(false);
+      if (!leaving) setPending(false);
     }
   }
 

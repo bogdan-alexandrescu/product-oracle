@@ -60,11 +60,10 @@ test("qa-docs-29: the per-section totals and the score legend say what they coun
   await expect(page.getByTestId("evidence-totals")).not.toContainText("0 · 0");
 
   const legend = page.getByLabel("Legend");
-  await expect(legend).toContainText("Link confidence, 0 to 1:");
-  await expect(legend).toContainText("Strong0.70 or more");
-  await expect(legend).toContainText("Fair0.40 to 0.70");
-  await expect(legend).toContainText("Weakbelow 0.40");
-  await expect(legend).not.toContainText("0.85");
+  // qa-docs-53: words, not scores.
+  await expect(legend).toContainText("Link confidence:");
+  await expect(legend).toContainText("StrongMediumWeak");
+  await expect(legend).not.toContainText(/\d\.\d/);
 });
 
 test("qa-docs-29: the coverage panel uses no monospace font and words for a missing snapshot", async ({ page }) => {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Button, Chip, type IconName } from "@/components/ds";
-import { FIELD_LABEL, InlineError, LockedChip, TEXTAREA, VerdictChip } from "@/components/review/parts";
+import { FIELD_LABEL, InlineError, LockedChip, TEXTAREA, VERDICT_KIND, VerdictChip } from "@/components/review/parts";
 import type { Schemas, Verdict } from "@/lib/api/client";
 import { formatDateTime, VERDICT_LABEL } from "@/lib/format";
 
@@ -24,11 +24,14 @@ export function SectionReviewBar({
   heading,
   verdict,
   readOnly,
+  readOnlyNote,
   onSubmit,
 }: {
   heading: string;
   verdict?: Schemas["SectionVerdict"] | null;
   readOnly?: boolean;
+  /** qa-docs-77: read-only, who may review instead (a short line beside the state). */
+  readOnlyNote?: string;
   onSubmit: (verdict: Verdict, note: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<Verdict | null>(null);
@@ -36,6 +39,15 @@ export function SectionReviewBar({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hintId = useId();
+  // qa-docs-74: the state reads the choice being made until it is saved or cancelled.
+  const needsNote = !!draft && NOTE_REQUIRED[draft] && !note.trim();
+  const pending = !readOnly && draft && draft !== verdict?.verdict ? draft : null;
+  // qa-docs-9: the opened note and its Save scroll clear of a phone's bottom bars (the page's
+  // scroll padding), not left under them.
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (draft) formRef.current?.scrollIntoView({ block: "nearest" });
+  }, [draft]);
 
   async function save(e?: FormEvent) {
     e?.preventDefault();
@@ -57,33 +69,59 @@ export function SectionReviewBar({
   const lapsed = verdict?.verdict === "approved" && Boolean(verdict.lapsed_at);
   const locked = verdict?.verdict === "approved" && !lapsed;
 
+  const state = verdict ? (
+    <>
+      {lapsed ? (
+        <Chip kind="warn" data-testid="verdict-lapsed" title={verdict.lapse_reason ?? "This approval no longer counts"}>
+          Lapsed
+        </Chip>
+      ) : (
+        <VerdictChip verdict={verdict.verdict} />
+      )}
+      {locked && <LockedChip />}
+      {verdict.note && (
+        <span className="min-w-0 truncate text-sm text-text" title={verdict.note}>
+          “{verdict.note}”
+        </span>
+      )}
+      <span className="tnum flex-none text-[13px] text-text2 max-[600px]:hidden">{formatDateTime(verdict.created_at)}</span>
+    </>
+  ) : (
+    // qa-docs-48: the text colour, not the muted status grey, so it reads at 4.5:1 or better on
+    // the bar and on a selected row, light and dark.
+    <Chip kind="line" data-testid="verdict-none">
+      Not reviewed
+    </Chip>
+  );
+
+  // qa-docs-77: someone who may not review sees one compact status line, and who can.
+  if (readOnly)
+    return (
+      <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1" data-testid="review-bar">
+        <div className="flex min-w-0 items-center gap-2" data-testid="verdict-state">
+          {state}
+        </div>
+        {readOnlyNote && (
+          <span className="text-[13px] text-text2" data-testid="review-bar-note">
+            {readOnlyNote}
+          </span>
+        )}
+      </div>
+    );
+
   return (
     <div className="mt-4 rounded-button border border-line bg-surface2" data-testid="review-bar">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2" data-testid="verdict-state">
-          {verdict ? (
+          {pending ? (
             <>
-              {lapsed ? (
-                <Chip kind="warn" data-testid="verdict-lapsed" title={verdict.lapse_reason ?? "This approval no longer counts"}>
-                  Lapsed
-                </Chip>
-              ) : (
-                <VerdictChip verdict={verdict.verdict} />
-              )}
-              {locked && <LockedChip />}
-              {verdict.note && (
-                <span className="min-w-0 truncate text-sm text-text" title={verdict.note}>
-                  “{verdict.note}”
-                </span>
-              )}
-              <span className="tnum flex-none text-[13px] text-text2 max-[600px]:hidden">{formatDateTime(verdict.created_at)}</span>
+              <Chip kind={VERDICT_KIND[pending]} data-testid="verdict-pending">
+                {VERDICT_LABEL[pending]}
+              </Chip>
+              <span className="text-[13px] text-text2">Not saved yet</span>
             </>
           ) : (
-            // qa-docs-48: the text colour, not the muted status grey, so it reads at 4.5:1 or better on
-            // the bar and on a selected row, light and dark.
-            <Chip kind="line" data-testid="verdict-none">
-              Not reviewed
-            </Chip>
+            state
           )}
         </div>
         {!readOnly && (
@@ -110,14 +148,14 @@ export function SectionReviewBar({
         )}
       </div>
       {draft && (
-        <form onSubmit={save} className="flex flex-col gap-2 border-t border-line px-3 py-2.5">
+        <form ref={formRef} onSubmit={save} className="flex flex-col gap-2 border-t border-line px-3 py-2.5">
           <label className={FIELD_LABEL}>
             {draft === "approved" ? "Note (optional)" : "What should change?"}
             <textarea
               autoFocus
               rows={2}
               required={NOTE_REQUIRED[draft]}
-              aria-describedby={NOTE_REQUIRED[draft] ? hintId : undefined}
+              aria-describedby={needsNote ? hintId : undefined}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => {
@@ -127,23 +165,25 @@ export function SectionReviewBar({
               className={TEXTAREA}
             />
           </label>
-          {NOTE_REQUIRED[draft] && (
-            <p id={hintId} data-testid="verdict-note-hint" className="text-[13px] leading-4 text-text2">
-              Needed to {draft === "rejected" ? "reject" : "request changes"}: the writer sees it.
-            </p>
-          )}
           {error && <InlineError>{error}</InlineError>}
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" variant="solid" icon="check" disabled={saving || (NOTE_REQUIRED[draft] && !note.trim())}>
-              {saving ? "Saving…" : `Save: ${VERDICT_LABEL[draft]}`}
+            {/* qa-docs-74: the button says the action it takes, not the state it saves. */}
+            <Button
+              type="submit"
+              variant="solid"
+              icon={ACTIONS.find((a) => a.verdict === draft)!.icon}
+              disabled={saving || needsNote}
+              data-testid="verdict-submit"
+            >
+              {saving ? "Saving…" : ACTIONS.find((a) => a.verdict === draft)!.label}
             </Button>
             <Button variant="ghost" onClick={() => setDraft(null)}>
               Cancel
             </Button>
-            {/* qa-docs-5: a disabled Save says what it waits for. */}
-            {NOTE_REQUIRED[draft] && !note.trim() && !saving && (
-              <span data-testid="verdict-save-hint" className="text-[13px] text-text2">
-                Write a note first
+            {/* qa-docs-5, qa-docs-74: one hint, saying what the disabled button waits for and why. */}
+            {needsNote && !saving && (
+              <span id={hintId} data-testid="verdict-save-hint" className="text-[13px] text-text2">
+                Write a note first: the writer sees it
               </span>
             )}
             <span className="ml-auto text-[13px] text-text2 max-[600px]:hidden">Ctrl/⌘ + Enter</span>

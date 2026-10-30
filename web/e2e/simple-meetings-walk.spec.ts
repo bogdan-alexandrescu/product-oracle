@@ -142,7 +142,9 @@ for (const phone of [false, true]) {
         await delivery(page).getByRole("button", { name: "Send" }).click();
         await expect(delivery(page).getByRole("status", { name: "Sent" })).toBeVisible();
         // qa-simple-decide-32: the summary does not repeat the title and count.
-        await expect(page.getByTestId("minutes-summary")).toContainText("Moved Setup checklist.");
+        // qa-simple-decide-6: a short prose summary, not the decision titles again.
+        await expect(page.getByTestId("minutes-summary")).toContainText("1 decision taken.");
+        await expect(page.getByTestId("minutes-summary")).not.toContainText("Setup checklist");
       });
 
       test("Upcoming lists what Home shows; the rail counts what the page lists; Home's Start opens the sheet", async ({ page }) => {
@@ -163,7 +165,8 @@ for (const phone of [false, true]) {
         // Home's next review is Upcoming's first row; its Start meeting opens the sheet on it.
         await page.goto("/simple");
         await expect(page.getByTestId("home-meeting-next")).toContainText(firstTitle);
-        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start review" }).click();
+        // fix4 (qa-simple-home-27): days before the meeting, Home's start says it starts now.
+        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start now" }).click();
         const sheet = page.getByRole("dialog", { name: "Start a review" });
         await expect(sheet.getByTestId("start-occurrence")).toContainText(firstTitle);
         const ritual = firstTitle;

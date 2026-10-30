@@ -67,7 +67,7 @@ test("Start a PRD from the inspector: the brief shows the request behind it, and
 
   await page.getByRole("textbox", { name: "Title" }).fill("Weekly order summary");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   const brief = page.url();
   const linked = page.getByTestId("intake-requests");
@@ -101,7 +101,7 @@ test("Start a PRD from the queue: selected qualified requests are ticked in the 
   await behind(page).getByRole("checkbox", { name: "Share a board read-only" }).uncheck();
   await page.getByRole("textbox", { name: "Title" }).fill("Team invites");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
 });
@@ -114,14 +114,14 @@ test("already behind a brief or a PRD: such requests are not offered in the queu
   await page.getByRole("button", { name: "Start a PRD from 1 request" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill("Team invites");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
 
   // "Share a board read-only" is linked to a PRD by an approver.
   await openRequests(page);
   await pick(page, "Share a board read-only");
-  await inspector(page).getByLabel("PRD").selectOption({ index: 1 });
+  await inspector(page).getByLabel("Linked PRD").selectOption({ index: 1 });
   await inspector(page).getByRole("button", { name: "Save links" }).click();
   const prd = inspector(page).locator('a[href^="/documents/"]');
   await expect(prd).toBeVisible();
@@ -154,7 +154,7 @@ test("archiving a brief that made no PRD releases its requests to the next brief
   await page.getByRole("button", { name: "Start a PRD from 1 request" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill("Team invites");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
 
@@ -175,7 +175,7 @@ test("archiving a brief that made no PRD releases its requests to the next brief
   // A new brief takes it.
   await page.getByRole("textbox", { name: "Title" }).fill("Team invites, again");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
   await openRequests(page);
@@ -187,7 +187,7 @@ test("the inspector shows a request's PRD once", async ({ page }) => {
   await login(page, "approver@example.com");
   await openRequests(page);
   await pick(page, "Weekly summary email");
-  await inspector(page).getByLabel("PRD").selectOption({ index: 1 });
+  await inspector(page).getByLabel("Linked PRD").selectOption({ index: 1 });
   await inspector(page).getByRole("button", { name: "Save links" }).click();
   await expect(inspector(page).locator('a[href^="/documents/"]')).toBeVisible();
   await signOut(page);

@@ -32,16 +32,16 @@ for (const phone of [false, true]) {
         await login(page, "viewer@example.com");
         await page.goto("/simple/decisions");
         const past = group(page, "Review: Usage alerts");
-        await expect(past).toContainText("Comment: keep quiet hours on by default.");
+        // qa-simple-decide-6: a prose summary; qa-simple-decide-1: the comment is no decision.
+        await expect(past).toContainText("1 decision taken.");
+        await expect(past).not.toContainText("Comment:");
         await expect(past).toContainText("Attendees: Admin, Approver, Commenter");
         await expect(past).toContainText("D-3: Should muted teams still get the weekly digest?");
         await expect(past).toContainText("Draft the quiet hours copy · Commenter · by");
         await expect(past).toContainText("Usage alerts: the working draft is not approved yet");
         const rows = past.getByTestId("decision-row");
-        await expect(rows).toHaveCount(2);
-        await expect(rows.first()).toContainText("D-5 Comment: keep quiet hours on by default");
-        await expect(rows.first()).toContainText("Admin");
-        await expect(rows.nth(1)).toContainText("D-4 Moved Weekly alert digest");
+        await expect(rows).toHaveCount(1);
+        await expect(rows.first()).toContainText("D-4 Moved Weekly alert digest");
         const outside = group(page, "Outside meetings");
         // prd-decisions A1: a PRD's decided question sits here too, with its code and answer.
         // qa-simple-decide-20: D-3 is listed once, beside its meeting, not here as well.
@@ -65,9 +65,12 @@ for (const phone of [false, true]) {
         await expect(outside).toContainText("D-1 Start guided setup with the checklist");
 
         await page.getByRole("combobox", { name: "Goal", exact: true }).selectOption({ label: "All goals" });
-        await page.getByRole("combobox", { name: "Meeting", exact: true }).selectOption({ label: "Review: Usage alerts" });
+        // qa-simple-decide-11: each meeting carries its day ("· live" for the one on).
+        const meetingBox = page.getByRole("combobox", { name: "Meeting", exact: true });
+        const pastOption = await meetingBox.locator("option", { hasText: /^Review: Usage alerts · \w{3} \w{3} \d+$/ }).first().textContent();
+        await meetingBox.selectOption({ label: pastOption! });
         await expect(page).toHaveURL(/\?meeting=[0-9a-f-]+$/);
-        await expect(past.getByTestId("decision-row")).toHaveCount(2);
+        await expect(past.getByTestId("decision-row")).toHaveCount(1);
         await expect(outside).toHaveCount(0);
         await page.reload();
         await expect(page.getByRole("combobox", { name: "Meeting", exact: true })).toHaveValue(/[0-9a-f-]{36}/);
@@ -95,8 +98,9 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("simple-roadmap")).toBeVisible();
         await openRoadmapItem(page, "setup-import");
         const card = page.getByTestId("floating-card");
-        await expect(card.getByTestId("card-decided-in")).toContainText(`Decided in ${itemNo}: Moved Sample data import`);
-        await card.getByTestId("card-decided-in").getByRole("link", { name: itemNo }).click();
+        // fix4 qa-simple-roadmap-3: the card names the decision by its title, no "D-<n>".
+        await expect(card.getByTestId("card-decided-in")).toContainText("Moved Sample data import");
+        await card.getByTestId("card-decided-in").getByRole("link", { name: "Moved Sample data import" }).click();
         await expect(page).toHaveURL(new RegExp(`/simple/decisions#d-${itemNo.slice(2)}$`));
         await expect(page.locator(`#d-${itemNo.slice(2)}`)).toContainText("Moved Sample data import");
 

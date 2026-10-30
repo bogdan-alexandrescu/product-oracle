@@ -341,6 +341,35 @@ async def test_override_rules(client):
     assert [(o.position, o.reason) for o in active] == [(3, "The first call")]
 
 
+async def test_override_clear_goes_back_to_oracles_rank(client):
+    """qa-simple-plan-4: ``after.clear`` ends the feature's override (no reason, no new pin);
+    its undo puts the pin back; with no override it is a 409."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    r = await w.post(client, "decider", "override_priority", after={"clear": True})
+    assert r.status_code == 409, r.text
+    r = await w.post(client, "decider", "override_priority")
+    assert r.status_code == 201, r.text
+    pin = {"kind": "pin", "position": 1, "above_feature_id": None, "reason": REASON}
+    r = await w.post(client, "decider", "override_priority", before={"override": pin},
+                     after={"clear": True})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert r.json()["change"]["status"] == "applied"
+
+    async def active() -> list[tuple[int | None, str]]:
+        async with tenant_session(ctx.tenant_id) as s:
+            rows = await s.scalars(
+                select(PriorityOverride).where(PriorityOverride.removed_at.is_(None))
+            )
+            return [(o.position, o.reason) for o in rows]
+
+    assert await active() == []
+    undo = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo",
+                             headers=ctx.as_("decider"))  # fmt: skip
+    assert undo.status_code == 201, undo.text
+    assert await active() == [(1, REASON)]
+
+
 async def test_launch_task_needs_a_live_launch(client):
     ctx = await make_people()
     w = await World(ctx).build()

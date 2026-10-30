@@ -22,9 +22,10 @@ Test cards (protects / fails_when / no_claim):
   code already taken falls back to initials; fails_when=a PRD-imported item reads
   initials; no_claim=the web's marks.
 - test_item_card_names_the_prd_section: protects=the item card's reason reads "From <PRD>
-  (draft N): F-06 <heading>." (the PRD code and the section's heading), and the item's
-  name for a key that is no code with no heading (never "section <key>");
-  fails_when=the card reads "section f-06"; no_claim=other reasons.
+  (draft N): <heading>." (the section's heading with no code, qa-simple-roadmap-3; the
+  item's code is its own field), and the item's name for a key that is no code with no
+  heading (never "section <key>"); fails_when=the card reads "section f-06"; no_claim=other
+  reasons.
 - test_next_review_lists_the_rituals_real_attendees: protects=the next review of a
   ritual lists its owner, its attendees and whoever attended the last review held from
   it (the meeting held had 3, the card says 3); fails_when=the card counts only the
@@ -197,7 +198,7 @@ async def test_item_card_names_the_prd_section(client):
         "loop-guards": "F-06",
         "other": None,
     }
-    assert "From Guards Prd (draft 1): F-06 Loop and blast-radius guards." in reasons["loop-guards"]
+    assert "From Guards Prd (draft 1): Loop and blast-radius guards." in reasons["loop-guards"]
     assert "From Guards Prd (draft 1): Other." in reasons["other"]
     assert service.prd_section_label("f-06", None) == "F-06"
     assert service.prd_section_label("f-06", "Loop guards") == "F-06 Loop guards"

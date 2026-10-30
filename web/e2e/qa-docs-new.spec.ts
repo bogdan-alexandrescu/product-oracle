@@ -73,14 +73,15 @@ test.describe("desktop", () => {
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveCount(0);
     await expect(page.getByTestId("recommendation-panel")).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText(/403|Requires the/);
-    await note.getByRole("link", { name: "Back to PRDs" }).click();
+    // qa-docs-35: one way back, the header's crumb.
+    await page.locator("[data-page-back]").getByRole("link", { name: "PRDs" }).click();
     await expect(page).toHaveURL(/\/documents$/);
   });
 
   test("qa-docs-10: a commenter writes a PRD brief but is told up front a roadmap is not theirs to start", async ({ page }) => {
     await open(page, "commenter");
     await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Continue" }).first()).toBeEnabled();
 
     await page.goto("/documents/new?kind=roadmap");
     await expect(page.getByRole("heading", { level: 1, name: "New roadmap" })).toBeVisible();
@@ -103,7 +104,7 @@ test.describe("desktop", () => {
 async function missingFields(page: Page) {
   const title = page.getByRole("textbox", { name: "Title" });
   const problem = page.getByRole("textbox", { name: "What problem does it solve?" });
-  const go = page.getByRole("button", { name: "Continue" });
+  const go = page.getByRole("button", { name: "Continue" }).first();
   await expect(go).toBeEnabled();
   await go.click();
   await expect(page.getByTestId("new-prd-missing")).toHaveText("To continue, give it a title and say what problem it solves.");
@@ -160,7 +161,7 @@ for (const scheme of ["light", "dark"] as const) {
     expect(decodeURIComponent((await picture.getAttribute("src")) ?? "")).toContain("Example feature PRD");
 
     // Template descriptions wrap, whole.
-    const desc = page.getByTestId("template-option-oracle-default").getByText(/^Goal trace, problem alignment/);
+    const desc = page.getByTestId("template-option-oracle-default").getByText(/^Oracle's standard: the goal it serves/);
     await expect(desc).toBeVisible();
     const clipped = await desc.evaluate((el) => getComputedStyle(el).textOverflow === "ellipsis" || el.scrollWidth > el.clientWidth);
     expect(clipped).toBe(false);

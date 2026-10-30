@@ -21,7 +21,7 @@ test("goals in Draft with Oracle: the brief's goals are picked, and a change sti
   await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for teams");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
   await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Raise activation/ }).check();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
@@ -34,14 +34,14 @@ test("goals in Draft with Oracle: the brief's goals are picked, and a change sti
   await goals.getByRole("checkbox", { name: /Grow paid conversion/ }).check();
   await goals.getByRole("checkbox", { name: /Raise activation/ }).uncheck();
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $29.50");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$29.50 estimated");
   await sheet.getByRole("button", { name: "Close Draft with Oracle" }).click();
   await expect(sheet).toHaveCount(0);
 
   // Reopened, the sheet takes up the draft run's goals, not the brief's.
   await page.reload();
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $29.50");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$29.50 estimated");
   await expect(goals.getByRole("checkbox", { name: /Raise activation/ })).not.toBeChecked();
   await expect(goals.getByRole("checkbox", { name: /Grow paid conversion/ })).toBeChecked();
   await sheet.getByRole("button", { name: "Start drafting" }).click();
@@ -68,7 +68,7 @@ test("brief goal rejected since: Draft with Oracle leaves it out, says so, and e
   const goals = sheet.getByRole("group", { name: "Goals this PRD serves" });
   await expect(goals.getByRole("checkbox", { name: /Raise activation/ })).toBeChecked();
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^Estimated \$[\d.]+$/);
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^\$[\d.]+ estimated/);
   await expect(sheet.getByTestId("draft-goals-left-out")).toHaveText(
     "1 goal of this brief is no longer a confirmed goal: this PRD leaves it out.",
   );
@@ -82,7 +82,7 @@ test("New run goals: the dialog picks the goals a Baseline to PRD run serves", a
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "new-run-prd"));
   await login(page);
   await page.getByTestId("nav-runs").click();
-  await page.getByRole("button", { name: "New run" }).click();
+  await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "New run" });
   const goals = dialog.getByRole("group", { name: "Goals this PRD serves" });
   await expect(goals.getByRole("checkbox")).toHaveCount(2);

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { Button, Chip, Icon, Inspector, InspectorSection, LinkButton, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
-import { FRESHNESS } from "@/components/tech-brief";
+import { Button, Chip, Icon, Inspector, InspectorSection, LinkButton, NotFoundPanel, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
+import { FRESHNESS, reasonText, type PrdWords } from "@/components/tech-brief";
 import { ErrorNote } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -26,6 +26,31 @@ function subscribePhone(onChange: () => void) {
 }
 function useIsPhone(): boolean {
   return useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+}
+/** The app's theme: the system's, or the one picked in the user menu (data-theme on <html>). */
+function subscribeScheme(onChange: () => void) {
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  mq.addEventListener("change", onChange);
+  const watch = new MutationObserver(onChange);
+  watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => {
+    mq.removeEventListener("change", onChange);
+    watch.disconnect();
+  };
+}
+/** qa-docs-82: the page's surface colour while the app is dark, else null. */
+function useDarkSurface(): string | null {
+  return useSyncExternalStore(
+    subscribeScheme,
+    () => {
+      const css = getComputedStyle(document.documentElement);
+      if (!css.colorScheme.includes("dark")) return null;
+      const surface = css.getPropertyValue("--surface").trim();
+      // Only a plain colour goes into the frame's style.
+      return /^[#a-z0-9(),.%\s/-]+$/i.test(surface) ? surface : "#1b1f27";
+    },
+    () => null,
+  );
 }
 
 export const DESIGN_KIND: Record<string, string> = { user_flow: "User flow", wireframe: "Wireframes" };
@@ -57,12 +82,8 @@ export function designHref(specId: string, versionId: string): string {
   return `/specs/${specId}/design/${versionId}`;
 }
 
-const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
-const shortHash = (h: string | null | undefined) => (h ? `${h.slice(0, 4)}…${h.slice(-4)}` : "Not recorded");
 const MEDIA: Record<string, string> = { "image/svg+xml": "Drawing (SVG)", "text/html": "Web page (HTML)" };
 
-/** How the page names the PRD a design rests on, and its sections (qa-docs-35). */
-type PrdWords = { slug: string | null; title: string | null; heading: (key: string) => string | null };
 
 /** A PRD slug the reasons name ("section s-5-2 changed in checkout-redesign v2"). */
 const SLUG_IN_REASON = /\b(?:in|of) ([a-z0-9]+(?:-[a-z0-9]+)+)\b/;
@@ -98,13 +119,8 @@ function usePrdWords(spec: Spec | undefined, d: Design | undefined): PrdWords {
 /** A section by its heading ("5.2 Shipping step"), or "a section" while it is not known. */
 const sectionName = (w: PrdWords, key: string) => w.heading(key) ?? "a section";
 
-/** A staleness reason in words: section headings and the PRD's title, never keys or slugs. */
-function reasonText(reason: string, w: PrdWords): string {
-  // A key may hold dots ("s-5.2"), but the period that ends the sentence is kept.
-  let out = reason.replace(/\bsection ([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)/g, (_, key: string) => (w.heading(key) ? `section "${w.heading(key)}"` : "a section"));
-  if (w.slug) out = out.replaceAll(w.slug, w.title ?? "the PRD");
-  return out.charAt(0).toUpperCase() + out.slice(1);
-}
+/** A design version that is not there, said without its id (the API's 404 names it). */
+const DESIGN_MISSING = "This design doesn't exist or was deleted.";
 
 /**
  * v2 screen 4: one flow or wireframe version of a spec (picks.md 4: A's canvas + review
@@ -119,7 +135,9 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
     unwrap(api.GET("/v1/spec-requests/{request_id}", { params: { path: { request_id: specId } } })),
   );
   const designQ = useQuery(`design-artifact|${versionId}`, () =>
-    unwrap(api.GET("/v1/design-artifacts/{version_id}", { params: { path: { version_id: versionId } } })),
+    unwrap(api.GET("/v1/design-artifacts/{version_id}", { params: { path: { version_id: versionId } } })).catch((e) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, DESIGN_MISSING) : e;
+    }),
   );
   const words = usePrdWords(specQ.data, designQ.data);
   const [picked, setPicked] = useState<string | null>(null);
@@ -127,6 +145,26 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const error = designQ.error ?? specQ.error;
+  // qa-shell-7: an old link to a design version, in the app's one not-found pattern.
+  if (designQ.error === DESIGN_MISSING) {
+    const back = specQ.data ? briefHref(specQ.data) : null;
+    return (
+      <NotFoundPanel
+        title="Design not found"
+        icon="search"
+        testId="design-not-found"
+        actions={
+          back && (
+            <LinkButton href={back} variant="primary" icon="back" className="h-10">
+              Back to the tech brief
+            </LinkButton>
+          )
+        }
+      >
+        <p>{DESIGN_MISSING}</p>
+      </NotFoundPanel>
+    );
+  }
   if (error) {
     const back = specQ.data ? briefHref(specQ.data) : null;
     return (
@@ -190,7 +228,6 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
       spec={spec}
       d={d}
       shown={shown}
-      brief={brief}
       reasons={reasons}
       words={words}
       chips={chipsOf("na")}
@@ -219,12 +256,18 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
         action={
           phone ? (
             <Button variant="primary" onClick={() => setSheetOpen(true)}>
-              Review
+              Review the design
             </Button>
           ) : undefined
         }
       />
-      <nav aria-label="Design artifacts" className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
+      {/* qa-docs-81: the line under the tabs is drawn inside the strip, so nothing overflows it
+          upward or down (no stray scroll control); on a phone the tabs wrap, never cut. */}
+      <nav
+        aria-label="Design artifacts"
+        data-testid="design-tabs"
+        className="mb-4 flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--color-line)] max-[600px]:flex-wrap"
+      >
         {(spec.design ?? []).map((a) => {
           const current = a.version.id === v.id;
           return (
@@ -232,7 +275,8 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
               key={a.version.id}
               href={designHref(specId, a.version.id)}
               aria-current={current ? "page" : undefined}
-              className={`-mb-px flex-none border-b-2 px-3 py-2 text-[15px] font-semibold whitespace-nowrap ${
+              title={`${a.title} · v${a.version.number}`}
+              className={`flex-none border-b-2 px-3 py-2 text-[15px] font-semibold whitespace-nowrap max-[600px]:min-w-0 max-[600px]:flex-auto max-[600px]:whitespace-normal max-[600px]:break-words ${
                 current ? "border-accent text-text" : "border-transparent text-text2 hover:text-text"
               }`}
             >
@@ -247,14 +291,18 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
             tone="warn"
             testId="stale-notice"
             action={
+              // qa-docs-83/84: one way to the tech brief, named, for those who settle it there.
               <>
                 {running && spec.regeneration_run_id && <LinkButton href={`/runs/${spec.regeneration_run_id}`}>Open the run</LinkButton>}
-                {brief && <LinkButton href={brief}>Review on tech brief</LinkButton>}
+                {brief && roles.decide && <LinkButton href={brief}>Open the tech brief</LinkButton>}
               </>
             }
           >
             {running ? "Potentially stale, regeneration running" : "Potentially stale"}
-            {reasons.length > 0 && `: ${reasons.join("; ")}`}. Review or reconcile it on the tech brief before approving.
+            {reasons.length > 0 && `: ${reasons.join("; ")}`}.{" "}
+            {roles.decide
+              ? "Review or reconcile it on the tech brief before approving."
+              : "The spec's engineering approvers review it on the tech brief before it can be approved."}
           </Notice>
         )}
         {shown
@@ -309,7 +357,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
                   {requirementName(spec, id)}
                 </Chip>
               ))}
-              <span className="ml-auto text-[13px] text-text2">Shown in a sandboxed frame, no scripts.</span>
+              <span className="ml-auto text-[13px] text-text2">A preview: its links and buttons do nothing.</span>
             </div>
           )}
         </Panel>
@@ -340,10 +388,16 @@ function LoadingState() {
   );
 }
 
-/** An SVG drawn as the whole document of the frame. */
-function asDocument(output: Output, content: string): string {
+/**
+ * An SVG drawn as the whole document of the frame, its labels in a sans-serif like the app's
+ * (the frame loads no fonts). qa-docs-82: in the dark theme the grayscale drawing is turned
+ * light on the page's dark surface, not a bright white box.
+ */
+function asDocument(output: Output, content: string, dark: string | null): string {
   if (output.media_type === "text/html") return content;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><style>html,body{margin:0;background:#fff}svg{display:block;width:100%;height:auto}</style></head><body>${content}</body></html>`;
+  const scheme = dark ? `<meta name="color-scheme" content="dark">` : "";
+  const look = dark ? `html,body{background:${dark}}svg{filter:invert(1) hue-rotate(180deg)}` : "html,body{background:#fff}";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">${scheme}<style>html,body{margin:0}svg{display:block;width:100%;height:auto;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}${look}</style></head><body>${content}</body></html>`;
 }
 
 /**
@@ -351,6 +405,7 @@ function asDocument(output: Output, content: string): string {
  * srcdoc in a sandbox with no permissions: no scripts, no same origin, no forms, no network.
  */
 function OutputFrame({ versionId, output }: { versionId: string; output: Output }) {
+  const dark = useDarkSurface();
   const q = useQuery(`design-output|${versionId}|${output.name}`, () =>
     unwrap(
       api.GET("/v1/design-artifacts/{version_id}/outputs/{name}", {
@@ -361,7 +416,7 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
   );
   return (
     <figure className="m-0 min-w-0 overflow-hidden rounded-button border border-line-strong bg-surface">
-      {/* qa-docs-35: the file by its title; its name, type, size and fingerprint in a closed Details. */}
+      {/* qa-docs-35/79: the file by its title; its name and type in a closed Details (no sizes or fingerprints). */}
       <figcaption className="flex flex-wrap items-start gap-x-2.5 gap-y-1 border-b border-line bg-surface2 px-2.5 py-1.5 text-[13px] text-text2">
         <b className="min-w-0 font-semibold break-words text-text">{output.title ?? output.name}</b>
         <details data-testid="file-details" className="ml-auto min-w-0">
@@ -370,13 +425,7 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
             <dt>File</dt>
             <dd className="break-words text-text">{output.name}</dd>
             <dt>Type</dt>
-            <dd className="text-text">{MEDIA[output.media_type] ?? output.media_type}</dd>
-            <dt>Size</dt>
-            <dd className="tnum text-text">{kb(output.size_bytes)}</dd>
-            <dt>Fingerprint</dt>
-            <dd className="text-text" title={output.sha256}>
-              {shortHash(output.sha256)}
-            </dd>
+            <dd className="text-text">{MEDIA[output.media_type] ?? "A file"}</dd>
           </dl>
         </details>
       </figcaption>
@@ -390,8 +439,8 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
             sandbox=""
             referrerPolicy="no-referrer"
             title={`${output.title ?? output.name} (${output.name})`}
-            srcDoc={asDocument(output, q.data)}
-            className={`block w-full rounded border-0 bg-white ${output.media_type === "text/html" ? "h-[520px] max-[600px]:h-[440px]" : "h-[360px] max-[600px]:h-[220px]"}`}
+            srcDoc={asDocument(output, q.data, dark)}
+            className={`block w-full rounded border-0 ${dark && output.media_type !== "text/html" ? "bg-surface" : "bg-white"} ${output.media_type === "text/html" ? "h-[520px] max-[600px]:h-[440px]" : "h-[360px] max-[600px]:h-[220px]"}`}
           />
         )}
       </div>
@@ -405,7 +454,6 @@ function ReviewInspector({
   spec,
   d,
   shown,
-  brief,
   reasons,
   words,
   chips,
@@ -416,7 +464,6 @@ function ReviewInspector({
   spec: Spec;
   d: Design;
   shown: Output[];
-  brief: string | null;
   reasons: string[];
   words: PrdWords;
   chips: ReactNode;
@@ -445,7 +492,7 @@ function ReviewInspector({
       ]}
     >
       <InspectorSection label={`Verdict on v${v.number}`} testId="verdict">
-        <VerdictSection spec={spec} d={d} brief={brief} roles={roles} readOnly={readOnly} post={post} />
+        <VerdictSection spec={spec} d={d} roles={roles} readOnly={readOnly} post={post} />
       </InspectorSection>
       <AnnotationsSection spec={spec} words={words} outputs={shown} roles={roles} meId={meId} post={post} />
       <InspectorSection label="Version reviews · oldest first" testId="version-reviews">
@@ -468,14 +515,12 @@ function ReviewInspector({
 function VerdictSection({
   spec,
   d,
-  brief,
   roles,
   readOnly,
   post,
 }: {
   spec: Spec;
   d: Design;
-  brief: string | null;
   roles: Roles;
   readOnly: boolean;
   post: (body: Schemas["DesignReviewIn"]) => Promise<void>;
@@ -510,6 +555,11 @@ function VerdictSection({
     );
   }
   const decide = async (kind: Verdict) => {
+    // qa-docs-80: said before anything is sent, in plain words.
+    if (kind !== "approved" && !note.trim()) {
+      setErr("Add a note to request changes or reject.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -545,16 +595,9 @@ function VerdictSection({
         </Button>
       </div>
       {approveOff && (
+        // qa-docs-83: the way to the tech brief is the stale notice's button, not a second link here.
         <p data-testid="approve-off" className="text-[13px] text-text2">
           {approveOff}
-          {stale && brief && (
-            <>
-              {" "}
-              <Link href={brief} className="font-medium text-accent-ink hover:underline">
-                Go to the tech brief
-              </Link>
-            </>
-          )}
         </p>
       )}
       {roles.decide && (
@@ -623,8 +666,10 @@ function AnnotationsSection({
     </span>
   );
   const label = outputs.length === 1 ? `Annotations · ${outputs[0].title ?? outputs[0].name}` : "Annotations";
+  // qa-docs-83: the heading keeps its line; the filter chips sit below it.
   return (
-    <InspectorSection label={label} tools={total > 0 ? filter : undefined} testId="annotations">
+    <InspectorSection label={<span data-testid="annotations-heading">{label}</span>} testId="annotations">
+      {total > 0 && <div className="-mt-1 mb-3 flex flex-wrap gap-1">{filter}</div>}
       {total === 0 ? (
         <p className="text-sm text-text2">No annotations on this file.</p>
       ) : (
@@ -807,22 +852,17 @@ function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design;
   const runId = str("run_id");
   const deps = d.lineage?.dependencies ?? [];
   const prd = words.title ?? "The PRD";
-  // qa-docs-35: names, not ids; the technical record stays in a closed Details.
-  const technical = [
-    str("prompt_version") && { k: "Prompt", value: str("prompt_version") },
-    str("runner_profile") && { k: "Runner", value: str("runner_profile") },
-    v.composition_revision != null && { k: "Composition revision", value: String(v.composition_revision) },
-    v.content_hash && { k: "Content fingerprint", value: shortHash(v.content_hash), title: v.content_hash },
-  ].filter((x): x is { k: string; value: string; title?: string } => !!x);
+  // qa-docs-35/79: names, not ids. The prompt, runner and fingerprints are Oracle's own
+  // record: the run that made the version holds them, one click away.
   return (
     <div className="flex flex-col">
       {v.summary && <p className="mb-1.5 text-sm">{v.summary}</p>}
       <MetaRow k="Made by">
         {runId ? (
           <>
-            Oracle,{" "}
+            Oracle ·{" "}
             <Link href={`/runs/${runId}`} className="text-accent-ink hover:underline">
-              in a run
+              See how it was made
             </Link>
           </>
         ) : str("origin") === "upload" ? (
@@ -864,18 +904,6 @@ function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design;
               ? prd
               : "Nothing recorded"}
       </MetaRow>
-      {technical.length > 0 && (
-        <details data-testid="version-details" className="mt-1.5 text-sm">
-          <summary className="cursor-pointer text-text2 select-none hover:text-text">Technical details</summary>
-          <div className="mt-1 flex flex-col">
-            {technical.map((t) => (
-              <MetaRow key={t.k} k={t.k}>
-                <span title={t.title}>{t.value}</span>
-              </MetaRow>
-            ))}
-          </div>
-        </details>
-      )}
     </div>
   );
 }

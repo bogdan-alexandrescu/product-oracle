@@ -75,28 +75,47 @@ function Touches({ b }: { b: TechBrief }) {
       {b.touches.length === 0 ? (
         <p className="text-text2">Nothing listed</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table aria-label="What it touches" className="w-full text-left text-[14px]">
-            <thead className="text-[13px] text-text2">
-              <tr>
-                <th className="py-1 pr-3 font-semibold">Area</th>
-                <th className="py-1 pr-3 font-semibold">Kind</th>
-                <th className="py-1 pr-3 font-semibold">Change</th>
-                <th className="py-1 font-semibold">In the code map</th>
-              </tr>
-            </thead>
-            <tbody>
-              {b.touches.map((t, i) => (
-                <tr key={`${t.area}-${i}`} className="border-t border-line align-top">
-                  <td className="py-1.5 pr-3 break-words">{t.area}</td>
-                  <td className="py-1.5 pr-3">{KIND[t.kind] ?? t.kind}</td>
-                  <td className="py-1.5 pr-3">{CHANGE[t.change] ?? t.change}</td>
-                  <td className="py-1.5 break-words">{t.ref ? refName(t.ref) : <span className="text-text2">Not mapped</span>}</td>
+        <>
+          {/* qa-docs-85: a table from 601 px up; on a phone each touch is a short stack of
+              label and value, so no cell wraps mid-phrase. */}
+          <div className="overflow-x-auto max-[600px]:hidden">
+            <table aria-label="What it touches" className="w-full text-left text-[14px]">
+              <thead className="text-[13px] text-text2">
+                <tr>
+                  <th className="py-1 pr-3 font-semibold">Area</th>
+                  <th className="py-1 pr-3 font-semibold">Kind</th>
+                  <th className="py-1 pr-3 font-semibold">Change</th>
+                  <th className="py-1 font-semibold">In the code map</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {b.touches.map((t, i) => (
+                  <tr key={`${t.area}-${i}`} className="border-t border-line align-top">
+                    <td className="py-1.5 pr-3 break-words">{t.area}</td>
+                    <td className="py-1.5 pr-3">{KIND[t.kind] ?? t.kind}</td>
+                    <td className="py-1.5 pr-3">{CHANGE[t.change] ?? t.change}</td>
+                    <td className="py-1.5 break-words">{t.ref ? refName(t.ref) : <span className="text-text2">Not mapped</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ul aria-label="What it touches" data-testid="brief-touches-stack" className="hidden flex-col max-[600px]:flex">
+            {b.touches.map((t, i) => (
+              <li key={`${t.area}-${i}`} className="border-t border-line py-2 first:border-t-0 first:pt-0">
+                <p className="font-semibold break-words">{t.area}</p>
+                <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[14px]">
+                  <dt className="whitespace-nowrap text-text2">Kind</dt>
+                  <dd>{KIND[t.kind] ?? t.kind}</dd>
+                  <dt className="whitespace-nowrap text-text2">Change</dt>
+                  <dd>{CHANGE[t.change] ?? t.change}</dd>
+                  <dt className="whitespace-nowrap text-text2">In the code map</dt>
+                  <dd className="break-words">{t.ref ? refName(t.ref) : <span className="text-text2">Not mapped</span>}</dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {b.reuse.length > 0 && (
         <p className="mt-2 break-words text-text2">

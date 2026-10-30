@@ -93,7 +93,7 @@ test("qa-company-6 (phone): tapping a ritual opens it in a sheet", async ({ page
   await ritualRow(page, "Investor update").click();
   const sheet = page.getByTestId("ritual-sheet");
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByTestId("ritual-inspector")).toContainText("Investor update");
+  await expect(sheet.getByRole("heading", { name: "Investor update" })).toBeVisible();
   const box = await sheet.getByRole("button", { name: "Resume" }).boundingBox();
   expect(box).toBeTruthy();
   expect(box!.y + box!.height).toBeLessThanOrEqual(PHONE.height);
@@ -115,7 +115,7 @@ test("qa-company-21: the zone is named once, one way, and no time carries its ow
 
   await ritualRow(page, "Monthly roadmap refresh").getByTestId("next-pre-read").click();
   await expect(page.getByTestId("occurrence-zone")).toHaveText("Times are in Pacific Time (Los Angeles)");
-  await expect(page.getByTestId("ritual-block").first()).toContainText("Data as of");
+  await expect(page.getByTestId("occurrence-as-of")).toContainText("Data as of");
   await expect(page.locator("main")).not.toContainText(/\b(PT|PST|PDT)\b/);
 });
 
@@ -183,16 +183,21 @@ test("qa-company-34 (phone): the (i) sits beside the cost text and each row's Wh
   await page.setViewportSize(PHONE);
   await openRituals(page);
   const line = page.getByTestId("ritual-summaries");
+  const first = await line.getByTestId("summaries-estimate").boundingBox();
+  // fix4-company review: the phone's layout is drawn from the first paint; nothing moves the
+  // page once it has loaded (the tabs wrapping, the add button joining them).
+  await page.waitForTimeout(800);
   const text = await line.getByTestId("summaries-estimate").boundingBox();
   const tip = await line.getByRole("button", { name: "About the summaries estimate" }).boundingBox();
-  expect(text && tip).toBeTruthy();
+  expect(text && tip && first).toBeTruthy();
+  expect(text!.y).toBe(first!.y);
   expect(tip!.y).toBeLessThan(text!.y + text!.height);
   expect(tip!.x).toBeGreaterThan(text!.x);
   for (const title of ["Investor update", "Weekly goals check-in"]) {
     const row = ritualRow(page, title);
     await expect(row).not.toContainText("Next —");
     const when = await row.locator("td", { hasText: /^(Mondays|First)/ }).first().boundingBox();
-    const last = await row.locator("td", { hasText: "Last pre-read" }).boundingBox();
+    const last = await row.locator("td", { hasText: "Latest pre-read" }).boundingBox();
     expect(when && last).toBeTruthy();
     expect(Math.abs(when!.x - last!.x)).toBeLessThanOrEqual(1);
     expect(last!.y).toBeGreaterThanOrEqual(when!.y + when!.height - 1);
@@ -205,7 +210,7 @@ test("qa-company-35 (phone): the occurrence's name and state are its heading tog
   await page.setViewportSize(PHONE);
   await openRituals(page);
   await ritualRow(page, "Monthly roadmap refresh").getByTestId("next-pre-read").click();
-  const heading = page.getByRole("heading", { level: 1, name: "Monthly roadmap refresh" });
+  const heading = page.getByRole("heading", { level: 2, name: "Monthly roadmap refresh" });
   const h = await heading.boundingBox();
   const chip = await page.getByTestId("occurrence-state").boundingBox();
   expect(h && chip).toBeTruthy();

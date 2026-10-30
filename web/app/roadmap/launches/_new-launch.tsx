@@ -19,7 +19,7 @@ const HORIZON: Record<string, string> = { now: "Now", next: "Next", later: "Late
  * As the API (oracle.roadmap.views.track_out): a track's roadmap is its latest approved version
  * with items, else its latest; a later version in review keeps the approved one here.
  */
-const approvedRoadmap = (t: Track | undefined) => (t?.roadmap?.approved && t.roadmap.version ? t.roadmap : null);
+export const approvedRoadmap = (t: Track | undefined) => (t?.roadmap?.approved && t.roadmap.version ? t.roadmap : null);
 const roadmapName = (r: { title: string }) => docLabel({ title: r.title, kind: "roadmap" });
 
 /**
@@ -117,37 +117,7 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
         <legend className="mb-1 text-sm font-semibold text-text2">
           Items{roadmap ? ` · ${roadmapName(roadmap)}, version ${roadmap.version}` : ""}
         </legend>
-        {tracksQ.data && !track && (
-          <p className="text-sm text-text2" data-testid="new-launch-blocked">
-            No product track yet. A track starts when a PRD is approved; then build and approve its roadmap in{" "}
-            <Link href="/plan/documents" className="font-medium text-accent-ink underline-offset-2 hover:underline">
-              Roadmap documents
-            </Link>
-            .
-          </p>
-        )}
-        {track && !roadmap && (
-          <p className="text-sm text-text2" data-testid="new-launch-blocked">
-            {track.title} has no approved roadmap yet, and a launch groups items of an approved roadmap.{" "}
-            {track.roadmap ? (
-              <>
-                Approve{" "}
-                <Link href={`/documents/${track.roadmap.slug}`} className="font-medium text-accent-ink underline-offset-2 hover:underline">
-                  {roadmapName(track.roadmap)}
-                </Link>{" "}
-                first.
-              </>
-            ) : (
-              <>
-                Build its roadmap in{" "}
-                <Link href="/plan/documents" className="font-medium text-accent-ink underline-offset-2 hover:underline">
-                  Roadmap documents
-                </Link>{" "}
-                and approve it first.
-              </>
-            )}
-          </p>
-        )}
+        {tracksQ.data && !roadmap && <NoRoadmapReason track={track} />}
         {roadmap && itemsQ.data && items.length === 0 && <p className="text-sm text-text2">The approved roadmap has no items.</p>}
         <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
           {items.map((i) => (
@@ -182,5 +152,45 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
       )}
       {problem && <ErrorNote>{problem}</ErrorNote>}
     </Dialog>
+  );
+}
+
+/**
+ * Why no launch can be planned yet, and the way forward (fix4 qa-plan-13: Launches says it by
+ * its disabled New launch too): no track, or the track's roadmap not approved yet.
+ */
+export function NoRoadmapReason({ track, testId = "new-launch-blocked" }: { track: Track | undefined; testId?: string }) {
+  const link = "font-medium text-accent-ink underline-offset-2 hover:underline";
+  if (!track)
+    return (
+      <p className="text-sm text-text2" data-testid={testId}>
+        No product track yet. A track starts when a PRD is approved; then build and approve its roadmap in{" "}
+        <Link href="/plan/documents" className={link}>
+          Roadmap documents
+        </Link>
+        .
+      </p>
+    );
+  return (
+    <p className="text-sm text-text2" data-testid={testId}>
+      {track.title} has no approved roadmap yet, and a launch groups items of an approved roadmap.{" "}
+      {track.roadmap ? (
+        <>
+          Approve{" "}
+          <Link href={`/documents/${track.roadmap.slug}`} className={link}>
+            {roadmapName(track.roadmap)}
+          </Link>{" "}
+          first.
+        </>
+      ) : (
+        <>
+          Build its roadmap in{" "}
+          <Link href="/plan/documents" className={link}>
+            Roadmap documents
+          </Link>{" "}
+          and approve it first.
+        </>
+      )}
+    </p>
   );
 }

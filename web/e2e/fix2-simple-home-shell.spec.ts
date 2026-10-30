@@ -88,16 +88,20 @@ test("qa-simple-home-2: the phone's More sheet closes on Escape, a tap outside a
   await expect(more).toBeFocused();
   await expect(more).toHaveAttribute("aria-expanded", "false");
 
+  // qa-simple-home-19: the sheet dims the page; a tap on the dimmed page (over the title) closes it.
   await more.click();
   await expect(sheet).toBeVisible();
-  await page.getByTestId("phone-title").click();
+  const title = await box(page.getByTestId("phone-title"));
+  await page.getByTestId("simple-more-sheet").getByTestId("sheet-scrim").click({ position: { x: title.x + 5, y: title.y + 5 } });
   await expect(sheet).toBeHidden();
 
+  // Its close button closes it too; the header's Ask then opens Ask.
   await more.click();
   await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Close More" }).click();
+  await expect(sheet).toBeHidden();
   await page.getByTestId("phone-ask").click();
   await expect(page.getByTestId("phone-ask-sheet")).toBeVisible();
-  await expect(sheet).toBeHidden();
 });
 
 test("qa-simple-home-29: the phone's tabs and More sheet show the rail's counts", async ({ page }) => {
@@ -185,8 +189,12 @@ test("qa-simple-home-31: the rail's, the More sheet's and the account menu's swi
   await page.getByTestId("simple-tab-more").click();
   const sheet = page.getByTestId("mode-switch-sheet");
   await expect(sheet).toBeVisible();
-  expect(await look(sheet.locator('[aria-checked="true"]'))).toBe(railOn);
-  expect(await look(sheet.locator('[aria-checked="false"]'))).toBe(railOff);
+  // fix4 (qa-simple-home-19): the More sheet is the ds Sheet, whose controls are 44 px touch
+  // targets; the rest of the look is the rail's.
+  const noHeight = (s: string) => s.split(" | ").filter((_, i) => i !== 6).join(" | ");
+  expect(noHeight(await look(sheet.locator('[aria-checked="true"]')))).toBe(noHeight(railOn));
+  expect(noHeight(await look(sheet.locator('[aria-checked="false"]')))).toBe(noHeight(railOff));
+  expect((await sheet.locator('[aria-checked="true"]').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await track(sheet)).toBe(railTrack);
 });
 
@@ -272,7 +280,7 @@ for (const phone of [false, true]) {
     }
     // Every label in full (wrapped on a phone, never "No milestone…").
     const label = strip.getByTestId("plan-strip-label").filter({ hasText: /^No milestone/ });
-    await expect(label).toHaveText(/^No milestone · \d+ items?$/);
+    await expect(label).toHaveText(/^No milestone · \d+ roadmap items?$/);
     for (const l of await strip.getByTestId("plan-strip-label").all())
       expect(await l.evaluate((el) => el.scrollWidth <= el.clientWidth && getComputedStyle(el).textOverflow !== "ellipsis")).toBe(true);
     // A solid bar stands out from its card in dark (contrast at least 1.5:1).

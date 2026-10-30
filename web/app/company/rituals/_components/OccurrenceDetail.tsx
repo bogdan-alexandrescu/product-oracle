@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { FindingCard } from "@/app/company/market/_components/FindingCard";
 import { MarkdownBody } from "@/components/MarkdownBody";
-import { Button, Chip, LinkButton, PageHeader, Panel } from "@/components/ds";
+import { Button, Chip, LinkButton, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
@@ -16,6 +16,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
+import { CompanyHeader } from "../../_nav";
 import { STATE_KIND, STATE_LABEL, localTime, zoneTime, type Occurrence } from "./lib";
 import { MetricsTable, VarianceCards, type MetricRow, type VarianceRow } from "./MetricBlocks";
 
@@ -72,32 +73,39 @@ export function OccurrenceDetail({ id }: { id: string }) {
     return () => clearInterval(t);
   }, [running, reload]);
 
-  if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
-  if (!occ) return <Loading />;
+  if (q.error || !occ)
+    return (
+      <>
+        <CompanyHeader />
+        {q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}
+      </>
+    );
   const blocks = rebuildShown(occ, occ.pre_read.blocks as unknown as Block[]);
   const isOwner = me?.user_id === occ.owner_id;
   const ended = q.data!.at >= Date.parse(occ.ends_at);
   // Held when its Simple review meeting ended, with nothing recorded yet: the owner still records it.
   const heldByMeeting = occ.status === "held" && !occ.notes && occ.decision_ids.length === 0;
   const recordable = isOwner && ((ended && (occ.status === "ready" || occ.status === "missed")) || heldByMeeting);
+  // qa-company-35: the blocks' one "Data as of", said once under the heading when they share it.
+  const asOfs = new Set(blocks.flatMap((b) => (b.as_of ? [localTime(b.as_of)] : [])));
+  const sharedAsOf = asOfs.size === 1 && blocks.every((b) => b.as_of) ? [...asOfs][0] : null;
 
   return (
     <>
-      {/* qa-company-35: the name and its state together as the heading, on a phone too. */}
-      <PageHeader
-        phoneTitle
-        title={occ.title}
-        back={
-          <Link href="/company/rituals" className="hover:underline">
-            ← Rituals
-          </Link>
-        }
-        status={
+      {/* qa-company-34: the Company header and tabs as on every Company page, then the
+          occurrence's own heading: the way back, its name and its state together (qa-company-35). */}
+      <CompanyHeader />
+      <div className="mb-1 flex flex-col gap-1" data-testid="occurrence-heading">
+        <Link href="/company/rituals" className="self-start text-sm text-text2 hover:underline">
+          ← Rituals
+        </Link>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="min-w-0 font-display text-[22px] leading-7 font-bold tracking-heading break-words">{occ.title}</h2>
           <Chip kind={STATE_KIND[occ.status]} dot data-testid="occurrence-state">
             {STATE_LABEL[occ.status]}
           </Chip>
-        }
-      />
+        </div>
+      </div>
       <p className="mb-3 flex flex-wrap gap-x-3 text-sm text-text2" data-testid="occurrence-meta">
         <span className="tnum" title={zoneTime(occ.due_at, occ.timezone)}>
           {localTime(occ.due_at)}
@@ -108,6 +116,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
         </span>
         {/* qa-company-21: the zone named once; the times on the page are in it. */}
         <span data-testid="occurrence-zone">Times are in {zoneName(zone)}</span>
+        {sharedAsOf && <span data-testid="occurrence-as-of">Data as of {sharedAsOf}</span>}
       </p>
       <div className="flex flex-col gap-3">
         {occ.kind === "baseline_rebuild" ? (
@@ -127,9 +136,9 @@ export function OccurrenceDetail({ id }: { id: string }) {
           <div className="grid grid-cols-2 gap-3 max-[900px]:grid-cols-1">
             {blocks.map((b) =>
               b.key === "competitor_web" ? (
-                <WebFindingsCard key={b.key} block={b} occurrenceId={occ.id} canDecide={can("promote_web_finding")} />
+                <WebFindingsCard key={b.key} block={b} occurrenceId={occ.id} canDecide={can("promote_web_finding")} showAsOf={!sharedAsOf} />
               ) : (
-                <BlockCard key={b.key} block={b} live={live} onChanged={varianceQ.reload} />
+                <BlockCard key={b.key} block={b} live={live} onChanged={varianceQ.reload} showAsOf={!sharedAsOf} />
               ),
             )}
           </div>
@@ -166,7 +175,18 @@ function openVariances(blocks: Block[], live: Map<string, Schemas["VarianceOut"]
   return rows.filter((r) => (live.get(r.variance_id)?.status ?? r.status) === "open").length;
 }
 
-function BlockCard({ block, live, onChanged }: { block: Block; live: Map<string, Schemas["VarianceOut"]>; onChanged: () => Promise<void> }) {
+function BlockCard({
+  block,
+  live,
+  onChanged,
+  showAsOf,
+}: {
+  block: Block;
+  live: Map<string, Schemas["VarianceOut"]>;
+  onChanged: () => Promise<void>;
+  /** Its own "Data as of", when the blocks do not all share one (qa-company-35). */
+  showAsOf: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   return (
@@ -177,7 +197,7 @@ function BlockCard({ block, live, onChanged }: { block: Block; live: Map<string,
     >
       <header className="border-b border-line px-4 py-2.5">
         <h2 className="font-display text-[17px] font-bold">{block.title}</h2>
-        {block.as_of && <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>}
+        {showAsOf && block.as_of && <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>}
       </header>
       {block.rows.length === 0 ? (
         <p className="px-4 py-3 text-sm text-text2">Nothing this time</p>
@@ -217,8 +237,9 @@ function BlockCard({ block, live, onChanged }: { block: Block; live: Map<string,
         <ul className="flex flex-col gap-1 px-4 py-3 text-[15px]">
           {block.rows.map((r, i) => (
             <li key={i} className="min-w-0 [overflow-wrap:anywhere]">
+              {/* qa-company-36: a row that opens something (D-5 in Decisions) reads as a link. */}
               {r.href ? (
-                <Link href={r.href} className="hover:underline">
+                <Link href={r.href} className="text-accent-ink hover:underline">
                   {rowText(r)}
                 </Link>
               ) : (
@@ -238,7 +259,7 @@ function BlockCard({ block, live, onChanged }: { block: Block; live: Map<string,
  * Not vetted with its host and date, and Promote and Dismiss for approvers and owners. Rows
  * without a finding ("Web search is not set up") show as text.
  */
-function WebFindingsCard({ block, occurrenceId, canDecide }: { block: Block; occurrenceId: string; canDecide: boolean }) {
+function WebFindingsCard({ block, occurrenceId, canDecide, showAsOf }: { block: Block; occurrenceId: string; canDecide: boolean; showAsOf: boolean }) {
   const q = useQuery(`occurrence-web-findings|${occurrenceId}`, async () => {
     const [open, promoted] = await Promise.all(
       (["open", "promoted"] as const).map((status) =>
@@ -253,7 +274,7 @@ function WebFindingsCard({ block, occurrenceId, canDecide }: { block: Block; occ
     <section data-testid="ritual-block" data-key={block.key} className="min-w-0 rounded-panel border border-line bg-surface shadow-panel">
       <header className="border-b border-line px-4 py-2.5">
         <h2 className="font-display text-[17px] font-bold">{block.title}</h2>
-        {block.as_of && <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>}
+        {showAsOf && block.as_of && <p className="text-[13px] text-text2">Data as of {localTime(block.as_of)}</p>}
       </header>
       <div className="flex flex-col divide-y divide-line px-4">
         {q.error && <ErrorNote>{q.error}</ErrorNote>}

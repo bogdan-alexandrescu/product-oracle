@@ -31,9 +31,20 @@ async function openBoard(page: Page) {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
+  await showPickers(page);
+}
+
+/** Opens a phone's Filters (qa-shell-24: its pickers sit behind it; a tap outside closes them). */
+async function showPickers(page: Page) {
+  if ((page.viewportSize()?.width ?? 1366) > 600) return;
+  const toggle = page.getByTestId("filters-toggle");
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(page.getByTestId("filter-pickers")).toBeVisible();
 }
 
 async function pick(page: Page, roadmap: string) {
+  await showPickers(page);
   await page.getByTestId("filter-roadmap").selectOption({ label: roadmap });
   await expect(page.getByTestId("roadmap-scope")).toHaveText(roadmap);
 }
@@ -73,7 +84,10 @@ async function quickAdd(page: Page, phone: boolean, title: string, where: string
   await sheet.getByLabel("Title").fill(title);
   await sheet.getByLabel("Where").selectOption({ label: where });
   if (roadmap && phone) {
-    await expect(sheet.getByRole("button", { name: button, exact: true })).toBeDisabled();
+    // fix4 qa-simple-roadmap-14: nothing goes until a roadmap is chosen, and the sheet says so.
+    await sheet.getByRole("button", { name: button, exact: true }).click();
+    await expect(sheet.getByRole("alert").filter({ hasText: "Pick the roadmap it goes on" })).toBeVisible();
+    await expect(sheet).toBeVisible();
     await sheet.getByLabel("Roadmap").selectOption({ label: roadmap });
   } else if (!roadmap) {
     await expect(sheet.getByLabel("Roadmap")).toHaveCount(0);

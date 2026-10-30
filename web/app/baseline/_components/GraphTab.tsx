@@ -68,7 +68,12 @@ function AddSubgoal({
     if (title.trim()) onAdd(title.trim());
   };
   return (
-    <form aria-label="Add subgoal" onSubmit={submit} className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3 max-[600px]:px-3">
+    <form
+      aria-label="Add subgoal"
+      onSubmit={submit}
+      // Under its goal's row (qa-plan-37): the row's cell gives the padding.
+      className="flex flex-wrap items-end gap-2 pt-1"
+    >
       <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
         <span className="text-text2">
           Subgoal of {namedText(parent)}
@@ -91,8 +96,11 @@ function AddSubgoal({
   );
 }
 
-/** A phone goal row's actions: tighter padding, so Make measurable, Confirm and Add subgoal share one row at 390 px (qa-plan-26). */
-const PHONE_ACTION = "max-[600px]:px-2!";
+/**
+ * A goal row's actions: one width on a wide screen, so they line up (qa-plan-39); on a phone tighter
+ * padding, so Make measurable, Confirm and Add subgoal share one row at 390 px (qa-plan-26).
+ */
+const PHONE_ACTION = "min-[601px]:w-28 max-[600px]:px-2!";
 
 /** A goal's typed cell, or its text in grey with the tooltip saying it is not checked yet. */
 function TextFallback({ attr, text }: { attr: string; text: unknown }) {
@@ -135,31 +143,40 @@ function TitleButton({
 }
 
 /**
- * Progress in words (qa-plan-2): what the percentage is measured from, so it squares with the
- * value and target Plan shows. With a start: "50% of the way from 31%"; without one, the
- * current value against the target: "84% of target"; a parent: "60% from subgoals".
+ * Progress in words (qa-plan-2), in one form (qa-plan-35): how far along the way to the target,
+ * and from what it is measured, so it squares with the value and target Plan shows. With a
+ * start: "50% of the way from 31% to ≥ 45%"; without one: "78% of the way to ≥ 12%"; a
+ * parent: "60% of the way to target, from subgoals".
  */
 export function progressWords(g: EntityOut): { value: string; words: string; tip: string } | null {
   const p = g.progress;
   if (p?.value == null) return null;
   const pct = formatPercent(p.value);
-  if (p.source === "subgoals") return { value: pct, words: "from subgoals", tip: `${pct} of the way to target, rolled up from its subgoals` };
   const a = g.attrs ?? {};
   const unit = typeof a.unit === "string" && a.unit ? a.unit : null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const [start, current, target] = [num(a.start), num(a.current), num(a.target)];
   const fig = (v: number) => (unit && unit !== "count" ? figure(v, unit) : String(v));
   const goal = typedTarget(a)?.short ?? (target != null ? fig(target) : "target");
-  const now = current != null ? `${fig(current)} now` : null;
+  if (p.source === "subgoals") {
+    return { value: pct, words: `of the way to ${goal}, from subgoals`, tip: `${pct} of the way to ${goal}, rolled up from its subgoals` };
+  }
+  const now = current != null ? `; ${fig(current)} now` : "";
   if (start != null && target != null && start !== target) {
     return {
       value: pct,
-      words: `of the way from ${fig(start)}`,
-      tip: `${pct} of the way from ${fig(start)} (start) to ${goal}${now ? `; ${now}` : ""}`,
+      words: `of the way from ${fig(start)} to ${goal}`,
+      tip: `${pct} of the way from ${fig(start)} (start) to ${goal}${now}`,
     };
   }
-  return { value: pct, words: "of target", tip: `${now ? `${now}: ` : ""}${pct} of the target ${goal}` };
+  return { value: pct, words: `of the way to ${goal}`, tip: `${pct} of the way to ${goal}${now}` };
 }
+
+/** The goals interview's button, in plain words (qa-plan-40): "Ask Oracle to sharpen 2 goals". */
+export const sharpenLabel = (n: number) => `Ask Oracle to sharpen ${n} ${n === 1 ? "goal" : "goals"}`;
+
+/** Fill from text's button and its question's action (qa-plan-40): "Read targets from 1 goal's text". */
+export const fillLabel = (n: number) => `Read targets from ${n} ${n === 1 ? "goal's" : "goals'"} text`;
 
 /** Fill from text's question: which goals it saves to, and what it reads. */
 function fillAsk(goals: EntityOut[]) {
@@ -171,9 +188,8 @@ function fillAsk(goals: EntityOut[]) {
         .map(([k, v]) => `${k.slice(0, -5).replaceAll("_", " ")} “${String(v)}”`);
       return texts.length ? `${g.title} (${texts.join(", ")})` : g.title;
     });
-  const n = names.length;
   return {
-    action: `Fill ${n} ${n === 1 ? "goal" : "goals"} from text`,
+    action: fillLabel(names.length),
     message: `Oracle reads the text and saves it as typed fields on ${names.join("; ")}. A locked goal gets a proposal instead; ranges and owner names stay as text.`,
   };
 }
@@ -375,7 +391,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         return p ? (
           <span data-attr="progress" data-source={g.progress?.source} className="tnum" title={p.tip}>
             {/* What the number is and what it is measured from (qa-plan-43, qa-plan-2):
-                "50% of the way from 31%", "84% of target", "60% from subgoals". */}
+                "50% of the way from 31% to ≥ 45%", "78% of the way to ≥ 12%" (qa-plan-35). */}
             {p.value} <span className="text-sm text-text2">{p.words}</span>
           </span>
         ) : (
@@ -452,7 +468,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       key: "act",
       header: <span className="sr-only">Action</span>,
       // The whole button: nothing in the action column truncates. One button a line, so the
-      // column stays narrow and the goal's name keeps the room (qa-plan-2).
+      // column stays narrow and the goal's name keeps the room (qa-plan-2); each the same width,
+      // right-aligned, so Confirm and Add subgoal line up row to row (qa-plan-39).
       width: canWrite ? "136px" : "8px",
       // On a phone: the row's last line, every action in one row under target and progress (qa-plan-26).
       className: "overflow-visible max-[600px]:order-5! max-[600px]:ml-0! max-[600px]:basis-full!",
@@ -528,7 +545,10 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         }
       >
         {groups.length === 0 ? (
-          <p className="px-4 py-8 text-center text-text2">No features yet</p>
+          // qa-shell-9: the next step, only for a role that can take it.
+          <p className="px-4 py-8 text-center text-text2" data-testid="features-empty">
+            {canWrite ? "No features yet. Add one, or draft them from your sources with Build baseline." : "No features yet. They appear here once someone adds one."}
+          </p>
         ) : (
           <>
           {/* What the marks mean, in words beside them (prod-7). */}
@@ -560,7 +580,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             {onInterviewVague && vague > 0 && (
               <>
                 <Button disabled={busy} onClick={onInterviewVague}>
-                  {`Interview vague goals (${vague})`}
+                  {sharpenLabel(vague)}
                 </Button>
                 <InfoTip label="the goals interview">
                   Oracle asks one question at a time in a discussion on the goal and proposes measurable versions; an
@@ -578,7 +598,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
                   if (await confirmInPage(fillAsk(goals))) onFill();
                 }}
               >
-                {`Fill goals from text (${toFill} ${toFill === 1 ? "goal" : "goals"})`}
+                {fillLabel(toFill)}
               </Button>
               <InfoTip label="Fill from text">
                 Oracle reads the goals&apos; targets, values and horizons still written as text, with the rules Home uses. A
@@ -589,20 +609,6 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           </>
         }
       >
-        {adding && onAddSubgoal && (
-          <AddSubgoal
-            key={adding.id}
-            parent={tree.get(adding.id) ?? named(adding.title, adding.key)}
-            busy={busy}
-            onCancel={() => setAdding(null)}
-            onAdd={async (title) => {
-              if (await onAddSubgoal(adding, title)) {
-                fold(adding.id, true);
-                setAdding(null);
-              }
-            }}
-          />
-        )}
         {goalsNote && vague > 0 && (
           <p className="border-b border-line px-4 py-3 text-sm text-text2 max-[600px]:px-3" data-testid="goals-observe">
             {goalsNote}
@@ -611,7 +617,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         {goals.length === 0 ? (
           // No table to draw yet: a header band over nothing would stop short of the panel (qa-onboarding-26).
           <p className="px-4 py-8 text-center text-text2" data-testid="table-empty">
-            No goals yet
+            {canWrite ? "No goals yet. Add one, or draft them from your sources with Build baseline." : "No goals yet. They appear here once someone adds one."}
           </p>
         ) : (
         <DataTable
@@ -622,6 +628,23 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           selected={selectedId}
           onSelect={(id) => onOpen(id)}
           rowProps={(g) => ({ "data-testid": `goal-${g.key}` })}
+          // qa-plan-37: Add subgoal opens right under the goal it is for, not above the table.
+          detail={(g) =>
+            adding?.id === g.id && onAddSubgoal ? (
+              <AddSubgoal
+                key={adding.id}
+                parent={tree.get(adding.id) ?? named(adding.title, adding.key)}
+                busy={busy}
+                onCancel={() => setAdding(null)}
+                onAdd={async (title) => {
+                  if (await onAddSubgoal(adding, title)) {
+                    fold(adding.id, true);
+                    setAdding(null);
+                  }
+                }}
+              />
+            ) : null
+          }
           empty="No goals yet"
         />
         )}
@@ -667,7 +690,8 @@ function Ledger({
   const cols = 3 + goals.length;
   const th = "bg-surface2 px-2 text-[13px] leading-4 font-semibold text-text2";
   return (
-    <div className="min-w-0 overflow-clip">
+    // A container: beside an open drawer the columns narrow before the feature's name does (qa-plan-7).
+    <div className="@container min-w-0 overflow-clip">
       <table
         aria-label="Feature × goal"
         role="table"
@@ -675,14 +699,14 @@ function Ledger({
       >
         <colgroup>
           <col />
-          <col className="w-[132px] max-[600px]:hidden" />
-          <col className="w-[96px] max-[600px]:hidden" />
+          <col className="w-[132px] @max-[900px]:w-[112px] max-[600px]:hidden" />
+          <col className="w-[96px] @max-[900px]:w-[88px] max-[600px]:hidden" />
           {goals.map((g) => (
-            <col key={g.id} className="w-[124px] max-[1100px]:w-[96px] max-[600px]:w-[52px]" />
+            <col key={g.id} className="w-[148px] @max-[900px]:w-[96px] max-[600px]:w-[52px]" />
           ))}
         </colgroup>
-        {/* A compact header (qa-plan-28): one line of names, every label at the same height, then
-            a thin row with each goal's target. */}
+        {/* A compact header (qa-plan-28): the goals' names wrap to two lines, never cut (qa-plan-38),
+            every label at the same height, then a thin row with each goal's target, labelled on the left. */}
         <thead className="max-[600px]:sr-only">
           <tr>
             <th scope="col" className={`${th} h-9 pl-4 text-left align-middle max-[600px]:pl-3`}>
@@ -704,14 +728,14 @@ function Ledger({
                   className={`${th} h-9 border-l border-line text-left align-middle last:pr-4 max-[600px]:px-1 max-[600px]:text-center max-[600px]:last:pr-1`}
                 >
                   <span className="flex min-w-0 items-center gap-1.5 max-[600px]:justify-center">
-                    <span className="flex-none max-[600px]:hidden">
+                    <span className="flex-none @max-[900px]:hidden max-[600px]:hidden">
                       <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} code={codes.get(g.id)} proposed={g.status === "proposed"} codeOnly />
                     </span>
                     <button
                       type="button"
                       onClick={() => onOpen(g.id)}
                       title={target ? `${name} · target ${target}` : name}
-                      className="min-w-0 truncate text-left font-semibold text-text hover:underline max-[600px]:sr-only"
+                      className="line-clamp-2 min-w-0 text-left font-semibold break-words whitespace-normal text-text hover:underline max-[600px]:sr-only"
                     >
                       {name}
                     </button>
@@ -722,8 +746,8 @@ function Ledger({
           </tr>
           {goals.some((g) => goalTarget(g)) && (
             <tr data-testid="ledger-targets">
-              <th scope="row" colSpan={3} className={`${th} h-7 pl-4 text-right align-middle font-medium max-[600px]:hidden`}>
-                Target
+              <th scope="row" colSpan={3} className={`${th} h-7 pl-4 text-left align-middle font-medium max-[600px]:hidden`}>
+                Targets
               </th>
               {goals.map((g) => (
                 <td key={g.id} className={`${th} h-7 border-l border-line text-left align-middle font-medium last:pr-4 max-[600px]:hidden`}>
@@ -836,8 +860,14 @@ function FeatureRow({
       }`}
     >
       <td role="cell" className="px-2 py-1.5 pl-4 max-[600px]:block max-[600px]:basis-full max-[600px]:p-0">
-        <span className="flex min-w-0 items-center gap-2 max-[600px]:flex-wrap">
-          <TitleButton entity={feature} onOpen={onOpen} className="max-[600px]:font-medium max-[600px]:whitespace-normal" />
+        {/* The name keeps the room (qa-plan-7): it wraps whole words to two lines, and the lock,
+            Proposed and flags wrap below it rather than squeezing it to "Usa…". */}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <TitleButton
+            entity={feature}
+            onOpen={onOpen}
+            className="line-clamp-2 max-w-full break-words whitespace-normal max-[600px]:font-medium"
+          />
           <LockMark entity={feature} meId={meId} />
           {feature.status === "proposed" && (
             <span className="flex-none max-[600px]:hidden">
@@ -845,7 +875,7 @@ function FeatureRow({
             </span>
           )}
           {flags.length > 0 && (
-            <span className="flex min-w-0 flex-none gap-1.5 max-[600px]:flex-wrap">
+            <span className="flex min-w-0 flex-wrap gap-1.5">
               <FlagBadges flags={flags} />
             </span>
           )}

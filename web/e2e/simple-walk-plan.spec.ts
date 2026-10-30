@@ -71,10 +71,11 @@ for (const phone of [false, true]) {
           const labels = plan.getByTestId("home-strip-label");
           await expect(labels.first()).toBeVisible();
           const texts = await labels.allTextContents();
-          expect(texts.slice(0, 2)).toEqual(["M1 · Measure it, make it safe · 3 items", "M2 · Ship to beta · 2 items"]);
-          expect(texts).toContain("Beta launch · 3 items");
+          // fix4 (qa-simple-home-17): each row names its document first.
+          expect(texts.slice(0, 2)).toEqual(["Guided setup · M1 · Measure it, make it safe · 3 items", "Guided setup · M2 · Ship to beta · 2 items"]);
+          expect(texts.some((t) => /^.+ · Beta launch · 3 items$/.test(t))).toBe(true);
           for (const t of texts) expect(t).not.toMatch(/two teams first|after legal/);
-          expect(texts.at(-1)).toMatch(/^No milestone · \d+ items?$/);
+          expect(texts.at(-1)).toMatch(/^.+ · no milestone · \d+ items?$/);
           expect(new Set(texts).size).toBe(texts.length);
           for (const t of texts) expect(t).not.toMatch(/[(;]/);
           await plan.getByTestId("home-strip-row").first().click();
@@ -85,7 +86,7 @@ for (const phone of [false, true]) {
           await setUp(page, scheme, EMAILS[role]);
           await page.goto("/simple/prds/guided-setup");
           const strip = page.getByLabel("Timeline strip");
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · Measure it, make it safe · 3 items", "M2 · Ship to beta · 2 items", "Beta launch · 3 items", "No milestone · 1 item"]);
+          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · Measure it, make it safe · 3 roadmap items", "M2 · Ship to beta · 2 roadmap items", "Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
           await expect(strip).not.toContainText("dry run");
 
           const problem = page.getByRole("region", { name: "Problem and who has it" });
@@ -106,7 +107,7 @@ for (const phone of [false, true]) {
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
-          await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 items" }).click();
+          await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 roadmap items" }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap\?prd=guided-setup$/);
         });
 

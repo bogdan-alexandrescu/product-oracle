@@ -10,9 +10,8 @@
  * dependency. `estimate_feature` writes a person's goal value or effort, which the score uses.
  */
 import type { Schemas } from "@/lib/api/client";
-import { mockNowMs } from "./clock";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { closed, companyToday, roadmapOut, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 
 type Row = Schemas["SimplePriorityRow"];
@@ -43,15 +42,31 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
   "setup-video": { value: 0, effort: 1 },
   "price-tiers": { value: 0, effort: 3 },
 };
+/** The "simple-plan" scenario's existing items the plan names (server.ts seedSimplePlanScenario). */
+const PLAN_EXISTING: Record<string, string> = { "setup-checklist": "F-01", "setup-import": "F-02" };
+
+/** An item's code in the plan (plan-f-07: F-07; an existing item the plan names: its code), with a plan. */
+function planCode(db: SimpleDb, key: string): string | null {
+  if (!db.plan) return null;
+  const m = /^plan-f-(\d+)$/.exec(key);
+  return m ? `F-${m[1]}` : (PLAN_EXISTING[key] ?? null);
+}
+
+/** The plan's engineer-weeks of a feature across its slices; null when it is all PM-owned (no engineer-weeks, as plan.py). */
+function planWeeks(code: string): number | null {
+  const of = planSlices().filter((x) => x.feature_code === code);
+  if (!of.length) return null;
+  return of.every((x) => x.effort_weeks == null) ? null : of.reduce((n, x) => n + (x.effort_weeks ?? 0), 0);
+}
+
 /**
  * The "simple-plan" scenario's items (plan-f-07 ...): their effort is the plan's engineer-weeks
- * across their slices (PM-owned work: half a week), their goal value invented from the code.
+ * across their slices (PM-owned work: none, so no score), their goal value invented from the code.
  */
-function planFeature(key: string): { value: number; effort: number } | null {
+function planFeature(key: string): { value: number; effort: number | null } | null {
   const m = /^plan-f-(\d+)$/.exec(key);
   if (!m) return null;
-  const weeks = planSlices().filter((x) => x.feature_code === `F-${m[1]}`).reduce((n, x) => n + (x.effort_weeks ?? 0), 0);
-  return { value: ((Number(m[1]) * 5) % 7) + 1, effort: weeks || 0.5 };
+  return { value: ((Number(m[1]) * 5) % 7) + 1, effort: planWeeks(`F-${m[1]}`) };
 }
 const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
 
@@ -107,8 +122,11 @@ function stored(db: SimpleDb, itemId: string): Values {
 }
 
 /** A person's estimates, else the feature's: [goal value, effort, whether the value is a person's]. */
-export function estimates(db: SimpleDb, key: string, itemId: string): { value: number; effort: number; valueEstimated: boolean } {
-  const f = FEATURES[key] ?? planFeature(key) ?? { value: 0, effort: 1 };
+export function estimates(db: SimpleDb, key: string, itemId: string): { value: number; effort: number | null; valueEstimated: boolean } {
+  const own = FEATURES[key] ?? planFeature(key) ?? { value: 0, effort: 1 };
+  // With a plan, an existing item the plan names takes the plan's engineer-weeks (one effort on every tab).
+  const code = db.plan ? PLAN_EXISTING[key] : undefined;
+  const f = code ? { ...own, effort: planWeeks(code) ?? own.effort } : own;
   const s = stored(db, itemId);
   return {
     value: typeof s.goal_value === "number" ? s.goal_value : f.value,
@@ -129,6 +147,8 @@ export function priorityBefore(db: SimpleDb, key: string, op: string, itemId: st
 /** targets.py's stored `after` of the two ops (a pin at a rank; the estimates rounded). */
 export function priorityAfter(op: string, after: Values): Values | string {
   if (op === "override_priority") {
+    // after.clear: back to Oracle's rank (targets.py), the active override ends.
+    if (after.clear === true) return { override: null };
     const pos = after.position;
     const reason = String(after.reason ?? "").trim();
     if (typeof pos !== "number" || pos < 1) return "after.position: a rank from 1 (the top)";
@@ -139,7 +159,8 @@ export function priorityAfter(op: string, after: Values): Values | string {
   for (const k of ["goal_value", "effort"]) {
     if (!(k in after)) continue;
     const v = Number(after[k]);
-    if (!(v > 0)) return `after.${k}: a number above 0`;
+    // qa-simple-plan-6: a goal value goes down to 0; an effort stays above 0 (targets.py).
+    if (k === "goal_value" ? !(v >= 0) : !(v > 0)) return `after.${k}: a number ${k === "goal_value" ? "0 or more" : "above 0"}`;
     out[k] = Math.round(v * 10) / 10;
   }
   return Object.keys(out).length ? out : "after: goal_value or effort";
@@ -176,10 +197,12 @@ function ancestors(id: string, byId: Map<string, Item>, seen = new Set<string>()
 /** The latest override_priority change that holds for this item (applied or accepted, not undone). */
 function activeOverride(db: SimpleDb, itemId: string): Schemas["SimpleChangeOut"] | undefined {
   const cs = db.changes ?? [];
-  return cs
+  const last = cs
     .filter((c) => c.op === "override_priority" && c.target.item_id === itemId && ["applied", "accepted"].includes(c.status) && !cs.some((u) => u.undoes_id === c.id))
     .sort((a, b) => ((a.decided_at ?? a.at) < (b.decided_at ?? b.at) ? -1 : 1))
     .at(-1);
+  // The last one a clear (back to Oracle's rank): no override.
+  return last?.after.override ? last : undefined;
 }
 
 type Line = Schemas["SimpleLine"];
@@ -190,10 +213,13 @@ const lineDay = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateSt
 /** priorities.lines: Now, each key date and each dated milestone the reader sees. */
 function linesOf(read: Schemas["SimpleRoadmapOut"]): Line[] {
   const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
+  // Key dates and milestones in date order, one list (Now first).
   return [
     NOW_LINE,
-    ...(read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date })),
-    ...read.milestones.filter((m) => m.date && tracks.has(m.track_id) && m.status !== "dropped").map((m): Line => ({ key: `milestone:${m.id}`, kind: "milestone", label: `${m.name} · ${lineDay(m.date!)}`, date: m.date! })),
+    ...[
+      ...(read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date })),
+      ...read.milestones.filter((m) => m.date && tracks.has(m.track_id) && m.status !== "dropped").map((m): Line => ({ key: `milestone:${m.id}`, kind: "milestone", label: `${m.name} · ${lineDay(m.date!)}`, date: m.date! })),
+    ].sort((a, b) => (a.date! < b.date! ? -1 : a.date! > b.date! ? 1 : 0)),
   ];
 }
 
@@ -201,7 +227,8 @@ function linesOf(read: Schemas["SimpleRoadmapOut"]): Line[] {
 function pickLine(key: string | null, offered: Line[]): Line {
   if (key?.startsWith("date:")) {
     const day = key.slice(5);
-    return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day)) ? { key, kind: "date", label: `By ${lineDay(day)}`, date: day } : NOW_LINE;
+    // A day before 2000 is a half-typed one (year 1), never a line (priorities.FIRST_LINE_YEAR).
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day)) && Number(day.slice(0, 4)) >= 2000 ? { key, kind: "date", label: `By ${lineDay(day)}`, date: day } : NOW_LINE;
   }
   return offered.find((x) => x.key === key) ?? NOW_LINE;
 }
@@ -213,7 +240,7 @@ export function prioritiesOut(
   decides: (itemId: string) => boolean,
   lineKey: string | null = null,
 ): Schemas["SimplePrioritiesOut"] {
-  const today = new Date(mockNowMs()).toISOString().slice(0, 10);
+  const today = companyToday();
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
   const lines = linesOf(read);
   const line = pickLine(lineKey, lines);
@@ -234,9 +261,11 @@ export function prioritiesOut(
   const score = new Map<string, number>();
   for (const i of ranked) {
     const e = estimates(db, keyOf(i), i.id);
-    score.set(i.id, round((e.value * (CONFIDENCE[i.confidence ?? ""] ?? 0.5)) / e.effort));
+    // No effort (PM-owned work): no score (scoring.py's missing_inputs), ranked after the scored.
+    if (e.effort) score.set(i.id, round((e.value * (CONFIDENCE[i.confidence ?? ""] ?? 0.5)) / e.effort));
   }
-  const sorted = [...ranked].sort((a, b) => Number(!a.goal) - Number(!b.goal) || score.get(b.id)! - score.get(a.id)! || a.title.localeCompare(b.title));
+  const sc = (id: string): number => score.get(id) ?? -1;
+  const sorted = [...ranked].sort((a, b) => Number(!a.goal) - Number(!b.goal) || sc(b.id) - sc(a.id) || a.title.localeCompare(b.title));
   const oracle = dependencyOrder(sorted, byId);
   const oracleRank = new Map(oracle.map((i, n) => [i.id, n + 1]));
   // People's pins, oldest first; never above a dependency.
@@ -256,7 +285,7 @@ export function prioritiesOut(
     const e = estimates(db, keyOf(i), i.id);
     const above = yours.slice(0, n);
     let after: Row["after"] = null;
-    if (above.some((a) => score.get(a.id)! < score.get(i.id)!)) {
+    if (above.some((a) => sc(a.id) < sc(i.id))) {
       const anc = ancestors(i.id, byId);
       const dep = [...above].reverse().find((a) => anc.has(a.id));
       if (dep) after = { code: dep.key, title: dep.title };
@@ -276,7 +305,8 @@ export function prioritiesOut(
       horizon: mine ? i.horizon : null,
       goal_value: e.value,
       effort: e.effort,
-      score: score.get(i.id)!,
+      score: score.get(i.id) ?? null,
+      confidence: CONFIDENCE[i.confidence ?? ""] ?? 0.5,
       value_estimated: e.valueEstimated,
       depends_on: depsOf(i, byId).map((d) => byId.get(d)!.key),
       after,
@@ -293,7 +323,8 @@ export function prioritiesOut(
   });
   // In the mock each item's key is its feature's key (its own code when it has one); FEATURES
   // is in creation order, a feature outside it after them by key.
-  const featureKey = (k: string): string => FEATURES[k]?.code ?? k;
+  // With a plan, a feature the plan names is keyed by the plan's code (F-06), so one feature reads one code on every tab.
+  const featureKey = (k: string): string => planCode(db, k) ?? FEATURES[k]?.code ?? k;
   const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
   const prdCodes = Object.fromEntries(yours.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
   const shorts = shortCodes(created, prdCodes);
@@ -309,7 +340,7 @@ export function prioritiesOut(
       const i = codes.get(String(c.target.item_id))!;
       return {
         change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureId(i.id), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
-        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
+        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), can_withdraw: c.by === ctx.id, flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
       };
     });
   const drafts: Schemas["SimplePriorityDraft"][] = live
@@ -343,7 +374,7 @@ export function prioritiesOut(
     yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
   }
   return {
-    // The plan-model lane: with a plan, its span ("2 Nov - 12 Feb"), else the calendar quarter.
+    // The plan-model lane: with a plan, its span ("Nov 2 - Feb 12"), else the calendar quarter.
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,

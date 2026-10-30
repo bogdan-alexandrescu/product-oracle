@@ -185,7 +185,7 @@ export function milestoneOf(text: string | null): [string, string] {
   return head ? [head, head] : ["Milestone", "Milestone"];
 }
 
-export function planByMonth(items: PlanInput[], today: string): PlanStrip | null {
+export function planByMonth(items: PlanInput[], today: string, through: string | null = null): PlanStrip | null {
   if (items.length === 0) return null;
   // One row per milestone (the record the item links, else its code, else its text before
   // any note), not per text.
@@ -217,7 +217,8 @@ export function planByMonth(items: PlanInput[], today: string): PlanStrip | null
   const first = minOf([...items.map((i) => i.start), ...dated, ...begins]);
   const last = dated.length ? maxOf(dated) : maxOf(committed.length ? committed : items.map((i) => i.end));
   let start = monthOf(first);
-  const lastMonth = monthOf(last > first ? last : first);
+  // qa-simple-home-17: Home's strip runs to the end of the quarter (`through`), each month labelled.
+  const lastMonth = monthOf([last > first ? last : first, ...(through ? [through] : [])].sort().at(-1)!);
   let n = monthsBetween(start, lastMonth);
   if (n > PLAN_MONTHS) {
     const anchor = minOf([addMonths(monthOf(today), -1), addMonths(lastMonth, 1 - PLAN_MONTHS)]);
@@ -305,13 +306,16 @@ export function greeting(hour: number): string {
   return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 }
 
-/** One sentence on what waits: "2 decisions and 1 proposal wait on you." */
+/**
+ * One sentence on what waits, by name: "Decisions and a broken link wait on you." The counts
+ * are the summary tiles' alone (qa-simple-home-15), so the sentence does not repeat them.
+ */
 export function waitSentence(parts: [number, string, string][]): string {
-  const shown = parts.filter(([n]) => n > 0).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+  const shown = parts.filter(([n]) => n > 0).map(([n, one, many]) => (n === 1 ? `a ${one}` : many));
   if (shown.length === 0) return "Nothing waits on you today.";
   const list = shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}`;
   const total = parts.reduce((s, [n]) => s + n, 0);
-  return `${list} ${total === 1 ? "waits" : "wait"} on you.`;
+  return `${list[0].toUpperCase()}${list.slice(1)} ${total === 1 ? "waits" : "wait"} on you.`;
 }
 
 /** What a Simple change does, in Simple's words ("Move dates", "Retitle"). */
@@ -320,13 +324,14 @@ export const OP_WORDS: Record<string, string> = {
   change_horizon: "Move to another horizon",
   reorder: "Reorder",
   cut: "Cut",
+  cut_with_dependents: "Cut it and its dependents",
   restore: "Restore",
   edit_title: "Retitle",
   edit_outcome: "Change the outcome",
   accept_date_suggestion: "Accept suggested dates",
   accept_risk: "Accept as a risk",
-  shift_dependents: "Move dependents",
-  move_dependency: "Move dependency",
+  shift_dependents: "Move the dependents",
+  move_dependency: "Move the dependency",
   override_priority: "Change the priority",
   add_item: "Add an item",
   merge_item: "Merge a duplicate",
@@ -355,6 +360,7 @@ const DONE_WORDS: Record<string, string> = {
   change_horizon: "Horizon changed for",
   reorder: "Reordered",
   cut: "Cut",
+  cut_with_dependents: "Cut with its dependents:",
   restore: "Restored",
   edit_title: "Retitled",
   edit_outcome: "Outcome changed for",
@@ -398,7 +404,13 @@ export function changeWords(c: Pick<Schemas["SimpleChangeOut"], "op" | "after" |
     lead = value && effort ? "Value and effort estimated for" : value ? "Value estimated for" : "Effort estimated for";
   }
   const named = typeof after.title === "string" ? after.title : typeof after.name === "string" ? after.name : null;
-  const subject = item ? `${item.code ? `${item.code} ` : ""}${item.title}` : named;
+  let subject = item ? `${item.code ? `${item.code} ` : ""}${item.title}` : named;
+  // Review minor: a cut with its dependents names every item it cut, the item first.
+  const titles = c.op === "cut_with_dependents" && Array.isArray(c.target?.titles) ? (c.target.titles as unknown[]).slice(1).map(String) : [];
+  if (titles.length) {
+    const all = [subject ?? "an item", ...titles];
+    subject = `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}`;
+  }
   return subject ? `${lead} ${subject}` : lead.replace(/ (for|to|on|after|beside its look-alike):?$|:$/, "");
 }
 

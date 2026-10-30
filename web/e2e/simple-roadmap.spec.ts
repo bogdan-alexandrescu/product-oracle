@@ -93,7 +93,8 @@ for (const [where, use] of [
           await expect(page.locator('[data-testid="broken-callout"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
           await expect(page.getByTestId("item-milestone").first()).toBeAttached();
           await expect(page.getByTestId("below-the-line")).toBeVisible();
-          await expect(page.getByTestId("return-place")).toHaveText("#1");
+          // fix4 qa-simple-roadmap-3: the return queue's place is on hover ("1st to come back"), not a "#1" on the bar.
+          await expect(page.locator('[data-testid="bar"][data-place="1"] title').first()).toContainText("1st to come back");
           // B2: the lanes name their goal and count their items.
           await expect(page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getByTestId("lane-count")).toHaveText("4 items");
           expect(await bar(page, "alert-digest").getAttribute("data-lane")).toBe(await page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getAttribute("data-lane"));
@@ -202,7 +203,7 @@ test("a commenter's drag is a proposal the owner accepts in the tray", async ({ 
   await expect(page.getByTestId("needs-decision")).toHaveCount(0);
   const before = await bar(page, "alert-export").getAttribute("data-start");
   await drag(page, "alert-export", 90);
-  await expect(page.getByText(/proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/proposed: it waits for .+ in Needs a decision/)).toBeVisible();
   await expect(bar(page, "alert-export")).toHaveAttribute("data-start", before!);
   await page.goto("/home");
   await signOut(page);
@@ -348,14 +349,14 @@ test("a viewer reads and cannot drag", async ({ page }) => {
 test("only a new feature's proposal carries a flow thumbnail", async ({ page }) => {
   await open(page, "commenter@example.com");
   await drag(page, "alert-export", 90);
-  await expect(page.getByText(/Moved 'Alert history export'.*proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Alert history export'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
   await bar(page, "alert-export").click();
   const card = page.getByTestId("floating-card");
   await expect(card.getByTestId("card-proposals")).toContainText("Move the dates");
   await expect(card.getByTestId("flow-thumb")).toHaveCount(0);
   await card.getByRole("button", { name: "Close" }).click();
   await drag(page, "setup-ideas", 90);
-  await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
   await bar(page, "setup-ideas").click();
   await card.getByTestId("flow-thumb").click();
   await expect(card).toHaveAttribute("data-wide", "true");
@@ -372,7 +373,7 @@ test("a commenter proposes a fix from the callout", async ({ page }) => {
   await open(page, "commenter@example.com");
   const callout = page.locator('[data-testid="broken-callout"][data-item="alert-digest"]');
   await callout.getByRole("button", { name: "Move the dependents" }).click();
-  await expect(page.getByText(/Moved what depends on 'Alert rules engine' proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/Moved what depends on 'Alert rules engine' proposed: it waits for .+ in Needs a decision/)).toBeVisible();
 });
 
 /**
@@ -438,7 +439,7 @@ test.describe("phone, long-press", () => {
   test("a feature's flow opens full height on a phone", async ({ page }) => {
     await open(page, "commenter@example.com", true);
     await longPressDrag(page, "setup-ideas", 60);
-    await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for the decider/)).toBeVisible();
+    await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
     await page.getByTestId("chart-label").filter({ hasText: "Team invite nudges" }).click();
     const card = page.getByTestId("floating-card");
     await card.getByTestId("flow-thumb").click();
@@ -449,39 +450,4 @@ test.describe("phone, long-press", () => {
   });
 });
 
-test.describe("500 items", () => {
-  test.beforeEach(async ({ context }) => {
-    await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
-  });
-
-  /**
-   * Card simple-roadmap-500: protects = a 500-item roadmap's first paint (navigation to
-   * 500 bars drawn) is under 2 s and a drag runs at 60 fps (median frame interval under
-   * 20 ms, each pointer move handled in under 4 ms on average); fails_when = the chart
-   * re-renders per move or paints slowly; no_claim = a real laptop's numbers (the mock in
-   * headless Chromium).
-   */
-  test("first paint under 2 s and a 60 fps drag", async ({ page }) => {
-    await login(page);
-    const t0 = Date.now();
-    await page.goto(URL);
-    await expect(page.locator('g[data-testid="bar"]')).toHaveCount(500);
-    const paint = Date.now() - t0;
-    console.log(`500 items: first paint in ${paint} ms`);
-    expect(paint).toBeLessThan(2000);
-    await page.evaluate(() => {
-      window.__poDragFrames = [];
-      window.__poDragWork = [];
-    });
-    const key = (await page.locator('g[data-testid="bar"][data-kind="dated"]').first().getAttribute("data-item"))!;
-    await drag(page, key, 120, 60);
-    const { frames, work } = await page.evaluate(() => ({ frames: window.__poDragFrames ?? [], work: window.__poDragWork ?? [] }));
-    const sorted = [...frames].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    const avgWork = work.reduce((a, b) => a + b, 0) / Math.max(1, work.length);
-    console.log(`drag: ${frames.length} frames, median ${median?.toFixed(1)} ms, ${work.length} moves at ${avgWork.toFixed(2)} ms each`);
-    expect(frames.length).toBeGreaterThan(5);
-    expect(median).toBeLessThan(20);
-    expect(avgWork).toBeLessThan(4);
-  });
-});
+// The 500-item first paint and drag speed: e2e/simple-roadmap-500-timing.spec.ts (@timing).

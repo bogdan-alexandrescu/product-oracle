@@ -76,10 +76,10 @@ test("invite: Retry that grants access says so with the time", async ({ page }) 
   const access = row.getByTestId("invite-access-detail");
   await expect(access).toContainText("oracle-api-be: Google returned 403 (permission denied)");
   await row.getByRole("button", { name: "Retry access for pat@example.com" }).click();
-  await expect(row.getByTestId("invite-access")).toHaveText("Access granted");
+  await expect(row.getByTestId("invite-access")).toHaveText("Google sign-in ready");
   // Granted: nothing is left to say on the status line; the chip's title has the time.
   await expect(access).toHaveCount(0);
-  await expect(row.getByTestId("invite-access")).toHaveAttribute("title", /^Access granted \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M P[DS]T$/);
+  await expect(row.getByTestId("invite-access")).toHaveAttribute("title", /^Google sign-in ready since \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M P[DS]T$/);
 });
 
 test("invite: a failed email's reason is text on the row", async ({ page }) => {

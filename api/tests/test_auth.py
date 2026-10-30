@@ -72,6 +72,84 @@ async def test_login_cookie_me_and_logout(client):
     assert (await client.get("/v1/me")).status_code == 401
 
 
+async def test_a_removed_member_hears_why_only_with_the_right_password(client):
+    # qa-settings-42: removed (disabled) who gives the right password is refused in words, naming
+    # the owner who removed them; a wrong password says no more than for anyone else.
+    from oracle.auth.service import create_user
+
+    r = await seed(password="pw")
+    async with tenant_session(r.tenant_id) as s:
+        admin = await s.scalar(select(User).where(User.email == "admin@example.com"))
+        pm = await create_user(s, "former.pm@example.com", "pm-pass")
+        pm.role, pm.disabled_at, pm.disabled_by = "approver", datetime.now(UTC), admin.id
+        pm_id = pm.id
+        await s.commit()
+    login = {"email": "former.pm@example.com", "password": "pm-pass"}
+
+    wrong = await client.post("/v1/auth/login", json={**login, "password": "nope"})
+    assert (wrong.status_code, wrong.json()["detail"]) == (401, "Invalid email or password")
+    resp = await client.post("/v1/auth/login", json=login)
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == (
+        "An owner removed you from this Oracle. Ask Admin to restore you."
+    )
+    assert "set-cookie" not in resp.headers
+    assert (await client.get("/v1/me")).status_code == 401
+
+    # Removed by a token, or by someone since removed too: any owner.
+    async with tenant_session(r.tenant_id) as s:
+        (await s.get(User, pm_id)).disabled_by = None
+        await s.commit()
+    resp = await client.post("/v1/auth/login", json=login)
+    assert resp.json()["detail"] == (
+        "An owner removed you from this Oracle. Ask an owner to restore you."
+    )
+
+
+async def test_a_removed_member_is_told_to_ask_an_owner_and_the_attempt_is_audited(client):
+    # fix4-settings review (qa-settings-42): a remover who is no longer an owner is not
+    # named, and a removed member's refused sign-in is audited on their row.
+    from oracle.auth.service import create_user
+
+    r = await seed(password="pw")
+    async with tenant_session(r.tenant_id) as s:
+        admin = await s.scalar(select(User).where(User.email == "admin@example.com"))
+        lead = await create_user(s, "lead@example.com", "lead-pass")
+        pm = await create_user(s, "former.pm@example.com", "pm-pass")
+        await s.flush()
+        lead.role, lead.name = "approver", "Lee"
+        pm.role, pm.disabled_at, pm.disabled_by = "approver", datetime.now(UTC), lead.id
+        pm_id, admin_id = pm.id, admin.id
+        await s.commit()
+    login = {"email": "former.pm@example.com", "password": "pm-pass"}
+
+    resp = await client.post("/v1/auth/login", json=login)
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == (
+        "An owner removed you from this Oracle. Ask an owner to restore you."
+    )
+    async with tenant_session(r.tenant_id) as s:
+        events = (
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "login_refused_removed"))
+        ).all()
+    assert [(e.entity, e.entity_id) for e in events] == [("user", pm_id)]
+
+    # A wrong password leaves no trace beyond the plain refusal.
+    await client.post("/v1/auth/login", json={**login, "password": "nope"})
+    async with tenant_session(r.tenant_id) as s:
+        assert (
+            len(
+                (
+                    await s.scalars(
+                        select(AuditEvent).where(AuditEvent.action == "login_refused_removed")
+                    )
+                ).all()
+            )
+            == 1
+        )
+        assert (await s.get(User, admin_id)).role == "owner"
+
+
 async def test_tampered_cookie_is_rejected(client):
     await seed(password="pw")
     await client.post("/v1/auth/login", json={"email": "admin@example.com", "password": "pw"})

@@ -14,7 +14,7 @@ async function shareBoard(page: Page, label: string, download: boolean) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "sharing"));
   await login(page);
   await page.goto(`${DOC}?audience=board`);
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
   await sheet.getByLabel("Label").fill(label);
   const allow = sheet.getByLabel("Allow PDF download");
@@ -33,7 +33,7 @@ async function shareBoard(page: Page, label: string, download: boolean) {
   await holder.getByLabel("Passcode").fill(code);
   await holder.getByRole("button", { name: "Open" }).click();
   const shared = holder.frameLocator('iframe[title="Shared roadmap"]');
-  await expect(shared.getByText("Audience Board", { exact: true })).toBeVisible();
+  await expect(shared.getByText(/^Shared with you/)).toBeVisible();
   return holder;
 }
 
@@ -41,7 +41,7 @@ test("a link with downloads off: the shared page shows no Download PDF", async (
   const holder = await shareBoard(page, "Board, no downloads", false);
   await expect(holder.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
   await holder.reload();
-  await expect(holder.frameLocator('iframe[title="Shared roadmap"]').getByText("Audience Board", { exact: true })).toBeVisible();
+  await expect(holder.frameLocator('iframe[title="Shared roadmap"]').getByText(/^Shared with you/)).toBeVisible();
   await expect(holder.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
 });
 
@@ -49,7 +49,7 @@ test("a link with downloads on: the shared page shows Download PDF and it downlo
   const holder = await shareBoard(page, "Board, with downloads", true);
   await expect(holder.getByRole("button", { name: "Download PDF" })).toBeVisible();
   await holder.reload();
-  await expect(holder.frameLocator('iframe[title="Shared roadmap"]').getByText("Audience Board", { exact: true })).toBeVisible();
+  await expect(holder.frameLocator('iframe[title="Shared roadmap"]').getByText(/^Shared with you/)).toBeVisible();
   const button = holder.getByRole("button", { name: "Download PDF" });
   await expect(button).toBeVisible();
   const download = holder.waitForEvent("download");

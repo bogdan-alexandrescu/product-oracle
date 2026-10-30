@@ -62,7 +62,7 @@ test("qa-plan-13: inputs, MoSCoW and formulas in words and body font; the cycle 
 
   await rowOf(page, "F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
   const ex = page.getByTestId("explanation-F-1");
-  await expect(ex.getByRole("cell", { name: "Effort (from the feature)" })).toBeVisible();
+  await expect(ex.getByRole("row", { name: /^Effort\b/ }).getByRole("cell", { name: "The feature", exact: true })).toBeVisible();
   await expect(ex).not.toContainText("attrs.");
   expect(await mono(ex.getByRole("list", { name: "Steps" }))).toBe(false);
 
@@ -73,7 +73,7 @@ test("qa-plan-13: inputs, MoSCoW and formulas in words and body font; the cycle 
   const steps = page.getByTestId("explanation-F-1").getByRole("list", { name: "Steps" });
   await expect(steps).toContainText("Must have = 4; ties broken by goal value 6");
   await expect(page.getByTestId("explanation-F-1").getByRole("cell", { name: "Must have", exact: true })).toBeVisible();
-  await expect(page.getByTestId("explanation-F-1")).toContainText("MoSCoW (from the feature)");
+  await expect(page.getByTestId("explanation-F-1")).toContainText("The feature");
   await expect(page.getByTestId("explanation-F-1")).not.toContainText("tie-break");
 });
 
@@ -139,8 +139,8 @@ test("qa-plan-39: the snapshot note is labelled and sits beside Save snapshot", 
 test("qa-plan-40: scores in one style and body font; the Move dialog names the source and date", async ({ page }) => {
   await open(page);
   await page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "RICE" }).click();
-  await expect(rowOf(page, "F-2").getByTestId("score")).toHaveText("5,400.00");
-  await expect(rowOf(page, "F-8").getByTestId("score")).toHaveText("83.33");
+  await expect(rowOf(page, "F-2").getByTestId("score")).toHaveText("5,400");
+  await expect(rowOf(page, "F-8").getByTestId("score")).toHaveText("83");
   expect(await mono(rowOf(page, "F-2").getByTestId("score"))).toBe(false);
 
   await page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "Goal-weighted" }).click();

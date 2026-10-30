@@ -2,7 +2,7 @@ import { Chip, Ring, type ChipKind } from "@/components/ds";
 import { LockIcon } from "@/components/ui";
 import type { EntityOut, GraphOut, NodeStatus } from "@/lib/api/client";
 import { formatDate, formatPercent } from "@/lib/format";
-import { goalTree } from "@/lib/goal-tree";
+import { goalTree, scoredConfidence } from "@/lib/goal-tree";
 
 /** Default `low` threshold of the confidence settings; the trace report carries the company's. */
 export const DEFAULT_LOW = 0.4;
@@ -87,7 +87,7 @@ export function ConfidenceRing({
    */
   evidence?: number;
 }) {
-  const scored = evidence === 0 ? null : value;
+  const scored = scoredConfidence(value, evidence);
   const tone = scored == null ? undefined : confidenceTone(scored, low);
   // The ring's number is a percentage: its name and tooltip say so (prod-7).
   const words =

@@ -56,8 +56,8 @@ for (const phone of [false, true]) {
         await page.goto("/simple");
         await expect(page.getByTestId("home-greeting")).toBeVisible();
         await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
-        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-        await broken.getByRole("button", { name: "Move dependents" }).click();
+        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
+        await broken.getByRole("button", { name: "Move the dependents" }).click();
         await expect(page.getByText("Dependents moved in your working draft")).toBeVisible();
         const since = page.getByTestId("home-since");
         const rows = since.getByTestId("home-since-row").filter({ hasText: "Weekly alert digest" });
@@ -66,7 +66,7 @@ for (const phone of [false, true]) {
         await expect(rows).toContainText(/^You moved (F-\d+ )?Weekly alert digest and its dependents after what it depends on/);
         await expect(rows).not.toContainText("undone");
         await page.getByRole("button", { name: "Undo" }).click();
-        await expect(page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" })).toBeVisible();
+        await expect(page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ })).toBeVisible();
         // qa-simple-home-15: an undone change and its undo are no rows.
         await expect(rows).toHaveCount(0);
         for (const text of await since.getByTestId("home-since-row").allInnerTexts()) {
@@ -80,8 +80,8 @@ for (const phone of [false, true]) {
         await setUp(page, "simple-home", scheme);
         await login(page);
         await page.goto("/simple");
-        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-        await broken.getByRole("button", { name: "Move dependents" }).click();
+        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
+        await broken.getByRole("button", { name: "Move the dependents" }).click();
         await expect(page.getByText("Dependents moved in your working draft")).toBeVisible();
         // A visit to the Inbox: the change is now from before the last visit.
         await expect(async () => {

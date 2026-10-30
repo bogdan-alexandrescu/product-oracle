@@ -97,7 +97,7 @@ async def _assert_evidence_removal(ctx, evidence_id, link, wire, spec):
     assert any(
         "sources" in r and "evidence that was deleted" in r for r in _reasons(change, on_section)
     )
-    assert any("feature saved-addresses" in r and "evidence" in r
+    assert any("Saved addresses" in r and "evidence" in r
                for r in _reasons(change, on_feature))  # fmt: skip
 
 
@@ -179,7 +179,7 @@ async def _assert_source_removal(ctx, source_id, evidence_id, by_evidence, by_it
     assert str(by_item) in {lk["id"] for lk in change.data["trace"]["links"]}
     assert any("source was deleted" in r for r in _reasons(change, deps["wireframe"]))
     assert any("source was deleted" in r for r in _reasons(change, deps["prototype"]))
-    assert any("feature saved-addresses" in r for r in _reasons(change, deps["spec"]))
+    assert any("Saved addresses" in r for r in _reasons(change, deps["spec"]))
 
 
 async def test_deleting_a_source_marks_what_its_items_back(client):
@@ -318,7 +318,7 @@ async def test_removing_a_part_reaches_what_is_downstream_of_its_whole(client):
 
     assert (await dependency(ctx.tenant_id, on_sibling_ac)).freshness == "potentially_stale"
     (change,) = [c for c in await _changes(ctx.tenant_id) if c.cause == "entity_deleted"]
-    assert any("feature saved-addresses" in r and "deleted" in r
+    assert any("Saved addresses" in r and "deleted" in r
                for r in _reasons(change, on_sibling_ac))  # fmt: skip
 
 

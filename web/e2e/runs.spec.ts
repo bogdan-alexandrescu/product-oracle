@@ -108,8 +108,8 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await page.goto(runUrl);
   await expect(status(page)).toHaveText("Succeeded");
   const prd = page.getByTestId("segment-prd_draft");
-  await expect(prd).toContainText("Imported as team-onboarding v1");
-  await prd.getByRole("link", { name: "team-onboarding v1" }).click();
+  await expect(prd).toContainText(/Imported as (?!team-onboarding).+ v1/);
+  await prd.getByRole("link", { name: / v1$/ }).click();
   await expect(page).toHaveURL(/\/documents\/team-onboarding\/v\/1$/);
 });
 
@@ -123,7 +123,7 @@ async function draftSheet(page: Page, title: string) {
   await page.goto("/documents/new?kind=prd");
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Teams pay through a slow manual invoice. Billing should be self-serve.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
@@ -140,11 +140,11 @@ test("new run: knobs, estimate before start, skipped checkpoints", async ({ page
   // F4: with its stop off, the Engineering check's segment is skipped and costs nothing.
   await sheet.getByRole("switch", { name: "Engineering check" }).uncheck();
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $31.50");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$31.50 estimated");
 
   // Changing a knob re-estimates the same draft run.
   await sheet.getByRole("group", { name: "Depth" }).getByRole("button", { name: "Quick" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $15.75");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$15.75 estimated");
 
   await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
@@ -166,8 +166,8 @@ async function estimateOverFifty(page: Page) {
   const sheet = await draftSheet(page, "Platform PRD");
   await sheet.getByRole("group", { name: "Depth" }).getByRole("button", { name: "Deep" }).click();
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toContainText("Estimated $73.00");
-  await expect(sheet.getByTestId("draft-estimate")).toContainText("Needs an owner's approval before it starts");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$73.00 estimated");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("an owner approves it before it starts");
   return sheet;
 }
 
@@ -278,7 +278,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   await expect(review.getByRole("button", { name: "Request changes" })).toBeEnabled();
 
   await retry.click();
-  await expect(prd).toContainText("Imported as guest-checkout v1");
+  await expect(prd).toContainText(/Imported as (?!guest-checkout).+ v1/);
   await expect(prd).not.toContainText("Draft not imported");
   await expect(retry).toHaveCount(0);
   // Nothing is decided: the review still waits for a person, who may approve it now.
@@ -288,7 +288,7 @@ test("a rejected draft: Retry import imports it, and the segment links the PRD",
   await expect(review.getByRole("link", { name: "Open review" })).toBeVisible();
   await expect(review.getByTestId("cannot-approve")).toHaveCount(0);
 
-  await prd.getByRole("link", { name: "guest-checkout v1" }).click();
+  await prd.getByRole("link", { name: / v1$/ }).click();
   await expect(page).toHaveURL(/\/documents\/guest-checkout\/v\/1$/);
 });
 

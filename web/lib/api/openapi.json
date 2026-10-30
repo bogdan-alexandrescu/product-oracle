@@ -42818,6 +42818,74 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/changes/{change_id}/withdraw": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Withdraw Simple Change",
+        "description": "Withdraw one of the caller's own proposals while it waits for a decision: nothing\nchanges; it is closed as declined (\"Withdrawn\").",
+        "operationId": "withdraw_simple_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleChangeResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale: nothing written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/SimpleChangeConflict"
+                  },
+                  "title": "Response 409 Withdraw Simple Change"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
+      }
+    },
     "/v1/simple/drafts": {
       "get": {
         "tags": [
@@ -45077,6 +45145,70 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SimpleSendIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/delivery/retry": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Retry Simple Meeting Delivery",
+        "description": "Retry: whoever ended the meeting or an owner requeues the minutes' failed emails or\nSlack post (403 for others, 409 when nothing failed); the minute tick tries them.",
+        "operationId": "retry_simple_meeting_delivery",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleRetryDeliveryIn"
               }
             }
           }
@@ -58605,6 +58737,26 @@
               }
             ],
             "title": "Values"
+          },
+          "with_dependents": {
+            "type": "boolean",
+            "title": "With Dependents",
+            "default": false
+          },
+          "dependents": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependents"
           }
         },
         "type": "object",
@@ -58704,7 +58856,8 @@
                   "set_owner",
                   "set_decider",
                   "decide_question",
-                  "name_decider"
+                  "name_decider",
+                  "cut_with_dependents"
                 ]
               },
               {
@@ -58915,6 +59068,38 @@
               }
             ],
             "title": "Correct"
+          },
+          "dependents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dependents",
+            "default": []
+          },
+          "dependent_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Dependent Ids",
+            "default": []
+          },
+          "may_with_dependents": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "apply",
+                  "propose"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "May With Dependents"
           }
         },
         "type": "object",
@@ -59018,7 +59203,8 @@
               "set_owner",
               "set_decider",
               "decide_question",
-              "name_decider"
+              "name_decider",
+              "cut_with_dependents"
             ],
             "title": "Op"
           },
@@ -79896,7 +80082,8 @@
               "set_owner",
               "set_decider",
               "decide_question",
-              "name_decider"
+              "name_decider",
+              "cut_with_dependents"
             ],
             "title": "Op"
           },
@@ -80059,6 +80246,18 @@
             ],
             "title": "Ended At"
           },
+          "sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
           "decisions": {
             "type": "integer",
             "title": "Decisions"
@@ -80077,6 +80276,7 @@
           "meeting_id",
           "title",
           "ended_at",
+          "sent_at",
           "decisions",
           "state"
         ],
@@ -91097,6 +91297,22 @@
             "type": "array",
             "title": "Lines",
             "default": []
+          },
+          "who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Who"
+          },
+          "missing": {
+            "type": "boolean",
+            "title": "Missing",
+            "default": false
           }
         },
         "type": "object",
@@ -91393,6 +91609,52 @@
             "type": "array",
             "title": "Decisions",
             "default": []
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "measure_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure Source"
+          },
+          "footnotes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Footnotes",
+            "default": []
+          },
+          "can_draw_flow": {
+            "type": "boolean",
+            "title": "Can Draw Flow",
+            "default": false
+          },
+          "words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Words"
           }
         },
         "type": "object",
@@ -91402,6 +91664,41 @@
           "source_keys"
         ],
         "title": "OnePagerLine"
+      },
+      "OnePagerLook": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "where": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Where",
+            "default": []
+          },
+          "source_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Keys",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "OnePagerLook",
+        "description": "One \"Needs a look\" item for the PRD's owners (numbers that disagree, a code with no\nname): what to look at, and the sections it is in. Shared by the one-pager's checks."
       },
       "OnePagerMetric": {
         "properties": {
@@ -91673,6 +91970,14 @@
           "can_start": {
             "type": "boolean",
             "title": "Can Start"
+          },
+          "needs_look": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerLook"
+            },
+            "type": "array",
+            "title": "Needs Look",
+            "default": []
           }
         },
         "type": "object",
@@ -112830,7 +113135,8 @@
               "set_owner",
               "set_decider",
               "decide_question",
-              "name_decider"
+              "name_decider",
+              "cut_with_dependents"
             ],
             "title": "Op"
           },
@@ -112947,7 +113253,8 @@
               "set_owner",
               "set_decider",
               "decide_question",
-              "name_decider"
+              "name_decider",
+              "cut_with_dependents"
             ],
             "title": "Op"
           },
@@ -113485,6 +113792,19 @@
             ],
             "title": "Email Status"
           },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleEmailDelivery"
+            },
+            "type": "array",
+            "title": "Emails",
+            "default": []
+          },
+          "email_sent": {
+            "type": "integer",
+            "title": "Email Sent",
+            "default": 0
+          },
           "slack": {
             "type": "boolean",
             "title": "Slack",
@@ -113631,6 +113951,14 @@
           "in_meeting": {
             "type": "boolean",
             "title": "In Meeting"
+          },
+          "titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Titles",
+            "default": []
           }
         },
         "type": "object",
@@ -113816,6 +114144,30 @@
         "title": "SimpleDraftOut",
         "description": "A working draft of one roadmap (S3b): its changes until submitted, then the version\nin review and who it waits on."
       },
+      "SimpleEmailDelivery": {
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "sent",
+              "retrying",
+              "failed"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "person",
+          "status"
+        ],
+        "title": "SimpleEmailDelivery",
+        "description": "One attendee's minutes email: queued, sent, retrying (a try failed, another is due\non the tick) or failed (three tries failed; Retry requeues it)."
+      },
       "SimpleEvidence": {
         "properties": {
           "label": {
@@ -113970,6 +114322,15 @@
               }
             ],
             "title": "Risk Note"
+          },
+          "moves": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Moves",
+            "default": []
           }
         },
         "type": "object",
@@ -114507,6 +114868,14 @@
               }
             ],
             "title": "Proposed By Name"
+          },
+          "needs_look": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Needs Look",
+            "default": []
           }
         },
         "type": "object",
@@ -115071,6 +115440,11 @@
             "type": "boolean",
             "title": "Redraft",
             "default": false
+          },
+          "retry_delivery": {
+            "type": "boolean",
+            "title": "Retry Delivery",
+            "default": false
           }
         },
         "type": "object",
@@ -115190,6 +115564,21 @@
             },
             "type": "array",
             "title": "Decisions"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDelivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_retry_delivery": {
+            "type": "boolean",
+            "title": "Can Retry Delivery",
+            "default": false
           }
         },
         "type": "object",
@@ -115318,7 +115707,8 @@
             "type": "string",
             "enum": [
               "note",
-              "question"
+              "question",
+              "comment"
             ],
             "title": "Kind"
           },
@@ -115329,6 +115719,18 @@
           "by_name": {
             "type": "string",
             "title": "By Name"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
           },
           "card_id": {
             "anyOf": [
@@ -115351,7 +115753,7 @@
           "by_name"
         ],
         "title": "SimpleMeetingNote",
-        "description": "chat-actions: a minutes note or open question added during the meeting."
+        "description": "chat-actions: a minutes note or open question added during the meeting; also a\ncomment (qa-simple-decide-1), which is not a meeting decision and stays out of\nminutes."
       },
       "SimpleMeetingOut": {
         "properties": {
@@ -116568,7 +116970,7 @@
           "label"
         ],
         "title": "SimplePlanSpan",
-        "description": "plan-model: first milestone start to last milestone end, \"2 Nov - 12 Feb\"."
+        "description": "plan-model: first milestone start to last milestone end, \"Nov 2 - Feb 12\"."
       },
       "SimplePlanStrip": {
         "properties": {
@@ -116945,6 +117347,11 @@
             "title": "Can Decide",
             "default": false
           },
+          "can_withdraw": {
+            "type": "boolean",
+            "title": "Can Withdraw",
+            "default": false
+          },
           "flow": {
             "anyOf": [
               {
@@ -117085,6 +117492,17 @@
               }
             ],
             "title": "Score"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
           },
           "value_estimated": {
             "type": "boolean",
@@ -117598,6 +118016,23 @@
           "draft"
         ],
         "title": "SimpleResumeOut"
+      },
+      "SimpleRetryDeliveryIn": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "enum": [
+              "email",
+              "slack"
+            ],
+            "title": "What"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what"
+        ],
+        "title": "SimpleRetryDeliveryIn"
       },
       "SimpleRoadmapItem": {
         "properties": {

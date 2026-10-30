@@ -12356,6 +12356,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/changes/{change_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Simple Change
+         * @description Withdraw one of the caller's own proposals while it waits for a decision: nothing
+         *     changes; it is closed as declined ("Withdrawn").
+         */
+        post: operations["withdraw_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/drafts": {
         parameters: {
             query?: never;
@@ -13151,6 +13172,27 @@ export interface paths {
          *     attendees and post to Slack when chosen.
          */
         post: operations["send_simple_meeting_minutes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/delivery/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Simple Meeting Delivery
+         * @description Retry: whoever ended the meeting or an owner requeues the minutes' failed emails or
+         *     Slack post (403 for others, 409 when nothing failed); the minute tick tries them.
+         */
+        post: operations["retry_simple_meeting_delivery"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17695,6 +17737,13 @@ export interface components {
             values?: {
                 [key: string]: string | null;
             } | null;
+            /**
+             * With Dependents
+             * @default false
+             */
+            with_dependents: boolean;
+            /** Dependents */
+            dependents?: string[] | null;
         };
         /** ChatApplyOut */
         ChatApplyOut: {
@@ -17719,7 +17768,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -17772,6 +17821,18 @@ export interface components {
             correct?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Dependents
+             * @default []
+             */
+            dependents: string[];
+            /**
+             * Dependent Ids
+             * @default []
+             */
+            dependent_ids: string[];
+            /** May With Dependents */
+            may_with_dependents?: ("apply" | "propose") | null;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
@@ -17796,7 +17857,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -25567,7 +25628,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
             /**
              * Status
              * @enum {string}
@@ -25619,6 +25680,8 @@ export interface components {
             title: string;
             /** Ended At */
             ended_at: string | null;
+            /** Sent At */
+            sent_at: string | null;
             /** Decisions */
             decisions: number;
             /**
@@ -29725,6 +29788,13 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["OnePagerLine"][];
+            /** Who */
+            who?: string | null;
+            /**
+             * Missing
+             * @default false
+             */
+            missing: boolean;
         };
         /** OnePagerDraft */
         OnePagerDraft: {
@@ -29839,6 +29909,43 @@ export interface components {
              * @default []
              */
             decisions: components["schemas"]["SimpleOpenDecision"][];
+            /** Measure */
+            measure?: string | null;
+            /** Measure Source */
+            measure_source?: string | null;
+            /**
+             * Footnotes
+             * @default []
+             */
+            footnotes: string[];
+            /**
+             * Can Draw Flow
+             * @default false
+             */
+            can_draw_flow: boolean;
+            /** Words */
+            words?: string | null;
+        };
+        /**
+         * OnePagerLook
+         * @description One "Needs a look" item for the PRD's owners (numbers that disagree, a code with no
+         *     name): what to look at, and the sections it is in. Shared by the one-pager's checks.
+         */
+        OnePagerLook: {
+            /** Kind */
+            kind: string;
+            /** Text */
+            text: string;
+            /**
+             * Where
+             * @default []
+             */
+            where: string[];
+            /**
+             * Source Keys
+             * @default []
+             */
+            source_keys: string[];
         };
         /** OnePagerMetric */
         OnePagerMetric: {
@@ -29943,6 +30050,11 @@ export interface components {
             can_propose: boolean;
             /** Can Start */
             can_start: boolean;
+            /**
+             * Needs Look
+             * @default []
+             */
+            needs_look: components["schemas"]["OnePagerLook"][];
         };
         /**
          * OnePagerRemindOut
@@ -37309,7 +37421,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -37345,7 +37457,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider" | "cut_with_dependents";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -37580,6 +37692,16 @@ export interface components {
             /** Email Status */
             email_status?: string | null;
             /**
+             * Emails
+             * @default []
+             */
+            emails: components["schemas"]["SimpleEmailDelivery"][];
+            /**
+             * Email Sent
+             * @default 0
+             */
+            email_sent: number;
+            /**
              * Slack
              * @default false
              */
@@ -37652,6 +37774,11 @@ export interface components {
             session_kind: ("editing" | "meeting") | null;
             /** In Meeting */
             in_meeting: boolean;
+            /**
+             * Titles
+             * @default []
+             */
+            titles: string[];
         };
         /**
          * SimpleDraftOut
@@ -37720,6 +37847,19 @@ export interface components {
              */
             can_withdraw: boolean;
         };
+        /**
+         * SimpleEmailDelivery
+         * @description One attendee's minutes email: queued, sent, retrying (a try failed, another is due
+         *     on the tick) or failed (three tries failed; Retry requeues it).
+         */
+        SimpleEmailDelivery: {
+            person: components["schemas"]["SimplePersonRef"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "sent" | "retrying" | "failed";
+        };
         /** SimpleEvidence */
         SimpleEvidence: {
             /** Label */
@@ -37784,6 +37924,11 @@ export interface components {
             subject?: string | null;
             /** Risk Note */
             risk_note?: string | null;
+            /**
+             * Moves
+             * @default []
+             */
+            moves: string[];
         };
         /**
          * SimpleFlow
@@ -37978,6 +38123,11 @@ export interface components {
             can_reject: boolean;
             /** Proposed By Name */
             proposed_by_name?: string | null;
+            /**
+             * Needs Look
+             * @default []
+             */
+            needs_look: string[];
         };
         /** SimpleGoalSuggestionGoal */
         SimpleGoalSuggestionGoal: {
@@ -38208,6 +38358,11 @@ export interface components {
              * @default false
              */
             redraft: boolean;
+            /**
+             * Retry Delivery
+             * @default false
+             */
+            retry_delivery: boolean;
         };
         /** SimpleMeetingCommentIn */
         SimpleMeetingCommentIn: {
@@ -38258,6 +38413,12 @@ export interface components {
             minutes: components["schemas"]["SimpleMinutes"] | null;
             /** Decisions */
             decisions: components["schemas"]["SimpleDecisionRow"][];
+            delivery?: components["schemas"]["SimpleDelivery"] | null;
+            /**
+             * Can Retry Delivery
+             * @default false
+             */
+            can_retry_delivery: boolean;
         };
         /** SimpleMeetingIn */
         SimpleMeetingIn: {
@@ -38295,7 +38456,9 @@ export interface components {
         };
         /**
          * SimpleMeetingNote
-         * @description chat-actions: a minutes note or open question added during the meeting.
+         * @description chat-actions: a minutes note or open question added during the meeting; also a
+         *     comment (qa-simple-decide-1), which is not a meeting decision and stays out of
+         *     minutes.
          */
         SimpleMeetingNote: {
             /** Id */
@@ -38304,11 +38467,13 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "note" | "question";
+            kind: "note" | "question" | "comment";
             /** Text */
             text: string;
             /** By Name */
             by_name: string;
+            /** At */
+            at?: string | null;
             /** Card Id */
             card_id?: string | null;
         };
@@ -38817,7 +38982,7 @@ export interface components {
         };
         /**
          * SimplePlanSpan
-         * @description plan-model: first milestone start to last milestone end, "2 Nov - 12 Feb".
+         * @description plan-model: first milestone start to last milestone end, "Nov 2 - Feb 12".
          */
         SimplePlanSpan: {
             /**
@@ -39001,6 +39166,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * Can Withdraw
+             * @default false
+             */
+            can_withdraw: boolean;
             flow?: components["schemas"]["SimpleFlow"] | null;
         };
         /** SimplePriorityRow */
@@ -39033,6 +39203,8 @@ export interface components {
             effort?: number | null;
             /** Score */
             score?: number | null;
+            /** Confidence */
+            confidence?: number | null;
             /**
              * Value Estimated
              * @default false
@@ -39245,6 +39417,14 @@ export interface components {
         SimpleResumeOut: {
             session: components["schemas"]["SimpleSessionOut"];
             draft: components["schemas"]["SimpleDraftOut"];
+        };
+        /** SimpleRetryDeliveryIn */
+        SimpleRetryDeliveryIn: {
+            /**
+             * What
+             * @enum {string}
+             */
+            what: "email" | "slack";
         };
         /** SimpleRoadmapItem */
         SimpleRoadmapItem: {
@@ -69098,6 +69278,48 @@ export interface operations {
             };
         };
     };
+    withdraw_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_simple_drafts: {
         parameters: {
             query?: never;
@@ -70346,6 +70568,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SimpleSendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_simple_meeting_delivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleRetryDeliveryIn"];
             };
         };
         responses: {

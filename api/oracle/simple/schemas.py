@@ -57,6 +57,9 @@ class SimpleFlag(BaseModel):
     # What the flag is about: the dependency's item id, the blocker's id, the milestone's name.
     subject: str | None = None
     risk_note: str | None = None
+    # qa-simple-home-1: the items "Move the dependents" (shift_dependents) moves, the
+    # flagged item first, as the change engine moves them; empty for other flags.
+    moves: list[uuid.UUID] = []
 
 
 class SimpleDocRef(BaseModel):
@@ -131,7 +134,7 @@ class SimpleSlice(BaseModel):
 
 
 class SimplePlanSpan(BaseModel):
-    """plan-model: first milestone start to last milestone end, "2 Nov - 12 Feb"."""
+    """plan-model: first milestone start to last milestone end, "Nov 2 - Feb 12"."""
 
     start: dt.date
     end: dt.date
@@ -472,6 +475,9 @@ ChangeOp = Literal[
     # (oracle.simple.questions).
     "decide_question",
     "name_decider",
+    # fix5-cut-dependents: an item cut with every item that waits on it (transitively), as
+    # one change keyed by item id (oracle.simple.changes).
+    "cut_with_dependents",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -623,6 +629,9 @@ class SimpleDraftChange(BaseModel):
     at: dt.datetime
     session_kind: Literal["editing", "meeting"] | None
     in_meeting: bool
+    # fix5-cut-dependents: the titles of every item a cut_with_dependents cut (the item
+    # first); empty for every other op.
+    titles: list[str] = []
 
 
 class SimpleDraftOut(BaseModel):
@@ -744,6 +753,8 @@ class SimplePriorityRow(BaseModel):
     # Engineer-weeks.
     effort: float | None = None
     score: float | None = None
+    # qa-simple-plan-3: Oracle's confidence (0 to 1) the score is worked out with.
+    confidence: float | None = None
     # The goal value is a person's estimate (estimate_feature).
     value_estimated: bool = False
     # Codes of the rows it depends on (direct).
@@ -900,6 +911,8 @@ class SimplePriorityProposal(BaseModel):
     # Names of who decides it.
     waiting_for: list[str]
     can_decide: bool = False
+    # qa-simple-plan-30: the caller proposed it and may take it back (POST .../withdraw).
+    can_withdraw: bool = False
     # The design bundle of the item's feature; None until S10 ("No flow yet").
     flow: SimpleFlow | None = None
 
@@ -1000,6 +1013,28 @@ class OnePagerLine(BaseModel):
     flow: "OnePagerFlow | None" = None
     # S8: the decisions that changed this line (newest first; the Decisions page).
     decisions: list[SimpleOpenDecision] = []
+    # Reads clearly (2026-10-30, oracle.simple.one_pager_checks): an outcome's measure (what
+    # is counted) and its source (where), from the PRD; null when the PRD does not say.
+    measure: str | None = None
+    measure_source: str | None = None
+    # The notes of the footnote marks the line keeps ("† Sent once ..."); a mark with no
+    # note in the PRD is dropped from the line.
+    footnotes: list[str] = []
+    # A bet with no flow yet that the caller may ask Oracle to draw ("Draw the flow").
+    can_draw_flow: bool = False
+    # The line's words before codes got their names and marks with no note were dropped
+    # (the Edit box starts from them); null when those changed nothing.
+    words: str | None = None
+
+
+class OnePagerLook(BaseModel):
+    """One "Needs a look" item for the PRD's owners (numbers that disagree, a code with no
+    name): what to look at, and the sections it is in. Shared by the one-pager's checks."""
+
+    kind: str
+    text: str
+    where: list[str] = []
+    source_keys: list[str] = []
 
 
 class OnePagerItem(BaseModel):
@@ -1020,6 +1055,11 @@ class OnePagerBlock(BaseModel):
     rules: str
     kind: Literal["text", "lines", "metrics", "timeline"]
     lines: list[OnePagerLine] = []
+    # The problem block: who has it, from the PRD's users or personas section; null when
+    # the PRD has none ("Who has it is not in the PRD yet").
+    who: str | None = None
+    # Oracle marked it "Not in the PRD yet": nothing of the PRD maps to it (oracle.simple.quality).
+    missing: bool = False
 
 
 class OnePagerSectionPatch(BaseModel):
@@ -1158,6 +1198,10 @@ class OnePagerOut(BaseModel):
     can_propose: bool
     # Start review: the start API's own rule (meetings.may_start: an owner or the decider).
     can_start: bool
+    # "Needs a look", for owners only (empty for everyone else): the PRD's numbers that
+    # disagree and its codes with no name (the PRD's owners; ad-onepager), and the checks a
+    # build held for owners failed twice (kind "check"; oracle.simple.quality).
+    needs_look: list[OnePagerLook] = []
 
 
 # --------------------------------------------------------------------------- S7
@@ -1198,6 +1242,9 @@ class SimpleGoalSuggestion(BaseModel):
     can_reject: bool
     # A person's suggestion (origin "person"): their display name.
     proposed_by_name: str | None = None
+    # oracle.simple.quality: Oracle's suggestion failed its checks twice (owners only; people
+    # below owner do not see it).
+    needs_look: list[str] = []
 
 
 class SimpleGoalSuggestionGoal(BaseModel):
@@ -1312,6 +1359,14 @@ class ChatCardOut(BaseModel):
     # opens ({fields, values}: Oracle's reading, prefilled); None off the roadmap.
     change_words: dict[str, str | None] | None = None
     correct: dict[str, Any] | None = None
+    # fix5-cut-dependents: an open cut's dependents, the titles of every item that waits on
+    # it (transitively) and is not cut: what "Cut it and its dependents" cuts with it.
+    dependents: list[str] = []
+    # Their ids, in the same order: the apply sends them back (``ChatApplyIn.dependents``).
+    dependent_ids: list[uuid.UUID] = []
+    # Review major: what "Cut it and its dependents" does for the reader: "apply" when they
+    # decide every item it cuts, "propose" when not, None when they may not (``why_not``).
+    may_with_dependents: Literal["apply", "propose"] | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1411,6 +1466,12 @@ class ChatApplyIn(BaseModel):
     # roadmap-talk's Correct: the card's fields as the person corrected them (its
     # ``correct.fields``: title, goal, milestone, start_date, end_date, owner).
     values: dict[str, str | None] | None = None
+    # fix5-cut-dependents: a cut card applies as cut_with_dependents (the card's dependents
+    # cut with it, one change).
+    with_dependents: bool = False
+    # With it, the ids of the dependents the card listed (``ChatCardOut.dependent_ids``): a
+    # roadmap that has changed since is 409, so nothing unseen is cut.
+    dependents: list[uuid.UUID] | None = None
 
 
 class ChatApplyOut(BaseModel):
@@ -1516,13 +1577,29 @@ class SimpleMinutesIn(BaseModel):
     action_items: list[SimpleActionItemIn] = Field(default_factory=list, max_length=30)
 
 
+DeliveryStatus = Literal["queued", "sent", "retrying", "failed"]
+
+
+class SimpleEmailDelivery(BaseModel):
+    """One attendee's minutes email: queued, sent, retrying (a try failed, another is due
+    on the tick) or failed (three tries failed; Retry requeues it)."""
+
+    person: SimplePersonRef
+    status: DeliveryStatus
+
+
 class SimpleDelivery(BaseModel):
     decisions: bool = True
     inbox: bool = True
-    # chosen by whoever ended the meeting; status: queued, sent, failed, unavailable.
+    # chosen by whoever ended the meeting; email_status: queued, sent, retrying (some
+    # attendee's is tried again), failed (some attendee's did not go) or unavailable.
     email: bool = False
     email_status: str | None = None
+    # Each attendee's email, and how many went.
+    emails: list[SimpleEmailDelivery] = []
+    email_sent: int = 0
     slack: bool = False
+    # queued, sent, retrying or failed.
     slack_status: str | None = None
     slack_channel: str | None = None
 
@@ -1562,15 +1639,20 @@ class SimpleMeetingCan(BaseModel):
     end: bool
     # The same people requeue a failed minutes job ("Draft again").
     redraft: bool = False
+    # Whoever ended the meeting or an owner retries a failed email or Slack post.
+    retry_delivery: bool = False
 
 
 class SimpleMeetingNote(BaseModel):
-    """chat-actions: a minutes note or open question added during the meeting."""
+    """chat-actions: a minutes note or open question added during the meeting; also a
+    comment (qa-simple-decide-1), which is not a meeting decision and stays out of
+    minutes."""
 
     id: str
-    kind: Literal["note", "question"]
+    kind: Literal["note", "question", "comment"]
     text: str
     by_name: str
+    at: dt.datetime | None = None
     card_id: uuid.UUID | None = None
 
 
@@ -1687,6 +1769,10 @@ class SimpleSendIn(BaseModel):
     slack: bool = False
 
 
+class SimpleRetryDeliveryIn(BaseModel):
+    what: Literal["email", "slack"]
+
+
 class SimpleDecisionRow(BaseModel):
     id: uuid.UUID
     number: int
@@ -1708,6 +1794,9 @@ class SimpleMeetingGroup(BaseModel):
     meeting: SimpleMeetingBrief
     minutes: SimpleMinutes | None
     decisions: list[SimpleDecisionRow]
+    # How the sent minutes went out (email, Slack), and whether the caller may Retry.
+    delivery: SimpleDelivery | None = None
+    can_retry_delivery: bool = False
 
 
 class SimpleFilterOption(BaseModel):
@@ -1841,6 +1930,7 @@ class InboxSimpleMinutes(BaseModel):
     meeting_id: uuid.UUID
     title: str
     ended_at: dt.datetime | None
+    sent_at: dt.datetime | None
     decisions: int
     state: Literal["new", "open"]
 

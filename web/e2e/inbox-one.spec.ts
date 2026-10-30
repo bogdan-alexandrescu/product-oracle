@@ -85,7 +85,7 @@ test("a second visit: what was new is Open; Home's Needs you lists the same New 
   await expect(needs.getByTestId("panel-count")).toHaveText("11");
   // Six lines and '+5 more in Inbox': 11 items (the pending access request among them), each once.
   await expect(needs.getByTestId("home-needs-more")).toHaveText("+5 more in Inbox");
-  await expect(page.getByTestId("home-needs-table").locator("tr[data-row]")).toHaveCount(7);
+  await expect(page.getByTestId("home-needs-table").locator("tr[data-row]")).toHaveCount(6);
   await page.goto("/inbox");
   await expect(tab(page, "New")).not.toContainText("11");
   await tab(page, "Seen").click();

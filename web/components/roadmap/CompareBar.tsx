@@ -43,6 +43,17 @@ export function CompareBar({
 }) {
   const { previous, approved } = diff.options;
   const draft = diff.head.kind === "prd_draft";
+  // qa-docs-66: a roadmap's first version has nothing to compare with: say so, select nothing.
+  if (!draft && !previous && !approved) {
+    return (
+      <div data-testid="items-compare" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="text-sm font-semibold text-text2">Compared with</span>
+        <span data-testid="compare-none" className="text-sm text-text">
+          No earlier version
+        </span>
+      </div>
+    );
+  }
   return (
     <div data-testid="items-compare" className="flex min-w-0 flex-col gap-1.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -57,7 +68,7 @@ export function CompareBar({
               ? { value: "previous", label: draft ? previous.label : `v${versionOf(previous.ref)}`, testId: "compare-previous" }
               : {
                   value: "previous",
-                  label: draft ? "Previous draft" : "Previous version",
+                  label: draft ? "Previous draft" : "No earlier version",
                   testId: "compare-previous",
                   disabled: true,
                   title: draft ? "No earlier draft with items" : "No earlier version with items",

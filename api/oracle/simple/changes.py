@@ -56,6 +56,13 @@ Ops and the fields they write (``before`` must name the key fields):
   (``merged_into``: the kept item's key); or linked to a baseline feature
   (``target.feature_id``). Keyed by item id like the fixes; ``before`` is read, not given.
 - ``keep_both`` (S7): kept_both; the draft's look-alikes are no longer offered.
+- ``cut_with_dependents`` (fix5-cut-dependents): the item and every item that waits on it,
+  transitively (``dependents``), cut as one change, undone as one; ``before`` is the
+  item's own ``{"cut"}`` as seen, and optionally ``"dependents"``, the ids of the
+  dependents the caller saw (409 when the cut would take others); keyed by item id like
+  the fixes; ``target.titles`` names every item it cut, the item first. It applies only
+  when the caller decides every item it cuts (:func:`decides_all`); else it is proposed to
+  the people who decide them all (:func:`cut_route`), else the company's owners.
 """
 
 import uuid
@@ -78,7 +85,6 @@ from oracle.simple.schemas import (
     SimpleChangeIn,
     SimpleChangeOut,
     SimpleChangeResult,
-    SimpleFlag,
     SimpleItemFlags,
     SimpleSessionOut,
 )
@@ -90,6 +96,7 @@ DONE_DAYS = 30
 TITLE_MAX = 200
 OUTCOME_MAX = 1000
 NOTE_MAX = 500
+WITHDRAWN = "Withdrawn by the person who proposed it"
 DATES = ("start_date", "end_date")
 # Each single-item op's key fields: ``before`` must name them all.
 FIELDS: dict[str, tuple[str, ...]] = {
@@ -109,8 +116,10 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_decider": ("decider_id",),
 }
 FIXES = ("shift_dependents", "move_dependency")
+# fix5-cut-dependents: the item and every item that waits on it, cut as one change.
+CUT_ALL = "cut_with_dependents"
 # The ops that key ``before``/``after`` by item id.
-KEYED = (*FIXES, "merge_item")
+KEYED = (*FIXES, "merge_item", CUT_ALL)
 FLAG_KINDS = (
     "dependency_order",
     "blocker_date",
@@ -121,6 +130,7 @@ FLAG_KINDS = (
 WRITTEN = ("applied", "accepted", "undone")
 # Roadmap-plus: a roadmap's key dates (oracle.simple.key_dates).
 KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
+QUESTION_OPS = ("decide_question", "name_decider")
 
 
 class ChangeError(Exception):
@@ -345,13 +355,57 @@ async def routed_to(db: AsyncSession, entry: service.Entry, read_: service.Read)
     return service.decider_ids(entry, read_.deciders) or await _company_owners(db)
 
 
+def decides_all(principal: Any, entries: list[service.Entry], deciders: dict) -> bool:
+    """Review major: a cut with its dependents is the caller's to apply (or accept) only when
+    they decide every item it cuts (service.can_decide, item by item)."""
+    return bool(entries) and all(service.can_decide(principal, e, deciders) for e in entries)
+
+
+def cut_route(entries: list[service.Entry], deciders: dict) -> list[uuid.UUID]:
+    """Who decides every item of a cut with its dependents: the deciders all its items share
+    (service.decider_ids), else [] (the company's owners)."""
+    common: list[uuid.UUID] | None = None
+    for e in entries:
+        ids = service.decider_ids(e, deciders)
+        common = ids if common is None else [i for i in common if i in ids]
+    return common or []
+
+
+def cut_entries(c: SimpleChange, by_id: dict[uuid.UUID, service.Entry]) -> list[service.Entry]:
+    """The items a cut_with_dependents change cuts (its ``after``'s keys), as read."""
+    out = []
+    for key in c.after or {}:
+        try:
+            e = by_id.get(uuid.UUID(str(key)))
+        except ValueError:
+            e = None
+        if e is not None:
+            out.append(e)
+    return out
+
+
 def current_route(
-    c: SimpleChange, by_id: dict[uuid.UUID, service.Entry], deciders: dict, owners: list
+    c: SimpleChange,
+    by_id: dict[uuid.UUID, service.Entry],
+    deciders: dict,
+    owners: list,
+    questions: dict | None = None,
 ) -> list[uuid.UUID]:
     """An open proposal's decider now (S3a-minor: the decider may have changed since it
-    was made); its stored route when its item is not read."""
-    if c.status != "proposed" or c.op == "edit_line" or c.op in KEY_DATE_OPS:
+    was made); its stored route when its item is not read. A PRD question's proposal
+    (decide_question, name_decider) names no item: it goes to the question's decider now
+    (``questions``: its Decision by id; review major: a decider named since takes it),
+    else its stored route (the decider when made), never the company's owners."""
+    if c.status == "proposed" and c.op in QUESTION_OPS:
+        d = (questions or {}).get(str(c.target.get("decision_id")))
+        if d is not None and d.approver_id is not None:
+            return [d.approver_id]
         return list(c.routed_to or [])
+    if c.status != "proposed" or c.op in ("edit_line", *QUESTION_OPS) or c.op in KEY_DATE_OPS:
+        return list(c.routed_to or [])
+    if c.op == CUT_ALL:
+        cut = cut_entries(c, by_id)
+        return (cut_route(cut, deciders) or list(owners)) if cut else list(c.routed_to or [])
     item_id = c.target.get("item_id")
     if not item_id:
         return list(owners)
@@ -435,51 +489,34 @@ def _uuid(value: Any, name: str) -> uuid.UUID:
         raise ChangeError(422, f"target.{name}: an id") from e
 
 
-def _accepted_order(n: service.Entry, dep: service.Entry) -> bool:
-    return any(
-        f.kind == "dependency_order" and f.state == "amber" and str(f.subject) == str(dep.row.id)
-        for f in n.flags
-    )
-
-
 def _fix_plan(
     op: str, entry: service.Entry, dep: service.Entry, by_id: dict[uuid.UUID, service.Entry]
 ) -> dict[uuid.UUID, tuple[date, date]]:
     """The new (start, end) of every item a fix moves."""
-    one = timedelta(days=1)
     if op == "move_dependency":
-        new_end = entry.resolved.start.date - one
+        new_end = entry.resolved.start.date - timedelta(days=1)
         shift = new_end - dep.resolved.end.date
         return {dep.row.id: (dep.resolved.start.date + shift, new_end)}
-    # #9: every direct dependent of `dep` that starts too early moves, not only the one
-    # whose callout was clicked (two items can share a dependency, each estimated or
-    # slice-dated); the move then walks forward transitively through each moved item's
-    # own dependents.
-    moves: dict[uuid.UUID, tuple[date, date]] = {}
-    queue: deque[uuid.UUID] = deque()
-    for nid in dep.needed_by:
-        n = by_id.get(nid)
-        if n is None or n.status == "cut" or n.resolved.start.date > dep.resolved.end.date:
-            continue
-        # A sibling whose order on `dep` was accepted as a risk stays where it is.
-        if nid != entry.row.id and _accepted_order(n, dep):
-            continue
-        delta = dep.resolved.end.date + one - n.resolved.start.date
-        moves[nid] = (n.resolved.start.date + delta, n.resolved.end.date + delta)
-        queue.append(nid)
+    return service.shift_plan(entry, dep, by_id)
+
+
+def dependents(entry: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> list[service.Entry]:
+    """Every item that waits on ``entry``, transitively (breadth first, in the roadmap's
+    order at each step), but those cut or merged already: what cut_with_dependents cuts
+    with it. An item that also waits on a kept item is still cut: it waits on this one."""
+    out: list[service.Entry] = []
+    seen = {entry.row.id}
+    queue: deque[service.Entry] = deque([entry])
     while queue:
         cur = queue.popleft()
-        end = moves[cur][1]
-        for nid in by_id[cur].needed_by:
+        for nid in cur.needed_by:
             n = by_id.get(nid)
-            if n is None or nid in moves or n.status == "cut":
+            if n is None or nid in seen or n.status in ("cut", "merged"):
                 continue
-            start = n.resolved.start.date
-            if start <= end:
-                delta = end + one - start
-                moves[nid] = (start + delta, n.resolved.end.date + delta)
-                queue.append(nid)
-    return moves
+            seen.add(nid)
+            out.append(n)
+            queue.append(n)
+    return out
 
 
 async def _plan(
@@ -521,6 +558,28 @@ async def _plan(
         return entry, target, before, after
     if op == "merge_item":
         return await _merge_plan(db, entry, target, by_id)
+    if op == CUT_ALL:
+        # As a cut: ``before`` is the item's own {"cut"} as seen; the change is keyed by
+        # item id, the item and its dependents (target.titles names them, the item first).
+        if "cut" not in body.before:
+            raise ChangeError(422, "before: cut as you saw it")
+        current = read(row, ("cut",), target)
+        if _normal(("cut",), body.before) != current:
+            raise await _conflict(db, current, {str(row.id)}, "Changed since you saw it")
+        cut = [entry, *dependents(entry, by_id)]
+        if len(cut) == 1:
+            raise ChangeError(422, "No item depends on this one: cut it alone")
+        seen_ids = body.before.get("dependents")
+        now_ids = [str(e.row.id) for e in cut[1:]]
+        if seen_ids is not None and sorted(map(str, seen_ids)) != sorted(now_ids):
+            # Review minor: never cut a dependent the caller was not shown.
+            raise await _conflict(
+                db, {"dependents": now_ids}, set(now_ids), "Changed since you saw it"
+            )
+        target["titles"] = [e.row.title for e in cut]
+        before = {str(e.row.id): read(e.row, ("cut",), target) for e in cut}
+        after = {str(e.row.id): {"cut": True} for e in cut}
+        return entry, target, before, after
     fields = FIELDS[op]
     missing = [f for f in fields if f not in body.before]
     if missing:
@@ -786,17 +845,7 @@ async def _flags(
     return [
         SimpleItemFlags(
             item_id=i,
-            flags=[
-                SimpleFlag(
-                    kind=f.kind,
-                    reason=f.reason,
-                    fixes=f.fixes,
-                    state=f.state,  # type: ignore[arg-type]
-                    subject=f.subject,
-                    risk_note=f.risk_note,
-                )  # fmt: skip
-                for f in by_id[i].flags
-            ],
+            flags=service.flags_out(by_id[i]),
         )
         for i in ids
     ]
@@ -834,9 +883,9 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
             )
             if i not in ids
         ]
-    elif body.op in FIXES:
-        # A fix may move any item of the version (dependents, transitively): every one is
-        # locked before service.load reads them.
+    elif body.op in (*FIXES, CUT_ALL):
+        # A fix may move any item of the version (dependents, transitively), a cut with its
+        # dependents cut them: every one is locked before service.load reads them.
         version = await db.scalar(
             select(RoadmapItem.roadmap_version_id).where(RoadmapItem.id == ids[0])
         )
@@ -853,7 +902,12 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     entry = read_.by_id().get(ids[0])
     if entry is None:
         raise ChangeError(404, "No such roadmap item")
-    applies = service.can_decide(principal, entry, read_.deciders)
+    cut = [entry, *dependents(entry, read_.by_id())] if body.op == CUT_ALL else None
+    applies = (
+        decides_all(principal, cut, read_.deciders)
+        if cut is not None
+        else service.can_decide(principal, entry, read_.deciders)
+    )
     session = await _session_for_change(db, me, body.session_id, applies, now)
     entry, target, before, after = await _plan(db, principal, body, read_)
     c = SimpleChange(
@@ -867,7 +921,11 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
         by=me,
         at=now,
         reason=body.reason,
-        routed_to=[] if applies else await routed_to(db, entry, read_),
+        routed_to=[]
+        if applies
+        else (cut_route(cut, read_.deciders) or await _company_owners(db))
+        if cut is not None
+        else await routed_to(db, entry, read_),
     )
     if applies:
         await _apply(db, c, after, principal, session)  # type: ignore[arg-type]
@@ -920,7 +978,12 @@ async def decide(
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
         raise ChangeError(404, "No such change")
-    if not service.can_decide(principal, entry, read_.deciders):
+    by_id = read_.by_id()
+    if not (
+        decides_all(principal, cut_entries(c, by_id), read_.deciders)
+        if c.op == CUT_ALL
+        else service.can_decide(principal, entry, read_.deciders)
+    ):
         raise ChangeError(
             403,
             "Only an owner or the roadmap's decider (with no decider, its owner) decides proposals",
@@ -944,6 +1007,29 @@ async def decide(
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
     return SimpleChangeResult(change=await one_out(db, principal, c), flags=flags)
+
+
+async def withdraw(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
+    """qa-simple-plan-30: the person who proposed a change takes it back while it still waits
+    for a decision; nothing changes and it is closed as declined, "Withdrawn"."""
+    from oracle.simple import additions, one_pager, questions
+
+    me, now = _me(principal), company_time.now()
+    c = await _get(db, change_id)
+    if c.by != me:
+        raise ChangeError(403, "Only the person who proposed it withdraws it")
+    if c.op in additions.OPS or c.op in questions.OPS or c.op in one_pager.OPS:
+        # Their decline does more than close the proposal (a suggestion reopens, ...).
+        raise ChangeError(409, "This kind of proposal is not withdrawn here")
+    if c.status != "proposed":
+        raise ChangeError(409, f"This change is {c.status} already")
+    c.status = "declined"
+    c.decided_by, c.decided_at, c.decision_reason = me, now, WITHDRAWN
+    await db.flush()
+    await audit.record(db, principal, "simple_change.withdrawn", "simple_change", c.id,
+                       data={"op": c.op, "target": c.target})  # fmt: skip
+    await db.commit()
+    return SimpleChangeResult(change=await one_out(db, principal, c), flags=[])
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
@@ -1033,7 +1119,7 @@ class _View:
         self.questions: dict[str, Any] = {}
 
     def route(self, c: SimpleChange) -> list[uuid.UUID]:
-        return current_route(c, self.by_id, self.deciders, self.company_owners)
+        return current_route(c, self.by_id, self.deciders, self.company_owners, self.questions)
 
     def entry(self, c: SimpleChange) -> service.Entry | None:
         try:
@@ -1054,6 +1140,8 @@ class _View:
             return targets.may_decide(self.principal, c, self)
         if c.op in one_pager.OPS:
             return one_pager.may_decide(self.principal, c)
+        if c.op == CUT_ALL:
+            return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)
         return e is not None and service.can_decide(self.principal, e, self.deciders)
 
@@ -1146,17 +1234,24 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
     people = {"drafts": participants, "owners": owners}
     company = await _company_owners(db) if any(c.status == "proposed" for c in changes) else []
     v = _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
-    qids = {
-        c.target.get("decision_id") for c in changes if c.op in ("decide_question", "name_decider")
-    }
-    if qids:
-        from oracle.decisions.models import Decision
-
-        ids = [uuid.UUID(i) for i in qids if i]
-        v.questions = {
-            str(d.id): d for d in await db.scalars(select(Decision).where(Decision.id.in_(ids)))
-        }
+    v.questions = await _questions(db, changes)
     return v
+
+
+async def _questions(db: AsyncSession, changes: list[SimpleChange]) -> dict[str, Any]:
+    """The PRD questions (Decision rows, by id) these changes are on."""
+    ids = set()
+    for c in changes:
+        if c.op in QUESTION_OPS:
+            try:
+                ids.add(uuid.UUID(str(c.target.get("decision_id"))))
+            except ValueError:
+                pass
+    if not ids:
+        return {}
+    from oracle.decisions.models import Decision
+
+    return {str(d.id): d for d in await db.scalars(select(Decision).where(Decision.id.in_(ids)))}
 
 
 async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeOut:
@@ -1216,7 +1311,8 @@ async def inbox_rows(
         read_ = await service.load(db)
         owners = await _company_owners(db)
         by_id = read_.by_id()
-        waiting = [c for c in waiting if me in current_route(c, by_id, read_.deciders, owners)]
+        qs = await _questions(db, waiting)
+        waiting = [c for c in waiting if me in current_route(c, by_id, read_.deciders, owners, qs)]
     decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
         return [], []

@@ -66,6 +66,9 @@ test.describe("phone", () => {
     expect(await header.evaluate((el) => getComputedStyle(el).position)).toBe("static");
     const step = steps(page).getByRole("button", { name: "2 Roadmap" });
     expect((await step.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    // qa-simple-decide-29: the attendees fold into one row on a phone; its toggle is a 44 px target too.
+    expect((await page.getByTestId("meeting-people-toggle").boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await page.getByTestId("meeting-people-toggle").click();
     const chip = page.getByLabel("Attendees").locator("li").first();
     expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   });

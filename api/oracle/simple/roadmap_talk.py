@@ -142,15 +142,23 @@ def _day(c: Any, text: str | None, name: str) -> date | None:
 # --------------------------------------------------------------------------- builds
 
 
-def _move_kw(c: Any, e: service.Entry, start: date, end: date, how: str = "") -> dict:
+def _move_kw(
+    c: Any, e: service.Entry, start: date, end: date, how: str = "",
+    shift: tuple[int, int] | None = None,
+) -> dict:  # fmt: skip
     if end < start:
         raise ValueError("the end comes before the start")
     s, en = start.isoformat(), end.isoformat()
     how = f" {how}," if how else ""
-    return chat._kw(f"Move {label(e)}{how} to {span(start, end)}", "move_dates", e,
+    card = chat._kw(f"Move {label(e)}{how} to {span(start, end)}", "move_dates", e,
                     {"item_id": str(e.row.id)}, chat._dates(e), {"start_date": s, "end_date": en},
                     {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
                      "end_date": en, "roadmap": True})  # fmt: skip
+    if shift is not None:
+        # A move by a span (as chat._b_move and the mock's talkMove): offered again on
+        # newer dates, it moves from those (chat.rebase).
+        card["preview"]["shift"] = list(shift)
+    return card
 
 
 def build_move_dates(c: Any, a: dict[str, Any]) -> chat.Built:
@@ -176,7 +184,8 @@ def build_move_dates(c: Any, a: dict[str, Any]) -> chat.Built:
         how = f"{WORDS.get(n, str(n))} {m[2]}{'s' if n > 1 else ''} {m[3] or 'later'}"
         if m[3] == "out":
             how = how.replace(" out", " later")
-        return _move_kw(c, e, moved(r.start.date), moved(r.end.date), how)
+        return _move_kw(c, e, moved(r.start.date), moved(r.end.date), how,
+                        (sign * by[0], sign * by[1]))  # fmt: skip
     if start is None and end is None:
         return chat._b_move(c, a)
     e = c.find(chat._need(a, "item"))

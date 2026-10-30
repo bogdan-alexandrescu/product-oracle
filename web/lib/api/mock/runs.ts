@@ -14,7 +14,7 @@ import type { RowTally } from "./from-run";
 import { fileItems } from "./checkpoint-review";
 import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
-import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, type StoredScope } from "./scope";
+import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
 
 type RunOut = Schemas["RunOut"];
 type SegmentOut = Schemas["SegmentOut"];
@@ -621,7 +621,7 @@ function cannotApprove(c: CheckpointOut): string | null {
 
 /** As oracle.runs.gate (D3): a date reason is never waived; file-level problems never are. */
 const DATE_CODES = ["unverified_date", "date_outside_now", "undated_source", "invalid_date"];
-const DATE_NOT_WAIVED = "a date is never waived: remove it or record a verified basis";
+const DATE_NOT_WAIVED = "a date is never waived: remove it or add a date source";
 const FILE_NOT_WAIVED = "a problem of the whole file is never waived: send it back to the agents";
 /** As oracle.runs.gate.message. */
 const gateMessage = (n: number) => `${n} blocking problem${n === 1 ? "" : "s"} left: fix or waive them, or send back to the agents`;
@@ -4057,6 +4057,13 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
     }
   }
   const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answersCode(a, x.code)));
+  // qa-work-1: a feature set sends the rows a person changed (as the API's sent_review).
+  const scoped = cp.kind === "feature_set" ? scopeSendBack(ctx.db, r.id, staged) : null;
+  if (scoped) {
+    entries.push(...scoped.entries);
+    waived.push(...scoped.waived);
+    items.push(...scoped.keys);
+  }
   const entered = new Set([...entries, ...waived].map((e) => e.id));
   return {
     version: 1,
@@ -4064,7 +4071,7 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
     run: r.id,
     segment: seg?.name ?? null,
     attempt: (cp.payload?.attempt as number | undefined) ?? null,
-    file: cp.kind === "roadmap_items" ? "roadmap_items.yaml" : null,
+    file: cp.kind === "roadmap_items" ? "roadmap_items.yaml" : scoped ? "feature_set.yaml" : null,
     items: entries,
     unchanged: items.filter((k) => !entered.has(k) && !open.some((x) => x.item === k)),
     problems_open: open.filter((x) => x.severity === "blocking").map((x) => ({ id: x.item, code: x.code, text: x.text })),

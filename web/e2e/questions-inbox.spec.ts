@@ -70,7 +70,9 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
 
   await row.getByRole("button", { name: "Answer" }).click();
   const form = page.getByTestId("answer-question");
-  await expect(form).toContainText(CLINIC);
+  // qa-company-3 (round 3): the question once, in the row, not again above the form.
+  await expect(row.getByTestId("question-prompt")).toHaveText(CLINIC);
+  await expect(form.getByTestId("answer-prompt")).toHaveCount(0);
   await expect(form).toContainText("Why Oracle asks");
   for (const name of ["Send answer", "I don't know", "Defer", "Ask someone", "Research this"]) {
     await expect(form.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
@@ -96,9 +98,15 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   await tab(page, "Seen").click();
   await tab(page, "New").click();
 
+  // The seeded metric question already has this person's "I don't know": not offered again.
   await questionRow(page, METRIC).getByRole("button", { name: "Answer" }).click();
+  await expect(page.getByTestId("answer-question").getByRole("button", { name: "Send answer" })).toBeVisible();
+  await expect(page.getByTestId("answer-question").getByRole("button", { name: "I don't know" })).toHaveCount(0);
+  await page.getByTestId("answer-question").getByRole("button", { name: "Cancel" }).click();
+
+  await questionRow(page, CLINIC).getByRole("button", { name: "Answer" }).click();
   await page.getByTestId("answer-question").getByRole("button", { name: "I don't know" }).click();
-  await expect(questionRow(page, METRIC)).toContainText("I don't know ✓");
+  await expect(questionRow(page, CLINIC)).toContainText("I don't know ✓");
 
   await questionRow(page, REFUND).getByRole("button", { name: "Answer" }).click();
   await page.getByTestId("answer-question").getByRole("button", { name: "Defer" }).click();
@@ -110,15 +118,16 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   await form.getByLabel("Find a person").fill("appr");
   await form.getByRole("option", { name: /Approver/ }).click();
   await expect(questionRow(page, TIERS)).toContainText("Asked Approver ✓");
-  await expect(badge(page)).toHaveText("10");
+  // The "I don't know" question still counts in Needs you (owner 2026-10-29): open until a real answer.
+  await expect(badge(page)).toHaveText("11");
 
   // Neither under New nor under Open any more: all three are Done.
   for (const name of ["New", "Seen"]) {
     await tab(page, name).click();
-    for (const text of [METRIC, REFUND, TIERS]) await expect(questionRow(page, text)).toHaveCount(0);
+    for (const text of [CLINIC, REFUND, TIERS]) await expect(questionRow(page, text)).toHaveCount(0);
   }
   await tab(page, "Done").click();
-  for (const text of [METRIC, REFUND, TIERS]) await expect(questionRow(page, text)).toHaveCount(1);
+  for (const text of [CLINIC, REFUND, TIERS]) await expect(questionRow(page, text)).toHaveCount(1);
 
   // The delegate's Inbox has it, and the question delegated to them before.
   await signOut(page);

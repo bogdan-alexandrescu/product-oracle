@@ -138,45 +138,44 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, colorScheme: "dark" });
 
-  test("qa-company-34: the page's primary button shares the tab strip's row, not a row of its own", async ({ page }) => {
+  test("qa-company-34, -44: the page's primary button sits in the tab strip, labelled, after every tab", async ({ page }) => {
+    // protects=qa-company-34 (no row of its own above the tabs) and qa-company-44 (a labelled
+    // "+ Decision", not a bare "+"); fails_when=the button is an icon only, or sits outside
+    // the strip; no_claim=which line it ends on.
     await login(page);
-    for (const [key, name] of [
-      ["decisions", "Propose decision"],
+    for (const [key, name, label] of [
+      ["decisions", "Propose decision", "Decision"],
       // Metrics has no header button here: with no metrics yet its empty state holds the Add (qa-company-20).
-      ["updates", "New update"],
+      ["updates", "New update", "Update"],
     ] as const) {
       await openTab(page, key);
       const button = page.getByRole("button", { name, exact: true }).filter({ visible: true });
       await expect(button).toHaveCount(1);
+      await expect(button).toHaveText(label);
       const b = (await button.boundingBox())!;
       const n = (await nav(page).boundingBox())!;
-      // Same row: the button's middle is within the strip's height, and to its right.
-      expect(b.y + b.height / 2).toBeGreaterThan(n.y);
-      expect(b.y + b.height / 2).toBeLessThan(n.y + n.height);
-      expect(b.x).toBeGreaterThanOrEqual(n.x + n.width);
+      expect(b.y).toBeGreaterThanOrEqual(n.y);
+      expect(b.y + b.height).toBeLessThanOrEqual(n.y + n.height);
+      expect(b.x + b.width).toBeLessThanOrEqual(n.x + n.width);
+      const market = (await nav(page).getByTestId("company-tab-market").boundingBox())!;
+      expect(b.y).toBeGreaterThanOrEqual(market.y - 1);
       await button.click();
       await expect(page.getByRole("dialog", { name })).toBeVisible();
     }
   });
 
-  test("qa-shell-34: Market's sub-tabs show no scrollbar and a picked tab shows whole", async ({ page }) => {
+  test("qa-shell-34, qa-company-44: Market's sub-tabs all show, wrapping, with no scrollbar", async ({ page }) => {
     await login(page);
     await openTab(page, "market");
     const tabs = page.getByRole("tablist", { name: "Market" });
-    const scrollbar = await tabs.evaluate((el: HTMLElement) => ({ style: getComputedStyle(el).scrollbarWidth, bar: el.offsetHeight - el.clientHeight }));
-    expect(scrollbar.style).toBe("none");
-    expect(scrollbar.bar).toBe(0);
+    for (const name of ["Alternatives", "Change log", "Positioning", "Pricing", "Win and loss"]) {
+      await expect(tabs.getByRole("tab", { name })).toBeInViewport({ ratio: 1 });
+    }
+    const bar = await tabs.evaluate((el: HTMLElement) => el.offsetHeight - el.clientHeight);
+    expect(bar).toBe(0);
     const pricing = tabs.getByRole("tab", { name: "Pricing" });
     await pricing.click();
     await expect(pricing).toHaveAttribute("aria-selected", "true");
-    // The strip keeps the current tab in full view: not cut by its edge.
-    await expect
-      .poll(async () => {
-        const t = (await pricing.boundingBox())!;
-        const s = (await tabs.boundingBox())!;
-        return t.x >= s.x - 0.5 && t.x + t.width <= s.x + s.width + 0.5;
-      })
-      .toBe(true);
     const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
     expect(sw).toBeLessThanOrEqual(cw);
   });

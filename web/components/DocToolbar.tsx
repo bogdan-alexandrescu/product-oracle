@@ -52,17 +52,31 @@ export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTit
   );
 }
 
-/** Bar under the shell's top edge: breadcrumb + document status + page tools + the ⋮ menu (#482). */
-export function DocToolbar({ doc, children }: { doc?: DocumentOut; children?: ReactNode }) {
+/**
+ * Bar under the shell's top edge: breadcrumb + document status + page tools + the ⋮ menu (#482).
+ * `withTitle={false}`: the page's own title names the document and its status (the overview,
+ * qa-docs-24), so the crumb only leads back. `openItem={false}`: the page has its own Open latest (qa-docs-27).
+ */
+export function DocToolbar({
+  doc,
+  children,
+  withTitle = true,
+  openItem = true,
+}: {
+  doc?: DocumentOut;
+  children?: ReactNode;
+  withTitle?: boolean;
+  openItem?: boolean;
+}) {
   const router = useRouter();
   return (
     <div className="sticky top-0 z-20 border-b border-line bg-bg">
       <div className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 px-6 py-2 max-[600px]:px-2.5">
-        <DocCrumb doc={doc} />
+        <DocCrumb doc={doc} withTitle={withTitle} />
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {children}
           {/* A deleted document is gone: back to its list. */}
-          {doc && <ArtifactMenu doc={doc} onDeleted={() => router.push(home(doc).href)} />}
+          {doc && <ArtifactMenu doc={doc} openItem={openItem} onDeleted={() => router.push(home(doc).href)} />}
         </div>
       </div>
     </div>

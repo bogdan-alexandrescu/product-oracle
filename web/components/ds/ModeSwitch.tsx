@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useLayoutEffect } from "react";
 
 import { DETAILED_HOME, modeOf, SIMPLE_HOME, saveMode, switchTarget, type Mode } from "@/lib/experience";
+import { leave } from "@/lib/leave-guard";
 import { useMe } from "@/lib/me";
 
 import { onRadioKeys, radioTabIndex } from "./radio-keys";
@@ -15,12 +16,14 @@ const MODES: { value: Mode; label: string }[] = [
 
 /**
  * The one segmented control (qa-simple-home-31): Simple's rail switch, the More sheet's and the
- * account menu's theme switch. A light track with the chosen option as a white pill.
+ * account menu's theme switch. A light track with the chosen option as a white pill (in dark, a
+ * lighter outlined one).
  */
 export const SEGMENTED = {
   track: "gap-0.5 rounded-xl bg-surface2 p-1",
   option: "h-9 rounded-lg text-[15px]",
-  on: "bg-surface font-semibold text-accent-ink shadow-sm",
+  // qa-simple-home-20: in dark the chosen option is a lighter, outlined pill (a dark pill on its track read as unchosen).
+  on: "bg-surface font-semibold text-accent-ink shadow-sm [:root[data-theme=dark]_&]:bg-accent-mid [:root[data-theme=dark]_&]:shadow-[0_0_0_1px_var(--line-strong)] dark:[:root:not([data-theme=light])_&]:bg-accent-mid dark:[:root:not([data-theme=light])_&]:shadow-[0_0_0_1px_var(--line-strong)]",
   off: "font-medium text-text2 hover:text-accent-ink",
 };
 
@@ -61,8 +64,11 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
   // the person lands next time), so a slow save never makes the click look dead.
   function choose(mode: Mode) {
     if (mode === current) return;
-    void saveMode(mode);
-    router.push(switchTarget(pathname, mode, documentHome));
+    // Typed work on the page (New PRD) asks first (lib/leave-guard).
+    leave(() => {
+      void saveMode(mode);
+      router.push(switchTarget(pathname, mode, documentHome));
+    });
   }
 
   const rail = placement !== "sheet";

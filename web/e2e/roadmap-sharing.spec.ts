@@ -19,7 +19,7 @@ async function sharing(page: Page, email?: string) {
 
 /** Creates a link through the Share sheet and returns its address and passcode, as shown once. */
 async function createLink(page: Page, audience: string, label: string, passcode?: string) {
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
   await sheet.getByLabel("Audience").selectOption({ label: audience });
   await sheet.getByLabel("Label").fill(label);
@@ -64,7 +64,7 @@ test("an owner switches the audience: Board hides its sections and goal-less ite
 test("share a Board link: the address and passcode are shown once; the holder needs the passcode", async ({ page }) => {
   await sharing(page);
   await page.goto(`${DOC}?audience=board`);
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
   // The sheet preselects the page's audience and 14 days, with downloads allowed.
   await expect(sheet.getByLabel("Audience")).toHaveValue("board");
@@ -108,7 +108,7 @@ test("share a Board link: the address and passcode are shown once; the holder ne
   await holder.getByLabel("Passcode").fill(code);
   await holder.getByRole("button", { name: "Open" }).click();
   const shared = holder.frameLocator('iframe[title="Shared roadmap"]');
-  await expect(shared.getByText("Audience Board", { exact: true })).toBeVisible();
+  await expect(shared.getByText(/^Shared with you/)).toBeVisible();
   await expect(holder.getByRole("button", { name: "Download PDF" })).toBeVisible();
 });
 
@@ -124,7 +124,7 @@ test("the Links table: View log, New passcode and Revoke, and the ended page", a
   await page.goto(path);
   await page.getByLabel("Passcode").fill(code);
   await page.getByRole("button", { name: "Open" }).click();
-  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText("Audience Board", { exact: true })).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText(/^Shared with you/)).toBeVisible();
 
   await page.goto(DOC);
   const row = page.getByTestId("share-links").getByRole("row").filter({ hasText: "Board, October meeting" });
@@ -155,7 +155,7 @@ test("the Links table: View log, New passcode and Revoke, and the ended page", a
   await expect(page.getByText("That passcode did not open a link.")).toBeVisible();
   await page.getByLabel("Passcode").fill(fresh);
   await page.getByRole("button", { name: "Open" }).click();
-  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText("Audience Board", { exact: true })).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText(/^Shared with you/)).toBeVisible();
 
   await page.goto(DOC);
   await expect(row.getByTestId("share-views")).toHaveText("2");
@@ -192,7 +192,7 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
     await audience.getByRole("radio", { name: "Board" }).click();
     await expect(page.frameLocator('iframe[title="Roadmap for Board"]').getByText("Audience Board", { exact: true })).toBeVisible();
     await expect(audience.getByRole("radio", { name: "Public" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Share", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Share a link", exact: true })).toHaveCount(0);
     await expect(page.getByTestId("share-links")).toHaveCount(0);
   });
 }
@@ -200,7 +200,7 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
 test("an approver shares Board, Team and Engineering, never Public", async ({ page }) => {
   await sharing(page, "approver@example.com");
   await page.goto(DOC);
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
   const options = sheet.getByLabel("Audience").locator("option");
   await expect(options).toHaveText(["Board", "Team", "Engineering", "Public (owners only)"]);
@@ -216,12 +216,14 @@ test("an approver shares Board, Team and Engineering, never Public", async ({ pa
 test("an unpublished roadmap asks to publish first", async ({ page }) => {
   await sharing(page);
   await page.goto("/documents/usage-alerts-roadmap");
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
   // qa-docs-2: v1's withdrawn date keeps it from being published; the sheet says so.
   await expect(sheet.getByTestId("share-not-published")).toContainText("v1 can't be published yet");
   await expect(sheet.getByTestId("share-blocks")).toContainText("Dec 15, 2026");
-  await expect(sheet.getByRole("link", { name: "Go to Publish" })).toHaveAttribute("href", "/documents/usage-alerts-roadmap/publish");
+  // qa-docs-16: the way to fix it is a button; the sheet only closes.
+  await expect(sheet.getByRole("link", { name: "Go to Plan › Dates" })).toHaveAttribute("href", "/plan/dates");
+  await expect(sheet.getByRole("button", { name: "Cancel" })).toHaveCount(0);
   await expect(sheet.getByRole("button", { name: "Create link" })).toHaveCount(0);
 });
 

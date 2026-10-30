@@ -49,8 +49,8 @@ BUILTIN_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "oracle-default",
         "prd",
         "Goal-traced PRD",
-        "Oracle's standard: goal trace, problem alignment, prioritized solution, requirements "
-        "with ids, launch, recap",
+        "Oracle's standard: the goal it serves, the problem, the solution in priority order, "
+        "numbered requirements, the launch and a look back",
         "Default for any cross-functional feature or product version; the founder has no "
         "strong preference",
         "clean-document",
@@ -107,7 +107,8 @@ BUILTIN_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "now-next-later",
         "roadmap",
         "Now / Next / Later",
-        "Direction by confidence horizon. Dated milestones only in Now. Goal tag on every card.",
+        "What happens now, next and later. Only Now has dates; every card names the goal it "
+        "serves.",
         "Always the default. Especially early stage, fast change, or when goals are confirmed "
         "but dates beyond the quarter are not credible.",
         "roadmap-board",
@@ -116,8 +117,8 @@ BUILTIN_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "outcome-roadmap",
         "roadmap",
         "Outcome roadmap",
-        "Rows = confirmed goals (metric, target), columns = horizons. Shows what each goal "
-        "gets and flags items that serve no goal.",
+        "One row per confirmed goal, with what it gets now, next and later. Shows the work "
+        "that serves no goal.",
         "Board or leadership audience. A goal-setting or OKR season. A traceability report "
         'shows drift. The founder asks "are we working on the right things?"',
         "roadmap-board",
@@ -126,8 +127,8 @@ BUILTIN_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "quarterly-timeline",
         "roadmap",
         "Quarterly timeline",
-        "Quarter axis, swimlanes by team or theme, dated bars in Now, fuzzy bars beyond, "
-        "milestones, dependency arrows, capacity strip.",
+        "Work laid out by quarter, one lane per team. Firm dates this quarter, rough ranges "
+        "after it.",
         "External dates exist (launch, contract, event, regulation). GTM or finance needs "
         "timing. Several teams with cross-dependencies.",
         "roadmap-board",
@@ -136,8 +137,8 @@ BUILTIN_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "release-plan",
         "roadmap",
         "Release plan",
-        "Releases with target dates, scoped items, readiness, tracker links, estimate vs plan "
-        "drift.",
+        "Each release with its target date, what is in it, what is left, and whether it is "
+        "still on schedule.",
         "Engineering audience. Versioned or app-store releases. Eng tracker connected with "
         "write or read access.",
         "roadmap-board",
@@ -146,7 +147,8 @@ BUILTIN_TEMPLATES: tuple[BuiltinTemplate, ...] = (
         "cycle-bets",
         "roadmap",
         "Cycle bets (Shape Up)",
-        "Current cycle bets with appetite and hill position, next-cycle pitches, cool-down.",
+        "What the team committed to this cycle and how far along each piece is, ideas for the "
+        "next cycle, and the break between cycles.",
         "The team already works in fixed cycles or the founder wants a betting-table ritual. "
         "Small team, horizon of one cycle.",
         "roadmap-board",
@@ -180,7 +182,7 @@ KIND_TEMPLATES: tuple[BuiltinTemplate, ...] = (
     BuiltinTemplate(
         "board-product",
         "update",
-        "Board product section",
+        "Board update",
         "The product section of a board update: goals against target, a timeline with "
         "verified dates only, what shipped and what slipped, in two slides",
         "A board meeting is coming (every 6 to 8 weeks)",

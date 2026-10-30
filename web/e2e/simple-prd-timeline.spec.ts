@@ -35,8 +35,8 @@ import { expect, test, type Page } from "./test";
  * worded with ids; no_claim = how a goal is measured.
  *
  * Card timeline-card (B1 + D1): protects = the timeline card carries the PRD's summary lines,
- * "When", the decisions with a date as diamonds with their words ("was due 20 Oct", "at the M1
- * review, 27 Nov", "before M2 starts, 30 Nov"), the legend, the count of decisions with no day
+ * "When", the decisions with a date as diamonds with their words ("was due Oct 20", "M2 decision, taken at the M1
+ * review, Nov 27", "before M2 starts, Nov 30"), the legend, the count of decisions with no day
  * and "Milestones: done when"; it is slim (a one-row lane is at most 34 px; a goal's lane at
  * most 64); the milestone's part is a separate card under it; fails_when = a part is missing,
  * a lane grows back to the old height or the milestone's part shares the timeline's card.
@@ -50,7 +50,7 @@ import { expect, test, type Page } from "./test";
  * milestone's work; no_claim = the flow drawing (the Flow components).
  *
  * Card timeline-now: protects = on a day inside M1 its card's chip reads "Now · week 2 of 4"
- * and the next milestone's "Next · starts 30 Nov"; fails_when = the week or the state is
+ * and the next milestone's "Next · starts Nov 30"; fails_when = the week or the state is
  * wrong; no_claim = the company's time zone (its own spec).
  *
  * Card timeline-header (D1, D2): protects = the PRD's header sits above the timeline: the way
@@ -107,9 +107,9 @@ for (const phone of [false, true]) {
         await expect(title).toBeVisible();
         const meta = page.getByTestId("one-pager-meta");
         await expect(meta).toContainText("Approved");
-        await expect(meta).toContainText(phone ? "v3 · 20 Oct 2026" : "Version 3 · 20 Oct 2026");
+        await expect(meta).toContainText(phone ? "v3 · Oct 20, 2026" : "Version 3 · Oct 20, 2026");
         await expect(meta).toContainText("Owner Admin");
-        await expect(meta).toContainText("2 Nov 2026 → 12 Feb 2027");
+        await expect(meta).toContainText("Nov 2, 2026 → Feb 12, 2027");
         await expect(meta).toContainText("56 engineer-weeks");
         for (const name of ["Present", "Export PDF", "Start review"]) await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
         await expect(page.getByRole("link", { name: "Open the detailed view" })).toBeVisible();
@@ -165,7 +165,7 @@ for (const phone of [false, true]) {
           await expect(tl.getByTestId("timeline-no-work")).toHaveCount(1);
           await expect(tl.getByTestId("timeline-lane")).toHaveCount(5);
           await expect(tl.getByTestId("timeline-lane").last()).toContainText("Product manager's work");
-          for (const f of ["M1 ends 27 Nov", "M2 ends 25 Dec", "M3 ends 12 Feb"]) await expect(tl.getByRole("button", { name: f })).toBeVisible();
+          for (const f of ["M1 ends Nov 27", "M2 ends Dec 25", "M3 ends Feb 12"]) await expect(tl.getByRole("button", { name: f })).toBeVisible();
           // Growth: F-05a (M1) and F-05b's M2 run back to back, so they stack in two rows.
           const lane = tl.getByTestId("timeline-lane").filter({ hasText: "Growth" });
           const m1 = lane.locator('[data-testid="timeline-bar"][data-milestone="M1"]');
@@ -214,11 +214,11 @@ for (const phone of [false, true]) {
           await expect(down.getByTestId("timeline-step")).toHaveCount(3);
           const m1 = down.getByTestId("timeline-step").first();
           await expect(m1).toContainText("M1 Prove it");
-          await expect(m1).toContainText("to 27 Nov · 4 weeks · 16 engineer-weeks");
+          await expect(m1).toContainText("to Nov 27 · 4 weeks · 16 engineer-weeks");
           // A compact summary: the milestone's part (Done when, targets) follows the timeline once.
           await expect(m1.getByTestId("part-done-when")).toHaveCount(0);
           await expect(m1.getByRole("link", { name: "6 features, 2 flows · 1 decision ›" })).toBeVisible();
-          await expect(down.getByTestId("timeline-decision")).toHaveText([/Q3 Which sample data to ship\s*was due 20 Oct/, /Q8 The bulk import row limit\s*at the M1 review/, /Q7 Legal input on invite emails\s*before M2 starts/]);
+          await expect(down.getByTestId("timeline-decision")).toHaveText([/Q3 Which sample data to ship\s*was due Oct 20/, /Q8 The bulk import row limit\s*M2 decision, taken at the M1 review/, /Q7 Legal input on invite emails\s*before M2 starts/]);
           const order = await down.locator(':scope > [data-testid], :scope > div').allTextContents();
           const at = (words: string) => order.findIndex((t) => t.includes(words));
           expect(at("Q3 Which")).toBeLessThan(at("Today"));
@@ -238,10 +238,10 @@ for (const phone of [false, true]) {
           await expect(summary.first().locator("b")).toHaveText("Goal: setup in a day.");
           await expect(tl.getByRole("heading", { name: "When", exact: true })).toBeVisible();
           const decisions = tl.getByTestId("timeline-decision");
-          await expect(decisions).toHaveText([/Q3 Which sample data to ship\s*was due 20 Oct/, /Q8 The bulk import row limit\s*at the M1 review, 27 Nov/, /Q7 Legal input on invite emails\s*before M2 starts, 30 Nov/]);
+          await expect(decisions).toHaveText([/Q3 Which sample data to ship\s*was due Oct 20/, /Q8 The bulk import row limit\s*M2 decision, taken at the M1 review, Nov 27/, /Q7 Legal input on invite emails\s*before M2 starts, Nov 30/]);
           await expect(tl).toContainText("1 more decision has no date yet; it is listed under its milestone.");
           const legend = tl.getByTestId("timeline-legend");
-          for (const w of ["M1", "M2", "M3", "Product manager's work, no engineering", "Today 22 Oct", "Holidays 28 Dec – 1 Jan", "milestone end"]) await expect(legend).toContainText(w);
+          for (const w of ["M1", "M2", "M3", "Product manager's work, no engineering", "Today Oct 22", "Holidays Dec 28 – Jan 1", "milestone end"]) await expect(legend).toContainText(w);
           await expect(tl.getByRole("heading", { name: "Milestones: done when" })).toBeVisible();
           await expect(tl.getByRole("group", { name: "Milestones" }).getByRole("button")).toHaveText(["M1 Prove it", "M2 Scale volume", "M3 Open to all"]);
           // The decisions' row sits under the lanes, inside the strip.
@@ -256,7 +256,7 @@ for (const phone of [false, true]) {
         const part = page.getByTestId("milestone-part");
         // The current milestone by default: M1 is the next to start on the mock's day.
         await expect(part.getByRole("heading", { level: 2 })).toHaveText("M1 Prove it");
-        await expect(part).toContainText("Next · starts 2 Nov");
+        await expect(part).toContainText("Next · starts Nov 2");
         await expect(part.getByTestId("part-why")).toContainText("Why now");
         const m1 = tl.getByRole("button", { name: /^M1 Prove it/ });
         await expect(m1).toHaveAttribute(phone ? "aria-expanded" : "aria-pressed", "true");
@@ -269,8 +269,8 @@ for (const phone of [false, true]) {
         await tl.getByRole("button", { name: /^M2 Scale volume/ }).click();
         await expect(tl.getByRole("button", { name: /^M2 Scale volume/ })).toHaveAttribute(phone ? "aria-expanded" : "aria-pressed", "true");
         await expect(part.getByRole("heading", { level: 2 })).toHaveText("M2 Scale volume");
-        await expect(part.getByTestId("part-dates")).toHaveText("30 Nov → 25 Dec 2026 · 4 weeks · 16 engineer-weeks, 1 of it buffer");
-        await expect(part).toContainText("Later · starts 30 Nov");
+        await expect(part.getByTestId("part-dates")).toHaveText("Nov 30 → Dec 25, 2026 · 4 weeks · 16 engineer-weeks, 1 of it buffer");
+        await expect(part).toContainText("Later · starts Nov 30");
         await expect(part.getByTestId("part-why")).toContainText("Now bring in whole teams at once");
         await expect(part.getByTestId("part-done-when").getByRole("listitem")).toHaveText(["Bulk import handles 10,000 rows", "Invites come back from 40% of new admins"]);
         const tiles = part.getByTestId("part-targets");
@@ -290,8 +290,8 @@ for (const phone of [false, true]) {
         const q7 = decisions.getByRole("listitem").filter({ hasText: "Legal input on invite emails" });
         await expect(q7).toContainText("Q7");
         await expect(q7).toContainText("Recommended: Legal reads the invite email once, before it goes out.");
-        await expect(q7).toContainText("before M2 starts, 30 Nov");
-        await expect(decisions.getByRole("listitem").filter({ hasText: "The bulk import row limit" })).toContainText("at the M1 review, 27 Nov");
+        await expect(q7).toContainText("before M2 starts, Nov 30");
+        await expect(decisions.getByRole("listitem").filter({ hasText: "The bulk import row limit" })).toContainText("at the M1 review, Nov 27");
         const risks = part.getByTestId("part-risks");
         const r2 = risks.getByRole("listitem").filter({ hasText: "Large imports could slow setup for everyone" });
         await expect(r2).toContainText("R-2");
@@ -300,7 +300,7 @@ for (const phone of [false, true]) {
 
         if (!phone) {
           // A flag picks its milestone; so does a bar.
-          await tl.getByRole("button", { name: "M3 ends 12 Feb" }).click();
+          await tl.getByRole("button", { name: "M3 ends Feb 12" }).click();
           await expect(part.getByRole("heading", { level: 2 })).toHaveText("M3 Open to all");
           // M3's decision has no day: its milestone stands for when.
           await expect(part.getByTestId("part-decisions").getByRole("listitem")).toContainText("M3");
@@ -320,11 +320,11 @@ for (const phone of [false, true]) {
         const part = page.getByTestId("milestone-part");
         await expect(part.getByRole("heading", { level: 2 })).toHaveText("M1 Prove it");
         await expect(part).toContainText("Now · week 2 of 4");
-        await expect(part.getByTestId("part-decisions").getByRole("listitem")).toContainText("was due 20 Oct");
+        await expect(part.getByTestId("part-decisions").getByRole("listitem")).toContainText("was due Oct 20");
         const tl = page.getByRole("region", { name: "Timeline" });
         if (phone) await expect(tl.getByTestId("timeline-step").first()).toContainText("week 2 of 4");
         await tl.getByRole("button", { name: /^M2 Scale volume/ }).click();
-        await expect(part).toContainText("Next · starts 30 Nov");
+        await expect(part).toContainText("Next · starts Nov 30");
       });
 
       /**
@@ -421,7 +421,7 @@ for (const phone of [false, true]) {
           await expect(tl.getByTestId("timeline-lane")).toHaveCount(5);
           const bars = tl.getByTestId("timeline-bar");
           expect(new Set(await bars.evaluateAll((els) => els.map((e) => e.getAttribute("data-milestone"))))).toEqual(new Set(["M1"]));
-          await expect(tl.getByRole("button", { name: "M1 ends 27 Nov" })).toBeVisible();
+          await expect(tl.getByRole("button", { name: "M1 ends Nov 27" })).toBeVisible();
           await expect(tl.getByRole("button", { name: /^M2 ends/ })).toHaveCount(0);
         }
         await tl.getByRole("button", { name: /^M2 Scale volume/ }).click();

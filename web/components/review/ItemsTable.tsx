@@ -5,6 +5,7 @@ import { useMemo, type ReactNode } from "react";
 
 import { Chip, DataTable, Ring, type Column } from "@/components/ds";
 import { HORIZONS, horizonLabel, type ItemRow } from "@/components/roadmap/item-row";
+import { formatDate } from "@/lib/format";
 
 /** Below this a 0-1 confidence shows in the warn tone (as the API flags low confidence). */
 export const LOW_CONFIDENCE = 0.4;
@@ -44,12 +45,13 @@ export function StateChip({ freshness }: { freshness: ItemRow["freshness"] }) {
 
 export function MilestoneCell({ row }: { row: ItemRow }) {
   const m = row.milestone;
-  if (!m || (!m.name && !m.date && !m.refused_date)) return <span className="text-text2">—</span>;
+  const unbacked = row.unbacked ?? [];
+  if ((!m || (!m.name && !m.date && !m.refused_date)) && unbacked.length === 0) return <span className="text-text2">—</span>;
   return (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
-      {m.name && <span className="truncate">{m.name}</span>}
-      {m.date && (m.date_removed ? <s className="tnum flex-none text-text2" title="Date removed">{m.date}</s> : <span className="tnum flex-none text-text2">{m.date}</span>)}
-      {m.refused_date && (
+    <span className={`inline-flex min-w-0 max-w-full items-center gap-1.5 ${unbacked.length ? "flex-wrap" : ""}`}>
+      {m?.name && <span className="truncate">{m.name}</span>}
+      {m?.date && (m.date_removed ? <s className="tnum flex-none text-text2" title="Date removed">{m.date}</s> : <span className="tnum flex-none text-text2">{m.date}</span>)}
+      {m?.refused_date && (
         <>
           <s className="tnum flex-none text-text2">{m.refused_date}</s>
           <Chip kind="warn" title={m.refused ?? undefined}>
@@ -57,6 +59,15 @@ export function MilestoneCell({ row }: { row: ItemRow }) {
           </Chip>
         </>
       )}
+      {/* qa-docs-6: a date the item's text writes that no confirmed schedule backs. */}
+      {unbacked.map((u) => (
+        <span key={u.date} data-testid="unbacked-date" className="inline-flex flex-none items-center gap-1.5">
+          <span className="tnum text-text2">{formatDate(u.date)}</span>
+          <Chip kind="warn" title={u.withdrawn ? "Its schedule was withdrawn" : "No confirmed schedule backs it"}>
+            Unconfirmed
+          </Chip>
+        </span>
+      ))}
     </span>
   );
 }
@@ -135,7 +146,8 @@ export function ItemsTable({
         r.ghost || r.struck ? <s className="text-text2">{r.title}</s> : <span className={`font-medium ${r.muted ? "text-text2" : ""}`}>{r.title}</span>,
     },
     { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => (r.horizon ? <HorizonChip horizon={r.horizon} plain={plainHorizons} /> : <span className="text-text2">—</span>) },
-    { key: "milestone", header: "Milestone", width: "172px", phone: "meta", cell: (r) => <MilestoneCell row={r} /> },
+    // qa-docs-66: on a phone a row's "—" says what it is.
+    { key: "milestone", header: "Milestone", width: "172px", phone: "meta", phoneLabel: "Milestone", wrap: rows.some((r) => r.unbacked?.length), cell: (r) => <MilestoneCell row={r} /> },
     { key: "confidence", header: "Confidence", width: "104px", phone: "meta", phoneLabel: "Confidence", cell: (r) => <Confidence value={r.confidence} /> },
     {
       key: "depends_on",

@@ -28,7 +28,7 @@ export interface QualityContext {
   userId: string;
   role: Role;
   /** Resolves a document (slug or id) and version number to their ids, or null. */
-  findVersion: (doc: string, n: number) => { documentId: string; slug: string; versionId: string } | null;
+  findVersion: (doc: string, n: number) => { documentId: string; slug: string; versionId: string; authorId?: string | null } | null;
   /** The blockers lane's ``critical_blockers`` hard check for a document (./blockers.ts). */
   blockerGate: (documentId: string) => { status: Status; rationale: string; evidence_ids: string[] };
   /** POST .../quality-review: queues a quality_review job in ./llm-jobs.ts, or refuses it (409 switched off). */
@@ -63,9 +63,9 @@ type Rule = [Status, string, string[], string[]?];
 
 /** The fixed synthetic evaluation every version shows in mock mode (but the ones below). */
 const RULES: Record<string, Rule> = {
-  problem_clarity: ["pass", "The problem names its users and its pain is backed by 2 evidence.", ["problem"]],
+  problem_clarity: ["pass", "The problem names its users and its pain is backed by 2 pieces of evidence.", ["problem"]],
   goal_alignment: ["pass", "Every linked feature (1) serves a confirmed goal (activation).", ["goal-trace"]],
-  evidence_provenance: ["warning", "1 piece(s) of evidence are stale.", []],
+  evidence_provenance: ["warning", "1 piece of evidence is stale.", []],
   alternatives_tradeoffs: ["warning", "No alternatives considered: no section and no blocker with two options.", []],
   blocker_feasibility: ["pass", "No blocker is recorded; the risks section states the constraints.", ["risks"]],
   scope_testability: ["critical", "No acceptance criteria: nothing says how to test the requirements.", ["solution"]],
@@ -104,6 +104,13 @@ const RULES_BY_SLUG: Record<string, Record<string, Rule>> = {
   ),
 };
 const BLOCKERS_KEY = "critical_blockers";
+/** The blockers lane's hard check in plain words, as api/oracle/quality/service.py OTHER_CHECKS names it (qa-docs-57). */
+const BLOCKERS_CHECK = {
+  key: BLOCKERS_KEY,
+  title: "Critical blockers",
+  question: "Is any critical blocker still unresolved, with no accepted risk or approved experiment behind it?",
+  hard: true,
+};
 const STATUSES: Status[] = ["pass", "warning", "critical", "not_applicable"];
 
 export function seedQuality(): QualityDb {
@@ -380,7 +387,7 @@ type Purpose = Schemas["ReadinessDashboard"]["purpose"];
 
 function dashboard(
   ctx: QualityContext,
-  v: { documentId: string; slug: string; versionId: string },
+  v: { documentId: string; slug: string; versionId: string; authorId?: string | null },
   n: number,
   purpose: Purpose = "advisory",
 ): Schemas["ReadinessDashboard"] {
@@ -390,7 +397,7 @@ function dashboard(
   const errors = ctx.db.check_errors?.[v.slug] ?? {};
   const gate = ctx.blockerGate(v.documentId);
   // The blockers lane registers its hard check after the quality criteria.
-  const checks = [...CRITERIA, { key: BLOCKERS_KEY, title: "Critical blockers", question: "A readiness check registered by Oracle.", hard: true }];
+  const checks = [...CRITERIA, BLOCKERS_CHECK];
   const items: Schemas["ReadinessItem"][] = checks.map((c) => {
     const [status, rationale, section_keys, evidence_ids = []] =
       c.key === BLOCKERS_KEY ? [gate.status, gate.rationale, [], gate.evidence_ids] : rules[c.key];
@@ -402,7 +409,8 @@ function dashboard(
     );
     return {
       key: c.key, title: c.title, question: c.question, hard: c.hard, status, rationale,
-      evidence_ids, owner_id: ctx.userId, section_keys, error: errors[c.key] ?? null,
+      // qa-docs-2: as the API's rules name it, the version's author (who imported it), never whoever is looking.
+      evidence_ids, owner_id: c.key === BLOCKERS_KEY ? null : (v.authorId ?? null), section_keys, error: errors[c.key] ?? null,
       model: mf ? { status: mf.status, rationale: mf.rationale, section_keys: mf.section_keys, report_id: model.id } : null,
       human,
       agreement: {

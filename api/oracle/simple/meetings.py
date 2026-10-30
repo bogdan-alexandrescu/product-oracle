@@ -15,10 +15,13 @@ whose session closed for idleness (oracle.simple.changes.MEETING_IDLE) ends on i
 read, with Oracle's quick minutes (:func:`_settle`). Default attendees: the PRD's decider,
 its required reviewers and its owners (its tracks' owners); any member can be added.
 
-**Every action is a meeting decision**: each approve, cut, move, accept, decline, undo or
-comment made in the meeting is recorded by :func:`record_meeting_decision`: a
-``decisions`` row (origin ``meeting``, subjects the items and lines it changed, approver
-who decided), linked to the meeting and the changes (``simple_meeting_decisions``).
+**Every action is a meeting decision**: each approve, cut, move, accept, decline or undo
+made in the meeting is recorded by :func:`record_meeting_decision`: a ``decisions`` row
+(origin ``meeting``, subjects the items and lines it changed, approver who decided),
+linked to the meeting and the changes (``simple_meeting_decisions``). A comment
+(:func:`comment`) is not a decision: it is kept as a note (kind ``comment``), like a
+chat-actions note or open question, and stays out of minutes and the Decisions page
+(qa-simple-decide-1).
 
 **Approve** is the decider's, through :func:`oracle.simple.drafts.approve_in_meeting`: the
 required reviewers present approve there too; each absent one gets an Inbox request and
@@ -38,6 +41,7 @@ that module is absent or has drawn none: "No flow yet").
 Visibility: a meeting is seen by whoever reads its PRD (oracle.docs.visibility).
 """
 
+import json
 import logging
 import re
 import uuid
@@ -74,6 +78,7 @@ from oracle.simple.schemas import (
     SimpleDecisionsOut,
     SimpleDelivery,
     SimpleDocRef,
+    SimpleEmailDelivery,
     SimpleFilterOption,
     SimpleMeetingBrief,
     SimpleMeetingCan,
@@ -536,6 +541,7 @@ async def join(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Simpl
     if me in m.absent_ids:
         m.absent_ids = [i for i in m.absent_ids if i != me]
     await db.flush()
+    await audit.record(db, principal, "simple_meeting.joined", "simple_meeting", m.id)
     return m
 
 
@@ -594,6 +600,19 @@ async def describe(db: AsyncSession, c: SimpleChange) -> tuple[str, list[dict]]:
             subjects.append(
                 {"kind": "section", "id": str(doc.id), "ref": f"line:{t.get('line_id')}"}
             )
+    elif c.op == "cut_with_dependents":
+        # Review minor: every item the one change cut, the item first, each a subject.
+        titles = [str(x) for x in t.get("titles") or []] or ([name] if name else [])
+        name = titles[0] if len(titles) == 1 else f"{', '.join(titles[:-1])} and {titles[-1]}"
+        for key in list(c.after or {}):
+            if key == str(item_id):
+                continue
+            try:
+                row = await db.get(RoadmapItem, uuid.UUID(str(key)))
+            except ValueError:
+                row = None
+            if row is not None:
+                subjects.append({"kind": "roadmap_item", "id": str(row.id), "ref": row.item_key})
     elif not name:
         name = str((c.after or {}).get("title") or t.get("title") or "")
     words = drafts.OP_WORDS.get(c.op) or c.op.replace("_", " ").capitalize()
@@ -630,16 +649,49 @@ async def after_change(
 
 async def comment(
     db: AsyncSession, principal: Any, meeting_id: uuid.UUID, text: str, subjects: list[dict]
-) -> uuid.UUID:
-    """A comment made in the meeting is a meeting decision too (D7)."""
+) -> str:
+    """A comment made in the meeting is kept as a note, not a meeting decision
+    (qa-simple-decide-1): it does not appear in meeting_decisions, the minutes or the
+    Decisions page."""
     m, _ = await _get(db, principal, meeting_id)
     if not _rules(m).may_change(_me(principal)) and _me(principal) not in m.attendee_ids:
         raise MeetingError(403, "Join the meeting to comment in it")
-    did = await record_meeting_decision(
-        db, principal, m.id, f"Comment: {' '.join(text.split())}",
-        [*subjects, {"kind": "document", "id": str(m.prd_document_id)}], [],
-    )  # fmt: skip
-    return did
+    if m.status == "ended":
+        raise MeetingError(409, "This meeting has ended")
+    note = {"id": str(uuid.uuid4()), "kind": "comment", "text": " ".join(text.split())[:1000],
+            "by": str(_me(principal)), "at": company_time.now().isoformat(),
+            "card_id": None}  # fmt: skip
+    m.notes = [*(m.notes or []), note]
+    await db.flush()
+    return note["id"]
+
+
+COMMENT_PREFIX = "Comment: "
+
+
+def comment_decisions_to_notes(conn: Any) -> int:
+    """A comment made before qa-simple-decide-1 was a meeting decision titled
+    "Comment: ...": each becomes its meeting's comment note (its words, who, when), leaves
+    the meeting's decisions and is withdrawn. Sync, on a Connection (the data migration
+    0093_meeting_comments_as_notes runs it); a second run finds nothing. How many moved."""
+    rows = conn.execute(text(
+        "SELECT l.meeting_id, d.id, d.title, d.approver_id, coalesce(d.decided_at, d.created_at)"
+        " FROM simple_meeting_decisions l JOIN decisions d ON d.id = l.decision_id"
+        " WHERE d.origin = 'meeting' AND d.title LIKE :p ORDER BY 5"
+    ), {"p": COMMENT_PREFIX + "%"}).all()  # fmt: skip
+    for meeting_id, decision_id, title, by, at in rows:
+        note = {"id": str(uuid.uuid4()), "kind": "comment",
+                "text": title.removeprefix(COMMENT_PREFIX).strip()[:1000],
+                "by": str(by) if by else None, "at": at.isoformat(), "card_id": None}  # fmt: skip
+        conn.execute(
+            text("UPDATE simple_meetings SET notes = notes || CAST(:n AS jsonb) WHERE id = :m"),
+            {"n": json.dumps([note]), "m": meeting_id},
+        )
+        conn.execute(text("DELETE FROM simple_meeting_decisions WHERE decision_id = :d"),
+                     {"d": decision_id})  # fmt: skip
+        conn.execute(text("UPDATE decisions SET status = 'withdrawn' WHERE id = :d"),
+                     {"d": decision_id})  # fmt: skip
+    return len(rows)
 
 
 def published_words(d: Any, names: dict[uuid.UUID, str]) -> str:
@@ -895,7 +947,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         waiting_people=[_ref(i, waiting_names) for i in waiting],
         minutes=SimpleMinutes.model_validate(m.minutes) if m.minutes else None,
         minutes_job=job_state,
-        delivery=SimpleDelivery.model_validate(m.delivery) if m.delivery else None,
+        delivery=await delivery_out(db, m),
         slack=await _slack_state(db),
         email_available=email_available(),
         can=SimpleMeetingCan(
@@ -910,6 +962,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
             and m.minutes_state != "sent"
             and has_role(principal.role, "commenter"),
             redraft=job_state == "failed" and _presenter_or_decider(principal, m, w),
+            retry_delivery=m.minutes_state == "sent" and may_retry(principal, m),
         ),
         not_approved=not_approved or [],
         notes=await _notes_out(db, m),
@@ -985,6 +1038,7 @@ async def _notes_out(db: AsyncSession, m: SimpleMeeting) -> list:
             kind=n["kind"],
             text=n["text"],
             by_name=names.get(uuid.UUID(n["by"]), "someone") if n.get("by") else "someone",
+            at=n.get("at"),
             card_id=n.get("card_id"),
         )  # fmt: skip
         for n in notes
@@ -1222,20 +1276,15 @@ async def extract(db: AsyncSession, m: SimpleMeeting) -> dict[str, Any]:
     waits = await _waits(db, m)
     rec = await minutes.record(db, m, [d for _, d in reversed(links)], waits)
     if titles:
-        more = "…" if len(titles) > 6 else "."
-        # qa-simple-decide-32: the decisions themselves; the title and the count are
-        # beside it already.
-        summary = "; ".join(titles[:6]) + more
+        # qa-simple-decide-6: a short prose count, not the decisions' titles (the
+        # Decisions page already lists them) nor the notes' text.
+        n_notes = len([n for n in m.notes or [] if n.get("kind") == "note" and n.get("text")])
+        summary = minutes.summary_sentence(len(titles), n_notes, len(rec.questions()))
     elif rec.empty:
         summary = minutes.nothing(m.title)
     else:
         summary = f"{m.title}: no decision was taken."
     actions = [minutes.recorded(a) for a in rec.actions]
-    # chat-actions: the meeting's own notes ("note: ...") read in the summary; its open
-    # questions ("open question: ...") come with the record's questions.
-    meeting_notes = [n["text"] for n in m.notes or [] if n.get("kind") == "note" and n.get("text")]
-    if meeting_notes:
-        summary += "".join(f"\nNotes: {t}" for t in meeting_notes)
     return {
         "summary": summary[:SUMMARY_MAX],
         "open_questions": rec.questions()[:MAX_QUESTIONS],
@@ -1450,6 +1499,7 @@ async def edit_minutes(
     if m.minutes_state == "drafting":
         m.minutes_state = "ready"
     await db.flush()
+    await audit.record(db, principal, "simple_meeting.minutes_edited", "simple_meeting", m.id)
     return m
 
 
@@ -1479,24 +1529,22 @@ async def send(
     minutes = dict(m.minutes or await extract(db, m))
     delivery: dict[str, Any] = {"decisions": True, "inbox": True, "email": body.email,
                                 "slack": body.slack}  # fmt: skip
+    now = company_time.now().isoformat()
     if body.email:
         delivery["email_status"] = "queued" if email_available() else "unavailable"
+        if delivery["email_status"] == "queued":
+            delivery["email_to"] = {str(i): {"status": "queued", "tries": 0, "next_at": now}
+                                    for i in m.attendee_ids}  # fmt: skip
     if body.slack:
         delivery["slack_channel"] = slack.channel
         delivery["slack_status"] = "queued"
+        delivery["slack_tries"], delivery["slack_next_at"] = 0, now
     m.minutes, m.minutes_state, m.sent_at, m.delivery = (
         minutes,
         "sent",
         company_time.now(),
         delivery,
     )
-    if body.slack:
-        from oracle.slack.models import SlackOutbox
-
-        text = _plain(m, minutes, await _names(db, set(m.attendee_ids)))
-        db.add(SlackOutbox(op="ping", link_id=None, recipient_id=_me(principal),
-                           payload={"event": "meeting_minutes", "channel_post": True,
-                                    "text": text, "channel_text": text}))  # fmt: skip
     await db.flush()
     await audit.record(db, principal, "simple_meeting.sent", "simple_meeting", m.id,
                        data={"email": body.email, "slack": body.slack})  # fmt: skip
@@ -1549,9 +1597,56 @@ def _plain(m: SimpleMeeting, minutes: dict, names: dict) -> str:
     return "\n".join(lines)
 
 
-async def deliver_email(db: AsyncSession, meeting_id: uuid.UUID) -> int:
-    """Send a meeting's queued minutes email to each attendee through Oracle's mailer;
-    records ``sent`` or ``failed`` (the caller commits). Returns how many went."""
+# Delivery: each attendee's email and the Slack post are tried on the minute tick (the
+# first right after Send), again 5 then 10 minutes after a failure: 3 tries over about 15
+# minutes, then failed until whoever ended the meeting or an owner retries. The log keeps
+# the error's type only, never an address or a token.
+RETRY_AFTER_MINUTES = (5, 10)
+TRIES = len(RETRY_AFTER_MINUTES) + 1
+_PENDING = ("queued", "retrying")
+
+
+def _due(state: dict, now: datetime) -> bool:
+    at = state.get("next_at")
+    return state.get("status") in _PENDING and (not at or datetime.fromisoformat(at) <= now)
+
+
+def _failed_try(state: dict, now: datetime) -> dict:
+    tries = int(state.get("tries") or 0) + 1
+    if tries >= TRIES:
+        return {"status": "failed", "tries": tries, "next_at": None}
+    wait = timedelta(minutes=RETRY_AFTER_MINUTES[tries - 1])
+    return {"status": "retrying", "tries": tries, "next_at": (now + wait).isoformat()}
+
+
+def _email_status(to: dict) -> str:
+    states = {x["status"] for x in to.values()}
+    for status in ("retrying", "queued", "failed"):
+        if status in states:
+            return status
+    return "sent"
+
+
+async def _post_slack(db: AsyncSession, text: str) -> None:
+    """Post the minutes to the Notifications channel; raises when it did not go."""
+    from oracle.integrations import slack_oauth
+    from oracle.slack import api as slack_api
+    from oracle.slack.pings import _notify_channel
+
+    row = await slack_oauth.installed(db)
+    channel = await _notify_channel(db)
+    if row is None or row.status != "active" or channel is None:
+        raise LookupError("slack_unavailable")
+    async with slack_api.http_client() as http:
+        await slack_api.call(http, "chat.postMessage", token=slack_oauth.token_of(row),
+                             json={"channel": channel, "text": text[:3000], "mrkdwn": True,
+                                   "unfurl_links": False})  # fmt: skip
+
+
+async def deliver(db: AsyncSession, meeting_id: uuid.UUID) -> int:
+    """Try a sent meeting's due emails and Slack post once each; records each status (the
+    caller commits). The meeting is locked only to claim what is due (commits) and to record
+    how it went, never through a send. Returns how many emails went."""
     import html as html_mod
 
     import httpx
@@ -1559,49 +1654,178 @@ async def deliver_email(db: AsyncSession, meeting_id: uuid.UUID) -> int:
     from oracle.members import mailer
 
     m = await db.get(SimpleMeeting, meeting_id, with_for_update=True)
-    if m is None or (m.delivery or {}).get("email_status") != "queued":
+    if m is None or not m.delivery:
         return 0
-    sender = mailer.get_mailer()
-    if sender is None:
-        m.delivery = {**m.delivery, "email_status": "unavailable"}
+    d = dict(m.delivery)
+    now = company_time.now()
+    if d.get("slack_status") in _PENDING and "slack_tries" not in d:
+        d["slack_status"] = "sent"  # queued before the post carried its tries: the outbox posted it
+    due: list[str] = []
+    users: dict[str, User] = {}
+    sender = None
+    if d.get("email_status") in _PENDING:
+        to = {k: dict(v) for k, v in (d.get("email_to") or {}).items()}
+        if not to:  # queued before each attendee carried a status
+            to = {str(i): {"status": "queued", "tries": 0} for i in m.attendee_ids}
+        live = select(User).where(User.id.in_(m.attendee_ids), User.disabled_at.is_(None))
+        users = {str(u.id): u for u in await db.scalars(live)}
+        to = {k: v for k, v in to.items() if k in users}
+        due = [k for k, v in to.items() if _due(v, now)]
+        sender = mailer.get_mailer() if due else None
+        if due and sender is None:
+            d["email_status"], due = "unavailable", []
+        else:
+            d["email_to"] = to
+            d["email_status"] = _email_status(to) if to else "sent"
+            d["email_sent"] = sum(1 for v in to.values() if v["status"] == "sent")
+    slack = {"status": d.get("slack_status"), "tries": d.get("slack_tries"),
+             "next_at": d.get("slack_next_at")}  # fmt: skip
+    post = bool(d.get("slack")) and _due(slack, now)
+    if not due and not post:
+        m.delivery = d
+        await db.flush()
         return 0
-    users = list(await db.scalars(select(User).where(User.id.in_(m.attendee_ids),
-                                                     User.disabled_at.is_(None))))  # fmt: skip
-    names = {u.id: u.name or u.email for u in users}
+    # Claim what is due (a second deliver leaves it alone until the lease ends; a crash
+    # mid-send tries it again then), then send with the meeting unlocked.
+    names = {u.id: u.name or u.email for u in users.values()} if due else await _names(
+        db, set(m.attendee_ids))  # fmt: skip
     text = _plain(m, m.minutes or {}, names)
-    sent, failed = 0, 0
-    async with httpx.AsyncClient() as http:
-        for u in users:
-            msg = mailer.InviteEmail(
-                to=u.email, subject=f"Minutes: {m.title}", text=text,
-                html=f"<pre style='font-family:inherit'>{html_mod.escape(text)}</pre>",
-            )  # fmt: skip
-            try:
-                await sender.send(http, msg)
-                sent += 1
-            except Exception as exc:  # noqa: BLE001 - recorded, never raised
-                failed += 1
-                log.warning("minutes email for meeting %s failed: %s", m.id, type(exc).__name__)
-    m.delivery = {**m.delivery, "email_status": "failed" if failed and not sent else "sent",
-                  "email_sent": sent}  # fmt: skip
+    subject = f"Minutes: {m.title}"
+    lease = (now + timedelta(minutes=RETRY_AFTER_MINUTES[0])).isoformat()
+    tried = {k: dict(d["email_to"][k]) for k in due}
+    for k in due:
+        d["email_to"][k]["next_at"] = lease
+    if post:
+        d["slack_next_at"] = lease
+    m.delivery = d
+    await db.commit()
+    done: dict[str, dict] = {}
+    if due:
+        async with httpx.AsyncClient() as http:
+            for k in due:
+                msg = mailer.InviteEmail(
+                    to=users[k].email, subject=subject, text=text,
+                    html=f"<pre style='font-family:inherit'>{html_mod.escape(text)}</pre>",
+                )  # fmt: skip
+                try:
+                    await sender.send(http, msg)
+                except Exception as exc:  # noqa: BLE001 - recorded, never raised
+                    done[k] = _failed_try(tried[k], now)
+                    log.warning("minutes email for meeting %s failed: %s", meeting_id,
+                                type(exc).__name__)  # fmt: skip
+                else:
+                    done[k] = {"status": "sent", "tries": int(tried[k].get("tries") or 0) + 1}
+    if post:
+        try:
+            await _post_slack(db, text)
+        except Exception as exc:  # noqa: BLE001 - recorded, never raised
+            slack = _failed_try(slack, now)
+            log.warning("minutes Slack post for meeting %s failed: %s", meeting_id,
+                        type(exc).__name__)  # fmt: skip
+        else:
+            slack = {"status": "sent", "tries": int(slack.get("tries") or 0) + 1, "next_at": None}
+    m = await db.get(SimpleMeeting, meeting_id, with_for_update=True, populate_existing=True)
+    if m is None or not m.delivery:
+        return 0
+    d = dict(m.delivery)
+    if done:
+        to = {k: dict(v) for k, v in (d.get("email_to") or {}).items()}
+        to.update({k: v for k, v in done.items() if k in to})
+        d["email_to"] = to
+        d["email_status"] = _email_status(to) if to else "sent"
+        d["email_sent"] = sum(1 for v in to.values() if v["status"] == "sent")
+    if post:
+        d["slack_status"], d["slack_tries"], d["slack_next_at"] = (
+            slack["status"], slack["tries"], slack["next_at"])  # fmt: skip
+    m.delivery = d
     await db.flush()
-    return sent
+    return sum(1 for v in done.values() if v["status"] == "sent")
 
 
-async def send_queued_emails(db: AsyncSession) -> int:
-    """The minute tick: minutes emails still queued (commits)."""
+async def deliver_email(db: AsyncSession, meeting_id: uuid.UUID) -> int:
+    """The first try right after Send (the route's background task): see :func:`deliver`."""
+    return await deliver(db, meeting_id)
+
+
+async def deliver_due(db: AsyncSession) -> int:
+    """The minute tick: each sent meeting with an email or a Slack post still to try
+    (commits). Returns how many emails went."""
+    pending = list(_PENDING)
     ids = list(
         await db.scalars(
-            select(SimpleMeeting.id).where(
-                SimpleMeeting.delivery["email_status"].astext == "queued"
-            )
+            select(SimpleMeeting.id).where(or_(
+                SimpleMeeting.delivery["email_status"].astext.in_(pending),
+                SimpleMeeting.delivery["slack_status"].astext.in_(pending),
+            ))
         )
-    )
+    )  # fmt: skip
     n = 0
     for i in ids:
-        n += await deliver_email(db, i)
+        n += await deliver(db, i)
         await db.commit()
     return n
+
+
+def may_retry(principal: Any, m: SimpleMeeting) -> bool:
+    """Whoever ended the meeting or an owner retries its delivery."""
+    me = _me(principal)
+    if me is None or getattr(principal, "run_token_id", None) is not None:
+        return False
+    return me == m.ended_by or has_role(principal.role, "owner")
+
+
+async def retry_delivery(
+    db: AsyncSession, principal: Any, meeting_id: uuid.UUID, what: str
+) -> SimpleMeeting:
+    """Retry: requeue what failed (each failed attendee's email, or the Slack post) for the
+    tick, with three tries again. Commits."""
+    m, _document = await _get(db, principal, meeting_id, lock=True)
+    if not may_retry(principal, m):
+        raise MeetingError(403, "Only whoever ended the meeting or an owner retries it")
+    d = dict(m.delivery or {})
+    now = company_time.now().isoformat()
+    fresh = {"status": "queued", "tries": 0, "next_at": now}
+    if what == "email":
+        to = {k: dict(v) for k, v in (d.get("email_to") or {}).items()}
+        failed = [k for k, v in to.items() if v.get("status") == "failed"]
+        if d.get("email_status") != "failed" or not failed:
+            raise MeetingError(409, "No email is left to retry")
+        to.update({k: dict(fresh) for k in failed})
+        d["email_to"], d["email_status"] = to, _email_status(to)
+    else:
+        if d.get("slack_status") != "failed":
+            raise MeetingError(409, "The Slack post is not left to retry")
+        d["slack_status"], d["slack_tries"], d["slack_next_at"] = "queued", 0, now
+    m.delivery = d
+    await db.flush()
+    await audit.record(db, principal, "simple_meeting.delivery_retried", "simple_meeting", m.id,
+                       data={"what": what})  # fmt: skip
+    await db.commit()
+    return m
+
+
+async def delivery_out(db: AsyncSession, m: SimpleMeeting) -> SimpleDelivery | None:
+    """The meeting's delivery for people: each attendee's email named, with its status."""
+    if not m.delivery:
+        return None
+    d = m.delivery
+    to = d.get("email_to") or {}
+    names = await _names(db, {uuid.UUID(k) for k in to})
+    emails = [
+        SimpleEmailDelivery(person=_ref(uuid.UUID(k), names), status=v["status"])
+        for k, v in to.items()
+        if uuid.UUID(k) in names
+    ]
+    return SimpleDelivery.model_validate(
+        {
+            **d,
+            "emails": [e.model_dump() for e in emails],
+            # Stored before each attendee carried a status: the count it kept.
+            "email_sent": sum(1 for e in emails if e.status == "sent")
+            if to
+            else int(d.get("email_sent") or 0),
+        }  # fmt: skip
+    )
 
 
 # --------------------------------------------------------------------------- inbox
@@ -1638,6 +1862,7 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
             meeting_id=m.id,
             title=m.title,
             ended_at=m.ended_at,
+            sent_at=m.sent_at,
             decisions=counts.get(m.id, 0),
             state="new" if seen is None or (m.sent_at and m.sent_at > seen) else "open",
         )  # fmt: skip
@@ -1753,6 +1978,13 @@ def _row(d: Decision, names: dict) -> SimpleDecisionRow:
 _OPEN_DECISION = re.compile(r"^D-(\d+):")
 
 
+def _meeting_option_title(m: SimpleMeeting) -> str:
+    """The Decisions page's meeting filter (qa-simple-decide-11): the meeting's title,
+    its day in the company's zone ("Thu Oct 22"), and " · live" while it still is."""
+    words = company_time.date_in_words(company_time.day(m.started_at))
+    return f"{m.title} · {words}" + (" · live" if m.status == "live" else "")
+
+
 async def decisions_page(
     db: AsyncSession,
     principal: Any,
@@ -1841,6 +2073,8 @@ async def decisions_page(
             minutes=await _named(db, minutes) if minutes else None,
             decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
+            delivery=await delivery_out(db, m) if m.minutes_state == "sent" else None,
+            can_retry_delivery=m.minutes_state == "sent" and may_retry(principal, m),
         ))  # fmt: skip
     # An open decision a shown meeting's minutes name as an open question ("D-12: ...")
     # is listed there, not again outside meetings; once decided it is listed here.
@@ -1867,7 +2101,8 @@ async def decisions_page(
               for d in sorted(docs.values(), key=lambda d: d.title) if d.id in readable],
         goals=[SimpleFilterOption(id=g.key, title=g.title)
                for g in sorted(goals.values(), key=lambda g: g.key)],
-        meeting_options=[SimpleFilterOption(id=str(m.id), title=m.title) for m in ms],
+        meeting_options=[SimpleFilterOption(id=str(m.id), title=_meeting_option_title(m))
+                         for m in ms],  # fmt: skip
     )  # fmt: skip
 
 

@@ -1,4 +1,4 @@
-import { goalTree } from "@/lib/goal-tree";
+import { goalTree, scoredConfidence } from "@/lib/goal-tree";
 import type { EntityOut, Schemas } from "@/lib/api/client";
 
 type RevisionOut = Schemas["RevisionOut"];
@@ -196,6 +196,8 @@ export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entitie
     const current = typedFigure(a.current, a.unit);
     const targetRaw = a.target_text ?? a.target;
     const currentRaw = a.current_text ?? a.current;
+    // qa-plan-4: the Baseline's rule (no evidence, no score), so Plan's ring and the Baseline's Goals table agree.
+    const scored = scoredConfidence(g.confidence, g.evidence_count);
     return {
       id: g.id,
       tag,
@@ -207,7 +209,7 @@ export function goalViews(entities: EntityOut[], numbered: EntityOut[] = entitie
       name,
       metric: typeof a.metric === "string" ? a.metric : null,
       proposed: g.status === "proposed",
-      confidence: g.confidence == null ? null : Math.round(g.confidence * 100),
+      confidence: scored == null ? null : Math.round(scored * 100),
       current: current ?? parseFigure(currentRaw),
       currentText: current ? typedText(current) : text(currentRaw),
       target: target ?? parseFigure(targetRaw),

@@ -24,6 +24,8 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
 
   // Approve the cost from the inbox: the run starts and leaves the list.
   await page.getByTestId("inbox-approvals").getByRole("button", { name: "Approve $53.00" }).click();
+  // qa-company-1 (round 3): asked first, naming the amount.
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve $53.00" }).click();
   await expect(page.getByTestId("inbox-approvals")).toHaveCount(0);
 
   // Resume the overrun.

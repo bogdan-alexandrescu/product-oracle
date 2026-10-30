@@ -18,6 +18,8 @@ import {
   Split,
   type Column,
 } from "@/components/ds";
+import { revealOnPhone } from "@/app/settings/_components/reveal";
+import { useThemeNames } from "@/components/TemplateBodyEditor";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -39,7 +41,8 @@ const KIND_LABEL: Record<TemplateSummary["kind"], string> = {
   pricing: "Pricing memo",
 };
 
-const COLUMNS: Column<TemplateSummary>[] = [
+/** The list's columns; a suggested theme reads as its name (qa-settings-26). */
+const columns = (themeName: (key: string | null | undefined) => string): Column<TemplateSummary>[] => [
   {
     key: "name",
     header: "Template",
@@ -48,7 +51,7 @@ const COLUMNS: Column<TemplateSummary>[] = [
         <Link
           href={`/settings/templates/${t.key}`}
           onClick={(e) => e.stopPropagation()}
-          className={`min-w-0 truncate font-medium hover:underline ${t.archived_at ? "text-text2" : "text-text"}`}
+          className={`min-w-0 truncate font-medium hover:underline max-[600px]:inline-flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal ${t.archived_at ? "text-text2" : "text-text"}`}
         >
           {t.name}
         </Link>
@@ -62,7 +65,7 @@ const COLUMNS: Column<TemplateSummary>[] = [
     header: "Suggested theme",
     width: "190px",
     hideOnPhone: true,
-    cell: (t) => <span className="font-mono text-sm text-text2">{t.suggested_theme ?? "—"}</span>,
+    cell: (t) => <span className="text-text2">{themeName(t.suggested_theme)}</span>,
   },
   { key: "latest", header: "Latest", width: "76px", align: "right", cell: (t) => <span className="tnum">v{t.latest_version}</span> },
   {
@@ -75,7 +78,7 @@ const COLUMNS: Column<TemplateSummary>[] = [
   },
 ];
 
-function TemplateInspector({ t }: { t: TemplateSummary }) {
+function TemplateInspector({ t, themeName }: { t: TemplateSummary; themeName: (key: string | null | undefined) => string }) {
   return (
     <Inspector
       eyebrow="Template · selected"
@@ -109,10 +112,8 @@ function TemplateInspector({ t }: { t: TemplateSummary }) {
       ]}
     >
       <InspectorSection label="Facts">
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.suggested_theme ?? "—"}</span>}>
-          Suggested theme
-        </InspectorRow>
+        <InspectorRow value={themeName(t.suggested_theme)}>Suggested theme</InspectorRow>
+        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {t.description && (
         <InspectorSection label="Description">
@@ -133,6 +134,8 @@ export default function TemplatesPage() {
   const canCreate = can("create_template");
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const themeName = useThemeNames();
+  const cols = columns(themeName);
   const q = useQuery(`templates|${showArchived}`, () =>
     unwrap(api.GET("/v1/templates", { params: { query: { include_archived: showArchived } } })),
   );
@@ -176,18 +179,21 @@ export default function TemplatesPage() {
           )
         }
       />
-      <Split inspector={current ? <TemplateInspector t={current} /> : undefined}>
+      <Split inspector={current ? <TemplateInspector t={current} themeName={themeName} /> : undefined}>
         {q.error && <Notice tone="error">{q.error}</Notice>}
         {lists.map(({ kind, title, rows }, i) => (
           <Panel key={kind} title={title} count={rows?.length} tools={i === 0 ? toggle : undefined} testId={`templates-${kind}`}>
             <DataTable
               label={title}
-              columns={COLUMNS}
+              columns={cols}
               rows={rows}
               loading={q.loading}
               rowKey={(t) => t.key}
               selected={current?.key}
-              onSelect={(k) => setSelected(k)}
+              onSelect={(k) => {
+                setSelected(k);
+                revealOnPhone("template-inspector");
+              }}
               rowProps={(t) => ({ "data-testid": `template-row-${t.key}` })}
               empty={kind === "prd" ? "No PRD templates" : "No roadmap templates"}
             />

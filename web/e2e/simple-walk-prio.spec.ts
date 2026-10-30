@@ -48,13 +48,18 @@ async function checkLine(page: Page, scope: Locator, rows: Locator, titleOf: (ro
   const missing = m.filter((r) => !r.above);
   for (const r of m) {
     expect(r.misses, r.title).toBe(!r.above);
-    expect(r.tag, r.title).toBe(r.above ? null : compact ? "Misses" : `Misses ${label}`);
-    if (compact) expect(r.tagTitle, r.title).toBe(r.above ? null : `Misses ${label}`);
+    // QA pass 3 (qa-simple-plan-27): a feature tagged with the milestone it misses says so.
+    const own = `Misses its own milestone, ${label}`;
+    if (r.above) expect(r.tag, r.title).toBe(null);
+    else expect([compact ? "Misses" : `Misses ${label}`, own], r.title).toContain(r.tag);
+    if (compact) expect([r.above ? null : `Misses ${label}`, own], r.title).toContain(r.tagTitle);
   }
   const caption = scope.getByTestId("line-caption");
   await expect(caption).toContainText(`${missing.length} of ${m.length} miss ${label}`);
-  // A short caption (Value/effort's side list) names the rest in its title.
-  const named = `${await caption.textContent()} ${(await caption.getAttribute("title")) ?? ""}`;
+  // A short caption (Value/effort's side list) opens the rest with "and n more" (QA pass 3, qa-simple-plan-19).
+  const more = caption.getByTestId("line-caption-more");
+  if (await more.count()) await more.click();
+  const named = (await caption.textContent()) ?? "";
   for (const r of missing) expect(named, r.title).toContain(r.title);
   const first = m.findIndex((r) => !r.above);
   const interleaved = first >= 0 && m.slice(first).some((r) => r.above);
@@ -103,10 +108,11 @@ for (const [where, size] of [
           }
           await select.selectOption("pick");
           await page.getByLabel("The line's date").fill("2026-12-31");
+          await page.getByRole("button", { name: "Apply" }).click();
           await expect(page.getByTestId("line-caption")).toContainText(" miss Dec 31, 2026");
           sawInterleaved = (await checkLine(page, list, rows, title, "Dec 31, 2026")) || sawInterleaved;
-          // The mock's plan has a line where a row that makes it ranks below one that misses it.
-          expect(sawInterleaved).toBe(true);
+          // QA pass 3 (qa-simple-plan-2): every line splits the list, makers first; no row that makes it sits under one that misses it.
+          expect(sawInterleaved).toBe(false);
 
           await page.getByRole("tab", { name: "Value / effort" }).click();
           const side = page.getByRole("region", { name: "Ranked side list" });
@@ -214,6 +220,7 @@ test("Value/effort's side caption names three that miss the line and counts the 
   const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
   await select.selectOption("pick");
   await page.getByLabel("The line's date").fill("2026-10-28");
+  await page.getByRole("button", { name: "Apply" }).click();
   const label = "Oct 28, 2026";
   await expect(page.getByTestId("line-caption")).toContainText(` miss ${label}`);
   const titles = async (rows: Locator) => (await rows.evaluateAll((rs) => rs.filter((r) => r.getAttribute("data-misses") === "true").map((r) => r.querySelector('[data-testid="prio-title"]')!.textContent!.trim())));
@@ -229,7 +236,9 @@ test("Value/effort's side caption names three that miss the line and counts the 
   await expect(caption).toContainText(`${missing.length} of ${await side.getByTestId("side-row").count()} miss ${label}`);
   await expect(caption).toContainText(`${missing.slice(0, 3).join(", ")} and ${missing.length - 3} more`);
   for (const t of missing.slice(3)) await expect(caption).not.toContainText(t);
-  expect(await caption.getAttribute("title")).toBe(missing.join(", "));
+  // QA pass 3 (qa-simple-plan-19): "and n more" opens the rest.
+  await caption.getByTestId("line-caption-more").click();
+  for (const t of missing) await expect(caption).toContainText(t);
   await select.selectOption("now");
 });
 
@@ -243,8 +252,8 @@ test("the changes-in-review notice never pushes the goal band down", async ({ pa
   // A commenter proposes a fix on the plan: a viewer reads the published plan, the change in review.
   await login(page, "commenter@example.com");
   await page.goto("/simple");
-  const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-  await broken.getByRole("button", { name: "Propose: Move dependents" }).click();
+  const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
+  await broken.getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
   await signOut(page);
   await login(page, ROLES.viewer);

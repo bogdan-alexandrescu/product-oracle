@@ -17,10 +17,11 @@ It reads in bulk, a fixed number of statements whatever the company's size, and 
 nothing. :func:`load` is also what the daily suggestions read, as Oracle (no principal).
 """
 
+import re
 import uuid
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -90,6 +91,8 @@ class Entry:
     # applies), shown as the item's suggestion; None: the suggestion's own dates.
     suggestion_span: tuple[date, date] | None = None
     flags: list[constraints.Flag] = field(default_factory=list)
+    # The items each order flag's "Move the dependents" moves, by the flag's subject.
+    shift_moves: dict[str, list[uuid.UUID]] = field(default_factory=dict)
     # The track owner's role now (None: no owner, or a disabled one): D-a.
     owner_role: str | None = None
     # S4: the track owner's name (or e-mail) when enabled.
@@ -115,6 +118,67 @@ class Read:
 
     def by_id(self) -> dict[uuid.UUID, Entry]:
         return {e.row.id: e for e in self.entries}
+
+
+def _accepted_order(n: Entry, dep: Entry) -> bool:
+    return any(
+        f.kind == "dependency_order" and f.state == "amber" and str(f.subject) == str(dep.row.id)
+        for f in n.flags
+    )
+
+
+def shift_plan(
+    entry: Entry, dep: Entry, by_id: dict[uuid.UUID, Entry]
+) -> dict[uuid.UUID, tuple[date, date]]:
+    """The new (start, end) of every item "Move the dependents" (shift_dependents) moves
+    when `entry`'s order on `dep` is fixed: the change engine applies it, and the item's
+    flag names the items (SimpleFlag.moves) so Home says what it will move."""
+    one = timedelta(days=1)
+    # #9: every direct dependent of `dep` that starts too early moves, not only the one
+    # whose callout was clicked (two items can share a dependency, each estimated or
+    # slice-dated); the move then walks forward transitively through each moved item's
+    # own dependents.
+    moves: dict[uuid.UUID, tuple[date, date]] = {}
+    queue: deque[uuid.UUID] = deque()
+    for nid in dep.needed_by:
+        n = by_id.get(nid)
+        if n is None or n.status == "cut" or n.resolved.start.date > dep.resolved.end.date:
+            continue
+        # A sibling whose order on `dep` was accepted as a risk stays where it is.
+        if nid != entry.row.id and _accepted_order(n, dep):
+            continue
+        delta = dep.resolved.end.date + one - n.resolved.start.date
+        moves[nid] = (n.resolved.start.date + delta, n.resolved.end.date + delta)
+        queue.append(nid)
+    while queue:
+        cur = queue.popleft()
+        end = moves[cur][1]
+        for nid in by_id[cur].needed_by:
+            n = by_id.get(nid)
+            if n is None or nid in moves or n.status == "cut":
+                continue
+            start = n.resolved.start.date
+            if start <= end:
+                delta = end + one - start
+                moves[nid] = (start + delta, n.resolved.end.date + delta)
+                queue.append(nid)
+    return moves
+
+
+def flags_out(e: Entry) -> list[SimpleFlag]:
+    """The item's flags as the API shows them."""
+    return [
+        SimpleFlag(
+            kind=f.kind,
+            reason=f.reason,
+            fixes=f.fixes,
+            state=f.state,  # type: ignore[arg-type]
+            subject=f.subject,
+            risk_note=f.risk_note,
+            moves=e.shift_moves.get(f.subject or "", []) if f.kind == "dependency_order" else [],
+        )  # fmt: skip
+        for f in e.flags
+    ]
 
 
 def owner_decides(entry: Entry) -> uuid.UUID | None:
@@ -380,6 +444,16 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     flags = constraints.check(nodes)
     for e in entries:
         e.flags = flags.get(str(e.row.id), [])
+    # qa-simple-home-1: what each order flag's "Move the dependents" moves, the item first.
+    by_id = {e.row.id: e for e in entries}
+    for e in entries:
+        for f in e.flags:
+            if f.kind != "dependency_order" or not f.subject or "shift_dependents" not in f.fixes:
+                continue
+            dep = by_id.get(uuid.UUID(f.subject))
+            if dep is not None:
+                moved = list(shift_plan(e, dep, by_id))
+                e.shift_moves[f.subject] = sorted(moved, key=lambda i: i != e.row.id)
     shown_tracks = {e.track.id for e in entries if e.track is not None} | {
         t.id for t in tracks.values() if t.roadmap_document_id in docs
     }
@@ -416,10 +490,11 @@ def _candidates(
 def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
     if row.merged_into:
         return "merged"
-    if row.draft:
-        return "draft"
+    # dod-actions-meet: a cut draft reads cut (Restore), not a draft still in its horizon.
     if row.cut or row.item_key in cut:
         return "cut"
+    if row.draft:
+        return "draft"
     states = {r.state for r in recs if r.state != "cancelled"}
     if states and states <= {"done"}:
         return "done"
@@ -621,15 +696,19 @@ def prd_section_label(section_key: str, heading: str | None, name: str = "") -> 
     return f"{code or ''} {words}".strip()
 
 
+# A leading code ("F-06 ", "F-05b ") on a section's label.
+_LEADING_CODE = re.compile(r"^[A-Z][A-Z0-9]*-\d+[a-z]?\s+")
+
+
 def prd_provenance(e: Entry) -> str | None:
     """The card's "Why" line naming where the item came from: "From <PRD> (draft 5):
-    F-01 Sign-up flow." (the PRD, its draft, the code with the feature's name). The code is
-    the PRD section's, else the item's own; no section anchor is ever shown."""
+    Sign-up flow." (the PRD, its draft and the section's words). The card names an item by its
+    title alone (qa-simple-roadmap-3), so neither the code ("F-01") nor a section anchor shows."""
     if e.prd is None or not e.row.prd_section_key:
         return None
-    label = prd_section_label(e.row.prd_section_key, e.prd_heading, e.row.title or "")
-    if e.code and not _prd_code(e.row.prd_section_key) and not label.startswith(e.code):
-        label = f"{e.code} {label}".strip()
+    label = _LEADING_CODE.sub(
+        "", prd_section_label(e.row.prd_section_key, e.prd_heading, e.row.title or "")
+    )
     if not label:
         return None
     draft = f" (draft {e.prd_draft})" if e.prd_draft else ""
@@ -720,17 +799,7 @@ def item_out(
         ],
         depends_on=e.depends_on,
         needed_by=e.needed_by,
-        flags=[
-            SimpleFlag(
-                kind=f.kind,
-                reason=f.reason,
-                fixes=f.fixes,
-                state=f.state,  # type: ignore[arg-type]
-                subject=f.subject,
-                risk_note=f.risk_note,
-            )  # fmt: skip
-            for f in e.flags
-        ],
+        flags=flags_out(e),
         owner=SimpleOwnerRef(id=e.track.owner_id, name=e.owner_name)  # type: ignore[arg-type]
         if e.track is not None and e.track.owner_id is not None and e.owner_name
         else None,

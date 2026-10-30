@@ -19,7 +19,7 @@ async function scenario(page: Page, name: string, email?: string) {
 test("Draft public texts: Oracle drafts a text for each item with none, for a person to approve", async ({ page }) => {
   await scenario(page, "sharing-public");
   await page.goto(DOC);
-  await page.getByRole("link", { name: "Public version" }).click();
+  await page.getByRole("link", { name: "Check public text" }).click();
   const rows = page.getByTestId("public-row");
   await expect(rows).toHaveCount(5);
   await expect(rows.getByText("No public text yet.")).toHaveCount(5);
@@ -30,11 +30,12 @@ test("Draft public texts: Oracle drafts a text for each item with none, for a pe
   // The item that serves no confirmed goal gets none; every draft waits for a person.
   await expect(rows.getByTestId("public-state").filter({ hasText: "Draft" })).toHaveCount(4);
   await expect(rows.filter({ hasText: "Ops console cleanup" }).getByText("No public text yet.")).toBeVisible();
-  // qa-docs-38: the not-checked state says what the check is and what to do.
+  // qa-docs-38, qa-docs-17: the not-checked state says what the check is; the one next step is the drafts.
   await expect(page.getByTestId("public-check")).toHaveText(
-    "Nobody has checked this public page yet. Read it, then mark it as checked: a public link needs the check.",
+    "Nobody has checked this public page yet. A public link needs the check.",
   );
-  await expect(page.getByRole("button", { name: "Mark as checked" })).toBeDisabled();
+  await expect(page.getByTestId("public-next")).toContainText("Approve or exclude the public text of");
+  await expect(page.getByRole("button", { name: "Mark as checked" })).toHaveCount(0);
 
   // Nothing left to draft: the job says so.
   await page.getByRole("button", { name: "Draft public texts" }).click();
@@ -87,7 +88,7 @@ test("a changelog link opens in a new tab from the preview, the audience view an
   await page.getByRole("radiogroup", { name: "Audience" }).getByRole("radio", { name: "Public" }).click();
   await open('iframe[title="Roadmap for Public"]');
 
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
   await sheet.getByLabel("Audience").selectOption("public");
   await sheet.getByLabel("Label").fill("Customers, autumn");

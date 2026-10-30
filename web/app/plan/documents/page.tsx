@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 
 import { ArtifactMenu } from "@/components/ArtifactMenu";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
@@ -108,10 +109,12 @@ function RoadmapInspector({ d, names }: { d: Doc; names: StyleNames }) {
   const theme = names.theme(d.theme);
   return (
     <Inspector
-      eyebrow="Roadmap · selected"
+      eyebrow="Roadmap"
       title={docLabel({ title: d.title, kind: "roadmap" })}
       label={`Roadmap ${d.title}`}
       testId="roadmap-inspector"
+      // fix4 qa-plan-23: the head on the card surface, as the Plan's and Priorities' inspectors.
+      tone="card"
       action={
         <LinkButton variant="hero" href={`/documents/${d.slug}`}>
           Open
@@ -124,23 +127,27 @@ function RoadmapInspector({ d, names }: { d: Doc; names: StyleNames }) {
           {template && <Chip hero>{template}</Chip>}
         </>
       }
-      stats={[
-        { label: "Latest", value: d.latest_version != null ? `v${d.latest_version}` : "—" },
-        // qa-plan-50: not approved is a status, shown as a chip, not as a big figure.
-        d.approved_version == null
-          ? {
-              label: "Approved",
-              figure: (
-                <span className="mt-1.5 block">
-                  <Chip kind="na" data-testid="roadmap-not-approved">
-                    Not approved yet
-                  </Chip>
-                </span>
-              ),
-            }
-          : { label: "Approved", value: <ApprovedValue d={d} /> },
-      ]}
     >
+      {/* fix4 qa-plan-22: each version's label first, its value beside it (never a value above its label). */}
+      <InspectorSection label="Versions" testId="roadmap-versions">
+        <InspectorRow value={<span className="text-sm font-medium">{d.latest_version != null ? `v${d.latest_version}` : "—"}</span>}>Latest</InspectorRow>
+        <InspectorRow
+          value={
+            // qa-plan-50: not approved is a status, shown as a chip, not as a big figure.
+            d.approved_version == null ? (
+              <Chip kind="na" data-testid="roadmap-not-approved">
+                Not approved yet
+              </Chip>
+            ) : (
+              <span className="text-sm font-medium">
+                <ApprovedValue d={d} />
+              </span>
+            )
+          }
+        >
+          Approved
+        </InspectorRow>
+      </InspectorSection>
       <InspectorSection label="Source PRD">
         {d.source ? <SourceLink source={d.source} /> : <span className="text-text2">—</span>}
       </InspectorSection>
@@ -158,22 +165,19 @@ function RoadmapInspector({ d, names }: { d: Doc; names: StyleNames }) {
 function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
   return (
     <Inspector
-      eyebrow="PRD · selected"
+      eyebrow="PRD"
       title={docLabel({ title: d.title, kind: "prd" })}
       label={`PRD ${d.title}`}
       testId="roadmap-inspector"
+      tone="card"
       action={
         <LinkButton variant="hero" href={`/documents/${d.slug}/v/${d.approved_version}`}>
           Open
         </LinkButton>
       }
       chips={<Chip hero>v{d.approved_version} approved</Chip>}
-      stats={[
-        { label: "Approved", value: `v${d.approved_version}` },
-        { label: "Roadmaps", value: built.length },
-      ]}
     >
-      <InspectorSection label="Roadmaps">
+      <InspectorSection label={`Roadmaps (${built.length})`}>
         {built.length === 0 ? (
           <span className="text-text2">—</span>
         ) : (
@@ -199,6 +203,14 @@ function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
  * PRD. Approved PRDs below can each build a roadmap.
  */
 export default function RoadmapDocumentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <RoadmapDocuments />
+    </Suspense>
+  );
+}
+
+function RoadmapDocuments() {
   const q = useQuery("documents|roadmap", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "roadmap" } } })));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   useArtifactsChanged(q.reload);
@@ -208,6 +220,8 @@ export default function RoadmapDocumentsPage() {
   // roadmap build is not one, so the item lets an approver in.
   const canBuild = can("create_run", true);
   const [selected, setSelected] = useState<string | null>(null);
+  // fix4 qa-plan-3: ?prd=<slug> (the report's "Build the roadmap from it") opens on that PRD's row.
+  const wantedPrd = useSearchParams().get("prd");
   const names = useStyleNames();
   const roadmaps = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const approved = (prds.data ?? []).filter((d) => d.approved_version != null);
@@ -217,7 +231,8 @@ export default function RoadmapDocumentsPage() {
     ...approved.map((d): Row => ({ kind: "prd", d, built: roadmaps.filter((r) => r.source?.slug === d.slug) })),
   ];
   const keyOf = (r: Row) => `${r.kind}:${r.d.id}`;
-  const current = rows.find((r) => keyOf(r) === selected) ?? rows[0];
+  const current =
+    rows.find((r) => keyOf(r) === selected) ?? (selected == null ? rows.find((r) => r.kind === "prd" && r.d.slug === wantedPrd) : undefined) ?? rows[0];
   const loading = (q.loading && !q.data) || (prds.loading && !prds.data);
   const inReview = roadmaps.filter((d) => d.status === "in_review").length;
 

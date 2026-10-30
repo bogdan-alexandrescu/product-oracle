@@ -30,21 +30,21 @@ async function signIn(page: Page, scenario: string, email: string) {
   await expect(page.getByTestId("home-greeting")).toBeVisible();
 }
 
-const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
+const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
 
 test("an approver who decides the item applies its fixes", async ({ page }) => {
   await signIn(page, "simple-home-deciders", "avery.lane@example.com");
-  await expect(digest(page).getByRole("button", { name: "Move dependents", exact: true })).toBeVisible();
+  await expect(digest(page).getByRole("button", { name: "Move the dependents", exact: true })).toBeVisible();
   await expect(digest(page)).not.toContainText("decides");
   await expect(digest(page).getByRole("button", { name: /^Propose/ })).toHaveCount(0);
-  await digest(page).getByRole("button", { name: "Move dependents", exact: true }).click();
+  await digest(page).getByRole("button", { name: "Move the dependents", exact: true }).click();
   await expect(page.getByText("Dependents moved in your working draft")).toBeVisible();
 });
 
 test("a commenter's fix row and toast name who decides", async ({ page }) => {
   await signIn(page, "simple-home-deciders", "commenter@example.com");
-  await expect(digest(page)).toContainText("Avery Lane decides");
-  await digest(page).getByRole("button", { name: "Propose: Move dependents" }).click();
+  await expect(page.getByTestId("simple-page").getByTestId("home-broken-deciders")).toContainText(/Avery Lane\b.*decides? the fixes you propose here/);
+  await digest(page).getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText("Proposed: Avery Lane decides", { exact: true })).toBeVisible();
 });
 
@@ -53,8 +53,8 @@ test("a decider with proposals on their items still sees their own proposals wai
   const onMine = page.getByTestId("home-proposals");
   await expect(page.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
   await expect(onMine.getByTestId("home-proposal").filter({ hasText: "New plan tiers" }).getByRole("button", { name: "Accept" })).toBeVisible();
-  await expect(digest(page)).toContainText("Avery Lane decides");
-  await digest(page).getByRole("button", { name: "Propose: Move dependents" }).click();
+  await expect(page.getByTestId("simple-page").getByTestId("home-broken-deciders")).toContainText(/Avery Lane\b.*decides? the fixes you propose here/);
+  await digest(page).getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText("Proposed: Avery Lane decides", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your proposals waiting" })).toBeVisible();
   await expect(page.getByTestId("home-my-proposals").getByTestId("home-proposal").filter({ hasText: "Weekly alert digest" })).toContainText("Waiting for Avery Lane");
@@ -72,7 +72,8 @@ test("people by name; Start meeting stays in Simple and opens the start sheet", 
   const next = page.getByTestId("home-meeting-next");
   await expect(next).toContainText("Admin");
   await expect(next).not.toContainText(/\badmin\b/);
-  const start = next.getByRole("link", { name: "Start review" });
+  // fix4 (qa-simple-home-27): days before the meeting, the start says it is early.
+  const start = next.getByRole("link", { name: "Start now" });
   await expect(start).toHaveAttribute("href", /^\/simple\/meetings\?start=[0-9a-f-]+$/);
   await start.click();
   await expect(page).toHaveURL(/\/simple\/meetings\?start=/);

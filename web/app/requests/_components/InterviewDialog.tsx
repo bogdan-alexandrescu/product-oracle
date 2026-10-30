@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState, type FormEvent } from "react";
+import { useCallback, useState } from "react";
 
 import { usePolling } from "@/components/JobsPanel";
-import { Button, Notice, SegmentedControl, useFocusTrap } from "@/components/ds";
+import { Button, Dialog, Notice, SegmentedControl } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { interviewsCall, LIMITS, type InterviewCreate, type InterviewLink, type InterviewOut, type InterviewPatch } from "@/lib/api/interviews";
@@ -49,55 +49,36 @@ export function expiresIn(iso: string, now: number = Date.now()): string {
  * drafting: its guide is the API's six fixed questions at once, edited the same way.
  */
 export function InterviewDialog({ onClose, onChanged }: { onClose: () => void; onChanged?: () => void }) {
-  const panel = useRef<HTMLDivElement>(null);
-  useFocusTrap(panel, true, onClose);
   const [step, setStep] = useState<Step>("subject");
   const [interview, setInterview] = useState<Created | null>(null);
   const [link, setLink] = useState<InterviewLink | null>(null);
 
-  const guideTitle = interview?.preset === "pricing" ? "Pricing questions" : "Draft questions";
-  const title = step === "subject" ? "Interview a customer" : step === "guide" ? guideTitle : "Link created";
-  return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
-      <div
-        ref={panel}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="interview-dialog-title"
-        tabIndex={-1}
-        data-testid="interview-dialog"
-        className="w-full max-w-2xl min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none"
-      >
-        <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
-          <h2 id="interview-dialog-title" className="font-display text-xl font-bold tracking-heading">
-            {title}
-          </h2>
-        </div>
-        {step === "subject" && (
-          <SubjectStep
-            onCancel={onClose}
-            onCreated={(iv) => {
-              setInterview(iv);
-              setStep("guide");
-              onChanged?.();
-            }}
-          />
-        )}
-        {step === "guide" && interview && (
-          <GuideStep
-            initial={interview}
-            onCancel={onClose}
-            onLinked={(l) => {
-              setLink(l);
-              setStep("link");
-              onChanged?.();
-            }}
-          />
-        )}
-        {step === "link" && link && <LinkStep link={link} onDone={onClose} />}
-      </div>
-    </div>
-  );
+  // qa-work-35: each step is the app's one Dialog, as New request is: the close X, a bordered
+  // Cancel, and "Discard your changes?" before typed work is thrown away.
+  if (step === "subject")
+    return (
+      <SubjectStep
+        onCancel={onClose}
+        onCreated={(iv) => {
+          setInterview(iv);
+          setStep("guide");
+          onChanged?.();
+        }}
+      />
+    );
+  if (step === "guide" && interview)
+    return (
+      <GuideStep
+        initial={interview}
+        onCancel={onClose}
+        onLinked={(l) => {
+          setLink(l);
+          setStep("link");
+          onChanged?.();
+        }}
+      />
+    );
+  return link ? <LinkStep link={link} onDone={onClose} /> : null;
 }
 
 function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated: (iv: Created) => void }) {
@@ -113,8 +94,10 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
   const intakes = useQuery("interview:intakes", () => unwrap(api.GET("/v1/intakes", { params: { query: { limit: 200 } } })));
   const themes = useQuery("interview:themes", () => unwrap(api.GET("/v1/request-themes")));
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  const dirty =
+    !!name.trim() || !!company.trim() || !!topic.trim() || !!intakeId || !!themeId || about !== "topic" || questions !== "drafted";
+
+  async function submit() {
     if (!name.trim()) return setError("Give the customer's name");
     const subject =
       about === "intake" ? (intakeId ? { intake_id: intakeId } : null) : about === "theme" ? (themeId ? { theme_id: themeId } : null) : topic.trim() ? { topic: topic.trim() } : null;
@@ -138,7 +121,22 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
   }
 
   return (
-    <form className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4" onSubmit={submit} noValidate>
+    <Dialog
+      title="Interview a customer"
+      testId="interview-dialog"
+      size="lg"
+      onClose={onCancel}
+      dirty={dirty}
+      askOnCancel
+      busy={busy}
+      onSubmit={() => void submit()}
+      actions={
+        <Button variant="primary" type="submit" disabled={busy}>
+          Next
+        </Button>
+      }
+    >
+    <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
         <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
           Customer name
@@ -149,7 +147,8 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
           <input className={INPUT} value={company} maxLength={LIMITS.company} onChange={(e) => setCompany(e.target.value)} />
         </label>
       </div>
-      <div className="flex flex-col gap-1">
+      {/* qa-work-35: the segmented controls take their options' width, not the row's. */}
+      <div className="flex flex-col items-start gap-1">
         <span className="text-sm font-semibold text-text2">What to learn about</span>
         <SegmentedControl label="What to learn about" size="sm" items={ABOUT} value={about} onChange={setAbout} />
       </div>
@@ -185,7 +184,7 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
           <textarea className={INPUT} rows={2} value={topic} maxLength={LIMITS.topic} onChange={(e) => setTopic(e.target.value)} />
         </label>
       )}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col items-start gap-1">
         <span className="text-sm font-semibold text-text2">Questions</span>
         <SegmentedControl label="Questions" size="sm" items={QUESTIONS} value={questions} onChange={setQuestions} />
         {/* qa-work-12: one line on what each choice does. */}
@@ -196,15 +195,8 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
         </p>
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
-      <div className="flex justify-end gap-2 pt-1">
-        <Button variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button variant="primary" type="submit" disabled={busy}>
-          Next
-        </Button>
-      </div>
-    </form>
+    </div>
+    </Dialog>
   );
 }
 
@@ -305,9 +297,11 @@ function GuideStep({ initial, onCancel, onLinked }: { initial: Created; onCancel
     }
   }
 
+  const title = pricing ? "Pricing questions" : "Draft questions";
   if (!loaded) {
     return (
-      <div className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4">
+      <Dialog title={title} testId="interview-dialog" size="lg" onClose={onCancel} cancelLabel="Close" actions={null}>
+      <div className="flex flex-col gap-3">
         {job === "failed" || job === "cancelled" ? (
           <Notice tone="error" testId="guide-failed" action={<Button onClick={redraft}>Draft again</Button>}>
             {/* When it failed, so a stored refusal reads as then (#604 re-review). */}
@@ -320,17 +314,33 @@ function GuideStep({ initial, onCancel, onLinked }: { initial: Created; onCancel
           </p>
         )}
         {error && <ErrorNote>{error}</ErrorNote>}
-        <div className="flex justify-end">
-          <Button variant="ghost" onClick={onCancel}>
-            Close
-          </Button>
-        </div>
       </div>
+      </Dialog>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4">
+    <Dialog
+      title={title}
+      testId="interview-dialog"
+      size="lg"
+      onClose={onCancel}
+      cancelLabel="Close"
+      dirty={dirty}
+      askOnCancel
+      busy={busy}
+      actions={
+        <>
+          <Button onClick={() => void save()} disabled={busy || !dirty}>
+            Save
+          </Button>
+          <Button variant="primary" onClick={createLink} disabled={busy}>
+            Create link
+          </Button>
+        </>
+      }
+    >
+    <div className="flex flex-col gap-3">
       <p className="text-sm text-text2">
         Nothing reaches {iv.interviewee_name} that you did not approve here, except Oracle&rsquo;s short acknowledgements and at most one
         follow-up per question.
@@ -394,31 +404,23 @@ function GuideStep({ initial, onCancel, onLinked }: { initial: Created; onCancel
         </Notice>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
-      <div className="flex flex-wrap justify-end gap-2 pt-1">
-        <Button variant="ghost" onClick={onCancel}>
-          Close
-        </Button>
-        <Button onClick={() => void save()} disabled={busy || !dirty}>
-          Save
-        </Button>
-        <Button variant="primary" onClick={createLink} disabled={busy}>
-          Create link
-        </Button>
-      </div>
     </div>
+    </Dialog>
   );
 }
 
 function LinkStep({ link, onDone }: { link: InterviewLink; onDone: () => void }) {
   return (
-    <div className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4">
-      <LinkShown link={link} />
-      <div className="flex justify-end">
-        <Button variant="primary" onClick={onDone}>
-          Done
-        </Button>
+    <Dialog title="Link created" testId="interview-dialog" size="lg" onClose={onDone}>
+      <div className="flex flex-col gap-3">
+        <LinkShown link={link} />
+        <div className="flex justify-end">
+          <Button variant="primary" onClick={onDone}>
+            Done
+          </Button>
+        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
 

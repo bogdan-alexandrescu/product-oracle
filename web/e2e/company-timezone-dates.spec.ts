@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "./test";
 
 import { SOURCES_STORAGE_KEY } from "../lib/api/mock/sources";
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * #401: every date and time a person sees is in the Company time zone (Settings ›
@@ -11,7 +11,7 @@ import { login } from "./helpers";
 
 async function setZone(page: Page, zone: string) {
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption(zone);
+  await pickZone(page, zone);
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
 }

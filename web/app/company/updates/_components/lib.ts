@@ -6,20 +6,21 @@ export type Update = Schemas["DocumentSummary"];
 export type Period = Schemas["UpdatePeriod"];
 export type UpdateTemplate = "investor-update" | "board-product";
 
-/** The two built-in update templates (H8), as the New update sheet offers them. */
-export const TEMPLATES: { key: UpdateTemplate; name: string; short: string; titlePrefix: string; depth: "quick" | "standard"; hint: string }[] = [
+/**
+ * The two built-in update templates (H8), as the New update sheet offers them; qa-company-38:
+ * one name everywhere (the list, the dialog, a new update's title and the API's template).
+ */
+export const TEMPLATES: { key: UpdateTemplate; name: string; titlePrefix: string; depth: "quick" | "standard"; hint: string }[] = [
   {
     key: "investor-update",
     name: "Investor update",
-    short: "Investor",
     titlePrefix: "Investor update",
     depth: "quick",
     hint: "Monthly: metrics first, asks near the top, then a short recap.",
   },
   {
     key: "board-product",
-    name: "Board product section",
-    short: "Board",
+    name: "Board update",
     titlePrefix: "Board update",
     depth: "standard",
     hint: "One to two slides: goals, a dated timeline, highlights and lowlights.",

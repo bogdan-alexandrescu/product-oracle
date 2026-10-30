@@ -12,8 +12,9 @@ Test cards (protects / fails_when / no_claim):
   a matching decision outside meetings behind 200 newer ones; fails_when=the newest 200
   are taken before the filter.
 - test_idle_meeting_ends: protects=a meeting whose session closed for idleness reads as
-  ended (with Oracle's quick minutes), in Past, and its presenter may still send them;
-  fails_when=it stays live while changes through it are refused.
+  ended (with Oracle's quick minutes, a short prose count, qa-simple-decide-6), in Past,
+  and its presenter may still send them; fails_when=it stays live while changes through
+  it are refused.
 - test_one_meeting_per_occurrence: protects=a second start from the same scheduled review
   is 409 naming the first meeting; fails_when=two meetings share the occurrence.
 - test_change_and_its_meeting_decision_commit_together: protects=a change made through a
@@ -139,7 +140,8 @@ async def test_idle_meeting_ends(client):
         await s.commit()
     out = await get(client, w, m["id"])
     assert out["status"] == "ended" and not out["can"]["change"] and not out["can"]["approve"]
-    assert out["minutes"] and "Renamed Edit_Title A" in out["minutes"]["summary"]
+    # qa-simple-decide-6: a short prose count, not the decision's title.
+    assert out["minutes"] and out["minutes"]["summary"] == "1 decision taken."
     assert out["can"]["end"]
     listed = (await client.get(MEETINGS, headers=w.ctx.as_("commenter"))).json()
     assert listed["live"] == [] and [x["id"] for x in listed["past"]] == [m["id"]]

@@ -103,8 +103,9 @@ for (const [where, use] of [
         await expect(full).toHaveCount(0);
         await opened.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
         await expect(page.getByTestId("flow-detail")).toHaveCount(0);
-        // A bet Oracle has not drawn yet: its row says so on the line.
-        await expect(page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" }).getByTestId("flow-empty")).toContainText("No flow yet");
+        // A bet Oracle has not drawn yet: a viewer sees no flow row and no prompt (2026-10-30).
+        await expect(page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" })).toHaveCount(0);
+        await expect(page.getByText("No flow yet")).toHaveCount(0);
       });
 
       test("an owner comments on a note and revises: version 2, version 1 in the history", async ({ page }) => {
@@ -133,10 +134,10 @@ for (const [where, use] of [
         await login(page);
         await page.goto(ONE_PAGER);
         const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
-        await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
-        await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
-        await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
+        await expect(wide).toHaveCount(0);
+        await page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" }).click();
+        // The mock draws at once here (the drawing state: "a one-pager bet line: drawing, then version 1").
+        await expect(page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" })).toHaveCount(0);
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
         await wide.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" }).click();
         const opened = page.getByTestId("flow-detail");
@@ -153,9 +154,9 @@ for (const [where, use] of [
         await login(page);
         await page.goto(ONE_PAGER);
         const wide = page.getByRole("group", { name: "User flow of “A sample project created on" });
-        await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
-        await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
+        await expect(wide).toHaveCount(0);
+        await page.getByRole("button", { name: "Draw the flow for “A sample project created on" }).click();
+        // The mock draws at once here (the drawing state: "a one-pager bet line: drawing, then version 1").
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
         await wide.getByRole("button", { name: "Flow for “A sample project created on" }).click();
         await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
@@ -163,12 +164,12 @@ for (const [where, use] of [
       });
 
       for (const who of ["commenter@example.com", "viewer@example.com"]) {
-        test(`${who.split("@")[0]} is not offered Ask on a bet Oracle has not drawn`, async ({ page }) => {
+        test(`${who.split("@")[0]} is not offered Draw the flow on a bet Oracle has not drawn`, async ({ page }) => {
           await login(page, who);
           await page.goto(ONE_PAGER);
-          const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
-          await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
-          await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
+          // 2026-10-30: nothing until a flow exists, no "Draw the flow" either.
+          await expect(page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" })).toHaveCount(0);
+          await expect(page.getByRole("button", { name: /^Draw the flow/ })).toHaveCount(0);
         });
       }
 
@@ -247,7 +248,7 @@ test.describe("a drawing that takes a while lands without a reload", () => {
     await page.goto(ONE_PAGER);
     const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
     const loads = await noReloads(page);
-    await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
+    await page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" }).click();
     await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
     await page.waitForTimeout(2500);
     await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");

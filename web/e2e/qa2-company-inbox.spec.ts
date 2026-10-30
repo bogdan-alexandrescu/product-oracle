@@ -15,7 +15,7 @@ import { login } from "./helpers";
  * - qa-company-36: "Show the text" is a target of at least 24 px on a phone.
  * - qa-company-42: each action replaces the banner with its own message.
  * - qa-company-43: an empty New says where the waiting items are.
- * - qa-company-44: a viewer gets no Edit on "Sources that need attention".
+ * - qa-company-44: a viewer gets no Edit on "Sources that need attention" (qa-shell-19: nor the panel).
  */
 
 const NEW_PERSON = "new.person@example.com";
@@ -157,13 +157,12 @@ test("qa-company-43: an empty New says how many still wait in Seen, and opens it
   await expect(tab(page, "Seen")).toHaveAttribute("aria-selected", "true");
 });
 
-test("qa-company-44: a viewer reads a source needing attention with no Edit", async ({ page }) => {
+test("qa-company-44: a viewer gets no Edit on a source needing attention (qa-shell-19: nor the panel)", async ({ page }) => {
   await login(page, "viewer@example.com");
   await openInbox(page);
-  const group = page.getByTestId("inbox-sources");
-  await expect(group).toContainText("Legacy all-hands chat");
-  await expect(group.getByTestId("need-by-role")).toHaveText("View only");
-  await expect(group.getByRole("link", { name: /^Edit/ })).toHaveCount(0);
+  await expect(page.getByTestId("inbox-needs")).toBeVisible();
+  await expect(page.getByTestId("inbox-sources")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^Edit/ })).toHaveCount(0);
 });
 
 test.describe("on a phone", () => {

@@ -17,7 +17,7 @@ async function sharing(page: Page, email?: string) {
 }
 
 async function openSheet(page: Page) {
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   return page.getByRole("dialog", { name: "Share roadmap" });
 }
 
@@ -41,7 +41,7 @@ async function openShared(page: Page) {
   await expect(
     page
       .frameLocator('iframe[title="Shared roadmap"]')
-      .getByText("Audience Board", { exact: true }),
+      .getByText(/^Shared with you/),
   ).toBeVisible();
 }
 
@@ -86,9 +86,9 @@ test.describe("desktop", () => {
     const create = sheet.getByRole("button", { name: "Create link" });
     await expect(create).toBeDisabled();
     await expect(sheet.getByTestId("create-why")).toHaveText(
-      "Add a label first",
+      "Add a label first.",
     );
-    await expect(create).toHaveAccessibleDescription("Add a label first");
+    await expect(create).toHaveAccessibleDescription("Add a label first.");
     await label.fill("Board, October meeting");
     await expect(sheet.getByTestId("create-why")).toHaveCount(0);
     await expect(create).toBeEnabled();
@@ -156,10 +156,10 @@ test.describe("desktop", () => {
         "Shared by Admin at ",
       );
       await expect(page).toHaveTitle(/Platform roadmap, autumn/);
-      // The bar matches the white frame in either theme.
+      // The bar matches the frame's page in its scheme (qa-docs-11: dark when the reader prefers dark).
       expect(
         await header.evaluate((el) => getComputedStyle(el).backgroundColor),
-      ).toBe("rgb(255, 255, 255)");
+      ).toBe(scheme === "light" ? "rgb(255, 255, 255)" : "rgb(15, 23, 42)");
       // The frame is as tall as its page: it never scrolls on its own.
       const frame = page.getByTestId("shared-frame");
       await expect
@@ -232,9 +232,12 @@ test.describe("phone", () => {
       });
     await expect.poll(gap).toBeLessThan(64);
     const onPhone = await tall();
-    // The phone turned into a desktop window: the page wraps less, the frame follows it.
+    // The phone turned into a desktop window: the frame follows its page and never keeps a
+    // blank gap. The link holder's page is now cards and tables (qa-docs-26) that are as tall
+    // on a desktop as on a phone, so it does not shrink; it grows by no more than the page's
+    // own 1.5rem margin.
     await page.setViewportSize({ width: 1440, height: 900 });
-    await expect.poll(tall).toBeLessThan(onPhone);
     await expect.poll(gap).toBeLessThan(64);
+    expect(await tall()).toBeLessThanOrEqual(onPhone + 24);
   });
 });

@@ -58,13 +58,18 @@ export function formatScore(n: number | null | undefined): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+/** Methods whose scores read as whole numbers: MoSCoW's categories (4, 3) and RICE's reach-sized scores (5,400). */
+const WHOLE: ReadonlySet<string> = new Set(["moscow", "rice"]);
+
 /**
- * A feature's score as the Score column and the inspector show it: always two decimals,
- * thousands separated (5,400.00 · 83.33 · 8.10 · 0.33), so a column of them lines up.
+ * A feature's score as the Score column and the inspector show it, one way per method so a
+ * column of them lines up: whole numbers for MoSCoW and RICE (4 · 5,400, qa-plan-50), else
+ * two decimals (83.33 · 8.10 · 0.33); thousands separated.
  */
-export function scoreText(n: number | null | undefined): string {
+export function scoreText(n: number | null | undefined, method?: string): string {
   if (n == null) return "—";
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const places = method && WHOLE.has(method) ? 0 : 2;
+  return n.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places });
 }
 
 /**
@@ -77,7 +82,7 @@ function fmtNums(s: string): string {
 }
 
 /** A step the scorer wrote, with category names and input names in words. */
-export function stepWords(step: string): string {
+export function stepWords(step: string, method?: string): string {
   const moscow = step.match(/^(must|should|could|won't|wont) = (\d+); tie-break goal value (.+)$/);
   if (moscow) {
     return fmtNums(`${MOSCOW_LABEL[moscow[1]!]} = ${moscow[2]}; ties broken by goal value ${moscow[3]}`);
@@ -87,7 +92,7 @@ export function stepWords(step: string): string {
     const words = named[1]!.charAt(0).toUpperCase() + step.slice(1);
     // The score a step arrives at reads as the Score column shows it: two decimals (qa-plan-18).
     const sum = named[1] === "score" ? words.match(/^(.*) = (\d+(?:\.\d+)?)$/) : null;
-    if (sum) return `${fmtNums(sum[1]!)} = ${scoreText(Number(sum[2]))}`;
+    if (sum) return `${fmtNums(sum[1]!)} = ${scoreText(Number(sum[2]), method)}`;
     return fmtNums(words);
   }
   const missing = step.match(/^not scored: missing (.+)$/);

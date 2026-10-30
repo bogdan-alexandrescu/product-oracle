@@ -168,6 +168,8 @@ for (const phone of [false, true]) {
           await tap(viewer.getByRole("tab", { name: "Screen" }));
           await expect(viewer.getByTestId("flow-regions")).toContainText("Progress meter");
         } else {
+          // The Roadmap card's viewer keeps its "Roadmap" back (the one-pager's has none: qa-simple-prd-p3-22).
+          await expect(viewer.getByRole("button", { name: "Exit full screen" })).toBeVisible();
           await expect(viewer.getByRole("button", { name: "Roadmap" })).toBeVisible();
           await expect(viewer.getByRole("heading", { level: 2 })).toHaveText("Alert history export · flow");
           await expect(viewer.getByText("User flow", { exact: true })).toBeVisible();
@@ -252,7 +254,7 @@ for (const phone of [false, true]) {
 
       test(`a PRD bet line is the same row, opened the same (${where})`, async ({ page }) => {
         await login(page);
-        await page.goto("/simple/prds/guided-setup");
+        await page.goto("/simple/one-pagers/guided-setup");
         const line = page.getByRole("group", { name: "User flow of “A setup checklist that shows" });
         await expect(line.getByTestId("flow-meta")).toHaveText("5 steps · 1 screen");
         await expect(line.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
@@ -276,7 +278,7 @@ for (const phone of [false, true]) {
         await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, String(JOB_MS)] as const);
         await page.addInitScript(([key, bet]) => localStorage.setItem(key, bet), [MOCK_VISUAL_FAIL_KEY, "bets-2"] as const);
         await login(page);
-        await page.goto("/simple/prds/guided-setup");
+        await page.goto("/simple/one-pagers/guided-setup");
         let loads = 0;
         page.on("framenavigated", (f) => {
           if (f === page.mainFrame()) loads += 1;
@@ -284,8 +286,9 @@ for (const phone of [false, true]) {
         const drawn = page.getByRole("group", { name: "User flow of “A setup checklist that shows" });
         await expect(drawn.getByRole("button", { name: "Flow for “A setup checklist that shows" }).locator('[data-shape="decision"]')).toHaveCount(1);
         const row = page.getByRole("group", { name: "User flow of “A sample project created on" }).getByTestId("flow-row");
-        await expect(row.getByTestId("flow-empty")).toContainText("No flow yet");
-        await tap(row.getByRole("button", { name: "Ask Oracle to draw it" }));
+        // 2026-10-30: no "No flow yet" row under a bet; its line ends with "Draw the flow".
+        await expect(row).toHaveCount(0);
+        await tap(page.getByRole("button", { name: "Draw the flow for “A sample project created on" }));
         const stages = row.getByRole("list", { name: "Stages" });
         await expect(stages).toContainText("Read A sample project created on day one");
         await expect(stages).toContainText("Draw the screen");
@@ -296,7 +299,7 @@ for (const phone of [false, true]) {
         await expect(row.getByRole("button", { name: "Flow for “A sample project created on" }).locator('[data-shape="decision"]')).toHaveCount(1);
         // The failed state, on the line itself.
         const failing = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" }).getByTestId("flow-row");
-        await tap(failing.getByRole("button", { name: "Ask Oracle to draw it" }));
+        await tap(page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" }));
         await expect(failing.getByTestId("flow-empty")).toHaveText(/Oracle could not draw this flow\. Nothing changed on the item\./, { timeout: JOB_MS + 8000 });
         await tap(failing.getByRole("button", { name: "Retry" }));
         await expect(failing.getByTestId("flow-drawn")).toContainText("Version 1", { timeout: JOB_MS + 8000 });

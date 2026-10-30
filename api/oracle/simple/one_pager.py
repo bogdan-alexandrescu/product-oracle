@@ -50,15 +50,22 @@ from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack
-from oracle.simple import drafts, plan_strip
+from oracle.simple import drafts, one_pager_checks, plan_strip, quality
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
-from oracle.simple.models import SimpleChange, SimpleDraft, SimpleOnePager, SimpleSession
+from oracle.simple.models import (
+    SimpleChange,
+    SimpleDraft,
+    SimpleOnePager,
+    SimpleSession,
+    SimpleVisual,
+)
 from oracle.simple.schemas import (
     OnePagerBlock,
     OnePagerDraft,
     OnePagerItem,
     OnePagerLine,
+    OnePagerLook,
     OnePagerMetric,
     OnePagerNote,
     OnePagerOut,
@@ -514,15 +521,20 @@ def _numbered(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def clean_answer(
-    answer: Any, specs: tuple[Spec, ...], mapped: dict[str, list[Section]]
+    answer: Any, specs: tuple[Spec, ...], mapped: dict[str, list[Section]], strict: bool = True
 ) -> list[dict[str, Any]] | None:
     """The job's answer, held to each block's caps and its own section keys; None when it
-    is not usable (the quick read stays)."""
+    is not usable (the quick read stays). Not ``strict`` (an answer that failed its checks,
+    held for owners): a block left short is kept as it is."""
     given = {b.get("key"): b for b in (answer or {}).get("blocks") or [] if isinstance(b, dict)}
     out = []
     for spec in specs:
         allowed = {s.section_key for s in mapped.get(spec.key, [])}
         lines = []
+        marked = quality.marked(given.get(spec.key) or {})
+        if marked and not quality.has_facts(mapped.get(spec.key, [])):
+            out.append({"key": spec.key, "lines": [], "missing": True})  # "Not in the PRD yet"
+            continue
         for raw in (given.get(spec.key) or {}).get("lines") or []:
             if not isinstance(raw, dict):
                 continue
@@ -544,8 +556,8 @@ def clean_answer(
             lines.append(line)
         lines = lines[: spec.max_lines]
         facts = sum(len(_facts(x)) for x in mapped.get(spec.key, []))
-        if len(lines) < min(spec.min_lines, facts):
-            return None
+        if strict and len(lines) < min(max(spec.min_lines, marked), facts):
+            return None  # a block marked "Not in the PRD yet" that the PRD has: not usable
         out.append({"key": spec.key, "lines": lines})
     return _numbered(out)
 
@@ -712,6 +724,13 @@ async def built(
     return Built(document, v, specs, secs, row)
 
 
+def _problem_names_no_one(answer: Any, sections: list[Section]) -> str | None:
+    """ad-onepager's check on a raw ``one_pager`` answer: the reason its problem names no one
+    of the PRD's users, else None (oracle.simple.one_pager_checks.problem_check)."""
+    raw = (answer or {}).get("blocks") if isinstance(answer, dict) else None
+    return one_pager_checks.problem_check([b for b in raw or [] if isinstance(b, dict)], sections)
+
+
 async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     """The ``one_pager`` job: one call with each block's mapped sections; the answer,
     held to the caps and section keys, replaces the quick read of the same hash."""
@@ -747,8 +766,22 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
             for sp in specs
         ],
     }
+    # Who has it (ad-onepager): from the PRD's users or personas section, for the prompt.
+    sections = await _sections(s, v)
+    payload["who"] = one_pager_checks.who_has_it(sections)
+    # oracle.simple.quality: a failing answer is asked once more with its failures named;
+    # failing again, it is stored with them (held for owners; the last good page stays).
+    # A problem that names no one of the PRD's users is asked for again too, but only the
+    # quality checks hold a build: naming no one twice is built anyway (ad-onepager review),
+    # and the page shows who has it beside the problem.
     answer = await ask("one_pager", payload)
-    blocks = clean_answer(answer, specs, mapped)
+    checks = quality.one_pager(answer, specs, mapped)
+    why = _problem_names_no_one(answer, sections)
+    if checks or why:
+        failed = quality.said(checks) + ([why] if why else [])
+        answer = await ask("one_pager", {**payload, "failed_checks": failed})
+        checks = quality.one_pager(answer, specs, mapped)
+    blocks = clean_answer(answer, specs, mapped, strict=not checks)
     if blocks is None:
         return {"built": False, "reason": "the answer missed a block's lines or section keys"}
     if await _lines_in_use(s, document):
@@ -762,10 +795,23 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     )
     blocks = await carry_keys(s, document, v, blocks, row)
     if row is None:
-        row = SimpleOnePager(document_id=document.id, version_id=v.id, sections_hash=h)
+        quick = _numbered(extract(specs, mapped))
+        row = SimpleOnePager(
+            document_id=document.id,
+            version_id=v.id,
+            sections_hash=h,
+            blocks=quick,
+            built_at=company_time.now(),
+        )
         s.add(row)
-    row.blocks, row.built_by, row.job_id = blocks, "oracle", job.id
-    row.built_at = company_time.now()
+    row.job_id = job.id
+    if checks:
+        row.held, row.checks = blocks, checks
+        await s.flush()
+        # Held for owners, not built: the shown page and its visuals stay the last good.
+        return {"built": False, "held": True, "sections_hash": h, "checks": quality.said(checks)}
+    row.blocks, row.built_by, row.held, row.checks = blocks, "oracle", None, None
+    row.built_at = company_time.now()  # a held run leaves the last good page's time
     await s.flush()
     # S10: Oracle drafts each bet's visual with the page (once per bet: a bet keeps its flow
     # when its words change).
@@ -918,6 +964,15 @@ def may_remind(principal: Any, w: Who) -> bool:
     """Remind: the PRD's owners (a company owner, its track owners) and its decider."""
     me = _me(principal)
     return me is not None and (decides(principal, w) or me in w.track_owners)
+
+
+def owns(principal: Any, w: Who, owner_id: uuid.UUID | None) -> bool:
+    """The PRD's owners (its "Needs a look" note): a company owner, its track owners and
+    its document owner."""
+    me = _me(principal)
+    return me is not None and (
+        has_role(principal.role, "owner") or me in w.track_owners or me == owner_id
+    )
 
 
 def due_reminders(d: SimpleDraft, now: datetime) -> list[uuid.UUID]:
@@ -1084,7 +1139,9 @@ def patch_all(bodies: dict[str, str], old: str, new: str) -> dict[str, str] | No
 # --------------------------------------------------------------------------- the read
 
 
-async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
+async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True) -> OnePagerOut:
+    """The one-pager as ``principal`` reads it; ``held`` false (the PDF, which is shared): the
+    last good version, never a build held for owners."""
     from oracle.simple import service
 
     document = await _document(db, principal, doc)
@@ -1093,6 +1150,10 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     b = await built(db, document, persist=writer)
     if writer:
         await db.commit()
+    # oracle.simple.quality: a build that failed its checks twice is read by owners, with a
+    # note naming them; people below owner read the last good version.
+    owner_reads = held and has_role(principal.role, "owner") and bool(b.row.held)
+    page = b.row.held if owner_reads else b.row.blocks
     w = await who(db, document)
     d = await _open_draft(db, document)
     me = _me(principal)
@@ -1143,7 +1204,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         db, sids | {c.session_id for c in shown if c.session_id}
         | ({uuid.UUID(approved_sid)} if approved_sid else set())
     )  # fmt: skip
-    line_ids = [x["id"] for blk in b.row.blocks for x in blk["lines"]]
+    line_ids = [x["id"] for blk in page for x in blk["lines"]]
     by_line = await meetings.decided_in(
         db, [{"kind": "section", "id": str(document.id), "ref": f"line:{i}"} for i in line_ids]
     )
@@ -1171,11 +1232,14 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                 )
                 for k, p in (c.after.get("sections") or {}).items()
             ],
-            can_undo=kind == "change"
-            and c.by == me
-            and s is not None
-            and s.closed_at is None
-            and (s.last_change_at or s.started_at) > now - IDLE,
+            can_undo=(kind == "proposal" and c.by == me)
+            or (
+                kind == "change"
+                and c.by == me
+                and s is not None
+                and s.closed_at is None
+                and (s.last_change_at or s.started_at) > now - IDLE
+            ),
             can_decide=kind == "proposal" and may_decide(principal, c),
             adds_feature=line_id.startswith("bets-"),
             flow=visuals.one_pager_flow(note_flows.get(c.id)),
@@ -1185,7 +1249,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     proposed = {n.line_id for n in notes if n.kind == "proposal"}
     blocks = []
     for spec in b.specs:
-        raw = next((x for x in b.row.blocks if x["key"] == spec.key), {"lines": []})
+        raw = next((x for x in page if x["key"] == spec.key), {"lines": []})
         lines = []
         for line in raw["lines"]:
             edited = line["id"] in line_text
@@ -1215,12 +1279,17 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             )
         blocks.append(
             OnePagerBlock(
-                key=spec.key, title=spec.title, rules=spec.rules, kind=spec.kind, lines=lines
+                key=spec.key,
+                title=spec.title,
+                rules=spec.rules,
+                kind=spec.kind,
+                lines=lines,
+                missing=bool(raw.get("missing")) and not lines,
             )
         )  # type: ignore[arg-type]
     # S10: each bet ("What we will build") carries its visual.
     bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
-    keys = {x["id"]: visuals.bet_key(x) for blk in b.row.blocks for x in blk["lines"]}
+    keys = {x["id"]: visuals.bet_key(x) for blk in page for x in blk["lines"]}
     for x in bets:
         x.flow_subject = visuals.line_subject(document.id, keys.get(x.id, x.id))
     line_flows = await visuals.flows_for(db, "one_pager_line", [x.flow_subject for x in bets])
@@ -1233,8 +1302,15 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     }
     for sid, flow in (await visuals.flows_for(db, "one_pager_line", list(by_words))).items():
         by_words[sid].flow_subject, line_flows[sid] = sid, flow
+    # The request's own rule (visuals.may_revise of a bet: who changes the PRD directly).
+    draws = await visuals.may_revise(db, principal, SimpleVisual(document_id=document.id))
     for x in bets:
         x.flow = visuals.one_pager_flow(line_flows.get(x.flow_subject))
+        x.can_draw_flow = x.flow is None and draws
+    # Reads clearly (2026-10-30): who has it, measures, codes with names, footnotes; the
+    # "Needs a look" items for the PRD's owners. After the flows: a flow still keyed by a
+    # bet's words is found by the words before codes got their names.
+    looks = one_pager_checks.annotate(blocks, b.sections)
     slice_ = await service.build(db, principal, prd=str(document.id))
     items = [
         OnePagerItem(
@@ -1276,7 +1352,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             blocked_by=drafts.held(d),
         )
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
-    used = {k for blk in b.row.blocks for x in blk["lines"] for k in x["source_keys"]}
+    used = {k for blk in page for x in blk["lines"] for k in x["source_keys"]}
     sources = [
         OnePagerSource(
             key=x.section_key, heading=x.heading, body=patched.get(x.section_key, x.body_md)
@@ -1293,7 +1369,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         decider=person(w.decider) if w.decider in names else None,
         span_start=span[0] if span else None,
         span_end=span[1] if span else None,
-        built_by=b.row.built_by,
+        built_by="oracle" if owner_reads else b.row.built_by,
         built_at=b.row.built_at,  # type: ignore[arg-type]
         blocks=[*blocks, timeline.model_copy(update={"lines": []})],
         timeline=items,
@@ -1307,6 +1383,14 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         and _me(principal) is not None
         and has_role(principal.role, "commenter"),
         can_start=starts(principal, w),
+        needs_look=(
+            [OnePagerLook(**vars(x)) for x in looks] if owns(principal, w, owner_id) else []
+        )
+        + (
+            [OnePagerLook(kind="check", text=t) for t in quality.said(b.row.checks)]
+            if owner_reads
+            else []
+        ),
     )
 
 
@@ -1480,6 +1564,13 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     sees = d is not None and sees_draft(principal, d, w)
     text, bodies = await _current(db, b, line_id, d if sees else None)
     if text != old:
+        held = (b.row.held or []) if has_role(principal.role, "owner") else []
+        if old in (x["text"] for blk in held for x in blk["lines"] if x["id"] == line_id):
+            # Owners read a held build ("Needs a look"); edits act on the last good line.
+            raise _conflict(
+                "This line is from Oracle's draft that needs a look; edit the last good line",
+                text,
+            )
         raise _conflict("This line changed since you read it", text)
     if not bodies:
         raise ChangeError(409, "This line rests on no section of the PRD")
@@ -1575,10 +1666,39 @@ async def decide(db, principal, c: SimpleChange, action: str, reason: str | None
     return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
 
 
+async def _withdraw(db, principal, c: SimpleChange, me, now):
+    """A proposal withdrawn by its author (qa-simple-prd-p3-17): declined by them, the PRD
+    untouched; its note leaves the margin."""
+    from oracle.simple import changes
+
+    if c.by != me:
+        raise ChangeError(403, "Only the person who proposed it withdraws it")
+    # Lock the row so a decider's accept and this withdraw never both win.
+    await db.refresh(c, with_for_update=True)
+    if c.status != "proposed":
+        raise ChangeError(409, f"This change is {c.status} already")
+    c.status = "declined"
+    c.decided_by, c.decided_at = me, now
+    c.decision_reason = "Withdrawn by its author"
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        "simple_change.withdrawn",
+        "simple_change",
+        c.id,
+        data={"op": c.op, "target": c.target},
+    )
+    await db.commit()
+    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
+
+
 async def undo(db, principal, c: SimpleChange):
     from oracle.simple import changes
 
     me, now = changes._me(principal), company_time.now()
+    if c.status == "proposed":
+        return await _withdraw(db, principal, c, me, now)
     if c.status != "applied":
         raise ChangeError(409, f"Only an applied change undoes; this one is {c.status}")
     if c.by != me:
@@ -1904,7 +2024,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     stem."""
     from oracle.branding import BRAND_CSS, accent_css, load_brand, render_brand_header
 
-    out = await read(db, principal, doc)
+    out = await read(db, principal, doc, held=False)
     brand = await load_brand(db)
     # prd-timeline: a PRD with a dated plan prints its timeline page, then a page per milestone.
     view = (await plan_model.views(db, {out.document.id})).get(out.document.id)

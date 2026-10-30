@@ -93,6 +93,8 @@ function CompanyDomains() {
   const [text, setText] = useState("");
   const { act, error, setError, busy } = useAction();
   const list = q.data ?? [];
+  // What a removal does to Google sign-in, as the API decides it (/v1/sign-in-rules).
+  const rulesQ = useQuery("sign-in-rules", () => unwrap(api.GET("/v1/sign-in-rules")));
 
   async function save(next: string[]) {
     const saved = await act(() => writeSetting(DOMAINS_KEY, next));
@@ -110,12 +112,26 @@ function CompanyDomains() {
   }
 
   async function remove(domain: string) {
+    // The same list decides Google sign-in (Members › Sign-in): say both, and who loses access (qa-onboarding-10).
+    const drive =
+      list.length === 1
+        ? "With no company domain, every doc in a picked Drive folder is skipped, and the ones already pulled in are hidden now."
+        : `Docs in picked Drive folders owned at ${domain} are skipped, and the ones already pulled in are hidden now.`;
+    // Unread rules say the loss, the safe side.
+    const rules = rulesQ.data;
+    const signIn =
+      rules && !rules.google_sign_in
+        ? "Google sign-in is off, so no one's sign-in changes."
+        : rules?.domains.some((d) => d.domain === domain && d.from === "deployment")
+          ? `People at ${domain} can still sign in with Google: this Oracle's own setup allows that domain.`
+          : `Anyone at ${domain} who is not a member yet can no longer sign in with Google, even with an invite. Members already in keep their access.`;
     if (
-      list.length === 1 &&
       !(await confirmInPage({
         destructive: true,
-        action: "Remove",
-        message: `Remove ${domain}? With no company domain, every doc in a picked folder is skipped, and the ones already pulled in are hidden now.`,
+        title: `Remove ${domain}?`,
+        action: "Remove domain",
+        cancel: "Cancel",
+        message: `${drive} ${signIn}`,
       }))
     ) {
       return;

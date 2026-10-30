@@ -3,11 +3,16 @@ import { Suspense } from "react";
 import type { RouteProps } from "@/lib/route-props";
 
 import { InterviewDetail } from "./_detail";
-import { PageSkeleton } from "@/components/ds";
+import { PageSkeleton, PageTabsProvider } from "@/components/ds";
 
 async function Detail({ params }: { params: RouteProps<{ id: string }>["params"] }) {
   const { id } = await params;
-  return <InterviewDetail id={id} />;
+  // qa-work-44: one way back, "← Interviews": the Requests tabs are not drawn under the interview's name.
+  return (
+    <PageTabsProvider tabs={null}>
+      <InterviewDetail id={id} />
+    </PageTabsProvider>
+  );
 }
 
 /** A customer interview (C3): its approved questions, transcript, snapshot and requests. */

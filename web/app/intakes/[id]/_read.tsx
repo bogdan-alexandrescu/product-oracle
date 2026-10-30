@@ -15,13 +15,21 @@ type AiRead = Schemas["AiReadOut"];
 const LIVE = new Set<AiRead["state"]>(["queued", "running"]);
 const POLL_MS = 10_000;
 
-function line(read: AiRead): string {
-  if (read.state === "off") return read.off_reason === "company" ? "Oracle's read is off for this company." : "Oracle hasn't read this brief.";
+function line(read: AiRead, openGaps: number, asked: number): string {
+  if (read.state === "off") {
+    if (read.off_reason === "company") return "Oracle's read is off for this company.";
+    // qa-onboarding-22: the questions below are Oracle's, from what the brief says; only
+    // the deeper read (with the sources) has not run.
+    return asked > 0
+      ? `Oracle asked ${plural(asked, "question")} from what the brief says; it has not analysed it with your sources yet.`
+      : "Oracle hasn't read this brief.";
+  }
   if (LIVE.has(read.state)) return `Oracle is reading your brief and ${plural(read.sources, "source")}`;
   if (read.state === "failed") return read.error?.message ?? "Oracle's read failed. The rules read stands.";
-  // rirs-29: plain words, not "inferences" and "gaps".
+  // rirs-29: plain words, not "inferences" and "gaps". qa-work-3: the open gaps are the Gaps
+  // tab's count (the rules read's and Oracle's), not only those this read added.
   const added = read.added ?? { items: 0, gaps: 0 };
-  return `${plural(added.items, "thing Oracle assumed", "things Oracle assumed")}, ${plural(added.gaps, "open gap")} · private to you`;
+  return `${plural(added.items, "thing Oracle assumed", "things Oracle assumed")} (private to you), ${plural(openGaps, "open gap")}`;
 }
 
 /** The day the read started or finished, as the line ends with it (never split: qa-onboarding-40). */
@@ -38,7 +46,28 @@ function lineDay(read: AiRead): string | null {
  * the button waits with the API's sentence. While a read runs the page reads the summary
  * again every 10 s.
  */
-export function ReadLine({ read, mayRead, busy, onRead, onPoll }: { read: AiRead; mayRead: boolean; busy: boolean; onRead: () => void; onPoll: () => void }) {
+export function ReadLine({
+  read,
+  openGaps,
+  asked,
+  mayRead,
+  mayDraft = false,
+  busy,
+  onRead,
+  onPoll,
+}: {
+  read: AiRead;
+  /** The brief's open gaps, as the Gaps tab counts them. */
+  openGaps: number;
+  /** The questions Oracle has asked so far, in every batch. */
+  asked: number;
+  mayRead: boolean;
+  /** Draft with Oracle shows in the header: the help line says what it does too (qa-docs-86). */
+  mayDraft?: boolean;
+  busy: boolean;
+  onRead: () => void;
+  onPoll: () => void;
+}) {
   const live = LIVE.has(read.state);
   useEffect(() => {
     if (!live) return;
@@ -52,10 +81,11 @@ export function ReadLine({ read, mayRead, busy, onRead, onPoll }: { read: AiRead
   const day = lineDay(read);
   const left = Math.max(0, read.reads_per_day - read.reads_today);
   const showButton = mayRead && !live && !(read.state === "off" && read.off_reason === "company");
+  const label = read.state === "off" ? "Analyse with Oracle" : read.state === "failed" ? "Try again" : "Read the brief again";
   return (
     <div data-testid="intake-read" className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2">
       <span title={at ? when(at) : undefined}>
-        {line(read)}
+        {line(read, openGaps, asked)}
         {day && (
           <>
             {" · "}
@@ -80,7 +110,8 @@ export function ReadLine({ read, mayRead, busy, onRead, onPoll }: { read: AiRead
           ) : (
             // qa-onboarding-28: the day's cap shows before the first read, not only after it.
             <span data-testid="intake-read-count" className="whitespace-nowrap">
-              {left} of {read.reads_per_day} left today
+              {/* qa-work-31: what is counted. */}
+              {plural(left, "analysis", "analyses")} left today
             </span>
           )}
           {/* rirs-29: this reads the brief and its sources again (capped); the menu's "Rank the
@@ -90,9 +121,16 @@ export function ReadLine({ read, mayRead, busy, onRead, onPoll }: { read: AiRead
             title={refused ?? "Oracle reads the brief and its sources again"}
             onClick={onRead}
           >
-            {read.state === "off" ? "Analyse with Oracle" : read.state === "failed" ? "Try again" : "Read the brief again"}
+            {label}
           </Button>
         </span>
+      )}
+      {/* qa-docs-86: one plain line on what each Oracle button does. */}
+      {(showButton || mayDraft) && (
+        <p data-testid="intake-oracle-help" className="basis-full text-[13px] text-text2">
+          {showButton && <>{label}: Oracle reads the brief and its sources, and lists what it assumed and what is still open. </>}
+          {mayDraft && <>Draft with Oracle: Oracle writes the PRD from the brief and the answers so far.</>}
+        </p>
       )}
     </div>
   );

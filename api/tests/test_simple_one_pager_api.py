@@ -16,9 +16,11 @@ Test cards (protects / fails_when / no_claim):
   changed mapped section rebuilds; fails_when=every read rebuilds or a changed section
   keeps the old lines; no_claim=the worker's scheduling (tests/test_llm_jobs.py).
 - test_job_answer_held_to_caps_and_keys: protects=the job's answer replaces the quick read
-  (built_by oracle), lines naming another block's sections are dropped, a block left
-  short keeps the quick read; fails_when=a line points at a section it does not rest on;
-  no_claim=the prompt's quality.
+  (built_by oracle; one failing its checks, for owners), lines naming another block's
+  sections are dropped, a block left
+  short fails its checks and is held for owners while others keep the quick read
+  (tests/test_simple_generation_quality.py has the checks); fails_when=a line points at a
+  section it does not rest on; no_claim=the prompt's quality.
 - test_template_blocks: protects=a template's ``one_pager.blocks`` front matter replaces
   the six blocks and maps sections by key; fails_when=the fallback ignores the template;
   no_claim=template editing.
@@ -33,6 +35,10 @@ Test cards (protects / fails_when / no_claim):
   next version with the patched sections in review; the decider's approval publishes it
   and the one-pager reads the new line from the new version; fails_when=the import loses
   the patch or publishes without the decider; no_claim=required reviewers (S3b's tests).
+- test_proposer_withdraws_their_proposal: protects=a commenter's proposal note offers Undo
+  to them only; their undo withdraws it (declined, decided by them, note gone, PRD line
+  unchanged) while anyone else's undo is 403; fails_when=the proposer cannot withdraw,
+  another person can, or the withdraw writes the PRD; no_claim=the web's margin note.
 - test_pdf_one_page: protects=Export PDF answers a one-page PDF (or 503 without
   WeasyPrint's libraries) for every reader; fails_when=it is refused to a reader or runs
   past a page; no_claim=the brand's logo pixels.
@@ -247,16 +253,21 @@ async def test_job_answer_held_to_caps_and_keys(client):
 
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
-        assert (await one_pager.run_job(s, job, ask))["built"] is True
+        # The line naming another block's section fails its checks: held for owners.
+        assert (await one_pager.run_job(s, job, ask))["held"] is True
         await s.commit()
     view = await get(client, ctx)
     assert view["built_by"] == "oracle"
     assert [x["text"] for x in block(view, "bets")["lines"]] == ["Checklist", "Invites", "Sample"]
-    # A block left short of its minimum keeps the quick read.
+    # A block left short of its minimum fails its checks (oracle.simple.quality): asked
+    # again and failing again, it is held for owners; people below owner keep the quick read.
     answer["blocks"][1]["lines"] = answer["blocks"][1]["lines"][:1]
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
-        assert (await one_pager.run_job(s, job, ask))["built"] is False
+        out = await one_pager.run_job(s, job, ask)
+        assert "1 bet; a one-pager has 3 to 5" in out["checks"]
+        await s.commit()
+    assert (await get(client, ctx, "commenter"))["built_by"] == "extract"
 
 
 def test_template_blocks():
@@ -395,6 +406,42 @@ async def test_proposal_reads_the_published_line_when_the_draft_is_hidden(client
     assert "Owners-only wording" not in r.text
     stale = await edit(client, ctx, "commenter", seen, "bets-1", "Other", before="Not the line")
     assert stale.status_code == 409 and "Owners-only wording" not in stale.text
+
+
+async def test_proposer_withdraws_their_proposal(client):
+    ctx = await world(client)
+    seen = await get(client, ctx, "commenter")
+    old = line(seen, "risks-1")["text"]
+    r = await edit(client, ctx, "commenter", seen, "risks-1", "Calendar access may worry admins")
+    assert r.status_code == 201, r.text
+    prop = r.json()["change"]
+    assert prop["status"] == "proposed"
+    [mine] = (await get(client, ctx, "commenter"))["notes"]
+    assert mine["kind"] == "proposal" and mine["can_undo"] and not mine["can_decide"]
+    [theirs] = (await get(client, ctx, "decider"))["notes"]
+    assert theirs["kind"] == "proposal" and theirs["can_decide"] and not theirs["can_undo"]
+    # Someone else (the decider, an owner) cannot withdraw it.
+    for who in ("decider", "owner"):
+        no = await client.post(f"{CHANGES}/{prop['id']}/undo", headers=ctx.as_(who))
+        assert no.status_code == 403, no.text
+        assert "Only the person who proposed it withdraws it" in no.text
+    u = await client.post(f"{CHANGES}/{prop['id']}/undo", headers=ctx.as_("commenter"))
+    assert u.status_code in (200, 201), u.text
+    out = u.json()["change"]
+    assert out["status"] == "declined" and out["decided_by"] == str(ctx.users["commenter"].id)
+    assert out["decision_reason"] == "Withdrawn by its author"
+    for who in ("commenter", "decider"):
+        after = await get(client, ctx, who)
+        assert after["notes"] == []
+        assert line(after, "risks-1")["text"] == old
+        assert line(after, "risks-1")["state"] == "published"
+    async with tenant_session(ctx.tenant_id) as s:
+        assert list(await s.scalars(select(SimpleDraft))) == []
+    # Withdrawn once: a second undo and a late accept are 409.
+    again = await client.post(f"{CHANGES}/{prop['id']}/undo", headers=ctx.as_("commenter"))
+    assert again.status_code == 409, again.text
+    late = await client.post(f"{CHANGES}/{prop['id']}/accept", headers=ctx.as_("decider"))
+    assert late.status_code == 409, late.text
 
 
 async def test_track_owner_submits_a_prd_draft_without_decider(client):

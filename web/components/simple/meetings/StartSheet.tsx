@@ -38,6 +38,8 @@ export function StartSheet({
   occurrence,
   ritual,
   origin = "one_pager",
+  prefer,
+  from,
 }: {
   open: boolean;
   onClose: () => void;
@@ -48,6 +50,10 @@ export function StartSheet({
   /** A ritual's next review whose occurrence is not made yet (starting it makes it). */
   ritual?: Schemas["SimpleUpcomingMeeting"];
   origin?: Origin;
+  /** fix4 qa-simple-roadmap-23: the PRD picked first (the roadmap's working draft's), still changeable. */
+  prefer?: string;
+  /** What it was opened from, in words ("Your working draft · 3 changes"), said above the PRD. */
+  from?: string;
 }) {
   // qa-simple-decide-16: the focus moves into the sheet and stays there until it closes (Escape closes it).
   const ref = useRef<HTMLDivElement>(null);
@@ -74,27 +80,27 @@ export function StartSheet({
             Close
           </button>
         </div>
-        <Body prd={prd} occurrence={occurrence} ritual={ritual} origin={origin} onClose={onClose} />
+        <Body prd={prd} occurrence={occurrence} ritual={ritual} origin={origin} prefer={prefer} from={from} onClose={onClose} />
       </div>
     </div>,
     document.body,
   );
 }
 
-function Body({ prd, occurrence, ritual, origin, onClose }: { prd?: string; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; onClose: () => void }) {
+function Body({ prd, occurrence, ritual, origin, prefer, from, onClose }: { prd?: string; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; prefer?: string; from?: string; onClose: () => void }) {
   const q = useQuery(`simple-meeting-options|${prd ?? ""}|${occurrence ?? ""}`, () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: prd || undefined, occurrence: occurrence || undefined } } })),
   );
   const live = useQuery("simple-meetings", () => unwrap(api.GET("/v1/simple/meetings")));
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
-  return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} live={live.data?.live ?? []} onClose={onClose} />;
+  return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} prefer={prefer} from={from} live={live.data?.live ?? []} onClose={onClose} />;
 }
 
-function Form({ options, fixed, occurrence, ritual, origin, live, onClose }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; live: Schemas["SimpleMeetingBrief"][]; onClose: () => void }) {
+function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, onClose }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; prefer?: string; from?: string; live: Schemas["SimpleMeetingBrief"][]; onClose: () => void }) {
   const router = useRouter();
   const zone = useCompanyZone();
-  const [slug, setSlug] = useState(options.prds[0]?.document.slug ?? "");
+  const [slug, setSlug] = useState((options.prds.find((p) => p.document.slug === prefer && p.can_start) ?? options.prds[0])?.document.slug ?? "");
   const chosen = options.prds.find((p) => p.document.slug === slug);
   const occ = options.occurrence ?? ritual ?? null;
   const defaults = (p = chosen) => [...new Set([...(p?.default_attendee_ids ?? []), ...(occ?.attendees.map((a) => a.id) ?? [])])];
@@ -152,6 +158,11 @@ function Form({ options, fixed, occurrence, ritual, origin, live, onClose }: { o
       )}
       <section aria-label="What is reviewed">
         <h3 className="font-semibold">What is reviewed</h3>
+        {from && (
+          <p data-testid="start-from">
+            {from}: the review covers {chosen ? chosen.document.title : "a PRD"} and its part of the draft.
+          </p>
+        )}
         {fixed ? (
           <p>{chosen?.document.title}</p>
         ) : (
@@ -179,6 +190,7 @@ function Form({ options, fixed, occurrence, ritual, origin, live, onClose }: { o
           <fieldset>
             {/* The roadmap lane's plain words for the attendee boxes; they list people by name, not roles. */}
             <legend className="font-semibold">Who attends</legend>
+            <p className="simple-small">The people invited to the review; they see its chat and its decisions.</p>
             <div className="mt-1 grid gap-1 sm:grid-cols-2">
               {options.members.map((m) => (
                 <label key={m.id} className={CHOICE}>
@@ -197,7 +209,9 @@ function Form({ options, fixed, occurrence, ritual, origin, live, onClose }: { o
           </fieldset>
           <fieldset>
             <legend className="font-semibold">Who changes things in the chat</legend>
-            {([["everyone", "Everyone"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
+            {/* fix4 qa-simple-roadmap-23: each choice explained in one line. */}
+            <p className="simple-small" data-testid="start-change-mode-help">Who may move dates and edit the plan by asking the review&apos;s chat; everyone else can still comment.</p>
+            {([["everyone", "Everyone except viewers"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
               <label key={v} className={CHOICE}>
                 <input type="radio" className={CHECK} name="change-mode" checked={mode === v} onChange={() => setMode(v)} />
                 {label}
@@ -205,7 +219,9 @@ function Form({ options, fixed, occurrence, ritual, origin, live, onClose }: { o
             ))}
             {mode === "named" && (
               <div className="ml-6 mt-1" aria-label="Who else changes things">
-                {people.map((id) => (
+                {/* qa-simple-decide-26: the list is the attendees ticked above; empty, it says so. */}
+                {others.length === 0 && <p className="simple-small" data-testid="start-named-empty">Tick attendees above to pick them here.</p>}
+                {others.map((id) => (
                   <label key={id} className={CHOICE}>
                     <input type="checkbox" className={CHECK} checked={named.includes(id)} disabled={!named.includes(id) && named.length >= 2} onChange={() => toggleNamed(id)} />
                     {name(id)}

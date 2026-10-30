@@ -37,7 +37,9 @@ test("Pick sources: an empty Uploads source does not tick it, the build sheet wa
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
   const empty = page.getByTestId("sources-empty");
   await expect(empty).toContainText("No sources yet");
-  await empty.getByRole("button", { name: "Add a source" }).click();
+  // One way in: the header's Add a source (qa-onboarding-18).
+  await expect(empty.getByRole("button")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add a source" }).click();
   const form = page.getByRole("form", { name: "Add a source" });
   await expect(form.getByLabel("Name")).toBeFocused();
   // Add source says why it is greyed out.
@@ -61,7 +63,8 @@ test("Pick sources: an empty Uploads source does not tick it, the build sheet wa
   await expect(sheet(page)).toBeVisible();
   await expect(sheet(page).getByTestId("build-no-items")).toContainText("Your sources have no items yet, so the build has nothing to read.");
   await sheet(page).getByRole("link", { name: "Add files or sync a source" }).click();
-  await expect(page).toHaveURL(/\/settings\/sources$/);
+  // Opened from Set up, the build sheet keeps the way back to Home (fix4-plan, qa-onboarding-17).
+  await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
 
   // A file in it: Pick sources is done and counts it.
   await notes.getByLabel("Upload files to Research notes").setInputFiles([
@@ -73,7 +76,7 @@ test("Pick sources: an empty Uploads source does not tick it, the build sheet wa
   await expect(page).toHaveURL(/\/home$/);
   await expect(setup(page).getByTestId("panel-count")).toHaveText("3 of 8");
   await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
-  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("1 source");
+  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("1 source read");
 
   await row(page, "build_baseline").getByRole("link", { name: "Open" }).click();
   // The estimate reads "$7.00 estimated · below the $50 approval line · starts at once" (qa-onboarding-27).

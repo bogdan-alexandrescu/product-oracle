@@ -471,6 +471,35 @@ export function scopeEdits(db: RunsDb, runId: string): number {
   return scope.features.reduce((n, f) => n + (edited(f) ? 1 : 0) + f.requirements.filter(edited).length, 0);
 }
 
+/**
+ * qa-work-1: a feature set's send-back entries, as the API's scope_review.scope_entries: one
+ * per row a person changed (its new decision, or "edit"; "add" for a requirement they added),
+ * the draft's questions, and the waivers; null without a proposed scope.
+ */
+export function scopeSendBack(db: RunsDb, runId: string, staged: Action[]): { entries: Record<string, unknown>[]; waived: Record<string, unknown>[]; keys: string[] } | null {
+  const scope = latestScope(db, runId);
+  if (!scope || scope.status !== "proposed") return null;
+  const entries: Record<string, unknown>[] = [];
+  const rows: Row[] = [...scope.features.slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0)), ...scope.features.flatMap((f) => f.requirements)];
+  for (const r of rows) {
+    if (!edited(r)) continue;
+    if (added(r)) {
+      const parent = scope.features.find((f) => f.requirements.includes(r as ScopeRequirement));
+      entries.push({ id: r.key, action: "add", changes: { parent: parent?.key ?? null, text: r.text ?? null, acceptance: [...((r as ScopeRequirement).acceptance ?? [])] } });
+    } else if (r.decision !== r.original!.decision) {
+      entries.push({ id: r.key, action: r.decision !== "keep" ? r.decision : "edit", ...(r.decision_reason ? { note: r.decision_reason } : {}) });
+    } else entries.push({ id: r.key, action: "edit" });
+  }
+  const waived: Record<string, unknown>[] = [];
+  for (const a of staged) {
+    if (a.kind === "waive") {
+      const why = (a.value as { reason?: string } | null)?.reason ?? null;
+      for (const code of a.answers?.length ? a.answers : [null]) waived.push({ id: a.item_key, code, reason: why });
+    } else if (a.kind === "question") entries.push({ id: a.item_key, action: "question", question: (a.value as { text?: string } | null)?.text ?? null });
+  }
+  return { entries, waived, keys: scope.features.slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((f) => f.key) };
+}
+
 /** The requirements a person added or edited, for Approve with edits (the baseline writes). */
 export function personRequirements(scope: StoredScope): { feature: ScopeFeature; requirement: ScopeRequirement; added: boolean }[] {
   return scope.features

@@ -45,11 +45,11 @@ for (const width of [1440, 1512]) {
     // The Next cell: the decision and who takes it, inside the card, nothing cut.
     const digest = row(page, "Daily alert digest email");
     const next = digest.getByTestId("plan-next");
-    await expect(next).toHaveText("Decide on slip · owners");
+    await expect(next).toHaveText("Owners decide on the slip");
     const nb = (await next.boundingBox())!;
     expect(nb.x + nb.width).toBeLessThanOrEqual(box.x + box.width + 1);
     await notCut(next);
-    await expect(next.getByText("· owners")).toBeVisible();
+    await expect(next.getByText("Owners decide on the slip")).toBeVisible();
 
     // qa-plan-5: Item, PRD and Goal readable; the PRD by its name, its version on hover.
     const threshold = row(page, "Threshold alerts on spend");

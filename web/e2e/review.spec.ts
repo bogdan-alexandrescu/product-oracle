@@ -140,12 +140,12 @@ test("set a section verdict; approval shows the section as locked", async ({ pag
 
   await bar.getByRole("button", { name: "Request changes" }).click();
   await bar.getByLabel(/What should change/).fill("Add the support agent's main job in one line.");
-  await bar.getByRole("button", { name: /^Save/ }).click();
+  await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Changes requested");
   await expect(bar.getByTestId("verdict-state")).toContainText("support agent's main job");
 
   await bar.getByRole("button", { name: "Approve" }).click();
-  await bar.getByRole("button", { name: /^Save/ }).click();
+  await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
   await expect(bar.getByTestId("verdict-state")).toContainText("Locked");
 

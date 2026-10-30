@@ -97,8 +97,8 @@ test("slack picker: edit a source's channels, load more, paste ids", async ({ pa
   // An id the list does not show is still picked, by id.
   await expect(picker.getByRole("checkbox", { name: "C0999UNLISTED" })).toBeChecked();
   await chat.getByRole("button", { name: "Save channels" }).click();
-  // A pick no list has named keeps its id.
-  await expect(chat.getByTestId("source-picks")).toHaveText("#product, C0999UNLISTED");
+  // A pick no list has named reads as unknown, never by its id (qa-work-46, in Settings' words, qa-settings-23).
+  await expect(chat.getByTestId("source-picks")).toHaveText("#product, unknown channel");
 });
 
 test("slack picker: a rate limit reads as a retry", async ({ page }) => {
@@ -256,7 +256,7 @@ test("named picks: the row menus and the save read in plain words (AC 11)", asyn
   await expect(chat.getByRole("status")).toHaveText("Channels saved.");
 });
 
-test("named picks: a source saved without names shows ids until it is saved again (AC 12)", async ({ page }) => {
+test("named picks: a source saved without names counts its picks until it is saved again (AC 12, qa-work-46)", async ({ page }) => {
   await login(page);
   await page.goto("/settings/sources");
   const chat = page.getByRole("listitem", { name: "Product chat" });
@@ -268,7 +268,7 @@ test("named picks: a source saved without names shows ids until it is saved agai
     localStorage.setItem(key, JSON.stringify(db));
   }, SOURCES_STORAGE_KEY);
   await page.reload();
-  await expect(chat.getByTestId("source-picks")).toHaveText("C0123PRODUCT, C0456FEEDBACK");
+  await expect(chat.getByTestId("source-picks")).toHaveText("2 unknown channels");
   await expect(chat.getByText("Channels", { exact: true })).toBeVisible();
 
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();

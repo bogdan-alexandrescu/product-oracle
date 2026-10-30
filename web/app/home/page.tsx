@@ -26,14 +26,15 @@ const IN_FLIGHT = new Set(["running", "awaiting_checkpoint", "awaiting_approval"
 const PHONE = "(max-width: 600px)";
 
 /**
- * qa-company-5: how many of each kind wait, as a plain count. The Inbox has no view per
- * kind, so a count is not a link that seems to filter; the Inbox link beside them opens it.
+ * qa-company-5, -6: how many of each kind wait, as plain text. The Inbox has no view per
+ * kind, so a count is neither a link that seems to filter nor a bordered pill that looks like
+ * a button; the Inbox link beside them opens it.
  */
 function Count({ label, n, testId }: { label: string; n: number; testId: string }) {
   return (
-    <Chip kind="line" data-testid={testId}>
-      {label} <b className="tnum">{n}</b>
-    </Chip>
+    <span data-testid={testId} className="inline-flex h-[26px] items-center gap-1 text-[13px] font-medium whitespace-nowrap text-text2">
+      {label} <b className="tnum text-text">{n}</b>
+    </span>
   );
 }
 
@@ -42,31 +43,15 @@ const MAX_NEEDS = 7;
 
 /**
  * At most `max` lines, in the Inbox's order, never without a question when there is one
- * (I3); past `max`, the last line says how many more wait in the Inbox.
+ * (I3); past `max`, `more` says how many more wait in the Inbox (the footer under the lines).
  */
-function pickNeeds(rows: StatedNeed[], max: number): Need[] {
-  if (rows.length <= max) return rows;
+function pickNeeds(rows: StatedNeed[], max: number): { rows: Need[]; more: number } {
+  if (rows.length <= max) return { rows, more: 0 };
   const questions = rows.filter((r) => r.group === "questions");
   const others = rows.filter((r) => r.group !== "questions");
   const keep = max - 1;
   const shown = questions.length === 0 || others.length < keep ? rows.slice(0, keep) : [...others.slice(0, keep - 1), questions[0]];
-  const more = rows.length - shown.length;
-  return [
-    ...shown,
-    {
-      key: "more",
-      icon: "inbox",
-      kind: "More",
-      item: (
-        <Link href="/inbox" className="font-semibold text-accent-ink hover:underline" data-testid="home-needs-more">
-          +{more} more in Inbox
-        </Link>
-      ),
-      context: null,
-      at: null,
-      action: null,
-    },
-  ];
+  return { rows: shown, more: rows.length - shown.length };
 }
 
 /**
@@ -96,6 +81,11 @@ export default function HomePage() {
   const runsQ = useQuery("home|runs", () => unwrap(api.GET("/v1/runs")));
   // A1: the Set up checklist, read live; only the hide choice is stored (a preference).
   const setupQ = useQuery("home|setup", () => unwrap(api.GET("/v1/setup")));
+  // qa-onboarding-3: Pick sources says the sources the Sources page lists (its own query), so
+  // the two never contradict; read only while the checklist holds that step not yet done (a
+  // done step says its own count, so Home's call budget stays as it was).
+  const listSources = setupOpen(setupQ.data) && setupQ.data.steps.some((s) => s.key === "sources" && !s.done);
+  const sourcesQ = useQuery(listSources ? "sources" : "home|no-sources", () => (listSources ? unwrap(api.GET("/v1/sources")) : Promise.resolve(null)));
   const [setupBusy, setSetupBusy] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   async function hideSetup(hidden: boolean) {
@@ -116,16 +106,19 @@ export default function HomePage() {
   // A1 welcome: an invited member's first Home, until they dismiss it (a preference).
   // The panel closes once the preference is saved, so a reload right after Dismiss
   // cannot bring it back (the button is disabled while the save runs).
+  // Its own save state, apart from Set up's: one's spinner or error never shows in the other.
+  const [welcomeBusy, setWelcomeBusy] = useState(false);
+  const [welcomeError, setWelcomeError] = useState<string | null>(null);
   async function dismissWelcome() {
-    setSetupBusy(true);
-    setSetupError(null);
+    setWelcomeBusy(true);
+    setWelcomeError(null);
     try {
       await unwrap(api.PATCH("/v1/me/preferences", { body: { welcome_dismissed: true } }));
       setupQ.setData((s) => (s ? { ...s, welcome: false } : s));
     } catch (e) {
-      setSetupError(errorMessage(e));
+      setWelcomeError(errorMessage(e));
     } finally {
-      setSetupBusy(false);
+      setWelcomeBusy(false);
     }
   }
 
@@ -201,7 +194,7 @@ export default function HomePage() {
   const access = needs.filter((r) => r.group === "revoke-failures" || r.group === "access-failures" || r.group === "access-requests");
   const reviews = needs.filter((r) => r.group === "feedback");
   const asked = needs.filter((r) => r.group === "questions");
-  const shownNeeds = pickNeeds(visible, MAX_NEEDS);
+  const { rows: shownNeeds, more: moreNeeds } = pickNeeds(visible, MAX_NEEDS);
   // The rail badge's count: the Inbox's New + Open items.
   const waiting = inbox ? needs.length : undefined;
   const openItems = new Map((inbox?.feedback ?? []).map((d) => [d.document_id, d.open_count]));
@@ -245,9 +238,27 @@ export default function HomePage() {
         }
       >
         {owner && poolQ.data && <ClaudeOffNotice page={poolQ.data} />}
-        {setupError && <Notice tone="error">{setupError}</Notice>}
-        {setupQ.data?.welcome && capsReady && <WelcomePanel onDismiss={dismissWelcome} busy={setupBusy} />}
-        {setup && !setup.hidden && <SetupPanel setup={setup} onHide={() => hideSetup(true)} busy={setupBusy} />}
+        {welcomeError && setupQ.data?.welcome && (
+          <Notice tone="error" testId="home-welcome-error">
+            {welcomeError}
+          </Notice>
+        )}
+        {setupQ.data?.welcome && capsReady && (
+          <WelcomePanel onDismiss={dismissWelcome} busy={welcomeBusy} setup={setupQ.data} setupShown={!!setup && !setup.hidden} />
+        )}
+        {setupError && (
+          <Notice tone="error" testId="home-setup-error">
+            {setupError}
+          </Notice>
+        )}
+        {setup && !setup.hidden && (
+          <SetupPanel
+            setup={setup}
+            onHide={() => hideSetup(true)}
+            busy={setupBusy}
+            mine={{ sources: Array.isArray(sourcesQ.data) ? sourcesQ.data.length : undefined }}
+          />
+        )}
 
         <GoalsPanel
           goals={goals}
@@ -258,6 +269,7 @@ export default function HomePage() {
           canImport={canBuild}
           canInterview={can("start_goal_interview")}
           baseline={baselineStep(setupQ.data)}
+          openGoals
         />
 
         <Panel
@@ -305,9 +317,33 @@ export default function HomePage() {
           )}
           {notice}
           {inbox && !questionsQ.loading && !questionsQ.error && shownNeeds.length === 0 && (
-            <Empty testId="home-needs-empty">Nothing waiting</Empty>
+            // qa-company-14: what shows here for this person, and somewhere to go meanwhile.
+            <Empty testId="home-needs-empty">
+              <span className="block font-semibold">Nothing waiting</span>
+              <span className="block" data-testid="home-needs-empty-what">
+                {can("approve_version", true)
+                  ? "Approvals, reviews and the questions asked of you show here."
+                  : can("create_comment")
+                    ? "Reviews of your PRDs and the questions asked of you show here."
+                    : "Questions someone asks you show here."}
+              </span>
+              {!can("create_comment") && (
+                <Link href="/plan" className="mt-1 inline-block font-semibold text-accent-ink hover:underline" data-testid="home-needs-empty-link">
+                  Read the plan
+                </Link>
+              )}
+            </Empty>
           )}
           <NeedTable title="Needs you" testId="home-needs-table" rows={shownNeeds} compact />
+          {moreNeeds > 0 && (
+            // qa-company-12: the footer's icon and link on one line, on a phone too.
+            <div className="flex min-h-11 items-center gap-2.5 border-t border-line px-4 py-2 max-[600px]:px-3" data-testid="home-needs-footer">
+              <Icon name="inbox" className="flex-none text-accent-ink" />
+              <Link href="/inbox" className="font-semibold text-accent-ink hover:underline" data-testid="home-needs-more">
+                +{moreNeeds} more in Inbox
+              </Link>
+            </div>
+          )}
           {questionRows.sheet}
         </Panel>
 

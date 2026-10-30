@@ -19,11 +19,20 @@ import {
 } from "@/components/ds";
 import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
-import { ProblemList, TemplateBodyEditor, WarningList, useTemplateCheck } from "@/components/TemplateBodyEditor";
+import { FormActions } from "@/app/settings/_components/FormActions";
+import {
+  ProblemList,
+  TemplateBodyEditor,
+  WarningList,
+  sectionNames,
+  sectionTitles,
+  useTemplateCheck,
+  useThemeNames,
+} from "@/components/TemplateBodyEditor";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -58,6 +67,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const latest = t?.versions[t.versions.length - 1];
   const body = draft ?? latest?.body ?? "";
   const live = useTemplateCheck(body, !!t);
+  const themeName = useThemeNames();
 
   if (q.error) {
     return (
@@ -141,35 +151,31 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
 
   const kindLabel = t.kind === "prd" ? "PRD" : "Roadmap";
   const dirty = draft !== null && draft !== latest.body;
+  const shownTitles = sectionTitles(shown.body);
+  // qa-settings-28: why the main action is disabled, said next to it.
+  const saveReason =
+    busy !== null
+      ? null
+      : body === latest.body
+        ? "Change the template to save a new version."
+        : live.pending || !check
+          ? "Checking the template…"
+          : !check.valid
+            ? "Fix the problems above to save."
+            : null;
+  const detailsReason =
+    busy !== null
+      ? null
+      : !detailsChanged
+        ? "Change the name or description to save them."
+        : !nameValue.trim()
+          ? "A template needs a name."
+          : null;
 
   const inspector = (
-    <Inspector
-      eyebrow="Template"
-      title={t.name}
-      label="Template details"
-      chips={
-        <>
-          <Chip hero kind="acc">
-            {kindLabel}
-          </Chip>
-          {t.builtin && (
-            <Chip hero kind="na">
-              Built-in
-            </Chip>
-          )}
-          {t.archived_at && (
-            <Chip hero kind="warn">
-              Archived
-            </Chip>
-          )}
-        </>
-      }
-      stats={[
-        { label: "Latest", value: `v${t.latest_version}` },
-        { label: "Versions", value: t.versions.length },
-        { label: "Sections", value: latest.required_sections.length },
-      ]}
-    >
+    // qa-settings-27: each fact once. The name, kind and version are the page's header; the
+    // versions and their sections are the Versions panel.
+    <Inspector eyebrow="Template details" label="Template details">
       {canEdit && (
         <InspectorSection label="Details">
           <div className="flex flex-col gap-3">
@@ -179,27 +185,36 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             <Field label="Description">
               <GrowingTextarea value={descriptionValue} onChange={(e) => setDescription(e.target.value)} />
             </Field>
-            <div>
-              <Button onClick={saveDetails} disabled={!detailsChanged || !nameValue.trim() || busy !== null}>
+            <FormActions id="details-save-reason" reason={detailsReason}>
+              <Button
+                onClick={saveDetails}
+                disabled={!detailsChanged || !nameValue.trim() || busy !== null}
+                aria-describedby={detailsReason ? "details-save-reason" : undefined}
+              >
                 {busy === "details" ? "Saving…" : "Save details"}
               </Button>
-            </div>
+            </FormActions>
           </div>
         </InspectorSection>
       )}
+      {!canEdit && t.description && (
+        <InspectorSection label="Description">
+          <p className="text-[15px] text-text">{t.description}</p>
+        </InspectorSection>
+      )}
       <InspectorSection label="Facts">
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.suggested_theme ?? "—"}</span>}>
-          Suggested theme
-        </InspectorRow>
-        <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
-        {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
         {latest.suggest_when && (
           <div data-testid="suggest-when" className="flex flex-col gap-0.5 py-1.5">
             <span>Suggested when</span>
             <span className="font-semibold break-words">{latest.suggest_when}</span>
           </div>
         )}
+        <InspectorRow value={<span data-testid="suggested-theme">{themeName(t.suggested_theme)}</span>}>
+          Suggested theme
+        </InspectorRow>
+        <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
+        {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
+        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {canEdit && (
         <InspectorSection>
@@ -231,25 +246,6 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
             {capsReady && !canEdit && <ViewOnly />}
           </>
         }
-        action={
-          canEdit && (
-            <>
-              {dirty && (
-                <Button variant="ghost" onClick={() => setDraft(null)}>
-                  Discard changes
-                </Button>
-              )}
-              <Button
-                variant="primary"
-                icon="check"
-                onClick={saveVersion}
-                disabled={busy !== null || live.pending || !check?.valid || body === latest.body}
-              >
-                {busy === "version" ? "Saving…" : "Save as new version"}
-              </Button>
-            </>
-          )
-        }
       />
       <Split inspector={inspector}>
         {(notice || error) && (
@@ -262,6 +258,22 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
         {canEdit && (
           <Panel title="Next version" bodyClassName="p-4 max-[600px]:p-3">
             <TemplateBodyEditor value={body} onChange={setDraft} label="Template body" live={live} />
+            <FormActions id="version-save-reason" reason={saveReason} sticky className="mt-3">
+              <Button
+                variant="primary"
+                icon="check"
+                onClick={saveVersion}
+                disabled={busy !== null || live.pending || !check?.valid || body === latest.body}
+                aria-describedby={saveReason ? "version-save-reason" : undefined}
+              >
+                {busy === "version" ? "Saving…" : "Save as new version"}
+              </Button>
+              {dirty && (
+                <Button variant="ghost" onClick={() => setDraft(null)}>
+                  Discard changes
+                </Button>
+              )}
+            </FormActions>
           </Panel>
         )}
         <Panel
@@ -282,7 +294,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               >
                 {[...t.versions].reverse().map((v) => (
                   <option key={v.version} value={v.version}>
-                    v{v.version} · {formatDateTime(v.created_at)}
+                    v{v.version} · {formatDate(v.created_at)}
                     {v.version === latest.version ? " · latest" : ""}
                   </option>
                 ))}
@@ -293,10 +305,12 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
         >
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <Label>Required</Label>
-            <span className="min-w-0 font-mono text-[13px] break-words">{shown.required_sections.join(", ") || "none"}</span>
+            <span data-testid="version-required" className="min-w-0 break-words">
+              {sectionNames(shownTitles, shown.required_sections)}
+            </span>
             <Label className="ml-2">Brief</Label>
-            <span data-testid="version-brief" className="font-mono text-[13px]">
-              {shown.brief_sections.join(", ") || "none"}
+            <span data-testid="version-brief" className="min-w-0 break-words">
+              {sectionNames(shownTitles, shown.brief_sections)}
             </span>
           </div>
           {shown.warnings.some((w) => w.code === "no_brief_sections") && (

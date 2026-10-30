@@ -166,6 +166,16 @@ def test_a_valid_bundle_passes_with_sanitised_outputs():
         assert o.sha256 and o.size_bytes == len(o.content.encode())
 
 
+def test_a_wireframe_footer_numbers_each_note_once_without_ids_or_keys():
+    # qa-docs-19: "1. The quote shows ...", never "1. 1. cost-label [s-1] The quote ...".
+    out = check(design_json(REQS, SECTIONS))
+    html = out.wireframes[0].content
+    assert "<li><strong>1.</strong> The quote shows before the address step.</li>" in html
+    assert "cost-label" not in html
+    assert f"[{SECTIONS[0]}]" not in html
+    assert ".oracle-annotations ol{list-style:none" in html
+
+
 @pytest.mark.parametrize(
     ("override", "code"),
     [

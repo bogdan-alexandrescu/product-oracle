@@ -16,9 +16,8 @@ type FieldChange = Schemas["ItemFieldChange"];
 export const CHANGED = new Set(["added", "dropped", "moved", "changed"]);
 export const GHOST_PREFIX = "dropped:";
 
-/** A milestone date: a calendar day, the same in every zone ("30 Nov 2026"). */
-const day = (d: unknown, year = true) =>
-  typeof d === "string" && d ? calendarDay(d, { day: "numeric", month: "short", year: year ? "numeric" : undefined }, "en-GB") : null;
+/** A milestone date: a calendar day, the same in every zone, month first as the app writes days ("Nov 30, 2026"). */
+const day = (d: unknown, year = true) => (typeof d === "string" && d ? calendarDay(d, { day: "numeric", month: "short", year: year ? "numeric" : undefined }) : null);
 const deps = (n: number) => `${n} ${n === 1 ? "dependency" : "dependencies"}`;
 
 /** "v1" for a roadmap version's ref; "Approved v1" for the approved plan (E3 Screen and copy). */
@@ -46,7 +45,7 @@ export function changeChips(c: ItemChange): { label: string; kind: "acc" | "warn
   return out;
 }
 
-/** One line of "What changed": "Horizon: Next → Now", "Date: 30 Nov 2026 → none", "Depends on: + Shipping step". */
+/** One line of "What changed": "Horizon: Next → Now", "Date: Nov 30, 2026 → none", "Depends on: + Shipping step". */
 export function changeLine(f: FieldChange, titles: ReadonlyMap<string, string>): string {
   const name = (k: string) => titles.get(k) ?? k;
   const v = (x: unknown) => (x == null || x === "" ? "none" : String(x));

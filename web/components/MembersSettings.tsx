@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, Unavailable, useActed } from "@/components/account/acted";
 import { AccessRequests } from "@/components/members/AccessRequests";
 import { personName, RemoveDialog, RoleDialog } from "@/components/members/ChangePreview";
 import { MemberInspector } from "@/components/members/MemberInspector";
 import { SignInRules } from "@/components/members/SignInRules";
-import { FindPerson, matches, PeopleReadOnly } from "@/components/members/PeopleReadOnly";
+import { FindPerson, matches, NoMatch, PeopleReadOnly } from "@/components/members/PeopleReadOnly";
 import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
 import {
   Avatar,
   Button,
   Chip,
+  confirmInPage,
   DataTable,
   InfoTip,
   Inspector,
@@ -42,10 +44,14 @@ const INVITE_FORM = "invite-form";
 /** A3: the engineering lead is a flag any commenter or above carries, not a fifth role. */
 const LEAD_TIP =
   "Engineering lead: decides both engineering stops (the check after the feature set and the dates after the PRD draft) and verifies dates. Any commenter or above can carry it.";
+/** The Roles list's line for the engineering lead, as each role has one (qa-shell-27). */
 const VIEWER_NOT_LEAD = "Viewers can't be the engineering lead";
-const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50";
+/** On a phone the box is 24 px, inside a 44 px tall label (qa-onboarding-31). */
+const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50 max-[600px]:size-6";
 /** Room for the longest role ("Commenter") with the select's arrow: never cut mid-word. */
-const ROLE_SELECT = SELECT.replace("min-w-0", "min-w-[7.5rem]");
+const ROLE_SELECT = SELECT.replace("min-w-0", "min-w-[8.5rem]");
+/** A role that can't be changed here: the same chip everywhere (qa-settings-6). */
+const RoleChip = ({ role }: { role: Role }) => <Chip kind="line">{ROLE_LABEL[role]}</Chip>;
 const SELF_NOT_REMOVED = "You can't remove yourself";
 const NO_EMAIL = "Enter an email to send an invite.";
 /** The invite's personal note (#203): plain text, at most this long; a counter shows near it. */
@@ -99,6 +105,76 @@ const pageTip = (
   </InfoTip>
 );
 
+/**
+ * While `dirty`, a link to another page or the browser's Back first asks "Discard your
+ * changes?" (Keep editing or Discard), as New request's dialog does: the rail, Settings'
+ * list, a Tokens count.
+ */
+function useLeaveGuard(dirty: boolean) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!dirty) return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (!(a instanceof HTMLAnchorElement) || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      const url = new URL(a.href, window.location.href);
+      // A link within this page (Invite someone's #invite-form) keeps the form.
+      if (url.origin !== window.location.origin || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void confirmInPage({
+        title: "Discard your changes?",
+        message: "The invite you started is not sent. Leaving this page throws it away.",
+        action: "Discard",
+        cancel: "Keep editing",
+        destructive: true,
+      }).then((yes) => yes && router.push(`${url.pathname}${url.search}${url.hash}`));
+    };
+    // Before the app's own link handlers (React's, at its root), so nothing moves first.
+    document.addEventListener("click", onClick, true);
+    // The browser's Back asks too: a copy of this page's history entry takes the Back, and
+    // Discard then goes back past the page itself.
+    const guarded = { ...(window.history.state ?? {}), poLeaveGuard: true };
+    if (!window.history.state?.poLeaveGuard) window.history.pushState(guarded, "", window.location.href);
+    let leaving = false;
+    const onPop = () => {
+      if (leaving) return;
+      void confirmInPage({
+        title: "Discard your changes?",
+        message: "The invite you started is not sent. Leaving this page throws it away.",
+        action: "Discard",
+        cancel: "Keep editing",
+        destructive: true,
+      }).then((yes) => {
+        if (yes) {
+          leaving = true;
+          window.history.back();
+        } else window.history.pushState(guarded, "", window.location.href);
+      });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("popstate", onPop);
+    };
+  }, [dirty, router]);
+}
+
+/** An email that breaks only after its @ or before a dot, never mid-word (qa-settings-2). */
+function Email({ email }: { email: string }) {
+  return (
+    <>
+      {email.split(/(?<=@)|(?=\.)/).map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && <wbr />}
+          {part}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 function subscribeHash(onChange: () => void) {
   window.addEventListener("hashchange", onChange);
   return () => window.removeEventListener("hashchange", onChange);
@@ -146,49 +222,59 @@ function RoleNote() {
 }
 
 /** The four roles and the engineering lead flag, what each can do in words, and how many active people hold each. */
-function RolesSection({ members }: { members?: Member[] }) {
+function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?: string | null }) {
   const leads = members?.filter((m) => m.engineering_lead && m.status !== "disabled").length;
   return (
-    <InspectorSection label="Roles">
-      {ROLES.map((r) => (
-        <div key={r.role} data-testid={`role-${r.role}`} className="flex items-start gap-2.5 py-1">
-          <span className="min-w-0 flex-1">
-            <span className="block font-semibold">{r.label}</span>
-            <span data-testid="role-can" className="block text-[13px] leading-5 break-words text-text2">
-              {r.can.charAt(0).toUpperCase() + r.can.slice(1)}.
-            </span>
-          </span>
-          {members && (
-            <span className="tnum flex-none font-semibold">{members.filter((m) => m.role === r.role && m.status !== "disabled").length}</span>
-          )}
-        </div>
-      ))}
-      <div data-testid="roles-engineering-lead">
-        <InspectorRow
-          value={
-            leads != null ? (
-              <span className="tnum" data-testid="engineering-lead-count">
-                {leads}
+    <>
+      <InspectorSection label={label ?? undefined} testId="roles-list">
+        {ROLES.map((r) => (
+          <div key={r.role} data-testid={`role-${r.role}`} className="flex items-start gap-2.5 py-1">
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">{r.label}</span>
+              <span data-testid="role-can" className="block text-[13px] leading-5 break-words text-text2">
+                {r.can.charAt(0).toUpperCase() + r.can.slice(1)}.
               </span>
-            ) : undefined
-          }
-        >
-          <span className="inline-flex items-center gap-1.5">
-            Engineering lead
-            <InfoTip label="the engineering lead" align="start">
-              {LEAD_TIP}
-            </InfoTip>
-          </span>
-        </InspectorRow>
-      </div>
-    </InspectorSection>
+            </span>
+            {members && (
+              <span className="tnum flex-none font-semibold">{members.filter((m) => m.role === r.role && m.status !== "disabled").length}</span>
+            )}
+          </div>
+        ))}
+      </InspectorSection>
+      {/* qa-settings-7: not a fifth role, so a section of its own. */}
+      <InspectorSection label="Engineering lead" testId="roles-lead">
+        <div data-testid="roles-engineering-lead">
+          <InspectorRow
+            value={
+              leads != null ? (
+                <span className="tnum" data-testid="engineering-lead-count">
+                  {leads}
+                </span>
+              ) : undefined
+            }
+          >
+            <span className="inline-flex items-center gap-1.5">
+              {/* The row keeps the words "Engineering lead" for a screen reader; the heading shows them. */}
+              <span>
+                <span className="sr-only">Engineering lead: </span>
+                {leads != null ? "People named" : "Any commenter or above can carry it"}
+              </span>
+              <InfoTip label="the engineering lead" align="start">
+                {LEAD_TIP}
+              </InfoTip>
+            </span>
+          </InspectorRow>
+        </div>
+      </InspectorSection>
+    </>
   );
 }
 
 function RolesInspector() {
   return (
-    <Inspector eyebrow="Members · roles" title="Roles" label="Roles">
-      <RolesSection />
+    // qa-shell-27: one heading, the panel's title; its roles section has none of its own.
+    <Inspector eyebrow="Members" title="Roles" label="Roles">
+      <RolesSection label={null} />
     </Inspector>
   );
 }
@@ -234,7 +320,10 @@ function InviteDetail({ invite }: { invite: Invite }) {
   );
 }
 
-/** An invite's Google IAP access: granted, or not yet with Retry. Nothing without IAP. */
+/**
+ * An invite's Google IAP access: their Google sign-in is ready (qa-onboarding-38: they have
+ * not joined until they sign in), or not yet with Retry. Nothing without IAP.
+ */
 function AccessState({ invite, retrying, onRetry }: { invite: Invite; retrying: boolean; onRetry: () => void }) {
   if (invite.access !== "granted" && invite.access !== "pending") return null;
   const granted = invite.access === "granted";
@@ -243,9 +332,9 @@ function AccessState({ invite, retrying, onRetry }: { invite: Invite; retrying: 
       <Chip
         kind={granted ? "pass" : "warn"}
         data-testid="invite-access"
-        title={granted && invite.access_at ? `Access granted ${formatDateTime(invite.access_at)}` : undefined}
+        title={granted && invite.access_at ? `Google sign-in ready since ${formatDateTime(invite.access_at)}` : undefined}
       >
-        {granted ? "Access granted" : "Access not granted yet"}
+        {granted ? "Google sign-in ready" : "Access not granted yet"}
       </Chip>
       {!granted && (
         <Button variant="ghost" aria-label={`Retry access for ${invite.email}`} aria-busy={retrying || undefined} disabled={retrying} onClick={onRetry}>
@@ -285,23 +374,26 @@ function EmailState({ invite, resending, onResend }: { invite: Invite; resending
   );
 }
 
-/** "Removed Oct 18, 2026" */
+/** "Removed", its date under the chip (qa-settings-1: the chip fits its column). */
 function StatusChip({ m }: { m: Member }) {
   const status = !removed(m) ? (
     <Chip kind="pass" dot>
       Active
     </Chip>
   ) : (
-    <Chip kind="na" dot title={m.disabled_at ? `Removed ${formatDateTime(m.disabled_at)}` : undefined}>
-      Removed{m.disabled_at ? ` ${shortDate(m.disabled_at)}` : ""}
-    </Chip>
+    <span data-testid="member-removed" className="flex flex-col items-start gap-0.5" title={m.disabled_at ? `Removed ${formatDateTime(m.disabled_at)}` : undefined}>
+      <Chip kind="na" dot>
+        Removed
+      </Chip>
+      {m.disabled_at && <span className="tnum text-[12px] leading-4 text-text2">{shortDate(m.disabled_at)}</span>}
+    </span>
   );
   if (!m.access_pending) return status;
   // A Google IAP access change that failed; Oracle retries it on its own.
   return (
     <span className="flex flex-col items-start gap-1">
       {status}
-      <Chip kind="warn" data-testid="member-access" title="Google refused the change; Oracle retries it for a day">
+      <Chip kind="warn" wrap data-testid="member-access" title="Google refused the change; Oracle retries it for a day">
         {m.access_pending === "revoke" ? "Access not removed yet" : "Access not granted yet"}
       </Chip>
     </span>
@@ -355,6 +447,17 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   // The Set up checklist's Engineering lead step lands on #engineering-lead: the column is
   // marked and a line says what to pick.
   const leadStep = useSyncExternalStore(subscribeHash, () => window.location.hash === "#engineering-lead", () => false);
+  const [resent, setResent] = useState<{ id: string; ok: boolean; text: string } | null>(null);
+  const resentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (resentTimer.current && clearTimeout(resentTimer.current)), []);
+  // qa-onboarding-36: a half-written invite asks before a link elsewhere drops it.
+  useLeaveGuard(!!email.trim() || !!inviteName.trim() || !!inviteMessage.trim() || inviteLead);
+  // qa-settings-44: below 1100 px the panel sits under the list; a picked member's comes into view.
+  useEffect(() => {
+    if (!inspecting || !window.matchMedia("(max-width: 1100px)").matches) return;
+    const at = requestAnimationFrame(() => document.querySelector('[data-testid="member-inspector"]')?.scrollIntoView({ block: "start" }));
+    return () => cancelAnimationFrame(at);
+  }, [inspecting]);
 
   // B5: the goal owner picker's "Invite them first" opens here with ?invite=1: the invite
   // form ready (its role starts at Commenter).
@@ -491,6 +594,13 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     }
   }
 
+  /** qa-onboarding-37: what a Resend did, said on its own row ("Resent just now", or why not). */
+  function resentNote(id: string, ok: boolean, text: string) {
+    setResent({ id, ok, text });
+    if (resentTimer.current) clearTimeout(resentTimer.current);
+    if (ok) resentTimer.current = setTimeout(() => setResent((r) => (r?.id === id ? null : r)), 8000);
+  }
+
   async function resend(invite: Invite) {
     setBusy(`email:${invite.id}`);
     setError(null);
@@ -499,8 +609,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       polls.current = 0;
       setMailStalled(false);
       replaceInvite(updated);
+      resentNote(invite.id, true, "Resent just now");
     } catch (e) {
-      setError(errorMessage(e));
+      resentNote(invite.id, false, errorMessage(e));
     } finally {
       setBusy(null);
     }
@@ -510,9 +621,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     setBusy(`resend:${invite.id}`);
     setError(null);
     try {
-      replaceInvite(await unwrap(api.POST("/v1/invites/{invite_id}/resend", { params: { path: { invite_id: invite.id } } })));
+      const updated = await unwrap(api.POST("/v1/invites/{invite_id}/resend", { params: { path: { invite_id: invite.id } } }));
+      replaceInvite(updated);
+      resentNote(invite.id, true, `Resent just now · expires ${formatDate(updated.expires_at)}`);
     } catch (e) {
-      setError(errorMessage(e));
+      resentNote(invite.id, false, errorMessage(e));
     } finally {
       setBusy(null);
     }
@@ -549,6 +662,8 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       setInviteLead(false);
       setInviteMessage("");
     } catch (err) {
+      // qa-onboarding-8: only the refusal shows, not the last invite's "Invite sent".
+      setMade(null);
       setInviteError(errorMessage(err));
     } finally {
       setPending(false);
@@ -556,25 +671,37 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   }
 
   const roleCell = (m: Member) => {
-    if (removed(m)) return <Chip kind="line">{ROLE_LABEL[m.role]}</Chip>;
+    if (removed(m)) return <RoleChip role={m.role} />;
     const lastOwner = m.role === "owner" && activeOwners <= 1;
-    if (m.id === selfId && lastOwner) {
+    if (m.id === selfId) {
+      // qa-shell-28: on a phone your own card shows your role and status only, on one line.
       return (
-        <span className="flex flex-col gap-1">
-          <Unavailable reason="You are the only owner. Make someone else owner first." testId="role-unavailable">
-            {(props) => (
-              <button type="button" {...props} aria-label={`Role for ${m.email}`} className={`${SELECT} inline-flex items-center opacity-70`}>
-                {ROLE_LABEL[m.role]}
-              </button>
+        <span className="flex flex-col gap-1 max-[600px]:contents">
+          <Chip kind="line" className="hidden max-[600px]:inline-flex" data-testid="own-role">
+            {ROLE_LABEL[m.role]}
+          </Chip>
+          <span className="contents max-[600px]:hidden">
+            {lastOwner ? (
+              <Unavailable reason="You are the only owner. Make someone else owner first." testId="role-unavailable">
+                {(props) => (
+                  <button type="button" {...props} aria-label={`Role for ${m.email}`} className="inline-flex rounded-full text-left">
+                    <RoleChip role={m.role} />
+                  </button>
+                )}
+              </Unavailable>
+            ) : (
+              <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} className="self-start" />
             )}
-          </Unavailable>
+          </span>
+          {/* Your own lead box too: on a phone the Eng lead column hides. */}
           {phoneLead(m)}
         </span>
       );
     }
     return (
       <span className="flex flex-col gap-1">
-        <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} />
+        {/* Its own width, not the cell's (qa-shell-5): the browser sizes a select to its longest role and its arrow. */}
+        <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} className="self-start" />
         {phoneLead(m)}
       </span>
     );
@@ -660,20 +787,21 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             <Avatar name={personName(m)} size={28} tone={m.id === selfId ? "me" : "default"} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
-            {/* A5: the name in bold, the email under it (the email alone with no name); opens the member inspector.
-                Both wrap, never cut: the chips sit under them. */}
+            {/* A5: the name in bold (the one name rule, as everyone's People list), the email under it;
+                opens the member inspector. Both wrap, never mid-word (an email at its @ or a dot):
+                the chips sit under them. On a phone the button is a 44 px target. */}
             <button
               type="button"
               data-testid="member-open"
               onClick={() => setInspecting(m.id)}
-              className={`flex max-w-full min-w-0 flex-col text-left leading-tight [overflow-wrap:anywhere] hover:underline ${removed(m) ? "text-text2" : ""}`}
+              className={`flex max-w-full min-w-0 flex-col text-left leading-tight break-words hover:underline max-[600px]:min-h-11 max-[600px]:justify-center ${removed(m) ? "text-text2" : ""}`}
             >
               <span data-testid="member-name" className="font-semibold">
                 {personName(m)}
               </span>
-              {m.name?.trim() && (
-                <span data-testid="member-email" className="text-[13px] font-normal text-text2">
-                  {m.email}
+              {personName(m) !== m.email && (
+                <span data-testid="member-email" title={m.email} className="text-[13px] font-normal text-text2">
+                  <Email email={m.email} />
                 </span>
               )}
             </button>
@@ -696,7 +824,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </span>
       ),
     },
-    { key: "role", header: "Role", width: "140px", wrap: true, cell: roleCell },
+    { key: "role", header: "Role", width: "160px", wrap: true, cell: roleCell },
     {
       key: "lead",
       // The anchor of A1's Engineering lead step (Set up on Home).
@@ -720,22 +848,23 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           leadBox(m)
         ),
     },
-    { key: "status", header: "Status", width: "132px", wrap: true, cell: (m) => <StatusChip m={m} /> },
+    { key: "status", header: "Status", width: "120px", wrap: true, cell: (m) => <StatusChip m={m} /> },
     {
       key: "signin",
       header: "Last sign-in",
       width: "104px",
       // Beside an open panel the table keeps its room for names; the panel shows the date.
       narrow: "laptop",
-      phoneLabel: "Signed in ",
+      // On a phone the cell says it in words: "Signed in Oct 20, 2026", or "Never signed in".
       cell: (m) =>
         m.last_sign_in_at ? (
-          <span className="tnum text-text2" title={formatDateTime(m.last_sign_in_at)}>
-            {formatDate(m.last_sign_in_at)}
+          <span className="tnum text-text2">
+            <span className="hidden font-semibold text-text max-[600px]:inline">Signed in </span>
+            <span title={formatDateTime(m.last_sign_in_at)}>{formatDate(m.last_sign_in_at)}</span>
           </span>
         ) : (
-          <span className="text-text2" title="Not known: no sign-in recorded yet">
-            —
+          <span data-testid="never-signed-in" className="text-text2" title="No sign-in recorded yet">
+            Never<span className="hidden max-[600px]:inline"> signed in</span>
           </span>
         ),
     },
@@ -756,7 +885,16 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </Link>
       ),
     },
-    { key: "action", header: <span className="sr-only">Actions</span>, width: "124px", align: "right", phone: "action", wrap: true, cell: actionCell },
+    {
+      key: "action",
+      header: <span className="sr-only">Actions</span>,
+      width: "120px",
+      align: "right",
+      phone: "action",
+      wrap: true,
+      // qa-shell-28: on a phone your own card shows your role and status only, not a Remove you can't use.
+      cell: (m) => (m.id === selfId && !removed(m) ? <span className="contents max-[600px]:hidden">{actionCell(m)}</span> : actionCell(m)),
+    },
   ];
 
   const invites = invitesQ.data;
@@ -779,9 +917,99 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     <InviteOutcome invite={latest} stalled={mailStalled} copied={copied === `made:${latest.id}`} onCopy={() => copyLink(latest, `made:${latest.id}`)} />
   );
 
+  // qa-settings-4: GET /v1/invites lists the expired with the open (each needs an action); the page keeps them apart.
+  const openInvites = invites?.filter((i) => i.status !== "expired");
+  const expiredInvites = invites?.filter((i) => i.status === "expired");
+  const inviteRow = (i: Invite) => (
+    <li
+      key={i.id}
+      data-testid="invite-row"
+      data-status={i.status}
+      {...inviteActs.rowAttrs(i.id)}
+      className="flex min-h-11 flex-col gap-1.5 border-t border-line py-2 first:border-t-0"
+    >
+      {/* The full email on its own line, wrapping at its @ or a dot, never cut; chips and actions under it. */}
+      <span data-testid="invite-who" className="min-w-0 font-medium break-words" title={invitedLine(i)}>
+        {i.name ? (
+          <>
+            {i.name}{" "}
+            <span className="font-normal text-text2">
+              <Email email={i.email} />
+            </span>
+          </>
+        ) : (
+          <Email email={i.email} />
+        )}
+      </span>
+      {inviteActs.acted?.key === i.id ? (
+        <ActedCell acted={inviteActs.acted} onUndo={inviteActs.undo} />
+      ) : (
+        <>
+          <span className="flex flex-wrap items-center gap-1.5">
+            <Chip kind="acc">{ROLE_LABEL[i.role]}</Chip>
+            {i.engineering_lead && <Chip kind="acc">Eng lead</Chip>}
+            {i.status === "expired" ? (
+              <Chip kind="warn" data-testid="invite-expiry">
+                Expired {formatDate(i.expires_at)}
+              </Chip>
+            ) : (
+              <Chip kind="line" data-testid="invite-expiry">
+                Expires {formatDate(i.expires_at)}
+              </Chip>
+            )}
+            {/* #370: Retry and Resend are an owner's; an approver sees neither. An expired
+                invite's only state is Expired: its access and email no longer matter. */}
+            {manage && i.status !== "expired" && (
+              <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />
+            )}
+            {manage && i.status !== "expired" && (
+              <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />
+            )}
+          </span>
+          <span className="flex flex-wrap items-center gap-1.5">
+            {i.status === "expired" ? (
+              // A5: 14 more days from now; an expired link no longer signs anyone in, so no Copy link.
+              <Button
+                variant="ghost"
+                aria-label={`Resend invite for ${i.email}`}
+                disabled={busy === `resend:${i.id}`}
+                onClick={() => renew(i)}
+              >
+                {busy === `resend:${i.id}` ? "Resending…" : "Resend"}
+              </Button>
+            ) : (
+              <Button variant="ghost" icon="link" aria-label={`Copy link for ${i.email}`} onClick={() => copyLink(i)}>
+                {copied === i.id ? "Copied" : "Copy link"}
+              </Button>
+            )}
+            <Button variant="ghost" aria-label={`Revoke invite for ${i.email}`} onClick={() => revokeInvite(i)}>
+              Revoke
+            </Button>
+          </span>
+          {i.message && (
+            // Plain text, on one line: the full note is its title.
+            <span data-testid="invite-note" title={i.message} className="truncate text-[13px] text-text2">
+              Note: {i.message}
+            </span>
+          )}
+          {manage && i.status !== "expired" && <InviteDetail invite={i} />}
+          {resent?.id === i.id && (
+            <p
+              role={resent.ok ? "status" : "alert"}
+              data-testid="invite-resent"
+              className={`text-[13px] font-medium break-words ${resent.ok ? "text-pass" : "text-crit"}`}
+            >
+              {resent.text}
+            </p>
+          )}
+        </>
+      )}
+    </li>
+  );
+
   const inspector = (
     <Inspector
-      eyebrow="Members · invite"
+      eyebrow="Members"
       title="Invite someone"
       label="Invite someone"
       chips={
@@ -801,7 +1029,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               { label: "Removed", value: members ? members.filter(removed).length : "—", testId: "stat-removed" },
             ]
           : []),
-        { label: "Open invites", value: invites?.length ?? "—" },
+        // qa-settings-4: an expired invite is counted, and listed, apart from the open ones.
+        { label: "Open invites", value: openInvites?.length ?? "—", testId: "stat-open-invites" },
+        ...(expiredInvites?.length ? [{ label: "Expired", value: expiredInvites.length, testId: "stat-expired-invites" }] : []),
       ]}
     >
       <InspectorSection>
@@ -900,86 +1130,20 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       <InspectorSection label="Open invites" testId="open-invites">
         {invitesQ.error && <Notice tone="error">{invitesQ.error}</Notice>}
         {!invites && !invitesQ.error && <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />}
-        {invites?.length === 0 && <p className="text-[15px] text-text2">No open invites</p>}
-        {!!invites?.length && (
+        {openInvites?.length === 0 && <p className="text-[15px] text-text2">No open invites</p>}
+        {!!openInvites?.length && (
           <ul aria-label="Open invites" className={`-my-1 flex flex-col ${SETTLING}`}>
-            {invites.map((i) => (
-              <li
-                key={i.id}
-                data-testid="invite-row"
-                data-status={i.status}
-                {...inviteActs.rowAttrs(i.id)}
-                className="flex min-h-11 flex-col gap-1.5 border-t border-line py-2 first:border-t-0"
-              >
-                {/* The full email on its own line, wrapping, never cut; chips and actions under it. */}
-                <span data-testid="invite-who" className="min-w-0 font-medium [overflow-wrap:anywhere]" title={invitedLine(i)}>
-                  {i.name ? (
-                    <>
-                      {i.name} <span className="font-normal text-text2">{i.email}</span>
-                    </>
-                  ) : (
-                    i.email
-                  )}
-                </span>
-                {inviteActs.acted?.key === i.id ? (
-                  <ActedCell acted={inviteActs.acted} onUndo={inviteActs.undo} />
-                ) : (
-                  <>
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <Chip kind="acc">{ROLE_LABEL[i.role]}</Chip>
-                      {i.engineering_lead && <Chip kind="acc">Eng lead</Chip>}
-                      {i.status === "expired" ? (
-                        <Chip kind="warn" data-testid="invite-expiry">
-                          Expired {formatDate(i.expires_at)}
-                        </Chip>
-                      ) : (
-                        <Chip kind="line" data-testid="invite-expiry">
-                          Expires {formatDate(i.expires_at)}
-                        </Chip>
-                      )}
-                      {/* #370: Retry and Resend are an owner's; an approver sees neither. An expired
-                          invite's only state is Expired: its access and email no longer matter. */}
-                      {manage && i.status !== "expired" && (
-                        <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />
-                      )}
-                      {manage && i.status !== "expired" && (
-                        <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />
-                      )}
-                    </span>
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      {i.status === "expired" ? (
-                        // A5: 14 more days from now; an expired link no longer signs anyone in, so no Copy link.
-                        <Button
-                          variant="ghost"
-                          aria-label={`Resend invite for ${i.email}`}
-                          disabled={busy === `resend:${i.id}`}
-                          onClick={() => renew(i)}
-                        >
-                          {busy === `resend:${i.id}` ? "Resending…" : "Resend"}
-                        </Button>
-                      ) : (
-                        <Button variant="ghost" icon="link" aria-label={`Copy link for ${i.email}`} onClick={() => copyLink(i)}>
-                          {copied === i.id ? "Copied" : "Copy link"}
-                        </Button>
-                      )}
-                      <Button variant="ghost" aria-label={`Revoke invite for ${i.email}`} onClick={() => revokeInvite(i)}>
-                        Revoke
-                      </Button>
-                    </span>
-                    {i.message && (
-                      // Plain text, on one line: the full note is its title.
-                      <span data-testid="invite-note" title={i.message} className="truncate text-[13px] text-text2">
-                        Note: {i.message}
-                      </span>
-                    )}
-                    {manage && i.status !== "expired" && <InviteDetail invite={i} />}
-                  </>
-                )}
-              </li>
-            ))}
+            {openInvites.map(inviteRow)}
           </ul>
         )}
       </InspectorSection>
+      {!!expiredInvites?.length && (
+        <InspectorSection label="Expired invites" testId="expired-invites">
+          <ul aria-label="Expired invites" className={`-my-1 flex flex-col ${SETTLING}`}>
+            {expiredInvites.map(inviteRow)}
+          </ul>
+        </InspectorSection>
+      )}
       <RolesSection members={manage ? members : undefined} />
     </Inspector>
   );
@@ -1063,7 +1227,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 loading={!members}
                 rowKey={(m) => m.id}
                 rowProps={(m) => ({ "data-testid": "member-row", "data-status": m.status, ...memberActs.rowAttrs(m.id) })}
-                empty="No members"
+                empty={find.trim() ? <NoMatch find={find} onClear={() => setFind("")} /> : "No members"}
               />
             </div>
           )}

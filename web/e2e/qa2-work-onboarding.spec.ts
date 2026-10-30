@@ -27,10 +27,10 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await login(page);
   await openRequests(page);
 
-  // The first request, from the empty state.
+  // The first request, from the header's New request (qa-shell-10: the empty state has none).
   const empty = page.getByTestId("requests-empty");
-  await expect(empty).toContainText("Nothing yet");
-  await empty.getByRole("button", { name: "New request" }).click();
+  await expect(empty).toContainText("No requests yet");
+  await page.getByTestId("requests-actions").getByRole("button", { name: "New request" }).click();
   const dialog = page.getByRole("dialog", { name: "New request" });
   await expect(dialog).toContainText("No goals yet");
   await dialog.getByLabel("Title").fill(TITLE);
@@ -65,7 +65,7 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill(TITLE);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(WHY);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
   // Draft with Oracle: a new company has no baseline, so Oracle builds it first.
@@ -78,7 +78,7 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await expect(sheet).not.toContainText("Use the current baseline");
 
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^Estimated \$[\d,]+\.\d{2}/);
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^\$[\d,]+\.\d{2} estimated/);
   // An owner approves a cost over the threshold here (#259); under it the button just starts.
   await sheet.getByRole("button", { name: /^(Start drafting|Approve \$[\d,]+\.\d{2} and start)$/ }).click();
 

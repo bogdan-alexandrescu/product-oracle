@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import { Button, Chip } from "@/components/ds";
-import { FRESHNESS } from "@/components/tech-brief";
+import { FRESHNESS, reasonText, type PrdWords } from "@/components/tech-brief";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -35,8 +35,9 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
   );
   const spec = specQ.data ?? null;
   const av = spec?.versions.find((v) => v.document_version === n)?.artifact_version;
+  const view = av ? spec?.stale.find((s) => s.artifact_version_id === av.id) : undefined;
+  const words = usePrdWords(spec, view);
   if (!spec || !av || av.freshness === "fresh") return null;
-  const view = spec.stale.find((s) => s.artifact_version_id === av.id);
   const fresh = FRESHNESS[av.freshness];
   // The spec's proposed regeneration, while its run has not ended.
   const runId = spec.regeneration_run_id ?? null;
@@ -54,7 +55,11 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
         <Chip kind={fresh.kind} dot>
           {label}
         </Chip>
-        {view && view.reasons.length > 0 && <span className="text-sm text-text2">{view.reasons.join("; ")}</span>}
+        {view && view.reasons.length > 0 && (
+          <span data-testid="spec-staleness-reasons" className="text-sm text-text2">
+            {[...new Set(view.reasons.map((r) => reasonText(r, words)))].join("; ")}
+          </span>
+        )}
       </div>
       {runId && (
         <p className="text-sm text-text2">
@@ -76,6 +81,24 @@ export function SpecStaleness({ doc, n, mayApprove, onChanged }: { doc: string; 
       )}
     </div>
   );
+}
+
+/**
+ * qa-docs-18: the PRD the spec rests on by its title, and its sections by their headings in
+ * its latest version, so the reasons never show a slug or a section key.
+ */
+function usePrdWords(spec: Spec | null, view: Output | undefined): PrdWords {
+  const up = (view?.dependencies ?? []).map((d) => d.upstream).find((u) => u.document_slug && (!u.document_kind || u.document_kind === "prd"));
+  const slug = spec?.prd?.slug ?? up?.document_slug ?? null;
+  const docQ = useQuery(`doc|${slug}`, () =>
+    slug ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: slug } } })).catch(() => null) : Promise.resolve(null),
+  );
+  const latest = docQ.data?.latest_version ?? null;
+  const sectionsQ = useQuery(`spec-stale-words|${slug}|${latest}`, () =>
+    slug && latest ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: slug, n: latest } } })) : Promise.resolve(null),
+  );
+  const headings = new Map((sectionsQ.data?.sections ?? []).map((x) => [x.section_key, x.heading]));
+  return { slug, title: spec?.prd?.title ?? docQ.data?.title ?? null, heading: (key) => headings.get(key) ?? null };
 }
 
 function StaleActions({

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { LinkButton } from "./Button";
 import { Icon, type IconName } from "./Icon";
 import { PageInfo } from "./page-info";
 import { PageTabs, SectionTitle } from "./PageTabs";
@@ -28,6 +29,8 @@ export function PageHeader({
   info,
   testId,
   phoneTitle = false,
+  phoneActionStart = false,
+  statusBelow = false,
 }: {
   title: ReactNode;
   /** Right after the title, small: "v3". */
@@ -47,6 +50,13 @@ export function PageHeader({
   testId?: string;
   /** The H1 shows on a phone too, wrapping (a long document title the phone header cuts, qa-docs-68). */
   phoneTitle?: boolean;
+  /** On a phone the action lines up with the page's left edge when it drops to a line of its own (qa-docs-65). */
+  phoneActionStart?: boolean;
+  /**
+   * Off a phone, the status chips take a line of their own under the title and the actions, so
+   * the actions stay on the title's line however long the chips are (a run's page, qa-work-22).
+   */
+  statusBelow?: boolean;
 }) {
   // One flat wrapping row. The status chips take their full width (flex-auto, not a 0 basis)
   // so they drop to a line of their own when the title and the actions leave no room for
@@ -66,6 +76,7 @@ export function PageHeader({
         </div>
       )}
       <h1
+        data-phone-title={phoneTitle ? "" : undefined}
         className={`min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading ${
           phoneTitle ? "break-words max-[600px]:text-[22px] max-[600px]:leading-7" : "max-[600px]:sr-only"
         }`}
@@ -76,11 +87,20 @@ export function PageHeader({
       </h1>
       {info && <PageInfo info={info} />}
       <div
-        className={`flex min-w-0 flex-auto flex-wrap items-center gap-2 ${status ? "" : "max-[600px]:hidden"}`}
+        className={`flex min-w-0 flex-auto flex-wrap items-center gap-2 ${status ? "" : "max-[600px]:hidden"} ${
+          statusBelow ? "min-[601px]:order-last min-[601px]:basis-full" : ""
+        }`}
       >
         {status}
       </div>
-      {action && <div className="ml-auto flex max-w-full flex-none flex-wrap items-center justify-end gap-2">{action}</div>}
+      {action && (
+        <div
+          data-page-action
+          className={`ml-auto flex max-w-full flex-none flex-wrap items-center justify-end gap-2 ${phoneActionStart ? "max-[600px]:ml-0 max-[600px]:justify-start" : ""}`}
+        >
+          {action}
+        </div>
+      )}
       <PageTabs />
     </header>
   );
@@ -170,7 +190,9 @@ export function Panel({
 /**
  * qa-shell-8: the one not-found (and failed-page) pattern: the page's title as its H1, an
  * icon, one sentence and the ways on (Back to PRDs, Go to Home) close under it. A wrong URL,
- * a missing document, version or run, and the error page all draw it.
+ * a missing document, version, run or design, and the error page all draw it. Go to Home
+ * (the bare URL: the person's own home, Simple's or Detailed's) always follows the page's
+ * own ways on (qa-shell-11); `home={false}` only where the page draws it itself.
  */
 export function NotFoundPanel({
   title,
@@ -179,6 +201,7 @@ export function NotFoundPanel({
   back,
   children,
   actions,
+  home = true,
 }: {
   title: string;
   icon?: IconName;
@@ -188,6 +211,7 @@ export function NotFoundPanel({
   children: ReactNode;
   /** The ways on: links or buttons. */
   actions?: ReactNode;
+  home?: boolean;
 }) {
   return (
     <Page>
@@ -199,7 +223,16 @@ export function NotFoundPanel({
         <div data-testid="not-found-text" className="flex max-w-prose flex-col gap-1 text-[15px] text-text2">
           {children}
         </div>
-        {actions && <div className="mt-1 flex flex-wrap justify-center gap-2">{actions}</div>}
+        {(actions || home) && (
+          <div className="mt-1 flex flex-wrap justify-center gap-2">
+            {actions}
+            {home && (
+              <LinkButton href="/" variant={actions ? "secondary" : "primary"} icon="home" className="h-10">
+                Go to Home
+              </LinkButton>
+            )}
+          </div>
+        )}
       </Panel>
     </Page>
   );

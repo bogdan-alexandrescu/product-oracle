@@ -15,7 +15,8 @@ import { expiresIn, LinkShown } from "../../_components/InterviewDialog";
 /**
  * One customer interview (C3): what it was about, the approved guide, the transcript, Oracle's
  * snapshot and the requests it created. Withdraw link: its creator or an approver, while the
- * link is open. "← Interviews" above the name goes back (rirs-40), as the Requests tabs do.
+ * link is open. "← Interviews" above the name is the one way back (rirs-40, qa-work-44: the
+ * Requests tabs are not drawn here).
  * The link itself is shown once, when it is made, and only its hash is kept, so it cannot be
  * shown or copied again here (qa-work-43): the page says so and when it was made, and Make a
  * new link (its creator or an approver, while the link is open) shows a fresh one once, after
@@ -27,7 +28,7 @@ export function InterviewDetail({ id }: { id: string }) {
   const iv = q.data;
   // rirs-40: back to the Interviews tab, above the name.
   const back = (
-    <Link href="/requests/interviews" data-testid="interview-back" className="hover:underline">
+    <Link href="/requests/interviews" data-testid="interview-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
       ← Interviews
     </Link>
   );
@@ -106,7 +107,9 @@ export function InterviewDetail({ id }: { id: string }) {
           <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3 text-[15px]">
             <Fact label="What it was about">{iv.title}</Fact>
             <Fact label="Created by">
-              {iv.created_by_name ?? "—"} · {formatDay(iv.created_at)}
+              {iv.created_by_name ?? "—"}
+              {/* qa-work-44: one date: the link's, when it shows, else the day it was made. */}
+              {!(iv.link_created_at && open) && ` · ${formatDay(iv.created_at)}`}
             </Fact>
             {iv.link_created_at && open && (
               <Fact label="Link made">

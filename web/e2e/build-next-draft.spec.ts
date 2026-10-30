@@ -97,7 +97,7 @@ test("over the threshold the estimate becomes the owner's decision and the run w
 test("the New run dialog no longer offers the feedback loop and points at where flows start", async ({ page }) => {
   await login(page);
   await page.goto("/runs");
-  await page.getByRole("button", { name: "New run" }).click();
+  await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "Where to start a run" });
   // C4: Baseline to PRD starts at New PRD too, so the dialog offers no flow.
   await expect(dialog.getByRole("radio")).toHaveCount(0);

@@ -94,9 +94,12 @@ async def _assert_section_follows(client, ctx, v1, feature: uuid.UUID, section: 
     assert change.subject_id == feature
     marked = {x["id"]: x for x in change.data["trace"]["marked"]}
     assert any(
-        section in r and "links feature saved-addresses" in r
+        # qa-plan-10: the feature by its title, never its baseline key.
+        section in r
+        and ("links Saved delivery addresses" in r or "links Saved addresses" in r)
+        and "feature saved-addresses" not in r
         for r in marked[str(dep_id)]["reasons"]
-    )
+    ), marked[str(dep_id)]["reasons"]
 
 
 # --- MAJOR: a link that names an entity survives its source's deletion ------------------------

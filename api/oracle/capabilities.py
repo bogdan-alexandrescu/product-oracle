@@ -277,6 +277,7 @@ PER_ITEM: dict[str, Role | None] = {
     "retry_lookup_run": "owner",
     "retry_run": "owner",
     "retry_simple_chat_read": None,
+    "retry_simple_meeting_delivery": "owner",
     "review_decision": None,
     "review_design_artifact": "owner",
     "revise_simple_visual": "owner",
@@ -326,6 +327,8 @@ PER_ITEM: dict[str, Role | None] = {
     "withdraw_discussion_change": None,
     # H11 questions: the intake's author or an approver, as asking them.
     "withdraw_intake_questions": "approver",
+    # qa-simple-plan-30: a waiting proposal is withdrawn by who proposed it alone.
+    "withdraw_simple_change": None,
     "withdraw_simple_draft": None,
 }
 

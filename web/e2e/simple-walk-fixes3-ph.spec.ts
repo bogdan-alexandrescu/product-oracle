@@ -46,7 +46,7 @@ for (const phone of [false, true]) {
         await expect(meta).toContainText("Owner Approver");
         await expect(meta).not.toContainText("Owner Admin");
         await expect(meta).not.toContainText("No owner yet");
-        await expect(meta).toContainText("5 Oct 2026 → 15 Jan 2027");
+        await expect(meta).toContainText("Oct 5, 2026 → Jan 15, 2027");
         await expect(meta).not.toContainText("Mar 12, 2027");
         const width = await page.evaluate(() => document.documentElement.scrollWidth);
         expect(width).toBeLessThanOrEqual(phone ? 390 : 1366);

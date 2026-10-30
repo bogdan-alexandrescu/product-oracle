@@ -69,23 +69,26 @@ export const FROM: { value: string; label: string; origin: DecisionSummary["orig
   { value: "priority_override", label: "Priority overrides", origin: "priority_override" },
   { value: "checkpoint_approvals", label: "Checkpoint approvals", origin: "checkpoint", chosen: "approve" },
   { value: "checkpoint_send_backs", label: "Checkpoint send-backs", origin: "checkpoint", chosen: "request_changes" },
-  { value: "manual", label: "Recorded by hand", origin: "manual" },
+  { value: "manual", label: "Added by members", origin: "manual" },
   { value: "oracle", label: "Proposed by Oracle", origin: "oracle" },
 ];
 
-export const ORIGIN_LABEL: Record<DecisionSummary["origin"], string> = {
-  manual: "Recorded by hand",
+/**
+ * Where a decision came from, as a line of meta under its chips (qa-company-31); a decision a
+ * member added reads "Added by <name>" instead.
+ */
+export const ORIGIN_LABEL: Record<Exclude<DecisionSummary["origin"], "manual">, string> = {
   oracle: "Proposed by Oracle",
-  version_approval: "A published version",
-  assumption: "An accepted risk or assumption",
-  blocker: "A blocker's resolution",
-  pushback_override: "An override of Oracle's pushback",
-  priority_override: "A priority override",
+  version_approval: "Recorded when a version was published",
+  assumption: "Recorded when a risk or assumption was accepted",
+  blocker: "Recorded when a blocker was resolved",
+  pushback_override: "Recorded when Oracle's pushback was overridden",
+  priority_override: "Recorded when a priority was overridden",
   autonomy: "Decided by Oracle",
-  checkpoint: "A run's stop",
-  request_decline: "A request said no to",
-  pricing: "A pricing memo",
-  meeting: "A review meeting",
+  checkpoint: "Recorded at a run's stop",
+  request_decline: "Recorded when a request was declined",
+  pricing: "Recorded from a pricing memo",
+  meeting: "Recorded in a review meeting",
 };
 
 export const VERDICT_LABEL: Record<Schemas["DecisionReviewOut"]["verdict"], string> = {

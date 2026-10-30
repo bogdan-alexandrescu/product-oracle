@@ -40,6 +40,8 @@ async function checkUnder(page: Page) {
   const pillBoxes = (await Promise.all((await pills.all()).map((p) => p.boundingBox()))).filter((b): b is Box => !!b);
   expect(pillBoxes.length).toBeGreaterThan(1);
   const perLane = new Map<string, Set<number>>();
+  // fix4 qa-simple-roadmap-1: a callout's line is as tall as the callout (its words wrap whole), CALL_H at least.
+  const lineH = new Map<string, number>();
   for (const c of await callouts.all()) {
     const key = (await c.getAttribute("data-item"))!;
     const cb = (await c.boundingBox())!;
@@ -51,13 +53,14 @@ async function checkUnder(page: Page) {
     const laneKey = (await b.getAttribute("data-lane"))!;
     const row = Number(await b.getAttribute("data-row"));
     (perLane.get(laneKey) ?? perLane.set(laneKey, new Set()).get(laneKey)!).add(row);
+    lineH.set(laneKey, (lineH.get(laneKey) ?? 0) + Math.max(CALL_H, Math.ceil(await c.evaluate((el) => (el as HTMLElement).offsetHeight)) + 4));
     const lane = (await page.locator(`[data-testid="chart-group"][data-lane="${laneKey}"]`).boundingBox())!;
     expect(cb.y + cb.height, `${key}'s callout stays in its lane`).toBeLessThanOrEqual(lane.y + lane.height + 0.5);
   }
   for (const [laneKey, calloutRows] of perLane) {
     const rows = new Set(await page.locator(`g[data-testid="bar"][data-lane="${laneKey}"]`).evaluateAll((els) => els.map((e) => e.getAttribute("data-row"))));
     const lane = (await page.locator(`[data-testid="chart-group"][data-lane="${laneKey}"]`).boundingBox())!;
-    expect(Math.round(lane.height), `lane ${laneKey}: ${rows.size} rows and ${calloutRows.size} callout lines`).toBe(rows.size * RH + calloutRows.size * CALL_H + 8);
+    expect(Math.round(lane.height), `lane ${laneKey}: ${rows.size} rows and ${calloutRows.size} callout lines`).toBe(rows.size * RH + lineH.get(laneKey)! + 8);
   }
 }
 
@@ -106,29 +109,32 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test.describe("narrow desktop", () => {
-  test.use(NARROW);
+// cld-9: the narrow desktop runs in light and dark.
+for (const scheme of ["light", "dark"] as const) {
+  test.describe(`narrow desktop, ${scheme}`, () => {
+    test.use({ ...NARROW, colorScheme: scheme });
 
-  // A pill near the chart's right edge: its callout, on its own line, slides left to stay in the chart, still under its pill.
-  test("a callout with no room to its right slides left, inside the chart and still under its pill", async ({ page }) => {
-    await open(page, "light");
-    await checkUnder(page);
-    const c = callout(page, "alert-digest");
-    const cb = (await c.boundingBox())!;
-    const pb = (await bar(page, "alert-digest").locator("rect[data-body]").first().boundingBox())!;
-    const chart = (await page.getByTestId("simple-chart").boundingBox())!;
-    expect(cb.x + cb.width, "the callout ends inside the chart").toBeLessThanOrEqual(chart.x + chart.width);
-    expect(cb.x, "the callout starts inside the chart").toBeGreaterThanOrEqual(chart.x);
-    expect(cb.x, "the callout slid left of its pill's start").toBeLessThan(pb.x);
-    expect(cb.x + cb.width, "the callout still spans its pill").toBeGreaterThanOrEqual(pb.x + pb.width);
-    // Its fixes are whole and still work.
-    const accept = c.getByRole("button", { name: "Accept as risk" });
-    const ab = (await accept.boundingBox())!;
-    expect(ab.x + ab.width).toBeLessThanOrEqual(chart.x + chart.width);
-    await accept.click();
-    await expect(page.getByLabel("Why it is an accepted risk")).toBeVisible();
+    // A pill near the chart's right edge: its callout, on its own line, slides left to stay in the chart, still under its pill.
+    test(`a callout with no room to its right slides left, inside the chart and still under its pill (${scheme})`, async ({ page }) => {
+      await open(page, scheme);
+      await checkUnder(page);
+      const c = callout(page, "alert-digest");
+      const cb = (await c.boundingBox())!;
+      const pb = (await bar(page, "alert-digest").locator("rect[data-body]").first().boundingBox())!;
+      const chart = (await page.getByTestId("simple-chart").boundingBox())!;
+      expect(cb.x + cb.width, "the callout ends inside the chart").toBeLessThanOrEqual(chart.x + chart.width);
+      expect(cb.x, "the callout starts inside the chart").toBeGreaterThanOrEqual(chart.x);
+      expect(cb.x, "the callout slid left of its pill's start").toBeLessThan(pb.x);
+      expect(cb.x + cb.width, "the callout still spans its pill").toBeGreaterThanOrEqual(pb.x + pb.width);
+      // Its fixes are whole and still work.
+      const accept = c.getByRole("button", { name: "Accept as risk" });
+      const ab = (await accept.boundingBox())!;
+      expect(ab.x + ab.width).toBeLessThanOrEqual(chart.x + chart.width);
+      await accept.click();
+      await expect(page.getByLabel("Why it is an accepted risk")).toBeVisible();
+    });
   });
-});
+}
 
 test.describe("phone", () => {
   test.use(PHONE);

@@ -62,6 +62,12 @@ export type ChatCard = {
   change_words?: ChangeWords | null;
   /** roadmap-talk: the fields Correct opens, prefilled with Oracle's reading; null: no Correct. */
   correct?: CardCorrect | null;
+  /** fix5-cut-dependents: an open cut's dependents (titles), what "Cut it and its dependents" cuts with it. */
+  dependents?: string[];
+  /** Their ids, sent back by the apply: a roadmap changed since is refused, nothing unseen is cut. */
+  dependent_ids?: string[];
+  /** Review major: what "Cut it and its dependents" does for the reader (apply only when they decide every item it cuts). */
+  may_with_dependents?: "apply" | "propose" | null;
 };
 
 export type ChangeWords = { before: string; after: string };
@@ -198,10 +204,11 @@ export function setChatMode(meetingId: string, change_mode: ChangeMode, change_p
 }
 
 /** POST /v1/simple/chat/cards/{card_id}/apply: the card (or its fix n) through the change engine. */
-export function applyCard(cardId: string, fix: number | null = null, values?: Record<string, string | null>): Promise<ChatApply> {
-  return unwrap(
-    loose.POST("/v1/simple/chat/cards/{card_id}/apply", { params: { path: { card_id: cardId } }, body: values ? { fix, values } : { fix } }),
-  ) as Promise<ChatApply>;
+export function applyCard(cardId: string, fix: number | null = null, values?: Record<string, string | null>, withDependents: string[] | false = false): Promise<ChatApply> {
+  // fix5-cut-dependents: a cut card applies with its dependents as one change (with_dependents),
+  // naming the dependents it listed.
+  const body = withDependents ? { fix, with_dependents: true, dependents: withDependents } : values ? { fix, values } : { fix };
+  return unwrap(loose.POST("/v1/simple/chat/cards/{card_id}/apply", { params: { path: { card_id: cardId } }, body })) as Promise<ChatApply>;
 }
 
 /** roadmap-talk: an item's own talk with Oracle (one thread per item and person). */

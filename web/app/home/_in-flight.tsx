@@ -50,12 +50,29 @@ export type GoalIndex = Map<string, RowGoal>;
 /** A PRD in review stands at the journey's Review step. */
 const REVIEW_STEP = JOURNEY_STEPS.indexOf("Review") + 1;
 
-/** What the run does next: the checkpoint it waits on, else the segment under way or next. */
-function runNext(run: RunSummary): string {
+/** What waits on a person before the run goes on: the checkpoint, the cost approval, or the overrun; null while it runs. */
+function runWait(run: RunSummary): string | null {
   if (run.waiting_on) return CHECKPOINT_LABEL[run.waiting_on];
   if (run.status === "awaiting_approval") return "Cost approval";
   if (run.status === "paused_overrun") return "Resume or cancel";
-  return run.progress?.now ?? "–";
+  return null;
+}
+
+/** The segment a run is on (1-based): the one after those done, never past the last. */
+const segmentAt = (d: { done: number; total: number }) => Math.max(1, Math.min(d.done + 1, d.total));
+
+/**
+ * qa-company-9: what comes after where the run stands now. A person's step it waits on; while
+ * it runs, the segment after the one under way (the list names only the one under way), or
+ * Finish on the last.
+ */
+function runNext(run: RunSummary): string {
+  const wait = runWait(run);
+  if (wait) return wait;
+  const d = run.progress;
+  if (!d || d.total === 0) return "–";
+  const after = segmentAt(d) + 1;
+  return after > d.total ? "Finish" : `Segment ${after} of ${d.total}`;
 }
 
 /** The run's document, by slug, among the PRDs Home lists. */
@@ -67,8 +84,10 @@ function title(f: Flight, docs?: DocumentSummary[]) {
   return f.kind === "prd" ? docLabel(f.doc) : runLabel(f.run, runDoc(f.run, docs)?.title);
 }
 
-/** "Step 8/9": where a PRD in review stands on the journey, said as a step so it is not read as sections done. */
-const STEP_TEXT = `Step ${REVIEW_STEP}/${JOURNEY_STEPS.length}`;
+/** "Step 8 of 9": where a PRD in review stands on the journey, said as a step so it is not read as sections done. */
+const STEP_TEXT = `Step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}`;
+/** qa-company-9: the journey's step after Review, what a PRD in review goes to next. */
+const AFTER_REVIEW = JOURNEY_STEPS[REVIEW_STEP] ?? "–";
 
 export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]): Column<Flight>[] {
   return [
@@ -107,10 +126,10 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
       width: "19%",
       phone: "hide",
       cell: (f) =>
-        // qa-company-31: one style for every row: what comes next, in plain words.
+        // qa-company-31, -9: one style for every row: what comes after the current step, in plain words.
         f.kind === "prd" ? (
-          <span className="truncate" title="Review">
-            Review
+          <span className="truncate" title={AFTER_REVIEW}>
+            {AFTER_REVIEW}
           </span>
         ) : (
           <span className="truncate" title={runNext(f.run)}>
@@ -121,7 +140,7 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
     {
       key: "done",
       header: "Progress",
-      width: "150px",
+      width: "210px",
       phone: "meta",
       cell: (f) => {
         if (f.kind === "prd") {
@@ -134,14 +153,21 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
         }
         const d = f.run.progress;
         // qa-company-43: a run paused over budget is not finished, whatever its segments say.
+        // qa-company-8: every row says its unit: "Step 8 of 9", "Segment 1 of 4".
         if (f.run.status === "paused_overrun") {
           return (
             <span className="tnum font-semibold whitespace-nowrap text-crit" data-testid="row-paused" title={d ? `Paused after ${d.done} of ${plural(d.total, "segment")}` : "Paused"}>
-              Paused{d ? ` at ${d.done}/${d.total}` : ""}
+              Paused{d && d.total > 0 ? ` at segment ${segmentAt(d)} of ${d.total}` : ""}
             </span>
           );
         }
-        return d ? <Meter value={d.done} max={d.total} label="Segments done" /> : <span className="text-text2">–</span>;
+        return d && d.total > 0 ? (
+          <span className="block min-w-0" data-testid="row-segments">
+            <Meter value={d.done} max={d.total} label="Segments done" text={`Segment ${segmentAt(d)} of ${d.total}`} />
+          </span>
+        ) : (
+          <span className="text-text2">–</span>
+        );
       },
     },
   ];
@@ -183,7 +209,7 @@ function GoalsSection({ goals }: { goals: RowGoal[] | undefined }) {
   );
 }
 
-/** The selected PRD: journey, blockers, sections reviewed, open items, its sections and blockers. */
+/** The selected PRD: journey, blockers, sections reviewed, open feedback, its sections and blockers. */
 function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: "prd" }>; openItems: number | undefined; goalIndex: GoalIndex }) {
   const d = f.doc;
   const n = d.latest_version;
@@ -243,7 +269,9 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
         },
         // qa-company-26: a label that fits the stat's room ("Sections approved" was cut).
         { label: "Approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
-        { label: "Open items", value: openItems ?? 0, testId: "stat-open" },
+        // qa-shell-22: the PRD's open review feedback (the Inbox's count), as the review panel names it;
+        // the Sections legend below counts sections not yet reviewed, another thing.
+        { label: "Open feedback", value: openItems ?? 0, testId: "stat-open" },
       ]}
     >
       <InspectorSection testId="inspector-journey" label={`Journey: step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}, ${JOURNEY_STEPS[REVIEW_STEP - 1]}`}>
@@ -257,7 +285,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
             <span className="flex flex-wrap items-center gap-2.5 font-medium text-text">
               <Legend cls="bg-pass" label="Approved" n={approved} />
               <Legend cls="bg-warn" label="Changes" n={count("changes_requested") + count("rejected")} />
-              <Legend cls="bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]" label="Open" n={count(null)} />
+              <Legend cls="bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]" label="Not reviewed" n={count(null)} />
             </span>
           }
         >
@@ -299,7 +327,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
 function Legend({ cls, label, n }: { cls: string; label: string; n: number }) {
   if (n === 0) return null;
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <i aria-hidden className={`size-2.5 rounded-[3px] ${cls}`} />
       {label} <b className="tnum">{n}</b>
     </span>
@@ -337,9 +365,13 @@ function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run"
         { label: "Checkpoints", value: detail ? detail.checkpoints.filter((c) => c.status === "pending").length : "–" },
       ]}
     >
-      <InspectorSection label="Next" testId="inspector-next">
-        <InspectorRow>{runNext(run)}</InspectorRow>
-      </InspectorSection>
+      {/* qa-onboarding-30: the segment under way is said once, in Segments; Next only for what
+          waits on a person. */}
+      {runWait(run) && (
+        <InspectorSection label="Next" testId="inspector-next">
+          <InspectorRow>{runWait(run)}</InspectorRow>
+        </InspectorSection>
+      )}
       {detail && detail.segments.length > 0 && (
         <InspectorSection label="Segments" testId="inspector-segments">
           {detail.segments.map((s) => (

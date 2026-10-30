@@ -7,7 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { citationHref, formatDate, formatDay } from "@/lib/format";
-import { plainText } from "@/lib/markdown";
+import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
@@ -94,7 +94,7 @@ import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
-import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
+import { ensureReports, inboxReports, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
@@ -134,7 +134,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -154,12 +154,13 @@ import {
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
+import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { itemSubjectName, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -168,6 +169,7 @@ import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience
 import {
   draftPublicTexts,
   emptyShares,
+  readerSections,
   routePublicShares,
   routeShares,
   seedShares,
@@ -545,7 +547,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
- * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
+ * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
+ * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
  * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts).
  */
@@ -654,8 +657,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     warnings: [],
     notes: [],
     imported_by: (seed.by ?? AGENT_TRACK).id,
-    // As the API names a token's import: "API token agent-track".
-    imported_by_name: seed.by ? seed.by.name : `API token ${AGENT_TRACK.name}`,
+    // As the API names a token's import (qa-docs-23): an integration, never the token's name.
+    imported_by_name: seed.by ? seed.by.name : "An integration",
     approved_at: null,
     approval_lapses: [],
     created_at: seed.created_at,
@@ -1057,6 +1060,17 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * "simple-suggest-needs-look": "simple-home" plus Oracle's suggestion for Grow retention that
+ * failed its checks twice (oracle.simple.quality): owners read it with a "Needs a look" note,
+ * everyone else does not see it. Invented data.
+ */
+function seedSimpleSuggestNeedsLookScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  db.simple_roadmap!.goal_suggestions = [...seedGoalSuggestions(), seedHeldGoalSuggestion()];
   return db;
 }
 
@@ -1949,6 +1963,10 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
   const base = {
     documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now,
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    noGoal: (v: { id: string }) => {
+      const version = db.versions.find((x) => x.id === v.id);
+      return new Set(version ? boardItems(db, version).filter((i) => i.no_goal).map((i) => i.key) : []);
+    },
   };
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   db.shares ??= scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO
@@ -1964,10 +1982,11 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
       db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
       return queueJob(llmContext(db, me?.id ?? db.user_id, me?.role ?? "owner"), doc.id, "public_text", v.number);
     },
-    renderAudience: (doc, v, audience) => {
+    renderAudience: (doc, v, audience, linkHolder = false) => {
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
-      return exportHtml(row, { ...version, sections: audienceSections(version.sections, audience, boardItems(db, version)) }, db.branding, audienceLabel(audience));
+      const sections = audienceSections(version.sections, audience, boardItems(db, version));
+      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },
   };
 }
@@ -2728,7 +2747,9 @@ function load(): Db {
   if (raw && hit && hit.raw === raw) return hit.db;
   if (raw) {
     try {
-      return JSON.parse(raw) as Db;
+      const db = JSON.parse(raw) as Db;
+      knowManyPlans(db.simple_roadmap);
+      return db;
     } catch {
       // fall through to a fresh seed
     }
@@ -2786,6 +2807,8 @@ function load(): Db {
                 ? seedSimpleHomeDecidersScenario
               : scenario === "simple-suggest-deciders"
                 ? seedSimpleSuggestDecidersScenario
+              : scenario === "simple-suggest-needs-look"
+                ? seedSimpleSuggestNeedsLookScenario
               : scenario === "simple-home-milestones"
                 ? seedSimpleHomeMilestonesScenario
               : scenario === "simple-home-one-prd"
@@ -2819,14 +2842,21 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "roadmap-talk"
+              : scenario === "simple-chat" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
                     // chat-reader: the two "Delivery …" items its rules talk about.
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
-                    if (scenario === "roadmap-talk" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    if (scenario !== "simple-chat" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    // fix5-cut-dependents review: approver@example.com is Alert rules engine's own
+                    // decider; the company's owners decide the items that wait on it.
+                    if (scenario === "roadmap-talk-own-decider" && db.simple_roadmap) {
+                      const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                      const r = db.simple_roadmap;
+                      r.targets = { ...r.targets, [r.ids["alert-rules"]]: { ...r.targets?.[r.ids["alert-rules"]], decider_id: approver.id } };
+                    }
                     return db;
                   }
               : scenario === "simple-500"
@@ -2839,6 +2869,8 @@ function load(): Db {
                     ? seedNoStrategyScenario
                     : seed,
   );
+  // The 500-item scenario's plans, known only while its items are the roadmap's.
+  knowManyPlans(db.simple_roadmap);
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
   db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
@@ -2948,6 +2980,7 @@ function load(): Db {
     for (const m of db.discussions.messages) if (m.status === "failed") m.error = SPENT;
   }
   if (scenario === KEY_RENEWED_SCENARIO) seedKeyRenewedRun(db.runs!, runsContext(db));
+  if (scenario === REPORT_PRD_MOVED_SCENARIO) addApprovedPrdV2(db);
   if (scenario === VERSION_WARNINGS_SCENARIO) {
     const prd = db.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -2958,6 +2991,18 @@ function load(): Db {
   // The caller owns this object now (see `cached`).
   cached = null;
   return db;
+}
+
+/** fix4 "report-prd-moved": the Usage alerts PRD's v2 approved after the roadmap was built from v1. */
+function addApprovedPrdV2(db: Db) {
+  const prd = db.documents.find((d) => d.slug === "usage-alerts");
+  const p1 = prd && db.versions.find((v) => v.document_id === prd.id && v.number === 1);
+  if (!prd || !p1) return;
+  const p2 = structuredClone(p1);
+  Object.assign(p2, { id: uuid(), number: 2, created_at: "2026-10-21T09:00:00Z", approved_at: "2026-10-22T09:00:00Z" });
+  p2.sections = p2.sections.map((x) => ({ ...x, id: uuid() }));
+  db.versions.push(p2);
+  prd.updated_at = p2.created_at;
 }
 
 /** E3 "roadmap-diff": usage-alerts-roadmap v1 approved, then v2, a draft (./roadmap.ts gives each its items). */
@@ -3043,6 +3088,15 @@ function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
 }
 
 /** The roadmap routes' context (CR-11, F3 Date bases) for the signed-in member. */
+/** fix4 qa-plan-1: an alignment report's tracks, read off the roadmap mock's track overviews (the Plan's). */
+function reportLive(db: Db, me: { id: string; role: Role; email: string }): LiveTracks {
+  return (calm) => {
+    const ctx = roadmapContext(db, me);
+    db.roadmap = ensureRoadmap(db, ctx);
+    return reportTracks(ctx, db.roadmap, calm);
+  };
+}
+
 function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): RoadmapContext {
   return {
     userId: me.id,
@@ -3097,6 +3151,23 @@ function discussionDocument(db: Db, d: DiscussionRow): DocumentSection[] {
   }));
 }
 
+/** A `screen` subject's page name, never its route (oracle.discussions.context.page_name): "Home", "Settings · Members", "General" for /. */
+const SCREEN_PAGES: Record<string, string> = { home: "Home", requests: "Requests", baseline: "Baseline", documents: "PRDs", priorities: "Priorities", plan: "Plan", roadmap: "Plan", runs: "Runs", inbox: "Inbox", company: "Company", sources: "Sources", settings: "Settings" };
+const SCREEN_SIMPLE_PAGES: Record<string, string> = { "": "Home", roadmap: "Roadmap", priorities: "Priorities", decisions: "Decisions", meetings: "Meetings", prds: "One-pager", "one-pagers": "One-pager" };
+function screenPageName(path: string): string {
+  const parts = path.split("?")[0].split("/").filter(Boolean);
+  if (parts.length === 0) return "General";
+  const simple = parts[0] === "simple" ? SCREEN_SIMPLE_PAGES[parts[1] ?? ""] : undefined;
+  if (simple) return simple === "One-pager" && parts.length < 3 ? "One-pagers" : simple;
+  const name = SCREEN_PAGES[parts[0]];
+  if (!name) return path;
+  if ((parts[0] === "settings" || parts[0] === "company") && parts[1]) {
+    const tab = parts[1].replace(/-/g, " ");
+    return `${name} · ${tab[0].toUpperCase()}${tab.slice(1)}`;
+  }
+  return name;
+}
+
 /** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
 function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): SubjectInfo | { status: number; detail: string } {
   if (kind === "document" || kind === "section" || kind === "roadmap_item") {
@@ -3122,7 +3193,7 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
-  if (kind === "screen") return { key: `screen:${s.path}`, label: String(s.path), url: String(s.path) };
+  if (kind === "screen") return { key: `screen:${s.path}`, label: screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }
@@ -3587,32 +3658,61 @@ function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
   return `${doc.title} · Version ${v.number}${badge} · ${status.charAt(0).toUpperCase()}${status.slice(1)} · ${when}`;
 }
 
-/** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
-/** A GFM table block's rows of cells (outer pipes dropped, `\\|` kept as a pipe), or null for any other block. */
-function tableRows(block: string): string[][] | null {
-  const lines = block.split("\n");
-  if (lines.length < 2 || !lines.every((l) => l.trim().startsWith("|")) || !/^\|[-:| ]+\|\s*$/.test(lines[1].trim())) return null;
-  const cells = (l: string) =>
-    l
-      .trim()
-      .replace(/^\||(?<!\\)\|$/g, "")
-      .split(/(?<!\\)\|/)
-      .map((c) => c.trim().replace(/\\\|/g, "|"));
-  return [cells(lines[0]), ...lines.slice(2).map(cells)];
+/** A body's inline markdown as HTML text: its words only (no citation marker, image or link target). */
+function inlineHtml(nodes: Inline[]): string {
+  return nodes
+    .map((n) =>
+      n.t === "text" || n.t === "code"
+        ? escapeHtml(n.v)
+        : n.t === "cite" || n.t === "img"
+          ? ""
+          : n.t === "strong"
+            ? `<strong>${inlineHtml(n.c)}</strong>`
+            : n.t === "em"
+              ? `<em>${inlineHtml(n.c)}</em>`
+              : inlineHtml(n.c),
+    )
+    .join("");
 }
 
-function bodyHtml(text: string, tables: boolean): string {
-  return text
-    .split(/\n\n+/)
-    .map((p) => {
-      const rows = tables ? tableRows(p) : null;
-      if (!rows) return `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`;
-      const [head, ...body] = rows;
-      const tr = (r: string[], tag: string) => `<tr>${head.map((_, n) => `<${tag}>${escapeHtml(r[n] ?? "")}</${tag}>`).join("")}</tr>`;
-      return `<table><thead>${tr(head, "th")}</thead><tbody>${body.map((r) => tr(r, "td")).join("")}</tbody></table>`;
+/** A section's markdown as the API's export renders it (qa-docs-15): paragraphs, lists and real tables, never pipe text. */
+function bodyHtml(md: string): string {
+  return parseBlocks(md.replace(/[ \t]*\[c:[\w.:-]+\]/g, ""))
+    .map((b) => {
+      switch (b.t) {
+        case "p":
+          return `<p>${inlineHtml(b.c).replace(/\n/g, "<br>")}</p>`;
+        case "h":
+          return `<h4>${inlineHtml(b.c)}</h4>`;
+        case "quote":
+          return `<blockquote>${inlineHtml(b.c)}</blockquote>`;
+        case "ul":
+        case "ol":
+          return `<${b.t}>${b.items.map((it) => `<li>${inlineHtml(it)}</li>`).join("")}</${b.t}>`;
+        case "pre":
+          return `<pre>${escapeHtml(b.v)}</pre>`;
+        case "table": {
+          const tr = (r: Inline[][], tag: string) => `<tr>${b.head.map((_, n) => `<${tag}>${inlineHtml(r[n] ?? [])}</${tag}>`).join("")}</tr>`;
+          return `<table><thead>${tr(b.head, "th")}</thead><tbody>${b.rows.map((r) => tr(r, "td")).join("")}</tbody></table>`;
+        }
+      }
     })
     .join("");
 }
+
+/**
+ * The export's own type and tables (as the API's prd.css / themed.css, qa-docs-15): the app's sans stack,
+ * bordered tables, a quiet banner. Every HTML export starts with the company's brand header (O5 lane 4).
+ */
+const EXPORT_CSS = `<style>
+body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #0f172a; line-height: 1.5; margin: 1.5rem; }
+h1, h2, h3, h4 { line-height: 1.25; margin: 1.25rem 0 0.5rem; }
+.banner, .doc-header { color: #475569; font-size: 0.875rem; margin: 0 0 1rem; }
+.banner-audience { display: inline-block; color: #475569; font-size: 0.875rem; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; }
+th, td { border: 1px solid #d0d5dd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+th { background: #f8fafc; font-weight: 600; }
+</style>`;
 
 // As the API's themed export with the roadmap-board theme (a roadmap's default): the sections under a
 // horizon laid out as a three-column board of cards; a goal group (section-wide: Board's table, Team's
@@ -3625,13 +3725,17 @@ table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #d0d5dd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
 </style>`;
 
-function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null): string {
+/**
+ * `linkHolder`: a share link holder's page (as the API's oracle.shares.render, link_holder): the header names the
+ * company, the title and the day it is as of; no version, status, audience or citations.
+ */
+function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null, linkHolder = false): string {
   // A roadmap rendered for an audience: the theme's card board, and its markdown tables as tables.
   const board = doc.kind === "roadmap" && !!audience;
   const section = (s: VersionRow["sections"][number]) => {
     const tag = `h${Math.min(s.level, 3)}`;
     const attrs = board ? ` class="prd-section level-${s.level}${spansRow(s.section_key) ? " section-wide" : ""}" data-section-key="${s.section_key}"` : "";
-    return `<section id="${s.section_key}"${attrs}><${tag}>${escapeHtml(s.heading)}</${tag}>${bodyHtml(s.body_text, board)}</section>`;
+    return `<section id="${s.section_key}"${attrs}><${tag}>${escapeHtml(s.heading)}</${tag}>${bodyHtml(s.body_md ?? s.body_text)}</section>`;
   };
   const groups: { head: VersionRow["sections"][number]; children: VersionRow["sections"] }[] = [];
   for (const s of v.sections) {
@@ -3657,7 +3761,10 @@ function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBr
           : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}${board ? BOARD_THEME_CSS : ""}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v, audience))} · mock export</p>${audience ? `<span class="banner-audience">Audience ${escapeHtml(audience)}</span>` : ""}${sections}<ol class="citations">${notes}</ol></body></html>`;
+  const head = linkHolder
+    ? `<p class="doc-header"><span class="banner-doc">${escapeHtml(doc.title)}</span> · <span class="banner-asof">As of ${escapeHtml(formatDate(v.approved_at ?? v.created_at))}</span></p>`
+    : `<p class="banner">${escapeHtml(banner(doc, v, audience))}</p>${audience ? `<span class="banner-audience">Audience ${escapeHtml(audience)}</span>` : ""}`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(doc.title)}${linkHolder ? "" : ` v${v.number}`}</title>${EXPORT_CSS}${brandStyleHtml(brand)}${board ? BOARD_THEME_CSS : ""}</head><body>${brandHeaderHtml(brand)}${head}${sections}${linkHolder ? "" : `<ol class="citations">${notes}</ol>`}</body></html>`;
 }
 
 /** A tiny single-page PDF (Helvetica, ASCII only) so the download flow can be exercised. */
@@ -4101,6 +4208,12 @@ async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): P
         resent_at: now(),
         resend_count: (invite.resend_count ?? 0) + 1,
       });
+      // As the API: its email goes out again unless one is under way or under a minute old.
+      const recent = invite.email_status === "sent" && !!invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000;
+      if (invite.email_status !== "queued" && !recent) {
+        (db.invites_resent ??= []).push(invite.id);
+        Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
+      }
       return json(200, withInviter(invite));
     }
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
@@ -4481,6 +4594,7 @@ function interviewsContext(db: Db, userId: string, role: Role): InterviewsContex
     role,
     company: MOCK_COMPANY,
     memberEmail: (id) => db.members.find((m) => m.id === id)?.email ?? null,
+    memberName: (id) => specActorName(db, id),
     intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
     themeTitle: (id) => ensureRequests(db).themes.find((t) => t.id === id && !t.archived_at)?.title ?? null,
     fileRequest: (input) => addInterviewRequest(ensureRequests(db), input),
@@ -4660,6 +4774,12 @@ async function route(db: Db, req: Request): Promise<Response> {
       // qa-onboarding-14: an invite withdrawn or past its date is refused in words, naming who to ask.
       const refused = inviteRefusal(db, address);
       if (refused) return json(403, { detail: refused });
+    }
+    if (member?.status === "disabled" && passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
+      // qa-settings-42: as oracle.auth.service: a removed member with the right password hears why.
+      const by = db.members.find((x) => x.id === member.disabled_by && x.status !== "disabled");
+      const who = by ? displayName(by.email, by.name) : "an owner";
+      return json(403, { detail: `An owner removed you from this Oracle. Ask ${who} to restore you.` });
     }
     if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
@@ -4887,7 +5007,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       // #710: Oracle reads the asker's Fireflies live in a private chat (./live.ts).
       liveReply: (asked, alone) => liveReply(asked.body, alone),
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
-      slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
+      slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id, reportLive(db, me)).integration }, r),
       documentText: (d) => discussionDocument(db, d),
       // G4: an approver's Stage of a section change writes its next_draft_changes row, as the API's.
       stageNextDraft: (d, c, reason) => {
@@ -5068,13 +5188,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
   if (pool) return pool;
   // G8: the Slack install's status (every member) and its channels (commenters and up).
-  const slack = slackRoute(ensureReports(db, db.user_id).integration, me, req, p);
+  const slack = slackRoute(ensureReports(db, db.user_id, reportLive(db, me)).integration, me, req, p);
   if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
   // H5: metrics, their variances and the analytics connection check roles themselves (./metrics.ts).
   const metricsOut = await routeMetrics(metricsContext(db, me), ensureMetrics(db, me), req, p, q);
   if (metricsOut) return metricsOut;
-  const reports = await reportsRoute(db, db.user_id, me, req, p, q);
+  const reports = await reportsRoute(db, db.user_id, me, req, p, q, reportLive(db, me));
   if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
@@ -5113,7 +5233,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     findVersion: (ref, n) => {
       const doc = findDocument(db, ref);
       const v = doc && findVersion(db, doc, n);
-      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
+      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id, authorId: v.imported_by ?? null } : null;
     },
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
     queueReview: (documentId, n) => queueQualityReview(llm, documentId, n),
@@ -5444,7 +5564,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
   // "one-pager-no-owner": the PRD was imported by a service token (no owner yet).
-  db.simple_one_pager ??= seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
+  // "one-pager-needs-look": Oracle's build failed its checks twice (oracle.simple.quality).
+  // "one-pager-not-in-prd": Oracle marked a block the PRD lacks "Not in the PRD yet".
+  db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
+    ? seedNeedsLookOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-not-in-prd"
+    ? seedNotInPrdOnePager()
+    : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
@@ -5453,7 +5579,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   const visualsRes = await routeSimpleVisuals(
     db.simple_visuals,
     // As the API: an item is named with its code, or its title (subject_name).
-    { id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])), itemName: (id) => itemSubjectName(roadmapItems, id) },
+    {
+      id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])), itemName: (id) => itemSubjectName(roadmapItems, id),
+      // As the one-pager's can_draw_flow (drafts.can_edit): Guided setup's decider, else its approver track owner.
+      edits: (doc) => {
+        if (me.role === "owner") return true;
+        if (doc !== db.simple_one_pager?.doc.id) return false;
+        const decider = db.members.find((x) => x.email === "dana.decider@example.com")?.id;
+        if (decider) return me.id === decider;
+        return mockApproverOwnsTrack() && me.email === "approver@example.com";
+      },
+    },
     req,
     p,
   );
@@ -5702,7 +5838,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // Owners also get the weekly alignment reports and the posts Slack refused (F6), and
     // one strategy drift row however many findings are open (H4). Those Oracle told: what
     // it did on its own (H11); unopened rows count.
-    const reported = inboxReports(ensureReports(db, db.user_id), me);
+    const reported = inboxReports(ensureReports(db, db.user_id, reportLive(db, me)), me);
     const strategy = inboxStrategy(db.strategy, me.role);
     const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
     const open = did.filter((a) => a.counts).length;
@@ -6024,6 +6160,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
         document_id: doc.id,
         slug: doc.slug,
         title: doc.title,
+        kind: doc.kind,
         number: v.number,
         latest: versions[versions.length - 1].number,
         status: v.approved_at ? "approved" : doc.status,

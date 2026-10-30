@@ -35,11 +35,15 @@ test("an invited commenter is welcomed on their first sign-in", async ({ page })
   const w = welcome(page);
   await expect(w.getByRole("heading", { name: "Welcome to Oracle" })).toBeVisible();
   await expect(w.getByTestId("welcome-role")).toContainText("You are a commenter");
+  // qa-onboarding-7: one list of first steps. Connect tools is Set up's, drawn below, so the
+  // welcome points there; Pick sources is done (the mock's sources are the company's), so it
+  // is never offered; the rest is the welcome's own.
+  await expect(page.getByTestId("home-setup")).toBeVisible();
+  await expect(w.getByTestId("welcome-setup")).toHaveText("Begin with Set up, below. Each step opens the page where you do it.");
   const steps = w.getByTestId("welcome-step");
-  await expect(steps).toHaveCount(3);
-  await expect(steps).toHaveText([/Connect your tools/, /Pick your sources/, /Read a PRD and comment/]);
+  await expect(steps).toHaveText([/Read a PRD and comment/]);
   await steps.nth(0).getByRole("link").click();
-  await expect(page).toHaveURL(/\/settings\/connections$/);
+  await expect(page).toHaveURL(/\/documents$/);
 });
 
 // Card welcome-dismiss: protects = Dismiss keeps the welcome away for good, across sign-ins;
@@ -95,7 +99,8 @@ test("an invited approver's welcome fits a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, "lee.example@example.com");
   await expect(welcome(page).getByTestId("welcome-role")).toContainText("You are an approver");
-  await expect(welcome(page).getByTestId("welcome-step")).toHaveText([/Connect your tools/, /Pick your sources/, /See what waits for you/]);
+  // qa-onboarding-7: Connect tools is in Set up, below, and Pick sources is done: neither repeated.
+  await expect(welcome(page).getByTestId("welcome-step")).toHaveText([/See what waits for you/]);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });

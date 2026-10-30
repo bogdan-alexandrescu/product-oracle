@@ -11,6 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
+import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
 import { flowFor, type VisualsDb } from "./simple-visuals";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
@@ -121,6 +122,8 @@ export interface MockKeyDate {
 /** S7: one of Oracle's suggested features for a goal, as stored. */
 export interface GoalSuggestionRow {
   id: string;
+  /** oracle.simple.quality: Oracle's suggestion failed its checks twice (their plain words): owners only. */
+  checks?: string[];
   goal: string;
   title: string;
   outcome: string;
@@ -211,7 +214,8 @@ const METRICS: Record<string, string> = { "grow-retention": "Teams active after 
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
-export const ROADMAP_SLUGS = (): string[] => Object.keys(ROADMAPS);
+// A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
+export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
 /** Whether a commenter or viewer reads the roadmap (oracle.docs.visibility). */
 export const readsRoadmap = (slug: string, role: Role): boolean => !(role === "commenter" || role === "viewer") || ROADMAPS[slug]?.visibility === "company";
 /** The roadmap a slug or id names, when the role reads it. */
@@ -239,6 +243,8 @@ const DAY = 86_400_000;
 const iso = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 const ms = (day: string): number => Date.parse(`${day}T00:00:00Z`);
 const addDays = (day: string, n: number): string => iso(ms(day) + n * DAY);
+/** Today: the company's day (its time zone), as oracle.company_time.company_today (qa-shell-6). */
+export const companyToday = (): string => companyDayIso(new Date(mockNowMs()));
 const span = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY) + 1;
 const word = (day: string): string => new Date(ms(day)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
@@ -289,7 +295,7 @@ export function seedSimpleRoadmap(): SimpleDb {
 
 /** Roadmap-plus: invented key dates, days from this quarter's start on the mock's clock. */
 export function seedKeyDates(): Record<string, MockKeyDate[]> {
-  const q = simpleWindows(iso(mockNowMs())).now[0];
+  const q = simpleWindows(companyToday()).now[0];
   return {
     "alerts-roadmap": [{ id: stableUuid("simple-key-date/conference"), name: "Customer conference", date: addDays(q, 44), note: "Keynote slot for alerts" }],
     "onboarding-roadmap": [{ id: stableUuid("simple-key-date/board"), name: "Board meeting", date: addDays(q, 75), note: null }],
@@ -305,31 +311,66 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
   if (own) return { start: own.start, end: own.end };
   const s = db.items.find((x) => x.key === key)!;
   if (s.source !== "typed" && s.source !== "accepted") return { start: null, end: null };
-  const w = simpleWindows(iso(mockNowMs()))[s.horizon];
+  const w = simpleWindows(companyToday())[s.horizon];
   return { start: s.start !== undefined ? addDays(w[0], s.start) : null, end: s.end !== undefined ? addDays(w[0], s.end) : null };
 }
 
 /**
- * The "simple-500" scenario (S4: first paint and drag speed): 500 invented items over the
- * three roadmaps, both goals and the three tracks, dated and undated, with chains of
- * dependencies.
+ * The "simple-500" scenario (S4, dod-perf: first paint and drag speed): a company-wide
+ * roadmap of 500 invented items over 12 roadmaps (each from its own PRD), 8 goals and 6
+ * tracks, two in three dated, with chains of dependencies inside each roadmap.
  */
+const MANY_PRDS = ["Billing portal", "Team spaces", "Audit trail", "Usage reports", "Mobile app", "Search", "Integrations hub", "Data export", "Access control", "Notifications", "Help center", "Partner API"];
+const MANY_GOALS: Record<string, string> = {
+  "grow-retention": "Grow retention", "faster-activation": "Faster activation", "win-teams": "Win larger teams", "cut-churn": "Cut churn",
+  "trust-security": "Earn security trust", "open-platform": "Open the platform", "self-serve": "Self-serve support", "go-mobile": "Work from phones",
+};
+const MANY_TRACKS: Record<string, string> = { "web-core": "Web core track", "mobile": "Mobile track", "platform": "Platform track", "data": "Data track", "growth": "Growth track", "security": "Security track" };
+const MANY_WORDS = ["Faster", "Simpler", "Shared", "Bulk", "Scheduled", "Smarter", "Offline", "Guided"];
+const MANY_THINGS = ["invoices", "filters", "exports", "invites", "alerts", "reports", "settings", "search", "roles", "dashboards", "imports", "comments", "webhooks"];
+const manySlug = (n: number): string => `${MANY_PRDS[n].toLowerCase().replace(/ /g, "-")}-roadmap`;
+/**
+ * The 500-item scenario's roadmaps, goals and tracks, known once its items are seeded or reloaded
+ * (as knowTalkGoals). dod-perf review: once the roadmap holds them no longer (another scenario's
+ * data), the ones it added are taken out again.
+ */
+let manyAdded: { roadmaps: string[]; goals: string[]; tracks: string[] } | null = null;
+export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } | undefined): void {
+  const many = !!db?.items.some((x) => x.roadmap === manySlug(0));
+  if (many && !manyAdded) {
+    manyAdded = {
+      roadmaps: MANY_PRDS.map((_, n) => manySlug(n)).filter((k) => !(k in ROADMAPS)),
+      goals: Object.keys(MANY_GOALS).filter((k) => !(k in GOALS)),
+      tracks: Object.keys(MANY_TRACKS).filter((k) => !(k in TRACKS)),
+    };
+    MANY_PRDS.forEach((prd, n) => (ROADMAPS[manySlug(n)] ??= { title: `${prd} roadmap`, visibility: "company", prd, draft: 1 + (n % 4) }));
+    for (const k of manyAdded.goals) GOALS[k] = MANY_GOALS[k];
+    for (const k of manyAdded.tracks) TRACKS[k] = MANY_TRACKS[k];
+  } else if (!many && manyAdded) {
+    for (const k of manyAdded.roadmaps) delete ROADMAPS[k];
+    for (const k of manyAdded.goals) delete GOALS[k];
+    for (const k of manyAdded.tracks) delete TRACKS[k];
+    manyAdded = null;
+  }
+}
+
 export function seedSimpleMany(n = 500): SimpleDb {
-  const roadmaps = ["alerts-roadmap", "onboarding-roadmap", "pricing-roadmap"];
-  const goals = ["grow-retention", "faster-activation", undefined];
-  const tracks = Object.keys(TRACKS);
+  const goals = Object.keys(MANY_GOALS);
+  const tracks = Object.keys(MANY_TRACKS);
   const horizons: Horizon[] = ["now", "next", "later"];
   const items: SeedItem[] = Array.from({ length: n }, (_, i) => {
     const dated = i % 3 !== 2;
     const start = (i * 7) % 60;
     return {
-      key: `item-${i}`, title: `Planned item ${i + 1}`, horizon: horizons[i % 3], roadmap: roadmaps[i % 2],
-      goal: goals[i % 3], track: tracks[i % 3], confidence: (["low", "medium", "high"] as const)[i % 3],
+      key: `item-${i}`, title: `${MANY_WORDS[i % 8]} ${MANY_THINGS[i % 13]} ${Math.floor(i / 12) + 1}`, horizon: horizons[i % 3], roadmap: manySlug(i % 12),
+      goal: goals[i % 8], track: tracks[i % 6], confidence: (["low", "medium", "high"] as const)[i % 3],
       ...(dated ? { start, end: start + 20 + (i % 30), source: "typed" as const } : {}),
-      ...(i % 10 === 5 ? { depends: [`item-${i - 1}`] } : {}),
+      ...(i >= 12 && i % 5 === 3 ? { depends: [`item-${i - 12}`] } : {}),
     };
   });
-  return { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };
+  const db: SimpleDb = { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };
+  knowManyPlans(db);
+  return db;
 }
 
 /** The item's stored dates (the API's start_date, end_date, date_source columns): moved or
@@ -337,7 +378,7 @@ export function seedSimpleMany(n = 500): SimpleDb {
 export function ownDates(db: SimpleDb, s: SeedItem): SimpleDb["own"][string] | undefined {
   if (db.own[s.key]) return db.own[s.key];
   if ((s.source !== "typed" && s.source !== "accepted") || s.start === undefined || s.end === undefined) return undefined;
-  const w = simpleWindows(iso(mockNowMs()))[s.horizon];
+  const w = simpleWindows(companyToday())[s.horizon];
   return { start: addDays(w[0], s.start), end: addDays(w[0], s.end), source: s.source };
 }
 
@@ -397,14 +438,14 @@ const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…
 function dependencyLine(title: string, start: string, depTitle: string, end: string): string {
   const years = start.slice(0, 4) !== end.slice(0, 4);
   const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ""}`;
-  return `'${short(title)}' starts ${day(start)}, but '${short(depTitle)}', which it depends on, ends ${day(end)}`;
+  return `‘${short(title)}’ starts ${day(start)}, but ‘${short(depTitle)}’, which it depends on, ends ${day(end)}`;
 }
 
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
   const out: Flag[] = [];
   const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
     const risk = s.risks?.find((x) => x.flag === kind && (!x.subject || x.subject === subject));
-    out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null });
+    out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null, moves: [] });
   };
   for (const key of s.depends ?? []) {
     const dep = all.get(key);
@@ -414,17 +455,55 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   }
   if (s.milestone) {
     const day = addDays(w[0], s.milestone.day);
-    if (r.end.date > day) flag("outside_milestone", `'${short(s.title)}' ends ${word(r.end.date)}, after its milestone '${s.milestone.name}' (${word(day)})`, ["accept_risk"], s.milestone.name);
+    if (r.end.date > day) flag("outside_milestone", `‘${short(s.title)}’ ends ${word(r.end.date)}, after its milestone ‘${s.milestone.name}’ (${word(day)})`, ["accept_risk"], s.milestone.name);
   }
   if (s.status === "cut") {
     const live = [...all.values()].filter((x) => x.s.status !== "cut" && x.s.depends?.includes(s.key));
     if (live.length) {
       const more = live.length > 1 ? ` and ${live.length - 1} other${live.length > 2 ? "s" : ""}` : "";
-      flag("cut_with_dependents", `Cut, but '${short(live[0].s.title)}'${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
+      flag("cut_with_dependents", `Cut, but ‘${short(live[0].s.title)}’${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
     }
   }
   if (s.draft && !s.track && !closed(s)) flag("draft_without_owner", "Draft with no owner to confirm it", []);
   return out;
+}
+
+const days = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY);
+
+/**
+ * The new [start, end] of every item "Move the dependents" moves (changes.shift_plan): the
+ * roadmap's flags name them (SimpleFlag.moves) and the change engine moves them (./simple-changes.ts).
+ */
+export function shiftPlan(items: Map<string, Item>, itemId: string, depId: string): Record<string, [string, string]> {
+  // #9: every direct dependent of `dep` that starts too early moves, not only the one whose
+  // callout was clicked (two items can share a dependency, each estimated or slice-dated);
+  // then the move walks forward transitively through each moved item's own dependents.
+  const dep = items.get(depId);
+  const moves: Record<string, [string, string]> = {};
+  const queue: string[] = [];
+  if (!dep) return moves;
+  for (const n of dep.needed_by) {
+    const next = items.get(n);
+    if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
+    // A sibling whose order on dep was accepted as a risk stays where it is (as the API).
+    if (n !== itemId && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === depId)) continue;
+    const delta = days(next.start.date, addDays(dep.end.date, 1));
+    moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
+    queue.push(n);
+  }
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const n of items.get(cur)!.needed_by) {
+      const next = items.get(n);
+      if (!next || moves[n] || next.status === "cut") continue;
+      if (next.start.date <= moves[cur][1]) {
+        const delta = days(next.start.date, addDays(moves[cur][1], 1));
+        moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
+        queue.push(n);
+      }
+    }
+  }
+  return moves;
 }
 
 /** S4: the item's track owner, by name (service: an enabled track owner). */
@@ -560,7 +639,7 @@ function regenerate(db: SimpleDb, today: string): number {
     const latest = deps.sort((a, b) => (a.r.end.date < b.r.end.date ? 1 : -1))[0];
     if (latest && addDays(latest.r.end.date, 1) > start) {
       start = addDays(latest.r.end.date, 1);
-      why = `starts the day after '${latest.s.title}' ends`;
+      why = `starts the day after ‘${latest.s.title}’ ends`;
     }
     const same = [...(durations.get(s.confidence ?? "") ?? [])].sort((a, b) => a - b);
     const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 42;
@@ -622,6 +701,12 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
   return { db: { ...db, items, own, key_dates: keyDates }, hidden, visible };
 }
 
+/** fix4 qa-simple-roadmap-9: the items one reader reads (the API's drafts.overlays_for): a
+ * change's stale check and a fix's plan read them, so a commenter acts on what they see. */
+export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb {
+  return readerView(db, me).db;
+}
+
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
   knowTalkGoals(db);
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
@@ -631,7 +716,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   };
   const reader = { ...(me ? readerView(db, me) : { db, hidden: 0, visible: [] }), full: db };
   db = reader.db;
-  const today = iso(mockNowMs());
+  const today = companyToday();
   const w = simpleWindows(today);
   const group = (q.get("group") ?? "goal") as Schemas["SimpleRoadmapOut"]["group"];
   if (!["goal", "track", "prd"].includes(group)) return null;
@@ -656,7 +741,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
-      status: s.merged_into ? "merged" : s.draft ? "draft" : (s.status ?? "planned"),
+      status: s.merged_into ? "merged" : s.status === "cut" ? "cut" : s.draft ? "draft" : (s.status ?? "planned"),
       draft: !!s.draft,
       start: r.start, end: r.end,
       source: r.end.estimated ? r.start.source : r.end.source,
@@ -678,7 +763,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ...(s.notes ?? []),
         ...(s.why ? [s.why] : []),
         ...(s.goal ? [`Serves the goal ${GOALS[s.goal]}.`] : []),
-        ...(s.section ? [`From ${rm.prd} (draft ${rm.draft}): ${sectionLabel(s.section, s.heading, s.title)}.`] : []),
+        ...(s.section ? [`From ${rm.prd}: ${sectionLabel(s.section, s.heading, s.title).replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, "")}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
@@ -690,6 +775,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
     };
   });
+  // qa-simple-home-1: what "Move the dependents" moves, as the change engine moves it (service.read).
+  const byItem = new Map(items.map((i) => [i.id, i]));
+  for (const i of items)
+    for (const f of i.flags) if (f.kind === "dependency_order" && f.fixes.includes("shift_dependents") && f.subject) f.moves = Object.keys(shiftPlan(byItem, i.id, f.subject));
   // The Roadmap filter (service.build's ``roadmap``): one readable roadmap, by id or slug.
   const readable = ROADMAP_SLUGS().filter((r) => readsRoadmap(r, role));
   const chosen = readableRoadmap(q.get("roadmap"), role);
@@ -834,7 +923,7 @@ export function settleDrafting(db: SimpleDb): void {
 export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "roadmap") return null;
   const m = req.method;
-  const today = iso(mockNowMs());
+  const today = companyToday();
   if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
   settleDrafting(db);
   if (!p[3] && m === "GET") {

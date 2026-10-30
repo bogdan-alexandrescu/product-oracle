@@ -274,7 +274,8 @@ function seed(): SourcesDb {
     kind: "google_docs",
     name: "Drive folders",
     connection_id: CONNECTIONS.google[1].id,
-    config: { folders: ["1FolderProductExample"] },
+    // Picked by name, as the Drive picker saves picks (qa-settings-23: the row reads the name).
+    config: { folders: ["1FolderProductExample"], names: { "1FolderProductExample": "Product planning" } },
     status: "active",
     last_error: null,
     last_synced_at: "2026-10-12T08:00:00Z",
@@ -416,9 +417,10 @@ export function itemsChangedSince(since: string, owner: string, me: string): num
   return items.filter((i) => (i.fetched_at && Date.parse(i.fetched_at) > at) || (i.deleted_at && Date.parse(i.deleted_at) > at)).length;
 }
 
-/** How many sources there are (A1's Pick sources step). */
 /** The sources holding at least one live item, as oracle.setup's Pick sources step counts
  * them: an empty source (an Uploads source with no files) gives the baseline nothing. */
+// qa-onboarding-3: as oracle/setup.py's _sources (the join on SourceItem, deleted_at null);
+// Home says the sources with nothing read beside it, from the Sources list itself.
 export function sourceCount(): number {
   const db = load();
   return db.sources.filter((s) => db.items.some((i) => i.source_id === s.id && !i.deleted_at)).length;
@@ -487,6 +489,9 @@ function hideOutsidePicks(db: SourcesDb, s: Source): number {
   return deleted;
 }
 
+/** What a Slack source's first sync reads from its channels (invented messages). */
+const FIRST_SLACK_READ = ["Customers keep asking for a weekly summary email.", "The export button is hard to find on a phone."];
+
 function counted(db: SourcesDb, s: Source): Source {
   return { ...s, item_count: db.items.filter((i) => i.source_id === s.id && !i.deleted_at).length };
 }
@@ -535,7 +540,9 @@ function badConfig(kind: Source["kind"], config: Record<string, unknown>): strin
   }
   if (kind !== "slack") return null;
   const channels = config.channels;
-  if (Array.isArray(channels) && channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;
+  // As the Slack connector's _channels: a source reads at least one channel (qa-onboarding-4).
+  if (!Array.isArray(channels) || channels.length === 0) return "allowlist at least one channel id";
+  if (channels.length > MAX_CHANNELS) return `allowlist at most ${MAX_CHANNELS} channels`;
   for (const key of ["since", "until"] as const) {
     const v = config[key];
     if (v == null) continue;
@@ -729,6 +736,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     // A sync also deletes what left the picks (sources narrowed before narrowing took
     // effect on save).
     const deleted = s.kind === "google_docs" ? hideOutsidePicks(db, s) : 0;
+    const before = db.items.length;
     // S4 "draft-new-items" scenario: Product chat's sync brings in one new message.
     if (ctx.scenario === DRAFT_NEW_ITEMS_SCENARIO && s.id === PRODUCT_CHAT_ID && !db.items.some((i) => i.external_id === "m-new")) {
       db.items.push({
@@ -751,7 +759,37 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
         content: "Teams want to set their own alert thresholds.",
       });
     }
-    return json(200, { source_id: s.id, outcome: "completed", upserted: 2, versions_written: 1, deleted, checkpoints: 1, retry_after: null, error: null, source: counted(db, s) });
+    // qa-onboarding-3: a Slack source just added reads its channels' messages on its first
+    // sync, as the connector does, so a new company's Pick sources is done once it syncs.
+    if (s.kind === "slack" && channels.length && !db.items.some((i) => i.source_id === s.id)) {
+      for (const [n, content] of FIRST_SLACK_READ.entries()) {
+        db.items.push({
+          id: uuid(),
+          source_id: s.id,
+          source_kind: s.kind,
+          source_name: s.name,
+          external_id: `${channels[0]}-first-${n + 1}`,
+          kind: "message",
+          title: null,
+          url: null,
+          author: "someone",
+          acl: {},
+          occurred_at: now(),
+          source_updated_at: null,
+          deleted_at: null,
+          version_id: uuid(),
+          fetched_at: now(),
+          confidence: confidence(s.kind, 1),
+          content,
+        });
+      }
+    }
+    // What it saw is what the source holds, so the result and the row agree (qa-onboarding-4).
+    const out = counted(db, s);
+    const seen = out.item_count;
+    // Each item read for the first time is a new version, as the API counts them.
+    const written = db.items.length - before || (seen ? 1 : 0);
+    return json(200, { source_id: s.id, outcome: "completed", upserted: seen, versions_written: written, deleted, checkpoints: 1, retry_after: null, error: null, source: out });
   }
   if (sub === "coverage" && m === "GET") {
     const limit = Number(q.get("limit") ?? 50);

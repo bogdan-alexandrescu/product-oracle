@@ -28,7 +28,8 @@ type Tool = "evidence" | "refine" | "ask" | "edit";
 
 /**
  * One section of a version. The open section (one at a time) carries the review bar and a
- * ⋯ menu with Add evidence link, Edit section, Refine section, Ask a teammate and Discuss this section; a
+ * ⋯ menu with Add evidence link, Edit the text yourself, Ask Oracle to rewrite, Ask a teammate a
+ * question and Start a discussion (qa-docs-76: each says what happens); a
  * `nested` section (detail shown in place inside a brief section) shows its content only
  * and offers to review it in the full document.
  */
@@ -39,6 +40,7 @@ export const SectionView = memo(function SectionView({
   highlights,
   activeCommentId,
   readOnly,
+  readOnlyNote,
   changedLock,
   evidenceTargets,
   refine,
@@ -63,6 +65,8 @@ export const SectionView = memo(function SectionView({
   highlights: Highlight[];
   activeCommentId: string | null;
   readOnly: boolean;
+  /** qa-docs-77: beside a read-only review state, who may review instead. */
+  readOnlyNote?: string;
   changedLock: boolean;
   /** Baseline items a commenter may cite a public link on; undefined hides the control. */
   evidenceTargets?: EntityOut[];
@@ -194,46 +198,42 @@ export const SectionView = memo(function SectionView({
                   )}
                   {edit && (
                     <MenuItem
-                      label={`Edit section ${section.heading}`}
                       onClick={() => {
                         closeMenu();
                         pick("edit");
                       }}
                     >
-                      Edit section
+                      Edit the text yourself
                     </MenuItem>
                   )}
                   {canRefine && (
                     <MenuItem
-                      label={`Refine section ${section.heading}`}
                       onClick={() => {
                         closeMenu();
                         pick("refine");
                       }}
                     >
-                      Refine section
+                      Ask Oracle to rewrite
                     </MenuItem>
                   )}
                   {ask && (
                     <MenuItem
-                      label={`Ask a teammate about ${section.heading}`}
                       onClick={() => {
                         closeMenu();
                         pick("ask");
                       }}
                     >
-                      Ask a teammate
+                      Ask a teammate a question
                     </MenuItem>
                   )}
                   {onDiscuss && (
                     <MenuItem
-                      label="Discuss this section"
                       onClick={() => {
                         closeMenu();
                         onDiscuss(section);
                       }}
                     >
-                      Discuss this section
+                      Start a discussion
                     </MenuItem>
                   )}
                   {mayDecide && (
@@ -297,6 +297,7 @@ export const SectionView = memo(function SectionView({
           heading={section.heading}
           verdict={section.verdict}
           readOnly={readOnly}
+          readOnlyNote={readOnlyNote}
           onSubmit={(v, note) => onVerdict(section.section_key, v, note)}
         />
       )}
@@ -338,7 +339,8 @@ export const SectionView = memo(function SectionView({
   );
 });
 
-function MenuItem({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+/** `label` names the item when its words alone would not say which section (the menu is named for it). */
+function MenuItem({ label, onClick, children }: { label?: string; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"

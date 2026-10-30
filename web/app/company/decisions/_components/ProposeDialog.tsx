@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 
 import { Button, useFocusTrap } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
@@ -14,6 +14,12 @@ import { LinksPicker, type Links } from "./LinksPicker";
 /** An option as typed; `key` keeps an existing option's key (and so its evidence and recommendation). */
 export type Draft = { key?: string; label: string; summary: string; pros: string; cons: string; cost: string };
 export const empty = (): Draft => ({ label: "", summary: "", pros: "", cons: "", cost: "" });
+/**
+ * qa-company-5: a field of the propose form. The label's semibold stops at the field, and a
+ * placeholder is a dim example ("e.g. …"), never something that reads as filled in.
+ */
+const FIELD = `${INPUT} font-normal placeholder:text-text-faint/80`;
+
 export const lines = (text: string) =>
   text
     .split("\n")
@@ -53,6 +59,16 @@ export function ProposeDialog({
   const [invalid, setInvalid] = useState<{ field: Field; note: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
+  // qa-company-46: the page under the dialog does not scroll, so only the dialog's own
+  // scrollbar shows (the page's beside it pushed the dialog off centre on a phone).
+  useEffect(() => {
+    const html = document.documentElement;
+    const overflow = html.style.overflow;
+    html.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = overflow;
+    };
+  }, []);
 
   function flag(field: Field, note: string) {
     setError(null);
@@ -99,14 +115,15 @@ export function ProposeDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    // qa-company-46: on a phone a full-width sheet, edge to edge.
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:p-0">
       <div
         ref={panel}
         role="dialog"
         aria-modal="true"
         aria-labelledby="propose-decision-title"
         tabIndex={-1}
-        className="w-full max-w-2xl min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none"
+        className="w-full max-w-2xl min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0"
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
           <h2 id="propose-decision-title" className="font-display text-xl font-bold tracking-heading">
@@ -120,7 +137,7 @@ export function ProposeDialog({
               <input
                 data-autofocus
                 data-field="title"
-                className={INPUT}
+                className={FIELD}
                 value={title}
                 maxLength={200}
                 aria-invalid={noteOf("title") ? true : undefined}
@@ -129,14 +146,14 @@ export function ProposeDialog({
                   setTitle(e.target.value);
                   if (invalid?.field === "title") setInvalid(null);
                 }}
-                placeholder="Ship usage caps before detection"
+                placeholder="e.g. Offer annual billing at launch"
               />
             </label>
             <FieldNote id="propose-note-title" note={noteOf("title")} />
           </div>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Question
-            <input className={INPUT} value={question} maxLength={1000} onChange={(e) => setQuestion(e.target.value)} placeholder="What is being decided" />
+            <input className={FIELD} value={question} maxLength={1000} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Do we bill yearly from day one?" />
           </label>
           <OptionsEditor
             options={options}
@@ -153,7 +170,7 @@ export function ProposeDialog({
                 <select
                   aria-label="Approver"
                   data-field="approver"
-                  className={INPUT}
+                  className={FIELD}
                   value={approver}
                   aria-invalid={noteOf("approver") ? true : undefined}
                   aria-describedby={noteOf("approver") ? "propose-note-approver" : undefined}
@@ -174,7 +191,7 @@ export function ProposeDialog({
             </div>
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Reversibility
-              <select aria-label="Reversibility" className={INPUT} value={reversibility} onChange={(e) => setReversibility(e.target.value as typeof reversibility)}>
+              <select aria-label="Reversibility" className={FIELD} value={reversibility} onChange={(e) => setReversibility(e.target.value as typeof reversibility)}>
                 <option value="reversible">Reversible</option>
                 <option value="irreversible">Hard to reverse</option>
               </select>
@@ -257,22 +274,22 @@ export function OptionsEditor({
               data-field={i === flagged ? "options" : undefined}
               aria-invalid={i === flagged ? true : undefined}
               aria-describedby={i === flagged ? "options-note" : undefined}
-              className={INPUT}
+              className={FIELD}
               value={o.label}
               maxLength={200}
               onChange={(e) => set(i, { label: e.target.value })}
-              placeholder={`Option ${i + 1}`}
+              placeholder={i === 0 ? "e.g. Annual at launch" : i === 1 ? "e.g. Monthly only" : "e.g. Another way"}
             />
             <Button variant="ghost" aria-label={`Remove option ${i + 1}`} onClick={() => setOptions((all) => all.filter((_, j) => j !== i))}>
               Remove
             </Button>
           </div>
-          <input aria-label={`Option ${i + 1} summary`} className={INPUT} value={o.summary} onChange={(e) => set(i, { summary: e.target.value })} placeholder="Summary" />
+          <input aria-label={`Option ${i + 1} summary`} className={FIELD} value={o.summary} onChange={(e) => set(i, { summary: e.target.value })} placeholder="Summary, e.g. Yearly plans from the first day" />
           <div className="grid grid-cols-2 gap-1.5 max-[600px]:grid-cols-1">
-            <textarea aria-label={`Option ${i + 1} pros`} className={INPUT} rows={2} value={o.pros} onChange={(e) => set(i, { pros: e.target.value })} placeholder="Pros, one a line" />
-            <textarea aria-label={`Option ${i + 1} cons`} className={INPUT} rows={2} value={o.cons} onChange={(e) => set(i, { cons: e.target.value })} placeholder="Cons, one a line" />
+            <textarea aria-label={`Option ${i + 1} pros`} className={FIELD} rows={2} value={o.pros} onChange={(e) => set(i, { pros: e.target.value })} placeholder="Pros, one a line" />
+            <textarea aria-label={`Option ${i + 1} cons`} className={FIELD} rows={2} value={o.cons} onChange={(e) => set(i, { cons: e.target.value })} placeholder="Cons, one a line" />
           </div>
-          <input aria-label={`Option ${i + 1} cost if wrong`} className={INPUT} value={o.cost} onChange={(e) => set(i, { cost: e.target.value })} placeholder="Cost if wrong" />
+          <input aria-label={`Option ${i + 1} cost if wrong`} className={FIELD} value={o.cost} onChange={(e) => set(i, { cost: e.target.value })} placeholder="Cost if wrong, e.g. A month of rework" />
         </div>
       ))}
       {options.length < 6 && (

@@ -155,3 +155,10 @@ export const memberName = (m: Member) => displayName(m.email, m.name);
 export function ruleOf(s: Schedule): Schemas["RitualSchedule"] {
   return { freq: s.freq, interval: s.interval, weekday: s.weekday, week_of_month: s.week_of_month, month: s.month, time: s.time };
 }
+
+/**
+ * qa-company-2: a ritual's newest pre-read: the next meeting's when it is ready (prepared
+ * early), else the last one's. The table's Latest pre-read and the inspector's newest
+ * occurrence then name the same pre-read.
+ */
+export const latestPreRead = (r: Ritual): OccurrenceSummary | null => r.next_pre_read ?? r.last_pre_read ?? null;

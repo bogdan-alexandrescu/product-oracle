@@ -36,12 +36,13 @@ test("app shell: hidden when signed out, the rail lists the nine destinations on
   await expect(nav.getByRole("link", { name: "Plan" })).toHaveAttribute("href", "/plan");
 });
 
-test("Requests: a new company's queue is a one-line empty state offering New request", async ({ page }) => {
+test("Requests: a new company's queue is a one-line empty state pointing to New request", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.goto("/requests");
-  await expect(page.getByTestId("requests-empty")).toContainText("Nothing yet");
-  await expect(page.getByTestId("requests-empty").getByRole("button", { name: "New request" })).toBeEnabled();
+  await expect(page.getByTestId("requests-empty")).toContainText("No requests yet. Add one with New request.");
+  // qa-shell-10: one New request, the header's.
+  await expect(page.getByRole("button", { name: "New request" })).toHaveCount(1);
   await expect(page.getByTestId("requests-empty").locator("svg").first()).toBeVisible();
 });
 
@@ -223,9 +224,12 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   await expect(h1).toHaveCount(1);
   expect((await h1.boundingBox())!.height).toBeLessThanOrEqual(1);
 
-  // The title follows the open page, a document's name and version included.
+  // The title follows the open page; a document version draws its own wrapped H1 on a phone,
+  // so the bar names where it is instead of cutting the title a second time (qa-docs-78).
   await page.goto("/documents/checkout-redesign/v/2");
-  await expect(title).toHaveText("Checkout redesign PRD v2");
+  // The page's own H1 (its sections draw an H1 of their own once they load).
+  await expect(page.getByRole("heading", { level: 1, name: /Checkout redesign PRD/ })).toBeVisible();
+  await expect(title).toHaveText("PRDs");
 
   const user = bar.getByTestId("phone-user-menu");
   await user.click();

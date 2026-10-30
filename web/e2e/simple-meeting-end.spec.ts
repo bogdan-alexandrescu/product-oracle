@@ -18,7 +18,7 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  * on (checked, disabled); "Email the attendees" is optional and disabled with "Email isn't
  * set up" when email is not available; Slack reads "Not connected" unless connected, then
  * "Post to #product-reviews"; Send shows "Sent" with each delivery's status (not picked,
- * on its way, on its way to the channel) and links the Decisions page; fails_when = a choice is not
+ * emailing or emailed the attendees, posting or posted to the channel: dod-delivery) and links the Decisions page; fails_when = a choice is not
  * sent, a status is missing, or Slack is offered while not connected; no_claim = the email
  * and Slack sending themselves (the API's outbox).
  */
@@ -50,7 +50,9 @@ async function endOne(page: Page) {
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "3 Decisions" }).click();
   await page.getByRole("textbox", { name: "Comment" }).fill("Ship the checklist first");
   await page.getByRole("button", { name: "Add comment" }).click();
-  await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Comment: Ship the checklist first");
+  // qa-simple-decide-1/2: a comment shows under its box, not among the decisions.
+  await expect(page.getByTestId("meeting-comment")).toContainText("Ship the checklist first");
+  await expect(page.getByRole("region", { name: "All decisions" })).not.toContainText("Ship the checklist first");
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
   await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
@@ -67,7 +69,7 @@ for (const phone of [false, true]) {
       test("the minutes are edited and sent to the Decisions page and the Inbox only", async ({ page }) => {
         await endOne(page);
         const minutes = page.getByRole("region", { name: "Minutes" });
-        await expect(minutes.getByLabel("Summary")).toHaveValue("Comment: Ship the checklist first; Moved Setup checklist.");
+        await expect(minutes.getByLabel("Summary")).toHaveValue("1 decision taken.");
         await expect(minutes.getByLabel("Decisions taken")).toContainText("Moved Setup checklist");
         await expect(page.getByRole("region", { name: "What still waits" })).toContainText("Guided setup: the working draft is not approved yet");
         await minutes.getByLabel("Summary").fill("We moved the checklist to Next and keep it first.");
@@ -113,9 +115,9 @@ for (const phone of [false, true]) {
         await endOne(page);
         await delivery(page).getByRole("checkbox", { name: "Email the attendees" }).check();
         await delivery(page).getByRole("button", { name: "Send" }).click();
-        await expect(page.getByRole("status", { name: "Sent" })).toContainText("Email · on its way");
+        await expect(page.getByRole("status", { name: "Sent" })).toContainText(/Emailing \d attendees…|Emailed all \d attendees/);
         await page.goto("/simple/meetings");
-        await expect(page.getByRole("region", { name: "Past" })).toContainText("Comment: Ship the checklist first; Moved Setup checklist.");
+        await expect(page.getByRole("region", { name: "Past" })).toContainText("1 decision taken.");
         await switchTo(page, "approver@example.com");
         await page.goto("/simple/decisions");
         await expect(page.getByRole("region", { name: "Review: Guided setup" })).toContainText("Moved Setup checklist");
@@ -134,7 +136,7 @@ test.describe("Slack connected", () => {
       await expect(d).not.toContainText("not connected");
       await d.getByRole("checkbox", { name: "Post to #product-reviews" }).check();
       await d.getByRole("button", { name: "Send" }).click();
-      await expect(page.getByRole("status", { name: "Sent" })).toContainText("Slack · on its way to #product-reviews");
+      await expect(page.getByRole("status", { name: "Sent" })).toContainText(/Posting to #product-reviews…|Posted to #product-reviews/);
     });
   }
 });

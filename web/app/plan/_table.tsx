@@ -4,7 +4,7 @@ import { Button, Chip, CodeChip, DataTable, type Column } from "@/components/ds"
 import { namedText } from "@/lib/codes";
 
 import type { GoalView } from "../home/_goals";
-import { driftMarker, engineeringParts, HORIZON_LABEL, HORIZONS, prdLabel, prdName, stateChip, whoLabel, type PlanItem } from "./_lib";
+import { driftMarker, engineeringParts, HORIZON_LABEL, HORIZONS, nextButton, nextSentence, prdLabel, prdName, stateChip, type PlanItem } from "./_lib";
 
 export type GroupBy = "horizon" | "goal" | "prd";
 const NO_GOAL = "No goal";
@@ -20,21 +20,40 @@ function DriftMarker({ item }: { item: PlanItem }) {
   );
 }
 
-/** The state chip; a draft's item has a dashed outline. */
-export function StateChip({ item, hero = false, wrap = false }: { item: PlanItem; hero?: boolean; wrap?: boolean }) {
+/**
+ * The state chip; a draft's item has a dashed outline. In the table (`split`) the pill holds one
+ * word on one line and the rest ("Next → Now", "in draft 2 (was Planned)") sits below it, outside
+ * the pill (qa-plan-30).
+ */
+export function StateChip({ item, hero = false, split = false }: { item: PlanItem; hero?: boolean; split?: boolean }) {
   const s = stateChip(item);
-  return (
+  const chip = (text: string, attrs: boolean) => (
     <Chip
       kind={s.kind}
       hero={hero}
-      wrap={wrap}
+      data-testid={attrs ? "plan-state" : undefined}
+      data-state={attrs ? item.state : undefined}
+      data-dashed={attrs && s.dashed ? "true" : undefined}
+      className={`flex-none ${s.dashed ? "border-dashed" : ""}`}
+    >
+      {text}
+    </Chip>
+  );
+  if (!split || !s.detail) return chip(s.label, true);
+  return (
+    <span
       data-testid="plan-state"
       data-state={item.state}
       data-dashed={s.dashed ? "true" : undefined}
-      className={s.dashed ? "border-dashed" : ""}
+      title={s.label}
+      className="inline-flex max-w-full min-w-0 flex-col items-start gap-0.5"
     >
-      {s.label}
-    </Chip>
+      {chip(s.head, false)}
+      <span className="min-w-0 text-[13px] break-words text-text2">
+        <span className="sr-only">{s.sep}</span>
+        {s.detail}
+      </span>
+    </span>
   );
 }
 
@@ -49,13 +68,12 @@ function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | un
         —
       </span>
     );
-  const who = whoLabel(n.who, me);
-  return (
-    // qa-plan-13: the decision on line 1, who takes it on a deliberate line 2 ("owners"), never
-    // "Decide on slip" broken into fragments. The " · " is for screen readers and copied text.
-    <span data-testid="plan-next" className="flex min-w-0 flex-col items-start gap-0.5 max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-1.5">
-      {/* A decision taken on a page the viewer may act on is a button; the rest name it (F2, F3 add theirs). */}
-      {n.action === "link_issue" && onLink && item.prd ? (
+  const sentence = nextSentence(n, me);
+  // qa-plan-29: a viewer who may take the decision gets its button ("Review the PRD"); the rest
+  // read who takes it in one sentence ("Owners decide on the slip"), never "Decide on slip · owners".
+  if (n.action === "link_issue" && onLink && item.prd)
+    return (
+      <span data-testid="plan-next" className="flex min-w-0 flex-col items-start">
         <Button
           className="h-7 max-w-full flex-none px-2 whitespace-nowrap"
           onClick={(e) => {
@@ -63,25 +81,25 @@ function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | un
             onLink(item);
           }}
         >
-          {n.label}
+          {nextButton(n)}
         </Button>
-      ) : n.href && n.viewer_may ? (
+      </span>
+    );
+  if (n.href && n.viewer_may)
+    return (
+      <span data-testid="plan-next" className="flex min-w-0 flex-col items-start">
         <Link
           href={n.href}
           onClick={(e) => e.stopPropagation()}
           className="inline-flex h-7 max-w-full flex-none items-center rounded-lg border whitespace-nowrap border-line-strong px-2 text-sm font-semibold hover:bg-surface2"
         >
-          {n.label}
+          {nextButton(n)}
         </Link>
-      ) : (
-        <span className="font-medium whitespace-nowrap">{n.label}</span>
-      )}
-      {who && (
-        <span className="min-w-0 text-sm text-text2">
-          <span className="sr-only max-[600px]:not-sr-only"> · </span>
-          {who}
-        </span>
-      )}
+      </span>
+    );
+  return (
+    <span data-testid="plan-next" className="min-w-0 text-sm break-words">
+      {sentence}
     </span>
   );
 }
@@ -219,7 +237,7 @@ export function PlanTable({
       cell: (i) => (
         <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
           {/* qa-plan-31: a dropped item's one chip says so, "Dropped in draft 2 (was Planned)". */}
-          <StateChip item={i} wrap />
+          <StateChip item={i} split />
           <DriftMarker item={i} />
         </span>
       ),
@@ -247,10 +265,13 @@ export function PlanTable({
       selected={selected}
       onSelect={(k) => onSelect(k)}
       group={group}
+      // qa-plan-31 (fix4): "Now · 7" in one span, so a flex row on a phone cannot drop the space.
       groupLabel={(g) => (
-        <>
-          {g} <span className="tnum text-accent-ink">{counts.get(g)}</span>
-        </>
+        <span>
+          {g}
+          <span className="text-text2"> · </span>
+          <span className="tnum text-accent-ink">{counts.get(g)}</span>
+        </span>
       )}
       groupProps={() => ({ "data-testid": "plan-group" })}
       rowProps={(i) => ({ "data-testid": "plan-row", "data-origin": i.origin, "data-item": i.key })}

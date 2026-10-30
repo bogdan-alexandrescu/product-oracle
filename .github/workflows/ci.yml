@@ -129,3 +129,22 @@ jobs:
         with:
           name: e2e-results
           path: web/test-results/
+
+  # dod-perf review: the web's timing specs (tagged @timing, as the API's `timing` mark) on the
+  # mock-backed build, alone (one worker) so no other test's load counts against them.
+  e2e-timing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: cd web && npm ci && npx playwright install --with-deps chromium
+      - run: cd web && E2E_TIMING=1 npx playwright test --grep @timing --workers=1
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-timing-results
+          path: web/test-results/

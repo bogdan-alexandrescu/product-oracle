@@ -46,7 +46,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision, DecisionReview
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.members.names import display_name
-from oracle.simple import changes, constraints, drafts, service, targets
+from oracle.simple import change_words, changes, constraints, drafts, service, targets
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
 from oracle.simple.schemas import (
@@ -60,7 +60,6 @@ from oracle.simple.schemas import (
     ChatThreadOut,
     SimpleChangeIn,
     SimpleChangeResult,
-    SimpleFlag,
     SimpleItemFlags,
     SimplePersonRef,
     WalkDecision,
@@ -138,7 +137,8 @@ def _day_words(d: date | str | None, year: bool = False) -> str:
     if d is None:
         return "no date"
     d = date.fromisoformat(d) if isinstance(d, str) else d
-    return f"{d.day} {d.strftime('%b')}" + (f" {d.year}" if year else "")
+    # Month first, as everywhere else in the app: "Nov 20", "Dec 20, 2026".
+    return f"{d:%b} {d.day}" + (f", {d.year}" if year else "")
 
 
 def parse_day(text: str, today: date) -> date | None:
@@ -487,6 +487,9 @@ def _b_move(c: Ctx, a: dict[str, Any]) -> Built:
                {"start_date": s, "end_date": en},
                {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
                 "end_date": en})  # fmt: skip
+    if by is not None:
+        # A move by a span: offered again on newer dates, it moves from those (rebase).
+        card["preview"]["shift"] = list(by)
     if period is not None and start < c.today:
         # "this quarter" / "this month" / the current Qn start on their first day.
         return Reply("cards", f"Here is the change. That period began {start:%b} {start.day}, "
@@ -1373,6 +1376,12 @@ def _grounded(c: Ctx, said: str) -> bool:
     return any(len(n) >= 3 and n.lower() in t for n in names)
 
 
+def _unread(skipped: Any) -> list[str]:
+    """The reader's ``skipped`` parts of the line, said back (at most three, each clipped)."""
+    parts = [" ".join(str(x).split())[:120] for x in skipped or [] if str(x).strip()]
+    return [f"I did not understand: “{p}”." for p in parts[:3]] if isinstance(skipped, list) else []
+
+
 def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
     """The reader's answer, validated: every action through ChatOp.build (an unknown op, a
     bad arg or an item the caller cannot read is a plain refusal, never a card); a clarify
@@ -1404,15 +1413,22 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
                 refused.append(r.body if r.kind == "note" else f"I can't do that: {r.body}")
                 continue
             cards += r.cards
+        # qa-simple-decide-24: nothing is dropped without a word: every refusal, the parts the
+        # reader could not read, the changes past the fifth.
+        said = _unread(answer.get("skipped"))
+        if len(actions) > 5:
+            said.append("I read the first five changes; say the rest again.")
         if not cards:
-            return Reply("note", refused[0])
+            return Reply("note", " ".join([refused[0], *refused[1:], *said]))
         if refused:
-            # The valid cards stay; the line says which one it cannot do.
-            why = (
-                refused[0].removeprefix("I can't do that here: ").removeprefix("I can't do that: ")
+            # The valid cards stay; the line says which ones it cannot do.
+            whys = " ".join(
+                r.removeprefix("I can't do that here: ").removeprefix("I can't do that: ")
+                for r in refused
             )
-            return Reply("cards", f"One I can't do: {why} {_count(len(cards))}", cards)
-        return Reply("cards", _count(len(cards)), cards)
+            n = {1: "One", 2: "Two", 3: "Three"}.get(len(refused), str(len(refused)))
+            said.insert(0, f"{n} I can't do: {whys}")
+        return Reply("cards", " ".join([*said, _count(len(cards))]), cards)
     if isinstance(clarify, dict) and clarify.get("choices"):
         if viewer_in_meeting:
             return Reply("note", VIEWER_NOTE)
@@ -1575,7 +1591,12 @@ async def apply_all(
                 await apply(db, principal, card_id)
         except (ChatError, ChangeError) as e:
             await db.rollback()
-            stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(e.detail))
+            # dod-data: the engine's answer's words, not its raw detail (ids, raw dates);
+            # a card whose item changed is offered again on the new state.
+            why = e.detail.get("message") if isinstance(e.detail, dict) else e.detail
+            stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(why))
+            if isinstance(e, ChangeError) and e.status == 409:
+                await rebase(db, card_id, e.detail)
             break
         applied.append(card_id)
     return await _out(db, principal, meeting_id, page, discussion_id), applied, stopped
@@ -1654,20 +1675,6 @@ def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
     return None
 
 
-def _flags_out(flags: list[Any]) -> list[SimpleFlag]:
-    return [
-        SimpleFlag(
-            kind=f.kind,
-            reason=f.reason,
-            fixes=f.fixes,
-            state=f.state,
-            subject=f.subject,
-            risk_note=f.risk_note,
-        )  # fmt: skip
-        for f in flags
-    ]
-
-
 def _as_if(card: SimpleChatCard, read_: service.Read, overlays: dict) -> dict:
     """The reader's overlays with the card's item fields applied (the constraint check)."""
     if card.op not in CARD_OPS_ON_ITEMS or card.item_id is None:
@@ -1735,6 +1742,13 @@ async def cards_out(
         e = read_.by_id().get(c.item_id) if c.item_id else None
         flags: list[SimpleItemFlags] = []
         fixes: list[ChatFix] = []
+        # fix5-cut-dependents: what "Cut it and its dependents" cuts with the item, as the
+        # reader reads the roadmap now.
+        waiting = (
+            changes.dependents(e, read_.by_id())
+            if c.status == "open" and c.op == "cut" and e is not None
+            else []
+        )
         if c.status == "open" and e is not None:
             after = (
                 read_
@@ -1745,14 +1759,15 @@ async def cards_out(
             ae = by_id.get(e.row.id)
             if ae is not None:
                 flags = [
-                    SimpleItemFlags(item_id=i, flags=_flags_out(by_id[i].flags))
+                    SimpleItemFlags(item_id=i, flags=service.flags_out(by_id[i]))
                     for i in (ae.row.id, *ae.needed_by)
                     if i in by_id and by_id[i].flags
                 ]
                 fixes = [x for i in (ae.row.id, *ae.needed_by) if i in by_id
                          for x in _fixes(by_id[i], by_id)]  # fmt: skip
-        change_words, correct = _talk().correct_out(c)
+        card_words, correct = _talk().correct_out(c)
         may: str | None = None
+        may_all: str | None = None
         bar = None
         if c.status == "open":
             bar = _card_bar(principal, c, rules)
@@ -1760,6 +1775,14 @@ async def cards_out(
                 decides = (await _adds_directly(db, principal, c, read_) if c.op == "add_item"
                            else _decides(principal, c, read_))  # fmt: skip
                 may = "apply" if decides else "propose"
+                if waiting and e is not None:
+                    # Review major: the cut with its dependents needs rights on every item.
+                    cut = [e, *waiting]
+                    may_all = (
+                        "apply"
+                        if changes.decides_all(principal, cut, read_.deciders)
+                        else "propose"
+                    )
         outs.append(ChatCardOut(
             id=c.id, message_id=c.message_id, op=c.op, target=c.target,  # type: ignore[arg-type]
             before=c.before, after=c.after, summary=c.summary, item_id=c.item_id,
@@ -1767,8 +1790,10 @@ async def cards_out(
             may=may, why_not=bar, flags=flags, fixes=fixes, preview=c.preview,  # type: ignore[arg-type]
             flow=await _flow(db, c), change_id=c.change_id,
             decided_by_name=names.get(c.decided_by) if c.decided_by else None,  # type: ignore[arg-type]
-            decided_at=c.decided_at, decision_id=c.decision_id, change_words=change_words,
+            decided_at=c.decided_at, decision_id=c.decision_id, change_words=card_words,
             correct=correct if c.status == "open" else None,
+            dependents=[x.row.title for x in waiting], dependent_ids=[x.row.id for x in waiting],
+            may_with_dependents=may_all,  # type: ignore[arg-type]
         ))  # fmt: skip
     return outs
 
@@ -1797,15 +1822,22 @@ async def apply(
     card_id: uuid.UUID,
     fix: int | None = None,
     values: dict[str, Any] | None = None,
+    with_dependents: bool = False,
+    dependents: list[uuid.UUID] | None = None,
 ) -> tuple[ChatCardOut, SimpleChangeResult]:
     """Apply a card (or one of its fixes) through the change engine with the caller's own
     rights; in a meeting an applied card is a meeting decision. ``values`` (roadmap-talk's
-    Correct): the card is rebuilt from them first, so the corrected values apply."""
+    Correct): the card is rebuilt from them first, so the corrected values apply.
+    ``with_dependents`` (fix5-cut-dependents): a cut card applies as cut_with_dependents,
+    the item and everything that waits on it in one change; the card then names them.
+    ``dependents``: the ids the card listed; others waiting on it now are 409."""
     me = _me(principal)
     card, rules = await _get(db, principal, card_id)
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
+    if with_dependents and (card.op != "cut" or fix is not None or values):
+        raise ChatError(422, "Only a cut card cuts its dependents too")
     if values:
         if fix is not None:
             raise ChatError(422, "A fix takes no corrections")
@@ -1822,8 +1854,11 @@ async def apply(
     else:
         if card.status != "open":
             raise ChatError(409, f"This card is {card.status} already")
-        body = SimpleChangeIn(op=card.op, target=card.target, before=card.before,  # type: ignore[arg-type]
-                              after=card.after)  # fmt: skip
+        body = SimpleChangeIn(op=changes.CUT_ALL if with_dependents else card.op,  # type: ignore[arg-type]
+                              target=card.target,
+                              before={**card.before, "dependents": [str(i) for i in dependents]}
+                              if with_dependents and dependents is not None else card.before,
+                              after={} if with_dependents else card.after)  # fmt: skip
     # In a meeting the change goes into the meeting's session, whoever the mode lets apply
     # (S8's engine takes them; their own rights still decide): made in the meeting.
     body.session_id = getattr(rules, "session_id", None) if rules is not None else None
@@ -1854,6 +1889,11 @@ async def apply(
     if fix is None:
         card.status = "applied" if status == "applied" else "proposed"
         card.change_id, card.decided_by, card.decided_at = result.change.id, me, company_time.now()
+        if with_dependents:
+            # The card names every item the one change cut.
+            t = result.change.target
+            said = change_words.phrase(changes.CUT_ALL, t, {}, {}, (t.get("titles") or [None])[0])
+            card.summary = said[:1].upper() + said[1:]
         if card.op == "add_item" and status == "applied" and card.item_id is None:
             # roadmap-talk: the new item, so its bar flashes on the timeline.
             new = (result.change.target or {}).get("item_id")
@@ -1871,6 +1911,33 @@ async def apply(
                 raise ChatError(e.status, e.detail) from e
     await db.commit()
     return await one(db, principal, card, rules), result
+
+
+async def rebase(db: AsyncSession, card_id: uuid.UUID, detail: Any) -> None:
+    """dod-data: a card refused because its item changed since it was made (409 with the
+    current values, after the failed apply is rolled back) stays open and is offered again
+    on the new state: its ``before`` is what the item has now, so a second Apply is the
+    person's choice on what they see. The caller has checked the card is theirs to apply."""
+    current = detail.get("current") if isinstance(detail, dict) else None
+    if not isinstance(current, dict) or not current:
+        return
+    card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
+    if card is None or card.status != "open" or not set(current) <= set(card.before or {}):
+        return
+    card.before = {**card.before, **current}
+    shift = (card.preview or {}).get("shift")
+    if card.op == "move_dates" and shift and current.get("start_date") and current.get("end_date"):
+        # A move by a span ("out a quarter") lands that span from where the item is now.
+        start, end = (_add_months(date.fromisoformat(current[k]), shift[0])
+                      + timedelta(days=shift[1]) for k in ("start_date", "end_date"))  # fmt: skip
+        old = card.after
+        s, en = start.isoformat(), end.isoformat()
+        card.after = {"start_date": s, "end_date": en}
+        card.preview = {**card.preview, "start_date": s, "end_date": en}
+        was = f"{_day_words(date.fromisoformat(old['start_date']))} – " \
+              f"{_day_words(date.fromisoformat(old['end_date']), True)}"  # fmt: skip
+        card.summary = card.summary.replace(was, f"{_day_words(start)} – {_day_words(end, True)}")
+    await db.commit()
 
 
 async def _apply_direct(

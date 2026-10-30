@@ -173,7 +173,13 @@ const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_
 /** Home's narrower lines: one action each. */
 export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
   c.key === "kind"
-    ? { ...c, width: "150px" }
+    ? {
+        ...c,
+        width: "150px",
+        // qa-shell-23: on a phone the last line's "More" comes before its "+N more in Inbox", as on a desktop.
+        className: `${c.className ?? ""} max-[600px]:has-[[data-needs-more]]:order-0`,
+        cell: (n) => (n.key === "more" ? <span data-needs-more className="contents">{c.cell(n)}</span> : c.cell(n)),
+      }
     : c.key === "item"
       ? { ...c, wrap: true, className: `${c.className ?? ""} ${WRAP_TWO}` }
       : c.key === "context"
@@ -183,17 +189,28 @@ export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
           : c,
 );
 
+/**
+ * qa-company-20: Sources that need attention: one action (Edit or "View only"), so the item
+ * takes the room the action column leaves, its reason on up to two lines.
+ */
+export const SOURCE_COLUMNS: Column<Need>[] = NEED_COLUMNS.map((c) =>
+  c.key === "item" ? { ...c, wrap: true } : c.key === "act" ? { ...c, width: "120px" } : c,
+);
+
 export function NeedTable({
   title,
   testId,
   rows,
   compact = false,
   heading,
+  columns,
 }: {
   title: string;
   testId: string;
   rows: Need[];
   compact?: boolean;
+  /** Columns of its own (Sources that need attention); else the Inbox's, or Home's when compact. */
+  columns?: Column<Need>[];
   /** Shown above the rows: a group that is not something to act on says what it is. */
   heading?: ReactNode;
 }) {
@@ -244,7 +261,7 @@ export function NeedTable({
       )}
       <DataTable
         label={title}
-        columns={compact ? NEED_COLUMNS_COMPACT : NEED_COLUMNS}
+        columns={columns ?? (compact ? NEED_COLUMNS_COMPACT : NEED_COLUMNS)}
         rows={drawn}
         rowKey={(n) => n.key}
         hideHeader
@@ -362,6 +379,7 @@ export type NeedGroup =
   | "outcomes"
   | "webhooks"
   | "reminders"
+  | "minutes"
   | "shipped"
   | "fyi";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
@@ -401,10 +419,17 @@ export function feedbackNeeds(
   // qa-company-4: an open item only an approver decides is for my information, not counted.
   const othersDecide = perms.ready !== false && !mayDecide;
   const docLink = (slug: string, title: string | null | undefined) => (
-    <Link href={`/documents/${slug}`} className="block truncate hover:underline">
+    <Link href={`/documents/${slug}`} className="block truncate hover:underline" title={title ?? slug}>
       {title ?? slug}
     </Link>
   );
+  // qa-company-16: a document's staged row is as old as its latest staged change.
+  const stagedAt = (docId: string) =>
+    (inbox.items ?? [])
+      .filter((f) => f.document_id === docId && f.state === "staged")
+      .map((f) => f.updated_at)
+      .sort()
+      .at(-1) ?? null;
   const staged: StatedNeed[] = (inbox.staged ?? []).map((row) => ({
     key: `staged-${row.document_id}`,
     icon: "doc",
@@ -416,13 +441,14 @@ export function feedbackNeeds(
       <Link
         href={sectionHref(row.slug, row.latest_version ?? 1, null, { feedback: "staged" })}
         className="tnum truncate font-semibold hover:underline"
+        title={`${plural(row.count, "change")} staged for draft ${row.next_version}`}
         data-testid="staged-row-label"
       >
         {plural(row.count, "change")} staged for draft {row.next_version}
       </Link>
     ),
     context: docLink(row.slug, row.title),
-    at: null,
+    at: stagedAt(row.document_id),
     action: (
       <LinkButton
         href={`/documents/${row.slug}/v/${row.latest_version}?${BUILD_PARAM}=1`}
@@ -471,7 +497,7 @@ export function feedbackNeeds(
           {outcome}
         </>
       ),
-      context: slug ? docLink(slug, f.title) : <span className="block truncate">{f.title}</span>,
+      context: slug ? docLink(slug, f.title) : <span className="block truncate" title={f.title ?? undefined}>{f.title}</span>,
       at: live ? f.created_at : f.updated_at,
       action:
         state === "staged" ? (
@@ -860,7 +886,7 @@ export function reportFailureNeeds(failures: ReportFailure[], busy: string | nul
 type OracleAction = NonNullable<InboxOut["oracle_actions"]>[number];
 
 /** Something written like a code ("G-B", "F-28", "R-12"): its expanded text names it. */
-const CODE_LIKE = /\b[A-Z]{1,3}-[A-Z0-9]{1,5}\b/;
+export const CODE_LIKE = /\b[A-Z]{1,3}-[A-Z0-9]{1,5}\b/;
 
 /**
  * "Oracle did" (H11): what Oracle did on its own, for each person it told. Counted until I
@@ -1083,7 +1109,7 @@ function childNeeds(c: InboxCheckpointRow, summary: InboxSummary, busy: string |
     kind: "",
     item: (
       <>
-        <span className="truncate" data-testid="child-title">
+        <span className="truncate" data-testid="child-title" title={child.title ?? child.item}>
           {child.title ?? child.item}
         </span>
         <Chip kind={child.reason.severity === "blocking" ? "crit" : "warn"} title={child.reason.text}>
@@ -1269,7 +1295,7 @@ function baselineLabel(title: string, summary: { need_you: number; blocking: num
  * The Inbox's rows, each with its action. `compact` (Home) gives an overrun, a stuck run and
  * a failed import one action that opens the run, where the rest are.
  */
-export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false, fixed?: FixedHere, perms: Perms = ALL) {
+export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false, fixed?: FixedHere, perms: Perms = ALL, onActed?: OnActed) {
   // What the signed-in person may do on a run (qa-company-3): its starter may manage it too.
   const may = (op: Operation, r: { created_by?: string | null }) => perms.can(op, !!perms.userId && r.created_by === perms.userId);
   // D3: a console approval held while blocking problems are open waits for a review.
@@ -1295,7 +1321,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       kind: "Checkpoint",
       item: (
         <>
-          <span className="truncate" data-testid="checkpoint-label">
+          <span className="truncate" data-testid="checkpoint-label" title={`${label}${held}`}>
             {label}
             {held}
           </span>
@@ -1406,7 +1432,23 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       <Button
         aria-label={`Approve ${money(r.estimate_usd)}`}
         disabled={busy !== null}
-        onClick={() => act(`approve-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/approve", path(r.id))))}
+        onClick={async () => {
+          // qa-company-1 (round 3): spend is asked first, naming the amount, on Home as in the
+          // Inbox; once approved, the page says so (the Inbox's act says it; Home's notice here).
+          const amount = r.estimate_usd == null ? null : formatMoney(r.estimate_usd);
+          // The threshold is the API's own (the flow catalog's), never a figure written here.
+          const catalog = amount ? await unwrap(api.GET("/v1/flows")).catch(() => null) : null;
+          const threshold = catalog ? `the ${formatMoney(catalog.approval_threshold_usd)} approval threshold` : "the approval threshold";
+          const asked = await confirmInPage({
+            action: amount ? `Approve ${amount}` : "Approve run",
+            message: `Start ${runLabel(r)}? ${amount ? `Its estimated cost, ${amount}, is over ${threshold}.` : "It has no cost estimate yet."} The run starts at once.`,
+          });
+          if (!asked) return;
+          void act(`approve-${r.id}`, async () => {
+            await unwrap(api.POST("/v1/runs/{run_id}/approve", path(r.id)));
+            if (compact) onActed?.({ id: `approve-${r.id}`, message: "Approved: run started" });
+          });
+        }}
       >
         Approve
       </Button>
@@ -1680,11 +1722,16 @@ export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Ne
       icon: "sources",
       kind: "Source",
       item: (
-        <span className="truncate" title={s.last_error ?? undefined}>
+        // qa-company-20: the reason wraps to a second line rather than cut mid-sentence.
+        <span className="line-clamp-2 min-w-0 break-words whitespace-normal" title={s.last_error ?? undefined} data-testid="source-need-text">
           {s.last_error ?? (mayEdit ? "Needs attention: edit this source to sync it again" : "Needs attention: it syncs again once it is edited")}
         </span>
       ),
-      context: <span className="block truncate">{s.name}</span>,
+      context: (
+        <span className="block truncate" title={s.name}>
+          {s.name}
+        </span>
+      ),
       at: s.updated_at,
       // qa-company-44: a role that cannot edit sources reads the row, with no Edit.
       action: mayEdit ? (
@@ -1758,7 +1805,8 @@ export function requestNeeds(inbox: InboxOut, busy: string | null, act: Act): { 
             {r.body}
           </span>
         ) : (
-          <span className="block truncate text-text2">{r.decision_number ? `D-${r.decision_number} · Requests` : "Requests"}</span>
+          // qa-onboarding-27: no bare decision code in Needs you.
+          <span className="block truncate text-text2">Requests</span>
         ),
       at: r.at,
       action: (
@@ -2002,7 +2050,7 @@ export function allNeeds(
   /** What the signed-in person may do (usePerms): rows draw only those actions. */
   perms: Perms = ALL,
 ): StatedNeed[] {
-  const n = inboxNeeds(inbox, busy, act, compact, fixed, perms);
+  const n = inboxNeeds(inbox, busy, act, compact, fixed, perms, onActed);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
   const requests = requestNeeds(inbox, busy, act);
@@ -2067,14 +2115,15 @@ export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, se
   return (inbox.decisions ?? []).map((d) => {
     const href = `/company/decisions?d=${d.number}`;
     const live = d.state !== "done";
-    const label = `${DECISION_KIND[d.reason]} · ${d.ref} ${d.title}`;
+    // qa-onboarding-27: the decision by its title, never its bare code ("D-5").
+    const label = `${DECISION_KIND[d.reason]} · ${d.title}`;
     return {
       key: `decision-${d.id}-${d.reason}`,
       icon: "company",
       kind: "Decision",
       item: (
         <span className="truncate" title={label}>
-          {d.reason === "informed" ? `${DECISION_KIND[d.reason]} · ${d.ref} ${d.title}` : label}
+          {label}
         </span>
       ),
       context: <span className="block truncate">{d.review_at && d.reason === "review_due" ? `Review was due ${formatDate(d.review_at)}` : "Decision log"}</span>,
@@ -2084,7 +2133,7 @@ export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, se
           {live && d.reason === "needs_decision" && <LinkButton href={`${href}&act=decide`}>Decide</LinkButton>}
           {live && d.reason === "review_due" && (
             <Button
-              aria-label={`Reaffirm ${d.ref} for 90 more days`}
+              aria-label={`Reaffirm ${d.title} for 90 more days`}
               disabled={busy !== null}
               onClick={() =>
                 act(`reaffirm-${d.id}`, () =>
@@ -2100,7 +2149,7 @@ export function decisionNeeds(inbox: InboxOut, busy: string | null, act: Act, se
               Reaffirm +90 days
             </Button>
           )}
-          <LinkButton href={href} aria-label={`Open ${d.ref}`}>
+          <LinkButton href={href} aria-label={`Open ${d.title}`}>
             Open
           </LinkButton>
         </>
@@ -2155,7 +2204,7 @@ export function trackNeeds(
         kind: "Track alert",
         item: (
           <>
-            <span className="truncate" data-testid="child-title">
+            <span className="truncate" data-testid="child-title" title={alertTitle(a)}>
               {alertTitle(a)}
             </span>
             <Chip kind="warn">{ALERT_KIND[a.kind]}</Chip>

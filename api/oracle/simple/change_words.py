@@ -49,6 +49,12 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"cut {x}"
         case "restore":
             return f"restored {x}"
+        case "cut_with_dependents":
+            rest = [str(t) for t in (target.get("titles") or [])[1:]]
+            if not rest:
+                return f"cut {x} and its dependents"
+            names = rest[0] if len(rest) == 1 else f"{', '.join(rest[:-1])} and {rest[-1]}"
+            return f"cut {x} and its dependents {names}"
         case "edit_title":
             return f"renamed {x} to {title}" if title else f"renamed {x}"
         case "edit_outcome":

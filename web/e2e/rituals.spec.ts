@@ -4,7 +4,7 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
 import { displayName } from "../lib/names";
 
-import { ADMIN, login } from "./helpers";
+import { ADMIN, login, pickZone } from "./helpers";
 
 /*
  * H2 Cadence engine: Company › Rituals and the occurrence page, driven through the UI as a
@@ -47,11 +47,12 @@ async function openRituals(page: Page) {
   await expect(page.getByTestId("company-tab-rituals").filter({ visible: true })).toHaveAttribute("aria-current", "page");
 }
 
-/** Opens a ritual's last pre-read from its Last pre-read link. */
+/** Opens a ritual's latest pre-read from its Latest pre-read link. */
 async function openLastPreRead(page: Page, title: string) {
-  await ritualRow(page, title).getByRole("link").click();
+  await ritualRow(page, title).getByTestId("last-pre-read").click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  // qa-company-34: the page keeps the Company H1; the occurrence's name heads its own part.
+  await expect(page.getByRole("heading", { level: 2, name: title })).toBeVisible();
 }
 
 test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Next shows it in the Company time zone", async ({ page }) => {
@@ -99,7 +100,8 @@ test("12b: an attendee follows Pre-read ready to the occurrence; Tracks and Date
   const blocks = page.getByTestId("ritual-block");
   await expect(blocks.filter({ hasText: "Tracks" }).first()).toContainText("Usage alerts PRD");
   await expect(blocks.filter({ hasText: "Date slips" })).toContainText("Threshold alerts beta");
-  await expect(blocks.first()).toContainText("Data as of");
+  // qa-company-35: the blocks' shared "Data as of" is said once, under the heading.
+  await expect(page.getByTestId("occurrence-as-of")).toContainText("Data as of");
   await expect(page.getByTestId("occurrence-state")).toHaveText("Ready");
   await expect(badge(page)).toHaveText(String(before - 1));
   await page.goto("/inbox");
@@ -159,7 +161,7 @@ test("12e: at 390 px the occurrence page stacks its blocks with no horizontal sc
   await withRituals(page);
   await login(page);
   await page.goto("/company/rituals");
-  await ritualRow(page, "Monthly roadmap refresh").getByRole("link").click();
+  await ritualRow(page, "Monthly roadmap refresh").getByTestId("next-pre-read").click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
   const blocks = page.getByTestId("ritual-block");
   await expect(blocks.first()).toBeVisible();
@@ -268,7 +270,7 @@ test("H2 review: the rituals follow a change of the Company time zone", async ({
   await withRituals(page);
   await login(page);
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption("Asia/Tokyo");
+  await pickZone(page, "Asia/Tokyo");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await openRituals(page);

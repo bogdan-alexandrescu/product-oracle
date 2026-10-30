@@ -122,7 +122,7 @@ test("15c: the approver follows the Inbox row to the digest, writes it with Orac
   await expect(row).toHaveCount(1);
   await row.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Monthly competitive digest" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Monthly competitive digest" })).toBeVisible();
   const blocks = page.getByTestId("ritual-block");
   await expect(blocks).toHaveCount(4);
   await expect(blocks.filter({ hasText: "Changes" }).first()).toContainText("Competitor A");
@@ -217,7 +217,7 @@ test("15g: a viewer sees Market read-only: no Add, Watch, Check now, Promote, Ac
   await withMarket(page);
   await login(page, VIEWER);
   await openMarket(page);
-  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only: Market");
   await alternativeRow(page, "Competitor A").click();
   await expect(inspector(page)).toContainText("competitor-a.example");
   const none = ["Add alternative", "Watch a page", "Check now", "Pause", "Remove", "Promote to change log", "Accept", "Dismiss"];
@@ -230,7 +230,7 @@ test("15g: a viewer sees Market read-only: no Add, Watch, Check now, Promote, Ac
   await subTab(page, "Positioning").click();
   await expect(page.getByTestId("positioning-suggestion").first()).toBeVisible();
   for (const name of [...none, "Edit"]) await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
-  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
+  await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only: Market");
 });
 
 test("15h: at 390 px the change log, a diff and the From the web card have no horizontal scroll", async ({ page }) => {
@@ -308,7 +308,7 @@ test("at Observe the digest occurrence does not offer Write the digest with Orac
   };
   await level("Observe");
   await page.goto(occurrence);
-  await expect(page.getByRole("heading", { level: 1, name: "Monthly competitive digest" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Monthly competitive digest" })).toBeVisible();
   await expect(page.getByTestId("ritual-block")).toHaveCount(4);
   await expect(summary).toContainText("No digest");
   await expect(summary.getByRole("button", { name: "Write the digest with Oracle" })).toHaveCount(0);

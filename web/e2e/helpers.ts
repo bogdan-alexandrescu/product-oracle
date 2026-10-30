@@ -84,6 +84,17 @@ export async function signOut(page: Page) {
   await expect(page).toHaveURL(/\/login/);
 }
 
+/**
+ * Picks `zone` ("Asia/Tokyo") in Settings › Company's time zone picker (a combobox,
+ * qa-settings-12): types its city and clicks its option. `scope`: the page or the panel.
+ */
+export async function pickZone(scope: Page | Locator, zone: string) {
+  const box = scope.getByRole("combobox", { name: "Company time zone" });
+  await box.fill(zone.split("/").pop()!.replace(/_/g, " "));
+  await scope.getByRole("listbox", { name: "Time zones" }).locator(`[data-zone="${zone}"]`).click();
+  await expect(box).toHaveAttribute("data-zone", zone);
+}
+
 /** The version view's outline rail (>= 1280 px; one section is open at a time). */
 export function sectionStrip(page: Page): Locator {
   return page.getByTestId("outline-rail").filter({ visible: true });
@@ -283,7 +294,7 @@ type RunSeed = { run: { id: string }; artifacts: Record<string, string> };
  * Adds a seeded run (and its files) to the mock's data in the mock's own turn
  * (`__poMockWrite`, lib/api/mock/server.ts): a call of the app's in flight cannot save over it.
  */
-async function seedRun(page: Page, seed: RunSeed): Promise<string> {
+export async function seedRun(page: Page, seed: RunSeed): Promise<string> {
   return page.evaluate((seed) => {
     type Db = { runs: { runs: { id: string }[]; artifacts: Record<string, string> } };
     const write = (globalThis as { __poMockWrite?: (change: (db: Db) => string) => Promise<string> }).__poMockWrite;

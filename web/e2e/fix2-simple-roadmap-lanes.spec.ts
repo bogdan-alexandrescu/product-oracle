@@ -116,6 +116,7 @@ test.describe("phone", () => {
   test("B3: a lane's name has its own title for the full text", async ({ page }) => {
     await openLanes(page, "light");
     const fa = phoneLane(page, "Faster activation");
-    await expect(fa.locator("title")).toHaveText("Faster activation");
+    // The lane's own title (its runs carry their own, naming their items).
+    await expect(fa.locator(":scope > title")).toHaveText("Faster activation");
   });
 });

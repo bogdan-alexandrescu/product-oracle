@@ -371,6 +371,38 @@ async def test_migrated_draft_words_flow_stays_with_the_draft(client):
     assert line(await get(client, ctx, "viewer"), "bets-1")["flow"] is None
     mine = line(await get(client, ctx, "decider"), "bets-1")
     assert mine["text"] == said
+    # Who sees the draft reads the flow drawn from its words on the bet itself.
+    assert mine["flow_subject"] == str(old)
+    assert mine["flow"] is not None and mine["flow"]["subject_id"] == str(old)
+    assert (await panel(client, ctx, "decider", old, str(doc_id)))["flow"]["version"] == 1
+
+
+async def test_the_line_flow_wins_over_a_draft_words_flow(client):
+    """Card: protects=a bet with a flow of its own (keyed by its line) shows that flow to
+    everyone, a decider who sees the draft too, over one drawn from the draft's unpublished
+    words; who does not see the draft never gets the draft words' flow; fails_when=the
+    decider's bet shows the draft words' flow though the line has its own, or a viewer's
+    shows it at all; no_claim=the drawing itself."""
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    doc_id = uuid.UUID(view["document"]["id"])
+    said = "A checklist that invites a teammate"
+    r = await edit(client, ctx, "decider", view, "bets-1", said)
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    old = visuals.words_subject(doc_id, said)
+    bet = visuals.line_subject(doc_id, "bets-1")
+    async with tenant_session(ctx.tenant_id) as s:
+        await visuals.request_visual(s, None, "one_pager_line", old, said,
+                                     document_id=doc_id)  # fmt: skip
+        await s.commit()
+    assert (await ask(client, ctx, "decider", str(bet), str(doc_id))).status_code == 202
+    await run_visual_jobs(ctx)
+    for who in ("decider", "owner", "viewer"):
+        mine = line(await get(client, ctx, who), "bets-1")
+        assert mine["flow_subject"] == str(bet), who
+        assert mine["flow"] is not None and mine["flow"]["subject_id"] == str(bet), who
+    # The draft words' flow: only who sees the draft reads it.
+    assert (await panel(client, ctx, "viewer", old, str(doc_id)))["flow"] is None
     assert (await panel(client, ctx, "decider", old, str(doc_id)))["flow"]["version"] == 1
 
 

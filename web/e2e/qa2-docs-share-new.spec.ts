@@ -17,7 +17,7 @@ async function sharing(page: Page) {
 async function openShared(page: Page) {
   await sharing(page);
   await page.goto(`${DOC}?audience=board`);
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
   await sheet.getByLabel("Label").fill("Board, November meeting");
   await sheet.getByLabel("Allow PDF download").check();
@@ -28,7 +28,7 @@ async function openShared(page: Page) {
   await page.goto(new URL(url).pathname);
   await page.getByLabel("Passcode").fill(code);
   await page.getByRole("button", { name: "Open" }).click();
-  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText("Audience Board", { exact: true })).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText(/^Shared with you/)).toBeVisible();
 }
 
 async function openNew(page: Page, kind: "prd" | "roadmap") {
@@ -69,14 +69,15 @@ test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   for (const scheme of ["light", "dark"] as const) {
-    // qa-docs-1: the shared page is light whatever the app's theme; so is its Download PDF button.
-    test(`qa-docs-1 (${scheme}): the shared page's Download PDF button is light with dark words`, async ({ page }) => {
+    // qa-docs-1, qa-docs-11 (QA pass 3): the shared page follows the reader's scheme; its Download PDF
+    // button reads in either (light with dark words, or dark with light words).
+    test(`qa-docs-1 (${scheme}): the shared page's Download PDF button reads in its scheme`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme });
       await openShared(page);
       const button = page.getByRole("button", { name: "Download PDF" });
       await expect(button).toBeVisible();
-      await expect(button).toHaveCSS("background-color", "rgb(255, 255, 255)");
-      await expect(button).toHaveCSS("color", "rgb(15, 23, 42)");
+      await expect(button).toHaveCSS("background-color", scheme === "light" ? "rgb(255, 255, 255)" : "rgb(30, 41, 59)");
+      await expect(button).toHaveCSS("color", scheme === "light" ? "rgb(15, 23, 42)" : "rgb(226, 232, 240)");
     });
   }
 
@@ -121,7 +122,8 @@ test.describe("desktop", () => {
     await expect(page.getByText("Share makes one")).toHaveCount(0);
   });
 
-  for (const kind of ["prd", "roadmap"] as const) {
+  // New roadmap offers one theme, named as text with no picker (qa-docs-39, qa3-docs-new.spec.ts).
+  for (const kind of ["prd"] as const) {
     for (const scheme of ["light", "dark"] as const) {
       // qa-docs-2: each theme tile shows a picture of its page, never an empty box.
       test(`qa-docs-2 (${kind}, ${scheme}): every theme thumbnail shows a picture of the page`, async ({ page }) => {
@@ -207,13 +209,13 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  // qa-docs-1 on a phone: the button stays light and readable in dark mode.
-  test("qa-docs-1 (dark, phone): the Download PDF button is light with dark words", async ({ page }) => {
+  // qa-docs-1 on a phone: the button stays readable in dark mode (dark, light words: qa-docs-11).
+  test("qa-docs-1 (dark, phone): the Download PDF button is dark with light words", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     await openShared(page);
     const button = page.getByRole("button", { name: "Download PDF" });
-    await expect(button).toHaveCSS("background-color", "rgb(255, 255, 255)");
-    await expect(button).toHaveCSS("color", "rgb(15, 23, 42)");
+    await expect(button).toHaveCSS("background-color", "rgb(30, 41, 59)");
+    await expect(button).toHaveCSS("color", "rgb(226, 232, 240)");
   });
 
   // qa-docs-2 on a phone: the tiles still show a picture, nothing scrolls sideways.

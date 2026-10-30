@@ -73,7 +73,7 @@ test.describe("desktop", () => {
   test("rirs-1: the Include fix for Bulk address edit stays inside the table card", async ({ page }) => {
     await seeded(page, "feature-set");
     await openReview(page);
-    const fix = row(page, "Bulk address edit").getByRole("button", { name: "Include Shared address book export" });
+    const fix = row(page, "Bulk address edit").getByRole("button", { name: "Include dependency" });
     await expect(fix).toBeVisible();
     const table = (await page.getByTestId("scope-table").boundingBox())!;
     const box = (await fix.boundingBox())!;
@@ -125,8 +125,7 @@ test.describe("desktop", () => {
     await seeded(page, "scope-review", APPROVER);
     await openReview(page);
     await expect(page.getByRole("columnheader", { name: "Confidence" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Requirements kept" })).toBeVisible();
-    await expect(page.locator('abbr[title="Confidence"]')).toHaveCount(1);
+    await expect(page.getByRole("columnheader").filter({ hasText: /^Requirements$/ })).toBeVisible();
     const pick = row(page, "Pick address in one step");
     await pick.getByRole("button", { name: "Requirements of Pick address in one step" }).click();
     const checks = pick.getByTestId("requirement-pick-address-one-screen").getByTestId("requirement-checks");
@@ -152,11 +151,11 @@ test.describe("desktop", () => {
     });
   }
 
-  test("rirs-14: a feature still to confirm shows Proposed: include, not a decision", async ({ page }) => {
+  test("rirs-14: a feature still to confirm shows Oracle proposes: Include, not a decision", async ({ page }) => {
     await seeded(page, "scope-review", APPROVER);
     await openReview(page);
     await row(page, "Address labels").getByTestId("feature-title").click();
-    await expect(inspector(page)).toContainText("Proposed: include");
+    await expect(inspector(page)).toContainText("Oracle proposes: Include");
     await expect(inspector(page).getByTestId("proposed-decision")).toBeVisible();
     await expect(inspector(page).getByRole("group", { name: "Decision" }).getByRole("button", { name: "Include", exact: true })).toHaveAttribute("aria-pressed", "false");
     // Once the person decides, the decision shows.
@@ -199,7 +198,7 @@ test.describe("phone", () => {
     await seeded(page, "feature-set");
     await openReview(page);
     const name = page.getByRole("link", { name: "Saved addresses PRD · Baseline to PRD", exact: true });
-    await expect(name).toHaveAttribute("data-testid", "run-name");
+    await expect(name).toHaveAttribute("data-testid", "review-back");
     await expect(name).toBeVisible();
     expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   });

@@ -42,7 +42,7 @@ async function startReview(page: Page) {
   await sheet.getByRole("checkbox", { name: "Commenter" }).check();
   await tap(sheet.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-  await expect(page.getByTestId("chat-rules")).toBeVisible();
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
 }
 
 const chat = (page: Page) => page.getByTestId("meeting-chat");
@@ -69,9 +69,10 @@ async function preview(card: Locator, ...lines: string[]) {
   for (const l of lines) await expect(p).toContainText(l);
 }
 
-async function apply(card: Locator, by = "Admin") {
+async function apply(card: Locator) {
   await tap(card.getByRole("button", { name: "Apply" }));
-  await expect(card.getByTestId("chat-card-outcome")).toContainText(`Applied by ${by}`);
+  // fix4 qa-simple-roadmap-27: the one who applied reads "you".
+  await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 }
 
 /** Opens Ask Oracle (the rail's button; the header's Ask on a phone): the visible panel. */
@@ -128,7 +129,9 @@ for (const [phone, dark] of [
 
       await tap(page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }));
       await expect(page.getByTestId("end-screen")).toBeVisible();
-      await expect(page.getByLabel("Summary")).toHaveValue(/Notes: Ship the checklist copy first/);
+      // qa-simple-decide-6: the notes are their own list, the summary says how many.
+      await expect(page.getByLabel("Summary")).not.toHaveValue(/Ship the checklist copy first/);
+      await expect(page.getByTestId("minutes-notes")).toContainText("Ship the checklist copy first");
       await expect(page.getByLabel("Summary")).not.toHaveValue(/Drop the welcome video/);
       await expect(page.getByLabel("Open questions")).toHaveValue(/Who writes the tour script\?/);
     });
@@ -243,16 +246,19 @@ for (const [phone, dark] of [
       const panel = await openAsk(page, phone);
       const card = await understood(panel, "Approver owns In-app tour", "Make Approver the owner of In-app tour");
       await tap(card.getByRole("button", { name: "Propose" }));
-      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by Approver");
+      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by you");
       await expect(card.getByRole("button", { name: "Undo" })).toHaveCount(0);
 
       // The viewer, in a tab of their own (each tab keeps its own sign-in; the account menu is in the desktop rail).
       const tab = await page.context().newPage();
+      // The Ask panel the approver opened is remembered for them; on Detailed below 1600 px it lies
+      // over the page with a backdrop (the shell's), so the person closes it to reach the rail.
+      await tab.addLocatorHandler(tab.getByTestId("hop-backdrop"), (b) => b.click({ position: { x: 5, y: 5 } }));
       await tab.goto("/home");
       await signOut(tab);
       if (phone) await tab.setViewportSize({ width: 390, height: 844 });
       await signIn(tab, EMAILS.viewer, `/simple/meetings/${CHAT_MEETING_ID}/chat`);
-      await expect(tab.getByTestId("chat-rules")).toBeVisible();
+      await expect(tab.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
       await sayIn(chat(tab), "note: Ship the checklist copy first");
       await expect(chat(tab).locator('[data-testid="chat-message"][data-kind="note"]').last()).toContainText("Viewers ask questions here");
       await sayIn(chat(tab), "Admin owns Setup checklist");

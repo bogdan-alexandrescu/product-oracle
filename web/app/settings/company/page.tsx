@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 
 import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel, ViewOnly } from "@/components/ds";
 import { BRANDING_OPS } from "@/lib/api/branding";
@@ -13,6 +13,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { ZONE_NOT_SET } from "@/lib/zone";
 
 import { INPUT, SELECT_FIELD } from "../_components/fields";
+import { setupReturn } from "../_nav";
 import { BrandingPanel } from "./BrandingPanel";
 
 /** The planning_horizons setting (oracle.tenant_settings_api): B2 Goals framework. */
@@ -56,12 +57,45 @@ function laterError(f: Form): string | null {
   return null;
 }
 
-/** Whether the page was opened from Home's Set up checklist (?from=setup). */
-function useFromSetup(): boolean {
+/**
+ * The Home the page's "Back to Home" returns to when it was opened from a setup step: Detailed
+ * Home's checklist (?from=setup) or Simple Home's (?from=simple-setup, qa-onboarding-34); else null.
+ */
+function useFromSetup(): string | null {
   return useSyncExternalStore(
     () => () => {},
-    () => new URLSearchParams(window.location.search).get("from") === "setup",
-    () => false,
+    () => setupReturn(new URLSearchParams(window.location.search).get("from")),
+    () => null,
+  );
+}
+
+/**
+ * A section's "Saved"; opened from Set up, with the way back to the Home it came from
+ * (qa-onboarding-16, -33: every Set up section says it, Simple's setup card back to Simple).
+ */
+function SavedNote({ testId }: { testId?: string }) {
+  const home = useFromSetup();
+  return (
+    <span role="status" className="text-sm font-semibold text-pass" data-testid={testId}>
+      Saved
+      {home && (
+        <>
+          {" · "}
+          <Link href={home} className="text-accent-ink hover:underline">
+            Back to Home
+          </Link>
+        </>
+      )}
+    </span>
+  );
+}
+
+/** qa-settings-13: why Save waits, beside it, while nothing has changed. */
+function SaveHint({ testId, children }: { testId: string; children: string }) {
+  return (
+    <span data-testid={testId} className="text-sm text-text2">
+      {children}
+    </span>
   );
 }
 
@@ -78,7 +112,6 @@ function HorizonsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const fromSetup = useFromSetup();
   const form = edit ?? stored;
   const changed = !!form && !!stored && !sameForm(form, stored);
 
@@ -109,6 +142,8 @@ function HorizonsPanel() {
     if (!form) return;
     setEdit({ ...form, ...patch });
     setFieldError(null);
+    // qa-settings-14: an earlier save's problem goes once the horizons change again.
+    setError(null);
     setSaved(false);
   };
   return (
@@ -206,25 +241,17 @@ function HorizonsPanel() {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-              {/* qa-settings-18: Save, as every other panel; with the defaults unchanged it confirms them. */}
-              {(changed || setting.is_default) && (
-                <Button type="submit" variant="solid" disabled={busy}>
-                  Save
-                </Button>
+              {/* qa-settings-18: Save, as every other panel; with the defaults unchanged it confirms them
+                  (Set up's Check the planning horizons). qa-settings-13: otherwise only after a change. */}
+              <Button type="submit" variant="solid" disabled={busy || !(changed || setting.is_default)}>
+                Save
+              </Button>
+              {!saved && !changed && (
+                <SaveHint testId="horizons-save-reason">
+                  {setting.is_default ? "Save keeps the default horizons." : "Change a horizon to save it."}
+                </SaveHint>
               )}
-              {saved && (
-                <span role="status" className="text-sm font-semibold text-pass" data-testid="horizons-saved">
-                  Saved
-                  {fromSetup && (
-                    <>
-                      {" · "}
-                      <Link href="/home" className="text-accent-ink hover:underline">
-                        Back to Home
-                      </Link>
-                    </>
-                  )}
-                </span>
-              )}
+              {saved && <SavedNote testId="horizons-saved" />}
               {!setting.is_default && (
                 <Button variant="ghost" disabled={busy} onClick={() => void reset()} className="ml-auto">
                   Reset to defaults
@@ -293,6 +320,148 @@ function zoneOptions(): { common: ZoneOption[]; rest: ZoneOption[] } {
 const matches = (o: ZoneOption, q: string) => !q || o.label.toLowerCase().includes(q) || o.zone.toLowerCase().replace(/_/g, " ").includes(q);
 
 /**
+ * qa-settings-12: the Company time zone in one searchable picker (a combobox): typing narrows
+ * the list right under the field, Common first; a pick fills it. Unset, it reads "Not set ·
+ * Pacific is used". Arrows move through the list, Enter picks (the first match when none is
+ * marked), Escape closes it and keeps the zone.
+ */
+function ZonePicker({
+  id,
+  zone,
+  options,
+  onPick,
+}: {
+  id: string;
+  zone: string;
+  options: { common: ZoneOption[]; rest: ZoneOption[] };
+  onPick: (zone: string) => void;
+}) {
+  // What is typed while the list is open; null: closed, the field shows the zone.
+  const [query, setQuery] = useState<string | null>(null);
+  const [active, setActive] = useState(-1);
+  const open = query !== null;
+  const chosen = zone ? (options.common.find((o) => o.zone === zone) ?? options.rest.find((o) => o.zone === zone) ?? zoneOption(zone)) : null;
+  // Opening keeps the saved zone in the field, selected so typing replaces it; until then
+  // the whole list shows.
+  const q = query === null || query === chosen?.label ? "" : query.trim().toLowerCase();
+  const common = options.common.filter((o) => matches(o, q));
+  const rest = options.rest.filter((o) => matches(o, q));
+  const list = [...common, ...rest];
+  const listId = `${id}-list`;
+  const optionId = (i: number) => `${id}-option-${i}`;
+
+  useEffect(() => {
+    if (active >= 0) document.getElementById(optionId(active))?.scrollIntoView({ block: "nearest" });
+    // optionId reads only `id`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  const close = () => {
+    setQuery(null);
+    setActive(-1);
+  };
+  const pick = (o: ZoneOption) => {
+    onPick(o.zone);
+    close();
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!open) return setQuery(chosen?.label ?? "");
+      if (list.length === 0) return;
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((a) => (a < 0 ? (step > 0 ? 0 : list.length - 1) : (a + step + list.length) % list.length));
+    } else if (e.key === "Enter" && open) {
+      // Picks, never submits the form with a half-typed zone.
+      e.preventDefault();
+      const o = list[active >= 0 ? active : 0];
+      if (o && (active >= 0 || q)) pick(o);
+    } else if (e.key === "Escape" && open) {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
+  };
+
+  const item = (o: ZoneOption, i: number) => (
+    <div
+      key={o.zone}
+      id={optionId(i)}
+      role="option"
+      aria-selected={i === active}
+      data-zone={o.zone}
+      className={`flex min-h-9 cursor-pointer items-center px-3 py-1.5 text-[15px] ${i === active ? "bg-surface2" : "hover:bg-surface2"} ${
+        o.zone === zone ? "font-semibold text-accent-ink" : "text-text"
+      }`}
+      onClick={() => pick(o)}
+    >
+      {o.label}
+    </div>
+  );
+  const heading = "px-3 pt-2 pb-1 text-[13px] font-semibold text-text2";
+
+  return (
+    <div className="relative min-w-0 max-w-96">
+      <input
+        id={id}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
+        autoComplete="off"
+        spellCheck={false}
+        data-zone={zone}
+        className={INPUT}
+        placeholder={open ? "Type a city or zone" : ZONE_NOT_SET}
+        title={chosen?.label}
+        value={open ? (query ?? "") : (chosen?.label ?? "")}
+        onFocus={(e) => {
+          const input = e.currentTarget;
+          setQuery(chosen?.label ?? "");
+          requestAnimationFrame(() => input.select());
+        }}
+        onClick={() => !open && setQuery(chosen?.label ?? "")}
+        onBlur={close}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActive(-1);
+        }}
+        onKeyDown={onKeyDown}
+      />
+      {open && (
+        <div
+          id={listId}
+          role="listbox"
+          aria-label="Time zones"
+          // Keep focus in the field, so a click picks before blur closes the list.
+          onMouseDown={(e) => e.preventDefault()}
+          className="absolute inset-x-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-inspector border border-line bg-surface py-1 shadow-tip"
+        >
+          {common.length > 0 && (
+            <div role="group" aria-label="Common">
+              <div role="presentation" className={heading}>
+                Common
+              </div>
+              {common.map((o, i) => item(o, i))}
+            </div>
+          )}
+          {rest.length > 0 && (
+            <div role="group" aria-label="All time zones">
+              <div role="presentation" className={heading}>
+                All time zones
+              </div>
+              {rest.map((o, i) => item(o, common.length + i))}
+            </div>
+          )}
+          {list.length === 0 && <p className="px-3 py-1.5 text-[15px] text-text2">No time zone matches.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * The Company time zone (one setting; unset, America/Los_Angeles is used): every date and time on screen, goals' today, the weekly report and rituals.
  * #370: only a role that can change it (owners) gets the form; others read the zone.
  */
@@ -308,18 +477,14 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
   const zone = edit ?? stored;
   const options = useMemo(() => zoneOptions(), []);
-  const q = query.trim().toLowerCase();
-  const pick = (list: ZoneOption[]) => list.filter((o) => o.zone === zone || matches(o, q));
-  const known = !zone || options.common.some((o) => o.zone === zone) || options.rest.some((o) => o.zone === zone);
-  const common = pick(options.common);
-  const rest = pick(options.rest);
+  // qa-settings-13: Save once another zone is picked.
+  const changed = !!zone && zone !== stored;
 
   async function save() {
     // With none chosen there is nothing to save: the zone stays unset (Pacific is used meanwhile).
-    if (!zone) return;
+    if (!zone || !changed) return;
     const value = zone;
     setBusy(true);
     setError(null);
@@ -373,47 +538,16 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
               <label htmlFor="company-timezone" className={ROW_LABEL}>
                 Company time zone
               </label>
-              <div className="flex min-w-0 flex-col gap-2">
-                <input
-                  type="search"
-                  aria-label="Find a time zone"
-                  placeholder="Find a city or zone"
-                  className={`${INPUT} max-w-96`}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <select
-                  id="company-timezone"
-                  className={`${SELECT_FIELD} max-w-96`}
-                  value={zone}
-                  onChange={(e) => {
-                    setEdit(e.target.value);
-                    setSaved(false);
-                  }}
-                >
-                  {!zone && <option value="">{ZONE_NOT_SET}</option>}
-                  {!known && <option value={zone}>{zoneOption(zone).label}</option>}
-                  {common.length > 0 && (
-                    <optgroup label="Common">
-                      {common.map((o) => (
-                        <option key={o.zone} value={o.zone}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {rest.length > 0 && (
-                    <optgroup label="All time zones">
-                      {rest.map((o) => (
-                        <option key={o.zone} value={o.zone}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-                {q && common.length + rest.length === 0 && <p className="text-[13px] text-text2">No time zone matches.</p>}
-              </div>
+              <ZonePicker
+                id="company-timezone"
+                zone={zone}
+                options={options}
+                onPick={(z) => {
+                  setEdit(z);
+                  setError(null);
+                  setSaved(false);
+                }}
+              />
             </div>
             {error && (
               <div className="px-4 pb-1 max-[600px]:px-3">
@@ -421,19 +555,13 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-              <Button type="submit" variant="solid" disabled={busy || !zone}>
+              <Button type="submit" variant="solid" disabled={busy || !changed}>
                 Save
               </Button>
-              {!zone && (
-                <span data-testid="timezone-save-reason" className="text-sm text-text2">
-                  Pick a time zone to save it.
-                </span>
+              {!saved && !changed && (
+                <SaveHint testId="timezone-save-reason">{zone ? "Pick another time zone to save it." : "Pick a time zone to save it."}</SaveHint>
               )}
-              {saved && (
-                <span role="status" className="text-sm font-semibold text-pass">
-                  Saved
-                </span>
-              )}
+              {saved && <SavedNote testId="timezone-saved" />}
             </div>
           </form>
         )}
@@ -460,9 +588,11 @@ function PricingOwnerPanel() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const chosen = edit ?? current ?? "";
+  // qa-settings-13: Save once another owner is picked.
+  const changed = !!chosen && chosen !== current;
 
   async function save() {
-    if (!chosen) return;
+    if (!changed) return;
     setBusy(true);
     setError(null);
     setSaved(false);
@@ -481,6 +611,14 @@ function PricingOwnerPanel() {
   }
 
   const loadError = settingQ.error ?? membersQ.error;
+  // Why Save waits: one owner has no one to pick; with none chosen yet, the earliest decides.
+  const earliest = owners[0] ? displayName(owners[0].email, owners[0].name) : "";
+  const pricingHint =
+    owners.length === 1
+      ? `${earliest} is the only owner: make another member an owner to choose someone else.`
+      : stored === null
+        ? `Not chosen yet: the earliest owner, ${earliest}, decides until you pick someone else.`
+        : "Pick another owner to save it.";
   return (
     <div id="pricing-owner" className="scroll-mt-4" data-testid="pricing-owner-panel">
       <Panel
@@ -515,6 +653,7 @@ function PricingOwnerPanel() {
                 value={chosen}
                 onChange={(e) => {
                   setEdit(e.target.value);
+                  setError(null);
                   setSaved(false);
                 }}
               >
@@ -531,14 +670,11 @@ function PricingOwnerPanel() {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-              <Button type="submit" variant="solid" disabled={busy || !chosen}>
+              <Button type="submit" variant="solid" disabled={busy || !changed}>
                 Save
               </Button>
-              {saved && (
-                <span role="status" className="text-sm font-semibold text-pass">
-                  Saved
-                </span>
-              )}
+              {!saved && !changed && <SaveHint testId="pricing-owner-save-reason">{pricingHint}</SaveHint>}
+              {saved && <SavedNote />}
             </div>
           </form>
         )}
@@ -562,6 +698,8 @@ export default function CompanySettingsPage() {
     <>
       <PageHeader title="Company" status={capsReady && (readsSettings || readsBranding) && !canChange ? <ViewOnly /> : undefined} />
       <div className="flex min-w-0 flex-col gap-4">
+        {/* qa-onboarding-25: a role that cannot change them (a Set up link, a shared link) reads why. */}
+        {capsReady && !canChange && <Notice testId="company-owner-only">Only owners set horizons and the time zone.</Notice>}
         {readsSettings && (
           <>
             <HorizonsPanel />

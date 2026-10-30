@@ -12,7 +12,7 @@ import { useMe, type Role } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { DECIDED_GAP, HARD_BLOCKERS, categoryNote, criticalCount, holdCount, tally, unknownGaps, type Batch, type Gap, type Summary } from "./_lib";
+import { DECIDED_GAP, HARD_BLOCKERS, categoryNote, criticalCount, holdCount, tally, unknownGaps, unknownNote, type Batch, type Gap, type Summary } from "./_lib";
 
 type Decision = Schemas["DecisionIn"]["decision"];
 
@@ -150,7 +150,18 @@ export function readiness(s: Summary): { label: string; kind: ChipKind } {
 }
 
 /**
- * The right column (a sheet behind "Gaps N open" on a phone): Ready to draft, with each
+ * The inspector's title (the phone's summary card says the same, qa-work-29): qa-docs-19, it
+ * answers the question in the same words as what follows it (and, #307, never "Ready to
+ * draft" while a critical question is open).
+ */
+export function readinessTitle(s: Summary): string {
+  if (s.intake.status === "archived") return "Not drafting";
+  if (s.readiness.gate !== "clear") return "Not ready to draft";
+  return missingGaps(s).length > 0 ? "Can draft, with gaps" : "Ready to draft";
+}
+
+/**
+ * The right column (a sheet behind "Show details" on a phone): Ready to draft, with each
  * critical question that holds the draft and Decide, or the critical questions still open
  * that hold nothing (never "Ready to draft" while one is open), or Archived; the figures;
  * the goals; the template.
@@ -182,15 +193,8 @@ export function IntakeInspector({
   const missing = missingGaps(s);
   const counts = tally(s, batches);
   const unknown = unknownGaps(batches);
-  // qa-docs-19: the title answers the question, in the same words as what follows it (and,
-  // #307, never "Ready to draft" while a critical question is open).
-  const title = archived
-    ? "Not drafting"
-    : gate.gate !== "clear"
-      ? "Not ready to draft"
-      : missing.length > 0
-        ? "Can draft, with gaps"
-        : "Ready to draft";
+  const title = readinessTitle(s);
+  const note = unknownNote(counts);
   return (
     <Inspector
       eyebrow="Before drafting"
@@ -204,9 +208,9 @@ export function IntakeInspector({
       ]}
     >
       <InspectorSection testId="ready-to-draft">
-        {counts.unknown > 0 && (
-          <p data-testid="answered-unknown" className="mb-2 text-[13px] text-text2">
-            {counts.unknown} answered as unknown (&ldquo;I don&apos;t know&rdquo;)
+        {note && (
+          <p data-testid="open-unknown" className="mb-2 text-[13px] text-text2">
+            {note}
           </p>
         )}
         {archived ? (

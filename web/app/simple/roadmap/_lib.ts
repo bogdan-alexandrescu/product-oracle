@@ -154,6 +154,25 @@ export function storedDates(i: Item): { start_date: string | null; end_date: str
 /** The flags drawn red (not accepted as a risk). */
 export const broken = (i: Item): Flag[] => i.flags.filter((f) => f.state === "red");
 
+/** fix4 qa-simple-roadmap-8: the flags that are a broken link between items (a dependency
+ * out of order, a cut item others still depend on); a draft with no owner or an end past its
+ * milestone is red too, but it is not a broken link. */
+const LINK_KINDS: Flag["kind"][] = ["dependency_order", "cut_with_dependents"];
+export const brokenLinks = (i: Item): Flag[] => broken(i).filter((f) => LINK_KINDS.includes(f.kind));
+
+/** fix4 qa-simple-roadmap-8: what "Needs a decision" counts, read by its toolbar button and its
+ * panel's tiles alike (one number): broken links, dates to confirm, proposals, pulled in. */
+export function decisionCounts(items: Item[], proposals: Change[]): { broken: Item[]; dates: Item[]; proposals: Change[]; pulled: Change[]; total: number } {
+  const mine = proposals.filter((c) => c.can_decide);
+  const out = {
+    broken: items.filter((i) => i.can_decide && brokenLinks(i).length > 0),
+    dates: items.filter((i) => !!i.suggestion?.can_decide),
+    proposals: mine.filter((c) => c.op !== "change_horizon"),
+    pulled: mine.filter((c) => c.op === "change_horizon"),
+  };
+  return { ...out, total: out.broken.length + out.dates.length + out.proposals.length + out.pulled.length };
+}
+
 /**
  * The constraint checker's dependency rule, live while a bar is dragged (the API checks it
  * again on drop): the item starts on or before a dependency ends, or ends on or after a
@@ -165,23 +184,77 @@ export function liveBreaks(items: Map<string, Item>, id: string, start: string, 
   const out: string[] = [];
   for (const d of it.depends_on) {
     const dep = items.get(d);
-    if (dep && dep.status !== "cut" && dep.end.date >= start) out.push(`Starts ${shortDay(start)}, but '${dep.title}' it depends on ends ${shortDay(dep.end.date)}`);
+    if (dep && dep.status !== "cut" && dep.end.date >= start) out.push(`Starts ${shortDay(start)}, but ‘${dep.title}’ it depends on ends ${shortDay(dep.end.date)}`);
   }
   for (const n of it.needed_by) {
     const next = items.get(n);
-    if (next && next.status !== "cut" && end >= next.start.date) out.push(`Ends ${shortDay(end)}, after '${next.title}' that depends on it starts ${shortDay(next.start.date)}`);
+    if (next && next.status !== "cut" && end >= next.start.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it starts ${shortDay(next.start.date)}`);
   }
   return out;
+}
+
+/**
+ * dod-perf review: a dragged bar moves on a layer of its own over the chart (a copy of it, the
+ * chart's own bar hidden while it is lifted), so a drag frame repaints that one bar, not the
+ * chart's other 499. Draw the move on `bar`; `drop` puts the chart's bar back.
+ */
+export type Lifted = { bar: SVGGElement; drop: () => void };
+export function liftBar(g: SVGGElement): Lifted {
+  const svg = g.ownerSVGElement!;
+  const layer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  layer.setAttribute("width", svg.getAttribute("width") ?? "0");
+  layer.setAttribute("height", svg.getAttribute("height") ?? "0");
+  layer.setAttribute("aria-hidden", "true");
+  layer.dataset.testid = "drag-layer";
+  // The chart's svg sits at the top left of its box: the layer lies exactly over it.
+  layer.style.cssText = "position:absolute;left:0;top:0;overflow:visible;pointer-events:none;will-change:transform";
+  const bar = g.cloneNode(true) as SVGGElement;
+  for (const a of ["data-testid", "data-bar-id", "tabindex", "role", "aria-label"]) bar.removeAttribute(a);
+  layer.appendChild(bar);
+  svg.after(layer);
+  g.style.visibility = "hidden";
+  return {
+    bar,
+    drop: () => {
+      layer.remove();
+      g.style.visibility = "";
+    },
+  };
+}
+
+/** The dragged bar's dates on the chart's own bar, written only when they change. */
+export function markDrag(g: SVGGElement, start: string, end: string, broken: boolean) {
+  const live = broken ? "broken" : "ok";
+  if (g.dataset.dragStart !== start) g.dataset.dragStart = start;
+  if (g.dataset.dragEnd !== end) g.dataset.dragEnd = end;
+  if (g.dataset.live !== live) g.dataset.live = live;
 }
 
 export class ChangeFailed extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** fix4 qa-simple-roadmap-21: on a 409, the fields someone else changed (the API's `current`). */
+    readonly changed: string[] = [],
   ) {
     super(message);
   }
 }
+
+/** fix4 qa-simple-roadmap-21: a changed field in words ("its dates", never "start_date"). */
+const FIELD_WORDS: Record<string, string> = {
+  start_date: "dates",
+  end_date: "dates",
+  horizon: "horizon",
+  title: "title",
+  outcome: "outcome",
+  status: "status",
+  key_date: "key date",
+  kept_both: "merge choice",
+  milestone: "milestone",
+  order: "order",
+};
+export const changedWords = (fields: string[]): string[] => [...new Set(fields.map((f) => FIELD_WORDS[f] ?? f.replace(/_/g, " ")))];
 
 function detailOf(error: unknown): string {
   const d = (error as { detail?: unknown } | undefined)?.detail;
@@ -190,10 +263,17 @@ function detailOf(error: unknown): string {
   return "Oracle could not make this change";
 }
 
+/** The fields a 409's `current` names (flattened one level: an item's fields under its id). */
+function changedOf(error: unknown): string[] {
+  const cur = ((error as { detail?: unknown } | undefined)?.detail as { current?: unknown } | undefined)?.current;
+  if (!cur || typeof cur !== "object") return [];
+  return Object.entries(cur as Record<string, unknown>).flatMap(([k, v]) => (v && typeof v === "object" && !Array.isArray(v) && !(k in FIELD_WORDS) ? Object.keys(v) : [k]));
+}
+
 /** One change through the engine (POST /v1/simple/changes). */
 export async function propose(body: Schemas["SimpleChangeIn"]): Promise<ChangeResult> {
   const { data, error, response } = await api.POST("/v1/simple/changes", { body });
-  if (!data) throw new ChangeFailed(detailOf(error), response.status);
+  if (!data) throw new ChangeFailed(detailOf(error), response.status, response.status === 409 ? changedOf(error) : []);
   return data;
 }
 
@@ -222,9 +302,14 @@ export async function suggestion(id: string, how: "accept" | "edit" | "dismiss",
   if (!r.data) throw new ChangeFailed(detailOf(r.error), r.response.status);
 }
 
-/** The words a change's result says: applied (undo) or proposed (to whom). */
-export function resultWords(r: ChangeResult, what: string): string {
-  return r.change.status === "applied" ? `${what} in your working draft` : `${what} proposed: it waits for the decider`;
+/** fix4 qa-simple-roadmap-21: who decides a proposal, by name ("Dana Lee", "Dana Lee or Sam
+ * Ortiz"); with none named, the roadmap's owner. */
+export const deciderWords = (deciders: string[] | undefined): string =>
+  deciders?.length ? (deciders.length === 1 ? deciders[0] : `${deciders.slice(0, -1).join(", ")} or ${deciders.at(-1)}`) : "the roadmap's owner";
+
+/** The words a change's result says: applied (undo) or proposed (to whom, and where it shows). */
+export function resultWords(r: ChangeResult, what: string, deciders?: string[]): string {
+  return r.change.status === "applied" ? `${what} in your working draft` : `${what} proposed: it waits for ${deciderWords(deciders)} in Needs a decision`;
 }
 
 const PHASE_SPLIT: [Item["phases"][number]["key"], number][] = [
@@ -330,8 +415,10 @@ export function milestonePrd(data: Roadmap, m: Milestone): { slug: string; title
  * The rows' lanes. Goal: the API's goal groups, an item with no goal of its own going under the
  * goal its plan slices move most (the API's lane of that goal when there is one; one lane per
  * goal, "No goal" last); Milestone: an item under its PRD's milestone of its first slice, in code
- * order, titled with the PRD when the plan's items come from more than one ("No milestone"
- * last); Track and PRD: the API's.
+ * order, titled with the PRD when the plan's items come from more than one; an item with no
+ * slice under the track milestone it leads to (fix4 qa-simple-roadmap-11: the milestone naming
+ * it, else its own milestone's, else the first of its track's it ends on or before), by date
+ * ("No milestone" last); Track and PRD: the API's.
  */
 export function lanes(data: Roadmap, by: Lane): Roadmap {
   if (by === "track" || by === "prd") return data;
@@ -354,15 +441,26 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
       }
   } else {
     const many = planPrds(data).size > 1;
+    const tracked = data.milestones.filter((m) => m.date && !(m.start_date && m.end_date)).sort((a, b) => (a.date! < b.date! ? -1 : 1));
+    const leadsTo = (i: Item): Milestone | undefined =>
+      tracked.find((m) => m.item_ids.includes(i.id)) ??
+      (i.milestone?.name ? tracked.find((m) => m.name === i.milestone!.name && (!i.track || m.track_id === i.track.id)) : undefined) ??
+      tracked.find((m) => !!i.track && m.track_id === i.track.id && i.end.date <= m.date!);
     for (const g of data.groups)
       for (const id of g.item_ids) {
         const item = byId.get(id);
         const first = item?.slices[0];
+        const tm = item && !first ? leadsTo(item) : undefined;
         if (first) {
           const prd = item!.prd;
           const key = `milestone:${prd?.slug ?? ""}:${first.milestone}`;
           order.set(key, [first.milestone, prd?.title ?? ""]);
           put(key, `${first.milestone} ${first.milestone_name}${many && prd ? ` (${prd.title})` : ""}`, id);
+        } else if (tm) {
+          const key = `track-milestone:${tm.id}`;
+          // After the plan's coded milestones, in date order.
+          order.set(key, [`\uffff${tm.date}`, ""]);
+          put(key, `${tm.name} (${shortDay(tm.date!)})`, id);
         } else put("none", "No milestone", id);
       }
   }
@@ -372,6 +470,8 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
       if (a.key === "none" || b.key === "none") return Number(a.key === "none") - Number(b.key === "none");
       const [ac, ap] = order.get(a.key)!;
       const [bc, bp] = order.get(b.key)!;
+      const [at, bt] = [ac.startsWith("\uffff"), bc.startsWith("\uffff")];
+      if (at !== bt) return Number(at) - Number(bt);
       return ac.localeCompare(bc, undefined, { numeric: true }) || ap.localeCompare(bp);
     });
   else groups.sort((a, b) => Number(a.key === "none") - Number(b.key === "none"));

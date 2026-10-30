@@ -193,7 +193,8 @@ async def test_each_reason_fires_on_its_fixture(client, owner, runtime):
     assert (blocking["severity"], blocking["label"], blocking["waivable"]) == (
         "blocking", "Not decided", True,
     )  # fmt: skip
-    assert retention["reasons"][1]["detail"] == "Missing: unit, comparison, target, owner"
+    # qa-plan-36: the fields as people name them; a target is its value, unit and comparison.
+    assert retention["reasons"][1]["detail"] == "Missing: target, owner"
     assert retention["reasons"][1]["severity"] == "confirm"
     assert codes(rows["feature:f.cart-save"]) == ["no_evidence", "serves_no_goal"]
     assert codes(rows["feature:f.saved-carts-2"]) == []

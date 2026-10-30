@@ -33,6 +33,11 @@ export type ItemRow = {
   ghost?: boolean;
   /** D1: a handled row's text is muted; a dropped item's title is struck through. */
   muted?: boolean;
+  /**
+   * qa-docs-6: dates the roadmap's text writes for this item (its section) that no confirmed
+   * schedule backs, as the version's date marks say; the version cannot be approved with them.
+   */
+  unbacked?: { date: string; withdrawn: boolean }[];
   struck?: boolean;
 };
 
@@ -71,10 +76,10 @@ export function toItemRow(item: Schemas["RoadmapItemOut"], headings?: ReadonlyMa
   };
 }
 
-/** A date the API refused or withdrew, or an item whose PRD trace may be stale. */
+/** A date the API refused or withdrew, a date in its text no confirmed schedule backs, or an item whose PRD trace may be stale. */
 export function needsAttention(row: ItemRow): boolean {
   // A reconciled item was confirmed still valid: nothing left to look at.
-  return !!row.milestone?.refused_date || row.freshness === "potentially_stale" || row.freshness === "under_review";
+  return !!row.milestone?.refused_date || !!row.unbacked?.length || row.freshness === "potentially_stale" || row.freshness === "under_review";
 }
 
 /**
@@ -86,11 +91,37 @@ export function sectionFor(
   item: { key: string; horizon: string; title: string },
   sections: readonly { section_key: string; heading: string }[],
 ): string | null {
+  return ownSection(item, sections) ?? sections[0]?.section_key ?? null;
+}
+
+/** The roadmap section that names an item, as `sectionFor` finds it, with no fallback: null when none does. */
+export function ownSection(
+  item: { key: string; horizon: string; title: string },
+  sections: readonly { section_key: string; heading: string }[],
+): string | null {
   const byKey = (k: string) => sections.find((s) => s.section_key === k);
   const found =
-    byKey(`${item.horizon}-${item.key}`) ??
-    byKey(item.key) ??
-    sections.find((s) => s.heading.trim() === item.title.trim()) ??
-    sections[0];
+    byKey(`${item.horizon}-${item.key}`) ?? byKey(item.key) ?? sections.find((s) => s.heading.trim() === item.title.trim());
   return found?.section_key ?? null;
+}
+
+/**
+ * qa-docs-6: each row with the dates its own section writes that no confirmed schedule backs
+ * (the version's date marks with a label), so the table flags them and Needs attention counts them.
+ */
+export function withUnbacked<T extends ItemRow>(
+  rows: T[],
+  marks: readonly Schemas["DateMarkOut"][] | undefined,
+  sections: readonly { section_key: string; heading: string }[],
+): T[] {
+  const flagged = (marks ?? []).filter((m) => m.label);
+  if (flagged.length === 0) return rows;
+  return rows.map((r) => {
+    const key = r.ghost ? null : ownSection(r, sections);
+    // The date the API refused on the milestone already shows struck, with its own chip.
+    const mine = key ? flagged.filter((m) => m.section_key === key && m.date !== r.milestone?.refused_date) : [];
+    if (mine.length === 0) return r;
+    const days = [...new Map(mine.map((m) => [m.date, { date: m.date, withdrawn: m.status === "withdrawn" }])).values()];
+    return { ...r, unbacked: days };
+  });
 }

@@ -44,7 +44,7 @@ test("10a: New update › Investor update drafts with Oracle: metrics first, Ask
   await openUpdates(page);
   await page.getByRole("button", { name: "New update" }).click();
   const sheet = page.getByRole("dialog", { name: "New update" });
-  await sheet.getByRole("radio", { name: /Board product section/ }).check();
+  await sheet.getByRole("radio", { name: /Board update/ }).check();
   await sheet.getByRole("radio", { name: /Investor update/ }).check();
   const now = mockNow();
   const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;

@@ -70,10 +70,11 @@ test("qa-plan-59: a recorded change leads back to its version, with PRDs highlig
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
   // The what-if page it was opened from may still be mounted, hidden; the shown header is the change's.
   const back = page.getByTestId("impact-back").filter({ visible: true });
-  await expect(back).toHaveText("‹ Checkout redesign PRD v2");
+  // qa-plan-12: opened from v2's Impact, it leads back there.
+  await expect(back).toHaveText("‹ Impact of Checkout redesign PRD v2");
   await expect(back).toBeVisible();
   await back.click();
-  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);
+  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
 });
 
 test("qa-plan-59/61: a baseline item's what-if reads 'Impact: Guided setup' and leads back to Baseline", async ({ page }) => {

@@ -71,7 +71,7 @@ export function NewWebhookSheet({
   const ready = name.trim() && url.trim() && types.length > 0 && (!approvers || why.trim());
 
   return (
-    <Sheet open={open} title="New webhook" onClose={close} testId="new-webhook-sheet">
+    <Sheet open={open} dialog title="New webhook" onClose={close} testId="new-webhook-sheet">
       {created ? (
         <div className="flex flex-col gap-4 p-4">
           <p className="text-[15px]">

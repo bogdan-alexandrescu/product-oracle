@@ -184,10 +184,11 @@ export function ConfirmStep({
         {entries(which).map((o, i) => {
           const isNew = !!o.module && added.has(o.module);
           return (
-            <li key={`${o.section_id}-${i}`} className={`flex flex-wrap items-center gap-x-2 rounded px-1.5 py-0.5 ${isNew ? "bg-accent-soft text-accent-ink" : ""}`}>
-              {isNew && <span aria-label="new">+</span>}
-              <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{o.heading}</span>
-              {o.module && o.origin === "template" && <span className="text-text2">· {titleOf(o.module)}</span>}
+            // qa-docs-47: the "+" of a new section stays on the line of its heading, however long.
+            <li key={`${o.section_id}-${i}`} data-new={isNew ? "1" : undefined} className={`min-w-0 rounded px-1.5 py-0.5 [overflow-wrap:anywhere] ${isNew ? "bg-accent-soft text-accent-ink" : ""}`}>
+              {isNew && <span aria-label="new">+ </span>}
+              <span className="font-medium">{o.heading}</span>
+              {o.module && o.origin === "template" && <span className="text-text2"> · {titleOf(o.module)}</span>}
             </li>
           );
         })}
@@ -264,7 +265,7 @@ export function ConfirmStep({
         <div className="min-w-0 space-y-4">
           {preview && (
             <section className="space-y-2">
-              <Label>Problems and missing information</Label>
+              <Label className="block">Problems and missing information</Label>
               {preview.problems.length ? <ProblemList testId="preview-problems" problems={preview.problems} /> : <p className="text-sm text-text2">Nothing blocks confirming.</p>}
               {missing.length > 0 && (
                 <ul className="space-y-1 text-sm text-text2">
@@ -276,7 +277,7 @@ export function ConfirmStep({
             </section>
           )}
           <section className="space-y-2">
-            <Label>Save as</Label>
+            <Label className="block">Save as</Label>
             <SegmentedControl
               label="Save as"
               size="sm"
@@ -318,7 +319,8 @@ export function ConfirmStep({
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="solid" disabled={!ready} onClick={submit}>
+            {/* qa-docs-47: the dialog's main action is the primary button. */}
+            <Button variant="primary" disabled={!ready} onClick={submit}>
               {label}
             </Button>
           </div>

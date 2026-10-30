@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 import { login } from "./helpers";
 
 // #256: the PRD overview's version panel says who imported a version by name: a
-// member's display name, "Oracle" for a run, an API token's name. The id is only in
+// member's display name, "Oracle" for a run, "An integration" for an API token (qa-docs-23). The id is only in
 // the tooltip.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -20,7 +20,7 @@ test("each version names who imported it, with no id even in a tooltip (qa-docs-
   const by = page.getByTestId("version-inspector").getByTestId("version-importer");
   for (const [n, name] of [
     [1, "Approver"],
-    [2, "API token agent-track"],
+    [2, "An integration"],
     [3, "Oracle"],
   ] as const) {
     await pick(page, n);

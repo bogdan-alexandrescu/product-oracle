@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 
 import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
 import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
+import { FormActions } from "@/app/settings/_components/FormActions";
 import {
   Button,
   Chip,
@@ -24,7 +25,7 @@ import { SlidePreview, ThemePreview } from "@/components/ThemePreview";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
-import { formatDateTime } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useLive } from "@/lib/use-live";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -50,6 +51,22 @@ const FONTS = [
   { name: "heading", label: "Heading font" },
   { name: "mono", label: "Monospace font" },
 ] as const;
+
+/**
+ * The fonts the picker names (qa-settings-32), each with the fallbacks it is written with.
+ * The exports render with the DejaVu families; the others are common system fonts.
+ */
+const KNOWN_FONTS: Record<string, string> = {
+  "DejaVu Sans": '"DejaVu Sans", Helvetica, Arial, sans-serif',
+  "DejaVu Serif": '"DejaVu Serif", Georgia, serif',
+  "DejaVu Sans Mono": '"DejaVu Sans Mono", Menlo, Consolas, monospace',
+  Arial: "Arial, Helvetica, sans-serif",
+  Helvetica: "Helvetica, Arial, sans-serif",
+  Georgia: 'Georgia, "Times New Roman", serif',
+  "Times New Roman": '"Times New Roman", Times, serif',
+  Menlo: "Menlo, Consolas, monospace",
+  Consolas: "Consolas, Menlo, monospace",
+};
 
 const SPACING = [
   { name: "base_size_pt", label: "Base size (pt)", step: 0.5, min: 6, max: 20 },
@@ -236,26 +253,21 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
     run("restore", () => unwrap(api.POST("/v1/themes/{key}/restore", { params: { path: { key } } })), "Restored.");
 
   const previewKind = form.kind === "roadmap" ? "roadmap" : "prd";
-  const chips = (hero: boolean) => (
-    <>
-      <Chip hero={hero} kind="acc">
-        {KIND_LABEL[t.kind]}
-      </Chip>
-      {t.builtin && (
-        <Chip hero={hero} kind="na">
-          Built-in
-        </Chip>
-      )}
-      {t.archived_at && (
-        <Chip hero={hero} kind="warn">
-          Archived
-        </Chip>
-      )}
-    </>
-  );
+  // qa-settings-28: why Save is disabled, said next to it.
+  const saveReason =
+    busy !== null
+      ? null
+      : !changed
+        ? "Change something to save the theme."
+        : live.pending || !live.data
+          ? "Checking the theme…"
+          : invalid
+            ? "Fix the problems above to save."
+            : null;
 
   const inspector = (
-    <Inspector eyebrow="Theme" title={t.name} label="Theme details" chips={chips(true)}>
+    // The name and chips are the page's header: not repeated here (qa-settings-27).
+    <Inspector eyebrow="Theme details" label="Theme details">
       {canEdit && (
         <InspectorSection label="Details">
           <div className="flex flex-col gap-3">
@@ -278,9 +290,9 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
         </InspectorSection>
       )}
       <InspectorSection label="Facts">
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
-        <InspectorRow value={formatDateTime(t.updated_at)}>Updated</InspectorRow>
-        {t.archived_at && <InspectorRow value={formatDateTime(t.archived_at)}>Archived</InspectorRow>}
+        <InspectorRow value={formatDate(t.updated_at)}>Updated</InspectorRow>
+        {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
+        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {canEdit && (
         <InspectorSection>
@@ -305,16 +317,11 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
         title={t.name}
         status={
           <>
-            {chips(false)}
+            <Chip kind="acc">{KIND_LABEL[t.kind]}</Chip>
+            {t.builtin && <Chip kind="na">Built-in</Chip>}
+            {t.archived_at && <Chip kind="warn">Archived</Chip>}
             {capsReady && !canEdit && <ViewOnly />}
           </>
-        }
-        action={
-          canEdit && (
-            <Button variant="primary" icon="check" onClick={save} disabled={busy !== null || !changed || invalid || live.pending}>
-              {busy === "save" ? "Saving…" : "Save"}
-            </Button>
-          )
         }
       />
       <Split inspector={inspector}>
@@ -436,15 +443,25 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                         >
                           {f.label}
                         </label>
-                        <GrowingTextarea
+                        {/* qa-settings-32: the font by name; its CSS fallbacks under Advanced. */}
+                        <select
                           id={`font-${f.name}`}
-                          value={stack}
-                          title={stack || undefined}
+                          className={`${SELECT_FULL} ${malformed ? "border-crit ring-1 ring-crit" : ""}`}
+                          value={families[0] ?? ""}
                           aria-invalid={!!malformed || undefined}
                           aria-describedby={`font-${f.name}-hint`}
-                          onChange={(e) => setTokens("fonts", { [f.name]: e.target.value.replace(/\n/g, " ") || null })}
-                          className={malformed ? "border-crit ring-1 ring-crit" : ""}
-                        />
+                          onChange={(e) =>
+                            setTokens("fonts", { [f.name]: e.target.value ? (KNOWN_FONTS[e.target.value] ?? stack) : null })
+                          }
+                        >
+                          <option value="">The theme&apos;s default</option>
+                          {families[0] && !KNOWN_FONTS[families[0]] && <option value={families[0]}>{families[0]}</option>}
+                          {Object.keys(KNOWN_FONTS).map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
                         <p
                           id={`font-${f.name}-hint`}
                           data-testid={`font-${f.name}-hint`}
@@ -457,6 +474,24 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                                 ? `Uses ${families[0]}.`
                                 : `Uses ${families[0]}; without it, ${families.slice(1).join(", then ")}.`)}
                         </p>
+                        <details open={malformed ? true : undefined} className="text-sm">
+                          <summary className="cursor-pointer text-text2 hover:text-text">Advanced</summary>
+                          <div className="mt-2 flex flex-col gap-1.5">
+                            <label
+                              htmlFor={`font-${f.name}-stack`}
+                              className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+                            >
+                              {`${f.label} fallbacks (CSS)`}
+                            </label>
+                            <GrowingTextarea
+                              id={`font-${f.name}-stack`}
+                              value={stack}
+                              aria-invalid={!!malformed || undefined}
+                              onChange={(e) => setTokens("fonts", { [f.name]: e.target.value.replace(/\n/g, " ") || null })}
+                              className={`font-mono ${malformed ? "border-crit ring-1 ring-crit" : ""}`}
+                            />
+                          </div>
+                        </details>
                       </div>
                     );
                   })}
@@ -586,6 +621,21 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
                   />
                 )}
               </Group>
+              <FormActions
+                id="theme-save-reason"
+                reason={saveReason}
+                className="sticky bottom-0 z-[2] rounded-panel border border-line bg-surface px-4 py-3 shadow-panel max-[600px]:bottom-[var(--phone-tab-bar)] max-[600px]:px-3"
+              >
+                <Button
+                  variant="primary"
+                  icon="check"
+                  onClick={save}
+                  disabled={busy !== null || !changed || invalid || live.pending}
+                  aria-describedby={saveReason ? "theme-save-reason" : undefined}
+                >
+                  {busy === "save" ? "Saving…" : "Save"}
+                </Button>
+              </FormActions>
             </div>
           )}
         </div>

@@ -69,7 +69,8 @@ for (const phone of [false, true]) {
             await expect(page.getByText("Accepted", { exact: true })).toBeVisible();
           } else if (kind === "agenda_decision") {
             await expect(step(page).getByRole("link", { name: "Open the decision" })).toBeVisible();
-            await tap(step(page).getByRole("button", { name: "Next" }));
+            await expect(step(page).getByRole("button", { name: "Next" })).toHaveCount(0);
+            await tap(page.getByRole("button", { name: "Skip" }));
           } else await tap(page.getByRole("button", { name: "Skip" }));
         }
         const order = ["broken_link", "decision", "agenda_decision", "proposal"];
@@ -108,7 +109,7 @@ for (const phone of [false, true]) {
           await step(page).getByLabel("Or type what to do").fill("move Weekly alert digest to Q2");
           await tap(step(page).getByTestId("walk-type").getByRole("button", { name: "Send" }));
           const reply = step(page).getByTestId("walk-reply");
-          await expect(reply.getByTestId("chat-card")).toContainText("Move Weekly alert digest to 1 Apr");
+          await expect(reply.getByTestId("chat-card")).toContainText("Move Weekly alert digest to Apr 1");
           await expect(reply.getByRole("button", { name: "Apply" })).toBeEnabled();
           await tap(page.getByRole("button", { name: "Done" }));
           await expect(page.getByTestId("home-greeting")).toBeVisible();

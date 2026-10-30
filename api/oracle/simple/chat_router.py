@@ -140,17 +140,26 @@ async def apply_simple_chat_card(
     meeting's change mode leaves the caller out. In a meeting the change and its meeting
     decision commit together (S8's one commit): a refusal or failure between them keeps
     neither."""
-    async with _one_commit(db):
-        card, result = await _run(
-            db,
-            chat.apply(
+    try:
+        async with _one_commit(db):
+            card, result = await _run(
                 db,
-                principal,
-                card_id,
-                body.fix if body is not None else None,
-                body.values if body is not None else None,
-            ),
-        )
+                chat.apply(
+                    db,
+                    principal,
+                    card_id,
+                    body.fix if body is not None else None,
+                    body.values if body is not None else None,
+                    body.with_dependents if body is not None else False,
+                    body.dependents if body is not None else None,
+                ),
+            )
+    except HTTPException as e:
+        # dod-data: a card whose item changed since is offered again on the new state.
+        plain = body is None or (body.fix is None and not body.with_dependents)
+        if e.status_code == 409 and plain:
+            await chat.rebase(db, card_id, e.detail)
+        raise
     return ChatApplyOut(card=card, result=result)
 
 

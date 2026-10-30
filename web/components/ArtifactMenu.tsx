@@ -55,15 +55,17 @@ async function undo(entry: Schemas["TrashEntryOut"]) {
 }
 
 /**
- * A document's ⋮ menu (#482): Open v<n> (the latest version, where its sections are edited) and Regenerate… for approvers (deciders approve) and owners,
+ * A document's ⋮ menu (#482): Open latest (v<n>) (the latest version, where its sections are edited) and Regenerate… for approvers (deciders approve) and owners,
  * Delete… for owners. Commenters and viewers can use none of these, so it is not drawn (#370).
  */
-export function ArtifactMenu({ doc, onDeleted }: { doc: ArtifactDoc; onDeleted?: () => void }) {
+export function ArtifactMenu({ doc, onDeleted, openItem = true }: { doc: ArtifactDoc; onDeleted?: () => void; openItem?: boolean }) {
   const { can } = useMe();
   const [open, setOpen] = useState<"delete" | "regenerate" | null>(null);
   const router = useRouter();
-  // #370: each action shows when the API lets this role call it.
-  const edit = can("edit_document_section") && doc.latest_version != null ? versionHref(doc.slug, doc.kind, doc.latest_version) : null;
+  // #370: each action shows when the API lets this role call it. `openItem={false}`: the page
+  // already opens the latest version its own way (qa-docs-27, qa-docs-32), so no second Open.
+  const edit =
+    openItem && can("edit_document_section") && doc.latest_version != null ? versionHref(doc.slug, doc.kind, doc.latest_version) : null;
   const regenerate = can("start_regeneration") && !!doc.kind && REGENERATES.has(doc.kind);
   const del = can("delete_document");
   if (!edit && !regenerate && !del) return null;
@@ -81,7 +83,7 @@ export function ArtifactMenu({ doc, onDeleted }: { doc: ArtifactDoc; onDeleted?:
                   router.push(edit);
                 }}
               >
-                {`Open v${doc.latest_version}`}
+                {`Open latest (v${doc.latest_version})`}
               </RowMenuItem>
             )}
             {regenerate && (

@@ -4,7 +4,7 @@ Methods (O3):
 
 - ``goal_weighted`` (default): sum over confirmed goals of goal weight x the
   ``supports`` contribution (0-3), times confidence, divided by effort. A person's
-  estimate of the goal value (attrs ``goal_value`` > 0, Simple S6's ``estimate_feature``)
+  estimate of the goal value (attrs ``goal_value`` >= 0, Simple S6's ``estimate_feature``)
   replaces the sum; the explanation keeps the goals' terms and says what they give.
 - ``rice``: reach x impact x confidence / effort.
 - ``moscow``: must > should > could > won't; ties broken by goal value.
@@ -242,9 +242,9 @@ def goal_value(f: FeatureInput) -> tuple[float, list[dict[str, Any]]]:
 
 
 def estimated_goal_value(f: FeatureInput) -> float | None:
-    """A person's estimate of the feature's goal value (attrs ``goal_value`` > 0, S6)."""
+    """A person's estimate of the feature's goal value (attrs ``goal_value`` >= 0, S6)."""
     v = _number(f.attrs.get("goal_value"))
-    return v if v is not None and v > 0 else None
+    return v if v is not None and v >= 0 else None
 
 
 def _input(f: FeatureInput, *names: str) -> tuple[float | None, str | None]:

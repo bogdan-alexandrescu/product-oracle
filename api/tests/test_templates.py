@@ -56,6 +56,33 @@ def test_every_builtin_is_a_valid_template_naming_a_builtin_theme(t):
     assert check.suggest_when == t.suggest_when
 
 
+# qa-docs-36 / qa-docs-38: the picker shows these descriptions to people, in plain words
+# (web/lib/api/mock/lane-f.ts TEMPLATE_SEEDS carries the same text).
+PLAIN_DESCRIPTIONS = {
+    "oracle-default": "Oracle's standard: the goal it serves, the problem, the solution in "
+    "priority order, numbered requirements, the launch and a look back",
+    "now-next-later": "What happens now, next and later. Only Now has dates; every card names "
+    "the goal it serves.",
+    "outcome-roadmap": "One row per confirmed goal, with what it gets now, next and later. "
+    "Shows the work that serves no goal.",
+    "quarterly-timeline": "Work laid out by quarter, one lane per team. Firm dates this "
+    "quarter, rough ranges after it.",
+    "release-plan": "Each release with its target date, what is in it, what is left, and "
+    "whether it is still on schedule.",
+    "cycle-bets": "What the team committed to this cycle and how far along each piece is, "
+    "ideas for the next cycle, and the break between cycles.",
+}
+
+
+def test_builtin_descriptions_are_plain_words():
+    by_key = {t.key: t for t in BUILTIN_TEMPLATES}
+    for key, text in PLAIN_DESCRIPTIONS.items():
+        assert by_key[key].description == text, key
+    jargon = ("with ids", "Rows =", "fuzzy bars", "hill position", "cool-down", "estimate drift")
+    for t in BUILTIN_TEMPLATES:
+        assert not any(j in t.description for j in jargon), t.key
+
+
 async def test_seeding_is_idempotent_and_keeps_default_v1(db):
     await ensure_default_template(db)  # what migration 0002 / oracle.seed already did
     assert await ensure_builtins(db) is True

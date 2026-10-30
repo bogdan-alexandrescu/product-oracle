@@ -580,7 +580,13 @@ def _headline(
     if health == "closed":
         return "Closed."
     if health == "paused":
-        return "Paused."
+        # qa-plan-61: what pausing stops (monitor_due and alerts.situations skip a paused
+        # track; prds_with_active_track leaves its PRD out of updates' dates), and what it
+        # keeps (reports.alignment lists active and paused tracks).
+        return (
+            "Paused: not checked hourly and raises no alerts, and updates take no dates "
+            "from it. Reports still list it."
+        )
     if health == "no_roadmap":
         return "No roadmap items yet: derive the roadmap from the PRD."
     when = ""

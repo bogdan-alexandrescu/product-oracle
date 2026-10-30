@@ -11,8 +11,10 @@ import pytest
 from sqlalchemy import select, update
 
 from oracle.decisions.models import Decision
+from oracle.docs.visibility import Hidden, _words_of
 from oracle.rituals import service as rituals
 from oracle.rituals.models import Ritual
+from oracle.roadmap import staleness
 from oracle.roadmap.models import RoadmapItem, TrackAlert
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
@@ -234,3 +236,19 @@ async def test_a_pricing_review_stop_row_follows_the_pricing_decision(
         assert stops[0]["href"].startswith("/runs/")
     else:
         assert "/runs/" not in one.text
+
+
+def test_an_old_alert_line_hides_a_title_cut_beside_a_fullwidth_copy():
+    """protects=cld-8: an old "; " line whose hidden title is cut on "; " across two parts,
+    the later part also naming it whole with a fullwidth semicolon (which folds to ";"),
+    hides both parts: the part where the cut title starts is never shown;
+    fails_when=the later part alone naming the title leaves the first part shown ("S...");
+    no_claim=a title named in other words (Hidden.names)."""
+    title = "Secretplan; launch"
+    hidden = Hidden(decision_ids=frozenset(), document_ids=frozenset(), ids=frozenset(),
+                    numbers=frozenset(), words=frozenset(_words_of(title)))  # fmt: skip
+    old = "Secretplan; launch Secretplan； launch changed; requirement:x changed"
+    detail = staleness.detail_for_reader(old, hidden)
+    assert "secret" not in detail.lower(), detail
+    assert detail.endswith("a requirement changed"), detail
+    assert detail.startswith(staleness.HIDDEN_REASON), detail

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { AnswerQuestion, type InboxQuestion } from "@/components/AnswerQuestion";
-import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl } from "@/components/ds";
+import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl, initialsOf } from "@/components/ds";
 import { PersonPicker, findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -43,11 +43,18 @@ function OracleBubble({ message, testId }: { message: Message; testId: string })
   );
 }
 
+/** qa-work-28: the reader's own initials, as the rail's account button shows them, never "YO" for "You". */
+function useMyInitials(): string {
+  const { me } = useMe();
+  return initialsOf(me?.email ?? me?.token_name ?? "");
+}
+
 /** What the person wrote before Oracle's follow-up, not recorded yet. */
 function PendingBubble({ message }: { message: Message }) {
+  const initials = useMyInitials();
   return (
     <div data-testid="pending-answer" className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
-      <Avatar name="You" tone="me" />
+      <Avatar name="You" initials={initials} tone="me" />
       <p className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
         {message.body}
       </p>
@@ -116,10 +123,11 @@ function asInbox(card: Card, s: Summary): InboxQuestion {
 function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number]; people: People; me: Me }) {
   const mine = answer.answered_by === me.id;
   const who = mine ? "You" : (people.get(answer.answered_by ?? "")?.name ?? "Someone");
+  const myInitials = useMyInitials();
   const kind = answer.kind === "answer" && answer.knowledge_state !== "unknown" ? (answer.knowledge_state === "user_decision" ? "pass" : "acc") : "na";
   return (
     <div data-testid="answer" className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
-      <Avatar name={who} tone={mine ? "me" : "default"} />
+      <Avatar name={who} initials={mine ? myInitials : undefined} tone={mine ? "me" : "default"} />
       <div className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text2">
           <span className="font-semibold text-text">{who}</span>
@@ -196,6 +204,12 @@ function QuestionBubble({
   const mayMove = can("update_question", q.asked_by === me.id || s.intake.author_id === me.id);
   const mayAnswer = can("answer_question", mine || can("update_question"));
   const waitingReview = gap?.status === "answered_pending_review";
+  const last = card.answers[card.answers.length - 1];
+  /** An answer stands on it (not a hand-over to someone else): Answer becomes Change answer. */
+  const standing = !!last && last.kind !== "delegate";
+  // Answered "I don't know": the API lets an approver write the answer later (answers.py).
+  const unsure = q.status === "answered" && last?.kind === "dont_know";
+  const mayChange = unsure && can("update_question");
 
   async function reassign(p: Person) {
     setError(null);
@@ -207,6 +221,19 @@ function QuestionBubble({
       setError(errorMessage(e));
     }
   }
+
+  // qa-work-28: a question that already has an answer (an "I don't know" too) offers to change it.
+  const actions = (className = "") => (
+    <div data-testid="question-actions" className={`${className} flex flex-wrap items-center gap-2`}>
+      {open && !mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
+      {(open ? mayAnswer : mayChange) && mode !== "answer" && (
+        <Button variant={mine && !standing ? "solid" : "secondary"} onClick={() => setMode("answer")}>
+          {standing ? "Change answer" : "Answer"}
+        </Button>
+      )}
+      {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
+    </div>
+  );
 
   return (
     <li id={`q-${q.id}`} className="flex min-w-0 scroll-mt-16 flex-col gap-2" data-testid="question">
@@ -232,6 +259,8 @@ function QuestionBubble({
             {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
             {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
+          {/* qa-docs-86: an open question's actions sit in its card, not below it. */}
+          {open && !standing && !waiting && actions("mt-2.5")}
         </article>
       </div>
       {transcript.map((m) =>
@@ -246,6 +275,8 @@ function QuestionBubble({
       {card.answers.map((a) => (
         <AnswerBubble key={a.id} answer={a} people={people} me={me} />
       ))}
+      {/* qa-work-28: an answered question (an "I don't know" too) offers Change answer after its answers. */}
+      {(open || unsure) && standing && !waiting && <div className="ml-10 max-[600px]:ml-4">{actions()}</div>}
       {thinking && (
         <p data-testid="oracle-typing" role="status" className="ml-10 text-sm text-text2 max-[600px]:ml-4">
           Oracle is thinking…
@@ -273,21 +304,10 @@ function QuestionBubble({
           />
         )}
         {open && waiting && onTurn && !thinking && <FollowUpReply onTurn={turn} />}
-        {open && !waiting && (
-          <div className="flex flex-wrap items-center gap-2">
-            {!mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
-            {mayAnswer && mode !== "answer" && (
-              <Button variant={mine ? "solid" : "secondary"} onClick={() => setMode("answer")}>
-                Answer
-              </Button>
-            )}
-            {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
-          </div>
-        )}
-        {open && !waiting && mode === "answer" && (
+        {(open || unsure) && !waiting && mode === "answer" && (
           <div className="rounded-panel border border-line bg-surface p-3">
             <AnswerQuestion
-              question={asInbox(card, s)}
+              question={open ? asInbox(card, s) : { ...asInbox(card, s), answer_paths: ["answer"] }}
               sendAnswer={onTurn && mine ? (body) => turn(body, false) : undefined}
               onCancel={() => setMode(null)}
               onSettled={() => {
@@ -509,12 +529,13 @@ export function QuestionsTab({
     <div className="flex min-w-0 flex-col gap-4">
       {member && (
         <div className="flex justify-end">
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-text">
+          {/* qa-work-43: a 44 px row and a 20 px box to tap on a phone. */}
+          <label data-testid="follow-up-switch" className="inline-flex min-h-6 cursor-pointer items-center gap-2 text-sm font-semibold text-text max-[600px]:min-h-11">
             <input
               type="checkbox"
               role="switch"
               aria-label="Oracle follows up"
-              className="size-4 accent-[var(--accent)]"
+              className="size-4 accent-[var(--accent)] max-[600px]:size-5"
               checked={followUp}
               onChange={(e) => toggle(e.target.checked)}
             />

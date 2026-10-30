@@ -130,7 +130,7 @@ test.describe("desktop", () => {
     const admin = await open(page, "admin@example.com");
     expect(await markCodes(admin)).toEqual(CODES);
     await expect(admin.getByLabel("Legend")).toContainText(
-      "Codes stay with the item; ranks are in the list.",
+      "Each mark shows the feature's code; its rank is in the list.",
     );
     await expect(admin.getByLabel("Legend")).not.toContainText(
       "Numbers are ranks",
@@ -267,7 +267,7 @@ test.describe("desktop", () => {
       "7",
     );
     await expect(viewer.getByLabel("Legend")).toContainText(
-      "Codes stay with the item; ranks are in the list.",
+      "Each mark shows the feature's code; its rank is in the list.",
     );
   });
 
