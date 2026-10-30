@@ -179,7 +179,17 @@ export function RitualInspector({
           <InspectorRow value={<span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>}>Time zone</InspectorRow>
           <InspectorRow value={`${ritual.duration_min} min`}>Length</InspectorRow>
           <InspectorRow value={`${ritual.prep_hours} h before`}>Pre-read ready</InspectorRow>
-          <InspectorRow value={ritual.next_due_at ? <span title={zoneTime(ritual.next_due_at, saved.timezone)}>{localTime(ritual.next_due_at)}</span> : "—"}>
+          <InspectorRow
+            value={
+              ritual.waits_for_goal ? (
+                "Starts when the first goal is confirmed"
+              ) : ritual.next_due_at ? (
+                <span title={zoneTime(ritual.next_due_at, saved.timezone)}>{localTime(ritual.next_due_at)}</span>
+              ) : (
+                "—"
+              )
+            }
+          >
             Next
           </InspectorRow>
         </InspectorSection>
