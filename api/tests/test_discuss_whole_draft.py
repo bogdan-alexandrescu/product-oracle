@@ -277,3 +277,101 @@ async def test_declining_the_item_with_oracles_suggestion_closes_the_thread(clie
 
     thread = (await client.get(f"/v1/discussions/{d}", headers=reviewer)).json()
     assert thread["status"] == "closed"
+
+
+# --- fix3-discuss review 2: an item someone acted on outlives its thread ---------------------
+
+
+async def suggestion(tenant_id: uuid.UUID, sid: str):
+    from oracle.jobs.models import LlmSuggestion
+
+    async with tenant_session(tenant_id) as s:
+        return await s.get(LlmSuggestion, uuid.UUID(sid))
+
+
+async def reopened(client, headers, d: str) -> dict:
+    """The starter reopens the thread its item's resolution closed."""
+    lock = (await client.get(f"/v1/discussions/{d}", headers=headers)).json()
+    body = {"status": "open", "lock_version": lock["lock_version"]}
+    resp = await client.patch(f"/v1/discussions/{d}", json=body, headers=headers)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def test_an_open_item_no_one_acted_on_is_withdrawn_with_its_suggestion(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
+    sid = await oracle_suggests(tenant_id, "none")
+    mid = await first_message(client, reviewer, d)
+
+    resp = await client.delete(f"/v1/discussions/{d}/messages/{mid}", headers=reviewer)
+    assert resp.status_code == 204, resp.text
+
+    assert await items(tenant_id) == []
+    assert await suggestion(tenant_id, sid) is None
+
+
+async def test_an_item_resolved_by_accepting_oracles_suggestion_is_kept(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver")
+    d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
+    sid = await oracle_suggests(tenant_id, "none")
+    resp = await client.post(f"/v1/suggestions/{sid}/accept", json={}, headers=approver)
+    assert resp.status_code == 200, resp.text
+    await reopened(client, reviewer, d)
+    mid = await first_message(client, reviewer, d)
+
+    resp = await client.delete(f"/v1/discussions/{d}/messages/{mid}", headers=reviewer)
+    assert resp.status_code == 204, resp.text
+
+    # The item stays with its text, no longer the thread's; the accepted suggestion with it.
+    [item] = await items(tenant_id)
+    assert (item.summary, item.status, item.discussion_id) == (REMARK, "addressed", None)
+    accepted = await suggestion(tenant_id, sid)
+    assert accepted is not None and accepted.status == "accepted"
+    [listed] = (await client.get(f"/v1/documents/{SLUG}/feedback", headers=approver)).json()
+    assert (listed["summary"], listed["discussion_id"]) == (REMARK, None)
+
+
+async def test_an_item_with_a_dismissed_suggestion_is_kept_when_the_thread_goes_private(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver")
+    out = await started(client, reviewer, await doc_id(tenant_id))
+    sid = await oracle_suggests(tenant_id, "none")
+    body = {"reason": "Not what the remark asks."}
+    resp = await client.post(f"/v1/suggestions/{sid}/dismiss", json=body, headers=approver)
+    assert resp.status_code == 200, resp.text
+    lock = (await client.get(f"/v1/discussions/{out['id']}", headers=reviewer)).json()
+
+    patch = {"visibility": "private", "lock_version": lock["lock_version"]}
+    resp = await client.patch(f"/v1/discussions/{out['id']}", json=patch, headers=reviewer)
+    assert resp.status_code == 200, resp.text
+
+    [item] = await items(tenant_id)
+    assert (item.summary, item.discussion_id) == (REMARK, None)
+    dismissed = await suggestion(tenant_id, sid)
+    assert dismissed is not None and dismissed.status == "dismissed"
+
+
+async def test_an_item_the_approver_answered_is_kept_when_the_thread_goes_private(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver")
+    out = await started(client, reviewer, await doc_id(tenant_id))
+    [listed] = (await client.get(f"/v1/documents/{SLUG}/feedback", headers=approver)).json()
+    resolve = {"status": "addressed", "resolution_note": "Goals rewritten."}
+    resp = await client.patch(f"/v1/feedback/{listed['id']}", json=resolve, headers=approver)
+    assert resp.status_code == 200, resp.text
+    lock = await reopened(client, reviewer, out["id"])
+
+    patch = {"visibility": "private", "lock_version": lock["lock_version"]}
+    resp = await client.patch(f"/v1/discussions/{out['id']}", json=patch, headers=reviewer)
+    assert resp.status_code == 200, resp.text
+
+    [item] = await items(tenant_id)
+    assert (item.summary, item.resolution_note, item.discussion_id) == (
+        REMARK, "Goals rewritten.", None,
+    )  # fmt: skip
