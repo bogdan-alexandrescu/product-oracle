@@ -69,7 +69,8 @@ for (const phone of [false, true]) {
             await expect(page.getByText("Accepted", { exact: true })).toBeVisible();
           } else if (kind === "agenda_decision") {
             await expect(step(page).getByRole("link", { name: "Open the decision" })).toBeVisible();
-            await tap(step(page).getByRole("button", { name: "Next" }));
+            await expect(step(page).getByRole("button", { name: "Next" })).toHaveCount(0);
+            await tap(page.getByRole("button", { name: "Skip" }));
           } else await tap(page.getByRole("button", { name: "Skip" }));
         }
         const order = ["broken_link", "decision", "agenda_decision", "proposal"];
