@@ -178,7 +178,7 @@ test("rirs-40, rirs-26: an interview's page has a way back and says when its lin
   await tab(page, "interviews").click();
   await page.getByTestId("interview-row").filter({ hasText: "Ana Lima" }).click();
   const back = page.getByTestId("interview-back").filter({ visible: true });
-  await expect(back).toHaveText("All interviews");
+  await expect(back).toHaveText("← Interviews");
   await expect(page.getByTestId("interview-link-expires")).toHaveText(/^in \d+ days, [A-Z][a-z]{2} \d{1,2}$/);
   await expect(page.getByTestId("interview-about")).not.toContainText(/, 20\d\d/);
   await back.click();
