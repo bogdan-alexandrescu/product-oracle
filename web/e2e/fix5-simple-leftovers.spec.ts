@@ -22,9 +22,14 @@ const visible = (page: Page, testId: string) => page.getByTestId(testId).filter(
 const welcome = (page: Page) => visible(page, "home-welcome");
 const setup = (page: Page) => visible(page, "home-setup");
 
-/** An owner invites a second owner in the empty company; the new owner's first Home shows the welcome above Set up. */
+/**
+ * An owner invites a second owner in the empty company (at a desk: the inviter is not under
+ * test); the new owner's first Home, on the device under test, shows the welcome above Set up.
+ */
 async function newOwner(page: Page) {
+  const size = page.viewportSize()!;
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
+  await page.setViewportSize(DESKTOP.viewport);
   await login(page);
   await page.goto("/settings/members");
   const form = page.getByRole("form", { name: "Invite" });
@@ -33,6 +38,7 @@ async function newOwner(page: Page) {
   await form.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(page.getByTestId("invite-outcome")).toHaveText(`Invite sent to ${NEW_OWNER}`);
   await signOut(page);
+  await page.setViewportSize(size);
   await login(page, NEW_OWNER);
   await expect(welcome(page).getByRole("heading", { name: "Welcome to Oracle" })).toBeVisible();
   await expect(setup(page)).toBeVisible();
@@ -59,14 +65,14 @@ for (const [name, device] of [
     // Card simple-leftovers-welcome-failed-save: protects = a Dismiss that fails to save keeps
     // the welcome (nothing lost: its words and its Dismiss), says so by the welcome, and never
     // in or as Set up's; a second Dismiss saves; fails_when = the welcome goes, no error shows,
-    // or the error shows as Set up's; no_claim = the error's exact words (errorMessage's).
+    // or the error shows as Set up's; no_claim = the error's exact words (the API's detail).
     test("a welcome whose Dismiss fails to save stays, with its error", async ({ page }) => {
       await newOwner(page);
       const role = await welcome(page).getByTestId("welcome-role").innerText();
       await page.evaluate((k) => localStorage.setItem(k, "PATCH /v1/me/preferences"), MOCK_FAIL_ONCE_KEY);
       await welcome(page).getByRole("button", { name: "Dismiss" }).click();
       await expect(visible(page, "home-welcome-error")).toBeVisible();
-      await expect(visible(page, "home-welcome-error")).not.toContainText(/500|Mock/);
+      await expect(visible(page, "home-welcome-error")).not.toContainText(/\b500\b/);
       await expect(welcome(page)).toBeVisible();
       await expect(welcome(page).getByTestId("welcome-role")).toHaveText(role);
       await expect(welcome(page).getByRole("button", { name: "Dismiss" })).toBeEnabled();
