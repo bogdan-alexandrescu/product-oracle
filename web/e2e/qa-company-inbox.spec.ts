@@ -58,26 +58,25 @@ test("a second visit opens on Seen, where the waiting items are, never on 'Nothi
 });
 
 for (const role of ["viewer", "commenter"] as const) {
-  test(`a ${role} is offered no Approve, Resume, Cancel run or Accept; who acts is said`, async ({ page }) => {
+  test(`a ${role} is offered no Approve, Resume, Cancel run or Accept, nor shown runs only owners decide`, async ({ page }) => {
     await openInbox(page, role);
     // Let the role's capabilities arrive before counting buttons.
     await page.waitForTimeout(1000);
     const needs = page.getByTestId("inbox-needs");
     await expect(needs.getByRole("button", { name: /^(Approve|Resume|Cancel run|Accept)\b/ })).toHaveCount(0);
-    const approval = page.getByTestId("inbox-approvals").locator("tr[data-row]").first();
-    await expect(approval.getByTestId("need-by-role")).toHaveText("Owners approve");
-    await expect(approval.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", /^\/runs\//);
-    await expect(overrun(page).getByTestId("need-by-role")).toHaveText("Owners decide");
+    // qa-company-4 (as the API): cost approvals and overruns wait on owners only.
+    await expect(page.getByTestId("inbox-approvals")).toHaveCount(0);
+    await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   });
 }
 
 test("an approver is not offered Resume, Cancel run or Approve on a run someone else started", async ({ page }) => {
-  // Resume and Approve are an owner's; Cancel run is an owner's or the run's starter's.
+  // Resume and Approve are an owner's: as the API, those rows wait on owners only (qa-company-4).
   await openInbox(page, "approver");
-  await expect(overrun(page).getByTestId("need-by-role")).toHaveText("Owners decide");
-  await expect(overrun(page).getByRole("button", { name: "Cancel run" })).toHaveCount(0);
-  await expect(overrun(page).getByRole("button", { name: "Resume" })).toHaveCount(0);
-  await expect(page.getByTestId("inbox-approvals").getByRole("button", { name: /^Approve/ })).toHaveCount(0);
+  await expect(tabs(page)).toBeVisible();
+  await expect(page.getByTestId("inbox-needs").getByRole("button", { name: /^(Resume|Cancel run)\b/ })).toHaveCount(0);
+  await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
+  await expect(page.getByTestId("inbox-approvals")).toHaveCount(0);
 });
 
 test("a row's actions sit on one line, each the same height", async ({ page }) => {

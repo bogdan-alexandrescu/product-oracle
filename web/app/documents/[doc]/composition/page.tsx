@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
 
 import { CompositionView } from "./_view";
+import { PageSkeleton } from "@/components/ds";
 
 async function Composition({ params }: { params: RouteProps<{ doc: string }>["params"] }) {
   const { doc } = await params;
@@ -12,7 +12,7 @@ async function Composition({ params }: { params: RouteProps<{ doc: string }>["pa
 
 export default function CompositionPage({ params }: RouteProps<{ doc: string }>) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Composition params={params} />
     </Suspense>
   );

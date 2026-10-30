@@ -4,6 +4,12 @@
  * rows created later take random ones and so never collide with the seed.
  */
 
+/**
+ * A new company (the "empty" scenario, server.ts's MOCK_SCENARIO_KEY): every seed Simple
+ * reads (its roadmap, plan, meetings, reviews, chat, suggestions) starts empty, as Detailed's.
+ */
+export const newCompany = (): boolean => typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === "empty";
+
 let scope: { label: string; seq: number } | null = null;
 
 function fnv(text: string, basis: number): number {
@@ -48,3 +54,6 @@ export const seededItemId = (sourceId: string, externalId: string) => stableUuid
 
 /** The mock's "Product chat" source (./sources.ts), which baseline evidence and a citation use. */
 export const PRODUCT_CHAT_ID = "50000000-0000-4000-8000-000000000001";
+
+/** The localStorage key naming the mock's scenario; server.ts says what each one seeds. Here so a seed module reads it without importing server.ts. */
+export const MOCK_SCENARIO_KEY = "po-mock-scenario";

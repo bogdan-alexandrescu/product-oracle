@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { dayIn, formatInZone, todayIn, useCompanyZone, zoneDateTime } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
 import { Code, FlowDiagram, FlowScreen, FlowStepList, Icon, ICONS, ScreenCard, stepsOf, StoryCard, Tabs, usePhone } from "./FlowViews";
@@ -23,8 +23,13 @@ const RUN_SCREEN_MS = 15000;
 /** A drawing made this recently carries "New" (the row need not have watched it land). */
 const NEW_MS = 15 * 60 * 1000;
 
-/** "7:04 PM": a time of day in the company's zone, as the mock-ups write it. */
-const clock = (iso: string, zone: string): string => formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" }).replace(/^(\d{1,2}:\d{2}\s?[AP]M)\s.*$/, "$1");
+/** "7:04 PM PDT" today, else "Oct 19, 8:00 AM PDT": a time in the company's zone with its short
+ * name, and its day when not today, as every other time in Simple reads (qa-simple-prd-20). */
+export const clock = (iso: string, zone: string): string =>
+  dayIn(iso, zone) === todayIn(zone) ? formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" }) : zoneDateTime(iso, zone);
+
+/** A flow: three steps joined left to right (qa-simple-prd-33: not the Roadmap's icon). */
+const FLOW_ICON = "r,2,9,5,6,1.5|r,9.5,9,5,6,1.5|r,17,9,5,6,1.5|M7 12h2.5M14.5 12h2.5";
 
 /** "6 steps · 1 screen". */
 export function flowSize(flow: Flow): string {
@@ -32,7 +37,7 @@ export function flowSize(flow: Flow): string {
   return `${n} step${n === 1 ? "" : "s"} · ${flow.touches_screen ? "1 screen" : "no screen"}`;
 }
 
-/** "Version 1 · drawn 7:04 PM" (the time in the company's zone). */
+/** "Version 1 · drawn 7:04 PM PDT" (the time in the company's zone; its day when not today). */
 export function flowDrawn(flow: Flow, zone: string): string {
   return `Version ${flow.version}${flow.made_at ? ` · drawn ${clock(flow.made_at, zone)}` : ""}`;
 }
@@ -45,9 +50,13 @@ export function flowMeta(flow: Flow, zone: string): string {
 /** A subject's name starting with its code ("F-06 Weekly alert digest"): its code alone, as the stages say it. */
 const codeOf = (name: string): string | null => /^([A-Z][A-Z0-9]*-\d+[a-z]?)\b/.exec(name)?.[1] ?? null;
 
+/** "build" -> "Build": a PRD section's key, in plain words. */
+const capSection = (key: string): string => key.charAt(0).toUpperCase() + key.slice(1);
+
 // The mock-ups' buttons: .btn (32 px, 8 px corners) and .sbtn.sm (34 px, 10 px corners).
 const BTN = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-text hover:bg-surface2 disabled:opacity-60";
-const BTN_SOLID = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink";
+// qa-simple-roadmap-32: disabled must look disabled too (Revise reads enabled otherwise).
+const BTN_SOLID = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink disabled:cursor-not-allowed disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:hover:bg-surface2";
 const BTN_GHOST = "inline-flex h-8 items-center gap-1.5 rounded-lg px-1.5 text-[14px] leading-none font-semibold whitespace-nowrap text-accent-ink hover:bg-surface2";
 const SBTN = "simple-button !min-h-[34px] gap-1.5 !px-3 !text-[14px]";
 const META = "text-[13px] leading-[18px] text-text2";
@@ -55,7 +64,7 @@ const SUB = "mb-1.5 text-[15px] leading-[22px] font-semibold";
 
 /** The drawing's row while there is none (A): none yet, Oracle drawing it (its stages, a bar,
  * when it started), or Oracle could not draw it. */
-function NoDrawing({ v, busy, onAsk }: { v: Visual; busy: boolean; onAsk: () => void }) {
+function NoDrawing({ v, busy, onAsk, showHint }: { v: Visual; busy: boolean; onAsk: () => void; showHint?: boolean }) {
   const zone = useCompanyZone();
   // The API says queued (0) or running (1): Oracle draws the steps, then the screen, in one
   // run, so a run past RUN_SCREEN_MS reads as drawing the screen (the bar fills past half).
@@ -141,7 +150,7 @@ function NoDrawing({ v, busy, onAsk }: { v: Visual; busy: boolean; onAsk: () => 
     <div data-testid="flow-empty" data-state="none">
       <div className="mt-2 flex flex-wrap items-start gap-3">
         <span aria-hidden className="grid h-[72px] w-[min(164px,35%)] flex-none place-items-center rounded-lg border border-dashed border-line text-text-faint">
-          <Icon d={ICONS.roadmap} size={22} width={1.7} />
+          <Icon d={FLOW_ICON} size={22} width={1.7} />
         </span>
         <div className="min-w-[180px] flex-1">
           <p className="text-text2">No flow yet</p>
@@ -155,7 +164,13 @@ function NoDrawing({ v, busy, onAsk }: { v: Visual; busy: boolean; onAsk: () => 
           )}
         </div>
       </div>
-      <p className={`mt-2 ${META}`}>{v.can_revise ? "Oracle draws the steps and the screen they touch, from the PRD." : "Oracle has not drawn a user flow or a screen for this yet."}</p>
+      {showHint !== false && (
+        // Once per list (qa-simple-prd-33): a row after one already giving the hint (bets in
+        // one section, siblings in a list) leaves it out.
+        <p data-testid="flow-hint" className={`simple-flow-hint mt-2 ${META} [li:has(.simple-flow-hint)~li_&]:hidden`}>
+          {v.can_revise ? "Oracle draws the steps and the screen they touch, from the PRD." : "Oracle has not drawn a user flow or a screen for this yet."}
+        </p>
+      )}
     </div>
   );
 }
@@ -260,6 +275,7 @@ export function FlowPanel({
   code,
   name,
   backLabel = "Back",
+  showHint,
 }: {
   subject: FlowSubject;
   documentId?: string;
@@ -278,6 +294,9 @@ export function FlowPanel({
   name?: string;
   /** Where the viewer's back link goes ("Roadmap"). */
   backLabel?: string;
+  /** With no flow yet, the hint under "No flow yet" ("Oracle draws the steps..."). Unset: it
+   * shows on the first row of a list only; false: never; true: on this row (bar the CSS rule). */
+  showHint?: boolean;
 }) {
   const zone = useCompanyZone();
   const phone = usePhone();
@@ -473,9 +492,9 @@ export function FlowPanel({
               {(a.section_key || a.requirement) && (
                 <span className="text-text2">
                   {" "}
-                  · {a.section_key ? `PRD § ${a.section_key}` : ""}
+                  · {a.section_key ? `From the PRD: ${capSection(a.section_key)} section` : ""}
                   {a.section_key && a.requirement ? ", " : ""}
-                  {a.requirement ? `requirement ${a.requirement}` : ""}
+                  {a.requirement ? <span className="whitespace-nowrap">{`Requirement ${a.requirement}`}</span> : ""}
                 </span>
               )}
             </li>
@@ -587,6 +606,7 @@ export function FlowPanel({
       ref={openedRef}
       tabIndex={-1}
       role="dialog"
+      aria-modal="true"
       aria-label={`${name ?? f.title} · flow`}
       data-testid="flow-detail"
       style={{ left: box.left, right: box.right, top: 16, maxHeight: "calc(100dvh - 32px)" }}
@@ -660,7 +680,9 @@ export function FlowPanel({
           </div>
         )}
         <div className="relative min-h-0 flex-1">
-          <div className="h-full overflow-y-auto">
+          {/* qa-simple-roadmap-12: the comments panel is an overlay (`absolute right-0 w-[420px]`);
+              while it is open, this pane keeps clear of it so the Steps list is not covered. */}
+          <div className={`h-full overflow-y-auto ${commenting && !phone ? "pr-[420px]" : ""}`}>
             {phone ? (
               <div className="px-4 py-3">
                 <Tabs
@@ -716,8 +738,14 @@ export function FlowPanel({
     />
   );
 
+  // The opened view and the storyboard on a desktop dim the page behind (qa-simple-prd-22); a
+  // click on it closes them, as Escape does. A phone's are full-height sheets.
+  const backdrop = overlay && !phone && !full && (view === "opened" || view === "story") && (
+    <div aria-hidden data-testid="flow-backdrop" className="fixed inset-0 z-50 bg-hero/50" onClick={() => setView(null)} />
+  );
   const layers = flow ? (
     <Layer>
+      {backdrop}
       {view === "opened" && overlay && (phone ? phoneOpened(flow) : desktopOpened(flow))}
       {view === "story" && overlay && story(flow)}
       {full && viewer(flow)}
@@ -755,11 +783,11 @@ export function FlowPanel({
       <section data-testid="flow-row" aria-label="Flow" className="text-[15px] leading-[22px]">
         {v.flow ? (
           <div data-testid="flow-row-drawn">
-            <div className="mt-2 flex items-start gap-3">
+            <div className="mt-2 flex items-start gap-3 max-[600px]:flex-col max-[600px]:gap-2">
               <button type="button" aria-label={openLabel} aria-expanded={view === "opened"} data-testid="flow-row-thumb" onClick={() => setView("opened")} className="flex-none rounded-lg border border-line bg-surface p-1.5 hover:border-line-strong">
                 <FlowDiagram flow={v.flow} layout="mini" />
               </button>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 max-[600px]:w-full">
                 <b className="font-[650] break-words">{v.flow.title}</b>
                 {fresh && (
                   <span className="ml-1.5 inline-flex items-center rounded-full bg-pass-bg px-2 align-[1px] text-[12px] leading-5 font-semibold text-pass" data-testid="flow-new">
@@ -799,7 +827,7 @@ export function FlowPanel({
             </div>
           </div>
         ) : (
-          <NoDrawing v={v} busy={busy} onAsk={() => void ask()} />
+          <NoDrawing v={v} busy={busy} onAsk={() => void ask()} showHint={showHint} />
         )}
         {error && <p className="mt-2 text-[14px] text-crit">{error}</p>}
         {layers}
@@ -848,7 +876,7 @@ export function FlowPanel({
           <div className="mt-3 border-t border-line pt-3">{commentsPanel(flow, true)}</div>
         </>
       ) : (
-        <NoDrawing v={v} busy={busy} onAsk={() => void ask()} />
+        <NoDrawing v={v} busy={busy} onAsk={() => void ask()} showHint={showHint} />
       )}
       {error && !flow && <p className="mt-2 text-[14px] text-crit">{error}</p>}
       {onClose && (
@@ -896,6 +924,7 @@ function Storyboard({
         ref={refEl}
         tabIndex={-1}
         role="dialog"
+        aria-modal="true"
         aria-label={`${f.title} · storyboard`}
         data-testid="flow-storyboard"
         style={{ left: box.left, right: box.right, bottom: 16 }}

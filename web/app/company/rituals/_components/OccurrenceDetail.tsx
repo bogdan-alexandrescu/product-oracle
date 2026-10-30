@@ -9,7 +9,8 @@ import { MarkdownBody } from "@/components/MarkdownBody";
 import { Button, Chip, LinkButton, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatMoney } from "@/lib/format";
+import { useCompanyZone } from "@/lib/dates";
+import { formatMoney, zoneName } from "@/lib/format";
 import { parseBlocks } from "@/lib/markdown";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -37,6 +38,7 @@ const NOTES_MAX = 10_000;
  */
 export function OccurrenceDetail({ id }: { id: string }) {
   const { me, can } = useMe();
+  const zone = useCompanyZone();
   // Read with the time it was read: the meeting has ended when the owner records it.
   const q = useQuery(`ritual-occurrence|${id}`, async () => {
     const occ = await unwrap(api.GET("/v1/ritual-occurrences/{occurrence_id}", { params: { path: { occurrence_id: id } } }));
@@ -72,7 +74,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
 
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!occ) return <Loading />;
-  const blocks = occ.pre_read.blocks as unknown as Block[];
+  const blocks = rebuildShown(occ, occ.pre_read.blocks as unknown as Block[]);
   const isOwner = me?.user_id === occ.owner_id;
   const ended = q.data!.at >= Date.parse(occ.ends_at);
   // Held when its Simple review meeting ended, with nothing recorded yet: the owner still records it.
@@ -81,7 +83,9 @@ export function OccurrenceDetail({ id }: { id: string }) {
 
   return (
     <>
+      {/* qa-company-35: the name and its state together as the heading, on a phone too. */}
       <PageHeader
+        phoneTitle
         title={occ.title}
         back={
           <Link href="/company/rituals" className="hover:underline">
@@ -102,6 +106,8 @@ export function OccurrenceDetail({ id }: { id: string }) {
         <span>
           {occ.attendee_ids.length} {occ.attendee_ids.length === 1 ? "attendee" : "attendees"}
         </span>
+        {/* qa-company-21: the zone named once; the times on the page are in it. */}
+        <span data-testid="occurrence-zone">Times are in {zoneName(zone)}</span>
       </p>
       <div className="flex flex-col gap-3">
         {occ.kind === "baseline_rebuild" ? (
@@ -132,6 +138,25 @@ export function OccurrenceDetail({ id }: { id: string }) {
         {recordable && <RecordForm occ={occ} onChanged={reload} />}
       </div>
     </>
+  );
+}
+
+/**
+ * qa-company-3: once Oracle started this occurrence's baseline build, the Baseline build card
+ * above says so; the pre-read's own rows from before it (what Oracle would do, "No baseline
+ * build yet") no longer describe the build as not started.
+ */
+function rebuildShown(occ: Occurrence, blocks: Block[]): Block[] {
+  if (occ.kind !== "baseline_rebuild" || !occ.summary_run_id) return blocks;
+  return blocks.map((b) =>
+    b.key !== "baseline_rebuild"
+      ? b
+      : {
+          ...b,
+          rows: b.rows
+            .filter((r) => !(r.text ?? "").startsWith("Oracle starts the build") && !(r.text ?? "").startsWith("Not started") && r.href !== "/baseline?build=1")
+            .map((r) => (r.text === "No baseline build yet" ? { ...r, text: "No earlier baseline build" } : r)),
+        },
   );
 }
 

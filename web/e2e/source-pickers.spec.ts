@@ -131,7 +131,9 @@ test("github picker: search, pick repos, add, edit", async ({ page }) => {
   await form.getByLabel("Name").fill("Billing code");
   await form.getByRole("button", { name: "Add source" }).click();
   const row = page.getByRole("listitem", { name: "Billing code" });
-  await expect(row).toContainText("example-org/billing-api, partner-org/webhooks");
+  // Each repo once, on its code-map line (qa-settings-25).
+  await expect(row).toContainText("example-org/billing-api");
+  await expect(row).toContainText("partner-org/webhooks");
 
   const repo = page.getByRole("listitem", { name: "Example repo" });
   await repo.getByRole("button", { name: "More actions for Example repo" }).click();
@@ -140,7 +142,8 @@ test("github picker: search, pick repos, add, edit", async ({ page }) => {
   await expect(edit.getByRole("checkbox", { name: "example-org/example-app" })).toBeChecked();
   await edit.getByRole("checkbox", { name: "example-org/docs" }).check();
   await repo.getByRole("button", { name: "Save repositories" }).click();
-  await expect(repo).toContainText("example-org/example-app, example-org/docs");
+  await expect(repo).toContainText("example-org/example-app");
+  await expect(repo).toContainText("example-org/docs");
 });
 
 test("slack picker: a date range, since and until", async ({ page }) => {
@@ -257,6 +260,14 @@ test("named picks: a source saved without names shows ids until it is saved agai
   await login(page);
   await page.goto("/settings/sources");
   const chat = page.getByRole("listitem", { name: "Product chat" });
+  // The seeded source keeps its channels' names; make it one saved before names were kept.
+  await expect(chat.getByTestId("source-picks")).toHaveText("#product, #customer-feedback");
+  await page.evaluate((key) => {
+    const db = JSON.parse(localStorage.getItem(key)!);
+    delete db.sources.find((s: { name: string }) => s.name === "Product chat").config.labels;
+    localStorage.setItem(key, JSON.stringify(db));
+  }, SOURCES_STORAGE_KEY);
+  await page.reload();
   await expect(chat.getByTestId("source-picks")).toHaveText("C0123PRODUCT, C0456FEEDBACK");
   await expect(chat.getByText("Channels", { exact: true })).toBeVisible();
 

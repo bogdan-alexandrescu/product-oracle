@@ -376,7 +376,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   approval_threshold_usd: 50,
   overrun_factor: 1.5,
   runtime: "fake",
-  runtime_notes: ["Local agent runtime: segments finish at once with generic drafts."],
+  runtime_notes: ["Test mode: each step finishes at once with a sample draft."],
 };
 
 const THRESHOLD = 50;
@@ -438,6 +438,11 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
+
+/** qa-company-17: the run's document by its own title, as the API's RunSummary.document_title. */
+function docTitle(ctx: RunsContext, r: { document_id?: string | null }): string | null {
+  return (r.document_id && ctx.documents.find((d) => d.id === r.document_id)?.title) || null;
+}
 
 function summary(r: RunOut): Schemas["RunSummary"] {
   return {
@@ -1316,13 +1321,13 @@ function fileContent(name: string, segment: string, attempt: number, document?: 
   if (name === "eng_dates.yaml") return datesYaml({ ...LOCAL_DATES, prd: null, problems: [] }, attempt);
   if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
   if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, segment, attempt);
-  if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt} from the local agent runtime.\n`;
-  if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt} from the local agent runtime.\n`;
+  if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt}, a sample.\n`;
+  if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt}, a sample.\n`;
   if (name === "roadmap_items.yaml") {
-    return `# ${segment} (local agent runtime, attempt ${attempt})\nversion: 1\nitems:\n  - id: price-early\n    title: Show the price early\n    outcome: Fewer buyers drop off at checkout\n    horizon: now\n    milestone: Beta\n    confidence: medium\n    prd_section: features\n`;
+    return `# ${segment} (sample, attempt ${attempt})\nversion: 1\nitems:\n  - id: price-early\n    title: Show the price early\n    outcome: Fewer buyers drop off at checkout\n    horizon: now\n    milestone: Beta\n    confidence: medium\n    prd_section: features\n`;
   }
   if (name.endsWith(".yaml")) return `# ${segment} (attempt ${attempt})\nitems:\n  - key: g1\n    title: Raise first-order completion to 70%\n    confidence: 0.82\n`;
-  return `# ${segment}\n\nWritten by the local agent runtime (attempt ${attempt}).\n`;
+  return `# ${segment}\n\nA sample draft (attempt ${attempt}).\n`;
 }
 
 function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
@@ -1583,11 +1588,12 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
         flow: r.flow,
         flow_title: r.flow_title,
         document_slug: r.document_slug,
+        document_title: docTitle(ctx, r),
         segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
         // D9: what it needs of me and how much, from the same review read.
         summary: inboxSummary(ctx, r, c),
       })),
-  );
+  ).filter((c) => c.can_decide); // qa-company-4: as the API's inbox, only the stops I may decide.
   // Decided, not delivered to the run yet: shown, nothing to decide, not in the total.
   const deliveries = ctx.db.runs.flatMap((r) =>
     r.checkpoints
@@ -1598,13 +1604,16 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
         flow: r.flow,
         flow_title: r.flow_title,
         document_slug: r.document_slug,
+        document_title: docTitle(ctx, r),
         segment_title: r.segments.find((s) => s.seq === c.segment_seq)?.title ?? null,
       })),
   );
   // The inbox embeds summaries without their progress, as the API does.
-  const bare = (r: RunOut) => ({ ...summary(r), progress: null, delivering: null });
-  const approvals = ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(bare);
-  const overruns = ctx.db.runs.filter((r) => r.status === "paused_overrun").map(bare);
+  const bare = (r: RunOut) => ({ ...summary(r), document_title: docTitle(ctx, r), progress: null, delivering: null });
+  // qa-company-4: as the API, cost approvals and overruns wait on owners only.
+  const owner = ctx.userRole == null || ctx.userRole === "owner";
+  const approvals = owner ? ctx.db.runs.filter((r) => r.status === "awaiting_approval").map(bare) : [];
+  const overruns = owner ? ctx.db.runs.filter((r) => r.status === "paused_overrun").map(bare) : [];
   const byDoc = new Map<string, FeedbackRow[]>();
   for (const f of ctx.feedback.filter((x) => x.status === "open" && !ctx.staged?.(x.id)).sort((a, b) => b.created_at.localeCompare(a.created_at))) {
     byDoc.set(f.document_id, [...(byDoc.get(f.document_id) ?? []), f]);
@@ -1648,18 +1657,18 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     ];
   });
   // Runs whose output Oracle stopped trying to import (owners: Retry).
-  const imports = ctx.db.runs.filter((r) => r.can_retry_import && !FINAL.includes(r.status)).map(summary);
+  const imports = ctx.db.runs.filter((r) => r.can_retry_import && !FINAL.includes(r.status)).map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
   // Owners only: runs that finished with no document (owner, 2026-10-25).
   const finished = ctx.userRole === "owner" || ctx.userRole == null ? ctx.db.runs.filter((r) => r.status === "succeeded") : [];
   for (const r of finished) refresh(r);
   const no_documents = finished.flatMap((r) => {
     const why = noDocument(ctx, r);
-    return why ? [{ ...summary(r), no_document: why }] : [];
+    return why ? [{ ...summary(r), document_title: docTitle(ctx, r), no_document: why }] : [];
   });
   // Runs that wait on their owner (stuck: Retry, Stop cancelling, Retry lookup, Cancel again,
   // Dismiss), and work given up on that is still looked for (shown only, not in the total).
-  const lookups = ctx.db.runs.filter((r) => r.stuck).map(summary);
-  const searches = ctx.db.runs.filter((r) => r.searching).map(summary);
+  const lookups = ctx.db.runs.filter((r) => r.stuck).map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
+  const searches = ctx.db.runs.filter((r) => r.searching).map((r) => ({ ...summary(r), document_title: docTitle(ctx, r) }));
   // Refused drafts Oracle sent back to the writer itself, being revised: the review's state,
   // shown only (nothing to decide, not in the total).
   const revising = ctx.db.runs.filter((r) => r.segments.some((s) => sentBack(r, s))).map(bare);
@@ -1755,7 +1764,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
         .map((r) => {
           // As the API: the row's Decide follows the run page's can_decide for its waiting checkpoint.
           const cp = r.checkpoints.find((c) => c.status === "pending");
-          return { ...summary(r), can_decide: !!cp && mayStage(ctx, r, cp, ctx.userRole ?? null) };
+          return { ...summary(r), document_title: docTitle(ctx, r), can_decide: !!cp && mayStage(ctx, r, cp, ctx.userRole ?? null) };
         }),
     );
   }
@@ -1892,7 +1901,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     // As the API (#556, #561 review): stored errors read in words, a failed one in the past.
     const segments = r.segments.map((s) => (s.error ? { ...s, error: readableRefusal(s.error, s.status === "failed") } : s));
     const can_decide = checkpoints.some((c) => c.status === "pending" && c.can_decide);
-    return json(status, { ...r, error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, can_decide, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
+    return json(status, { ...r, document_title: docTitle(ctx, r), error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, can_decide, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
 
   if (p.length === 3 && m === "GET") return done();
@@ -3445,7 +3454,7 @@ function briefsCheckOf(briefs: Brief[]): BriefsCheck {
 }
 
 function briefsYaml(briefs: Brief[], attempt: number): string {
-  const lines = [`# eng_review (local agent runtime, attempt ${attempt})`, "version: 1", "code_map: {used: false, repos: []}", "features:"];
+  const lines = [`# eng_review (sample, attempt ${attempt})`, "version: 1", "code_map: {used: false, repos: []}", "features:"];
   for (const b of briefs) {
     lines.push(`  - feature: ${b.key}`, `    title: ${b.title}`, `    approach: ${b.approach}`, `    size: ${b.size}`, `    depends_on: [${b.depends_on.join(", ")}]`, "    questions:");
     for (const q of b.questions) lines.push(`      - {id: ${q.id}, question: "${q.question}", blocking: ${q.blocking}}`);
@@ -3556,7 +3565,7 @@ function datesCheckOf(r: RunOut, spec: DatesSpec): DatesCheck {
 }
 
 function datesYaml(check: DatesCheck, attempt: number): string {
-  const lines = [`# eng_dates (local agent runtime, attempt ${attempt})`, "version: 1", `prd: {document: ${check.prd?.document ?? "null"}, version: ${check.prd?.version ?? "null"}}`, "items:"];
+  const lines = [`# eng_dates (sample, attempt ${attempt})`, "version: 1", `prd: {document: ${check.prd?.document ?? "null"}, version: ${check.prd?.version ?? "null"}}`, "items:"];
   for (const i of check.items) {
     lines.push(`  - item: ${i.key}`);
     if (i.proposed) lines.push(`    estimate: {kind: ${i.proposed.kind}, reference: ${i.proposed.reference}, supports_date: ${i.proposed.supports_date}}`, `    confidence: ${i.confidence}`);

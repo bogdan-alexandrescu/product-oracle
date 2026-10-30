@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 
-import { Button, InfoTip, Sheet } from "@/components/ds";
+import { Button, Dialog, InfoTip } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
@@ -52,7 +52,8 @@ export function DraftSheet({
   const [changed, setChanged] = useState("");
   const [years, setYears] = useState("5");
   const zone = useCompanyZone();
-  const [span, setSpan] = useState(() => defaultSpan(todayIn(zone)));
+  const [initialSpan] = useState(() => defaultSpan(todayIn(zone)));
+  const [span, setSpan] = useState(initialSpan);
   const [fromApproved, setFromApproved] = useState(approvedVersion != null);
   const [busy, setBusy] = useState<"oracle" | "empty" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,8 @@ export function DraftSheet({
   const yearsN = Number(years);
   // H11: the responsibility keys are the document kinds ("strategy", "vision").
   const observing = useAutonomyLevel(kind) === "observe";
+  // qa-company-14: typed work asks before it is thrown away (the ds Dialog's discard guard).
+  const dirty = !!changed.trim() || years !== "5" || span.from !== initialSpan.from || span.to !== initialSpan.to;
   const valid = vision ? Number.isInteger(yearsN) && yearsN >= 1 && yearsN <= 10 : !!span.from && !!span.to && span.to > span.from;
 
   /** The document's slug: the existing one, or a new one from the built-in template. */
@@ -108,86 +111,100 @@ export function DraftSheet({
     }
   }
 
+  // qa-company-14: the same centred dialog as every other create action (Propose decision,
+  // Add metric, New update), not a full-width bottom sheet.
   return (
-    <Sheet open title={title} onClose={onClose} testId="strategy-draft-sheet">
-      <form
-        className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-4 max-[600px]:px-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (valid && !busy && !observing) void draftWithOracle();
-        }}
-      >
-        <label className="block">
-          <span className="mb-1.5 block text-[15px] font-semibold text-text">What changed since the last one</span>
-          <textarea
-            data-autofocus
-            rows={3}
-            maxLength={4000}
-            className={INPUT}
-            value={changed}
-            onChange={(e) => setChanged(e.target.value)}
-            placeholder="Optional: a market shift, a goal that moved, a bet that did not pay off."
-          />
-        </label>
-        {vision ? (
-          <label className="block">
-            <span className="mb-1.5 block text-[15px] font-semibold text-text">Horizon in years</span>
-            <input type="number" min={1} max={10} className={`${INPUT} tnum w-28`} value={years} onChange={(e) => setYears(e.target.value)} />
-          </label>
-        ) : (
-          <fieldset className="min-w-0">
-            <legend className="mb-1.5 text-[15px] font-semibold text-text">Horizon</legend>
-            <div className="flex flex-wrap gap-3">
-              <label className="flex items-center gap-2 text-sm font-semibold text-text2">
-                From
-                <input type="date" className={`${INPUT} w-auto`} value={span.from} onChange={(e) => setSpan((s) => ({ ...s, from: e.target.value }))} />
-              </label>
-              <label className="flex items-center gap-2 text-sm font-semibold text-text2">
-                To
-                <input type="date" className={`${INPUT} w-auto`} value={span.to} onChange={(e) => setSpan((s) => ({ ...s, to: e.target.value }))} />
-              </label>
-            </div>
-            {span.from && span.to && span.to <= span.from && <p className="mt-1.5 text-sm text-crit">The horizon ends before it starts.</p>}
-          </fieldset>
-        )}
-        {approvedVersion != null && (
-          <label className="flex items-center gap-2 text-[15px]">
-            <input
-              id={`${id}-from`}
-              type="checkbox"
-              className="size-4 accent-[var(--accent)]"
-              checked={fromApproved}
-              onChange={(e) => setFromApproved(e.target.checked)}
-            />
-            Start from the last approved version (v{approvedVersion})
-          </label>
-        )}
-        {error && <ErrorNote>{error}</ErrorNote>}
-        {observing && (
-          <AutonomyNote testId="strategy-observing" onFollow={onClose}>
-            Oracle is set to observe the {DOC[kind].name}, so it drafts none. {doc ? "Edit the document yourself" : "Start from the empty template"}, or
-            change this in
-          </AutonomyNote>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          {!observing && (
-            <>
-              <Button type="submit" variant="primary" disabled={!valid || busy !== null}>
-                {busy === "oracle" ? "Starting…" : "Draft with Oracle"}
-              </Button>
-              <InfoTip label="drafting with Oracle" align="start">
-                Oracle reads the confirmed goals, approved PRDs and roadmaps, decisions, outcomes and the company&apos;s own strategy material, and
-                writes the draft. An owner reviews and approves it.
-              </InfoTip>
-            </>
-          )}
+    <Dialog
+      title={title}
+      onClose={onClose}
+      testId="strategy-draft-sheet"
+      dirty={dirty}
+      busy={busy !== null}
+      onSubmit={() => {
+        if (valid && !busy && !observing) void draftWithOracle();
+      }}
+      actions={
+        <>
           {!doc && (
-            <Button variant="ghost" className="ml-auto" disabled={busy !== null} onClick={emptyTemplate}>
+            <Button variant={observing ? "primary" : "ghost"} disabled={busy !== null} onClick={emptyTemplate}>
               {busy === "empty" ? "Creating…" : "Start from the empty template"}
             </Button>
           )}
-        </div>
-      </form>
-    </Sheet>
+          {!observing && (
+            <Button type="submit" variant="primary" disabled={!valid || busy !== null}>
+              {busy === "oracle" ? "Starting…" : "Draft with Oracle"}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <label className="block">
+        {/* qa-company-12: a first vision or strategy has no last one to compare with. */}
+        <span className="mb-1.5 block text-[15px] font-semibold text-text">
+          {approvedVersion != null ? "What changed since the last one" : "Anything Oracle should know"}
+        </span>
+        <textarea
+          data-autofocus
+          rows={3}
+          maxLength={4000}
+          className={INPUT}
+          value={changed}
+          onChange={(e) => setChanged(e.target.value)}
+          placeholder={
+            approvedVersion != null
+              ? "Optional: a market shift, a goal that moved, a bet that did not pay off."
+              : "Optional: a market you are entering, a bet you have made, what you will not do."
+          }
+        />
+      </label>
+      {vision ? (
+        <label className="block">
+          <span className="mb-1.5 block text-[15px] font-semibold text-text">Horizon in years</span>
+          <input type="number" min={1} max={10} className={`${INPUT} tnum w-28`} value={years} onChange={(e) => setYears(e.target.value)} />
+        </label>
+      ) : (
+        <fieldset className="min-w-0">
+          <legend className="mb-1.5 text-[15px] font-semibold text-text">Horizon</legend>
+          <div className="flex flex-wrap gap-3">
+            <label className="flex items-center gap-2 text-sm font-semibold text-text2">
+              From
+              <input type="date" className={`${INPUT} w-auto`} value={span.from} onChange={(e) => setSpan((s) => ({ ...s, from: e.target.value }))} />
+            </label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-text2">
+              To
+              <input type="date" className={`${INPUT} w-auto`} value={span.to} onChange={(e) => setSpan((s) => ({ ...s, to: e.target.value }))} />
+            </label>
+          </div>
+          {span.from && span.to && span.to <= span.from && <p className="mt-1.5 text-sm text-crit">The horizon ends before it starts.</p>}
+        </fieldset>
+      )}
+      {approvedVersion != null && (
+        <label className="flex items-center gap-2 text-[15px]">
+          <input
+            id={`${id}-from`}
+            type="checkbox"
+            className="size-4 accent-[var(--accent)]"
+            checked={fromApproved}
+            onChange={(e) => setFromApproved(e.target.checked)}
+          />
+          Start from the last approved version (v{approvedVersion})
+        </label>
+      )}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {observing ? (
+        <AutonomyNote testId="strategy-observing" onFollow={onClose}>
+          Oracle is set to observe the {DOC[kind].name}, so it drafts none. {doc ? "Edit the document yourself" : "Start from the empty template"}, or
+          change this in
+        </AutonomyNote>
+      ) : (
+        <p className="flex items-center gap-1.5 text-sm text-text2">
+          Oracle writes the draft; an owner reviews and approves it.
+          <InfoTip label="drafting with Oracle" align="start">
+            Oracle reads the confirmed goals, approved PRDs and roadmaps, decisions, outcomes and the company&apos;s own strategy material, and
+            writes the draft. An owner reviews and approves it.
+          </InfoTip>
+        </p>
+      )}
+    </Dialog>
   );
 }

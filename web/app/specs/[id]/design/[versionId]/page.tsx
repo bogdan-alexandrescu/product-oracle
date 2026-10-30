@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { DesignReview } from "@/components/DesignReview";
-import { Loading } from "@/components/ui";
+import { PageSkeleton } from "@/components/ds";
 
 /** Spelled out rather than Next's generated PageProps, so tsc passes without a build first. */
 type Params = { params: Promise<{ id: string; versionId: string }> };
@@ -14,7 +14,7 @@ async function Detail({ params }: Params) {
 /** v2 screen 4: a spec's user flow or wireframes, and their review. */
 export default function DesignArtifactPage({ params }: Params) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Detail params={params} />
     </Suspense>
   );

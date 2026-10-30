@@ -143,20 +143,38 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
             <span className="truncate">{item.limits_summary}</span>
           </Chip>
         )}
+        {owner && item.level === "act" && item.limits_schema && (
+          <Button variant="ghost" onClick={() => onPick("act")}>
+            Edit limits
+          </Button>
+        )}
       </p>
     </li>
   );
 }
 
+/*
+ * The same columns on every row (qa-settings-35): a row with a locked step is no wider, so
+ * every control starts and ends at the same x, right-aligned on a wide screen and full width
+ * on a phone. The shares follow the labels' lengths, with room for the lock.
+ */
+const STEP_COLUMNS =
+  "grid w-[400px] flex-none grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.4fr)_minmax(0,0.75fr)] max-[600px]:w-full";
+
 /** Observe · Draft · Recommend · Act: one line, steps above the ceiling locked. */
 function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void }) {
   return (
-    <div role="group" aria-label={`${item.title}: level`} className="inline-flex flex-none rounded-button border border-line-strong bg-surface">
+    <div
+      role="group"
+      aria-label={`${item.title}: level`}
+      data-testid="autonomy-steps"
+      className={`${STEP_COLUMNS} justify-self-end overflow-hidden rounded-button border border-line-strong bg-surface max-[600px]:justify-self-stretch`}
+    >
       {LEVELS.map((l) => {
         const on = item.level === l.value;
         const locked = !item.allowed.includes(l.value);
-        // Picking the current level again only means something at Act: its limits.
-        const idle = on && l.value !== "act";
+        // The current level is already set: picking it again does nothing (Edit limits changes Act's limits).
+        const idle = on;
         return (
           <button
             key={l.value}
@@ -165,7 +183,7 @@ function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void })
             disabled={locked}
             title={locked ? `Stays with people: ${item.ceiling_reason ?? "above this responsibility's ceiling"}` : undefined}
             onClick={() => !idle && onPick(l.value)}
-            className={`flex h-8 items-center gap-1 border-r border-line px-3 text-sm font-medium whitespace-nowrap last:border-r-0 max-[600px]:px-2 ${
+            className={`flex h-8 min-w-0 items-center justify-center gap-1 border-r border-line px-1 text-sm font-medium whitespace-nowrap last:border-r-0 max-[600px]:gap-0.5 ${
               on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
             } disabled:cursor-not-allowed disabled:hover:bg-transparent ${on ? "" : "disabled:text-text2"}`}
           >

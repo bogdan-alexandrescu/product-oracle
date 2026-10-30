@@ -230,7 +230,9 @@ async def test_plan_strip_by_month_with_milestones(client):
                       user_id=ctx.users["viewer"].id)  # fmt: skip
         html, _ = await one_pager.pdf_html(s, p, "guided-setup")
     assert "M1 · 3 items · Nov 20" in html and "No milestone · 2 items" in html
-    assert "1 commitment ends past Jan" in html
+    # qa-simple-prd-39: the footer reads as the page's strip, in words and with no arrow.
+    assert "1 commitment ends after Jan" in html and "past Jan" not in html
+    assert "after Jan →" not in html
     assert "M1-0" not in html and "Loose 1" not in html  # no per-item bars
 
 

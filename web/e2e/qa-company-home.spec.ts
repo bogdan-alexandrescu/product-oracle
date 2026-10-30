@@ -65,7 +65,7 @@ test("goals: the confidence ring is named and hidden without a current value; th
 
   // Cut early churn has no current value: no ring, no number beside the "–".
   const g3 = page.getByTestId("home-goal-G3");
-  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value");
+  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
   await expect(g3.getByTestId("goal-confidence")).toHaveCount(0);
   await expect(g3.getByRole("img", { name: /^Confidence/ })).toHaveCount(0);
 
@@ -100,7 +100,7 @@ test("in flight: the PRD's step and its sections approved are labelled apart", a
   await expect(checkout.getByTestId("row-journey")).toContainText("Step 8/9");
   const inspector = page.getByTestId("home-inspector");
   await expect(inspector.getByTestId("inspector-journey")).toContainText("step 8 of 9");
-  await expect(inspector.getByTestId("stat-sections")).toContainText("Sections approved");
+  await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
   await expect(inspector.getByTestId("stat-sections")).not.toContainText("Sections done");
 });
 

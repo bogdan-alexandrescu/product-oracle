@@ -11,7 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
-import { seeded, stableUuid } from "./ids";
+import { newCompany, seeded, stableUuid } from "./ids";
 import { flowFor, type VisualsDb } from "./simple-visuals";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 
@@ -274,6 +274,9 @@ export function seedSimpleDeciders(people: { decider: string; approver: string; 
 }
 
 export function seedSimpleRoadmap(): SimpleDb {
+  // A new company: no items yet, so no plan, broken links, priorities or key dates (Detailed says no goals).
+  // Nor Oracle's goal suggestions (no goal is confirmed yet: none are made on its own).
+  if (newCompany()) return { items: [], ids: {}, own: {}, suggestions: [], decisions: {}, key_dates: {}, goal_suggestions: [], goal_jobs: {}, auto_done: Object.keys(GOALS) };
   return seeded("simple-roadmap", () => ({
     items: SEED.map((s) => ({ ...s })),
     ids: Object.fromEntries(SEED.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])),
@@ -562,7 +565,8 @@ function regenerate(db: SimpleDb, today: string): number {
     const same = [...(durations.get(s.confidence ?? "") ?? [])].sort((a, b) => a - b);
     const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 42;
     const conf = s.confidence ? `${s.confidence}-confidence` : "unrated";
-    const how = same.length ? `${mid} days, the median of ${same.length} dated ${conf} items` : `${mid} days, the default with no dated ${conf} items`;
+    // finding 30: plain words, not statistics jargon ("median").
+    const how = same.length ? `${mid} days, about the same as ${same.length} similar ${conf} item${same.length === 1 ? "" : "s"}` : `${mid} days, typical with no dated ${conf} items yet`;
     let end = addDays(start, mid - 1);
     let tail = "";
     if (start <= window[1] && window[1] < end) {
@@ -718,7 +722,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
     milestones: [
-      { id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now", status: "planned", item_ids: [db.ids["alert-digest"]], ...UNDATED },
+      // The digest's Beta (a new company has no digest, so no Beta).
+      ...(db.ids["alert-digest"]
+        ? [{ id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now" as const, status: "planned" as const, item_ids: [db.ids["alert-digest"]], ...UNDATED }]
+        : []),
       ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
         const of = seeds.filter((s) => s.record === name);
         return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: null, horizon: "now" as const, status: "planned" as const, item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };

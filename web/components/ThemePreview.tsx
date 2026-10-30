@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo, useState } from "react";
+
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useLive } from "@/lib/use-live";
 
@@ -17,9 +19,18 @@ const loadPreview = (body: PreviewIn) =>
  * A sample document rendered by POST /v1/themes/preview with unsaved tokens and CSS,
  * refreshed 300 ms after the last change. Sandboxed: no scripts, no same-origin access.
  */
-export function ThemePreview({ tokens, css, kind, title = "Theme preview" }: PreviewIn & { title?: string }) {
+export function ThemePreview({
+  tokens,
+  css,
+  kind,
+  title = "Theme preview",
+  testId = "theme-preview",
+  height,
+}: PreviewIn & { title?: string; testId?: string; height?: string }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 300);
-  return <PreviewFrame html={live.data} pending={live.pending} error={live.error} title={title} testId="theme-preview" />;
+  return (
+    <PreviewFrame html={live.data} pending={live.pending} error={live.error} title={title} testId={testId} height={height} />
+  );
 }
 
 type SlidePreviewIn = {
@@ -73,6 +84,7 @@ function PreviewFrame({
   title,
   testId,
   scale = 1,
+  height = "h-[34rem]",
 }: {
   html: string | undefined;
   pending: boolean;
@@ -80,6 +92,8 @@ function PreviewFrame({
   title: string;
   testId: string;
   scale?: number;
+  /** The frame's height class; the sample scrolls inside it, so nothing is cut off. */
+  height?: string;
 }) {
   return (
     <div className="relative">
@@ -89,10 +103,10 @@ function PreviewFrame({
           data-testid={testId}
           sandbox=""
           srcDoc={html ?? ""}
-          className="h-[34rem] w-full rounded-button border border-line bg-surface"
+          className={`${height} w-full rounded-button border border-line bg-surface`}
         />
       ) : (
-        <div className="h-[34rem] w-full overflow-hidden rounded-button border border-line bg-surface2">
+        <div className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface2`}>
           <iframe
             title={title}
             data-testid={testId}
@@ -114,11 +128,40 @@ function PreviewFrame({
 }
 
 /**
+ * The preview page as a still picture (qa-docs-2, qa-onboarding-29): an SVG image whose
+ * foreignObject holds the page. An image runs no script, loads nothing from outside, never
+ * scrolls and needs no frame of its own (a scaled, sandboxed frame per tile could paint
+ * nothing at all). The page's styles move to the SVG's own <style>, so they always apply.
+ * Null when the page cannot be read: the sketch stays.
+ */
+function pictureOf(html: string, page: { width: number; height: number }): string | null {
+  if (typeof DOMParser === "undefined" || typeof XMLSerializer === "undefined") return null;
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const css = [...doc.querySelectorAll("style")].map((el) => el.textContent ?? "").join("\n");
+    doc.querySelectorAll("style, script, link, meta, base, iframe, frame, object, embed").forEach((el) => el.remove());
+    const body = new XMLSerializer().serializeToString(doc.body);
+    const still = `${css}\nbody { overflow: hidden !important; }`.split("]]>").join("]]]]><![CDATA[>");
+    const { width: w, height: h } = page;
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+      `<style><![CDATA[${still}]]></style>` +
+      `<foreignObject x="0" y="0" width="${w}" height="${h}">` +
+      `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;overflow:hidden;background:var(--color-background, #ffffff)">${body}</div>` +
+      `</foreignObject></svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A small, non-interactive picture of a theme: the preview page scaled down (a quarter by
  * default: 160 x 120). `page` is the preview's own size before scaling (640 x 480): a smaller
- * page keeps the sample's words large enough to read in a small thumbnail. Until the preview
- * arrives (or when it cannot be had) the theme's own colours and fonts draw a sketch of a
- * page, so a thumbnail is never blank.
+ * page keeps the sample's words large enough to read in a small thumbnail. The theme's own
+ * colours and fonts draw a sketch of a page underneath, shown until the picture arrives (or
+ * when it cannot be had), so a thumbnail is never blank. `fluid` fills its box's width
+ * instead (same proportions).
  */
 export function ThemeThumbnail({
   tokens,
@@ -126,40 +169,49 @@ export function ThemeThumbnail({
   kind,
   scale = 0.25,
   page = { width: 640, height: 480 },
-}: PreviewIn & { scale?: number; page?: { width: number; height: number } }) {
+  fluid = false,
+}: PreviewIn & { scale?: number; page?: { width: number; height: number }; fluid?: boolean }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 0);
+  const { width: pageWidth, height: pageHeight } = page;
+  const src = useMemo(
+    () => (live.data ? pictureOf(live.data, { width: pageWidth, height: pageHeight }) : null),
+    [live.data, pageWidth, pageHeight],
+  );
+  const [shown, setShown] = useState<string | null>(null);
+  const [broken, setBroken] = useState<string | null>(null);
   const c = tokens.colors ?? {};
   return (
     <div
       aria-hidden
       data-testid="theme-thumbnail"
-      data-ready={live.data ? "true" : undefined}
-      className="pointer-events-none overflow-hidden rounded border border-line bg-surface"
-      style={{ width: page.width * scale, height: page.height * scale }}
+      data-ready={src && shown === src ? "true" : undefined}
+      className="pointer-events-none relative overflow-hidden rounded border border-line bg-surface"
+      style={fluid ? { width: "100%", aspectRatio: `${page.width} / ${page.height}` } : { width: page.width * scale, height: page.height * scale }}
     >
-      {live.data ? (
-        <iframe
-          title="Theme thumbnail"
-          tabIndex={-1}
-          sandbox=""
-          srcDoc={live.data}
-          className="border-0"
-          style={{ width: page.width, height: page.height, transform: `scale(${scale})`, transformOrigin: "top left" }}
+      <div
+        data-testid="theme-thumbnail-sketch"
+        className="absolute inset-0 flex flex-col gap-1 p-2"
+        style={{ background: c.background ?? "#ffffff", fontFamily: tokens.fonts?.heading ?? undefined }}
+      >
+        <span className="text-[10px] leading-tight font-bold" style={{ color: c.heading ?? "#111827" }}>
+          {kind === "roadmap" ? "Product roadmap" : "Feature PRD"}
+        </span>
+        <span className="h-0.5 w-1/2 rounded" style={{ background: c.accent ?? "#2f5bd3" }} />
+        {[90, 75, 85, 60].map((w) => (
+          <span key={w} className="h-1 rounded" style={{ width: `${w}%`, background: c.muted ?? "#5b6472", opacity: 0.5 }} />
+        ))}
+      </div>
+      {src && broken !== src && (
+        // eslint-disable-next-line @next/next/no-img-element -- a data: SVG made here, not an asset to optimise
+        <img
+          alt=""
+          src={src}
+          draggable={false}
+          data-testid="theme-thumbnail-picture"
+          onLoad={() => setShown(src)}
+          onError={() => setBroken(src)}
+          className="absolute inset-0 block h-full w-full"
         />
-      ) : (
-        <div
-          data-testid="theme-thumbnail-sketch"
-          className="flex h-full flex-col gap-1 p-2"
-          style={{ background: c.background ?? "#ffffff", fontFamily: tokens.fonts?.heading ?? undefined }}
-        >
-          <span className="text-[10px] leading-tight font-bold" style={{ color: c.heading ?? "#111827" }}>
-            {kind === "roadmap" ? "Product roadmap" : "Feature PRD"}
-          </span>
-          <span className="h-0.5 w-1/2 rounded" style={{ background: c.accent ?? "#2f5bd3" }} />
-          {[90, 75, 85, 60].map((w) => (
-            <span key={w} className="h-1 rounded" style={{ width: `${w}%`, background: c.muted ?? "#5b6472", opacity: 0.5 }} />
-          ))}
-        </div>
       )}
     </div>
   );

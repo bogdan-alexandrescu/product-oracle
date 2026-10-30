@@ -146,7 +146,7 @@ test("10d: an approver sees and comments on updates without verdicts or Approve;
   await expect(rows.nth(1)).toContainText("Investor update · September 2026");
   await expect(rows.nth(0).getByTestId("update-visibility")).toHaveText("Owners and approvers");
   await expect(page.getByRole("button", { name: "New update" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+  await expect(page.getByTestId("update-share")).toHaveCount(0);
 
   await openUpdate(page, "Board update · October 2026");
   const headline = section(page, "headline");
@@ -170,10 +170,10 @@ test("10d: an approver sees and comments on updates without verdicts or Approve;
   await expect(tabs.getByTestId("company-tab-decisions")).toBeVisible();
   await expect(tabs.getByTestId("company-tab-updates")).toHaveCount(0);
   await page.goto("/company/updates");
-  await expect(page.getByTestId("updates-not-found")).toHaveText("Not found");
+  await expect(page.getByTestId("updates-not-found")).toContainText("Updates are for owners and approvers");
   await expect(page.getByTestId("update-row")).toHaveCount(0);
   await page.goto("/documents/board-update-2026-10");
-  await expect(page.getByText("Document not found")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Document not found" })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Board update · October 2026" })).toHaveCount(0);
   await page.goto("/sources");
   await page.getByLabel("Search", { exact: true }).fill("Larkspur");
@@ -182,8 +182,8 @@ test("10d: an approver sees and comments on updates without verdicts or Approve;
   await expect(page.getByTestId("search-hit")).toHaveCount(0);
 });
 
-test("10f: ⋯ › Share with the whole company, with a reason: the row's chip reads Company", async ({ page }) => {
-  // protects=an owner opens a row's ⋯ menu, picks Share with the whole company, gives a reason, and the
+test("10f: Share… › Share with the whole company, with a reason: the row's chip reads Company", async ({ page }) => {
+  // protects=an owner presses a row's Share…, gives a reason, and the
   // row's chip reads "Company" (and still does after a reload); a commenter can then open that
   // update; fails_when=the menu item is missing, no reason is asked, the chip does not change,
   // or the update stays hidden from the company; no_claim=the audit event (the API records it).
@@ -191,8 +191,7 @@ test("10f: ⋯ › Share with the whole company, with a reason: the row's chip r
   await openUpdates(page);
   const row = page.getByTestId("update-row").filter({ hasText: "Investor update · September 2026" });
   await expect(row.getByTestId("update-visibility")).toHaveText("Owners and approvers");
-  await row.getByRole("button", { name: "Actions for Investor update · September 2026" }).click();
-  await page.getByRole("menuitem", { name: "Share with the whole company…" }).click();
+  await row.getByRole("button", { name: "Share Investor update · September 2026 with the whole company" }).click();
   const dialog = page.getByRole("dialog", { name: "Share with the whole company" });
   await dialog.getByRole("button", { name: "Share", exact: true }).click();
   await expect(dialog.getByText("Say why")).toBeVisible();
@@ -208,9 +207,7 @@ test("10f: ⋯ › Share with the whole company, with a reason: the row's chip r
   await expect(page.getByTestId("update-row").filter({ hasText: "Board update · October 2026" }).getByTestId("update-visibility")).toHaveText(
     "Owners and approvers",
   );
-  await row.getByRole("button", { name: "Actions for Investor update · September 2026" }).click();
-  await expect(page.getByRole("menuitem", { name: "Limit to owners and approvers…" })).toBeVisible();
-  await page.keyboard.press("Escape");
+  await expect(row.getByRole("button", { name: "Limit Investor update · September 2026 to owners and approvers" })).toBeVisible();
 
   await signOut(page);
   await login(page, "commenter@example.com");

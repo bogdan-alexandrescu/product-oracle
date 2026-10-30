@@ -46,8 +46,11 @@ for (const scheme of ["light", "dark"] as const) {
       await login(page);
       await page.goto("/inbox");
       await expect(page.getByTestId("inbox-approvals")).toBeVisible();
-      const link = page.getByRole("main").locator('a[href^="/"]').filter({ visible: true }).last();
-      const href = (await link.getAttribute("href"))!;
+      const last = page.getByRole("main").locator('a[href^="/"]').filter({ visible: true }).last();
+      const href = (await last.getAttribute("href"))!;
+      // Pinned by its href: a section that loads later (Sources that need attention) adds links
+      // after it, and `.last()` would then measure and tap another one.
+      const link = page.getByRole("main").locator(`a[href="${href}"]`).filter({ visible: true }).last();
       await scrollUnderTabBar(page, link);
       await link.scrollIntoViewIfNeeded();
       const tabs = (await page.getByTestId("tab-bar").boundingBox())!;

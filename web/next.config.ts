@@ -65,7 +65,11 @@ const nextConfig: NextConfig = {
   },
   // c7 Plan rename: the Roadmap page became Plan; old links and bookmarks keep working (308).
   async redirects() {
-    return [{ source: "/roadmap", destination: "/plan", permanent: true }];
+    return [
+      { source: "/roadmap", destination: "/plan", permanent: true },
+      // qa-simple-prd-12: a PRD's one-pager has one address (the rail, the links and the mode switch know it).
+      { source: "/simple/prds/:doc", destination: "/simple/one-pagers/:doc", permanent: false },
+    ];
   },
   async rewrites() {
     return [

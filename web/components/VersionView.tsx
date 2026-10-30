@@ -9,7 +9,8 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { PricingDecide } from "@/components/PricingDecide";
-import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, Panel, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
+import { Button, Chip, Empty, Icon, InfoTip, LinkButton, NotFoundPanel, Page, PageHeader, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
+import { DocumentNotFound } from "@/components/DocumentNotFound";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
@@ -263,6 +264,37 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const [scrollTarget, setScrollTarget] = useState<{ id: string; key: string } | null>(null);
   // Queries are scoped to this view: Next keeps recently visited routes mounted (hidden).
   const rootRef = useRef<HTMLDivElement>(null);
+  // qa-docs-8: on a phone the Sections / Review bar sits on the app's tab bar. The page's scroll
+  // padding at the bottom is set to both bars (the room from the bar's top to the screen's
+  // bottom), so a section's end or its Prev/Next scrolled into view stops clear of both.
+  const [phoneBar, setPhoneBar] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = phoneBar;
+    if (!el) return;
+    const root = document.documentElement;
+    const before = root.style.scrollPaddingBottom;
+    // What this bar set, so a hidden view (Next keeps visited routes mounted) only undoes its own.
+    let mine: string | null = null;
+    const release = () => {
+      if (mine !== null && root.style.scrollPaddingBottom === mine) root.style.scrollPaddingBottom = before;
+      mine = null;
+    };
+    const fit = () => {
+      const r = el.getBoundingClientRect();
+      if (r.height === 0) return release();
+      mine = `${Math.ceil(window.innerHeight - r.top)}px`;
+      root.style.scrollPaddingBottom = mine;
+    };
+    fit();
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    window.addEventListener("resize", fit);
+    return () => {
+      watch.disconnect();
+      window.removeEventListener("resize", fit);
+      release();
+    };
+  }, [phoneBar]);
   const panelRef = useRef<HTMLElement>(null);
 
   const version = verQ.data;
@@ -726,6 +758,15 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           .map((m) => `${formatDate(m.date)} (${m.label})`)
           .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
       : undefined;
+  // Review of qa-docs-3: a reviewer who cannot approve reads why, not the approver's next step.
+  const approveBlockedNote =
+    flaggedDates.length > 0 && isUpdate
+      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " is" : "s are"} not verified yet, so this update cannot be approved.`
+      : flaggedDates.length > 0
+      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${flaggedDates
+          .map((m) => `${formatDate(m.date)} (${m.label})`)
+          .join(", ")}. The version cannot be approved until ${flaggedDates.length === 1 ? "it is" : "they are"} resolved.`
+      : undefined;
   // H4: a vision or a product strategy is an owner's to approve; approvers still set
   // section verdicts and comment.
   const ownerApproves = document_ ? OWNER_APPROVES[document_.kind] : undefined;
@@ -1060,25 +1101,26 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
   // The evidence pane says itself when the version is not found.
   if (missing === "doc" || (missing === "version" && pane !== "evidence")) {
-    return (
-      <Page>
-        <PageHeader title={missing === "doc" ? "Document not found" : "Version not found"} />
-        <Panel testId="doc-not-found" bodyClassName="flex flex-col items-center gap-3 pb-8">
-          <Empty icon="doc">
-            {missing === "doc" ? "This document doesn't exist or was deleted." : `Version ${n} of this document doesn't exist.`}
-          </Empty>
-          <div className="flex flex-wrap justify-center gap-2">
-            {missing === "version" && (
-              <LinkButton href={`/documents/${doc}`} variant="ghost">
-                Open the document
-              </LinkButton>
-            )}
-            <LinkButton href="/documents" variant="ghost" icon="back">
+    return missing === "doc" ? (
+      <DocumentNotFound />
+    ) : (
+      <NotFoundPanel
+        title="Version not found"
+        icon="doc"
+        testId="doc-not-found"
+        actions={
+          <>
+            <LinkButton href={`/documents/${doc}`} variant="secondary" className="h-10">
+              Open the document
+            </LinkButton>
+            <LinkButton href="/documents" variant="secondary" icon="back" className="h-10">
               Back to PRDs
             </LinkButton>
-          </div>
-        </Panel>
-      </Page>
+          </>
+        }
+      >
+        <p>Version {n} of this document doesn&apos;t exist.</p>
+      </NotFoundPanel>
     );
   }
 
@@ -1169,6 +1211,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                     }}
                   />
                 ))}
+              {/* qa-docs-3: a reviewer who cannot approve still sees why the version cannot be
+                  approved (the marked dates); only the Approve button is the approver's. */}
+              {version && !version.approved_at && !canApprove && capsReady && approveBlockedNote && (
+                <span
+                  data-testid="approve-blocked-note"
+                  className="block max-w-[min(28rem,calc(100vw-2.5rem))] text-right text-sm font-medium break-words text-warn max-[600px]:text-left"
+                >
+                  {approveBlockedNote}
+                </span>
+              )}
             </>
           }
         />
@@ -1443,6 +1495,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       {/* Phone: Sections and Review, each opening a sheet. */}
       {onDocument && version && (
         <div
+          ref={setPhoneBar}
           data-testid="phone-bar"
           className="fixed inset-x-0 bottom-0 z-30 hidden grid-cols-2 gap-2 border-t border-line bg-surface px-3 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] shadow-tip max-[639px]:grid max-[600px]:bottom-[68px] max-[600px]:pb-1.5"
         >

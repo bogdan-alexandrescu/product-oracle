@@ -5,6 +5,9 @@
  */
 export const RAIL_SELECTED =
   "aria-[current=page]:bg-rail-active aria-[current=page]:font-semibold aria-[current=page]:text-rail-active-text aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-2.5 aria-[current=page]:before:-left-[9px] aria-[current=page]:before:w-[3px] aria-[current=page]:before:rounded-[2px] aria-[current=page]:before:bg-rail-bar aria-[current=page]:before:content-['']";
-/** On the phone tab bar the bar sits on top instead. */
-export const TAB_BAR =
-  "before:absolute before:inset-x-2.5 before:-top-1.5 before:h-[3px] before:rounded-[2px] before:bg-rail-bar before:content-['']";
+/**
+ * On the phone tab bar the highlight alone marks the selected item (qa-company-37): the sky
+ * bar it once had on top stuck out above the highlight as a second indicator. Kept as the one
+ * place both tab bars (Detailed's, Simple's) take their selected extras from.
+ */
+export const TAB_BAR = "";

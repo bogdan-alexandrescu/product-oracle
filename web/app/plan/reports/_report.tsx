@@ -6,12 +6,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button, Chip, InfoTip, Label, Notice, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { formatDay, zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import { HealthChip, HORIZON_LABEL, periodBound, slackText, type Report, type ReportTrack } from "./_lib";
+import { HealthChip, HORIZON_LABEL, periodEnd, periodStart, slackText, zoneMoment, type Report, type ReportTrack } from "./_lib";
 
 const path = (id: string) => ({ params: { path: { report_id: id } } });
 
@@ -48,10 +48,11 @@ export function ReportDetail({ id }: { id: string }) {
     <Page>
       <PageHeader
         title={report?.title ?? "Alignment report"}
-        back={
-          <Link href="/plan/reports" className="hover:underline">
-            Alignment reports
-          </Link>
+        // qa-plan-11: no back link above the title: the Reports tab below leads to every report.
+        info={
+          <InfoTip label="this report" align="start" side="bottom">
+            How each track stood against its milestones over the week. Every report is under the Reports tab.
+          </InfoTip>
         }
         status={report && <Chip kind="line">{report.kind === "weekly" ? "Weekly" : "On demand"}</Chip>}
       />
@@ -75,12 +76,17 @@ export function ReportDetail({ id }: { id: string }) {
           </div>
           <aside data-testid="report-rail" className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-4 print:hidden">
             <SlackPanel report={report} onChange={q.reload} />
+            {/* qa-plan-44: "Oct 26 – Oct 29, 4:09 AM", the time zone said once under it. */}
             <Panel title="Covers">
               <div className="space-y-1 px-4 py-3 text-[15px]">
-                <p className="tnum">
-                  {periodBound(report.period.from, report)} to {periodBound(report.period.to, report)}
+                <p className="tnum" data-testid="report-covers">
+                  <span className="whitespace-nowrap">{periodStart(report)}</span> –{" "}
+                  <span className="whitespace-nowrap">{periodEnd(report)}</span>
                 </p>
-                <p className="text-sm text-text2">Made {formatDateTime(report.generated_at)}</p>
+                <p className="text-sm text-text2" data-testid="report-made">
+                  Made <span className="whitespace-nowrap">{zoneMoment(report.generated_at, report.timezone)}</span>
+                </p>
+                <p className="text-sm text-text2">Times in {zoneName(report.timezone)}</p>
               </div>
             </Panel>
             <nav aria-label="Reports" className="flex flex-wrap gap-2">
@@ -169,7 +175,15 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
             {a.aligned} aligned · {a.drift} drift · {a.untracked} untracked · {a.done} done
           </span>
         </Row>
-        {t.prd_moved && <Notice tone="warn">The PRD has a newer approved version.</Notice>}
+        {/* qa-plan-43: which version is approved, and where to update the roadmap from it. */}
+        {t.prd_moved && (
+          <Notice tone="warn" testId="report-prd-moved">
+            {t.prd_moved_to ? `v${t.prd_moved_to} of the PRD is approved` : "A newer version of the PRD is approved"} ·{" "}
+            <Link href={t.link} prefetch={false} className="font-semibold text-accent-ink hover:underline">
+              Update the roadmap
+            </Link>
+          </Notice>
+        )}
         {t.needs_attention.length > 0 && (
           <section data-testid="needs-attention" aria-label="Needs attention">
             <h3 className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2">
@@ -197,14 +211,21 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
             <h3 className="mb-1 text-[13px] font-semibold tracking-[0.02em] text-text2">Drift both ways</h3>
             <ul className="space-y-1.5">
               {t.drift.map((d, i) => (
-                <li key={`${d.kind}-${i}`} className="text-[15px]">
-                  <Chip kind="line">{d.kind === "ahead" ? "Started early" : "Not on the roadmap"}</Chip>{" "}
-                  {d.link && d.title ? (
-                    <Link href={d.link} prefetch={false} className="font-semibold text-accent-ink hover:underline">
-                      {d.title}
-                    </Link>
-                  ) : null}{" "}
-                  {d.detail}
+                // qa-plan-45: the chip and its words on one centred line, a steady gap between them.
+                <li key={`${d.kind}-${i}`} data-testid="report-drift" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px]">
+                  <Chip kind="line" className="shrink-0">
+                    {d.kind === "ahead" ? "Started early" : "Not on the roadmap"}
+                  </Chip>
+                  <span className="min-w-0">
+                    {d.link && d.title ? (
+                      <>
+                        <Link href={d.link} prefetch={false} className="font-semibold text-accent-ink hover:underline">
+                          {d.title}
+                        </Link>{" "}
+                      </>
+                    ) : null}
+                    {d.detail}
+                  </span>
                 </li>
               ))}
             </ul>

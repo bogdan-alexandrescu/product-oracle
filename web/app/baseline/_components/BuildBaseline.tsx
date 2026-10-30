@@ -7,7 +7,7 @@ import { usd, type EstimateOut } from "@/app/runs/_lib";
 import { Button, Chip, Icon, Notice, SegmentedControl } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
-import { errorMessage } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 type RunSummary = Schemas["RunSummary"];
 type Depth = Schemas["KnobsIn"]["depth"];
@@ -68,9 +68,23 @@ export function BuildBanner({ build }: { build: RunSummary }) {
   const started = build.started_at ?? build.created_at;
   return (
     <Notice testId="baseline-build-banner">
-      Baseline being built · started {formatDateTime(started)} · {link("Open run")}
+      Baseline being built · started {formatDateTime(started)} · {link("Open run")}. You&apos;ll get an Inbox item when
+      it&apos;s ready to review.
     </Notice>
   );
+}
+
+/** "$50" for a whole-dollar line, else "$50.50". */
+const line = (usd_: number) => (Number.isInteger(usd_) ? `$${usd_}` : usd(usd_));
+
+/**
+ * What the build costs and who approves it (qa-onboarding-27): "$7.00 estimated · below the
+ * $50 approval line · starts at once"; above the line an owner approves before it starts.
+ */
+export function estimateLine(e: EstimateOut): string {
+  return e.needs_approval
+    ? `${usd(e.total_usd)} estimated · above the ${line(e.approval_threshold_usd)} approval line · an owner approves it before it starts`
+    : `${usd(e.total_usd)} estimated · below the ${line(e.approval_threshold_usd)} approval line · starts at once`;
 }
 
 type Drafted = { runId: string; estimate: EstimateOut };
@@ -104,6 +118,10 @@ export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void
   const [error, setError] = useState<string | null>(null);
   // The latest choice wins when estimates cross.
   const asked = useRef(0);
+  // Sources with nothing in them give the build nothing to read: say so before Start
+  // (qa-onboarding-11). A failed list says nothing.
+  const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
+  const nothingToRead = !!sources.data && sources.data.every((s) => s.item_count === 0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -198,8 +216,18 @@ export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void
             <span className="font-semibold">Stop for my review</span>
           </label>
           <p className="tnum text-sm text-text2" data-testid="build-estimate" aria-live="polite">
-            {estimate ? `Estimate ${usd(estimate.total_usd)}` : busy ? "Estimating…" : ""}
+            {estimate ? estimateLine(estimate) : busy ? "Estimating…" : ""}
           </p>
+          {nothingToRead && (
+            <Notice tone="warn" testId="build-no-items">
+              {sources.data!.length === 0 ? "You have no sources yet" : "Your sources have no items yet"}, so the build has
+              nothing to read.{" "}
+              <Link href="/settings/sources" className="font-semibold underline underline-offset-2">
+                Add files or sync a source
+              </Link>{" "}
+              first.
+            </Notice>
+          )}
           {estimate?.needs_approval && (
             <Notice tone="warn">
               Over {usd(estimate.approval_threshold_usd)}: an owner approves the cost before the build starts.

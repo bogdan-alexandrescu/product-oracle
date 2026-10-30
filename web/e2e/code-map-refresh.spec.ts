@@ -54,7 +54,7 @@ for (const phone of [false, true]) {
         await login(page);
         await switchTo(page, "approver@example.com");
         await page.goto("/settings/sources");
-        await expect(page.getByRole("heading", { name: "Sources" }).first()).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
         await expect(page.getByLabel("Refresh stale code maps")).toHaveCount(0);
       });
     });

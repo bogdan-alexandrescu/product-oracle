@@ -28,24 +28,46 @@ export const SELECTION_LABEL: Record<Module["selection"], string> = {
 
 const SELECTION_ORDER: Module["selection"][] = ["mandatory", "suggested", "optional"];
 
-/** decided_by and policy_source in words, as the mockup labels them. */
+/** decided_by and policy_source in plain words (qa-docs-30: no "Condition holds" or "Pack policy"). */
 export const DECIDED_BY: Record<Module["decided_by"], string> = {
-  policy: "Policy",
-  template: "Template",
-  condition: "Condition holds",
-  learning: "A kept learning",
-  dependency: "Dependency",
-  user: "A person",
-  conflict: "Conflict",
-  none: "Nobody yet",
+  policy: "Company policy",
+  template: "The template",
+  condition: "This document needs it",
+  learning: "A past lesson",
+  dependency: "Another module needs it",
+  user: "A person chose it",
+  conflict: "Rules disagree",
+  none: "Not decided yet",
 };
 
 export const POLICY_SOURCE: Record<Module["policy_source"], string> = {
   company: "Company policy",
-  pack: "Pack policy",
-  template: "Template",
-  catalog: "Catalog",
+  pack: "Your company pack",
+  template: "The template",
+  catalog: "The catalog",
 };
+
+const POLICY_BY: Record<Module["policy_source"], string> = {
+  company: "your company policy",
+  pack: "your company pack",
+  template: "the template",
+  catalog: "the catalog",
+};
+
+/** Why a module is where it is, in one plain phrase ("Required by your company pack"). */
+export function decidedByInWords(m: Module): string {
+  if (m.decided_by !== "policy") return DECIDED_BY[m.decided_by];
+  const how = m.selection === "mandatory" ? "Required" : m.selection === "suggested" ? "Suggested" : "Left optional";
+  return `${how} by ${POLICY_BY[m.policy_source]}`;
+}
+
+/** How many sections a module adds to the short and the full version, in words. */
+export function sectionsInWords(m: Module): string | null {
+  const brief = m.layer_impact.brief_sections.length;
+  const full = m.layer_impact.full_sections.length;
+  if (!brief && !full) return null;
+  return [brief ? `${brief} in the short version` : null, full ? `${full} in the full version` : null].filter(Boolean).join(", ");
+}
 
 export const KNOWLEDGE: Record<Schemas["Basis"]["knowledge_state"], string> = {
   verified_fact: "Verified fact",

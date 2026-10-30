@@ -43,6 +43,13 @@ async function openRoadmap(page: Page, format: "timeline" | "gantt" | "waterfall
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
 }
 
+/** Opens an item's card from the Timeline: its pill on a desktop; on a phone (timeline-overlap B3, thin lanes) its row in its lane's list. */
+async function openFromTimeline(page: Page, phone: boolean, key: string, laneTitle: string) {
+  if (!phone) return body(page, key).click();
+  await page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: laneTitle }) }).click();
+  await page.locator(`[data-testid="lane-row"][data-item="${key}"]`).click();
+}
+
 /** A mouse drag of a bar by `dx` pixels from its middle. */
 async function mouseDrag(page: Page, key: string, dx: number) {
   await body(page, key).scrollIntoViewIfNeeded();
@@ -164,10 +171,10 @@ for (const [where, use] of [
         }
         await expect(page.getByTestId("legend")).toContainText("a key date");
         await page.getByTestId("format-timeline").click();
-        await body(page, "alert-rules").click();
+        await openFromTimeline(page, where === "phone", "alert-rules", "Grow retention");
         await expect(page.getByTestId("card-near")).toHaveText("Customer conference (Nov 14): ends 4 days before");
         await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
-        await body(page, "alert-sso").click();
+        await openFromTimeline(page, where === "phone", "alert-sso", "Grow retention");
         await expect(page.getByTestId("floating-card")).toBeVisible();
         await expect(page.getByTestId("card-near")).toHaveCount(0);
       });
@@ -258,7 +265,7 @@ for (const [where, use] of [
         await expect(page.getByTestId("simple-priorities")).toBeVisible();
         const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
         await expect(select).toHaveValue("now");
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss This quarter (Now)");
+        await expect(page.getByTestId("line-caption").first()).toContainText("miss this quarter");
         const options = await select.locator("option").allTextContents();
         expect(options).toEqual(expect.arrayContaining([expect.stringMatching(/^Key date: Customer conference · Nov 14, 2026$/), expect.stringMatching(/^Milestone: Beta · /), "Pick a date…"]));
         const kd = (await select.locator("option", { hasText: "Customer conference" }).getAttribute("value"))!;
@@ -280,7 +287,7 @@ for (const [where, use] of [
         await select.selectOption("pick");
         await page.getByLabel("The line's date").fill("2026-12-31");
         await expect(page).toHaveURL(/line=date(:|%3A)2026-12-31/);
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss By Dec 31, 2026");
+        await expect(page.getByTestId("line-caption").first()).toContainText("miss Dec 31, 2026");
         await page.getByRole("tab", { name: "Value / effort" }).click();
         const points = page.getByTestId("vxe-point");
         await expect(points.first()).toBeVisible();
@@ -301,13 +308,13 @@ for (const scheme of ["light", "dark"] as const) {
     /**
      * Card roadmap-plus-phone-touch-clear: protects = on a phone a bar scrolled into view
      * sits above the fixed tab bar (the page's scroll padding), so a real finger's long
-     * press on the timeline reaches the bar, picks it up and the drag is exactly one change
+     * press on the Gantt (the phone's Timeline, timeline-overlap B3, has no bars to drag) reaches the bar, picks it up and the drag is exactly one change
      * in the working draft; fails_when = the tab bar covers the bar (the touch lands on a
      * tab and the bar is never picked up) or the drag sends more than one change; no_claim =
      * native scrolling and the tab bar's look.
      */
-    test("a long press on the timeline reaches a bar the tab bar would cover: one change", async ({ page }) => {
-      await openRoadmap(page, "timeline");
+    test("a long press on the Gantt reaches a bar the tab bar would cover: one change", async ({ page }) => {
+      await openRoadmap(page, "gantt");
       const start = (await bar(page, "alert-rules").getAttribute("data-start"))!;
       await longPressDrag(page, "alert-rules", 40);
       await expect(page.getByText(/Moved 'Alert rules engine' to .* in your working draft/)).toBeVisible();

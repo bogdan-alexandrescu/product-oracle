@@ -18,16 +18,16 @@ test("priorities: method switch changes the ranking and the formula", async ({ p
   await expect(page.getByTestId("formula")).toContainText("goal weight × contribution");
   // F-2 is the best score but needs F-5 first, so F-5 is moved up.
   expect(await rankedKeys(page)).toEqual(["F-5", "F-2", "F-1", "F-7", "F-8", "F-4", "F-3", "F-6"]);
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("8.1");
+  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("8.10");
 
   await methods.getByRole("radio", { name: "WSJF" }).click();
   await expect(page.getByTestId("formula")).toContainText("business value + time criticality + risk reduction");
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("7.5");
+  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("7.50");
   expect(await rankedKeys(page)).toEqual(["F-5", "F-2", "F-4", "F-1", "F-7", "F-8", "F-3", "F-6"]);
 
   await methods.getByRole("radio", { name: "RICE" }).click();
   await expect(page.getByTestId("formula")).toContainText("reach × impact × confidence");
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
+  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400.00");
   // F-4 has no reach: unscored and flagged.
   await expect(page.getByTestId("priority-row-F-4")).toContainText("Not scored: no Reach");
   await expect(page.getByTestId("priority-row-F-4").getByTestId("score")).toHaveText("—");
@@ -37,7 +37,8 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await login(page);
   await page.goto("/priorities");
 
-  await expect(page.getByTestId("cycles-banner")).toContainText("F-7 Bulk export → F-8 Scheduled exports");
+  await expect(page.getByTestId("cycles-banner")).toContainText("Bulk export → Scheduled exports");
+  await expect(page.getByTestId("cycles-banner")).not.toContainText("F-7");
   const noGoal = page.getByTestId("priority-row-F-6");
   await expect(noGoal).toContainText("Serves no confirmed goal");
   await expect(page.getByTestId("priority-row-F-7")).toContainText("Dependency cycle");
@@ -51,7 +52,7 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   const ex = page.getByTestId("explanation-F-1");
   await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Goal value = 3×2 (Raise activation) = 6");
-  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Score = 6 × 75% ÷ 2 = 2.3");
+  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Score = 6 × 75% ÷ 2 = 2.25");
   await expect(ex).toContainText("from evidence");
   await expect(ex).toContainText("Interview 07");
   await expect(ex.getByRole("cell", { name: "Effort (from the feature)" })).toBeVisible();
@@ -60,7 +61,10 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await page.getByTestId("priority-row-F-3").getByRole("button", { name: "Shared projects" }).click();
   await expect(page.getByTestId("explanation-F-3")).toContainText("assumed");
   await page.getByTestId("priority-row-F-5").getByRole("button", { name: "Address lookup service" }).click();
-  await expect(page.getByTestId("explanation-F-5").locator("li", { hasText: "Moved for" })).toContainText("F-2");
+  await expect(page.getByTestId("explanation-F-5").locator("li", { hasText: "Moved for" })).toContainText(
+    "Shipping cost shown in the cart",
+  );
+  await expect(page.getByTestId("explanation-F-5").locator("li", { hasText: "Moved for" })).not.toContainText("F-2");
   await expect(page.getByTestId("explanation-F-5")).not.toContainText("depend(s)");
 
   // The inspector shows one feature at a time: F-1's explanation has gone.

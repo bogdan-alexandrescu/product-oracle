@@ -29,25 +29,25 @@ async function open(page: Page, scheme: "light" | "dark") {
   await page.emulateMedia({ colorScheme: scheme });
   await login(page, ADMIN.email);
   await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await expect(slice(page, "F-05a")).toBeAttached();
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
 }
 
-/** The item names listed under a lane's header, up to the next lane. */
-async function rowsUnder(page: Page, title: string): Promise<string[]> {
-  const rows = await page
-    .getByTestId("chart-labels")
-    .locator('[data-testid="chart-group"], [data-testid="chart-label"]')
-    // An item row's name (its code, F-06, sits before it: roadmap-milestones D).
-    .evaluateAll((els) => els.map((e) => [e.getAttribute("data-testid"), ((e.querySelector('[data-testid="label-title"]') ?? e) as HTMLElement).innerText.trim()]));
-  const at = rows.findIndex(([id, t]) => id === "chart-group" && t!.startsWith(title));
-  expect(at, `a lane "${title}"`).toBeGreaterThanOrEqual(0);
-  const out: string[] = [];
-  for (const [id, t] of rows.slice(at + 1)) {
-    if (id === "chart-group") break;
-    out.push(t!);
+/**
+ * The items (their keys) in a lane of the Timeline (timeline-overlap B2: the items whose pills
+ * sit in it; B3 on a phone: the lane opened, its list's rows).
+ */
+async function itemsIn(page: Page, phone: boolean, title: string): Promise<string[]> {
+  const named = new RegExp(`^${title.replace(/[()]/g, "\\$&")}$`);
+  if (phone) {
+    const l = page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: named }) });
+    await expect(l, `a lane "${title}"`).toHaveCount(1);
+    await l.click();
+    await expect(page.getByTestId("lane-list")).toHaveAttribute("data-lane", (await l.getAttribute("data-lane"))!);
+    return page.getByTestId("lane-list").getByTestId("lane-row").evaluateAll((els) => [...new Set(els.map((e) => e.getAttribute("data-item") ?? ""))]);
   }
-  return out;
+  const key = await page.getByTestId("chart-group").filter({ has: page.locator("b", { hasText: named }) }).getAttribute("data-lane");
+  expect(key, `a lane "${title}"`).toBeTruthy();
+  return page.locator(`g[data-testid="bar"][data-lane="${key}"]`).evaluateAll((els) => els.map((e) => e.getAttribute("data-item") ?? ""));
 }
 
 for (const phone of [false, true]) {
@@ -58,21 +58,21 @@ for (const phone of [false, true]) {
 
       /**
        * Card gantt-one-goal-lane: protects = an item under the goal Growth and the plan's items
-       * whose slices move Growth share ONE Growth lane ("5 items": Team invites, Usage
-       * dashboard, Launch email, Referral link, Public signup); its suggested features open
-       * from the goal's card above the chart (roadmap-milestones D draws no button on the
-       * lane); fails_when = two lanes are titled Growth; no_claim = the lanes' order, other
-       * goals' lanes.
+       * whose slices move Growth share ONE Growth lane ("4 items": Team invites, Usage
+       * dashboard, Referral link, Public signup; the PM-owned Launch email sits in the PM-owned
+       * lane, timeline-overlap B); its suggested features open from the goal's card above the
+       * chart (no button on the lane); fails_when = two lanes are titled Growth; no_claim =
+       * the lanes' order, other goals' lanes.
        */
       test(`one lane per goal, whether the goal is the item's or its slices' (${where})`, async ({ page }) => {
         await open(page, scheme);
-        const growth = lane(page, "Growth");
+        const growth = phone ? page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: /^Growth$/ }) }) : lane(page, "Growth");
         await expect(growth).toHaveCount(1);
-        await expect(growth.getByTestId("lane-count")).toHaveText("5 items");
-        await expect(growth.getByRole("button")).toHaveCount(0);
-        const rows = await rowsUnder(page, "Growth");
-        expect(rows).toContain("Public signup");
-        expect(rows).toContain("Team invites");
+        await expect(growth.getByTestId("lane-count")).toHaveText("4 items");
+        if (!phone) await expect(growth.getByRole("button")).toHaveCount(0);
+        const rows = await itemsIn(page, phone, "Growth");
+        expect(rows).toContain("plan-f-13");
+        expect(rows).toContain("plan-f-05");
       });
 
       /**
@@ -92,13 +92,15 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("img", { name: /^M1 Prove it \(Guided setup\) ends/ })).toBeAttached();
 
         await page.getByTestId("group-milestone").click();
-        await expect(lane(page, "M1 Prove it (Usage alerts)")).toHaveCount(1);
-        await expect(lane(page, "M1 Prove it (Guided setup)")).toHaveCount(1);
-        await expect(lane(page, "M1 Prove it (Usage alerts)").getByTestId("lane-count")).toHaveText("1 item");
-        expect(await rowsUnder(page, "M1 Prove it (Usage alerts)")).toEqual(["Weekly alert digest"]);
-        const guided = await rowsUnder(page, "M1 Prove it (Guided setup)");
-        expect(guided).toContain("Team invites");
-        expect(guided).not.toContain("Weekly alert digest");
+        if (!phone) {
+          await expect(lane(page, "M1 Prove it (Usage alerts)")).toHaveCount(1);
+          await expect(lane(page, "M1 Prove it (Guided setup)")).toHaveCount(1);
+          await expect(lane(page, "M1 Prove it (Usage alerts)").getByTestId("lane-count")).toHaveText("1 item");
+        }
+        expect(await itemsIn(page, phone, "M1 Prove it (Usage alerts)")).toEqual(["alert-digest"]);
+        const guided = await itemsIn(page, phone, "M1 Prove it (Guided setup)");
+        expect(guided).toContain("plan-f-05");
+        expect(guided).not.toContain("alert-digest");
       });
 
       /**
@@ -121,6 +123,8 @@ for (const phone of [false, true]) {
        */
       test(`a planned bar says how its dates change (${where})`, async ({ page }) => {
         await open(page, scheme);
+        // A phone's Timeline (timeline-overlap B3) has no bars: its Gantt's.
+        if (phone) await page.getByTestId("format-gantt").click();
         const bar = page.locator('g[data-testid="bar"]').filter({ has: slice(page, "F-05a") });
         await expect(bar).toHaveCount(1);
         await expect(bar).toHaveAccessibleName(/Its dates follow the PRD's plan: change them in the PRD/);

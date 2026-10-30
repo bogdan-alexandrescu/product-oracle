@@ -107,6 +107,7 @@ export function ClaudeAccounts() {
               variant="primary"
               icon="plus"
               aria-label="+ Add account"
+              className="max-sm:min-h-11"
               aria-expanded={adding}
               disabled={signin("add").kind === "started"}
               onClick={() => setAdding(!adding)}
@@ -129,7 +130,7 @@ export function ClaudeAccounts() {
         </Panel>
       )}
       {q.data && (
-        <div className="flex flex-col gap-4 max-[600px]:gap-3">
+        <div className="flex flex-col gap-4 max-[600px]:gap-3 max-sm:[&_[data-variant]]:min-h-11">
           {owner && <ClaudeOffNotice page={q.data} onAdd={() => setAdding(true)} onFallback={() => setFallbackOpen(true)} />}
           <Broken accounts={q.data.accounts} owner={owner} onOpen={(id) => setChosen(id)} />
           <Pool
@@ -189,14 +190,20 @@ function SummaryChips({ page }: { page: Page }) {
       <Dot />
       <Chip kind={sweepOk ? "na" : "warn"} data-testid="refresh-sweep">
         {!sweep.readable
-          ? "refresh sweep unknown"
+          ? "Last check unknown"
           : sweep.last_completed_at
-            ? `refresh sweep ${sweep.last_outcome === "ok" ? "ran" : "failed"} ${timeAgo(sweep.last_completed_at)}`
-            : "refresh sweep has not completed yet"}
+            ? `${sweep.last_outcome === "ok" ? "Last checked" : "Last check failed"} ${inMinutes(timeAgo(sweep.last_completed_at))}`
+            : "Not checked yet"}
       </Chip>
     </span>
   );
 }
+
+/** "6m ago" read out in words a person uses: "6 min ago". */
+const inMinutes = (ago: string) => ago.replace(/\b(\d+)m ago$/, "$1 min ago").replace(/\b(\d+)s ago$/, "$1 s ago");
+
+/** "anthropic" as a name: "Anthropic". */
+const providerName = (p: string) => (p ? p.charAt(0).toUpperCase() + p.slice(1) : p);
 
 /** The accounts a timer will never fix, before anything else. */
 function Broken({ accounts, owner, onOpen }: { accounts: Account[]; owner: boolean; onOpen: (id: string) => void }) {
@@ -219,7 +226,7 @@ function Broken({ accounts, owner, onOpen }: { accounts: Account[]; owner: boole
           <button
             key={a.account_id}
             type="button"
-            className="font-semibold underline underline-offset-2"
+            className="font-semibold underline underline-offset-2 max-sm:min-h-11"
             onClick={() => onOpen(a.account_id)}
           >
             {broken.length === 1 ? "Sign in again" : `Sign in again to ${a.label}`}
@@ -624,7 +631,7 @@ function Detail({
       chips={
         <>
           <AcctState account={account} zone={zone} />
-          <Chip hero>{account.provider} · Claude subscription</Chip>
+          <Chip hero>{providerName(account.provider)} · Claude subscription</Chip>
         </>
       }
       statColumns={2}
@@ -672,7 +679,7 @@ function Detail({
         <Fact label="Jobs on it">{account.assigned}</Fact>
         <Fact label="Last read">
           {account.observed_at === null
-            ? "not measured"
+            ? "Not measured"
             : `${timeAgo(account.observed_at, now)}${account.stale ? " (old: figures are projected)" : ""}`}
         </Fact>
         <Fact label="Token expires">
@@ -685,11 +692,9 @@ function Detail({
         <Fact label="Last refresh">
           {account.last_refresh_at
             ? `${account.last_refresh_reason ? `${reasonLabel(account.last_refresh_reason)} · ` : ""}${timeAgo(account.last_refresh_at, now)}`
-            : "No sweep yet"}
+            : "Not refreshed yet"}
         </Fact>
-        <Fact label="Id" mono>
-          {account.account_id}
-        </Fact>
+        <CopyId id={account.account_id} />
       </InspectorSection>
       <Holding account={account} now={now} />
       {owner ? (
@@ -713,7 +718,27 @@ function Detail({
   );
 }
 
-const TAB = "h-8 rounded-lg px-3 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-70";
+/** The account's id stays out of sight; a button copies it for a support request. */
+function CopyId({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <div className="flex min-h-8 items-center justify-end">
+      <Button variant="ghost" onClick={() => void copy()}>
+        {copied ? "ID copied" : "Copy ID"}
+      </Button>
+    </div>
+  );
+}
+
+const TAB = "h-8 max-sm:min-h-11 rounded-lg px-3 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-70";
 const tabTone = (on: boolean) => (on ? "bg-accent text-on-accent" : "text-text2 hover:bg-surface2 hover:text-text");
 
 /** Holding now | History, both closed by default and loaded only when opened. */
@@ -1005,7 +1030,7 @@ function RefreshControl({ account, reload }: { account: Account; reload: () => P
   return (
     <div className="flex flex-col items-start gap-2">
       <Button icon="clock" disabled={busy} onClick={() => void run()}>
-        {busy ? "refreshing…" : "Refresh now"}
+        {busy ? "Refreshing…" : "Refresh now"}
       </Button>
       {verdict && (
         <p
@@ -1050,12 +1075,15 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
       }
     >
       <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor={`remove-${account.account_id}`} className="w-full text-sm text-text2">
+          Type <b className="font-mono font-semibold text-text">{account.label}</b> to confirm
+        </label>
         <input
+          id={`remove-${account.account_id}`}
           className={`${INPUT} max-w-48 flex-1 font-mono`}
           value={typed}
           disabled={busy}
-          placeholder={account.label}
-          aria-label={`Type ${account.label} to confirm removal`}
+          autoComplete="off"
           onChange={(e) => setTyped(e.target.value)}
         />
         <Button variant="danger" disabled={!armed || busy} onClick={() => void run()}>
@@ -1169,7 +1197,11 @@ function SignInSteps({
             Claude account: <b>{claudeAccountOf(signin.account)}</b>
           </span>
         )}
-        <button type="button" className="font-semibold underline underline-offset-2" onClick={() => setSignin({ kind: "idle" })}>
+        <button
+          type="button"
+          className="font-semibold underline underline-offset-2 max-sm:min-h-11"
+          onClick={() => setSignin({ kind: "idle" })}
+        >
           Done
         </button>
       </div>
@@ -1372,7 +1404,7 @@ function AddAccount({
                 className={`${INPUT} font-mono`}
                 value={label}
                 disabled={signin.kind === "started"}
-                placeholder="personal"
+                placeholder="e.g. team-laptop"
                 onChange={(e) => setLabel(e.target.value.toLowerCase())}
               />
             </Field>

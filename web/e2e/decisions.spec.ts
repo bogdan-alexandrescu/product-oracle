@@ -126,7 +126,7 @@ test("phone: the table keeps D-number, title and state, no sideways scroll, the 
   const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
   expect(sw).toBeLessThanOrEqual(cw);
   await caps.click();
-  const sheet = page.getByRole("dialog", { name: /^D-5/ });
+  const sheet = page.getByRole("dialog", { name: "Decision" });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByTestId("decision-inspector")).toContainText("Do caps wait for detection?");
 });

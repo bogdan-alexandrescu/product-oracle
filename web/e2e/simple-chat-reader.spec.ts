@@ -199,7 +199,8 @@ for (const [phone, dark] of [
 
       await say(panel, "push Delivery pipeline v2 to next quarter and cut Delivery integrity and release safety");
       await expect(last(thread).getByTestId("chat-message-body")).toHaveText("I understood two changes:");
-      await expect(last(thread).getByRole("button", { name: "Apply all" })).toBeVisible();
+      // qa-simple-decide-13: a commenter's cards all propose, so the line says Propose all.
+      await expect(last(thread).getByRole("button", { name: "Propose all" })).toBeVisible();
 
       await say(panel, "why is Delivery pipeline v2 after the integrity work");
       // ask-fresh: Oracle's Ask answers in the same chat (no discussion screen in Simple).
@@ -217,13 +218,13 @@ test.describe("chat-reader review", () => {
   });
 
   test("meeting chat: a question gets the same note as the API", async ({ page }) => {
-    // protects: in the meeting chat a line the reader reads as a question gives the API's own words, "I could not tell what to change. Say it another way."
+    // protects: in the meeting chat a line the reader reads as a question gives the API's own words, "Kept as a question for the minutes. For an answer now, use Ask Oracle."
     // fails_when: the mock says something the API never says ("That reads as a question…")
     // no_claim: Ask's one box (it goes to Oracle's Ask)
     const chat = await meeting(page, EMAILS.owner);
     await say(chat, "why is Delivery pipeline v2 after the integrity work?");
     await expect(last(chat)).toHaveAttribute("data-kind", "note");
-    await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I could not tell what to change. Say it another way.");
+    await expect(last(chat).getByTestId("chat-message-body")).toHaveText("Kept as a question for the minutes. For an answer now, use Ask Oracle.");
   });
 
   test("Ask: a line handed to Oracle's Ask leaves nothing in the plan thread", async ({ page }) => {

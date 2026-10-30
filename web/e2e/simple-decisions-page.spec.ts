@@ -1,4 +1,4 @@
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
@@ -32,7 +32,7 @@ for (const phone of [false, true]) {
         await login(page, "viewer@example.com");
         await page.goto("/simple/decisions");
         const past = group(page, "Review: Usage alerts");
-        await expect(past).toContainText("2 decisions in Review: Usage alerts");
+        await expect(past).toContainText("Comment: keep quiet hours on by default.");
         await expect(past).toContainText("Attendees: Admin, Approver, Commenter");
         await expect(past).toContainText("D-3: Should muted teams still get the weekly digest?");
         await expect(past).toContainText("Draft the quiet hours copy · Commenter · by");
@@ -44,10 +44,11 @@ for (const phone of [false, true]) {
         await expect(rows.nth(1)).toContainText("D-4 Moved Weekly alert digest");
         const outside = group(page, "Outside meetings");
         // prd-decisions A1: a PRD's decided question sits here too, with its code and answer.
-        await expect(outside.getByTestId("decision-row")).toHaveCount(4);
+        // qa-simple-decide-20: D-3 is listed once, beside its meeting, not here as well.
+        await expect(outside.getByTestId("decision-row")).toHaveCount(3);
         await expect(outside.getByTestId("decision-row").first()).toContainText("Q1 Data retention period");
         await expect(outside.getByTestId("decision-row").first()).toContainText("Keep 90 days · Admin");
-        await expect(outside.getByTestId("decision-row").nth(1)).toContainText("D-3");
+        await expect(outside).not.toContainText("D-3");
         await expect(outside).toContainText("D-1 Start guided setup with the checklist");
 
         await page.getByRole("combobox", { name: "PRD", exact: true }).selectOption({ label: "Guided setup" });
@@ -79,8 +80,8 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Start review" }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await page.getByRole("button", { name: "Edit line 4" }).click();
-        await page.getByLabel("Line 4").fill("A sample project on day one");
+        await page.getByRole("button", { name: "Edit “A sample project created on" }).click();
+        await page.getByLabel("New wording for").fill("A sample project on day one");
         await page.getByRole("button", { name: "Save" }).click();
         const decisions = page.getByRole("region", { name: "All decisions" });
         await expect(decisions).toContainText("New wording for a line of Guided setup");
@@ -92,9 +93,9 @@ for (const phone of [false, true]) {
 
         await page.goto("/simple/roadmap");
         await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-        await page.locator('g[data-testid="bar"][data-item="setup-import"]').click();
+        await openRoadmapItem(page, "setup-import");
         const card = page.getByTestId("floating-card");
-        await expect(card.getByTestId("card-decided-in")).toContainText(`Decided in ${itemNo} Moved Sample data import`);
+        await expect(card.getByTestId("card-decided-in")).toContainText(`Decided in ${itemNo}: Moved Sample data import`);
         await card.getByTestId("card-decided-in").getByRole("link", { name: itemNo }).click();
         await expect(page).toHaveURL(new RegExp(`/simple/decisions#d-${itemNo.slice(2)}$`));
         await expect(page.locator(`#d-${itemNo.slice(2)}`)).toContainText("Moved Sample data import");

@@ -236,7 +236,7 @@ export function DeleteDialog({
           <Button variant="ghost" onClick={onClose} data-autofocus>
             Back
           </Button>
-          <Button variant="danger" disabled={!ready || busy} onClick={submit}>
+          <Button variant="danger" disabled={!ready || busy} title={working ? "Cancel the run first" : undefined} onClick={submit}>
             Move to Trash
           </Button>
         </>
@@ -275,7 +275,14 @@ export function DeleteDialog({
           )}
         </div>
       )}
-      {working && <Notice tone="warn">A run is still working on this. Cancel it first, then delete.</Notice>}
+      {working && (
+        // qa-onboarding-16: said as it is (a run waiting for a decision is not "working"), and
+        // Move to Trash stays off until the run is cancelled.
+        <Notice tone="warn" testId="delete-blocked">
+          {deps?.root.type === "run" ? "This run has not finished" : "A run on this has not finished"} (it is running or waiting for
+          someone). Cancel the run first, then delete.
+        </Notice>
+      )}
       {deps?.published && (
         <div data-testid="published-warning" className="rounded-button bg-warn-bg px-3 py-2 text-warn">
           <p>This is published. Deleting moves it to Trash here only: the external copy (Notion, Google Docs, Slack) stays where it is.</p>

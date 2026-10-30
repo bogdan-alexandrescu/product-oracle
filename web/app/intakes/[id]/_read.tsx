@@ -17,12 +17,18 @@ const POLL_MS = 10_000;
 
 function line(read: AiRead): string {
   if (read.state === "off") return read.off_reason === "company" ? "Oracle's read is off for this company." : "Oracle hasn't read this brief.";
-  if (LIVE.has(read.state)) {
-    return `Oracle is reading your brief and ${plural(read.sources, "source")}${read.started_at ? ` · started ${dayMonth(read.started_at)}` : ""}`;
-  }
+  if (LIVE.has(read.state)) return `Oracle is reading your brief and ${plural(read.sources, "source")}`;
   if (read.state === "failed") return read.error?.message ?? "Oracle's read failed. The rules read stands.";
+  // rirs-29: plain words, not "inferences" and "gaps".
   const added = read.added ?? { items: 0, gaps: 0 };
-  return `Oracle added ${plural(added.items, "inference")} and ${plural(added.gaps, "gap")} · private to you${read.finished_at ? ` · ${dayMonth(read.finished_at)}` : ""}`;
+  return `${plural(added.items, "thing Oracle assumed", "things Oracle assumed")}, ${plural(added.gaps, "open gap")} · private to you`;
+}
+
+/** The day the read started or finished, as the line ends with it (never split: qa-onboarding-40). */
+function lineDay(read: AiRead): string | null {
+  if (read.state === "off" || read.state === "failed") return null;
+  if (LIVE.has(read.state)) return read.started_at ? `started ${dayMonth(read.started_at)}` : null;
+  return read.finished_at ? dayMonth(read.finished_at) : null;
 }
 
 /**
@@ -43,10 +49,22 @@ export function ReadLine({ read, mayRead, busy, onRead, onPoll }: { read: AiRead
   const refused = read.read_again_refused ?? null;
   // The day in the line, its full time on hover.
   const at = live ? read.started_at : read.finished_at;
+  const day = lineDay(read);
+  const left = Math.max(0, read.reads_per_day - read.reads_today);
   const showButton = mayRead && !live && !(read.state === "off" && read.off_reason === "company");
   return (
     <div data-testid="intake-read" className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2">
-      <span title={at ? when(at) : undefined}>{line(read)}</span>
+      <span title={at ? when(at) : undefined}>
+        {line(read)}
+        {day && (
+          <>
+            {" · "}
+            <span data-testid="intake-read-day" className="whitespace-nowrap">
+              {day}
+            </span>
+          </>
+        )}
+      </span>
       {read.fallback && <span>{read.fallback.message}</span>}
       {read.state === "done" && read.path === "swarmcloud" && read.run_id && (
         <Link href={`/runs/${read.run_id}`} className="font-medium text-text hover:underline">
@@ -60,14 +78,19 @@ export function ReadLine({ read, mayRead, busy, onRead, onPoll }: { read: AiRead
               {refused}
             </span>
           ) : (
-            read.reads_today > 0 && (
-              <span data-testid="intake-read-count">
-                ({read.reads_today} of {read.reads_per_day} today)
-              </span>
-            )
+            // qa-onboarding-28: the day's cap shows before the first read, not only after it.
+            <span data-testid="intake-read-count" className="whitespace-nowrap">
+              {left} of {read.reads_per_day} left today
+            </span>
           )}
-          <Button disabled={busy || refused !== null} title={refused ?? undefined} onClick={onRead}>
-            {read.state === "off" ? "Analyse with Oracle" : read.state === "failed" ? "Try again" : "Read again"}
+          {/* rirs-29: this reads the brief and its sources again (capped); the menu's "Rank the
+              questions again" only re-orders the questions not asked yet. */}
+          <Button
+            disabled={busy || refused !== null}
+            title={refused ?? "Oracle reads the brief and its sources again"}
+            onClick={onRead}
+          >
+            {read.state === "off" ? "Analyse with Oracle" : read.state === "failed" ? "Try again" : "Read the brief again"}
           </Button>
         </span>
       )}

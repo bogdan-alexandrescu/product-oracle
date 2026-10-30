@@ -49,6 +49,7 @@ const usdFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "US
  * Cost (P3d: secondary). One small mono figure; `prominent` only on cost approvals
  * and overruns. With `of`, shows "spent / of".
  */
+/** qa-company-28: money in the app's own font, tabular figures; the chip's colour carries the warning. */
 export function CostFigure({
   usd,
   of,
@@ -64,14 +65,14 @@ export function CostFigure({
   /** Inside an Inspector head. */
   hero?: boolean;
 }) {
-  if (usd == null) return <span className="font-mono text-[13px] text-text2">–</span>;
+  if (usd == null) return <span className="text-[13px] text-text2">–</span>;
   const text = `${usdFmt.format(usd)}${of != null ? ` / ${usdFmt.format(of)}` : ""}${est ? " est." : ""}`;
   if (prominent) {
     const over = of != null && usd > of;
     return (
       <span
         data-cost="prominent"
-        className={`tnum inline-flex h-7 items-center rounded-lg px-2 font-mono text-[15px] font-medium whitespace-nowrap ${
+        className={`tnum inline-flex h-7 items-center rounded-lg px-2 text-[15px] font-medium whitespace-nowrap ${
           over ? "bg-crit-bg text-crit" : "bg-warn-bg text-warn"
         }`}
       >
@@ -82,7 +83,7 @@ export function CostFigure({
   return (
     <span
       data-cost="small"
-      className={`tnum font-mono text-[13px] leading-none font-medium whitespace-nowrap ${hero ? "text-hero-text2" : "text-text2"}`}
+      className={`tnum text-[13px] leading-none font-medium whitespace-nowrap ${hero ? "text-hero-text2" : "text-text2"}`}
     >
       {text}
     </span>

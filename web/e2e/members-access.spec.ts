@@ -150,10 +150,10 @@ test("members: an invite with a Name shows it on its row", async ({ page }) => {
 test("members: an invite row's tooltip names who invited them and the resends", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members");
-  await expect(inviteRow(page, "new.hire@example.com").getByTestId("invite-who")).toHaveAttribute("title", "Invited by Admin on Oct 15");
+  await expect(inviteRow(page, "new.hire@example.com").getByTestId("invite-who")).toHaveAttribute("title", "Invited by Admin on Oct 15, 2026");
   const old = inviteRow(page, "old.invite@example.com");
   await old.getByRole("button", { name: "Resend invite for old.invite@example.com" }).click();
-  await expect(old.getByTestId("invite-who")).toHaveAttribute("title", "Invited by Admin on Sep 20 · resent once");
+  await expect(old.getByTestId("invite-who")).toHaveAttribute("title", "Invited by Admin on Sep 20, 2026 · resent once");
 });
 
 test("members: Holds and See them open the approver's approvals", async ({ page }) => {
@@ -170,7 +170,7 @@ test("members: Holds and See them open the approver's approvals", async ({ page 
   await expect(list.getByRole("listitem")).toHaveCount(1);
   await expect(list).toContainText("Version approval");
 
-  await page.getByRole("button", { name: "Back to invites" }).click();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Remove approver@example.com" }).click();
   const lapses = page.getByTestId("remove-dialog").getByTestId("preview-lapses");
   await lapses.getByRole("button", { name: "See them" }).click();

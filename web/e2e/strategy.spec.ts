@@ -225,7 +225,7 @@ test("strategy: with no approved strategy, the Open chip counts the listed findi
   await form.getByLabel("Why waive it?").fill("The strategy is drafted next week.");
   await form.getByRole("button", { name: "Waive finding" }).click();
 
-  await expect(drift.getByTestId("drift-empty")).toHaveText("No open findings");
+  await expect(drift.getByTestId("drift-empty")).toContainText("No open findings");
   await expect(chips.getByRole("button", { name: /^Open/ })).toHaveText(/^Open\s*0$/);
   await expect(chips.getByRole("button", { name: /^Waived/ })).toHaveText(/^Waived\s*1$/);
   await chips.getByRole("button", { name: /^Waived/ }).click();

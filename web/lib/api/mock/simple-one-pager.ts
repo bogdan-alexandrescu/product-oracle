@@ -36,6 +36,9 @@ export interface OnePagerCtx {
   names: Record<string, string>;
   /** The PRD's required reviewers (its review policy). */
   reviewers: string[];
+  /** The PRD's decider (Dana Decider in "simple-deciders", as the meetings mock), and its track owners. */
+  decider?: string | null;
+  trackOwners?: string[];
   /** Writes one Inbox notification, as oracle.review.collab.notify. */
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
   /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
@@ -240,17 +243,25 @@ function json(status: number, body: unknown): Response {
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 
+/** As one_pager.decides: an owner; the decider; with none, a track owner while an approver. */
 function decides(ctx: OnePagerCtx): boolean {
-  return ctx.role === "owner";
+  if (ctx.role === "owner") return true;
+  if (ctx.decider) return ctx.id === ctx.decider;
+  return (ctx.trackOwners ?? []).includes(ctx.id) && RANK[ctx.role] >= RANK.approver;
+}
+
+/** As one_pager.starts (meetings.may_start): an owner or the PRD's decider start its review. */
+function starts(ctx: OnePagerCtx): boolean {
+  return ctx.role === "owner" || (!!ctx.decider && ctx.id === ctx.decider);
 }
 
 function seesDraft(db: OnePagerDb, ctx: OnePagerCtx): boolean {
   return ctx.role === "owner" || (db.draft?.participants.includes(ctx.id) ?? false) || (!!db.draft && ctx.reviewers.includes(ctx.id));
 }
 
-/** As one_pager.may_remind: the PRD's owners and its decider (none in the seed). */
+/** As one_pager.may_remind: the PRD's owners (a company owner, its track owners) and its decider. */
 function mayRemind(ctx: OnePagerCtx): boolean {
-  return ctx.role === "owner";
+  return decides(ctx) || (ctx.trackOwners ?? []).includes(ctx.id);
 }
 
 /** As one_pager.due_reminders: waiting reviewers not reminded in the last day. */
@@ -379,7 +390,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     version: db.version,
     published_at: "2026-10-20T15:00:00Z",
     owner: owner ? { id: owner, name: ctx.names[owner] ?? "Owner" } : null,
-    decider: null,
+    decider: ctx.decider ? { id: ctx.decider, name: ctx.names[ctx.decider] ?? "someone" } : null,
     span_start: span?.[0] ?? null,
     span_end: span?.[1] ?? null,
     built_by: "oracle",
@@ -416,6 +427,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     changes_in_review: hiddenDraft + (proposals.length - shown.length),
     can_edit: decides(ctx),
     can_propose: !decides(ctx) && RANK[ctx.role] >= RANK.commenter,
+    can_start: starts(ctx),
   };
 }
 

@@ -8,6 +8,7 @@ import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { ArtifactMenu } from "@/components/ArtifactMenu";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
+  Button,
   Chip,
   DataTable,
   FilterChips,
@@ -62,6 +63,36 @@ const SORT_WORDS: Record<SortKey, [string, string]> = {
   updated: ["oldest first", "newest first"],
 };
 
+/** The sort menu's choices, by column then order (qa-docs-20: a phone has no column headers). */
+const SORT_LABEL: Record<SortKey, string> = { title: "Document", status: "Status", latest: "Latest", updated: "Updated" };
+const SORT_CHOICES = (Object.keys(SORT_WORDS) as SortKey[]).flatMap((k) =>
+  [false, true].map((desc) => ({ value: `${k}:${desc ? "desc" : "asc"}`, label: `${SORT_LABEL[k]}, ${SORT_WORDS[k][desc ? 1 : 0]}` })),
+);
+
+/** A phone's sort: a menu above the list, as the column headers are for screen readers only there. */
+function SortMenu({ sort, onSort }: { sort: Sort; onSort: (s: Sort) => void }) {
+  return (
+    <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-text2 min-[601px]:hidden">
+      Sort
+      <select
+        data-testid="sort-menu"
+        className="h-11 min-w-0 rounded-lg border border-line-strong bg-surface px-2.5 text-[15px] text-text"
+        value={`${sort.key}:${sort.desc ? "desc" : "asc"}`}
+        onChange={(e) => {
+          const [key, order] = e.target.value.split(":") as [SortKey, string];
+          onSort({ key, desc: order === "desc" });
+        }}
+      >
+        {SORT_CHOICES.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 /** A sortable column's aria-sort: ascending, descending or none. */
 const ariaSort = (k: SortKey, sort: Sort): "ascending" | "descending" | "none" => (sort.key !== k ? "none" : sort.desc ? "descending" : "ascending");
 
@@ -76,7 +107,8 @@ function SortHeader({ label, k, sort, onSort }: { label: string; k: SortKey; sor
       aria-label={`Sort by ${label}${hint}`}
       title={on ? `Sorted ${SORT_WORDS[k][sort.desc ? 1 : 0]}` : `Sort by ${label}`}
       onClick={() => onSort({ key: k, desc: on ? !sort.desc : k === "updated" || k === "latest" })}
-      className={`inline-flex items-center gap-1 rounded hover:text-text ${on ? "text-text" : ""}`}
+      // qa-docs-20: a 24 px tall target at the least, not the 16 px line of text.
+      className={`inline-flex min-h-6 items-center gap-1 rounded hover:text-text ${on ? "text-text" : ""}`}
     >
       {label}
       {on && <Icon name={sort.desc ? "chevron-down" : "chevron-up"} size={16} />}
@@ -244,8 +276,13 @@ function DocInspector({ d, canPublish, names }: { d: DocumentSummary; canPublish
         <InspectorRow value={<span data-testid="inspector-approved">{approvedText(d)}</span>}>Approved version</InspectorRow>
         <InspectorRow value={<span data-testid="inspector-template">{names.template(d.template) ?? NONE}</span>}>Template</InspectorRow>
         <InspectorRow value={<span data-testid="inspector-theme">{names.theme(d.theme) ?? NONE}</span>}>Theme</InspectorRow>
-        <InspectorRow value={formatDate(d.created_at)}>Created</InspectorRow>
-        <InspectorRow value={formatDateTime(d.updated_at)}>Updated</InspectorRow>
+        <InspectorRow value={<span data-testid="inspector-created" title={formatDateTime(d.created_at)}>{formatDate(d.created_at)}</span>}>
+          Created
+        </InspectorRow>
+        {/* qa-docs-34: the table's one date format (the time on hover), in the Company time zone. */}
+        <InspectorRow value={<span data-testid="inspector-updated" title={formatDateTime(d.updated_at)}>{formatDate(d.updated_at)}</span>}>
+          Updated
+        </InspectorRow>
       </InspectorSection>
       {d.source && (
         <InspectorSection label="Source">
@@ -295,6 +332,7 @@ export default function DocumentsPage() {
   // C4: briefs waiting to be drafted, so an approver finds the one a commenter wrote.
   const ideasQ = useQuery("documents|ideas", loadIdeas);
   const [view, setView] = useState<"prds" | "ideas">("prds");
+  const ideaCount = ideasQ.data?.length ?? 0;
   const columns = docColumns(sort, setSort, names);
   // On a phone a tapped row opens its PRD, but the arrow keys (Home, End, Space) only move
   // the selection: the keydown that selects is caught before the row's own handler.
@@ -349,6 +387,7 @@ export default function DocumentsPage() {
             ]}
           />
         )}
+        {view === "prds" && all.length > 1 && <SortMenu sort={sort} onSort={setSort} />}
       </div>
       {view === "ideas" ? (
         <Panel>
@@ -411,7 +450,21 @@ export default function DocumentsPage() {
                   else setPicked(k);
                 }}
                 onActivate={(k) => router.push(`/documents/${k}`)}
-                empty={filter === "in_review" ? "No PRDs in review" : "No PRDs yet"}
+                empty={
+                  filter === "in_review" ? (
+                    "No PRDs in review"
+                  ) : ideaCount > 0 ? (
+                    // qa-onboarding-15: a first brief waits under Ideas, not here: say so and open it.
+                    <span data-testid="prds-empty-ideas" className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-2 whitespace-normal">
+                      <span>
+                        No PRDs yet. {plural(ideaCount, "brief")} {ideaCount === 1 ? "waits" : "wait"} in Ideas.
+                      </span>
+                      <Button onClick={() => setView("ideas")}>Open Ideas</Button>
+                    </span>
+                  ) : (
+                    "No PRDs yet"
+                  )
+                }
                 rowProps={() => ({ "data-testid": "document-row" })}
               />
             </div>

@@ -59,6 +59,9 @@ class RitualOut(BaseModel):
     # The next meeting's occurrence when its pre-read is ready ahead of it (Prepare now, or
     # the ticker's lead time): Company › Rituals' Next links to it.
     next_pre_read: "OccurrenceSummary | None" = None
+    # What Prepare now would spend (qa-company-1): the baseline build's estimate, or one
+    # summary when Oracle writes one for every pre-read; null when it spends nothing.
+    prepare_usd: float | None = None
 
 
 class Period(BaseModel):

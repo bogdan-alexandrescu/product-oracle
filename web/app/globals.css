@@ -655,6 +655,8 @@ code .date-mark {
   --simple-lead: 22px;
   --simple-bar: var(--accent-soft);
   --simple-bar-text: var(--accent-ink);
+  --simple-plan-bar: var(--accent-soft);
+  --simple-plan-bar-soft: var(--surface);
   --rail: var(--surface);
   --rail-top: var(--surface);
   --rail-foot: var(--surface);
@@ -668,11 +670,15 @@ code .date-mark {
 :root[data-theme="dark"][data-mode="simple"] {
   --simple-count-bg: #e0b23a;
   --simple-count-text: #1f1600;
+  --simple-plan-bar: var(--accent-mid);
+  --simple-plan-bar-soft: var(--accent-soft);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"])[data-mode="simple"] {
     --simple-count-bg: #e0b23a;
     --simple-count-text: #1f1600;
+    --simple-plan-bar: var(--accent-mid);
+    --simple-plan-bar-soft: var(--accent-soft);
   }
 }
 @media (max-width: 600px) {
@@ -705,6 +711,16 @@ code .date-mark {
   padding: var(--simple-pad-y) var(--simple-pad-x);
   font-size: var(--simple-text);
   line-height: var(--simple-leading);
+}
+/* qa-simple-home-1: on a phone a Simple page ends clear of the tab bar (as the Roadmap does);
+   Priorities draws its own frame, not .simple-page. */
+@media (max-width: 600px) {
+  .simple-page {
+    padding-bottom: calc(var(--simple-pad-y) + var(--phone-tab-bar));
+  }
+  [data-mode="simple"] [data-testid="simple-priorities"] {
+    padding-bottom: calc(24px + var(--phone-tab-bar));
+  }
 }
 .simple-h1 {
   font-family: var(--font-display);
@@ -752,6 +768,18 @@ code .date-mark {
   font-size: 15px;
   font-weight: 700;
 }
+/* qa-simple-home-29: the same count on a phone's tab (and in the More sheet), small, beside the icon. */
+.simple-count-tab {
+  position: absolute;
+  top: 2px;
+  left: calc(50% + 6px);
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  padding: 0 5px;
+  font-size: 13px;
+  line-height: 20px;
+}
 .simple-number {
   font-family: var(--font-display);
   font-size: 30px;
@@ -775,6 +803,24 @@ code .date-mark {
 .simple-button:hover {
   background: var(--surface2);
 }
+/* A disabled button reads as one (the walk's Undo while nothing can be undone). */
+.simple-button:disabled,
+.simple-button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.simple-button:disabled:hover,
+.simple-button[aria-disabled="true"]:hover {
+  background: var(--surface);
+}
+.simple-button-primary:disabled:hover,
+.simple-button-primary[aria-disabled="true"]:hover {
+  background: var(--accent);
+}
+.simple-button-quiet:disabled:hover,
+.simple-button-quiet[aria-disabled="true"]:hover {
+  background: transparent;
+}
 /* A button with a long label (a change card's fixes): wraps inside its container. */
 .simple-button-wrap {
   max-width: 100%;
@@ -791,6 +837,20 @@ code .date-mark {
 }
 .simple-button-primary:hover {
   background: var(--accent-ink);
+}
+/* qa-simple-decide-51: a count that needs nothing from you (upcoming reviews): neutral, not yellow. */
+.simple-count-quiet {
+  background: var(--surface2);
+  color: var(--text2);
+}
+/* qa-simple-decide-25: a disabled button looks disabled (the empty Decide, the empty Send). */
+.simple-button:disabled,
+.simple-button:disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.simple-button-primary:disabled:hover {
+  background: var(--accent);
 }
 .simple-row {
   display: grid;
@@ -819,6 +879,10 @@ code .date-mark {
   }
   .simple-actions {
     grid-column: 1 / -1;
+    /* qa-simple-decide-23: one compact row of buttons on a phone, not three full-width ones. */
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
   }
 }
 /*
@@ -1000,7 +1064,8 @@ code .date-mark {
 }
 .simple-goal-band {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* qa-simple-home-11: auto-fit, so the goals share the row instead of leaving empty tracks. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--simple-gap);
 }
 .simple-goal {
@@ -1070,6 +1135,13 @@ code .date-mark {
   background: repeating-linear-gradient(135deg, var(--simple-bar) 0 6px, transparent 6px 12px);
   outline: 1px dashed var(--accent);
   outline-offset: -1px;
+}
+/* qa-simple-home-12: the plan strip's bars, filled with a tone that shows on the card in dark too. */
+.simple-plan-bar {
+  background: var(--simple-plan-bar);
+}
+.simple-plan-bar.simple-bar-estimated {
+  background: repeating-linear-gradient(135deg, var(--simple-plan-bar) 0 6px, var(--simple-plan-bar-soft) 6px 12px);
 }
 .simple-bar-broken {
   outline: 2px solid var(--crit);

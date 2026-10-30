@@ -135,17 +135,21 @@ export function SharedRoadmap({ token }: { token: string }) {
               {download}
             </span>
           )}
+          {/* qa-docs-1: fixed light colours (bg-white follows the app's dark theme). */}
           {view.download && (
             <button
               type="button"
               onClick={pdf}
-              className="inline-flex h-10 items-center rounded-button border border-[#cbd5e1] bg-white px-4 font-semibold text-[#0f172a] hover:bg-[#f1f5f9]"
+              className="inline-flex h-10 items-center rounded-button border border-[#cbd5e1] bg-[#ffffff] px-4 font-semibold text-[#0f172a] hover:bg-[#f1f5f9]"
             >
               Download PDF
             </button>
           )}
         </header>
-        <Frame title="Shared roadmap" html={view.html} />
+        {/* qa-docs-26: the page keeps the header's side margins; its tables never touch the window's edge. */}
+        <div data-testid="shared-body" className="px-4">
+          <Frame title="Shared roadmap" html={view.html} />
+        </div>
       </main>
     );
   }

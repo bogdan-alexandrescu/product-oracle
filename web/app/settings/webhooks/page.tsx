@@ -1,12 +1,11 @@
 import { Suspense } from "react";
 
-import { Loading } from "@/components/ui";
-
 import { WebhooksSettings } from "./WebhooksSettings";
+import { PageSkeleton } from "@/components/ds";
 
 export default function WebhooksPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <WebhooksSettings />
     </Suspense>
   );

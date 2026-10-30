@@ -1284,3 +1284,44 @@ async def test_a_catch_up_rebuild_restarts_the_summary(client, owner, runtime, a
     assert occ.summary_run_id not in (None, first.summary_run_id)
     assert occ.summary_state == "running"
     assert len(await _summary_runs(tenant_id)) == 2
+
+
+async def test_report_names_items_as_the_plan_and_the_newer_prd_version(client, owner, runtime, at):
+    """qa-plan-41, qa-plan-43. protects=the report names each item (drift too) by its full
+    Plan title, and a PRD that moved on says which version is approved with the way to
+    update the roadmap; fails_when=a started-early item has no name, or the report only
+    says "The PRD has a newer approved version." with no version and no action;
+    no_claim=the Slack message."""
+    from tests.fixtures import import_draft
+
+    tenant_id, auth = owner
+    await a_track(client, auth, runtime)
+    text = (await client.get(f"/v1/documents/{PRD}/versions/1/markdown", headers=auth)).text
+    resp = await import_draft(client, auth, text.replace("Payment step", "Payment step (cards)", 1))
+    assert resp.status_code == 201, resp.text
+    resp = await client.post(f"/v1/documents/{PRD}/versions/2/approve", headers=auth)
+    assert resp.status_code == 200, resp.text
+    at(datetime.now(UTC))
+    resp = await client.post("/v1/alignment-reports", json={}, headers=auth)
+    assert resp.status_code == 201, resp.text
+    report = resp.json()
+    (t,) = report["tracks"]
+    roadmap = (await client.get(f"/v1/roadmaps/{ROADMAP}/alignment", headers=auth)).json()
+    names = {i["item_key"]: i["title"] for i in roadmap["items"]}
+    (ahead,) = [d for d in t["drift"] if d["kind"] == "ahead"]
+    assert ahead["title"] == names["shipping-step"]
+    assert all(n["title"] == names[n["item_key"]] for n in t["needs_attention"])
+    assert t["prd_moved"] is True and t["prd_moved_to"] == 2
+    md = report["markdown"]
+    assert f"- v2 of the PRD is approved · [Update the roadmap](/plan?item={PRD})" in md
+    assert "The PRD has a newer approved version." not in md
+
+
+def test_markdown_for_a_moved_prd_without_its_version():
+    """qa-plan-43. protects=a report kept before the version was recorded still reads as a
+    sentence with the action; fails_when=it prints "vNone"; no_claim=the page."""
+    content = _content(1)
+    content["tracks"][0]["prd_moved"] = True
+    md = alignment.markdown(content)
+    assert "- A newer version of the PRD is approved · [Update the roadmap](/plan?item=prd-0)" in md
+    assert "vNone" not in md

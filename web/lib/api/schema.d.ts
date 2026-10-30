@@ -2841,11 +2841,14 @@ export interface paths {
          * @description The company's active members for a person picker, matched on email (``q``):
          *     each one's name (from their email), email, role and whether they can write
          *     (commenter or above: answer, comment, be asked). Disabled members are not listed;
-         *     the full member list (``GET /v1/members``) stays the owner's.
+         *     the full member list (``GET /v1/members``) stays the owner's. ``decides`` lists only
+         *     the members whose role may decide a PRD question (approvers and owners). The list
+         *     is ordered by email and paged with ``limit`` and ``offset``.
          *
          *     ``ids`` names people instead ("Waiting on <name>", "Answered by <name>"): the
          *     company's members with those ids, however many the company has, a disabled one too
-         *     (it keeps its name and cannot write); ``q`` and ``limit`` do not apply.
+         *     (it keeps its name and cannot write); ``q``, ``decides``, ``limit`` and ``offset`` do
+         *     not apply.
          */
         get: operations["list_people"];
         put?: never;
@@ -24576,6 +24579,8 @@ export interface components {
             flow_title: string;
             /** Document Slug */
             document_slug?: string | null;
+            /** Document Title */
+            document_title?: string | null;
             /** Segment Title */
             segment_title?: string | null;
             summary?: components["schemas"]["InboxSummary"] | null;
@@ -29934,6 +29939,8 @@ export interface components {
             can_edit: boolean;
             /** Can Propose */
             can_propose: boolean;
+            /** Can Start */
+            can_start: boolean;
         };
         /**
          * OnePagerRemindOut
@@ -33183,6 +33190,8 @@ export interface components {
             dates: components["schemas"]["ReportDates"];
             /** Prd Moved */
             prd_moved: boolean;
+            /** Prd Moved To */
+            prd_moved_to?: number | null;
         };
         /** ReportUnreadableTrack */
         ReportUnreadableTrack: {
@@ -34475,6 +34484,8 @@ export interface components {
             replaced_by?: string | null;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
             next_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
+            /** Prepare Usd */
+            prepare_usd?: number | null;
         };
         /** RitualPatch */
         RitualPatch: {
@@ -34997,6 +35008,8 @@ export interface components {
             document_id?: string | null;
             /** Document Slug */
             document_slug?: string | null;
+            /** Document Title */
+            document_title?: string | null;
             /** Document Kind */
             document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             source?: components["schemas"]["VersionSource"] | null;
@@ -35268,6 +35281,8 @@ export interface components {
             document_id?: string | null;
             /** Document Slug */
             document_slug?: string | null;
+            /** Document Title */
+            document_title?: string | null;
             /** Document Kind */
             document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             source?: components["schemas"]["VersionSource"] | null;
@@ -36895,6 +36910,10 @@ export interface components {
             count?: number | null;
             /** Detail */
             detail?: string | null;
+            /** Invited */
+            invited?: number | null;
+            /** Run Id */
+            run_id?: string | null;
         };
         /** ShareDayOut */
         ShareDayOut: {
@@ -50704,6 +50723,8 @@ export interface operations {
                 q?: string | null;
                 limit?: number;
                 ids?: string[] | null;
+                decides?: boolean;
+                offset?: number;
             };
             header?: never;
             path?: never;

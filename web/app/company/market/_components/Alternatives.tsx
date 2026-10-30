@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button, Chip, DataTable, InfoTip, Inspector, InspectorSection, Panel, Split, useFocusTrap, type Column } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
@@ -41,17 +41,24 @@ export function Alternatives({
   onOpenChange,
   adding,
   onAdding,
+  onEmpty,
 }: {
   picked: string | null;
   onPick: (id: string) => void;
   onOpenChange: (id: string) => void;
   adding: boolean;
   onAdding: (open: boolean) => void;
+  /** Whether the list is known to be empty (its own Add button shows), so the header drops its one (qa-company-20). */
+  onEmpty?: (empty: boolean) => void;
 }) {
   const zone = useCompanyZone();
   const mayAdd = useMe().can("create_competitor");
   const list = useQuery("competitors", () => unwrap(api.GET("/v1/competitors")));
   const rows = list.data ?? [];
+  const empty = !!list.data && list.data.length === 0;
+  useEffect(() => {
+    onEmpty?.(empty);
+  }, [empty, onEmpty]);
   const selected = rows.find((c) => c.id === picked) ?? rows[0] ?? null;
   const detail = useQuery(
     `competitor|${selected?.id ?? "none"}`,

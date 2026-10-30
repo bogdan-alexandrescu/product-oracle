@@ -74,13 +74,14 @@ function tracks(atRisk: boolean): Track[] {
     needs_attention: atRisk
       ? [
           {
-            item_key: "threshold-alerts",
-            title: "Threshold alerts",
+            // qa-plan-3, qa-plan-41: ENG-405 is the Daily alert digest email's issue, named as on the Plan.
+            item_key: "alert-digest",
+            title: "Daily alert digest email",
             horizon: "now",
             kind: "slipping",
             detail: "ENG-405 targets Dec 9, after the milestone date Nov 30.",
             alert_id: null,
-            link: plan("usage-alerts", "threshold-alerts"),
+            link: plan("usage-alerts", "alert-digest"),
           },
         ]
       : [],
@@ -88,11 +89,11 @@ function tracks(atRisk: boolean): Track[] {
       ? [
           {
             kind: "ahead",
-            item_key: "digest-emails",
+            item_key: "spend-forecast",
             tracker_ref: null,
             detail: "Engineering has started work planned for Next.",
-            title: "Digest emails",
-            link: plan("usage-alerts", "digest-emails"),
+            title: "Spend forecast for the month",
+            link: plan("usage-alerts", "spend-forecast"),
           },
           { kind: "unplanned", item_key: null, tracker_ref: "ENG-431", detail: "ENG-431 (Alert storage cleanup) is not on the roadmap.", title: null, link: null },
         ]
@@ -100,10 +101,12 @@ function tracks(atRisk: boolean): Track[] {
     dates: atRisk
       ? {
           verified: [{ reference: "ENG-412", supports_date: "2026-11-30", reason: null }],
-          withdrawn: [{ reference: "ENG-413", supports_date: "2026-12-15", reason: "Estimate replaced" }],
+          withdrawn: [{ reference: "ENG-413", supports_date: "2026-12-15", reason: "The team re-estimated" }],
         }
       : { verified: [], withdrawn: [] },
     prd_moved: atRisk,
+    // qa-plan-43: the approved version the roadmap is behind, as the API keeps it.
+    prd_moved_to: atRisk ? 2 : null,
   };
   const checkout: Track = {
     track_id: "5e7a0000-0000-4000-8000-0000000c4ec0",
@@ -119,6 +122,7 @@ function tracks(atRisk: boolean): Track[] {
     drift: [],
     dates: { verified: [], withdrawn: [] },
     prd_moved: false,
+    prd_moved_to: null,
   };
   return [alerts, checkout];
 }
@@ -142,8 +146,19 @@ function summaryOf(ts: Track[]): Schemas["ReportSummaryFigures"] {
   };
 }
 
+/** As oracle.reports.alignment.prd_moved_text (qa-plan-43). */
+const prdMovedText = (t: Track) => (t.prd_moved_to ? `v${t.prd_moved_to} of the PRD is approved` : "A newer version of the PRD is approved");
+
 function markdown(r: Omit<Report, "read" | "markdown">): string {
-  const parts = r.tracks.map((t) => [`## ${t.prd.title}`, "", t.headline, ...t.needs_attention.map((n) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${n.detail}`)].join("\n"));
+  const parts = r.tracks.map((t) =>
+    [
+      `## ${t.prd.title}`,
+      "",
+      t.headline,
+      ...(t.prd_moved ? [`- ${prdMovedText(t)} · [Update the roadmap](${t.link})`] : []),
+      ...t.needs_attention.map((n) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${n.detail}`),
+    ].join("\n"),
+  );
   return [`# ${r.title}`, "", r.headline, "", ...parts].join("\n") + "\n";
 }
 

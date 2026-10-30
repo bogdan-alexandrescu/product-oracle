@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
 import { ImpactExplorer } from "@/app/impact/_explorer";
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
+import { PageSkeleton } from "@/components/ds";
 
 async function Explorer({ params }: { params: RouteProps<{ doc: string; n: string }>["params"] }) {
   const { doc, n } = await params;
@@ -12,7 +12,7 @@ async function Explorer({ params }: { params: RouteProps<{ doc: string; n: strin
 /** v2 screen 2: what a PRD version changes for the outputs built on earlier versions (a preview). */
 export default function VersionImpactPage({ params }: RouteProps<{ doc: string; n: string }>) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Explorer params={params} />
     </Suspense>
   );

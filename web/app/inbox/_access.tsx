@@ -9,6 +9,7 @@ import type { Role } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
+import type { OnActed } from "./_actions";
 import type { Need } from "./_needs";
 
 type AccessRequest = Schemas["InboxAccessRequest"];
@@ -21,10 +22,14 @@ const ROLE_WORD: Record<Role, string> = { viewer: "Viewer", commenter: "Commente
  * the company's default role, the caller's roles only), Approve and Decline. A decided row
  * stays in place with "Approved as <Role> ✓" or "Declined", out of the count at once, until
  * the tab or filter changes (I3); then it leaves. Inbox and Home draw the same rows.
+ *
+ * qa-company-7: given `onActed` (the Inbox), a decided row leaves Needs you at once for the
+ * Done or Declined tab, where it stays for the visit, and the banner says what happened with
+ * Undo (the request is pending again).
  */
-export function useAccessRequestRows(requests: AccessRequest[], reload: () => Promise<unknown>) {
+export function useAccessRequestRows(requests: AccessRequest[], reload: () => Promise<unknown>, onActed?: OnActed) {
   const [chosen, setChosen] = useState<Record<string, Role>>({});
-  const [settled, setSettled] = useState<ReadonlyMap<string, { r: AccessRequest; label: string }>>(new Map());
+  const [settled, setSettled] = useState<ReadonlyMap<string, { r: AccessRequest; label: string; declined: boolean }>>(new Map());
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -36,11 +41,27 @@ export function useAccessRequestRows(requests: AccessRequest[], reload: () => Pr
     try {
       if (action === "approve") await unwrap(api.POST("/v1/access-requests/{request_id}/approve", { ...path, body: { role } }));
       else await unwrap(api.POST("/v1/access-requests/{request_id}/decline", path));
-      setSettled((m) => new Map(m).set(r.id, { r, label: action === "approve" ? `Approved as ${ROLE_WORD[role]} ✓` : "Declined" }));
-      // The rail badge re-reads with the reload, as after any Inbox action.
-      invalidateWaiting();
-      void reload();
-      waitingChanged();
+      setSettled((m) => new Map(m).set(r.id, { r, label: action === "approve" ? `Approved as ${ROLE_WORD[role]} ✓` : "Declined", declined: action === "decline" }));
+      if (onActed) {
+        // The banner says it, Undo with it; onActed reloads (and the rail badge with it).
+        onActed({
+          id: `access-${r.id}`,
+          message: action === "approve" ? `Approved ${r.email} as ${ROLE_WORD[role]}` : `Declined ${r.email}`,
+          undo: async () => {
+            await unwrap(api.POST("/v1/access-requests/{request_id}/reopen", path));
+            setSettled((m) => {
+              const next = new Map(m);
+              next.delete(r.id);
+              return next;
+            });
+          },
+        });
+      } else {
+        // The rail badge re-reads with the reload, as after any Inbox action.
+        invalidateWaiting();
+        void reload();
+        waitingChanged();
+      }
     } catch (e) {
       setErrors((m) => ({ ...m, [r.id]: errorMessage(e) }));
     } finally {
@@ -85,7 +106,8 @@ export function useAccessRequestRows(requests: AccessRequest[], reload: () => Pr
         </span>
       ),
       at: r.requested_at,
-      ...(done ? { counted: false } : {}),
+      // The Inbox: Done or Declined at once, counted there; Home: in place, not counted.
+      ...(done ? (onActed ? { state: done.declined ? "declined" : "done" } : { counted: false }) : {}),
       action: done ? null : (
         <>
           <select

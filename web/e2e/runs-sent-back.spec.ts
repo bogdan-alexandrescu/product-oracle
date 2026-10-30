@@ -86,7 +86,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
   await expect(prd.getByTestId("segment-state")).toHaveText(REVISING);
 
   // The writer's revision finishes; Oracle imports it as the review opens.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(prd).toContainText("Imported as guest-checkout v1");
   await expect(prd.getByTestId("segment-state")).toHaveText("Succeeded");
   await expect(prd.getByTestId("draft-sent-back")).toHaveCount(0);
@@ -101,7 +101,8 @@ test("a clean revision clears Revising: the draft is imported and the review wai
   // The Inbox: the review is a decision now, counted; the Revising row is gone.
   await page.goto("/inbox");
   await expect(page.getByText("12 waiting").filter({ visible: true })).toBeVisible();
-  await expect(page.getByTestId("inbox-checkpoints")).toContainText("Guest checkout");
+  // qa-company-17: the row names the imported draft by its own title, as its page does.
+  await expect(page.getByTestId("inbox-checkpoints")).toContainText("Example product PRD");
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
   await expect(page.getByTestId("inbox-revising")).toHaveCount(0);
 

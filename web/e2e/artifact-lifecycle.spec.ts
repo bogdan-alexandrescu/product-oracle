@@ -36,8 +36,13 @@ async function openPrds(page: Page) {
 /** Deletes usage-alerts from its row on PRDs: the dialog lists what goes with it and asks once more. */
 async function deleteFamily(page: Page) {
   await openPrds(page);
-  await prdRow(page, PRD).getByRole("button", { name: `Actions for ${PRD}` }).click();
-  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  // A scroll closes a row menu: on a phone the row ends at the tab bar, and the list may still
+  // settle (scroll anchoring) as the menu opens. Centre the row and open again until Delete… takes.
+  await expect(async () => {
+    await prdRow(page, PRD).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    if (!(await page.getByRole("menuitem", { name: "Delete…" }).isVisible())) await prdRow(page, PRD).getByRole("button", { name: `Actions for ${PRD}` }).click();
+    await page.getByRole("menuitem", { name: "Delete…" }).click({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
   const dialog = page.getByRole("dialog", { name: `Delete ${PRD}` });
   const goes = dialog.getByTestId("delete-dependents");
   await expect(goes).toContainText(ROADMAP);
@@ -58,7 +63,8 @@ async function expectFamilyGone(page: Page) {
   await expect(page.getByTestId("roadmap-row").filter({ hasText: ROADMAP })).toHaveCount(0);
   await expect(page.getByTestId("approved-prd").filter({ hasText: PRD })).toHaveCount(0);
   await page.goto("/documents/checkout-redesign-early-shipping-cost-spec");
-  await expect(page.getByText(/not found/i).first()).toBeVisible();
+  // The page's own not-found words (the phone header holds a hidden copy, qa-shell-8).
+  await expect(page.getByText(/not found/i).filter({ visible: true }).first()).toBeVisible();
 }
 
 async function expectFamilyBack(page: Page) {
@@ -79,7 +85,9 @@ async function deleteAndRestore(page: Page) {
 
   // Settings › Trash: one entry for the three, with its days left.
   await page.goto("/settings");
-  await page.getByTestId("nav-trash").filter({ visible: true }).click();
+  // qa-settings-41: a phone picks the Settings page from a select.
+  if (page.viewportSize()!.width <= 600) await page.getByRole("combobox", { name: "Settings page" }).selectOption({ label: "Trash" });
+  else await page.getByTestId("nav-trash").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/settings\/trash$/);
   const entries = page.getByTestId("trash-entry");
   await expect(entries).toHaveCount(1);
@@ -293,5 +301,21 @@ test.describe("light", () => {
     await login(page);
     await deleteFamily(page);
     await expect(page.getByRole("status").filter({ hasText: "Moved to Trash" })).toBeVisible();
+  });
+});
+
+test.describe("desktop toast", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  // fix2-simple-roadmap review (#34): only Simple's Roadmap moves its toasts to a corner;
+  // every other page's toast stays centred at the bottom of the window.
+  test("the Moved to Trash toast stays centred on a desktop", async ({ page }) => {
+    await withFamily(page);
+    await login(page);
+    await deleteFamily(page);
+    const toast = page.getByRole("status").filter({ hasText: "Moved to Trash" });
+    await expect(toast).toBeVisible();
+    const box = (await toast.boundingBox())!;
+    expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThan(4);
   });
 });

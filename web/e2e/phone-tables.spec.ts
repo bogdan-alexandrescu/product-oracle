@@ -202,43 +202,23 @@ test("phone sources: each source's actions stay on one line", async ({ page }) =
   await expectNoSideScroll(page);
 });
 
-test("phone settings: the current tab is in full view, clear of the fades and chevrons", async ({ page }) => {
+test("phone settings: the page picker names the current page", async ({ page }) => {
+  // qa-settings-41: a phone picks the Settings page from a select, not a cut strip.
   await login(page);
-  for (const [path, tab] of [
-    ["/settings/members", "nav-members"],
-    ["/settings/connections", "nav-connections"],
-    ["/settings/claude-accounts", "nav-claude-accounts"],
-    ["/settings/sources", "nav-sources"],
-    ["/settings/templates", "nav-templates"],
-    ["/settings/themes", "nav-themes"],
-    ["/settings/templates/oracle-default", "nav-templates"],
-    ["/settings/themes/clean-document", "nav-themes"],
+  for (const [path, label] of [
+    ["/settings/members", "Members"],
+    ["/settings/connections", "Connections"],
+    ["/settings/claude-accounts", "Claude accounts"],
+    ["/settings/sources", "Sources"],
+    ["/settings/templates", "Templates"],
+    ["/settings/themes", "Themes"],
+    ["/settings/templates/oracle-default", "Templates"],
+    ["/settings/themes/clean-document", "Themes"],
   ]) {
     await page.goto(path);
-    const nav = page.getByRole("navigation", { name: "Settings" }).filter({ visible: true });
-    const current = nav.getByTestId(tab);
-    await expect(current).toHaveAttribute("aria-current", "page");
-    // Let the strip settle (it measures, shows its chevrons, then brings the tab into view).
-    await page.waitForTimeout(300);
-    const strip = current.locator("xpath=..");
-    const [box, item, more] = await Promise.all([
-      strip.boundingBox(),
-      current.boundingBox(),
-      strip.evaluate((el) => ({
-        left: el.hasAttribute("data-more-left"),
-        right: el.hasAttribute("data-more-right"),
-        // Where the first whole item starts from each edge: the fade hides up to there.
-        cutL: parseFloat(el.style.getPropertyValue("--cut-l")) || 0,
-        cutR: parseFloat(el.style.getPropertyValue("--cut-r")) || 0,
-      })),
-    ]);
-    expect(item!.x, path).toBeGreaterThanOrEqual(box!.x + (more.left ? more.cutL : 0) - 0.5);
-    expect(item!.x + item!.width, path).toBeLessThanOrEqual(box!.x + box!.width - (more.right ? more.cutR : 0) + 0.5);
-    // Nor under a chevron button.
-    for (const chevron of await nav.locator('[data-testid^="strip-more-"]').all()) {
-      const c = (await chevron.boundingBox())!;
-      expect(overlaps(c, item!), path).toBe(false);
-    }
+    const picker = page.getByRole("combobox", { name: "Settings page" });
+    await expect(picker, path).toBeVisible();
+    await expect(picker.locator("option:checked"), path).toHaveText(label);
   }
 });
 
@@ -256,6 +236,7 @@ test.describe("desktop", () => {
   test("settings: the tabs sit under the title; /sources lives under Settings › Sources", async ({ page }) => {
     await login(page);
     await page.goto("/settings/members");
+    // qa-settings-40: a Settings page is headed by its own name, the Settings tabs under it.
     const heading = page.getByRole("heading", { level: 1, name: "Members" });
     const nav = page.getByRole("navigation", { name: "Settings" });
     await expect(heading).toBeVisible();

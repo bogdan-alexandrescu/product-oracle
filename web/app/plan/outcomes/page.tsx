@@ -3,25 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
-import {
-  Button,
-  Chip,
-  confirmInPage,
-  DataTable,
-  FilterChips,
-  InfoTip,
-  Inspector,
-  InspectorRow,
-  InspectorSection,
-  Notice,
-  Page,
-  PageHeader,
-  Panel,
-  Sheet,
-  Split,
-  type ChipKind,
-  type Column,
-} from "@/components/ds";
+import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, FilterChips, InfoTip, Inspector, InspectorRow, InspectorSection, Notice, Page, PageHeader, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CATEGORY_LABEL } from "@/app/intakes/[id]/_lib";
@@ -141,7 +123,7 @@ function StateChip({ o, hero = false }: { o: Outcome; hero?: boolean }) {
  */
 export default function OutcomesPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton />}>
       <Outcomes />
     </Suspense>
   );
@@ -187,6 +169,8 @@ function Outcomes() {
   const current: Filter =
     filter ?? (linked == null && count("due") > 0 ? "due" : "all");
   const shown = rows.filter((o) => inFilter(o, current));
+  // Loaded, and nothing at all (not a filter that matches nothing).
+  const none = q.data != null && rows.length === 0;
   const active =
     shown.find((o) => o.id === selected) ??
     rows.find((o) => o.id === selected) ??
@@ -327,33 +311,63 @@ function Outcomes() {
           <Panel
             title="Outcomes"
             tools={
-              <FilterChips
-                label="Outcomes by state"
-                testId="outcome-filters"
-                value={current}
-                onChange={(v) => setFilter(v)}
-                items={[
-                  { value: "due", label: "Check due", count: count("due") },
-                  {
-                    value: "measuring",
-                    label: "Measuring",
-                    count: count("measuring"),
-                  },
-                  {
-                    value: "needs",
-                    label: "Needs prediction",
-                    count: count("needs"),
-                  },
-                  {
-                    value: "assessed",
-                    label: "Assessed",
-                    count: count("assessed"),
-                  },
-                  { value: "all", label: "All", count: rows.length },
-                ]}
-              />
+              // qa-plan-48: with no outcome at all, no filters (each would read 0) and no
+              // table headers: only the empty state and its action.
+              !none && (
+                <FilterChips
+                  label="Outcomes by state"
+                  testId="outcome-filters"
+                  value={current}
+                  onChange={(v) => setFilter(v)}
+                  // A state with nothing in it is dimmed and cannot be picked.
+                  items={[
+                    { value: "due", label: "Check due", count: count("due"), disabled: count("due") === 0 },
+                    {
+                      value: "measuring",
+                      label: "Measuring",
+                      count: count("measuring"),
+                      disabled: count("measuring") === 0,
+                    },
+                    {
+                      value: "needs",
+                      label: "Needs prediction",
+                      count: count("needs"),
+                      disabled: count("needs") === 0,
+                    },
+                    {
+                      value: "assessed",
+                      label: "Assessed",
+                      count: count("assessed"),
+                      disabled: count("assessed") === 0,
+                    },
+                    { value: "all", label: "All", count: rows.length },
+                  ]}
+                />
+              )
             }
           >
+            {none ? (
+              <div
+                data-testid="outcomes-empty"
+                className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2"
+              >
+                <p className="font-display text-lg font-bold text-text">
+                  No outcomes yet
+                </p>
+                <p>
+                  Approving a roadmap records a prediction for each item that
+                  serves a goal.
+                  {canApprove
+                    ? " You can also track an outcome for an item yourself."
+                    : ""}
+                </p>
+                {canApprove && !tracking && (
+                  <Button variant="primary" onClick={() => setTracking(true)}>
+                    Track outcome
+                  </Button>
+                )}
+              </div>
+            ) : (
             <DataTable<Outcome>
               label="Outcomes"
               testId="outcomes-table"
@@ -372,6 +386,7 @@ function Outcomes() {
                 "data-state": stateOf(o),
               })}
             />
+            )}
           </Panel>
         </Split>
         {phone && active && (
@@ -591,12 +606,13 @@ function AssessmentForm({
           onChange={(e) => setNote(e.target.value)}
         />
       </label>
+      {/* qa-plan-34: as every dialog: Cancel on the left, the primary action on the right. */}
       <div className="col-span-2 flex flex-wrap gap-2">
-        <Button type="submit" variant="primary" disabled={busy || !verdict}>
-          Record assessment
-        </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
+        </Button>
+        <Button type="submit" variant="primary" disabled={busy || !verdict}>
+          Record assessment
         </Button>
       </div>
     </form>

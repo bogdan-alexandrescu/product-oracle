@@ -68,7 +68,8 @@ export function FlaggedTab({
       header: "Confidence",
       width: "96px",
       align: "center",
-      cell: (f) => <ConfidenceRing value={f.confidence} low={trace.low} size={32} />,
+      // A score is built on evidence: none, no score (qa-plan-8).
+      cell: (f) => <ConfidenceRing value={f.confidence} evidence={f.evidence_count} low={trace.low} size={32} />,
     },
   ];
 

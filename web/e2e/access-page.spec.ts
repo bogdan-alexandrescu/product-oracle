@@ -23,7 +23,7 @@ const CASES: [string, string, string][] = [
     "You asked to join Acme's Product Oracle as new.person@example.com. An owner will approve or decline your request. This page updates by itself.",
   ],
   ["access-declined", "An owner declined your request", "If you think this is a mistake, ask an owner to invite new.person@example.com."],
-  ["access-expired", "Your invite expired", "It expired on Oct 30. Ask the person who invited you to resend it."],
+  ["access-expired", "Your invite expired", "It expired on Oct 19. Ask the person who invited you to resend it."],
   ["access-invite-only", "This Oracle is invite only", "Ask an owner to invite new.person@example.com."],
   ["access-outside", "Use your work account", "new.person@example.com isn't from this company's email domains, so it can't join this Oracle."],
 ];

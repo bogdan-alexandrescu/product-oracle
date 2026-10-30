@@ -215,11 +215,7 @@ export function SuggestionCard({
         <Avatar name="Oracle" initials="O" tone="oracle" />
         <span className="font-semibold">Oracle</span>
         <Chip kind="line">{CLASSIFICATION_LABEL[s.classification]}</Chip>
-        {s.group_key && (
-          <span className="truncate font-mono text-[13px] text-text2" title={`group: ${s.group_key}`}>
-            {s.group_key}
-          </span>
-        )}
+        {/* qa-docs-12: the grouping key is Oracle's own, not shown to people. */}
         <span className="ml-auto">
           <Chip kind={STATUS[s.status].kind}>{STATUS[s.status].label}</Chip>
         </span>

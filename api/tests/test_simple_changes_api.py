@@ -454,6 +454,57 @@ async def test_fixes_shift_dependents_and_move_dependency(client):
     assert (b.start_date, c.start_date) == (date(2026, 11, 10), date(2026, 12, 16))
 
 
+async def test_shift_dependents_moves_every_sibling_but_an_accepted_risk(client):
+    """#9 (fix2 review): Move the dependents on b also moves s, another dependent of a that
+    starts too early, and d, which depends on s; r, whose early start was accepted as a
+    risk, stays where it is."""
+    ctx = await make_people()
+    w = await World(ctx).build(decider=True, ops=["shift_dependents"])
+    a_id = w.ids["shift_dependents-a"]
+    async with tenant_session(ctx.tenant_id) as s:
+        a = await s.get(RoadmapItem, a_id)
+
+        def row(key: str, pos: int, start: date, end: date, dep: str, **kw: Any) -> RoadmapItem:
+            return RoadmapItem(roadmap_document_id=a.roadmap_document_id,
+                               roadmap_version_id=a.roadmap_version_id, item_key=key,
+                               position=pos, title=seeded_title(key), horizon="now",
+                               track_id=a.track_id, start_date=start, end_date=end,
+                               date_source="typed", depends_on=[dep], **kw)  # fmt: skip
+
+        rows = [
+            row("sib-s", 60, date(2026, 11, 1), date(2026, 11, 30), "shift_dependents-a"),
+            row("sib-d", 61, date(2026, 12, 1), date(2026, 12, 10), "sib-s"),
+            row("sib-r", 62, date(2026, 11, 5), date(2026, 11, 25), "shift_dependents-a",
+                accepted_risks=[{"flag": "dependency_order", "subject": a_id,
+                                 "note": "Built in parallel"}]),
+        ]  # fmt: skip
+        s.add_all(rows)
+        await s.commit()
+        for r_ in rows:
+            w.ids[r_.item_key] = str(r_.id)
+    r = await w.post(client, "decider", "shift_dependents")
+    assert r.status_code == 201, r.text
+    moved = {k: await w.item(k) for k in ("shift_dependents-b", "sib-s", "sib-d", "sib-r")}
+    assert (moved["shift_dependents-b"].start_date, moved["shift_dependents-b"].end_date) == (
+        date(2026, 11, 16),
+        date(2026, 12, 21),
+    )
+    assert (moved["sib-s"].start_date, moved["sib-s"].end_date) == (
+        date(2026, 11, 16),
+        date(2026, 12, 15),
+    )
+    assert (moved["sib-d"].start_date, moved["sib-d"].end_date) == (
+        date(2026, 12, 16),
+        date(2026, 12, 25),
+    )
+    assert (moved["sib-r"].start_date, moved["sib-r"].end_date) == (
+        date(2026, 11, 5),
+        date(2026, 11, 25),
+    )
+    after = set(r.json()["change"]["after"])
+    assert after == {w.ids[k] for k in ("shift_dependents-b", "sib-s", "sib-d")}
+
+
 async def test_list_filters_audit_and_tools(client):
     from oracle.main import app
     from oracle.mcp import tools

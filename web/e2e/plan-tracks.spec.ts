@@ -46,15 +46,15 @@ test("a track's title, owner and status are edited in place", async ({
 }) => {
   await openPlan(page);
   const t = track(page);
-  await expect(t.getByTestId("track-owner")).toHaveText("No owner");
-  await expect(t.getByTestId("track-health")).toHaveText("On track");
+  await expect(t.getByTestId("track-owner")).toHaveText("not set");
+  await expect(t.getByTestId("track-health")).toHaveText("At risk");
 
   await t.getByRole("button", { name: "Rename" }).click();
   await t.getByLabel("Track title").fill("Usage alerts launch");
   await t.getByRole("button", { name: "Save" }).click();
   await expect(t.getByTestId("track-title")).toHaveText("Usage alerts launch");
 
-  await t.getByRole("button", { name: "Change owner" }).click();
+  await t.getByRole("button", { name: "Set owner" }).click();
   await t.getByLabel("Find a person").fill("approver");
   await t.getByRole("option", { name: /approver@example\.com/ }).click();
   await expect(t.getByTestId("track-owner")).toContainText(
@@ -70,7 +70,7 @@ test("a track's title, owner and status are edited in place", async ({
     .getByRole("group", { name: "Track status" })
     .getByRole("button", { name: "Active" })
     .click();
-  await expect(t.getByTestId("track-health")).toHaveText("On track");
+  await expect(t.getByTestId("track-health")).toHaveText("At risk");
 
   await page.reload();
   await expect(track(page).getByTestId("track-title")).toHaveText(
@@ -92,7 +92,7 @@ test("milestones are added and edited in the inspector, with dated titles", asyn
   const m1 = t
     .getByTestId("track-milestone")
     .filter({ hasText: "First release" });
-  await expect(m1.getByTestId("milestone-title")).toHaveText("M1 · no date");
+  await expect(m1.getByTestId("milestone-title")).toHaveText("M1 · Oct 19 – Nov 30");
 
   await m1.click();
   const e = editor(page);
@@ -169,6 +169,7 @@ test("viewers see no track controls", async ({
   for (const name of [
     "Rename",
     "Change owner",
+    "Set owner",
     "Add milestone",
     "Check now",
     "Draft roadmap from this track",

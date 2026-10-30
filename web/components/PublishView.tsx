@@ -499,6 +499,7 @@ export function PublishView({ doc }: { doc: string }) {
   const advisory = readiness?.items.filter((i) => !i.hard) ?? [];
   const failing = hard.filter((i) => i.status === "critical").length;
   const tally = (s: Item["status"]) => advisory.filter((i) => i.status === s).length;
+  const hardNa = hard.filter((i) => i.status === "not_applicable").length;
   const half = Math.ceil(advisory.length / 2);
 
   const questionFor = (block: Block): Question | undefined => {
@@ -630,7 +631,8 @@ export function PublishView({ doc }: { doc: string }) {
     <Page>
       <PageHeader
         testId="publish-header"
-        back={<DocCrumb doc={d} withTitle={false} />}
+        // qa-docs-31: the same crumb as the document's other pages: PRDs / <document> <status>.
+        back={<DocCrumb doc={d} />}
         title="Publish"
         suffix={d ? `${d.title}${n != null ? ` v${n}` : ""}` : undefined}
         status={blocksChip}
@@ -680,6 +682,8 @@ export function PublishView({ doc }: { doc: string }) {
             <section aria-label="Hard checks">
               <SubHead title="Hard checks" count={hard.length}>
                 {failing > 0 && <Chip kind="crit">{failing} fail</Chip>}
+                {/* qa-docs-29: hard and advisory n/a add up to Quality's "All checks" n/a. */}
+                {hardNa > 0 && <Chip kind="na">{hardNa} n/a</Chip>}
               </SubHead>
               <ul>
                 {hard.map((i) => (

@@ -15,7 +15,8 @@ test("metrics: an owner adds a metric linked to a goal and sees its row", async 
   });
 
   await openCompanyTab(page, "metrics");
-  await page.getByRole("button", { name: "Add metric" }).click();
+  // qa-company-20: with no metric yet the header's Add metric gives way to the empty list's own button.
+  await page.getByRole("button", { name: /^Add (metric|your first metric)$/ }).click();
   const sheet = page.getByRole("dialog", { name: "Add metric" });
   await sheet.getByLabel("Title").fill("Setup completion rate");
   await sheet.getByLabel("What it counts").fill("Accounts that finish setup within 7 days of signing up");

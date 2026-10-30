@@ -22,6 +22,11 @@ const STATE: Record<Exclude<PlanItem["state"], "proposed">, { kind: ChipKind; la
 
 /** The state chip (F1 §5): a draft's item is "Proposed", with how it differs from its approved twin. */
 export function stateChip(i: PlanItem): { kind: ChipKind; label: string; dashed: boolean } {
+  // qa-plan-31: an approved item its draft drops has one state, not "Planned" and "Dropped" at once.
+  if (i.state !== "proposed" && i.change?.kind === "dropped") {
+    const draft = i.change.draft_version != null ? ` in draft ${i.change.draft_version}` : "";
+    return { kind: "warn", label: `Dropped${draft} (was ${STATE[i.state].label})`, dashed: false };
+  }
   if (i.state !== "proposed") return { ...STATE[i.state], dashed: false };
   const c = i.change;
   let suffix = "";
@@ -33,6 +38,11 @@ export function stateChip(i: PlanItem): { kind: ChipKind; label: string; dashed:
 
 /** The Engineering cell (F1 §6): the issue part, then the date part, joined by " · "; "—" when both are empty. */
 export function engineeringLine(i: PlanItem): string {
+  return engineeringParts(i).filter(Boolean).join(" · ") || "—";
+}
+
+/** The Engineering cell's two parts, [issue, date], each "" when there is none. */
+export function engineeringParts(i: PlanItem): [string, string] {
   const e = i.engineering;
   const keys = e.records.map((r) => r.external_ref);
   let issue = "";
@@ -45,7 +55,7 @@ export function engineeringLine(i: PlanItem): string {
   else if (e.date_status === "withdrawn") day = "date withdrawn";
   else if (target(i)) day = `${formatDay(target(i)!)} ✓`;
   else if (keys.length && !e.date) day = "no date";
-  return [issue, day].filter(Boolean).join(" · ") || "—";
+  return [issue, day];
 }
 
 /**
@@ -101,4 +111,20 @@ export function driftMarker(i: PlanItem): { kind: ChipKind; label: string } | nu
   const open = (i.drift ?? []).filter((d) => d.status === "open");
   const top = open.find((d) => d.severity === "high") ?? open[0];
   return top ? { kind: top.severity === "high" ? "crit" : "warn", label: top.label } : null;
+}
+
+/**
+ * qa-plan-1: a track's health as one badge, the same on its PRD card and its track panel. Both
+ * read the track's own health (the API's track overview), never a figure of their own.
+ */
+const TRACK_HEALTH: Record<Schemas["TrackOverview"]["health"], { kind: ChipKind; label: string }> = {
+  on_track: { kind: "pass", label: "On track" },
+  at_risk: { kind: "warn", label: "At risk" },
+  off_track: { kind: "crit", label: "Off track" },
+  no_roadmap: { kind: "na", label: "No roadmap" },
+  paused: { kind: "na", label: "Paused" },
+  closed: { kind: "na", label: "Closed" },
+};
+export function trackHealth(health: Schemas["TrackOverview"]["health"]): { kind: ChipKind; label: string } {
+  return TRACK_HEALTH[health] ?? { kind: "na", label: "No roadmap" };
 }

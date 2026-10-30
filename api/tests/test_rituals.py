@@ -338,7 +338,7 @@ async def test_the_goals_block_shows_homes_distance(client, ctx, at):
     by_title = {r["title"]: r for r in goals["rows"]}
     assert set(by_title) == {"Raise activation", "Lift NPS"}
     assert by_title["Raise activation"]["distance"] == "7 pts to go"
-    assert by_title["Lift NPS"]["distance"] == "No current value"
+    assert by_title["Lift NPS"]["distance"] == "No current value yet"
 
 
 async def test_the_goals_block_writes_values_as_home_does(client, ctx, at):
@@ -387,6 +387,82 @@ async def test_prepare_now_keeps_the_meeting_next_until_it_is_held(client, ctx, 
     assert r["next_pre_read"] is None
     # A week on (an hour off across the change from summer time).
     assert rituals.parse_time(r["next_due_at"]) - due >= timedelta(days=6, hours=23)
+
+
+async def test_prepare_now_on_a_paused_ritual_is_its_last_pre_read(client, ctx, at):
+    """protects=qa-company-2: Prepare now on a paused ritual (no Next) makes the new
+    pre-read its Last pre-read; and qa-company-1: prepare_usd says what Prepare now would
+    spend (a summary once summaries are on Every pre-read); fails_when=Last stays empty
+    while the occurrence is ready, or no cost is given; no_claim=the screen (Playwright)."""
+    await tick(ctx.tenant_id)
+    ritual = (await rituals_of(ctx.tenant_id))["goals_checkin"]
+    resp = await client.post(f"/v1/rituals/{ritual.id}/pause", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(f"/v1/rituals/{ritual.id}/prepare", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    occ = resp.json()
+
+    def listed(rows):
+        return next(r for r in rows if r["id"] == str(ritual.id))
+
+    r = listed((await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json())
+    assert r["next_pre_read"] is None
+    assert r["last_pre_read"]["id"] == occ["id"]
+    assert r["prepare_usd"] is None
+    resp = await client.put(
+        "/v1/rituals/summaries", json={"mode": "always"}, headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    r = listed((await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json())
+    assert r["prepare_usd"] == 3.0
+
+
+async def test_a_pre_read_ahead_is_never_the_last_of_an_active_ritual(client, ctx, at):
+    """protects=review minor: with no Next pre-read (the stored next meeting moved before
+    the one prepared early), an active ritual's pre-read still ahead is not its Last;
+    fails_when=Last names a meeting not yet held; no_claim=the screen (Playwright)."""
+    from oracle.rituals.models import Ritual
+
+    await tick(ctx.tenant_id)
+    ritual = (await rituals_of(ctx.tenant_id))["goals_checkin"]
+    due = ritual.next_due_at
+    resp = await client.post(f"/v1/rituals/{ritual.id}/prepare", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as db:
+        row = await db.get(Ritual, ritual.id)
+        row.next_due_at = due - timedelta(days=1)
+        await db.commit()
+    rows = (await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json()
+    r = next(r for r in rows if r["id"] == str(ritual.id))
+    assert r["next_pre_read"] is None
+    assert r["last_pre_read"] is None
+
+
+async def test_the_ritual_list_reads_the_summary_settings_once(client, ctx, at, monkeypatch):
+    """protects=review minor: GET /v1/rituals reads the summaries setting and the Run
+    rituals autonomy once for the list, not again for each ritual's prepare_usd;
+    fails_when=each ritual re-reads them; no_claim=the costs (the tests above)."""
+    from oracle import autonomy
+    from oracle.rituals import summaries
+
+    await tick(ctx.tenant_id)
+    calls = {"mode": 0, "allows": 0}
+    mode, allows = summaries.mode, autonomy.allows
+
+    async def counted_mode(db):
+        calls["mode"] += 1
+        return await mode(db)
+
+    async def counted_allows(db, key, *a, **k):
+        calls["allows"] += key == "rituals"
+        return await allows(db, key, *a, **k)
+
+    monkeypatch.setattr(summaries, "mode", counted_mode)
+    monkeypatch.setattr(autonomy, "allows", counted_allows)
+    rows = (await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json()
+    assert len(rows) > 2
+    assert calls["mode"] == 1
+    assert calls["allows"] == 1
 
 
 async def test_pre_read_and_record_notes_rows_in_the_inbox(client, ctx, at):

@@ -50,25 +50,25 @@ for (const phone of [false, true]) {
     test.describe(where, () => {
       test.use({ viewport: phone ? PHONE : DESKTOP, colorScheme: scheme });
 
-      test(`Home's since-your-last-visit says an undone change in plain words (${where})`, async ({ page }) => {
+      test(`Home's since-your-last-visit says my change as mine and drops it once undone (${where})`, async ({ page }) => {
         await setUp(page, "simple-home", scheme);
         await login(page);
         await page.goto("/simple");
         await expect(page.getByTestId("home-greeting")).toBeVisible();
         await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
-        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" });
+        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
         await broken.getByRole("button", { name: "Move dependents" }).click();
-        await expect(page.getByText("Move dependents: applied to your working draft")).toBeVisible();
+        await expect(page.getByText("Dependents moved in your working draft")).toBeVisible();
         const since = page.getByTestId("home-since");
         const rows = since.getByTestId("home-since-row").filter({ hasText: "Weekly alert digest" });
         await expect(rows).toHaveCount(1);
-        await expect(rows).toContainText(/\S+ moved (F-\d+ )?Weekly alert digest and its dependents after what it depends on/);
+        // qa-simple-home-15: my own change says "You".
+        await expect(rows).toContainText(/^You moved (F-\d+ )?Weekly alert digest and its dependents after what it depends on/);
         await expect(rows).not.toContainText("undone");
         await page.getByRole("button", { name: "Undo" }).click();
-        await expect(page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" })).toBeVisible();
-        // One row, the change, now "· undone"; the undo is no row of its own.
-        await expect(rows).toHaveCount(1);
-        await expect(rows).toContainText(/moved (F-\d+ )?Weekly alert digest and its dependents after what it depends on · undone/);
+        await expect(page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" })).toBeVisible();
+        // qa-simple-home-15: an undone change and its undo are no rows.
+        await expect(rows).toHaveCount(0);
         for (const text of await since.getByTestId("home-since-row").allInnerTexts()) {
           expect(text).not.toContain("_");
           expect(text).not.toContain("Dependents moved after");
@@ -76,13 +76,13 @@ for (const phone of [false, true]) {
         if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
       });
 
-      test(`Home's since-your-last-visit says an undo of a change made before the last visit (${where})`, async ({ page }) => {
+      test(`Home's since-your-last-visit lists no undo of a change made before the last visit (${where})`, async ({ page }) => {
         await setUp(page, "simple-home", scheme);
         await login(page);
         await page.goto("/simple");
-        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" });
+        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
         await broken.getByRole("button", { name: "Move dependents" }).click();
-        await expect(page.getByText("Move dependents: applied to your working draft")).toBeVisible();
+        await expect(page.getByText("Dependents moved in your working draft")).toBeVisible();
         // A visit to the Inbox: the change is now from before the last visit.
         await expect(async () => {
           await page.goto("/inbox");
@@ -99,9 +99,9 @@ for (const phone of [false, true]) {
         await expect(page.getByText("Undone", { exact: true })).toBeVisible();
         await page.goto("/simple");
         const rows = page.getByTestId("home-since").getByTestId("home-since-row").filter({ hasText: "Weekly alert digest" });
-        await expect(rows).toHaveCount(1);
-        await expect(rows).toContainText(/undid: moved (F-\d+ )?Weekly alert digest and its dependents after what it depends on/);
-        await expect(rows).not.toContainText("_");
+        // qa-simple-home-15: an undo (and the change it undid) is no row of what changed.
+        await expect(page.getByTestId("home-since").getByTestId("home-since-row").or(page.getByTestId("home-since-empty")).first()).toBeVisible();
+        await expect(rows).toHaveCount(0);
         if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
       });
 

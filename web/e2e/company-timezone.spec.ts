@@ -23,7 +23,9 @@ test("Company time zone: set on Settings › Company, read by the weekly report"
   await step.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company/);
   const zone = page.getByLabel("Company time zone");
-  await expect(zone).toHaveValue("America/Los_Angeles");
+  // Unset: no zone is chosen and the select says Pacific is used, as Home does.
+  await expect(zone).toHaveValue("");
+  await expect(zone.locator("option:checked")).toHaveText("Not set · Pacific is used");
   await zone.selectOption("Asia/Tokyo");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
@@ -34,7 +36,7 @@ test("Company time zone: set on Settings › Company, read by the weekly report"
   const report = page.getByTestId("report-schedule");
   await expect(report).toBeVisible();
   await expect(report.getByLabel("Time zone")).toHaveCount(0);
-  await expect(report.getByTestId("report-zone")).toHaveText("Asia/Tokyo");
+  await expect(report.getByTestId("report-zone")).toContainText("(Tokyo)");
   await expect(report.getByRole("link", { name: "Change" })).toHaveAttribute("href", "/settings/company#timezone");
 
   await page.goto("/home");
@@ -53,7 +55,7 @@ test("goal form: the Horizon tip reads the company's horizons", async ({ page })
   await page.getByLabel("From").fill("24");
   await page.getByLabel("To").fill("36");
   await page.getByRole("button", { name: "Save" }).first().click();
-  await expect(page.getByRole("button", { name: "Reset" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset to defaults" })).toBeVisible();
 
   await page.goto("/baseline");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();

@@ -161,7 +161,7 @@ def _spec_inputs(prompt: str) -> dict:
 
 def _spec_md(attempt: int) -> str:
     parts = [
-        f"## {title} {{#{key}}}\n\nWritten by the local agent runtime (attempt {attempt})."
+        f"## {title} {{#{key}}}\n\nA sample section (attempt {attempt})."
         for key, title in _SPEC_SECTIONS
     ]
     return "\n\n".join(parts) + "\n"
@@ -269,7 +269,7 @@ def _default_content(
             "---\n\n"
             "# Example product PRD {#title}\n\n"
             "## Problem {#problem}\n\n"
-            f"Draft {attempt} written by the local agent runtime. Buyers drop off when the\n"
+            f"Draft {attempt}, a sample. Buyers drop off when the\n"
             "total changes late in the flow.\n\n"
             "## Goal trace {#goal-trace}\n\n"
             "Serves G1 (activation).\n\n"
@@ -289,7 +289,7 @@ def _default_content(
             "---\n\n"
             "# Example product roadmap {#roadmap}\n\n"
             "## Summary {#summary}\n\n"
-            f"Draft {attempt} written by the local agent runtime.\n\n"
+            f"Draft {attempt}, a sample.\n\n"
             "## Items by horizon {#brief-items}\n\n"
             "| Horizon | Item | Outcome |\n|---|---|---|\n"
             "| [Now](#now) | [Show the price early](#now-price) | Fewer drop-offs |\n\n"
@@ -305,17 +305,17 @@ def _default_content(
     if name == "eng_dates.yaml":
         # F4 lane B: a date for the default draft items' one Now item.
         return (
-            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            f"# {segment} (sample, attempt {attempt})\n"
             "version: 1\n" + (f"prd: {{document: {document}}}\n" if document else "") + "items:\n"
             "  - item: price-early\n"
             "    estimate: {kind: estimate, reference: est-price-early, "
             "supports_date: 2026-11-30}\n"
             "    confidence: medium\n"
-            "    assumptions: [Local agent runtime]\n"
+            "    assumptions: [A sample date]\n"
         )
     if name == "roadmap_items.yaml":
         return (
-            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            f"# {segment} (sample, attempt {attempt})\n"
             "version: 1\n"
             "items:\n"
             "  - id: price-early\n"
@@ -324,7 +324,7 @@ def _default_content(
             "    horizon: now\n"
             "    milestone: Beta\n"
             "    depends_on: []\n"
-            "    priority: {score: 1, rank: 1, explanation: local agent runtime}\n"
+            "    priority: {score: 1, rank: 1, explanation: a sample ranking}\n"
             "    confidence: medium\n"
             "    prd_section: features\n"
         )
@@ -332,7 +332,7 @@ def _default_content(
         # The baseline YAML format (oracle.baseline.yaml_io): the one feature the default
         # feature_set.yaml includes.
         return (
-            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            f"# {segment} (sample, attempt {attempt})\n"
             "version: 1\n"
             "entities:\n"
             "  - {type: feature, key: price-early, title: Show the price early}\n"
@@ -342,7 +342,7 @@ def _default_content(
         # The C6 format (oracle.runs.feature_set): the baseline's one feature, serving no
         # confirmed goal yet (flagged, not blocking).
         return (
-            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            f"# {segment} (sample, attempt {attempt})\n"
             "version: 1\n" + (f"document: {document}\n" if document else "") + "features:\n"
             "  - key: price-early\n"
             "    title: Show the price early\n"
@@ -358,37 +358,33 @@ def _default_content(
         # scope the prompt pastes, else the default feature set's one; no code map.
         briefs = "".join(
             f"  - feature: {key}\n    title: {key}\n"
-            "    approach: Built by the local agent runtime\n"
+            "    approach: A sample approach\n"
             "    touches: []\n    reuse: []\n    risks: []\n    questions: []\n"
             "    size: m\n    depends_on: []\n"
-            '    assumptions: ["No code map: written by the local agent runtime"]\n'
+            '    assumptions: ["No code map: a sample brief"]\n'
             for key in scope or ["price-early"]
         )
         return (
-            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            f"# {segment} (sample, attempt {attempt})\n"
             "version: 1\ncode_map: {used: false, repos: []}\nfeatures:\n" + briefs
         )
     if name == "requests_triage.yaml":
         # C1 (oracle.requests.triage): nothing classified, nothing found.
-        return (
-            f"# {segment} (local agent runtime, attempt {attempt})\n"
-            "version: 1\nrequests: []\nfound: []\n"
-        )
+        return f"# {segment} (sample, attempt {attempt})\nversion: 1\nrequests: []\nfound: []\n"
     if name == "priority.yaml":
         # The C8 format (oracle.priorities.run_order): the approved scope the prompt pastes,
         # in dependency order, else the default feature set's one feature.
         rows = "".join(
-            f"  - key: {key}\n    rank: {n}\n    score: 0\n"
-            "    explanation: Ranked by the local agent runtime\n"
+            f"  - key: {key}\n    rank: {n}\n    score: 0\n    explanation: A sample ranking\n"
             for n, key in enumerate(scope or ["price-early"], start=1)
         )
         return (
-            f"# {segment} (local agent runtime, attempt {attempt})\n"
+            f"# {segment} (sample, attempt {attempt})\n"
             "version: 1\nmethod: goal_weighted\norder:\n" + rows
         )
     if name.endswith(".yaml"):
-        return f"# {segment} (local agent runtime, attempt {attempt})\nitems: []\n"
-    return f"# {segment}\n\nWritten by the local agent runtime (attempt {attempt}).\n"
+        return f"# {segment} (sample, attempt {attempt})\nitems: []\n"
+    return f"# {segment}\n\nA sample draft (attempt {attempt}).\n"
 
 
 @dataclass
@@ -408,7 +404,7 @@ class FakeRuntime:
         return True
 
     def notes(self) -> list[str]:
-        return ["Local agent runtime: segments finish at once with generic drafts."]
+        return ["Test mode: each step finishes at once with a sample draft."]
 
     async def whoami(self) -> dict[str, str | None]:
         return {"tenant_id": "fake"}

@@ -6,7 +6,7 @@ import { ADMIN } from "./helpers";
 
 /*
  * Simple S9: Home's "Walk me through it", in the "simple-chat" mock scenario: the owner has
- * broken links to fix (the roadmap's red dependencies), one decision on the agenda of the
+ * broken links to fix (the roadmap's red flags), decisions waiting, one decision on the agenda of the
  * next meeting (Weekly plan review), and the commenter's three proposals waiting. Every test
  * runs on desktop (1366x820) and on a phone (390x844); one runs in dark.
  */
@@ -53,7 +53,7 @@ for (const phone of [false, true]) {
       });
 
       test(`the walk goes broken links, agenda decisions, proposals, with progress, then Done (${where})`, async ({ page }) => {
-        // protects: one step at a time in the order broken links -> the next meeting's agenda decisions -> proposals, progress "n of N", Accept on a proposal through the change engine, Done returning to Home
+        // protects: one step at a time in the order broken links -> decisions waiting for me -> the next meeting's agenda decisions -> proposals, progress "n of N", Accept on a proposal through the change engine, Done returning to Home
         // fails_when: the order differs, progress does not count, Accept does not decide the proposal, or Done leaves the walk on screen
         // no_claim: which broken links the roadmap has (the roadmap's own specs), the decision page behind the agenda link
         await signIn(page);
@@ -72,7 +72,7 @@ for (const phone of [false, true]) {
             await tap(step(page).getByRole("button", { name: "Next" }));
           } else await tap(page.getByRole("button", { name: "Skip" }));
         }
-        const order = ["broken_link", "agenda_decision", "proposal"];
+        const order = ["broken_link", "decision", "agenda_decision", "proposal"];
         expect(kinds.map((k) => order.indexOf(k))).toEqual([...kinds.map((k) => order.indexOf(k))].sort());
         expect(kinds).toContain("broken_link");
         expect(kinds.filter((k) => k === "agenda_decision")).toHaveLength(1);

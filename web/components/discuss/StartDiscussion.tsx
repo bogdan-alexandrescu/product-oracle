@@ -148,6 +148,24 @@ export function StartDiscussion({
         onChange={(e) => setFirst(e.target.value)}
         className={`${TEXTAREA} -mt-2`}
       />
+      {/* qa-docs-52/33: who answers, right under the message and above the buttons, so it is
+          never the line cut off at the panel's foot. Alone in it, Oracle answers the first
+          message anyway (#402): said in words, not as a greyed-out ticked box. */}
+      {solo ? (
+        <p className="-mt-1 text-[13px] leading-5 text-text2" data-testid="oracle-rule">
+          Oracle will reply
+        </p>
+      ) : (
+        <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <label className="inline-flex items-center gap-1.5 text-sm text-text">
+            <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
+            Ask Oracle
+          </label>
+          <span className="text-[13px] text-text2" data-testid="oracle-rule">
+            {askOracle ? "Oracle will reply" : "Oracle replies when you @mention it"}
+          </span>
+        </div>
+      )}
       {error && <InlineError>{error}</InlineError>}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="solid" disabled={saving}>
@@ -158,15 +176,6 @@ export function StartDiscussion({
             Cancel
           </Button>
         )}
-        {/* qa-docs-52: the hint follows the box. Alone in it, Oracle answers the first message
-            anyway (#402), so the box shows ticked and fixed. */}
-        <label className="inline-flex items-center gap-1.5 text-sm text-text" title={solo ? "Oracle answers the first message while you are the only one in it" : undefined}>
-          <input type="checkbox" checked={solo || askOracle} disabled={solo} onChange={(e) => setAskOracle(e.target.checked)} />
-          Ask Oracle
-        </label>
-        <span className="text-[13px] text-text2" data-testid="oracle-rule">
-          {solo || askOracle ? "Oracle will reply" : "Oracle replies when you @mention it"}
-        </span>
       </div>
     </form>
   );

@@ -14,7 +14,7 @@ import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { featureCount, goalLabel, PlanBucketsHead, PlanFeatureList, planGoals } from "./plan-buckets";
+import { featureCount, goalLabel, PlanBucketsHead, PlanFeatureList, planGoals, planSpan } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
 type Row = Schemas["SimplePriorityRow"];
@@ -47,6 +47,16 @@ export function usePhone(): boolean {
 }
 
 const fmt = (n: number | null | undefined, digits = 1): string => (n == null ? "–" : Number(n.toFixed(digits)).toString());
+
+/** A feature as people read it: its title and its short code ("Sample data import (F-12)"), never its key. */
+const nameOf = (r: { title: string; short_code?: string | null }): string => (r.short_code ? `${r.title} (${r.short_code})` : r.title);
+
+/** Each tab's own line under the heading; only the Ranked list is a ranking. */
+const SUBTITLE: Record<Tab, string> = {
+  ranked: "Features that serve a goal first, then by score; a feature never ranks above one it depends on.",
+  "value-effort": "Each feature by its goal value and its effort; the dashed lines are the middles.",
+  buckets: "Where the engineer-weeks go, goal by goal.",
+};
 
 type Sent = { ok: true; change: Schemas["SimpleChangeOut"] } | { ok: false; status: number; message: string; pushback: boolean };
 
@@ -103,17 +113,28 @@ export function Priorities() {
   // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
   // until the next move or leaving the page: highlighted with "moved #a → #b".
   const [moved, setMoved] = useState<Moved | null>(null);
+  // A proposal's toast names who decides, once the read that lists it is back; a read that
+  // fails still says it was proposed.
+  const proposed = useRef<string | null>(null);
+  const readError = q.error;
+  useEffect(() => {
+    if (!proposed.current || (!data && !readError)) return;
+    const p = data?.proposals.find((x) => x.change_id === proposed.current);
+    proposed.current = null;
+    toast({ message: p?.waiting_for.length ? `Proposed: ${p.waiting_for.join(", ")} ${p.waiting_for.length === 1 ? "decides" : "decide"}` : "Proposed: it waits for a decision" });
+  }, [data, readError]);
 
   // An applied change is the next move: `row` is the item it moved (highlighted), none clears
   // the highlight; `moves` false (a decline) leaves it.
-  async function changed(r: Sent, done: string, proposedTo: string, row?: Row, moves = true): Promise<void> {
+  async function changed(r: Sent, done: string, row?: Row, moves = true, why?: string): Promise<void> {
     if (!r.ok) {
       toast({ message: r.message });
       return;
     }
-    await q.reload();
     const c = r.change;
-    if (c.status === "applied" && moves) setMoved(row ? { featureId: row.feature_id, from: row.rank } : null);
+    if (c.status !== "applied") proposed.current = c.id;
+    await q.reload();
+    if (c.status === "applied" && moves) setMoved(row ? { featureId: row.feature_id, from: row.rank, why } : null);
     if (c.status === "applied")
       toast({
         message: done,
@@ -129,7 +150,6 @@ export function Priorities() {
             }
           : undefined,
       });
-    else toast({ message: `Proposed: waiting for ${proposedTo}` });
   }
 
   const shapes = goalShapes(data?.rows ?? []);
@@ -140,8 +160,9 @@ export function Priorities() {
         <div>
           <h1 className="text-[length:var(--simple-h1)] font-semibold leading-[var(--simple-h1-leading)]">Priorities</h1>
           <p className="text-text2" data-testid="prio-subtitle">
-            By score, in dependency order: a feature never ranks above one it depends on.
-            {data ? ` ${data.quarter.label}.` : ""}
+            {SUBTITLE[tab]}
+            {data ? ` ${data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}.` : ""}
+            {data && tab === "ranked" && data.plan?.span && regrouped(data.rows) ? " The plan's dates decide what makes the line, so what makes it is listed first." : ""}
           </p>
         </div>
         <Link href="/priorities" className="text-[length:var(--simple-small)] font-medium text-accent-ink underline">
@@ -198,12 +219,14 @@ function goalShapes(rows: Row[]): Map<string, Shape> {
   return out;
 }
 
-type Changed = (r: Sent, done: string, proposedTo: string, row?: Row, moves?: boolean) => Promise<void>;
-type Moved = { featureId: string; from: number };
+type Changed = (r: Sent, done: string, row?: Row, moves?: boolean, why?: string) => Promise<void>;
+/** `why`: a re-estimate's words ("effort 4 wk"); none: a manual move. */
+type Moved = { featureId: string; from: number; why?: string };
 
-/** "moved #8 → #3" for the row just moved (its rank now from the read); null for any other row. */
+/** "moved #8 → #3" for the row just moved, "now #5 (effort 4 wk)" for one re-estimated (its rank now from the read); null for any other row. */
 function movedWords(moved: Moved | null, r: Row): string | null {
   if (moved?.featureId !== r.feature_id) return null;
+  if (moved.why) return `now #${r.rank} (${moved.why})`;
   return moved.from === r.rank ? `stays #${r.rank}` : `moved #${moved.from} → #${r.rank}`;
 }
 
@@ -215,13 +238,20 @@ function MovedTag({ words }: { words: string }) {
   );
 }
 
-/** The row's short code (stays with the item however it ranks); its key in the title. */
+/** The row's short code (stays with the item however it ranks), one chip style above and below the line; its name in the title. */
 function CodeChip({ r }: { r: Row }) {
   return (
-    <span data-testid="prio-code" title={r.code} className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">
-      {r.short_code || r.code}
+    <span data-testid="prio-code" title={r.title} className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1.5 text-[length:var(--simple-small)] font-semibold tabular-nums text-text">
+      {r.short_code || r.title}
     </span>
   );
+}
+
+/** Where a move may land: a feature never goes above one it needs, nor below one that needs it. */
+function moveBounds(rows: Row[], row: Row): { top: number; bottom: number; needs: Row | null; neededBy: Row | null } {
+  const needs = rows.filter((x) => row.depends_on.includes(x.code)).sort((a, b) => b.rank - a.rank)[0] ?? null;
+  const neededBy = rows.filter((x) => x.depends_on.includes(row.code)).sort((a, b) => a.rank - b.rank)[0] ?? null;
+  return { top: needs ? needs.rank + 1 : 1, bottom: neededBy ? neededBy.rank - 1 : rows.length, needs, neededBy };
 }
 
 // --------------------------------------------------------------------------- ranked list
@@ -258,10 +288,11 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
       {move && (
         <MoveDialog
           move={move}
+          rows={data.rows}
           onClose={() => setMove(null)}
-          changed={async (r, done, to) => {
+          changed={async (r, done) => {
             setMove(null);
-            await changed(r, done, to, move.row);
+            await changed(r, done, move.row);
           }}
         />
       )}
@@ -270,19 +301,25 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
 }
 
 function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
-  const rows = data.rows;
+  const rows = byLine(data);
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const maxValue = Math.max(1, ...rows.map((r) => r.goal_value ?? 0));
 
-  function targetIndex(y: number): number {
+  // A dated plan lists what makes the line first, so a row's neighbour on screen is not its
+  // neighbour by rank: the keys move by rank (data.rows), a drag stays on its side of the line.
+  const split = lineSplit(rows);
+  const apart = split >= 0 && regrouped(data.rows);
+
+  function targetIndex(y: number, from: number): number {
     let to = 0;
     refs.current.forEach((el, i) => {
       if (!el) return;
       const box = el.getBoundingClientRect();
       if (y > box.top + box.height / 2) to = i;
     });
-    return to;
+    if (!apart) return to;
+    return from < split ? Math.min(to, split - 1) : Math.max(to, split);
   }
 
   function start(e: ReactPointerEvent, from: number) {
@@ -293,22 +330,23 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
 
   function end(e: ReactPointerEvent) {
     if (!drag) return;
-    const to = targetIndex(e.clientY);
+    const to = targetIndex(e.clientY, drag.from);
     setDrag(null);
-    if (to !== drag.from) onMove(rows[drag.from], to + 1);
+    if (to !== drag.from) onMove(rows[drag.from], rows[to].rank);
   }
 
   function key(e: KeyboardEvent, i: number) {
-    if (e.key === "ArrowUp" && i > 0) {
+    const at = data.rows.indexOf(rows[i]);
+    if (e.key === "ArrowUp" && at > 0) {
       e.preventDefault();
-      onMove(rows[i], i);
-    } else if (e.key === "ArrowDown" && i < rows.length - 1) {
+      onMove(rows[i], data.rows[at - 1].rank);
+    } else if (e.key === "ArrowDown" && at < data.rows.length - 1) {
       e.preventDefault();
-      onMove(rows[i], i + 2);
+      onMove(rows[i], data.rows[at + 1].rank);
     }
   }
 
-  const split = lineSplit(rows);
+  const goalOf = goalOfRow(data);
   return (
     <>
     <LineCaption data={data} />
@@ -337,11 +375,11 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {mayChange && r.can_reorder && (
                 <button
-                  aria-label={`Drag ${r.code} to reorder`}
+                  aria-label={`Drag ${nameOf(r)} to reorder`}
                   title="Drag to reorder (or use the arrow keys)"
                   className="cursor-grab touch-none rounded-md px-1 text-[length:var(--simple-h2)] leading-none text-text2 hover:bg-surface2"
                   onPointerDown={(e) => start(e, i)}
-                  onPointerMove={(e) => drag && setDrag({ ...drag, to: targetIndex(e.clientY) })}
+                  onPointerMove={(e) => drag && setDrag({ ...drag, to: targetIndex(e.clientY, drag.from) })}
                   onPointerUp={end}
                   onPointerCancel={() => setDrag(null)}
                   onKeyDown={(e) => key(e, i)}
@@ -374,27 +412,29 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
               {words && <MovedTag words={words} />}
               {!r.above_line && <MissesTag data={data} />}
               <span className="ml-auto flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
-                {r.no_goal ? (
-                  <span className="rounded-full bg-warn-bg px-2 text-warn">No goal</span>
+                {goalOf(r) ? (
+                  <span data-testid="prio-goal">{goalOf(r)}</span>
                 ) : (
-                  <span>{r.goal?.title}</span>
+                  <span data-testid="prio-goal" className="rounded-full bg-warn-bg px-2 text-warn">
+                    No goal
+                  </span>
                 )}
                 {r.milestone && <span>Milestone {r.milestone}</span>}
-                <span className="flex items-center gap-1" aria-label={`Goal value ${fmt(r.goal_value)}`}>
-                  <span className="h-2 w-16 overflow-hidden rounded-full bg-surface2">
+                {/* The numbers say what they are and wrap as one group. */}
+                <span data-testid="prio-numbers" className="flex items-center gap-1 whitespace-nowrap tabular-nums">
+                  <span aria-hidden className="h-2 w-16 overflow-hidden rounded-full bg-surface2">
                     <span className="block h-full rounded-full bg-accent" style={{ width: `${((r.goal_value ?? 0) / maxValue) * 100}%` }} />
                   </span>
-                  {fmt(r.goal_value)}
-                </span>
-                <span>{fmt(r.effort)} wk</span>
-                <span className="font-semibold text-text" data-testid="prio-score">
-                  {fmt(r.score, 2)}
+                  {`value ${fmt(r.goal_value)} · ${fmt(r.effort)} wk · score `}
+                  <span className="font-semibold text-text" data-testid="prio-score">
+                    {fmt(r.score, 2)}
+                  </span>
                 </span>
               </span>
             </div>
             {r.after && (
               <p className="mt-1 pl-12 text-[length:var(--simple-small)] text-text2" data-testid="prio-after">
-                After {r.after.code}, which it needs.
+                After {r.after.title}, which it needs.
               </p>
             )}
             {r.override && (
@@ -441,16 +481,35 @@ function OracleOrder({ rows }: { rows: Row[] }) {
   );
 }
 
-function MoveDialog({ move, onClose, changed }: { move: { row: Row; position: number }; onClose: () => void; changed: Changed }) {
+function MoveDialog({ move, rows, onClose, changed }: { move: { row: Row; position: number }; rows: Row[]; onClose: () => void; changed: Changed }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [pushback, setPushback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { row, position } = move;
+  const { row } = move;
   const verb = row.applies ? "Move" : "Propose";
+  // Where the item can really land: a dependency stops it short (said), or keeps it where it is (refused).
+  const bounds = moveBounds(rows, row);
+  const position = Math.min(bounds.bottom, Math.max(bounds.top, move.position));
+  const stopped =
+    position === move.position
+      ? null
+      : position > move.position
+        ? `It needs ${bounds.needs!.title} (#${bounds.needs!.rank}), so it can go no higher than #${position}.`
+        : `${bounds.neededBy!.title} (#${bounds.neededBy!.rank}) needs it, so it can go no lower than #${position}.`;
+  const refused =
+    position !== row.rank
+      ? null
+      : move.position < row.rank
+        ? `Can't go above ${bounds.needs?.title}, which it needs.`
+        : `Can't go below ${bounds.neededBy?.title}, which needs it.`;
 
   async function submit(confirm = false) {
-    if (!reason.trim()) return;
+    if (refused) return;
+    if (!reason.trim()) {
+      setError("Say why in one line.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const r = await send({
@@ -463,23 +522,46 @@ function MoveDialog({ move, onClose, changed }: { move: { row: Row; position: nu
     setBusy(false);
     if (!r.ok && r.pushback) setPushback(r.message);
     else if (!r.ok) setError(r.message);
-    else await changed(r, `Moved ${row.code} to rank ${position}`, "the decider");
+    else await changed(r, `${row.applies ? "Moved" : "Proposed moving"} ${nameOf(row)} to rank ${position}`);
   }
+
+  if (refused)
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+        <div role="dialog" aria-modal="true" aria-label={`Why move ${nameOf(row)}`} className="w-full max-w-md rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">{nameOf(row)} stays #{row.rank}</h2>
+          <p className="mt-1 text-[length:var(--simple-small)] text-text2" data-testid="move-refused">
+            {refused}
+          </p>
+          <div className="mt-3 flex justify-end">
+            <Button type="button" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Why move ${row.code}`}
+        aria-label={`Why move ${nameOf(row)}`}
         className="w-full max-w-md rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
-          {verb} {row.code} to rank {position}
+          {verb} {nameOf(row)} to rank {position}
         </h2>
+        {stopped && (
+          <p className="mt-1 text-[length:var(--simple-small)] text-text2" data-testid="move-stopped">
+            {stopped}
+          </p>
+        )}
         <p className="mb-2 text-[length:var(--simple-small)] text-text2">
-          Oracle ranks it #{row.oracle_rank ?? row.rank}. A manual move is an override: say why in one line{row.applies ? "" : "; the decider accepts or declines it"}.
+          Oracle ranks it #{row.oracle_rank ?? row.rank}. Your order replaces Oracle&apos;s for it: say why in one line{row.applies ? "" : "; whoever decides accepts or declines it"}.
         </p>
         <form
           onSubmit={(e) => {
@@ -495,7 +577,10 @@ function MoveDialog({ move, onClose, changed }: { move: { row: Row; position: nu
             autoFocus
             maxLength={500}
             value={reason}
-            onChange={(e) => setReason(e.target.value.replace(/[\r\n]/g, " "))}
+            onChange={(e) => {
+              setReason(e.target.value.replace(/[\r\n]/g, " "));
+              setError(null);
+            }}
             className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 text-[length:var(--simple-small)]"
           />
           {pushback && (
@@ -517,7 +602,7 @@ function MoveDialog({ move, onClose, changed }: { move: { row: Row; position: nu
             <Button type="button" variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy || !reason.trim()}>
+            <Button type="submit" disabled={busy}>
               {verb}
             </Button>
           </div>
@@ -554,8 +639,7 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
       r.response.ok && r.data
         ? { ok: true, change: { ...r.data.change, status: "applied", can_undo: false } }
         : { ok: false, status: r.response.status, message: `Could not decide: ${detailMessage(r.error, r.response)}`, pushback: false },
-      action === "accept" ? `Accepted ${p.code}'s proposal` : `Declined ${p.code}'s proposal`,
-      "",
+      action === "accept" ? `Accepted the proposal for ${p.title}` : `Declined the proposal for ${p.title}`,
       row,
       action === "accept",
     );
@@ -570,7 +654,7 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
     >
       <div className="flex flex-wrap items-center gap-3">
         {p.flow ? (
-          <button aria-label={`Open the flow for ${p.code}`} onClick={() => setOpen(!open)} className="rounded-md border border-line bg-surface p-1" data-testid="flow-thumb">
+          <button aria-label={`Open the flow for ${p.title}`} onClick={() => setOpen(!open)} className="rounded-md border border-line bg-surface p-1" data-testid="flow-thumb">
             <FlowThumb flow={p.flow} />
           </button>
         ) : (
@@ -613,20 +697,19 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
           <li key={d.item_id} data-testid="prio-draft" data-code={d.code} className="rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-3">
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
-              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{d.code}</span>
               <span className="flex-1 font-medium">{d.title}</span>
               <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
               {mayChange && (
                 <span className="flex gap-2">
                   <Button
                     onClick={async () =>
-                      changed(await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }), `Confirmed ${d.code}`, "the decider")
+                      changed(await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }), `Confirmed ${d.title}`)
                     }
                   >
                     Confirm
                   </Button>
-                  <Button variant="secondary" onClick={() => setMerging(merging === d.item_id ? null : d.item_id)}>
-                    Merge
+                  <Button variant="secondary" aria-expanded={merging === d.item_id} onClick={() => setMerging(merging === d.item_id ? null : d.item_id)}>
+                    Merge into…
                   </Button>
                 </span>
               )}
@@ -640,9 +723,8 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
                   if (!target) return;
                   setMerging(null);
                   await changed(
-                    await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.code}` }),
-                    `Merged ${d.code} into ${target.code}`,
-                    "the decider",
+                    await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.title}` }),
+                    `Merged ${d.title} into ${target.title}`,
                   );
                 }}
               >
@@ -653,7 +735,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
                   <option value="">Choose an item…</option>
                   {d.merge_into.map((m) => (
                     <option key={m.item_id} value={m.item_id}>
-                      {m.code} · {m.title}
+                      {m.title}
                     </option>
                   ))}
                 </select>
@@ -756,6 +838,65 @@ function medianSplit(rows: Row[], key: (r: Row) => number, high: boolean): { med
 /** A rectangle on the plot, in pixels: left, top, right, bottom. */
 type Box = [number, number, number, number];
 
+/**
+ * Each mark's centre on a w x h plot: off the middle lines (22 px into the quadrant it counts
+ * in), then nudged apart where two marks or a mark and a quadrant's name overlap (a phone's
+ * narrow plot), kept inside the plot.
+ */
+function markSpots(
+  rows: Row[],
+  w: number,
+  h: number,
+  o: { at: (r: Row) => [number, number]; side: (r: Row) => [number, number]; ex: number; vy: number; avoid: Box[] },
+): Map<string, [number, number]> {
+  const R = 18;
+  const pts = rows.map((r) => {
+    let [x, y] = o.at(r);
+    const [sx, sy] = o.side(r);
+    if (w && Math.abs(x - o.ex) < 22) x = o.ex + sx * 22;
+    if (h && Math.abs(y - o.vy) < 22) y = o.vy + sy * 22;
+    return { id: r.feature_id, x, y };
+  });
+  if (!w || !h) return new Map(pts.map((p) => [p.id, [p.x, p.y]]));
+  const clamp = (p: { x: number; y: number }) => {
+    p.x = Math.min(w - R, Math.max(R, p.x));
+    p.y = Math.min(h - R, Math.max(R, p.y));
+  };
+  for (let round = 0; round < 40; round++) {
+    let moved = false;
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const a = pts[i];
+        const b = pts[j];
+        const ox = 2 * R - 6 - Math.abs(a.x - b.x);
+        const oy = 2 * R - 6 - Math.abs(a.y - b.y);
+        if (ox <= 0 || oy <= 0) continue;
+        moved = true;
+        // Apart along the shorter way out, half each.
+        if (ox < oy) {
+          const d = (ox / 2 + 1) * (a.x <= b.x ? 1 : -1);
+          a.x -= d;
+          b.x += d;
+        } else {
+          const d = (oy / 2 + 1) * (a.y <= b.y ? 1 : -1);
+          a.y -= d;
+          b.y += d;
+        }
+      }
+      const p = pts[i];
+      for (const q of o.avoid) {
+        if (p.x + R - 4 <= q[0] || p.x - R + 4 >= q[2] || p.y + R - 4 <= q[1] || p.y - R + 4 >= q[3]) continue;
+        moved = true;
+        // A quadrant's name is at the top or the foot: the mark steps clear of it inwards.
+        p.y = q[1] < h / 2 ? q[3] + R - 3 : q[1] - R + 3;
+      }
+      clamp(p);
+    }
+    if (!moved) break;
+  }
+  return new Map(pts.map((p) => [p.id, [p.x, p.y]]));
+}
+
 function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; shapes: Map<string, Shape>; mayChange: boolean; changed: Changed; moved: Moved | null }) {
   const box = useRef<HTMLDivElement>(null);
   // The plot's size, kept as it resizes (where the median lines' words fit).
@@ -790,6 +931,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   const quadrant = (r: Row) => (byValue.firstHalf.has(r.feature_id) ? (byEffort.firstHalf.has(r.feature_id) ? 0 : 1) : byEffort.firstHalf.has(r.feature_id) ? 2 : 3);
   const counts = [0, 1, 2, 3].map((q) => rows.filter((r) => quadrant(r) === q).length);
   const shapeOf = (r: Row): Shape => (r.goal ? (shapes.get(r.goal.key) ?? "circle") : "none");
+  const goalOf = goalOfRow(data);
   const sideRefs = useRef(new Map<string, HTMLLIElement>());
   const markRefs = useRef(new Map<string, HTMLButtonElement>());
 
@@ -821,9 +963,10 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
         before: { goal_value: r.value_estimated ? (r.goal_value ?? null) : null, effort: r.effort ?? null },
         after,
       }),
-      `Re-estimated ${r.code}: ${words}`,
-      "the decider",
+      `Re-estimated ${nameOf(r)}: ${words}`,
       r,
+      true,
+      words,
     );
   }
 
@@ -870,7 +1013,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     { name: "Fill-ins", at: "bottom-[8px] left-[10px]" },
     { name: "Later", at: "bottom-[22px] right-[10px] text-right" },
   ];
-  // B's legend: "Codes are the PRD's F-codes" when every mark's code is one, else codes stay with the item.
+  // B's legend: "Codes are the one-pager's feature codes" when every mark's code is one, else codes stay with the item.
   const fCodes = rows.length > 0 && rows.every((r) => /^F-\d+$/.test(r.short_code || r.code));
   const effortAt = xPct(byEffort.median);
   const valueAt = yPct(byValue.median);
@@ -879,21 +1022,30 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   const { w, h } = plotSize;
   const ex = (effortAt / 100) * w;
   const vy = (valueAt / 100) * h;
-  const taken: Box[] = [
-    ...rows.map((r): Box => {
-      const x = (xPct(effortOf(r)) / 100) * w + fan(r);
-      const y = (yPct(r.goal_value ?? 0) / 100) * h;
-      return [x - 18, y - 18, x + 18, y + 18];
-    }),
-    ...QUADRANTS.map((q, k): Box => {
-      const len = `${q.name} · ${counts[k]}`.length * 8.6;
-      return [[10, 8, 10 + len, 28], [w - 10 - len, 8, w - 10, 28], [10, h - 28, 10 + len, h - 8], [w - 10 - len, h - 42, w - 10, h - 22]][k] as Box;
-    }),
-  ];
+  const quadrantBoxes = QUADRANTS.map((q, k): Box => {
+    const len = `${q.name} · ${counts[k]}`.length * 8.6;
+    return [[10, 8, 10 + len, 28], [w - 10 - len, 8, w - 10, 28], [10, h - 28, 10 + len, h - 8], [w - 10 - len, h - 42, w - 10, h - 22]][k] as Box;
+  });
+  const spots = markSpots(rows, w, h, {
+    at: (r) => [(xPct(effortOf(r)) / 100) * w + fan(r), (yPct(r.goal_value ?? 0) / 100) * h],
+    // A mark on a middle line sits on the side its quadrant count puts it.
+    side: (r) => [byEffort.firstHalf.has(r.feature_id) ? -1 : 1, byValue.firstHalf.has(r.feature_id) ? -1 : 1],
+    ex,
+    vy,
+    avoid: quadrantBoxes,
+  });
+  const taken: Box[] = [...rows.map((r): Box => {
+    const [x, y] = spots.get(r.feature_id)!;
+    return [x - 18, y - 18, x + 18, y + 18];
+  }), ...quadrantBoxes];
   const free = (b: Box) => b[0] >= 0 && b[2] <= w && b[1] >= 0 && b[3] <= h && !taken.some((o) => o[0] < b[2] && b[0] < o[2] && o[1] < b[3] && b[1] < o[3]);
   const effortSpots: { box: Box; style: React.CSSProperties }[] = [
     { box: [ex + 5, h - 19, ex + 91, h - 3], style: { left: `calc(${effortAt}% + 5px)`, bottom: 3 } },
     { box: [ex - 91, h - 19, ex - 5, h - 3], style: { left: `calc(${effortAt}% - 5px)`, bottom: 3, transform: "translateX(-100%)" } },
+    ...[0.75, 0.6].flatMap((at): { box: Box; style: React.CSSProperties }[] => [
+      { box: [ex + 5, at * h - 8, ex + 91, at * h + 8], style: { left: `calc(${effortAt}% + 5px)`, top: `calc(${at * 100}% - 8px)` } },
+      { box: [ex - 91, at * h - 8, ex - 5, at * h + 8], style: { left: `calc(${effortAt}% - 5px)`, top: `calc(${at * 100}% - 8px)`, transform: "translateX(-100%)" } },
+    ]),
     { box: [ex + 5, 32, ex + 91, 48], style: { left: `calc(${effortAt}% + 5px)`, top: 32 } },
     { box: [ex - 91, 32, ex - 5, 48], style: { left: `calc(${effortAt}% - 5px)`, top: 32, transform: "translateX(-100%)" } },
   ];
@@ -903,7 +1055,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   ]);
   const effortLabel = (w && effortSpots.find((s) => free(s.box))) || effortSpots[0];
   const valueLabel = (w && valueSpots.find((s) => free(s.box))) || valueSpots[0];
-  const split = lineSplit(rows);
+  const listed = byLine(data);
+  const split = lineSplit(listed);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <section aria-label="Value / effort" className="min-w-0">
@@ -943,8 +1096,10 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
             ))}
             {rows.map((r) => {
               const d = drag?.code === r.code ? drag : null;
-              const left = `calc(${xPct(effortOf(r))}% + ${(d?.dx ?? 0) + fan(r)}px)`;
-              const top = `calc(${yPct(r.goal_value ?? 0)}% + ${d?.dy ?? 0}px)`;
+              // Laid out in pixels once the plot is measured (off the middle lines, apart from each other).
+              const [sx, sy] = spots.get(r.feature_id)!;
+              const left = w ? `${sx + (d?.dx ?? 0)}px` : `calc(${xPct(effortOf(r))}% + ${(d?.dx ?? 0) + fan(r)}px)`;
+              const top = w ? `${sy + (d?.dy ?? 0)}px` : `calc(${yPct(r.goal_value ?? 0)}% + ${d?.dy ?? 0}px)`;
               const isMoved = !!movedWords(moved, r);
               const isSelected = selected === r.feature_id;
               return (
@@ -960,7 +1115,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   data-moved={isMoved ? "true" : undefined}
                   data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
-                  aria-label={`#${r.rank} ${r.code}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}${r.goal ? "" : ", no goal"}`}
+                  aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}${goalOf(r) ? "" : ", no goal"}`}
                   title={`#${r.rank} ${r.short_code || r.code} · ${r.title}`}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-pointer"}`}
                   style={{ left, top }}
@@ -1011,7 +1166,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
             </li>
           )}
           <li>
-            {fCodes ? "Codes are the PRD's F-codes; ranks are in the list." : "Codes stay with the item; ranks are in the list."} Hollow: below the line ({lineWords(data)}).
+            {fCodes ? "Codes are the one-pager's feature codes; ranks are in the list." : "Codes stay with the item; ranks are in the list."} Hollow: below the line ({lineWords(data)}).
           </li>
         </ul>
         <p className="mt-1 pl-6 text-[15px] leading-[22px] text-text-faint">
@@ -1022,7 +1177,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
         <h2 className="mb-2 text-[21px] font-[650] leading-7">Ranked</h2>
         <LineCaption data={data} compact />
         <ol className="flex flex-col gap-1">
-          {rows.flatMap((r, i) => {
+          {listed.flatMap((r, i) => {
             const words = movedWords(moved, r);
             const isSelected = selected === r.feature_id;
             return [
@@ -1045,16 +1200,21 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
-                  <span className="flex-none font-mono text-[13px]" data-testid="side-code" title={r.code}>
-                    {r.short_code || r.code}
+                  <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
+                    {r.short_code || r.title}
                   </span>
                   <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {!r.above_line && <MissesTag data={data} compact />}
-                  {words && <MovedTag words={words} />}
                   <span className="flex-none tabular-nums text-text2">{fmt(r.score, 2)}</span>
                 </button>
+                {/* The badge on a line of its own, so the name stays readable. */}
+                {words && (
+                  <span className="flex px-2 pb-1 pl-[34px]">
+                    <MovedTag words={words} />
+                  </span>
+                )}
               </li>,
             ];
           })}
@@ -1075,9 +1235,10 @@ function lineWords(data: Out): string {
 /** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date · each dated milestone · Pick a date. */
 function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
   const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
-  const [picking, setPicking] = useState(current.kind === "date");
+  // Picking a date, the date field takes the select's place (one control); a picked day is the select's own option.
+  const [picking, setPicking] = useState(false);
   const offered = data.lines ?? [];
-  const value = picking || current.kind === "date" ? "pick" : current.key;
+  const value = current.kind === "date" ? "picked" : current.key;
   // B's box: 32 px high, as wide as the line it shows (not its longest option), a chevron of its own.
   const field = "h-8 rounded-lg border border-line-strong bg-surface px-2 text-[15px] text-text";
   return (
@@ -1085,17 +1246,33 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
       <label htmlFor="prio-line" className="font-semibold">
         Line
       </label>
-      <span className="relative inline-flex max-w-full">
+      {picking && (
+        <span className="inline-flex items-center gap-1">
+          <input
+            type="date"
+            autoFocus
+            aria-label="The line's date"
+            className={field}
+            defaultValue={current.date ?? ""}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setPicking(false);
+              onPick(`date:${e.target.value}`);
+            }}
+          />
+          <button type="button" aria-label="Keep the line as it is" onClick={() => setPicking(false)} className="h-8 w-8 rounded-lg text-text2 hover:bg-surface2">
+            ×
+          </button>
+        </span>
+      )}
+      <span className={`relative max-w-full ${picking ? "hidden" : "inline-flex"}`}>
         <select
           id="prio-line"
           value={value}
           className={`${field} max-w-full appearance-none pr-[26px] [field-sizing:content]`}
           onChange={(e) => {
             if (e.target.value === "pick") setPicking(true);
-            else {
-              setPicking(false);
-              onPick(e.target.value);
-            }
+            else if (e.target.value !== "picked") onPick(e.target.value);
           }}
         >
           {offered.map((l) => (
@@ -1103,24 +1280,48 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
               {l.kind === "key_date" ? `Key date: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
             </option>
           ))}
-          <option value="pick">{current.kind === "date" ? current.label : "Pick a date…"}</option>
+          {current.kind === "date" && <option value="picked">{current.label}</option>}
+          <option value="pick">{current.kind === "date" ? "Pick another date…" : "Pick a date…"}</option>
         </select>
         <span aria-hidden className="pointer-events-none absolute right-[9px] top-[11px] h-1.5 w-1.5 rotate-45 border-b-[1.5px] border-r-[1.5px] border-text2" />
       </span>
-      {value === "pick" && (
-        <input type="date" aria-label="The line's date" className={field} defaultValue={current.date ?? ""} onChange={(e) => e.target.value && onPick(`date:${e.target.value}`)} />
-      )}
     </div>
   );
 }
 
-const lineLabel = (data: Out): string => data.line?.label ?? "This quarter (Now)";
+/** The line inside a sentence: "this quarter", "Nov 20, 2026", "Beta · Dec 4, 2026" (never the picker's "By " or "(Now)"). */
+const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now" ? "this quarter" : data.line.label.replace(/^By /, ""));
 
 /**
  * Where a single divider may sit: before the first row that misses the line, only when every
  * row after it misses it too (rank order is dependency order and stays; otherwise each row
  * that misses is marked on its own and there is no divider). -1: no divider.
  */
+/**
+ * The rows as the list shows them: by rank, except that with a dated plan the plan's dates
+ * decide what makes the line, so what makes it comes first and what misses it after (each
+ * part by rank, every row keeping its #), and the line is drawn once between them.
+ */
+/**
+ * A row's goal: the item's, else the plan's (a row the item does not give a goal, but the plan
+ * does, each feature under the goal it moves most), as Goal buckets shows it.
+ */
+function goalOfRow(data: Out): (r: Row) => string | null {
+  const planGoal = new Map((data.plan?.slices ?? []).filter((x) => x.goal).map((x) => [x.feature_code, goalLabel(x.goal!).name]));
+  return (r) => r.goal?.title ?? planGoal.get(r.short_code) ?? null;
+}
+
+function byLine(data: Out): Row[] {
+  const rows = data.rows;
+  if (!data.plan?.span) return rows;
+  return [...rows.filter((r) => r.above_line), ...rows.filter((r) => !r.above_line)];
+}
+
+/** True when the plan's dates put rows that make the line below rows that miss it. */
+function regrouped(rows: Row[]): boolean {
+  return rows.some((r, i) => r.above_line && rows.slice(0, i).some((x) => !x.above_line));
+}
+
 function lineSplit(rows: Row[]): number {
   const first = rows.findIndex((r) => !r.above_line);
   return first >= 0 && rows.slice(first).every((r) => !r.above_line) ? first : -1;
@@ -1175,37 +1376,51 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
   if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} />;
-  const buckets: Bucket[] = data.buckets;
-  // The rows' short codes, as the 2x2 and the lists show them.
-  const short = new Map(data.rows.map((r) => [r.code, r.short_code || r.code]));
+  // An empty "No goal" bucket warns about nothing: it is left out.
+  const buckets: Bucket[] = data.buckets.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0));
+  const percent = sharePercents(buckets.map((b) => b.weeks));
+  // Each feature by its code and its name, as the Ranked list shows them.
+  const named = new Map(data.rows.map((r) => [r.code, r.short_code ? `${r.short_code} ${r.title}` : r.title]));
   return (
     <section aria-label="Goal buckets">
       <p className="mb-3 text-text2">
         No dated plan yet, so the work is not placed by milestone. Engineer-weeks per confirmed goal this quarter: {fmt(data.weeks_total)} wk in all.
       </p>
-      <div className="hidden overflow-hidden rounded-[var(--simple-card-radius)] border border-line sm:flex" data-testid="bucket-bar" aria-hidden>
-        {buckets
-          .filter((b) => b.weeks > 0)
-          .map((b) => (
-            <div key={b.key} style={{ width: `${b.share * 100}%` }} className={`min-h-12 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}>
-              {b.title}
-            </div>
-          ))}
-      </div>
+      <figure className="hidden sm:block" data-testid="bucket-bar">
+        <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
+        <div className="flex overflow-hidden rounded-[var(--simple-card-radius)] border border-line">
+          {buckets.map((b, k) =>
+            b.weeks > 0 ? (
+              <div
+                key={b.key}
+                data-testid="bucket-segment"
+                title={`${b.title}: ${fmt(b.weeks)} wk · ${percent[k]}%`}
+                style={{ width: `${b.share * 100}%` }}
+                className={`min-h-12 min-w-0 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}
+              >
+                <span className="block font-medium">{b.title}</span>
+                <span className="block tabular-nums">
+                  {fmt(b.weeks)} wk · {percent[k]}%
+                </span>
+              </div>
+            ) : null,
+          )}
+        </div>
+      </figure>
       <ul className="mt-3 grid gap-[var(--simple-gap)] sm:grid-cols-2">
-        {buckets.map((b) => (
+        {buckets.map((b, k) => (
           <li key={b.key} data-testid="goal-bucket" data-key={b.key} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="font-semibold">{b.title}</h3>
               <span className="tabular-nums">
-                {fmt(b.weeks)} wk · {Math.round(b.share * 100)}%
+                {fmt(b.weeks)} wk · <span data-testid="bucket-share">{percent[k]}%</span>
               </span>
             </div>
             <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
               <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
             </div>
             {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
-            <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.map((c) => short.get(c) ?? c).join(", ") : "Nothing this quarter"}</p>
+            <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.map((c) => named.get(c) ?? c).join(", ") : "Nothing this quarter"}</p>
             {!b.no_goal && (
               <div className="mt-3 border-t border-line pt-3">
                 <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} />
@@ -1217,6 +1432,22 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </section>
   );
+}
+
+/** Whole percentages of `weeks` that add up to 100 (largest remainder); all 0 when there are none. */
+function sharePercents(weeks: number[]): number[] {
+  const total = weeks.reduce((n, x) => n + x, 0);
+  if (!total) return weeks.map(() => 0);
+  const exact = weeks.map((x) => (x / total) * 100);
+  const out = exact.map(Math.floor);
+  let left = 100 - out.reduce((n, x) => n + x, 0);
+  const order = exact.map((x, i) => [x - Math.floor(x), i] as const).sort((a, b) => b[0] - a[0]);
+  for (const [, i] of order) {
+    if (left <= 0) break;
+    out[i] += 1;
+    left -= 1;
+  }
+  return out;
 }
 
 /** The goal a plan goal names among the goals people suggest under: the same name (its code aside), the same code, or the same key. */

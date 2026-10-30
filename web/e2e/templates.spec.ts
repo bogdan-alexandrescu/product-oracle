@@ -29,16 +29,16 @@ test("templates: view a version, live validation, save a new version, archive an
   const editor = page.getByLabel("Template body");
   await editor.fill("# Idea {#title}\n\n## Problem\n\nText [c:c1]\n");
   const problems = page.getByTestId("problems");
-  await expect(problems).toContainText("Line 3: heading 'Problem' (level 2) must end with {#section-id}");
+  await expect(problems).toContainText("Line 3: The heading 'Problem' (level 2) must end with {#section-id}.");
   await expect(problems).toContainText("Sources and data points");
-  await expect(problems).toContainText("Line 5: citation [c:c1]");
+  await expect(problems).toContainText("Line 5: The citation [c:c1]");
   const save = page.getByRole("button", { name: "Save as new version" });
   await expect(save).toBeDisabled();
 
   // Fix it (ids, sources last, and the brief it presents) and save: a new immutable version.
   const body = "---\nbrief: [problem]\n---\n# Idea {#title}\n\n## Problem {#problem}\n\n## Risks {#risks}\n\n## Sources and data points {#sources}\n";
   await editor.fill(body);
-  await expect(page.getByTestId("validation-ok")).toContainText("title, problem, risks, sources");
+  await expect(page.getByTestId("validation-ok")).toContainText("Idea, Problem, Risks, Sources and data points");
   await expect(save).toBeEnabled();
   await save.click();
   await expect(page.getByRole("status")).toContainText("Saved as version 2");
@@ -73,7 +73,7 @@ test("templates: create a new one from the skeleton", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "New template" })).toBeVisible();
   await page.getByLabel("Key").fill("launch-brief");
   await page.getByLabel("Name").fill("Launch brief");
-  await expect(page.getByTestId("validation-ok")).toContainText("title, problem, solution, sources");
+  await expect(page.getByTestId("validation-ok")).toContainText("<Title>, Problem, Solution, Sources and data points");
   await page.getByRole("button", { name: "Create template" }).click();
   await expect(page).toHaveURL(/\/settings\/templates\/launch-brief$/);
   await expect(page.getByRole("heading", { level: 1, name: "Launch brief" })).toBeVisible();

@@ -7,7 +7,8 @@ test("market: an owner adds an alternative, sees it listed and opens the Change 
   test.setTimeout(30_000);
   await login(page);
   await openCompanyTab(page, "market");
-  await page.getByRole("button", { name: "Add alternative" }).click();
+  // qa-company-20: with no alternative yet the header's button gives way to the empty list's own.
+  await page.getByRole("button", { name: /^Add (alternative|your first alternative)$/ }).click();
   const dialog = page.getByRole("dialog", { name: "Add alternative" });
   await dialog.getByLabel("Name").fill("Competitor C");
   await dialog.getByLabel("Kind").selectOption("direct");

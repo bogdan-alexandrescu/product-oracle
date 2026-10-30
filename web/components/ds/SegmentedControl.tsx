@@ -14,6 +14,8 @@ export type Segment<V extends string> = {
   disabled?: boolean;
   /** A short tooltip: what the choice means. */
   title?: string;
+  /** The segment's accessible name when its label alone says too little ("5" → "Ask 5 questions at a time"). */
+  ariaLabel?: string;
 };
 
 /**
@@ -77,6 +79,7 @@ export function SegmentedControl<V extends string>({
             data-seg
             data-testid={it.testId}
             title={it.title}
+            aria-label={it.ariaLabel}
             aria-pressed={on}
             disabled={it.disabled}
             onClick={() => onChange?.(it.value)}

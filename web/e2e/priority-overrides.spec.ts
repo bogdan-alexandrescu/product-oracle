@@ -30,24 +30,37 @@ async function open(page: Page, email = APPROVER) {
   await expectOrder(page, FORMULA);
 }
 
-/** ▲ ▼ ⋯ show on the row under the pointer (always on a phone): point at it, then press. */
+/** ▲ ▼ ⋯ show on every row: bring the row into view, as a person scrolls, then press. */
 async function rowAction(page: Page, key: string, name: "Move up" | "Move down" | "More actions") {
   const row = page.getByTestId(`priority-row-${key}`);
-  // Rows with every goal whole are taller: bring the row to the middle, as a person scrolls, so its menu opens on screen.
+  // Rows with every goal whole are taller: bring the row to the middle, so its menu opens on screen.
   await row.evaluate((e) => e.scrollIntoView({ block: "center" }));
-  await row.hover();
-  await row.getByRole("button", { name, exact: true }).click();
+  const button = row.getByRole("button", { name, exact: true });
+  await expect(button).toBeVisible();
+  await button.click();
 }
 
 function sheet(page: Page) {
   return page.getByRole("dialog");
 }
 
+/**
+ * ⋯ → Pin at… → the Rank box (cld-3): each step waits for what it opens. The menu closes on any
+ * scroll, which a busy machine can still be settling when it opens, so a closed menu is opened
+ * again (never toggled shut) until the sheet shows.
+ */
 async function pinAt(page: Page, key: string, title: string, rank: number) {
-  void title;
-  await rowAction(page, key, "More actions");
-  await page.getByRole("menuitem", { name: "Pin at…" }).click();
-  await sheet(page).getByLabel("Rank").fill(String(rank));
+  const s = sheet(page);
+  const menu = page.getByRole("menu", { name: `Change ${title}` });
+  await expect(async () => {
+    if (!(await s.isVisible())) {
+      if (!(await menu.isVisible())) await rowAction(page, key, "More actions");
+      await expect(menu).toBeVisible({ timeout: 2000 });
+      await menu.getByRole("menuitem", { name: "Pin at…" }).click({ timeout: 2000 });
+    }
+    await expect(s.getByLabel("Rank")).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
+  await s.getByLabel("Rank").fill(String(rank));
 }
 
 test("move up with a reason: the row moves, shows who moved it and Oracle's rank", async ({ page }) => {
@@ -88,6 +101,7 @@ test("pushback on a pin: take Oracle's advice, then keep my change", async ({ pa
   await pinAt(page, "F-6", "Dark mode", 1);
   await sheet(page).getByLabel("Why?").fill("Our largest account asked for it this quarter");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
+  await expect(sheet(page).getByTestId("pushback")).toBeVisible();
   await sheet(page).getByRole("button", { name: "Keep my change" }).click();
   await expect(sheet(page)).toBeHidden();
   await expectOrder(page, ["F-6", "F-5", "F-2", "F-1", "F-7", "F-8", "F-4", "F-3"]);
@@ -245,7 +259,7 @@ test("cite evidence: the feature's own items, at most five, shown on the stored 
   await expect(picker).toContainText("Interview 07");
   for (let i = 0; i < 5; i++) await boxes.nth(i).check();
   await expect(boxes.nth(5)).toBeDisabled();
-  await expect(picker).toContainText("5 of 5");
+  await expect(picker.getByTestId("cited-count")).toHaveText("5 picked, up to 5");
   await s.getByLabel("Why?").fill("A launch partner needs it in the first release");
   await s.getByRole("button", { name: "Save", exact: true }).click();
   await expect(s).toBeHidden();

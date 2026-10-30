@@ -96,20 +96,21 @@ for (const [where, size] of [
           let sawInterleaved = false;
           for (const [value, text] of picks) {
             await select.selectOption(value);
-            const label = text.replace(/^(Key date|Milestone): /, "");
+            // The caption reads the line plainly: "this quarter", a key date's or milestone's name, a day without "By".
+            const label = value === "now" ? "this quarter" : text.replace(/^(Key date|Milestone): /, "").replace(/^By /, "");
             await expect(page.getByTestId("line-caption")).toContainText(` miss ${label}`);
             sawInterleaved = (await checkLine(page, list, rows, title, label)) || sawInterleaved;
           }
           await select.selectOption("pick");
           await page.getByLabel("The line's date").fill("2026-12-31");
-          await expect(page.getByTestId("line-caption")).toContainText(" miss By Dec 31, 2026");
-          sawInterleaved = (await checkLine(page, list, rows, title, "By Dec 31, 2026")) || sawInterleaved;
+          await expect(page.getByTestId("line-caption")).toContainText(" miss Dec 31, 2026");
+          sawInterleaved = (await checkLine(page, list, rows, title, "Dec 31, 2026")) || sawInterleaved;
           // The mock's plan has a line where a row that makes it ranks below one that misses it.
           expect(sawInterleaved).toBe(true);
 
           await page.getByRole("tab", { name: "Value / effort" }).click();
           const side = page.getByRole("region", { name: "Ranked side list" });
-          await checkLine(page, side, side.getByTestId("side-row"), (r) => r.getByTestId("prio-title"), "By Dec 31, 2026", true);
+          await checkLine(page, side, side.getByTestId("side-row"), (r) => r.getByTestId("prio-title"), "Dec 31, 2026", true);
           await select.selectOption("now");
           await expect(page).not.toHaveURL(/line=/);
         });
@@ -157,7 +158,10 @@ for (const [where, size] of [
           await expect(page.getByTestId("home-goal").first()).toBeVisible();
           await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
           const after = (await goals.boundingBox())!;
-          expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+          // qa-simple-home-36: a viewer known has no "Walk me through it" and no slot for it: the
+          // band moves up by that slot once (never down); an owner's band stays where it stood.
+          if (role === "viewer") expect(after.y).toBeLessThanOrEqual(before.y + 1);
+          else expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
           expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
           const filledFoot = await foot();
           for (const [name, top] of named) {
@@ -210,7 +214,7 @@ test("Value/effort's side caption names three that miss the line and counts the 
   const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
   await select.selectOption("pick");
   await page.getByLabel("The line's date").fill("2026-10-28");
-  const label = "By Oct 28, 2026";
+  const label = "Oct 28, 2026";
   await expect(page.getByTestId("line-caption")).toContainText(` miss ${label}`);
   const titles = async (rows: Locator) => (await rows.evaluateAll((rs) => rs.filter((r) => r.getAttribute("data-misses") === "true").map((r) => r.querySelector('[data-testid="prio-title"]')!.textContent!.trim())));
   const all = await titles(page.getByTestId("prio-row"));
@@ -239,7 +243,7 @@ test("the changes-in-review notice never pushes the goal band down", async ({ pa
   // A commenter proposes a fix on the plan: a viewer reads the published plan, the change in review.
   await login(page, "commenter@example.com");
   await page.goto("/simple");
-  const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" });
+  const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
   await broken.getByRole("button", { name: "Propose: Move dependents" }).click();
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
   await signOut(page);
@@ -261,7 +265,7 @@ test("the changes-in-review notice never pushes the goal band down", async ({ pa
   await expect(page.getByTestId("home-in-review")).toHaveCount(0);
   const before = (await goals.boundingBox())!;
   await expect(page.getByTestId("home-in-review")).toBeVisible({ timeout: 8000 });
-  await expect(page.getByTestId("home-in-review")).toContainText("in review. You see the published plan until they are approved.");
+  await expect(page.getByTestId("home-in-review")).toHaveText(/^(1 change is in review\. You see the published plan until it is approved\.|\d+ changes are in review\. You see the published plan until they are approved\.)$/);
   expect(Math.abs((await goals.boundingBox())!.y - before.y)).toBeLessThanOrEqual(1);
   await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
 });

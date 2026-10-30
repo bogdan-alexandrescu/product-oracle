@@ -124,7 +124,7 @@ test("a staged section change goes with the agents and leaves the list once thei
   await openSeeded(page);
   await buildWithAgents(page);
 
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   // The draft is in: the run waits at its PRD review.
   await expect(page.getByTestId("run-status").filter({ visible: true })).not.toHaveText("Running");
 

@@ -109,7 +109,7 @@ test("qa-work-8, 24, 26, 4: a roadmap run's page in words, one Review items, the
   await openSeeded(page, seedRoadmapReview, `/runs/${RUN}`);
   const header = page.locator("header[data-page-header]").filter({ visible: true });
   // The document and the template by name, in the normal font.
-  await expect(header.getByTestId("run-document")).toHaveText("Usage alerts roadmap (new)");
+  await expect(header.getByTestId("run-document")).toHaveText("Usage alerts roadmap (written by this run)");
   await expect(header.getByTestId("run-document")).not.toHaveClass(/font-mono/);
   await expect(header.getByTestId("run-template")).toContainText("Template: Now / Next / Later");
   // Roles by their names, files in words (their names on hover).
@@ -138,12 +138,12 @@ test("qa-work-8, 24, 26, 4: a roadmap run's page in words, one Review items, the
 
 test("qa-work-20, 28, 54, 27: a waiting run's page: status-aware check, labels not links, plain details, a Delete button", async ({ page }) => {
   await openRun(page, "team onboarding");
-  // qa-work-28: the waiting pill is a label (no link); Check agents now is a button like Cancel run.
+  // qa-work-28: the waiting pill is a label (no link); Refresh progress is a button like Cancel run.
   const waiting = page.getByTestId("segment-baseline").getByTestId("checkpoint-waiting");
   await expect(waiting).toBeVisible();
   await expect(waiting.locator("a")).toHaveCount(0);
   await expect(page.locator('a[href="#decide"]')).toHaveCount(0);
-  const check = page.getByRole("button", { name: "Check agents now" });
+  const check = page.getByRole("button", { name: "Refresh progress" });
   await expect(check).toHaveAttribute("data-variant", "secondary");
   // qa-work-20: what the check found, for this run.
   await check.click();
@@ -151,14 +151,15 @@ test("qa-work-20, 28, 54, 27: a waiting run's page: status-aware check, labels n
   // qa-work-54: plain words in the details.
   const details = inspector(page).getByTestId("run-details");
   await expect(details).toContainText("How thorough");
-  await expect(details).toContainText("Runs in");
+  await expect(details).toContainText("Where it runs");
   await expect(details).not.toContainText("Depth");
   await expect(details).not.toContainText("Runtime");
   await expect(details).not.toContainText("none open");
   // qa-work-25: one format on the run page too.
   await expect(details.getByTestId("run-cost")).toHaveText(/^\$[\d,.]+ of \$[\d,.]+ estimated$/);
-  // qa-work-27: a plain Delete button, no menu holding one item.
-  await expect(page.getByTestId("run-delete")).toHaveText("Delete");
+  // qa-work-27, qa-onboarding-16: no menu holding one item; a waiting run is cancelled (not deleted) here.
+  await expect(page.getByTestId("run-delete")).toHaveCount(0);
+  await expect(page.getByTestId("run-cancel")).toHaveText("Cancel run");
   await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
 });
 
@@ -183,7 +184,7 @@ test.describe("phone", () => {
     await login(page);
     await openSeeded(page, seedRoadmapReview, `/runs/${RUN}`);
     await expect(page.getByTestId("segment-roadmap_items")).toBeVisible();
-    await expect(page.getByTestId("run-document").filter({ visible: true })).toHaveText("Usage alerts roadmap (new)");
+    await expect(page.getByTestId("run-document").filter({ visible: true })).toHaveText("Usage alerts roadmap (written by this run)");
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(over).toBeLessThanOrEqual(0);
     const header = page.locator("header[data-page-header]").filter({ visible: true });

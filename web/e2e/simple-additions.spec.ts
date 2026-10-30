@@ -27,8 +27,13 @@ async function openRoadmap(page: Page, email?: string) {
   await login(page, email);
   await page.goto(ROADMAP);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await expect(bar(page, "alert-rules")).toBeVisible();
+  // A phone's Timeline (timeline-overlap B3) draws thin lanes, not bars.
+  if (page.viewportSize()!.width > 640) await expect(bar(page, "alert-rules")).toBeVisible();
+  else await expect(page.getByTestId("phone-lane").first()).toBeVisible();
 }
+
+/** A lane's key on the Timeline (timeline-overlap B2), by its title. */
+const laneOf = (page: Page, title: string) => page.getByTestId("chart-group").filter({ hasText: title }).getAttribute("data-lane");
 
 async function board(page: Page) {
   await page.getByTestId("format-board").click();
@@ -100,13 +105,14 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(toastWith(page, "Added Quiet hours setting as a draft")).toBeVisible();
       const b = bar(page, "quiet-hours-setting");
       await expect(b).toHaveAttribute("data-kind", "draft");
-      await expect(page.getByTestId("chart-label").filter({ hasText: "Quiet hours setting" }).getByTestId("draft-tag")).toHaveText("Draft");
+      // B2: the draft's pill says so ("Draft · Quiet hours setting").
+      await expect(b.getByTestId("draft-tag")).toHaveText("Draft");
       await toastWith(page, "Added Quiet hours setting as a draft").getByRole("button", { name: "Undo" }).click();
       await expect(b).toHaveCount(0);
 
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
       await expect(b).toHaveAttribute("data-kind", "draft");
-      await page.getByTestId("chart-label").filter({ hasText: "Quiet hours setting" }).click();
+      await b.locator("rect[data-body]").click();
       const card = page.getByTestId("floating-card");
       await expect(card.getByTestId("draft-tag")).toHaveText("Draft");
       await expect(card.getByTestId("item-drafting")).toHaveText("Oracle is drafting…");
@@ -171,13 +177,9 @@ for (const scheme of ["light", "dark"] as const) {
       await openRoadmap(page);
       await dragAdd(page, "Team usage report", page.getByTestId("chart-group").filter({ hasText: "Faster activation" }));
       await expect(toastWith(page, "Added Team usage report as a draft")).toBeVisible();
-      await expect(page.getByTestId("chart-label").filter({ hasText: "Team usage report" })).toBeVisible();
-      const labels = await page.getByTestId("chart-labels").locator('[data-testid="chart-group"], [data-testid="chart-label"]').allInnerTexts();
-      const group = labels.findIndex((t) => t.includes("Faster activation"));
-      const next = labels.findIndex((t, n) => n > group && /Grow retention|No goal|Keep alerts quiet/.test(t));
-      const at = labels.findIndex((t) => t.includes("Team usage report"));
-      expect(at).toBeGreaterThan(group);
-      if (next > group) expect(at).toBeLessThan(next);
+      // B2: its pill sits in the Faster activation lane.
+      await expect(bar(page, "team-usage-report")).toBeVisible();
+      expect(await bar(page, "team-usage-report").getAttribute("data-lane")).toBe(await laneOf(page, "Faster activation"));
     });
 
     /**
@@ -199,7 +201,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(quiet.getByTestId("suggestion-why")).toContainText("Most mutes happen at night");
       await expect(quiet.getByTestId("suggestion-evidence")).toContainText("12 requests for night-time silence");
       await expect(quiet.getByTestId("suggestion-evidence")).toContainText("high confidence");
-      await quiet.getByRole("button", { name: "Open the flow for Quiet hours for alerts" }).click();
+      await quiet.getByRole("button", { name: "Show the flow" }).click();
       await expect(quiet).toHaveAttribute("data-wide", "true");
       await expect(quiet.getByTestId("flow-detail")).toBeVisible();
       await quiet.getByRole("button", { name: "Accept" }).click();
@@ -318,10 +320,10 @@ for (const scheme of ["light", "dark"] as const) {
 
       await page.goto("/simple/priorities");
       const draft = page.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
-      await draft.getByRole("button", { name: "Merge" }).click();
-      await draft.getByLabel("Merge into").selectOption({ label: "setup-checklist · Setup checklist" });
-      await draft.getByRole("button", { name: "Merge" }).last().click();
-      await expect(toastWith(page, "Merged setup-ideas into setup-checklist")).toBeVisible();
+      await draft.getByRole("button", { name: "Merge into…" }).click();
+      await draft.getByLabel("Merge into").selectOption({ label: "Setup checklist" });
+      await draft.getByRole("button", { name: "Merge", exact: true }).click();
+      await expect(toastWith(page, "Merged Team invite nudges into Setup checklist")).toBeVisible();
       await page.goto(ROADMAP);
       await board(page);
       await expect(boardCard(page, "setup-ideas").getByTestId("item-merged")).toHaveText("Merged into setup-checklist");
@@ -347,9 +349,12 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("quick-add")).toHaveCount(0);
       await sheetAdd(page, "Mute a rule for a week", "Next", "Add");
       await expect(toastWith(page, "Added Mute a rule for a week as a draft")).toBeVisible();
-      await expect(bar(page, "mute-a-rule-for-a-week")).toHaveAttribute("data-kind", "draft");
+      // B3: the draft is listed in its lane (No goal) with its Draft tag; its row opens the card.
+      await page.getByTestId("phone-lane").filter({ hasText: "No goal" }).click();
+      const row = page.locator('[data-testid="lane-row"][data-item="mute-a-rule-for-a-week"]');
+      await expect(row.getByTestId("draft-tag")).toHaveText("Draft");
       await noSidewaysScroll(page);
-      await page.getByTestId("chart-label").filter({ hasText: "Mute a rule for a week" }).click();
+      await row.click();
       const card = page.getByTestId("floating-card");
       await expect(card).toHaveAttribute("data-sheet", "bottom");
       await expect(card.getByTestId("draft-tag")).toHaveText("Draft");
@@ -371,14 +376,14 @@ for (const scheme of ["light", "dark"] as const) {
       await openRoadmap(page, "commenter@example.com");
       await sheetAdd(page, "Pause alerts on holidays", "Keep alerts quiet", "Propose");
       await expect(toastWith(page, "Proposed Pause alerts on holidays (Keep alerts quiet): it waits for the decider")).toBeVisible();
-      await expect(bar(page, "pause-alerts-on-holidays")).toHaveCount(0);
+      await expect(page.locator('[data-item="pause-alerts-on-holidays"]')).toHaveCount(0);
       await page.getByTestId("goal-counter-empty").getByTestId("goal-counter-suggestions").click();
       const sheet = page.getByTestId("goal-panel");
       await sheet.getByRole("tab", { name: "✦ Oracle · 2" }).click();
       const s = sheet.locator('[data-testid="goal-suggestion"][data-title="Quiet hours for alerts"]');
       await expect(s.getByRole("button", { name: "Reject" })).toHaveCount(0);
       await expect(s.getByRole("button", { name: "Accept" })).toHaveCount(0);
-      await s.getByRole("button", { name: "Open the flow for Quiet hours for alerts" }).click();
+      await s.getByRole("button", { name: "Show the flow" }).click();
       const flow = page.getByTestId("flow-sheet").getByRole("dialog");
       const box = (await flow.boundingBox())!;
       expect(Math.round(box.height)).toBeGreaterThanOrEqual(840);

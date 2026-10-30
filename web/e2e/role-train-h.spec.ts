@@ -32,6 +32,8 @@ for (const role of ROLES) {
     await expect(viewOnly(page)).toHaveCount(commenter ? 0 : 1);
 
     // Triage: approvers classify and turn the daily run; others read its state, no switch.
+    await expect(page.getByTestId("triage-menu")).toHaveCount(approver ? 1 : 0);
+    if (approver) await page.getByTestId("triage-menu").click();
     await expect(page.getByTestId("classify-now")).toHaveCount(approver ? 1 : 0);
     await expect(page.getByTestId("daily-triage-switch")).toHaveCount(approver ? 1 : 0);
     if (!approver) await expect(page.getByTestId("daily-triage-state")).toBeVisible();

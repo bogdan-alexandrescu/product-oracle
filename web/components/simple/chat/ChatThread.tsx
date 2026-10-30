@@ -15,6 +15,7 @@ import {
   type ChatThread as Thread,
 } from "@/lib/api/simple-chat";
 import { useCompanyZone } from "@/lib/dates";
+import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { AnswerSources, Who } from "./AskAnswer";
@@ -36,6 +37,7 @@ export function ChatThreadView({
   onThread,
   typed,
   note,
+  scroll,
 }: {
   thread: Thread | null;
   send: (text: string) => Promise<unknown>;
@@ -50,6 +52,8 @@ export function ChatThreadView({
   typed?: Typed;
   /** A line under the message box (the item's talk: "Just you and Oracle · kept with this item"). */
   note?: string;
+  /** qa-simple-decide-12: the lines scroll in their own area (this class sets its height); the box stays under them. */
+  scroll?: string;
 }) {
   const end = useRef<HTMLDivElement>(null);
   const count = thread?.messages.length ?? 0;
@@ -59,12 +63,14 @@ export function ChatThreadView({
 
   return (
     <div className="flex min-h-0 flex-col gap-3" data-testid={testId}>
-      <ChatMessages
-        messages={thread?.messages ?? []}
-        onCardChanged={onCardChanged}
-        onThread={onThread}
-      />
-      <div ref={end} />
+      <div className={scroll ? `flex min-h-0 flex-col gap-3 overflow-y-auto ${scroll}` : "contents"} data-testid={scroll ? `${testId}-scroll` : undefined}>
+        <ChatMessages
+          messages={thread?.messages ?? []}
+          onCardChanged={onCardChanged}
+          onThread={onThread}
+        />
+        <div ref={end} />
+      </div>
       <ChatComposer
         send={send}
         placeholder={placeholder}
@@ -329,7 +335,10 @@ export function ChatLine({
   ask?: boolean;
 }) {
   const zone = useCompanyZone();
+  const { me } = useMe();
   const mine = m.author_kind === "person";
+  // qa-simple-home-16: the reader's own lines say "You".
+  const you = mine && !!m.author_id && m.author_id === me?.user_id;
   return (
     <li
       data-testid="chat-message"
@@ -344,7 +353,7 @@ export function ChatLine({
             : `max-w-[95%] rounded-xl px-3 py-2 ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
         }
       >
-        {ask ? <Who name={m.author_name} at={m.at} zone={zone} mine={mine} /> : <p className="simple-small font-semibold">{m.author_name}</p>}
+        {ask ? <Who name={you ? "You" : m.author_name} at={m.at} zone={zone} mine={mine} /> : <p className="simple-small font-semibold">{m.author_name}</p>}
         {m.kind === "pending" ? (
           <p
             className="whitespace-pre-wrap text-text2"
@@ -504,7 +513,8 @@ function LineActions({
               })
             }
           >
-            Apply all
+            {/* qa-simple-decide-13: a person who proposes proposes them all. */}
+            {open.every((c) => c.may === "propose") ? "Propose all" : "Apply all"}
           </button>
         </div>
       )}

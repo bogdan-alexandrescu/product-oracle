@@ -3,13 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Button, Page, PageHeader, Panel } from "@/components/ds";
+import { Button, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
-import { PlanCrumb } from "../../_crumb";
 import { GenerateDialog } from "../_generate";
 
 /**
@@ -35,7 +34,15 @@ export default function LatestReportPage() {
   return (
     <Page>
       {/* qa-plan-25: every Plan tab's page is titled "Plan", like the strip beneath it. */}
-      <PageHeader title="Plan" back={<PlanCrumb />} />
+      <PageHeader
+        title="Plan"
+        info={
+          <InfoTip label="Alignment reports" align="start" side="bottom">
+            Each week Oracle reports how the tracks stand against their milestones and posts it to Slack. A report
+            opens from here; the newest is also the Alignment report link.
+          </InfoTip>
+        }
+      />
       <Panel testId="no-report-yet">
         <div className="flex flex-col items-center gap-1 px-4 py-10 text-center text-[15px] text-text2">
           <p className="font-display text-lg font-bold text-text">No report yet</p>

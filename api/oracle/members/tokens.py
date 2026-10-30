@@ -147,6 +147,7 @@ async def list_tokens(
 ) -> list[ApiTokenOut]:
     """Every credential of the company, oldest first, revoked ones included; ``kind`` and
     ``user_id`` (the member it acts for) narrow it."""
+    from oracle.runs.flows import FLOWS
     from oracle.runs.models import Run
     from oracle.runtokens import RunToken
 
@@ -170,10 +171,12 @@ async def list_tokens(
         users = await _users(session, (r.created_by for _, r in pairs))
         for token, run in pairs:
             creator = users.get(run.created_by)  # type: ignore[arg-type]
+            # The flow's own title ("Baseline to PRD"), not its key (qa-settings-29).
+            flow = FLOWS[run.flow].title if run.flow in FLOWS else run.flow.replace("_", " ")
             out.append(
                 ApiTokenOut(
                     id=token.id,
-                    name=f"Run · {run.flow.replace('_', ' ')}",
+                    name=f"Run · {flow}",
                     kind="run",
                     role=creator.role if creator else "viewer",
                     user_id=run.created_by,

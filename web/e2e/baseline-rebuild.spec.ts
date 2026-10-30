@@ -27,8 +27,11 @@ async function openRituals(page: Page) {
   await expect(page).toHaveURL(/\/company\/rituals$/);
 }
 
-/** The owner turns the Baseline rebuild on and prepares its next occurrence now. */
-async function resumeAndPrepare(page: Page) {
+/**
+ * The owner turns the Baseline rebuild on and prepares its next occurrence now; a Prepare now
+ * that starts a paid build asks first, naming its estimate `cost` (qa-company-1).
+ */
+async function resumeAndPrepare(page: Page, cost: string | null) {
   await openRituals(page);
   const row = ritualRow(page, "Baseline rebuild");
   await expect(row).toContainText("Paused");
@@ -36,6 +39,11 @@ async function resumeAndPrepare(page: Page) {
   await inspector(page).getByRole("button", { name: "Resume" }).click();
   await expect(ritualRow(page, "Baseline rebuild")).not.toContainText("Paused");
   await inspector(page).getByRole("button", { name: "Prepare now" }).click();
+  if (cost) {
+    const ask = page.getByRole("alertdialog", { name: "Prepare now" });
+    await expect(ask).toContainText(`one Oracle run of about ${cost}`);
+    await ask.getByRole("button", { name: "Prepare now" }).click();
+  }
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { level: 1, name: "Baseline rebuild" })).toBeVisible();
 }
@@ -46,7 +54,7 @@ async function resumeAndPrepare(page: Page) {
 // is not told; no_claim=the run's segment work (pytest tests/test_rituals_baseline_rebuild.py).
 test("baseline rebuild: an owner turns it on and Oracle starts the build with its estimate", async ({ page }) => {
   await login(page);
-  await resumeAndPrepare(page);
+  await resumeAndPrepare(page, "$7.00");
   const card = page.getByTestId("occurrence-rebuild");
   await expect(card).toContainText("Oracle started the baseline build · Estimate $7.00 at standard depth. Its proposals wait for your review.");
   await expect(page.getByTestId("occurrence-summary")).toHaveCount(0);
@@ -73,14 +81,14 @@ test("baseline rebuild: at Observe the occurrence only reminds and links the Bui
   await sheet.getByLabel("Why").fill("We rebuild by hand this quarter");
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(sheet).toBeHidden();
-  await resumeAndPrepare(page);
+  await resumeAndPrepare(page, null);
   const card = page.getByTestId("occurrence-rebuild");
   await expect(card).toContainText("Not started: Oracle is set to observe the baseline. Build it from the Baseline page.");
   await expect(page.getByTestId("ritual-block").filter({ hasText: "Estimate $7.00 at standard depth" })).toBeVisible();
   await card.getByRole("link", { name: "Build the baseline" }).click();
   await expect(page).toHaveURL(/\/baseline\?build=1$/);
   const build = page.getByRole("dialog", { name: "Build the baseline" });
-  await expect(build).toContainText("Estimate $7.00");
+  await expect(build).toContainText("$7.00 estimated · below the $50 approval line");
 });
 
 // protects=the rebuild has no ritual cost cap: a build priced $14.00 (above Run rituals' default
@@ -91,7 +99,7 @@ test("baseline rebuild: at Observe the occurrence only reminds and links the Bui
 test("baseline rebuild: a $14 build starts with no ritual cost cap", async ({ page }) => {
   await withScenario(page, "rebuild-costly");
   await login(page);
-  await resumeAndPrepare(page);
+  await resumeAndPrepare(page, "$14.00");
   const card = page.getByTestId("occurrence-rebuild");
   await expect(card).toContainText("Oracle started the baseline build · Estimate $14.00 at standard depth. Its proposals wait for your review.");
   const last = page.getByTestId("ritual-block").getByRole("link", { name: /^Last built / });
@@ -112,7 +120,7 @@ test("baseline rebuild: a $14 build starts with no ritual cost cap", async ({ pa
 test("baseline rebuild: a $70 build waits for the owner's approval", async ({ page }) => {
   await withScenario(page, "rebuild-over-approval");
   await login(page);
-  await resumeAndPrepare(page);
+  await resumeAndPrepare(page, "$70.00");
   const card = page.getByTestId("occurrence-rebuild");
   await expect(card).toContainText("Waiting for an owner's approval: the estimate $70.00 is over $50");
   const occurrence = page.url();

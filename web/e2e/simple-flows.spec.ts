@@ -1,5 +1,5 @@
 import { MOCK_VISUAL_FAIL_KEY, MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -56,7 +56,6 @@ const DESKTOP = { width: 1366, height: 820 };
 const PHONE = { width: 390, height: 844 };
 const JOB_MS = 4000;
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -66,8 +65,7 @@ async function tap(l: Locator) {
 async function openCard(page: Page, key: string): Promise<Locator> {
   await login(page);
   await page.goto("/simple/roadmap");
-  await expect(bar(page, key)).toBeVisible();
-  await bar(page, key).click();
+  await openRoadmapItem(page, key);
   const card = page.getByTestId("floating-card");
   await expect(card.getByTestId("card-flow")).toBeVisible();
   return card;
@@ -255,10 +253,10 @@ for (const phone of [false, true]) {
       test(`a PRD bet line is the same row, opened the same (${where})`, async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        const line = page.getByRole("group", { name: "User flow of bet 2" });
+        const line = page.getByRole("group", { name: "User flow of “A setup checklist that shows" });
         await expect(line.getByTestId("flow-meta")).toHaveText("5 steps · 1 screen");
         await expect(line.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
-        await tap(line.getByRole("button", { name: "Flow for bet 2" }));
+        await tap(line.getByRole("button", { name: "Flow for “A setup checklist that shows" }));
         const opened = page.getByTestId("flow-detail");
         await expect(opened.getByRole("heading", { level: 2 })).toHaveText("Finish setup from the checklist · flow");
         await expect(opened.getByTestId("flow-steps")).toContainText("Decision: Invite now or later? New If no: the checklist moves on and asks again tomorrow.");
@@ -283,9 +281,9 @@ for (const phone of [false, true]) {
         page.on("framenavigated", (f) => {
           if (f === page.mainFrame()) loads += 1;
         });
-        const drawn = page.getByRole("group", { name: "User flow of bet 2" });
-        await expect(drawn.getByRole("button", { name: "Flow for bet 2" }).locator('[data-shape="decision"]')).toHaveCount(1);
-        const row = page.getByRole("group", { name: "User flow of bet 4" }).getByTestId("flow-row");
+        const drawn = page.getByRole("group", { name: "User flow of “A setup checklist that shows" });
+        await expect(drawn.getByRole("button", { name: "Flow for “A setup checklist that shows" }).locator('[data-shape="decision"]')).toHaveCount(1);
+        const row = page.getByRole("group", { name: "User flow of “A sample project created on" }).getByTestId("flow-row");
         await expect(row.getByTestId("flow-empty")).toContainText("No flow yet");
         await tap(row.getByRole("button", { name: "Ask Oracle to draw it" }));
         const stages = row.getByRole("list", { name: "Stages" });
@@ -295,9 +293,9 @@ for (const phone of [false, true]) {
         await expect(row.getByTestId("flow-empty")).toContainText("Updates here by itself; you can close the card. Started");
         await expect(row.getByTestId("flow-drawn")).toContainText("Version 1 · drawn", { timeout: JOB_MS + 8000 });
         await expect(row.getByTestId("flow-new")).toHaveText("New");
-        await expect(row.getByRole("button", { name: "Flow for bet 4" }).locator('[data-shape="decision"]')).toHaveCount(1);
+        await expect(row.getByRole("button", { name: "Flow for “A sample project created on" }).locator('[data-shape="decision"]')).toHaveCount(1);
         // The failed state, on the line itself.
-        const failing = page.getByRole("group", { name: "User flow of bet 3" }).getByTestId("flow-row");
+        const failing = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" }).getByTestId("flow-row");
         await tap(failing.getByRole("button", { name: "Ask Oracle to draw it" }));
         await expect(failing.getByTestId("flow-empty")).toHaveText(/Oracle could not draw this flow\. Nothing changed on the item\./, { timeout: JOB_MS + 8000 });
         await tap(failing.getByRole("button", { name: "Retry" }));
@@ -336,7 +334,7 @@ for (const phone of [false, true]) {
         await tap(card.getByRole("button", { name: "Close" }).first());
         await expect(card).toHaveCount(0);
         await page.waitForTimeout(JOB_MS + 1000);
-        await bar(page, "alert-digest").click();
+        await openRoadmapItem(page, "alert-digest");
         const again = page.getByTestId("floating-card").getByTestId("flow-row");
         await expect(again.getByTestId("flow-drawn")).toContainText("Version 1");
         await expect(again.getByTestId("flow-new")).toHaveText("New");

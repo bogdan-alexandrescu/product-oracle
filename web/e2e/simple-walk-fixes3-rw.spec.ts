@@ -1,4 +1,4 @@
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -24,7 +24,6 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { width: 1366, height: 820 };
 const PHONE = { width: 390, height: 844 };
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 const column = (page: Page, h: "now" | "next" | "later"): Locator => page.locator(`[data-testid="board-column"][data-horizon-column="${h}"]`);
 const boardCard = (page: Page, key: string): Locator => page.locator(`[data-testid="board-card"][data-item="${key}"]`);
 
@@ -38,15 +37,14 @@ for (const phone of [false, true]) {
         test(`${email.split("@")[0]}: the card's Why line names the PRD, its draft, the code and the feature (${where})`, async ({ page }) => {
           await login(page, email);
           await page.goto("/simple/roadmap");
-          await expect(bar(page, "alert-digest")).toBeVisible();
-          await bar(page, "alert-digest").click();
+          await openRoadmapItem(page, "alert-digest");
           let reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
           await expect(reasons).toContainText("From Usage alerts (draft 5): F-06 Weekly digest of fired alerts.");
           await expect(reasons).not.toContainText("section ");
           await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
           await expect(page.getByTestId("floating-card")).toHaveCount(0);
 
-          await bar(page, "alert-rules").click();
+          await openRoadmapItem(page, "alert-rules");
           reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
           await expect(reasons).toContainText("From Usage alerts (draft 5): Alert rules engine.");
           await expect(reasons).not.toContainText("section bets");

@@ -15,11 +15,20 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 const body = (page: Page, key: string): Locator => bar(page, key).locator("rect[data-body]");
 
-async function open(page: Page, email?: string) {
+/** Opens the roadmap's Timeline (`gantt`: its Gantt, whose bars a phone long-presses: the phone's Timeline, timeline-overlap B3, draws thin lanes with no bars). */
+async function open(page: Page, email?: string, gantt = false) {
   await login(page, email);
   await page.goto(URL);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await expect(bar(page, "alert-rules")).toBeVisible();
+  if (gantt) await page.getByTestId("format-gantt").click();
+  if (gantt || page.viewportSize()!.width > 640) await expect(bar(page, "alert-rules")).toBeVisible();
+  else await expect(page.getByTestId("phone-lane").first()).toBeVisible();
+}
+
+/** B3: a phone opens a lane, then a piece's row in its list (the card opens as a sheet). */
+async function openFromLane(page: Page, laneTitle: string, key: string) {
+  await page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: laneTitle }) }).click();
+  await page.locator(`[data-testid="lane-row"][data-item="${key}"]`).click();
 }
 
 /** Drags a bar by `dx` pixels with the mouse, from its middle (a move, not a resize). */
@@ -62,31 +71,42 @@ for (const [where, use] of [
       test.use({ ...use, colorScheme: scheme });
 
       /**
-       * Card simple-roadmap-draws: protects = the timeline draws every item as a bar, dated
-       * solid, estimated hatched, the draft dashed, Oracle's suggestion as a dotted outline,
-       * a broken dependency red with its callout, an accepted risk amber, the milestone
-       * diamonds, today's line, the cut item below the line with its place, the goal
-       * counters with their metrics and the four format tabs; fails_when = any of them is
-       * missing or the page scrolls sideways on a phone; no_claim = pixel-exact drawing.
+       * Card simple-roadmap-draws: protects = the timeline (timeline-overlap B2: goal lanes)
+       * draws every item as a pill in its goal's lane with the lane's count, dated solid,
+       * estimated hatched, the draft dashed, Oracle's suggestion as a dotted outline, a broken
+       * dependency red with its callout, an accepted risk amber, the milestone diamonds,
+       * today's line, the cut item below the line with its place, the goal counters with
+       * their metrics and the four format tabs; a phone (B3) draws a thin lane per goal and
+       * lists the open lane's pieces; fails_when = any of them is missing or the page scrolls
+       * sideways on a phone; no_claim = pixel-exact drawing.
        */
       test("the timeline draws the roadmap", async ({ page }) => {
         await open(page);
-        await expect(bar(page, "alert-rules")).toHaveAttribute("data-kind", "dated");
-        await expect(bar(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");
-        await expect(bar(page, "setup-ideas")).toHaveAttribute("data-kind", "draft");
-        await expect(page.locator('[data-testid="suggestion-outline"][data-item="alert-sso"]')).toBeVisible();
-        await expect(bar(page, "alert-digest")).toHaveAttribute("data-broken", "true");
-        await expect(page.locator('[data-testid="dep-arrow"][data-from="alert-rules"][data-to="alert-digest"]')).toHaveAttribute("data-state", "red");
-        await expect(page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]')).toHaveAttribute("data-state", "amber");
-        await expect(page.locator('[data-testid="broken-callout"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
-        await expect(page.getByTestId("item-milestone").first()).toBeAttached();
+        if (where === "desktop") {
+          await expect(bar(page, "alert-rules")).toHaveAttribute("data-kind", "dated");
+          await expect(bar(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");
+          await expect(bar(page, "setup-ideas")).toHaveAttribute("data-kind", "draft");
+          await expect(page.locator('[data-testid="suggestion-outline"][data-item="alert-sso"]')).toBeVisible();
+          await expect(bar(page, "alert-digest")).toHaveAttribute("data-broken", "true");
+          await expect(page.locator('[data-testid="dep-arrow"][data-from="alert-rules"][data-to="alert-digest"]')).toHaveAttribute("data-state", "red");
+          await expect(page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]')).toHaveAttribute("data-state", "amber");
+          await expect(page.locator('[data-testid="broken-callout"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
+          await expect(page.getByTestId("item-milestone").first()).toBeAttached();
+          await expect(page.getByTestId("below-the-line")).toBeVisible();
+          await expect(page.getByTestId("return-place")).toHaveText("#1");
+          // B2: the lanes name their goal and count their items.
+          await expect(page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getByTestId("lane-count")).toHaveText("4 items");
+          expect(await bar(page, "alert-digest").getAttribute("data-lane")).toBe(await page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getAttribute("data-lane"));
+        } else {
+          // B3: a thin lane per goal (and below the line), the open lane's pieces listed under the chart.
+          await expect(page.getByTestId("phone-lane").filter({ hasText: "Grow retention" }).getByTestId("lane-count")).toHaveText("4 items");
+          await expect(page.getByTestId("phone-lane").filter({ hasText: "Below the line" })).toHaveCount(1);
+          await expect(page.getByTestId("lane-list").getByTestId("lane-row").first()).toBeVisible();
+        }
         await expect(page.getByTestId("track-milestone")).toHaveCount(1);
         await expect(page.getByTestId("today-line")).toBeAttached();
-        await expect(page.getByTestId("below-the-line")).toBeVisible();
-        await expect(page.getByTestId("return-place")).toHaveText("#1");
         await expect(page.getByTestId("goal-counter")).toHaveCount(2);
         await expect(page.getByTestId("goal-counters")).toContainText("Teams active after 90 days");
-        await expect(page.getByTestId("group-metric").first()).toBeVisible();
         for (const t of ["timeline", "gantt", "board", "waterfall"]) await expect(page.getByTestId(`format-${t}`)).toBeVisible();
         await expect(page.getByTestId("format-timeline")).toHaveAttribute("aria-pressed", "true");
         if (where === "phone") await noSidewaysScroll(page);
@@ -101,7 +121,9 @@ for (const [where, use] of [
        */
       test("a bar opens the floating card", async ({ page }) => {
         await open(page);
-        await bar(page, "alert-digest").click();
+        // A phone's Timeline (B3) opens it from the lane's list.
+        if (where === "phone") await openFromLane(page, "Grow retention", "alert-digest");
+        else await bar(page, "alert-digest").click();
         const card = page.getByTestId("floating-card");
         await expect(card).toBeVisible();
         await expect(card).toHaveAttribute("data-sheet", where === "phone" ? "bottom" : "float");
@@ -262,6 +284,9 @@ test("the Gantt: day and week, today's line, arrows, the same card", async ({ pa
   await expect(page.getByTestId("dep-arrow").first()).toBeAttached();
   await bar(page, "alert-rules").click();
   await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Alert rules engine" })).toBeVisible();
+  // #47: the card floats over a dimmed backdrop that takes the page's clicks; close it first.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("floating-card")).toHaveCount(0);
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
 });
@@ -373,6 +398,7 @@ test("the keyboard moves and resizes a bar", async ({ page }) => {
   await expect(b).toHaveAttribute("data-start", plus(start, 7));
 });
 
+// A phone long-presses the Gantt's bars: its Timeline (timeline-overlap B3) draws thin lanes with no bars to pick up.
 test.describe("phone, long-press", () => {
   test.use(PHONE);
 
@@ -382,7 +408,7 @@ test.describe("phone, long-press", () => {
    * a bottom sheet; fails_when = a touch drag does nothing; no_claim = native scrolling.
    */
   test("a long press drags a bar on a phone", async ({ page }) => {
-    await open(page);
+    await open(page, undefined, true);
     const before = await bar(page, "alert-export").getAttribute("data-start");
     await longPressDrag(page, "alert-export", 60);
     await expect(page.getByText(/Moved 'Alert history export'/)).toBeVisible();
@@ -395,7 +421,7 @@ test.describe("phone, long-press", () => {
    * until the finger lifts; fails_when = the bar never shows it; no_claim = the cue's look.
    */
   test("a long press shows the bar picked up", async ({ page }) => {
-    await open(page);
+    await open(page, undefined, true);
     const box = (await body(page, "alert-export").boundingBox())!;
     const ev = { pointerId: 9, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
     await bar(page, "alert-export").dispatchEvent("pointerdown", ev);
@@ -410,7 +436,7 @@ test.describe("phone, long-press", () => {
    * no_claim = S10's flows.
    */
   test("a feature's flow opens full height on a phone", async ({ page }) => {
-    await open(page, "commenter@example.com");
+    await open(page, "commenter@example.com", true);
     await longPressDrag(page, "setup-ideas", 60);
     await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for the decider/)).toBeVisible();
     await page.getByTestId("chart-label").filter({ hasText: "Team invite nudges" }).click();

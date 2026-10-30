@@ -19,7 +19,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
-import { stableUuid } from "./ids";
+import { newCompany, stableUuid } from "./ids";
 import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
@@ -207,6 +207,8 @@ export const CHAT_MEETING_ID = stableUuid("simple-meeting/weekly-plan-review");
 export function seedSimpleChat(members: { id: string; role: Role; status?: string }[]): ChatDb {
   const active = members.filter((m) => m.status !== "disabled");
   const presenter = active.find((m) => m.role === "owner")?.id ?? active[0]?.id ?? "";
+  // A new company has no review meeting yet: the walk lists no agenda.
+  if (newCompany()) return { threads: {}, cards: {}, meetings: {} };
   return {
     threads: {},
     cards: {},
@@ -770,6 +772,8 @@ function clauses(text: string): Clause[] {
 
 const QUESTION = /^(why|how|what|who|when|where|which|should|is|are|does|do)\b/i;
 const SAY_AGAIN = "I could not tell what to change. Say it another way.";
+/** qa-simple-decide-3: a question in a meeting's chat is kept for the minutes' open questions; Ask Oracle answers it. */
+const MEETING_ASK = "Kept as a question for the minutes. For an answer now, use Ask Oracle.";
 
 /** The items a phrase names (exact first, then every title that holds it). */
 function named(items: Item[], x: string): Item[] {
@@ -784,7 +788,7 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
   // "What should we cut first?" is a question, whatever verbs it holds.
   if (!cs.length || QUESTION.test(r.text.trim())) {
     if (QUESTION.test(r.text.trim()) || r.text.trim().endsWith("?"))
-      return r.ask ? { kind: "ask", body: "Asking Oracle…", cards: [] } : { kind: "note", body: SAY_AGAIN, cards: [] };
+      return r.ask ? { kind: "ask", body: "Asking Oracle…", cards: [] } : { kind: "note", body: r.meeting_id && r.text.trim().endsWith("?") ? MEETING_ASK : SAY_AGAIN, cards: [] };
     return { kind: "note", body: SAY_AGAIN, cards: [] };
   }
   if (r.meeting_id && r.role === "viewer") return { kind: "note", body: "Viewers ask questions here; ask the presenter to make a change.", cards: [] };
@@ -1377,12 +1381,16 @@ const OP_TITLE: Record<string, string> = {
   add_action_item: "Add an action item", add_launch_task: "Add a launch task", set_milestone: "Set a milestone", add_feature_ask: "New feature ask", accept_risk: "Accept as a risk",
 };
 
-/** GET /v1/simple/walk: broken links, then the next meeting's agenda decisions, then proposals waiting on the reader. */
+/**
+ * GET /v1/simple/walk (chat.walk): broken links (every red flag with a fix, as Home's
+ * brokenLinks counts and lists them: the card applies or proposes by the reader's rights),
+ * then the next meeting's agenda decisions, then proposals waiting on the reader.
+ */
 async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
   const items = itemsFor(db, ctx);
   const byId = new Map(items.map((i) => [i.id, i]));
   const steps: unknown[] = [];
-  for (const i of items) {
+  for (const i of ctx.role === "viewer" ? [] : items) {
     for (const f of i.flags.filter((x) => x.state === "red" && x.fixes.length > 0)) {
       const dep = f.subject ? byId.get(f.subject) : undefined;
       const sd = (it: Item) => {
@@ -1406,7 +1414,8 @@ async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
           change_id: null, decided_by_name: null, decided_at: null, decision_id: null,
         };
       }
-      steps.push({ id: `broken_link:${i.id}:${f.subject ?? f.kind}`, kind: "broken_link", title: `${i.title} has a broken link`, why: f.reason, card: cardOut(db, chat, chat.cards[id], ctx), change: null, decision: null });
+      // The problem said once (the step's why), under the item's name (chat.walk).
+      steps.push({ id: `broken_link:${i.id}:${f.kind}:${f.subject ?? ""}`, kind: "broken_link", title: i.title, why: f.reason, card: cardOut(db, chat, chat.cards[id], ctx), change: null, decision: null });
     }
   }
   const next = Object.values(chat.meetings).find((m) => !m.ended && m.attendee_ids.includes(ctx.id));

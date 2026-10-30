@@ -9,16 +9,16 @@ import { HandOverSelect, personName } from "@/components/members/ChangePreview";
 import { MemberApprovals } from "@/components/members/MemberApprovals";
 import type { Member } from "@/lib/api/client";
 import { hasRole, membersApi, type MemberDetail, type Responsibility } from "@/lib/api/members-types";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 const ROLE_WORD = { owner: "Owner", approver: "Approver", commenter: "Commenter", viewer: "Viewer" } as const;
 const NAME_MAX = 80;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** "Oct 3 · approved by Admin", "Oct 3 · joined from example.com", "Sep 1". */
+/** "Oct 3, 2026 · approved by Admin", "Oct 3, 2026 · joined from example.com", "Sep 1, 2026": the People table's date format. */
 function joinedLine(d: MemberDetail): string {
-  const day = d.joined.at ? formatDay(d.joined.at) : formatDay(d.created_at);
+  const day = formatDate(d.joined.at ?? d.created_at);
   const by = d.joined.by_name;
   if (d.joined.via === "access_request" && by) return `${day} · approved by ${by}`;
   if (d.joined.via === "invite" && by) return `${day} · invited by ${by}`;
@@ -183,8 +183,8 @@ export function MemberInspector({
       label={`Member ${member.email}`}
       testId="member-inspector"
       action={
-        <Button variant="hero" icon="back" onClick={onClose}>
-          Back to invites
+        <Button variant="hero" icon="x" onClick={onClose}>
+          Close
         </Button>
       }
       chips={
@@ -222,7 +222,19 @@ export function MemberInspector({
         <InspectorRow value={<span className="break-all">{member.email}</span>}>Email</InspectorRow>
         <InspectorRow value={ROLE_WORD[member.role]}>Role</InspectorRow>
         <InspectorRow value={detail ? <span data-testid="member-joined">{joinedLine(detail)}</span> : "—"}>Joined</InspectorRow>
-        <InspectorRow value={member.last_sign_in_at ? formatDateTime(member.last_sign_in_at) : "Not known"}>Last sign-in</InspectorRow>
+        <InspectorRow
+          value={
+            member.last_sign_in_at ? (
+              <span data-testid="member-last-sign-in" title={formatDateTime(member.last_sign_in_at)}>
+                {formatDate(member.last_sign_in_at)}
+              </span>
+            ) : (
+              "Not known"
+            )
+          }
+        >
+          Last sign-in
+        </InspectorRow>
         <InspectorRow
           value={
             <Link href={`/settings/api-tokens?member=${member.id}`} className="font-semibold text-accent-ink hover:underline">

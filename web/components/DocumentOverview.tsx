@@ -7,6 +7,7 @@ import { useState } from "react";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
+import { DOC_MISSING, DocumentNotFound } from "@/components/DocumentNotFound";
 import { RoadmapSharing } from "@/components/share/RoadmapSharing";
 import { PricingDecide } from "@/components/PricingDecide";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
@@ -20,6 +21,7 @@ import {
   LinkButton,
   Page,
   PageHeader,
+  PageSkeleton,
   Panel,
   Split,
   type Column,
@@ -29,7 +31,7 @@ import { RequestSpecDialog, SPEC_STATE, specHref, useSpecs } from "@/components/
 import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/components/ReviewSetup";
 import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas, type VersionSummary } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas, type VersionSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
@@ -274,7 +276,16 @@ function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean })
           <Loading />
         </div>
       ) : specs.length === 0 ? (
-        <p className="px-4 py-3 text-text2">No engineering spec yet</p>
+        // qa-docs-17: what unlocks a spec, and who asks for one.
+        <p data-testid="engineering-specs-empty" className="px-4 py-3 text-text2">
+          {!approved
+            ? can("publish_version")
+              ? "No engineering spec yet. Approve a version to request a spec."
+              : "No engineering spec yet. A spec can be requested once a version is approved."
+            : may
+              ? "No engineering spec yet. Request one for an approved roadmap item."
+              : "No engineering spec yet. An approver or owner can request one."}
+        </p>
       ) : (
         <ul className="divide-y divide-line">
           {specs.map((s) => {
@@ -309,7 +320,12 @@ function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean })
 
 export function DocumentOverview({ doc }: { doc: string }) {
   const router = useRouter();
-  const q = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
+  // qa-shell-1: a document the API does not have says so in words, never the API's own text.
+  const q = useQuery(`doc|${doc}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })).catch((e: unknown) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, DOC_MISSING) : e;
+    }),
+  );
   const d = q.data;
   const versions = [...(d?.versions ?? [])].reverse();
   const [picked, setPicked] = useState<number | null>(null);
@@ -326,17 +342,20 @@ export function DocumentOverview({ doc }: { doc: string }) {
   const templateOnly = isTemplateOnly(d?.kind, d?.versions ?? []);
   // G7 3.3: the panel is about this document (its latest version).
   useScreenSubject(d && versions[0] ? { kind: "document", subject: { document_id: d.id, version: versions[0].number } } : null, d?.title);
+  // A missing document: the one not-found page, no crumb waiting on a title that never comes.
+  if (q.error === DOC_MISSING) return <DocumentNotFound />;
   return (
     <div>
       <DocToolbar doc={d} />
       <Page>
         {q.error && <ErrorNote>{q.error}</ErrorNote>}
-        {!d && !q.error && <Loading />}
+        {!d && !q.error && <PageSkeleton bare />}
         {d && (
           <>
             <PageHeader
               title={d.title}
-              suffix={d.latest_version != null ? `v${d.latest_version}` : undefined}
+              // qa-docs-6: the version the panel shows (the latest until another is picked).
+              suffix={selected ? `v${selected.number}` : d.latest_version != null ? `v${d.latest_version}` : undefined}
               status={
                 <>
                   <DocStatusChip status={d.status} />

@@ -112,6 +112,13 @@ function whyNotRead(reason: string, label: string): string {
   return rest.charAt(0).toUpperCase() + rest.slice(1);
 }
 
+/** What each count on a source counts (rirs-39): items, things not read, and uses are not one unit. */
+const COUNTS = {
+  items: "Items read: what Oracle holds from the source.",
+  notRead: "Not read: channels, files or messages it skipped or could not open, counted apart from the items.",
+  used: "Used: times its items back evidence, a citation or a section link; one item can be used more than once.",
+};
+
 const notReadTotal = (c: Coverage) => c.not_read.skipped + c.not_read.unavailable + c.not_read.flagged + c.not_read.limited;
 const usedTotal = (c: Coverage) => c.used.evidence + c.used.citations + c.used.section_links;
 
@@ -140,8 +147,8 @@ export function CoverageTable({
     },
     {
       key: "items",
-      header: "Items",
-      width: "80px",
+      header: <span title={COUNTS.items}>Items read</span>,
+      width: "96px",
       align: "right",
       phoneLabel: "Items",
       cell: (c) => (
@@ -152,7 +159,7 @@ export function CoverageTable({
     },
     {
       key: "not-read",
-      header: "Not read",
+      header: <span title={COUNTS.notRead}>Not read</span>,
       width: "92px",
       align: "right",
       phoneLabel: "Not read",
@@ -181,7 +188,7 @@ export function CoverageTable({
     },
     {
       key: "used",
-      header: "Used",
+      header: <span title={COUNTS.used}>Used</span>,
       width: "72px",
       align: "right",
       phoneLabel: "Used",
@@ -201,6 +208,11 @@ export function CoverageTable({
     },
   ];
   return (
+    <>
+    {/* rirs-39: the three counts count different things; say what each is, so they need not add up. */}
+    <p data-testid="coverage-counts-note" className="border-b border-line px-4 py-2 text-[13px] text-text2 max-[600px]:px-3">
+      {COUNTS.items} {COUNTS.notRead} {COUNTS.used}
+    </p>
     <DataTable
       label="Coverage of my sources"
       testId="coverage-table"
@@ -211,6 +223,7 @@ export function CoverageTable({
       selected={selected}
       onSelect={(id) => onSelect(id)}
     />
+    </>
   );
 }
 

@@ -118,7 +118,7 @@ test("criterion 12: a commenter drafts questions, edits them and creates the lin
   const created = page.getByRole("dialog", { name: "Link created" });
   await expect(created.getByLabel("Interview link")).toHaveValue(/^https?:\/\/[^/]+\/i\/i-[0-9a-f]+$/);
   await expect(created.getByRole("button", { name: "Copy" })).toBeVisible();
-  await expect(created.getByTestId("interview-link-terms")).toHaveText(/^Works once · expires .+ (P[DS]T|GMT[+-]\d+)$/);
+  await expect(created.getByTestId("interview-link-terms")).toHaveText(/^Works once · expires (in \d+ days|tomorrow|today), [A-Z][a-z]{2} \d{1,2}$/);
   await created.getByRole("button", { name: "Done" }).click();
   await expect(created).toHaveCount(0);
 
@@ -181,7 +181,7 @@ test("criterion 14: the finished interview and its requests, as a member", async
   await expect(page.getByRole("button", { name: "Withdraw link" })).toHaveCount(0);
 
   await page.getByTestId("requests-tab-new").filter({ visible: true }).click();
-  await expect(page).toHaveURL(/\/requests\/new$/);
+  await expect(page).toHaveURL(/\/requests\/to-decide$/);
   const fromInterview = page.getByTestId("request-row").filter({ hasText: "Ana Lima (Example Co)" });
   await expect(fromInterview).toHaveCount(3);
   for (const r of await fromInterview.all()) {

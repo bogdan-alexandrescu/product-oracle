@@ -17,7 +17,7 @@ test("request changes on roadmap items: attempt 2 runs and the previous attempt'
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 
   // Attempt 1 writes roadmap_items.yaml; the run waits at its checkpoint.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const items = page.getByTestId("segment-roadmap_items");
   // D1: the run page shows the waiting stop as its summary line (Review items), not a panel.
   await expect(items.getByText("Waiting: Roadmap items")).toBeVisible();
@@ -40,15 +40,15 @@ test("request changes on roadmap items: attempt 2 runs and the previous attempt'
   const previous = items.getByRole("group", { name: "Previous attempt (attempt 1)" });
   await expect(previous).toContainText("Previous attempt");
   await previous.getByRole("button", { name: "Roadmap items", exact: true }).click();
-  await expect(items.getByTestId("artifact-content")).toContainText("(local agent runtime, attempt 1)");
+  await expect(items.getByTestId("artifact-content")).toContainText("(sample, attempt 1)");
 
   // Attempt 2 finishes: the current file is attempt 2's, the previous link still opens attempt 1's.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(items.getByTestId("items-review-line")).toBeVisible();
   const current = items.getByTestId("artifacts-current");
   await current.getByRole("button", { name: "Roadmap items", exact: true }).click();
-  await expect(items.getByTestId("artifact-content")).toContainText("(local agent runtime, attempt 2)");
+  await expect(items.getByTestId("artifact-content")).toContainText("(sample, attempt 2)");
   await previous.getByRole("button", { name: "Roadmap items", exact: true }).click();
-  await expect(items.getByTestId("artifact-content")).toContainText("(local agent runtime, attempt 1)");
+  await expect(items.getByTestId("artifact-content")).toContainText("(sample, attempt 1)");
   await expect(items.getByTestId("artifact-content")).not.toContainText("attempt 2");
 });

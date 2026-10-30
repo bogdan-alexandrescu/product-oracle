@@ -124,35 +124,45 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
     yaml_text, rest, offset = split_front_matter(text)
     if text.lstrip().startswith("---") and yaml_text is None:
         problems.append(
-            Problem("invalid_front_matter", "front matter starts with '---' but never ends", 1)
+            Problem(
+                "invalid_front_matter",
+                "The front matter starts with '---' but never ends.",
+                1,
+            )
         )
     elif yaml_text is not None:
         try:
             fm = safe_yaml.load(yaml_text) or {}
         except safe_yaml.SafeYamlError as e:
-            problems.append(Problem("invalid_front_matter", f"front matter is not valid YAML: {e}"))
+            problems.append(
+                Problem("invalid_front_matter", f"The front matter is not valid YAML: {e}")
+            )
             fm = {}
         if not isinstance(fm, dict):
-            problems.append(Problem("invalid_front_matter", "front matter must be a mapping"))
+            problems.append(
+                Problem(
+                    "invalid_front_matter", "The front matter must be a list of names and values."
+                )
+            )
             fm = {}
         result.front_matter = fm
     theme = result.front_matter.get("theme")
     if theme is not None and (not isinstance(theme, str) or not theme):
-        problems.append(Problem("invalid_theme", "front matter 'theme' must be a theme key"))
+        problems.append(Problem("invalid_theme", "The front matter's theme must name a theme."))
     elif theme_keys is not None and isinstance(theme, str) and theme not in theme_keys:
-        problems.append(Problem("unknown_theme", f"suggested theme '{theme}' does not exist"))
+        problems.append(Problem("unknown_theme", f"The suggested theme {theme} does not exist."))
 
     headings = _headings(rest, offset)
     result.headings = headings
     if not headings:
-        problems.append(Problem("no_sections", "the template has no level 1-3 headings"))
+        problems.append(Problem("no_sections", "The template has no headings (levels 1 to 3)."))
     seen: set[str] = set()
     for h in headings:
         if h.key is None:
             problems.append(
                 Problem(
                     "missing_section_id",
-                    f"heading '{h.text}' (level {h.level}) must end with {{#section-id}}",
+                    f"The heading '{h.text}' (level {h.level}) must end with {{#section-id}}.",
                     h.line,
                 )
             )
@@ -160,7 +170,7 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
             problems.append(
                 Problem(
                     "duplicate_section_id",
-                    f"section id '{h.key}' is used more than once",
+                    f"The section id {h.key} is used more than once.",
                     h.line,
                     h.key,
                 )
@@ -174,8 +184,8 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
         problems.append(
             Problem(
                 "missing_sources_section",
-                f"the template must end with a '## {SOURCES_HEADING} {{#{SOURCES_SECTION_ID}}}' "
-                "section: sources, data points and evidence live there, not in the body",
+                f"The template must end with a '## {SOURCES_HEADING} {{#{SOURCES_SECTION_ID}}}' "
+                "section. Sources, data points and evidence live there, not in the body.",
             )
         )
     else:
@@ -184,7 +194,7 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
             problems.append(
                 Problem(
                     "sources_section_level",
-                    f"'{SOURCES_HEADING}' must be a level 1 or 2 heading",
+                    f"'{SOURCES_HEADING}' must be a level 1 or 2 heading.",
                     sources.line,
                     SOURCES_SECTION_ID,
                 )
@@ -193,8 +203,8 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
             problems.append(
                 Problem(
                     "sources_section_not_last",
-                    f"'{SOURCES_HEADING}' must be the final section; '{later[0].text}' "
-                    "comes after it",
+                    f"'{SOURCES_HEADING}' must be the final section, but '{later[0].text}' "
+                    "comes after it.",
                     later[0].line,
                     later[0].key,
                 )
@@ -214,8 +224,8 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
             problems.append(
                 Problem(
                     "citation_in_body",
-                    f"citation [c:{m.group(1)}] is outside '{SOURCES_HEADING}': the body states "
-                    "conclusions only (O1c)",
+                    f"The citation [c:{m.group(1)}] is outside '{SOURCES_HEADING}'. "
+                    "The body states conclusions only.",
                     i + offset,
                     current,
                 )
@@ -230,9 +240,9 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
         problems.append(
             Problem(
                 NO_BRIEF_SECTIONS,
-                "the template marks no brief sections: add 'brief: [section ids]' to its "
+                "The template marks no brief sections. Add 'brief: [section ids]' to its "
                 f"front matter, or a level-1 '# {layers.FULL_HEADING} "
-                f"{{#{layers.FULL_SECTION_ID}}}' heading after the brief sections",
+                f"{{#{layers.FULL_SECTION_ID}}}' heading after the brief sections.",
             )
         )
 
@@ -258,7 +268,7 @@ def check_template(body: str, *, theme_keys: set[str] | None = None) -> Template
 def check_required_sections(required: list[str], check: TemplateCheck) -> list[Problem]:
     known = set(check.section_keys)
     return [
-        Problem("unknown_required_section", f"required section '{key}' is not in the body")
+        Problem("unknown_required_section", f"The required section {key} is not in the body.")
         for key in required
         if key not in known
     ]
@@ -272,8 +282,35 @@ _HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _FONT = re.compile(r"^[A-Za-z0-9 ,'\"_-]{1,200}$")
 # Colours that are read as text on the page background.
 TEXT_COLOURS = ("text", "muted", "accent", "heading")
+# How the theme editor names each colour; messages start with these words so the editor
+# can show each one next to its field.
+COLOUR_LABELS = {
+    "text": "Text",
+    "heading": "Heading",
+    "muted": "Muted",
+    "accent": "Accent",
+    "background": "Background",
+    "rule": "Rule",
+    "surface": "Surface",
+}
+FONT_LABELS = {"body": "Body", "heading": "Heading", "mono": "Monospace"}
+SPACING_LABELS = {
+    "base_size_pt": "Base size (pt)",
+    "line_height": "Line height",
+    "page_margin_mm": "Page margin (mm)",
+    "section_gap_rem": "Section gap (rem)",
+}
 PAGE_SIZES = ("A4", "Letter")
 ORIENTATIONS = ("portrait", "landscape")
+
+
+def _label(name: str) -> str:
+    return name.replace("_", " ").capitalize()
+
+
+def colour_label(name: str) -> str:
+    """A colour's name as the theme editor shows it ("Text" for ``text``)."""
+    return COLOUR_LABELS.get(name, _label(name))
 
 
 def _channel(c: int) -> float:
@@ -305,7 +342,10 @@ def check_theme_tokens(tokens: dict[str, Any]) -> list[Problem]:
     for name, value in colours.items():
         if not isinstance(value, str) or not _HEX.match(value):
             problems.append(
-                Problem("invalid_color", f"colors.{name} must be a hex colour like #1f2933")
+                Problem(
+                    "invalid_color",
+                    f"{colour_label(name)} colour must be a hex colour like #1f2933.",
+                )
             )
     background = colours.get("background")
     if isinstance(background, str) and _HEX.match(background):
@@ -318,7 +358,7 @@ def check_theme_tokens(tokens: dict[str, Any]) -> list[Problem]:
                 problems.append(
                     Problem(
                         "insufficient_contrast",
-                        f"colors.{name} {value} on colors.background {background} has a "
+                        f"{colour_label(name)} colour {value} on the background {background} has a "
                         f"contrast of {ratio:.2f}:1; WCAG AA needs at least {AA_BODY}:1 for "
                         "body text. Darken the text colour or lighten the background.",
                     )
@@ -328,17 +368,16 @@ def check_theme_tokens(tokens: dict[str, Any]) -> list[Problem]:
             problems.append(
                 Problem(
                     "invalid_font",
-                    f"fonts.{name} must be a font stack (letters, digits, spaces, commas, quotes)",
+                    f"{FONT_LABELS.get(name, _label(name))} font must be a list of font "
+                    "names (letters, digits, spaces, commas and quotes).",
                 )
             )
     page = tokens.get("page") or {}
     if page.get("size", "A4") not in PAGE_SIZES:
-        problems.append(
-            Problem("invalid_page", f"page.size must be one of {', '.join(PAGE_SIZES)}")
-        )
+        problems.append(Problem("invalid_page", f"Page size must be {' or '.join(PAGE_SIZES)}."))
     if page.get("orientation", "portrait") not in ORIENTATIONS:
         problems.append(
-            Problem("invalid_page", f"page.orientation must be one of {', '.join(ORIENTATIONS)}")
+            Problem("invalid_page", f"Orientation must be {' or '.join(ORIENTATIONS)}.")
         )
     spacing = tokens.get("spacing") or {}
     for name, (low, high) in {
@@ -356,7 +395,11 @@ def check_theme_tokens(tokens: dict[str, Any]) -> list[Problem]:
             or not low <= value <= high
         ):
             problems.append(
-                Problem("invalid_spacing", f"spacing.{name} must be a number from {low} to {high}")
+                Problem(
+                    "invalid_spacing",
+                    f"{SPACING_LABELS.get(name, _label(name))} must be a number "
+                    f"from {low} to {high}.",
+                )
             )
     return problems
 

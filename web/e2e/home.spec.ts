@@ -28,7 +28,7 @@ test("Home: goals show current over target, distance to go, confidence and trend
   const g3 = page.getByTestId("home-goal-G3");
   await expect(g3).toHaveAttribute("data-proposed", "true");
   // B5: early churn holds its target as text and has no current value yet.
-  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value");
+  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
 });
 
 test("Home: needs you lists the inbox and the questions asked of me, one action each", async ({ page }) => {
@@ -80,7 +80,7 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector.getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
-  await expect(inspector.getByTestId("stat-sections")).toContainText("Sections approved");
+  await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
   await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
 
   // A run: its segments and what comes next.
@@ -102,12 +102,22 @@ test("Home on a phone: stacked blocks under the phone header, inspector below, n
   await page.setViewportSize({ width: 390, height: 844 });
   await openHome(page);
   await expect(page.getByTestId("home-goal-G1")).toBeVisible();
+  // Every block loaded before measuring: a block still loading moves those below it (it was
+  // flaky under two workers).
+  await expect(page.getByTestId("home-in-flight-phone-title")).toHaveText("In flight6");
+  // The inspector waits for a tap on a phone (qa-company-32): the In flight rows are the last block to load.
+  await expect(page.getByTestId("home-in-flight-table").getByTestId("flight-row").first()).toBeVisible();
   // Page offsets, so scrolling does not move them.
   const top = (id: string) =>
     page.getByTestId(id).evaluate((el) => {
       const r = el.getBoundingClientRect();
       return { y: r.top + window.scrollY, bottom: r.bottom + window.scrollY };
     });
+  // qa-company-32: on a phone the inspector opens on a tap on a row, right under In flight.
+  await expect(page.getByTestId("home-inspector")).toBeHidden();
+  await page.getByTestId("home-in-flight-table").getByTestId("flight-row").first().click();
+  await expect(page.getByTestId("home-inspector")).toBeVisible();
+  // Measured once the tap has laid the page out, the inspector included.
   const goals = await top("home-goals");
   const needs = await top("home-needs");
   const flight = await top("home-in-flight");
@@ -131,7 +141,10 @@ test("Home for a new company: one line per block with what to do next", async ({
   await expect(setup.getByTestId("panel-count")).toHaveText("2 of 8");
   const goals = page.getByTestId("home-goals-empty");
   await expect(goals).toContainText("No goals yet");
-  await expect(goals.getByRole("link", { name: "Build the baseline" })).toHaveAttribute("href", "/baseline?build=1");
+  // qa-onboarding-37: one baseline action on Home; the Set up row holds it, the card points there.
+  await expect(goals.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
+  await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("Build it from Set up, above");
+  await expect(setup.getByTestId("setup-row-build_baseline").getByRole("link", { name: "Open" })).toHaveAttribute("href", "/baseline?build=1");
   await expect(page.getByTestId("home-needs-empty")).toHaveText("Nothing waiting");
   const flight = page.getByTestId("home-in-flight-empty");
   await expect(flight).toContainText("Nothing in flight");

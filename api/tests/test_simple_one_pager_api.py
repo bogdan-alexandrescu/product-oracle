@@ -171,6 +171,33 @@ async def test_fallback_blocks_capped_with_source_keys(client):
     assert (await get(client, ctx, "decider"))["can_edit"] is True
 
 
+async def test_can_start_follows_the_meeting_start_rule(client):
+    """Review finding (qa-simple-prd-10): Start review shows by meetings.may_start (an owner or
+    the PRD's decider), not by who edits lines; a decider-less track owner who is an approver
+    edits but does not start a review, and the start API refuses them."""
+    from oracle.roadmap.models import ProductTrack
+
+    ctx = await world(client)
+    assert (await get(client, ctx, "owner"))["can_start"] is True
+    assert (await get(client, ctx, "decider"))["can_start"] is True
+    assert (await get(client, ctx, "approver"))["can_start"] is False
+    assert (await get(client, ctx, "viewer"))["can_start"] is False
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        policy = await s.scalar(select(DocumentReviewPolicy))
+        policy.decider_id = None
+        s.add(
+            ProductTrack(prd_document_id=doc.id, title="Setup", owner_id=ctx.users["approver"].id)
+        )
+        await s.commit()
+    view = await get(client, ctx, "approver")
+    assert view["can_edit"] is True and view["can_start"] is False
+    opts = await client.get("/v1/simple/meetings/options", headers=ctx.as_("approver"))
+    assert opts.status_code == 200, opts.text
+    prd = next(p for p in opts.json()["prds"] if p["document"]["slug"] == "guided-setup")
+    assert prd["can_start"] is view["can_start"]
+
+
 async def test_cached_per_version_and_section_hash(client):
     ctx = await world(client)
     await get(client, ctx)

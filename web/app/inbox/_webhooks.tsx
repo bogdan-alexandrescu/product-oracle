@@ -52,12 +52,8 @@ export function useWebhookRows(busy: string | null, act: Act, seenBefore: string
         group: "webhooks",
         action: (
           <span className="flex flex-wrap justify-end gap-2">
-            <LinkButton variant={done ? "ghost" : undefined} href={href} onClick={() => void (done ? undefined : read(n).catch(() => undefined))}>
-              Open
-            </LinkButton>
             {resume && !done && id && can("update_webhook") && (
               <Button
-                variant="primary"
                 disabled={busy === key}
                 onClick={() =>
                   void act(key, async () => {
@@ -72,6 +68,7 @@ export function useWebhookRows(busy: string | null, act: Act, seenBefore: string
             )}
             {takeOver && !done && id && can("take_over_webhook") && (
               <Button
+                variant={resume && can("update_webhook") ? "ghost" : undefined}
                 disabled={busy === key}
                 onClick={() =>
                   void act(key, async () => {
@@ -84,6 +81,14 @@ export function useWebhookRows(busy: string | null, act: Act, seenBefore: string
                 Take over
               </Button>
             )}
+            {/* qa-company-29: the row's first action is the bordered one; Open after it is text. */}
+            <LinkButton
+              variant={!done && id && ((resume && can("update_webhook")) || (takeOver && can("take_over_webhook"))) ? "ghost" : undefined}
+              href={href}
+              onClick={() => void (done ? undefined : read(n).catch(() => undefined))}
+            >
+              Open
+            </LinkButton>
           </span>
         ),
       };

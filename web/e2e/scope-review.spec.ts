@@ -42,7 +42,7 @@ const bar = (page: Page) => page.getByTestId("decision-bar");
 test("a blocking dependency disables Approve until Include <dependency> fixes it", async ({ page }) => {
   await seeded(page);
   await openReview(page, "saved-addresses");
-  await expect(page.getByTestId("scope-for")).toHaveText("For saved-addresses · attempt 1");
+  await expect(page.getByTestId("scope-for")).toHaveText("For Saved addresses PRD · attempt 1");
   await expect(page.getByRole("button", { name: /^Needs you/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("scope-row")).toHaveCount(3);
   const approve = bar(page).getByRole("button", { name: /^Approve/ });
@@ -179,7 +179,7 @@ test("a commenter suggests leave out; the approver accepts it", async ({ page })
 test("the Changed filter on attempt 2 lists only rows that differ from attempt 1", async ({ page }) => {
   await seeded(page);
   await openReview(page, "saved-addresses-next");
-  await expect(page.getByTestId("scope-for")).toHaveText("For saved-addresses-next · attempt 2");
+  await expect(page.getByTestId("scope-for")).toHaveText("For Saved addresses next PRD · attempt 2");
   await page.getByRole("button", { name: /^Changed/ }).click();
   const rows = page.getByTestId("scope-row");
   await expect(rows).toHaveCount(3);
@@ -210,7 +210,7 @@ test("at 390 px rows are cards, the inspector is a sheet, the bar collapses, no 
 
   const collapsed = bar(page);
   await expect(collapsed).toHaveAttribute("data-collapsed", "true");
-  await expect(collapsed.getByRole("button", { name: "0 changes · Approve" })).toBeVisible();
+  await expect(collapsed.getByRole("button", { name: "1 blocking problem left · Review and decide" })).toBeVisible();
 
   await row(page, "Bulk edit").getByTestId("feature-title").click();
   const sheet = page.getByTestId("sheet-feature");
@@ -219,7 +219,7 @@ test("at 390 px rows are cards, the inspector is a sheet, the bar collapses, no 
   await sheet.getByRole("button", { name: "Close" }).click();
   await expect(sheet).toBeHidden();
 
-  await collapsed.getByRole("button", { name: "0 changes · Approve" }).click();
+  await collapsed.getByRole("button", { name: "1 blocking problem left · Review and decide" }).click();
   const decide = page.getByTestId("sheet-decide");
   await expect(decide.getByRole("button", { name: /^Approve/ })).toBeDisabled();
   await expect(decide.getByTestId("approve-blocked")).toHaveText("1 blocking problem left");

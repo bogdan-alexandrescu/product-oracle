@@ -30,7 +30,8 @@ test("new PRD: answers give a recommendation; override template and theme; start
   await page.getByTestId("template-option-prd-rfc").click();
   await expect(templates.getByRole("radio", { name: /Product spec \+ RFC/ })).toBeChecked();
   const themes = page.getByRole("radiogroup", { name: "Theme" });
-  await expect(themes.getByTestId("theme-option-clean-document").locator("iframe")).toBeAttached();
+  // The thumbnail is a still picture of the preview (qa-docs-2), no frame.
+  await expect(themes.getByTestId("theme-option-clean-document").getByTestId("theme-thumbnail-picture")).toBeAttached();
   await page.getByTestId("theme-option-editorial-memo").click();
   await expect(themes.getByRole("radio", { name: "Editorial memo" })).toBeChecked();
 

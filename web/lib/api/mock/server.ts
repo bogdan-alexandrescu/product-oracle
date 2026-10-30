@@ -6,11 +6,11 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
-import { citationHref, formatDate } from "@/lib/format";
+import { citationHref, formatDate, formatDay } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
-import { mockUuid, seeded, stableUuid } from "./ids";
+import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
@@ -62,6 +62,7 @@ import {
   enlargeRuns,
   FEATURE_SET_RUN,
   fromRunCheckpoint,
+  BUILD_UNDER_WAY,
   lastBaselineBuild,
   lastBaselineRun,
   seedFinishedBaselineBuild,
@@ -84,7 +85,6 @@ import {
   seedStoredRefusalRun,
   seedKeyRenewedRun,
   sendBackEntries,
-  BUILD_UNDER_WAY,
   type RunsContext,
   type RunsDb,
 } from "./runs";
@@ -153,7 +153,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { chatMeetings, ensureMeetings, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
@@ -532,6 +532,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * ./discussions.ts);
  * "mail-off" as the default company with no invite sender configured (invites are not
  * emailed); "mail-fails" where every first invite email fails (Resend sends it);
+ * "mail-stalls" where invite emails stay queued (the mail sender never gets to them);
  * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242; a plus
  * address never gets it, in any scenario: Google answers 400, #330);
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
@@ -548,7 +549,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
  * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts).
  */
-export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+export { MOCK_SCENARIO_KEY };
 /**
  * #723: Simple mode is on in the mock (the API's ORACLE_SIMPLE_MODE); tests set this
  * localStorage key to "off" to see the app without it (no switch, everyone in Detailed).
@@ -953,7 +954,7 @@ function seedSimpleWalkScenario(): Db {
  */
 const UNDATED_PLAN_FEATURE = "F-11";
 
-function seedSimplePlanScenario(): Db {
+function seedSimplePlanScenario(datedAll = false): Db {
   const db = seedSimpleHomeOnePrdScenario();
   const rm = db.simple_roadmap!;
   rm.plan = seedPlan();
@@ -978,18 +979,43 @@ function seedSimplePlanScenario(): Db {
     const name = planFeatureName(code) ?? of[0].name;
     // Team invites (F-05, a slice in M1 and one in M2) and Self-serve checkout (F-11, roadmap-gantt) have no dates of their own:
     // Oracle's date suggestions for them, in the tray's "Dates to confirm", are their slices'.
-    const dated = code === "F-05" || code === UNDATED_PLAN_FEATURE ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
+    const dated = !datedAll && (code === "F-05" || code === UNDATED_PLAN_FEATURE) ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
     rm.items.push({ key: k, title: name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", ...dated, section, heading: `${code} ${name}` });
     rm.ids[k] = stableUuid(`simple-item/${k}`);
   }
   db.simple_one_pager = seedOnePager();
   db.simple_one_pager.slice = planSlice();
-  // The PRD itself, so Simple's One-pagers lists it (its one-pager is the seeded one).
+  // The PRD itself, so Simple's One-pagers lists it (its one-pager is the seeded one); its version 3
+  // is approved, as the one-pager reads (qa-simple-prd-9).
   const at = "2026-10-20T15:05:00Z";
   db.documents.push({
-    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "draft", kind: "prd",
+    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "approved", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
+  return db;
+}
+
+/**
+ * timeline-overlap B2, the "simple-plan-lanes" scenario: "simple-plan" whose onboarding roadmap
+ * holds only the plan's work, as the owner's picked frame draws it (every piece planned, nothing
+ * broken or waiting): the cut tour, the welcome video and the draft nudges gone, the checklist's
+ * gate and the import's dependency dropped, Team invites and Self-serve checkout dated like the
+ * rest, and no key dates on it. Invented data.
+ */
+function seedSimplePlanLanesScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  const rm = db.simple_roadmap!;
+  const gone = new Set(rm.items.filter((x) => x.roadmap === "onboarding-roadmap" && x.key !== "setup-checklist" && x.key !== "setup-import" && !x.key.startsWith("plan-")).map((x) => x.key));
+  rm.items = rm.items.filter((x) => !gone.has(x.key));
+  for (const k of gone) delete rm.ids[k];
+  for (const x of rm.items) {
+    if (x.key === "setup-checklist") delete x.gates;
+    if (x.key === "setup-import") {
+      delete x.depends;
+      delete x.risks;
+    }
+  }
+  if (rm.key_dates) rm.key_dates = { ...rm.key_dates, "onboarding-roadmap": [] };
   return db;
 }
 
@@ -1875,7 +1901,7 @@ function baselineEntity(db: Db, type: BaselineEntity["type"], key: string, title
 /** The roadmap data, seeded on first use (./roadmap.ts), with the "sharing" roadmap's items (seedSharingRoadmap). */
 function ensureRoadmap(db: Db, ctx: RoadmapContext): RoadmapDb {
   if (!db.roadmap) {
-    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
+    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY), { plan: true });
     for (const [id, items] of Object.entries(db.sharing_items ?? {})) db.roadmap.items[id] ??= items;
   }
   return db.roadmap;
@@ -2068,7 +2094,8 @@ function withInboxStates(
   const seen = db.inbox_seen[me.id] ?? null;
   if (markSeen) db.inbox_seen[me.id] = now();
   // Decisions not delivered yet show to the review's approver role and above, as the API.
-  if (!atLeast(me.role, "approver")) return { ...base, deliveries: [], last_seen_at: seen };
+  // Open feedback too, as the API (qa-company-4: approvers decide it).
+  if (!atLeast(me.role, "approver")) return { ...base, deliveries: [], feedback: [], last_seen_at: seen };
   const states = inboxStates(llm, seen);
   // Open feedback per document comes from ./runs.ts (staged items left out there); its
   // items carry their state here.
@@ -2334,6 +2361,11 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
     marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
     baselineStarts: () => levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",
+    ritualsActCap: () => {
+      const a = (db.autonomy ??= emptyAutonomy());
+      const cap = levelFor(a, "rituals") === "act" ? limitsFor(a, "rituals")?.max_run_usd : null;
+      return typeof cap === "number" ? cap : null;
+    },
     rebuildUsd: () => db.baseline_build_usd ?? 7,
     // As rebuild.after_ready: B1's create, estimate and start through the runs mock's own routes.
     startBaselineBuild: async () => {
@@ -2676,8 +2708,23 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   return ctx;
 }
 
+/**
+ * qa-plan-10: the db as the last save left it, with the text it was saved as. Each call used to
+ * parse the whole db from localStorage and write it all back, one call at a time, so a page's
+ * dozens of reads spent most of its 2-3 s in JSON. Now a call whose stored text is unchanged
+ * takes the saved object (no parse), and a save whose text is unchanged writes nothing.
+ * The object is handed to one caller at a time: load() clears the cache, the caller's save()
+ * sets it again, so a call that throws half-way leaves nothing changed in memory (the next
+ * load parses the stored text again). Another tab's write, a test's seed or a reset changes
+ * the stored text, which drops the cache.
+ */
+let cached: { raw: string; db: Db } | null = null;
+
 function load(): Db {
   const raw = localStorage.getItem(STORAGE_KEY);
+  const hit = cached;
+  cached = null;
+  if (raw && hit && hit.raw === raw) return hit.db;
   if (raw) {
     try {
       return JSON.parse(raw) as Db;
@@ -2745,7 +2792,9 @@ function load(): Db {
               : scenario === "simple-walk"
                 ? seedSimpleWalkScenario
               : scenario === "simple-plan"
-                ? seedSimplePlanScenario
+                ? () => seedSimplePlanScenario()
+              : scenario === "simple-plan-lanes"
+                ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
                 ? seedSimplePlanTwoScenario
               : scenario === "simple-plan-undated"
@@ -2905,6 +2954,8 @@ function load(): Db {
     if (prd && v1) v1.warnings = versionWarnings(prd.title, prd.slug);
   }
   save(db);
+  // The caller owns this object now (see `cached`).
+  cached = null;
   return db;
 }
 
@@ -3100,11 +3151,15 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
 }
 
 function save(db: Db) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  const raw = JSON.stringify(db);
+  // A read that changed nothing writes nothing (qa-plan-10).
+  if (localStorage.getItem(STORAGE_KEY) !== raw) localStorage.setItem(STORAGE_KEY, raw);
+  cached = { raw, db };
 }
 
 /** Drops all mock state (used by the "Reset mock data" control). */
 export function resetMockData() {
+  cached = null;
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
@@ -3620,12 +3675,17 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   const people = db.members.filter((x) => x.status !== "disabled").length;
   const invites = db.invites.filter((i) => i.status === "open").length;
   const built = lastBaselineBuild(db.runs);
+  // qa-onboarding-10: the build under way, the first started (as the one-at-a-time rule names it).
+  const building = (db.runs?.runs ?? [])
+    .filter((r) => r.flow === "baseline" && BUILD_UNDER_WAY.includes(r.status))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
   const personal: Schemas["SetupStep"][] = [
     { key: "connect", done: facts.connections > 0, count: facts.connections, detail: null },
     { key: "sources", done: sources > 0, count: sources, detail: null },
   ];
   const owner: Schemas["SetupStep"][] = [
-    { key: "invite", done: people >= 2 || invites >= 1, count: people, detail: null },
+    // qa-onboarding-18: the open invites beside the people who joined.
+    { key: "invite", done: people >= 2 || invites >= 1, count: people, detail: null, invited: invites },
     {
       key: "domains",
       done: facts.domains.length > 0,
@@ -3635,7 +3695,7 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
     { key: "eng_lead", done: engineeringLeads(db).length > 0, count: engineeringLeads(db).length, detail: null },
     { key: "horizons", done: facts.horizons, count: null, detail: null },
     { key: "timezone", done: facts.timezone != null, count: null, detail: facts.timezone },
-    { key: "build_baseline", done: built != null, count: null, detail: built },
+    { key: "build_baseline", done: built != null, count: null, detail: built, run_id: building?.id ?? null },
   ];
   // The "setup-new-step" scenario: an API with a step this web build has no words for.
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === "setup-new-step") {
@@ -3686,6 +3746,21 @@ function claimInvite(db: Db, email: string): MemberRow | null {
   return member;
 }
 
+/**
+ * Why a sign-in with an invite's email is refused (qa-onboarding-14): the latest invite for
+ * the email was withdrawn, or is past its date. Null when there is no such invite.
+ */
+function inviteRefusal(db: Db, email: string): string | null {
+  const invite = db.invites.filter((i) => i.email === email && i.status !== "accepted").at(-1);
+  if (!invite) return null;
+  const by = db.members.find((x) => x.id === invite.invited_by);
+  const who = by ? displayName(by.email, by.name) : "an owner";
+  if (invite.status === "revoked") return `Your invite was withdrawn. Ask ${who} to invite you again.`;
+  if (invite.status === "open" && invite.expires_at && Date.parse(invite.expires_at) <= Date.now())
+    return `Your invite expired on ${formatDay(invite.expires_at)}. Ask ${who} to resend it.`;
+  return null;
+}
+
 /** Where an invitee signs in with Google: the app's own address in the mock. */
 const signInUrl = () => `${location.origin}/`;
 /** The mock company's sign-in domains (ORACLE_IAP_ALLOWED_DOMAINS). */
@@ -3717,7 +3792,9 @@ const expired = (i: InviteRow) => i.status === "open" && !!i.expires_at && Date.
 
 /** The background send: queued invite emails whose time has come are sent, or fail. */
 function settleInviteEmails(db: Db) {
-  const fails = localStorage.getItem(MOCK_SCENARIO_KEY) === "mail-fails";
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  if (scenario === "mail-stalls") return;
+  const fails = scenario === "mail-fails";
   for (const i of db.invites) {
     if (i.email_status !== "queued" || Date.now() - Date.parse(i.email_at ?? "") < MAIL_DELAY_MS) continue;
     const resent = (db.invites_resent ??= []).includes(i.id);
@@ -4352,6 +4429,8 @@ function ensureBlockers(db: Db): BlockersDb {
       db.user_id,
       deposits && { documentId: deposits.id, v2 },
     );
+    // A new company ("empty" scenario) has no blockers yet (qa-onboarding-25).
+    if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === "empty") db.blockers.blockers = [];
   }
   return db.blockers;
 }
@@ -4510,6 +4589,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const member =
       db.members.find((x) => x.email === address) ??
       (passwordOk(db.account, address, password, MOCK_LOGIN.password) ? claimInvite(db, address) : null);
+    if (!member && passwordOk(db.account, address, password, MOCK_LOGIN.password)) {
+      // qa-onboarding-14: an invite withdrawn or past its date is refused in words, naming who to ask.
+      const refused = inviteRefusal(db, address);
+      if (refused) return json(403, { detail: refused });
+    }
     if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
     }
@@ -4542,7 +4626,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       company: "Acme",
       requested_at: state === "pending" ? "2026-10-21T16:05:00Z" : null,
       note: (db.access_note ??= null),
-      invite_expired_at: state === "invite_expired" ? "2026-10-30T12:00:00Z" : null,
+      // qa-onboarding-34: past, from the mock's clock (14 days after an invite sent 17 days ago).
+      invite_expired_at: state === "invite_expired" ? new Date(Date.now() - 3 * 86_400_000).toISOString() : null,
     };
     if (p[3] === "note" && m === "POST") {
       if (state !== "pending") return json(409, { detail: "There is no request waiting for a note" });
@@ -5297,6 +5382,9 @@ async function route(db: Db, req: Request): Promise<Response> {
         names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
         // The PRD's required reviewer: the seeded approver.
         reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
+        // Its decider and track owners, as the meetings mock's Guided setup (simple-meetings prds).
+        decider: onePagerDb.doc.slug === "guided-setup" ? (db.members.find((x) => x.email === "dana.decider@example.com")?.id ?? null) : null,
+        trackOwners: onePagerDb.doc.slug === "guided-setup" && mockApproverOwnsTrack() ? db.members.filter((x) => x.email === "approver@example.com").map((x) => x.id) : [],
         notify: (user_id, kind, title, data, version) =>
           ensureReviewV2(db).notifications.push({
             id: uuid(), user_id, kind, title, document_id: onePagerDb.doc.id, version_number: version, section_key: null,

@@ -125,6 +125,8 @@ for (const [phone, dark] of [
       await expect(notes).not.toContainText("Drop the welcome video");
 
       await tap(page.getByRole("button", { name: "End meeting" }));
+
+      await tap(page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }));
       await expect(page.getByTestId("end-screen")).toBeVisible();
       await expect(page.getByLabel("Summary")).toHaveValue(/Notes: Ship the checklist copy first/);
       await expect(page.getByLabel("Summary")).not.toHaveValue(/Drop the welcome video/);

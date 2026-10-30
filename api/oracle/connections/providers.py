@@ -143,7 +143,8 @@ async def identify_slack(client: httpx.AsyncClient, token: str) -> Identity:
     user = data.get("user") or data.get("user_id")
     return Identity(
         account_id=f"{data['team_id']}:{data['user_id']}",
-        label=f"{user} @ {team}",
+        # "pat in Example": the person and their Slack workspace, in words (qa-onboarding-22).
+        label=f"{user} in {team}",
         scopes=_scope_header(resp, "X-OAuth-Scopes"),
     )
 

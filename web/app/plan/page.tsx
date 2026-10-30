@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import { BuildRoadmapButton } from "@/components/BuildRoadmap";
 import { LinkIssueDialog } from "@/components/LinkIssueDialog";
-import { Chip, InfoTip, LinkButton, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split, ViewOnly } from "@/components/ds";
+import { Chip, InfoTip, Notice, PageHeader, Panel, SegmentedControl, Sheet, Split, ViewOnly } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -29,7 +29,7 @@ function GoalsBand({ canImport }: { canImport: boolean }) {
       <Panel title="Goals" testId="plan-goals">
         <div data-testid="plan-goals-empty" className="flex flex-wrap items-center gap-3 px-4 py-4">
           <span className="text-[15px] font-semibold text-text2">No confirmed goals</span>
-          <Link href="/baseline" className="ml-auto font-semibold text-accent-ink underline-offset-2 hover:underline">
+          <Link href="/baseline" className="ml-auto inline-flex min-h-6 items-center font-semibold text-accent-ink underline-offset-2 hover:underline">
             Baseline
           </Link>
         </div>
@@ -153,9 +153,12 @@ export default function PlanPage() {
       // #370 (#505): a role that can never change the milestone sees it read only.
       canWrite={milestone?.id ? canEditMilestone : trackRights.addMilestone}
       onSaved={async (m) => {
+        // The pick this save was made from: a pick made while the track reloads (Add milestone,
+        // another milestone) wins over the saved one, never the other way round.
+        const from = milestone;
         const t = await unwrap(api.GET("/v1/tracks/{track_id}", { params: { path: { track_id: m.track_id } } }));
         putTrack(t);
-        setMilestone({ trackId: m.track_id, id: m.id });
+        setMilestone((cur) => (cur === from ? { trackId: m.track_id, id: m.id } : cur));
       }}
       onCancel={() => {
         setMilestone(null);
@@ -192,29 +195,32 @@ export default function PlanPage() {
             )}
           </>
         }
-        action={
-          <>
-            {/* F6: the latest weekly alignment report, the Plan's header button. */}
-            <LinkButton href="/plan/reports/latest">
-              Alignment report
-            </LinkButton>
-            <SegmentedControl<PlanScope>
-              label="Plan scope"
-              size="sm"
-              value={scope}
-              onChange={setScope}
-              items={[
-                { value: "all", label: "Approved + drafts" },
-                { value: "approved", label: "Approved only" },
-              ]}
-            />
-          </>
+        info={
+          <InfoTip label="Plan" align="start" side="bottom">
+            The goals, the PRDs in play and every roadmap item under Now, Next and Later, with its engineering
+            status and the next decision. Pick an item to see its history.
+          </InfoTip>
         }
       />
+      {/* qa-plan-12: the scope is this tab's own filter, so it sits in the tab, not in the
+          header that every Plan tab shares (the page-wide links are in the tab strip). */}
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2" data-testid="plan-scope-bar">
+        <span className="text-sm text-text2">Show</span>
+        <SegmentedControl<PlanScope>
+          label="Plan scope"
+          size="sm"
+          value={scope}
+          onChange={setScope}
+          items={[
+            { value: "all", label: "Approved + drafts" },
+            { value: "approved", label: "Approved only" },
+          ]}
+        />
+      </div>
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
         <GoalsBand canImport={canBaseline} />
-        <PrdCards prds={data?.prds} canWrite={canWrite} />
+        <PrdCards prds={data?.prds} canWrite={canWrite} tracks={tracks.data} />
         {roadmaps.map((r) => (
           <PlanChanges
             key={`${r.slug}|${opened?.roadmap === r.slug ? opened.id : ""}`}

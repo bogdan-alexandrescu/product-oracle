@@ -92,15 +92,15 @@ for (const phone of [false, true]) {
           const line = problem.getByTestId("one-pager-line-text");
           await expect(line).toHaveText(/hides the invite step\.$/);
           await expect(line).not.toContainText("weekend signup");
-          await problem.getByRole("button", { name: "Show all of line 1" }).click();
+          await problem.getByRole("button", { name: "Show all of “New workspace admins stall during" }).click();
           await expect(line).toHaveText(/after a weekend signup\.$/);
           await expect(line).not.toContainText("…");
-          await problem.getByRole("button", { name: "Show less of line 1" }).click();
+          await problem.getByRole("button", { name: "Show less of “New workspace admins stall during" }).click();
           await expect(line).toHaveText(/invite step\.$/);
           if (role === "owner") {
             // The editor starts from the whole line, not its "…" text.
-            await problem.getByRole("button", { name: "Edit line 1" }).click();
-            await expect(problem.getByLabel("Line 1")).toHaveValue(/after a weekend signup\.$/);
+            await problem.getByRole("button", { name: "Edit “New workspace admins stall during" }).click();
+            await expect(problem.getByLabel("New wording for")).toHaveValue(/after a weekend signup\.$/);
             await problem.getByRole("button", { name: "Cancel" }).click();
           }
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);

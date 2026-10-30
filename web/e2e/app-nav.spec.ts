@@ -77,6 +77,7 @@ test("settings: its own strip routes to each section, Settings stays active", as
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   const strip = page.getByRole("navigation", { name: "Settings" });
   for (const [id, path, heading] of [
+    // qa-settings-40: each Settings page is headed by its own name; the browser tab names it.
     ["nav-members", "/settings/members", "Members"],
     ["nav-api-tokens", "/settings/api-tokens", "API tokens"],
     ["nav-connections", "/settings/connections", "Connections"],
@@ -88,6 +89,7 @@ test("settings: its own strip routes to each section, Settings stays active", as
     await strip.getByTestId(id).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
+    await expect(page).toHaveTitle(`${heading} · Product Oracle`);
     await expect(strip.getByTestId(id)).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings")).toHaveAttribute(
       "aria-current",
@@ -212,8 +214,8 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   expect(box.height).toBe(44);
   await expect(bar).toHaveCSS("background-color", "rgb(11, 58, 122)");
   const title = bar.getByTestId("phone-title");
-  // qa-shell-23: a section's tab shows the section's name.
-  await expect(title).toHaveText("Settings");
+  // qa-settings-40: a Settings page shows its own name (Plan's and Company's tabs show the section's).
+  await expect(title).toHaveText("Members");
   await expect(title).toHaveCSS("color", "rgb(255, 255, 255)");
   await expect(title).toHaveCSS("font-weight", "600");
   // The page's H1 stays for screen readers but is not drawn a second time.

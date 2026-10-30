@@ -48,10 +48,13 @@ async function flags(context: BrowserContext, value: string) {
   await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_MEETINGS_KEY, value] as const);
 }
 
-async function startWithAnEdit(page: Page, absent?: string) {
+/** `attendee`: the one ticked besides the presenter (qa-simple-decide-35); never the reviewer a test needs absent. */
+async function startWithAnEdit(page: Page, absent?: string, attendee = "Commenter") {
   await login(page);
   await page.goto("/simple/prds/guided-setup");
   await page.getByRole("button", { name: "Start review" }).click();
+  // qa-simple-decide-35: a review needs one attendee besides the presenter.
+  await page.getByRole("dialog", { name: "Start a review" }).getByRole("checkbox", { name: attendee }).check();
   await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   if (absent) {
@@ -60,11 +63,11 @@ async function startWithAnEdit(page: Page, absent?: string) {
     await expect(here).toHaveAttribute("aria-pressed", "false");
   }
   await expect(page.getByTestId("meeting-screen").getByTestId("one-pager")).toContainText("Version 3");
-  await page.getByRole("button", { name: "Edit line 2" }).click();
-  await page.getByLabel("Line 2").fill("A checklist that names the next step");
+  await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+  await page.getByLabel("New wording for").fill("A checklist that names the next step");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
 }
 
 async function onePagerOutside(page: Page) {
@@ -77,7 +80,7 @@ async function onePagerOutside(page: Page) {
 async function endOne(page: Page) {
   await login(page);
   await page.goto("/simple/meetings");
-  await page.getByRole("button", { name: "Start a review" }).click();
+  await page.getByRole("button", { name: "Start review" }).first().click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
@@ -86,6 +89,7 @@ async function endOne(page: Page) {
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
   await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();
 }
 
@@ -124,7 +128,8 @@ for (const phone of [false, true]) {
 
       test("Approve with a required section's reviewer absent waits on that person", async ({ page, context }) => {
         await flags(context, "section-reviewer");
-        await startWithAnEdit(page);
+        // Commenter, the section's reviewer, is not in the meeting; Approver (the PRD's reviewer) is.
+        await startWithAnEdit(page, undefined, "Approver");
         await expect(page.getByTestId("approved-banner")).toHaveText(
           "Approved in Review: Guided setup · not yet published: Waiting on Commenter's approval",
         );

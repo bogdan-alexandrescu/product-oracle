@@ -19,6 +19,22 @@ export async function login(page: Page, email: string = ADMIN.email) {
 }
 
 /**
+ * Opens a roadmap item's card from Simple's Timeline: its bar on a desktop; on a phone (the
+ * Timeline's thin goal lanes, timeline-overlap B3) the lane that holds it, then its row in the
+ * lane's list.
+ */
+export async function openRoadmapItem(page: Page, key: string) {
+  if ((page.viewportSize()?.width ?? 1366) > 640) {
+    const bar = page.locator(`g[data-testid="bar"][data-item="${key}"]`);
+    await expect(bar).toBeVisible();
+    await bar.click();
+    return;
+  }
+  await page.locator(`[data-testid="phone-lane"][data-items~="${key}"]`).click();
+  await page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().click();
+}
+
+/**
  * Serves Claude's sign-in page (claude.com) from the test (#520): Playwright reports the
  * popup the app opens only once its page answers, and the real site, slow under load,
  * left "Open Claude's sign-in page" waiting past the test's timeout.

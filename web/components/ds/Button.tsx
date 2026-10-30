@@ -15,9 +15,11 @@ const BASE =
  * here: every button takes the page's one ring (globals.css :focus-visible, 2px accent
  * outline 2px off the button), visible on an accent fill and on the page alike. A ghost has
  * no fill or outline to change, and its resting text is already text2: disabled, it is dimmed.
+ * qa-docs-5: a disabled filled button also takes an outline in the strong line colour, so on a
+ * surface2 panel (the same fill) it still reads as a button, not as plain text.
  */
 const DISABLED_FILL =
-  "disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:brightness-100";
+  "disabled:border disabled:border-line-strong aria-disabled:border aria-disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:brightness-100";
 const DISABLED_OUTLINE =
   "disabled:border-line disabled:text-text2 disabled:hover:bg-surface aria-disabled:border-line aria-disabled:text-text2 aria-disabled:hover:bg-surface";
 

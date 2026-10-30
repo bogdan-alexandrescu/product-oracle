@@ -9,7 +9,7 @@ import { DeleteDialog } from "@/components/ArtifactMenu";
 import { Button, Chip, confirmInPage, Icon, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
-import { api, unwrap } from "@/lib/api/client";
+import { ApiError, api, unwrap } from "@/lib/api/client";
 import { plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -98,10 +98,16 @@ export function BeforeDrafting({ id }: { id: string }) {
 
   const summaryQ = useQuery(
     `intake|${id}|${version}`,
-    () => unwrap(api.GET("/v1/intakes/{intake_id}/summary", { params: { path: { intake_id: id } } })),
+    // rirs-30: a brief that is gone (404) is told as such, not as an error.
+    () =>
+      unwrap(api.GET("/v1/intakes/{intake_id}/summary", { params: { path: { intake_id: id } } })).catch((e: unknown) => {
+        if (e instanceof ApiError && e.status === 404) return null;
+        throw e;
+      }),
     { keepPrevious: true },
   );
-  const s = summaryQ.data;
+  const gone = summaryQ.data === null;
+  const s = summaryQ.data ?? undefined;
   const batchesQ = useQuery(`intake|${id}|batches|${version}|${s?.batch.current ?? ""}`, () => loadBatches(id, s?.batch.current), { keepPrevious: true });
   const changed = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -132,6 +138,21 @@ export function BeforeDrafting({ id }: { id: string }) {
     waitingChanged();
   }
 
+  if (gone) {
+    return (
+      <Page>
+        <PageHeader back={<BackToPrds />} title="This brief is not here" />
+        <div data-testid="intake-gone" className="flex flex-col items-start gap-3 rounded-panel border border-line bg-surface p-4 shadow-panel">
+          <p className="text-[15px] text-text">
+            It may have been drafted into a PRD, archived, or deleted. A drafted brief lives on as its PRD; a deleted one waits in Trash for a while.
+          </p>
+          <Link href="/documents" className="font-semibold text-accent-ink underline">
+            Back to PRDs
+          </Link>
+        </div>
+      </Page>
+    );
+  }
   if (!s) {
     return <Page>{summaryQ.error ? <ErrorNote>{summaryQ.error}</ErrorNote> : <Loading />}</Page>;
   }
@@ -151,7 +172,7 @@ export function BeforeDrafting({ id }: { id: string }) {
   const mayDelete = can("delete_intake");
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
-  const reason = blocked ? gateReason(gate.blocking_gap_ids.length) : null;
+  const reason = blocked ? gateReason(gate.blocking_gap_ids.length, gate.open_critical) : null;
   const status = STATUS[s.intake.status];
   const openGaps = s.gaps.filter((g) => OPEN_GAP.has(g.status)).length;
   const fresh = s.new_evidence.visible ? (s.new_evidence.count ?? 0) : 0;
@@ -187,7 +208,9 @@ export function BeforeDrafting({ id }: { id: string }) {
         <div className="flex min-w-48 flex-col gap-1" role="menu">
           {live && mayAnalyze && (
             <Button variant="ghost" role="menuitem" className="justify-start" disabled={busy} onClick={() => (close(), act(() => unwrap(api.POST("/v1/intakes/{intake_id}/analyze", { params: { path: { intake_id: id } } }))))}>
-              Re-analyse
+              {/* rirs-29: what it does, unlike the read line's "Read the brief again". */}
+              Rank the questions again
+              <span className="font-normal text-text2">Free: re-orders the questions not asked yet</span>
             </Button>
           )}
           {live && mayRepin && (
@@ -224,12 +247,7 @@ export function BeforeDrafting({ id }: { id: string }) {
   return (
     <Page>
       <PageHeader
-        back={
-          <Link href="/documents" className="inline-flex items-center gap-1 hover:text-text hover:underline">
-            <Icon name="back" size={16} />
-            PRDs
-          </Link>
-        }
+        back={<BackToPrds />}
         title={s.intake.title}
         status={
           <>
@@ -325,6 +343,16 @@ export function BeforeDrafting({ id }: { id: string }) {
         </Sheet>
       )}
     </Page>
+  );
+}
+
+/** The header's way back; rirs-25: at least 24 px tall, so a thumb hits it on a phone. */
+function BackToPrds() {
+  return (
+    <Link href="/documents" data-testid="intake-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
+      <Icon name="back" size={16} />
+      PRDs
+    </Link>
   );
 }
 

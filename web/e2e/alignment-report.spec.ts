@@ -74,10 +74,11 @@ test("report page: the headline, a panel per track, needs attention linking to t
   await expect(first.getByTestId("track-health")).toHaveText("At risk, was On track");
   const attention = first.getByTestId("needs-attention");
   await expect(attention).toContainText("as of now");
-  const link = attention.getByRole("link", { name: "Threshold alerts" });
-  await expect(link).toHaveAttribute("href", "/plan?item=usage-alerts:threshold-alerts");
+  // qa-plan-3: ENG-405 is the Daily alert digest email's issue, named as on the Plan.
+  const link = attention.getByRole("link", { name: "Daily alert digest email" });
+  await expect(link).toHaveAttribute("href", "/plan?item=usage-alerts:alert-digest");
   await expect(first).toContainText("ENG-413");
-  await expect(first).toContainText("Estimate replaced");
+  await expect(first).toContainText("The team re-estimated");
   await expect(tracks.nth(1).getByTestId("track-health")).toHaveText("On track");
   await expect(page.getByTestId("report-slack").filter({ visible: true })).toContainText("Posted to #plan on Oct 19");
 

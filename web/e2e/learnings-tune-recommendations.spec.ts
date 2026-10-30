@@ -59,7 +59,7 @@ async function retire(row: Locator) {
 /** Actions for <title> > Re-analyse: Oracle ranks the questions not asked yet again. */
 async function reanalyse(page: Page) {
   await page.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Re-analyse" }).click();
+  await page.getByRole("menuitem", { name: /^Rank the questions again/ }).click();
 }
 
 test("a kept learning moves its question into the next ones and says why", async ({ page }) => {

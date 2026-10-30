@@ -1,5 +1,5 @@
 import { MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -52,13 +52,12 @@ const ROADMAP = "/simple/roadmap";
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
 /** Opens bet 2's flow across the page: the opened view. */
 async function openBet(page: Page, email?: string): Promise<Locator> {
   await login(page, email);
   await page.goto(ONE_PAGER);
-  await page.getByRole("button", { name: "Flow for bet 2" }).click();
+  await page.getByRole("button", { name: "Flow for “A setup checklist that shows" }).click();
   const opened = page.getByTestId("flow-detail");
   await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
   return opened;
@@ -93,7 +92,8 @@ for (const [where, use] of [
         const full = await openComments(page, opened);
         await expect(full.getByRole("heading", { name: "Finish setup from the checklist", level: 2 })).toBeVisible();
         await expect(full.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · PRD § build, requirement R1");
+        // qa-simple-roadmap-31: plain words, not the internal "PRD §"/"requirement" jargon.
+        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · From the PRD: Build section, Requirement R1");
         // Roles: a viewer reads, with no comment box and no Revise.
         await expect(full.getByLabel("Comment on the flow")).toHaveCount(0);
         await expect(full.getByRole("button", { name: "Revise" })).toHaveCount(0);
@@ -104,7 +104,7 @@ for (const [where, use] of [
         await opened.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
         await expect(page.getByTestId("flow-detail")).toHaveCount(0);
         // A bet Oracle has not drawn yet: its row says so on the line.
-        await expect(page.getByRole("group", { name: "User flow of bet 3" }).getByTestId("flow-empty")).toContainText("No flow yet");
+        await expect(page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" }).getByTestId("flow-empty")).toContainText("No flow yet");
       });
 
       test("an owner comments on a note and revises: version 2, version 1 in the history", async ({ page }) => {
@@ -132,32 +132,32 @@ for (const [where, use] of [
       test("an owner asks Oracle to draw a bet's flow: pending, then version 1", async ({ page }) => {
         await login(page);
         await page.goto(ONE_PAGER);
-        const wide = page.getByRole("group", { name: "User flow of bet 3" });
+        const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
         await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
         await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
         await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
-        await wide.getByRole("button", { name: "Flow for bet 3" }).click();
+        await wide.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" }).click();
         const opened = page.getByTestId("flow-detail");
         await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
         await expect(opened.getByTestId("flow-svg")).toBeVisible();
         await opened.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
         // The bet's thumbnail still shows its flow (no longer "No flow yet") after a reload.
         await page.reload();
-        await expect(page.getByRole("button", { name: "Flow for bet 3" })).toBeVisible();
-        await expect(page.getByRole("group", { name: "User flow of bet 3" })).not.toContainText("No flow yet");
+        await expect(page.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" })).toBeVisible();
+        await expect(page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" })).not.toContainText("No flow yet");
       });
 
       test("an owner asks again for a bet whose queued drawing never came: pending, then version 1", async ({ page }) => {
         await login(page);
         await page.goto(ONE_PAGER);
-        const wide = page.getByRole("group", { name: "User flow of bet 4" });
+        const wide = page.getByRole("group", { name: "User flow of “A sample project created on" });
         await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
         await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
-        await wide.getByRole("button", { name: "Flow for bet 4" }).click();
+        await wide.getByRole("button", { name: "Flow for “A sample project created on" }).click();
         await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
         await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
       });
@@ -166,7 +166,7 @@ for (const [where, use] of [
         test(`${who.split("@")[0]} is not offered Ask on a bet Oracle has not drawn`, async ({ page }) => {
           await login(page, who);
           await page.goto(ONE_PAGER);
-          const wide = page.getByRole("group", { name: "User flow of bet 3" });
+          const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
           await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
           await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
         });
@@ -184,8 +184,7 @@ for (const [where, use] of [
       test("a roadmap item's card opens its flow across the page; an owner asks Oracle for one", async ({ page }) => {
         await login(page);
         await page.goto(ROADMAP);
-        await expect(bar(page, "alert-mobile")).toBeVisible();
-        await bar(page, "alert-mobile").click();
+        await openRoadmapItem(page, "alert-mobile");
         const card = page.getByTestId("floating-card");
         await expect(card.getByTestId("card-flow")).toContainText("Act on a pushed alert");
         await card.getByRole("button", { name: "Open the item's flow" }).click();
@@ -200,7 +199,7 @@ for (const [where, use] of [
         await view.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
         await expect(card).toHaveAttribute("data-flow-open", "false");
         await card.getByRole("button", { name: "Close", exact: true }).click();
-        await bar(page, "alert-digest").click();
+        await openRoadmapItem(page, "alert-digest");
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
         await expect(card.getByTestId("flow-empty")).toContainText("No flow yet");
         await card.getByRole("button", { name: "Ask Oracle to draw it" }).click();
@@ -229,7 +228,7 @@ test.describe("a drawing that takes a while lands without a reload", () => {
   test("a roadmap item's card: drawing, then version 1", async ({ page }) => {
     await login(page);
     await page.goto(ROADMAP);
-    await bar(page, "alert-digest").click();
+    await openRoadmapItem(page, "alert-digest");
     const card = page.getByTestId("floating-card");
     const loads = await noReloads(page);
     await card.getByRole("button", { name: "Ask Oracle to draw it" }).click();
@@ -246,14 +245,14 @@ test.describe("a drawing that takes a while lands without a reload", () => {
   test("a one-pager bet line: drawing, then version 1", async ({ page }) => {
     await login(page);
     await page.goto(ONE_PAGER);
-    const wide = page.getByRole("group", { name: "User flow of bet 3" });
+    const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
     const loads = await noReloads(page);
     await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
     await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
     await page.waitForTimeout(2500);
     await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
     await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1", { timeout: JOB_MS + 6000 });
-    await wide.getByRole("button", { name: "Flow for bet 3" }).click();
+    await wide.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" }).click();
     await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
     await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
     expect(loads()).toBe(0);

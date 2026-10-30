@@ -9,7 +9,7 @@ from oracle.templates import builtins
 from oracle.templates.builtins import BUILTIN_TEMPLATES, BUILTIN_THEMES, ensure_builtins
 from oracle.templates.defaults import DEFAULT_TEMPLATE_BODY, ensure_default_template
 from oracle.templates.models import Template, TemplateVersion, Theme
-from oracle.templates.validation import check_template, contrast
+from oracle.templates.validation import check_template, check_theme_tokens, contrast
 from oracle.tenancy import tenant_session
 from tests.conftest import seed_company
 from tests.test_priorities import _token
@@ -119,7 +119,11 @@ async def test_create_edit_versions_archive_restore(client, tenant_id):
     assert t["latest_version"] == 1 and not t["builtin"]
     assert t["versions"][0]["required_sections"] == ["title", "problem", "sources"]
     assert t["suggested_theme"] == "clean-document"
-    assert (await client.post("/v1/templates", json=payload, headers=h)).status_code == 409
+    taken = await client.post("/v1/templates", json=payload, headers=h)
+    assert taken.status_code == 409
+    assert taken.json()["detail"] == (
+        "A template with key bug-bash already exists. Archived templates keep their keys."
+    )
 
     # Renaming keeps the version; a new body adds one, and v1 stays as it was.
     resp = await client.patch("/v1/templates/bug-bash", json={"name": "Bug bash v2"}, headers=h)
@@ -212,7 +216,7 @@ async def test_validation_reports_every_problem(client, tenant_id, body, codes):
         headers=h,
     )
     assert resp.status_code == 422
-    assert resp.json()["detail"].startswith("template rejected")
+    assert resp.json()["detail"].startswith("The template was not saved: it has ")
     assert {p["code"] for p in resp.json()["problems"]} == codes
 
 
@@ -236,6 +240,39 @@ async def test_citation_problem_names_the_line_and_section(client, tenant_id):
 
 
 # --- themes -------------------------------------------------------------------------
+
+
+def test_template_problems_are_plain_sentences():
+    """qa-settings-34: capitalised sentences, no field paths or code words."""
+    messages = [p.message for p in check_template("Just text, no headings.\n").problems]
+    assert "The template has no headings (levels 1 to 3)." in messages
+    body = "# Idea {#title}\n\n## Problem\n\n## Problem {#title}\n"
+    messages = [p.message for p in check_template(body).problems]
+    assert "The heading 'Problem' (level 2) must end with {#section-id}." in messages
+    assert "The section id title is used more than once." in messages
+    assert all(m[0].isupper() or m[0] in "'@" for m in messages), messages
+
+
+def test_theme_problems_name_the_field_as_the_editor_does():
+    """qa-settings-7: the message starts with the field's label, so it shows next to it."""
+    problems = check_theme_tokens(
+        {
+            "colors": {"text": "red", "muted": "#aaaaaa", "background": "#ffffff"},
+            "fonts": {"mono": "Fira<Code>"},
+            "page": {"size": "A3"},
+            "spacing": {"line_height": 9},
+        }
+    )
+    messages = [p.message for p in problems]
+    assert "Text colour must be a hex colour like #1f2933." in messages
+    assert any(m.startswith("Muted colour #aaaaaa on the background #ffffff") for m in messages)
+    assert (
+        "Monospace font must be a list of font names (letters, digits, spaces, commas "
+        "and quotes)." in messages
+    )
+    assert "Page size must be A4 or Letter." in messages
+    assert "Line height must be a number from 1 to 2.5." in messages
+    assert not any("colors." in m or "fonts." in m or "spacing." in m for m in messages)
 
 
 def test_contrast_ratio():
@@ -273,7 +310,11 @@ async def test_theme_crud_and_archive(client, tenant_id):
     resp = await client.post("/v1/themes", json=THEME, headers=h)
     assert resp.status_code == 201, resp.text
     assert resp.json()["tokens"]["page"]["size"] == "Letter"
-    assert (await client.post("/v1/themes", json=THEME, headers=h)).status_code == 409
+    taken = await client.post("/v1/themes", json=THEME, headers=h)
+    assert taken.status_code == 409
+    assert taken.json()["detail"] == (
+        "A theme with key brand already exists. Archived themes keep their keys."
+    )
 
     resp = await client.patch("/v1/themes/brand", json={"css": "h2 { color: #222; }"}, headers=h)
     assert resp.json()["css"] == "h2 { color: #222; }"
@@ -299,7 +340,7 @@ async def test_low_contrast_is_rejected_with_a_clear_error(client, tenant_id):
     resp = await client.post("/v1/themes", json=bad, headers=h)
     assert resp.status_code == 422
     assert resp.json()["detail"] == (
-        "colors.text #aaaaaa on colors.background #ffffff has a contrast of 2.32:1; WCAG AA "
+        "Text colour #aaaaaa on the background #ffffff has a contrast of 2.32:1; WCAG AA "
         "needs at least 4.5:1 for body text. Darken the text colour or lighten the background."
     )
     await client.post("/v1/themes", json=THEME, headers=h)

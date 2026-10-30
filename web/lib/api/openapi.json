@@ -9607,7 +9607,7 @@
           "members"
         ],
         "summary": "List People",
-        "description": "The company's active members for a person picker, matched on email (``q``):\neach one's name (from their email), email, role and whether they can write\n(commenter or above: answer, comment, be asked). Disabled members are not listed;\nthe full member list (``GET /v1/members``) stays the owner's.\n\n``ids`` names people instead (\"Waiting on <name>\", \"Answered by <name>\"): the\ncompany's members with those ids, however many the company has, a disabled one too\n(it keeps its name and cannot write); ``q`` and ``limit`` do not apply.",
+        "description": "The company's active members for a person picker, matched on email (``q``):\neach one's name (from their email), email, role and whether they can write\n(commenter or above: answer, comment, be asked). Disabled members are not listed;\nthe full member list (``GET /v1/members``) stays the owner's. ``decides`` lists only\nthe members whose role may decide a PRD question (approvers and owners). The list\nis ordered by email and paged with ``limit`` and ``offset``.\n\n``ids`` names people instead (\"Waiting on <name>\", \"Answered by <name>\"): the\ncompany's members with those ids, however many the company has, a disabled one too\n(it keeps its name and cannot write); ``q``, ``decides``, ``limit`` and ``offset`` do\nnot apply.",
         "operationId": "list_people",
         "security": [
           {
@@ -9666,6 +9666,27 @@
                 }
               ],
               "title": "Ids"
+            }
+          },
+          {
+            "name": "decides",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Decides"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -77555,6 +77576,17 @@
             ],
             "title": "Document Slug"
           },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
           "segment_title": {
             "anyOf": [
               {
@@ -91625,6 +91657,10 @@
           "can_propose": {
             "type": "boolean",
             "title": "Can Propose"
+          },
+          "can_start": {
+            "type": "boolean",
+            "title": "Can Start"
           }
         },
         "type": "object",
@@ -91644,7 +91680,8 @@
           "draft",
           "changes_in_review",
           "can_edit",
-          "can_propose"
+          "can_propose",
+          "can_start"
         ],
         "title": "OnePagerOut"
       },
@@ -100979,6 +101016,17 @@
           "prd_moved": {
             "type": "boolean",
             "title": "Prd Moved"
+          },
+          "prd_moved_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Moved To"
           }
         },
         "type": "object",
@@ -104748,6 +104796,17 @@
                 "type": "null"
               }
             ]
+          },
+          "prepare_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepare Usd"
           }
         },
         "type": "object",
@@ -106283,6 +106342,17 @@
             ],
             "title": "Document Slug"
           },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
           "document_kind": {
             "anyOf": [
               {
@@ -107140,6 +107210,17 @@
               }
             ],
             "title": "Document Slug"
+          },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
           },
           "document_kind": {
             "anyOf": [
@@ -111679,6 +111760,28 @@
               }
             ],
             "title": "Detail"
+          },
+          "invited": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invited"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
           }
         },
         "type": "object",

@@ -8,7 +8,7 @@ import { expect, test, type Page } from "./test";
  * desktop (1366x820) and a phone (390x844), light and dark, against the mock (invented data).
  *
  * Card plan-strip-one-pager: protects = the one-pager's Timeline block is the PRD's span by
- * month (Oct-Jan) with one row per milestone ("M1 · 12 items" and its date), the items with
+ * month (Oct-Jan) with one row per milestone ("Milestone M1 · 12 items" and its date), the items with
  * no milestone summed in one row, today's line and the commitment past the edge, and never a
  * bar per item; clicking a milestone opens the roadmap filtered to the PRD; fails_when = the
  * block lists each roadmap item, loses a milestone's count, or the row does not filter the
@@ -58,10 +58,10 @@ for (const phone of [false, true]) {
           await expect(page.getByTestId("one-pager-meta")).not.toContainText("someone");
           const strip = page.getByLabel("Timeline strip");
           await expect(strip.getByTestId("plan-strip-month")).toHaveText(["Oct", "Nov", "Dec", "Jan"]);
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · 12 items", "M2 · 5 items", "M3 · 3 items", "No milestone · 2 items"]);
+          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Milestone M1 · 12 items", "Milestone M2 · 5 items", "Milestone M3 · 3 items", "No milestone · 2 items"]);
           await expect(strip.getByTestId("plan-strip-row").first()).toContainText("Nov 20");
           await expect(strip.getByTestId("plan-strip-today")).toHaveCount(1);
-          await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 commitment ends past Jan →");
+          await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 commitment with no milestone ends after Jan");
           // One page: no bar per roadmap item.
           await expect(strip).not.toContainText("Setup step 1");
           await expect(strip.getByTestId("plan-strip-more")).toHaveCount(0);

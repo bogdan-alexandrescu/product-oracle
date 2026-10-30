@@ -6,10 +6,12 @@ import { useState, type FormEvent } from "react";
 
 import { ProblemList } from "@/components/TemplateBodyEditor";
 import { ThemePreview } from "@/components/ThemePreview";
+import { KeyField, keyValid } from "@/app/settings/_components/KeyField";
+import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
 import { Button, InfoTip, Notice, PageHeader, Panel } from "@/components/ds";
 import { Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -26,6 +28,8 @@ export default function NewThemePage() {
   const [from, setFrom] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A key that is taken: said under the Key field.
+  const [keyError, setKeyError] = useState<string | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const base = themes.data?.find((t) => t.key === (from ?? "clean-document")) ?? themes.data?.[0];
 
@@ -34,6 +38,7 @@ export default function NewThemePage() {
     if (!base) return;
     setBusy(true);
     setError(null);
+    setKeyError(null);
     setProblems([]);
     try {
       const t = await unwrapProblems(
@@ -52,7 +57,8 @@ export default function NewThemePage() {
       );
       router.push(`/settings/themes/${t.key}`);
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : errorMessage(err));
+      if (err instanceof ApiError && err.status === 409) setKeyError(err.message);
+      else setError(err instanceof Error && err.message ? err.message : errorMessage(err));
       if (err instanceof ProblemsError) setProblems(err.problems);
       setBusy(false);
     }
@@ -62,13 +68,13 @@ export default function NewThemePage() {
     <>
       <PageHeader
         back={
-          <Link href="/settings/themes" className="hover:text-text hover:underline">
+          <Link href="/settings/themes" className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11">
             ← Themes
           </Link>
         }
         title="New theme"
         action={
-          <Button type="submit" form="new-theme" variant="primary" icon="plus" disabled={busy || !base || !key || !name}>
+          <Button type="submit" form="new-theme" variant="primary" icon="plus" disabled={busy || !base || !keyValid(key) || !name.trim()}>
             {busy ? "Creating…" : "Create theme"}
           </Button>
         }
@@ -78,26 +84,16 @@ export default function NewThemePage() {
         <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
           <Panel title="Details" bodyClassName="p-4 max-[600px]:p-3">
             <form id="new-theme" onSubmit={create} className="flex flex-col gap-3">
-              <Field
-                label="Key"
-                htmlFor="theme-key"
-                tip={
-                  <InfoTip label="allowed characters" align="start">
-                    Lowercase letters, digits and hyphens. It cannot change later.
-                  </InfoTip>
-                }
-              >
-                <input
-                  id="theme-key"
-                  className={`${INPUT} font-mono`}
-                  value={key}
-                  onChange={(e) => setKey(e.target.value.toLowerCase())}
-                  placeholder="company-brand"
-                  pattern="[a-z0-9][a-z0-9-]{1,62}"
-                  title="Lowercase letters, digits and hyphens"
-                  required
-                />
-              </Field>
+              <KeyField
+                id="theme-key"
+                value={key}
+                onChange={(v) => {
+                  setKey(v);
+                  setKeyError(null);
+                }}
+                error={keyError}
+                placeholder="company-brand"
+              />
               <Field label="Name">
                 <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Company brand" required />
               </Field>
@@ -109,7 +105,7 @@ export default function NewThemePage() {
                 </select>
               </Field>
               <Field label="Description">
-                <input className={INPUT} value={description} onChange={(e) => setDescription(e.target.value)} />
+                <GrowingTextarea value={description} onChange={(e) => setDescription(e.target.value)} />
               </Field>
               <Field
                 label="Start from"

@@ -33,12 +33,27 @@ function fmt(locale: string, timeZone: string, opts: Intl.DateTimeFormatOptions)
   return f;
 }
 
+/**
+ * A European zone's short name where en-US only has an offset: "CET" for Europe/Berlin, not
+ * "GMT+1", so a time reads as the zone Settings names (Central European Time; the API's
+ * company_time.in_words says "CET" too). Other zones keep what en-US gives (qa-onboarding-38).
+ */
+function namedZone(text: string, zone: string, at: Date): string {
+  const offset = /GMT[+-]\d{1,2}(?::\d{2})?/.exec(text);
+  if (!offset || !zone.startsWith("Europe/")) return text;
+  const name = fmt("en-GB", zone, { hour: "numeric", timeZoneName: "short" })
+    .formatToParts(at)
+    .find((p) => p.type === "timeZoneName")?.value;
+  return name && /^[A-Z]{3,5}$/.test(name) ? text.replace(offset[0], name) : text;
+}
+
 /** `iso` (an instant) in `zone`, with the zone's short name when the options show a time. */
 export function formatInZone(iso: string, zone: string, opts: Intl.DateTimeFormatOptions, locale = "en-US"): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
   const timed = opts.hour !== undefined || opts.minute !== undefined;
-  return fmt(locale, zone, timed ? { ...opts, timeZoneName: "short" } : opts).format(at);
+  const out = fmt(locale, zone, timed ? { ...opts, timeZoneName: "short" } : opts).format(at);
+  return timed ? namedZone(out, zone, at) : out;
 }
 
 /** "Oct 16": the day of an instant in `zone`. */
@@ -51,8 +66,8 @@ export const zoneWeekday = (iso: string, zone: string) => formatInZone(iso, zone
 export const zoneDateTime = (iso: string, zone: string) =>
   formatInZone(iso, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/ at /, ", ");
 
-/** "09:00 PDT" (24-hour). */
-export const zoneTime = (iso: string, zone: string) => formatInZone(iso, zone, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, "en-GB");
+/** "9:00 AM PDT": the one way a time is written (12-hour, the zone's short name, qa-shell-19). */
+export const zoneTime = (iso: string, zone: string) => formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" });
 
 /** The calendar day (YYYY-MM-DD) of an instant in `zone`. */
 export function dayIn(at: Date | number | string, zone: string): string {
@@ -134,7 +149,7 @@ export function inWords(iso: string, zone: string): string {
       timeZoneName: "short",
     }).formatToParts(new Date(iso));
     const v = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
-    return `${v("weekday")} ${v("month")} ${v("day")}, ${v("hour")}:${v("minute")} ${v("dayPeriod")} ${v("timeZoneName")}`;
+    return namedZone(`${v("weekday")} ${v("month")} ${v("day")}, ${v("hour")}:${v("minute")} ${v("dayPeriod")} ${v("timeZoneName")}`, zone, new Date(iso));
   } catch {
     return zoneDateTime(iso, zone);
   }

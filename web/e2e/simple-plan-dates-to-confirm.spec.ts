@@ -55,6 +55,8 @@ for (const [where, use] of [
         await login(page);
         await page.goto("/simple/roadmap");
         await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+        // A phone reads the item's bar on the Gantt: its Timeline (timeline-overlap B3) draws thin lanes, no bars.
+        if (where === "phone") await page.getByTestId("format-gantt").click();
         await expect(bar(page, ITEM)).toHaveAttribute("data-kind", "estimated");
 
         await page.getByTestId("needs-decision").click();
@@ -81,7 +83,7 @@ for (const [where, use] of [
         await bar(page, ITEM).click();
         const card = page.getByTestId("floating-card");
         await expect(card.getByRole("heading", { name: TITLE })).toBeVisible();
-        await expect(card.getByTestId("card-dates")).toHaveText(`${shown} · accepted`);
+        await expect(card.getByTestId("card-dates")).toHaveText(`${shown} · Dates accepted from Oracle`);
 
         if (where === "phone") expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
       });

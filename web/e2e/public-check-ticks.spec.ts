@@ -98,7 +98,7 @@ test("an intro with a blocking finding cannot be saved and shows why", async ({ 
 
 test("a commenter sees no ticks", async ({ page }) => {
   await asApprover(page, "commenter@example.com");
-  await expect(page.getByText("Approvers and owners check the Public version.")).toBeVisible();
+  await expect(page.getByText("Only an approver or owner can check the Public version")).toBeVisible();
   await expect(page.getByRole("checkbox", { name: /I checked this/ })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Page title and intro" })).toHaveCount(0);
 });

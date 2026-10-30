@@ -126,11 +126,8 @@ test.describe("phone", () => {
     expect((await cutTabs(nav)).cut).toEqual([]);
   });
 
-  for (const [path, label] of [
-    ["/plan", "Plan"],
-    ["/settings/members", "Settings"],
-    ["/sources", "Settings"],
-  ] as const) {
+  // qa-settings-41: Settings on a phone is a page picker, not a strip (fix2-shell.spec.ts).
+  for (const [path, label] of [["/plan", "Plan"]] as const) {
     test(`${path}: the ${label} strip shows whole tab names only`, async ({ page }) => {
       // protects=no tab is cut mid-word under the fade or a chevron on a phone; overflowing
       // strips have named chevrons (qa-plan-62, qa-work-15, qa-work-48); fails_when=a tab
@@ -140,6 +137,12 @@ test.describe("phone", () => {
       const nav = page.getByRole("navigation", { name: label }).filter({ visible: true });
       await expect(nav.getByRole("link").first()).toBeVisible();
       await page.waitForTimeout(300);
+      if ((await nav.locator("[data-wrap]").count()) > 0) {
+        // A wrapping strip (the Plan's, qa-plan-4): no chevrons, every tab whole on screen.
+        await expect(nav.getByRole("button", { name: /^Scroll tabs/ })).toHaveCount(0);
+        for (const link of await nav.getByRole("link").all()) await expect(link).toBeInViewport({ ratio: 1 });
+        return;
+      }
       await settle(page, nav);
       await expect(scroller(nav)).toHaveCSS("scrollbar-width", "none");
       expect((await cutTabs(nav)).cut).toEqual([]);

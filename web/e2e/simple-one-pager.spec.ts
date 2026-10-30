@@ -15,7 +15,7 @@ import { expect, test, type Page } from "./test";
  *
  * Card one-pager-owner-edit: protects = an owner's line edit applies into the working
  * draft: the line is tinted edited, the draft bar counts it, the margin note beside it
- * says "You changed line 2" with Undo and a before/after that shows the section patch, and
+ * says "You changed “A setup checklist" with Undo and a before/after that shows the section patch, and
  * Undo puts the line back; fails_when = the edit is not sent as edit_line, the note or the
  * section patch is missing, or Undo leaves the edit; no_claim = submit and approval
  * (the API's tests).
@@ -42,20 +42,20 @@ for (const phone of [false, true]) {
         await page.goto(URL);
         await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
         await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3");
-        await expect(page.getByTestId("one-pager-meta")).toContainText("published Oct 20, 2026");
+        await expect(page.getByTestId("one-pager-meta")).toContainText("Version 3 · 20 Oct 2026");
         for (const title of ["Problem and who has it", "What we will build", "Outcomes and how we measure them", "Not doing", "Risks and open decisions", "Timeline"]) {
           await expect(page.getByRole("region", { name: title })).toBeVisible();
         }
         await expect(page.getByRole("region", { name: "Outcomes and how we measure them" })).toContainText("48% → 65%");
         await expect(page.getByLabel("Timeline strip")).toContainText("M1 · 12 items");
-        await expect(page.getByRole("button", { name: /Edit line|Propose wording/ })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: /^Edit “|Propose wording/ })).toHaveCount(0);
         await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
-        const sources = page.getByRole("dialog", { name: "Sources of line 2" });
+        const sources = page.getByRole("region", { name: "Sources of “A setup checklist that shows" });
         await expect(sources.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", "/documents/guided-setup#build");
         await expect(page.getByRole("link", { name: "Open the detailed view" }).first()).toHaveAttribute("href", "/documents/guided-setup");
         const download = page.waitForEvent("download");
         await page.getByRole("button", { name: "Export PDF" }).click();
-        expect((await download).suggestedFilename()).toBe("guided-setup-v3-one-pager.pdf");
+        expect((await download).suggestedFilename()).toBe("Guided setup v3 one-pager.pdf");
         await page.getByRole("button", { name: "Present" }).click();
         await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
         await page.getByRole("button", { name: "Stop presenting" }).click();
@@ -65,19 +65,19 @@ for (const phone of [false, true]) {
       test("an owner edits a line into the working draft and undoes it", async ({ page }) => {
         await login(page);
         await page.goto(URL);
-        await page.getByRole("button", { name: "Edit line 2" }).click();
-        await page.getByLabel("Line 2").fill("A setup checklist with the next two steps");
+        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+        await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
         await page.getByRole("button", { name: "Save" }).click();
         const line = page.locator('[data-line="bets-1"]');
         await expect(line).toHaveAttribute("data-state", "edited");
         await expect(line).toContainText("A setup checklist with the next two steps");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("published v3 stays live until approved");
-        const note = notes(page).filter({ hasText: "You changed line 2" }).filter({ visible: true });
+        const note = notes(page).filter({ hasText: "You changed “A setup checklist" }).filter({ visible: true });
         await expect(note).toBeVisible();
         await note.getByRole("button", { name: "See before/after" }).click();
-        await expect(note.getByLabel("Before and after")).toContainText("Section “What we will build”");
-        await expect(note.getByLabel("Before and after")).toContainText("- A setup checklist with the next two steps");
+        await expect(note.getByLabel("Before and after")).toContainText("In “What we will build”");
+        await expect(note.getByLabel("Before and after")).toContainText("A setup checklist with the next two steps");
         await note.getByRole("button", { name: "Undo" }).click();
         await expect(line).toHaveAttribute("data-state", "published");
         await expect(line).toContainText("A setup checklist that shows the next step");
@@ -86,8 +86,8 @@ for (const phone of [false, true]) {
       test("an edited metric line shows its new numbers", async ({ page }) => {
         await login(page);
         await page.goto(URL);
-        await page.getByRole("button", { name: "Edit line 5" }).click();
-        await page.getByLabel("Line 5").fill("Teammate invited in week one from 48% to 70%");
+        await page.getByRole("button", { name: "Edit “Teammate invited in week one" }).click();
+        await page.getByLabel("New wording for").fill("Teammate invited in week one from 48% to 70%");
         await page.getByRole("button", { name: "Save" }).click();
         const line = page.locator('[data-line="outcomes-1"]');
         await expect(line).toHaveAttribute("data-state", "edited");
@@ -99,7 +99,7 @@ for (const phone of [false, true]) {
         await login(page, "viewer@example.com");
         await page.goto(URL);
         await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
-        const sources = page.getByRole("dialog", { name: "Sources of line 2" });
+        const sources = page.getByRole("region", { name: "Sources of “A setup checklist that shows" });
         await expect(sources).toContainText("What we will build");
         await expect(sources).toContainText("Invite suggestions from the admin's calendar");
       });
@@ -108,12 +108,12 @@ for (const phone of [false, true]) {
         test("a margin note sits beside its line", async ({ page }) => {
           await login(page);
           await page.goto(URL);
-          await page.getByRole("button", { name: "Edit line 9" }).click();
-          await page.getByLabel("Line 9").fill("Calendar access may worry admins");
+          await page.getByRole("button", { name: "Edit “Calendar access may scare admins" }).click();
+          await page.getByLabel("New wording for").fill("Calendar access may worry admins");
           await page.getByRole("button", { name: "Save" }).click();
           const line = page.locator('[data-line="risks-1"]');
           await expect(line).toHaveAttribute("data-state", "edited");
-          const note = page.getByRole("complementary", { name: "Margin" }).getByRole("note", { name: "Change to line 9" });
+          const note = page.getByRole("complementary", { name: "Changes and proposals" }).getByRole("note", { name: "Change to “Calendar access may scare admins" });
           await expect(note).toBeVisible();
           await expect(async () => {
             const a = (await line.boundingBox())!;
@@ -127,11 +127,11 @@ for (const phone of [false, true]) {
       test("a commenter proposes, the owner accepts after opening the flow", async ({ page }) => {
         await login(page, "commenter@example.com");
         await page.goto(URL);
-        await page.getByRole("button", { name: "Propose wording for line 3" }).click();
-        await page.getByLabel("Line 3").fill("Invite suggestions from shared contacts");
+        await page.getByRole("button", { name: "Propose wording for “Invite suggestions from the admin's" }).click();
+        await page.getByLabel("New wording for").fill("Invite suggestions from shared contacts");
         await page.getByRole("button", { name: "Propose", exact: true }).click();
         await expect(page.locator('[data-line="bets-2"]')).toHaveAttribute("data-state", "proposal");
-        const mine = notes(page).filter({ hasText: "proposes new wording for line 3" }).filter({ visible: true });
+        const mine = notes(page).filter({ hasText: "proposes new wording for “Invite suggestions" }).filter({ visible: true });
         await expect(mine).toBeVisible();
         await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
         // The account menu lives in the desktop rail: switch people there, then back to
@@ -142,8 +142,8 @@ for (const phone of [false, true]) {
         await login(page);
         await page.setViewportSize(size);
         await page.goto(URL);
-        const note = notes(page).filter({ hasText: "proposes new wording for line 3" }).filter({ visible: true });
-        await note.getByRole("button", { name: "Flow for line 3" }).click();
+        const note = notes(page).filter({ hasText: "proposes new wording for “Invite suggestions" }).filter({ visible: true });
+        await note.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" }).click();
         await expect(note).toHaveAttribute("data-widened", "true");
         // S10: Oracle drafted the bet's visual with the proposal.
         await expect(note.getByLabel("User flow").getByTestId("flow-version")).toHaveText("Version 1 of 1");

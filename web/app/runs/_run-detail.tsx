@@ -14,6 +14,7 @@ import {
   CodeText,
   confirmInPage,
   LinkButton,
+  NotFoundPanel,
   Icon,
   InfoTip,
   Inspector,
@@ -22,6 +23,7 @@ import {
   Notice,
   Page,
   PageHeader,
+  PageSkeleton,
   Panel,
   Sheet,
   Split,
@@ -67,6 +69,7 @@ import {
   deliveryText,
   fileLabel,
   runDocName,
+  runName,
   useRoleNames,
   useTemplateText,
   usd,
@@ -155,7 +158,7 @@ export function RunDetail({ id }: { id: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // #258: what the last "Check agents now" checked, said once it answers.
+  // #258: what the last "Refresh progress" checked, said once it answers.
   const [checked, setChecked] = useState<string | null>(null);
   const run = q.data;
   const { reload } = q;
@@ -209,28 +212,36 @@ export function RunDetail({ id }: { id: string }) {
   // #370: the handlers let an owner manage any run, an approver only a run they created.
   const mayManage = (op: Operation) => can(op, run?.created_by === me?.user_id);
   const back = (
-    <Link href="/runs" className="inline-flex items-center gap-1 hover:text-text hover:underline">
+    // rirs-25: a 24 px tap target on a phone.
+    <Link href="/runs" className="inline-flex min-h-6 items-center gap-1 hover:text-text hover:underline">
       <Icon name="back" size={16} />
       Runs
     </Link>
   );
 
+  // qa-shell-8: a missing run in the app's one not-found pattern.
+  if (!run && q.error === RUN_MISSING) {
+    return (
+      <NotFoundPanel
+        title="Run not found"
+        icon="search"
+        testId="run-not-found"
+        back={back}
+        actions={
+          <LinkButton href="/runs" variant="primary" icon="back">
+            Back to Runs
+          </LinkButton>
+        }
+      >
+        <p>{RUN_MISSING}</p>
+      </NotFoundPanel>
+    );
+  }
   if (!run) {
     return (
       <Page>
         <PageHeader back={back} title="Run" />
-        {q.error === RUN_MISSING ? (
-          <ErrorNote>
-            {RUN_MISSING}{" "}
-            <Link href="/runs" className="underline">
-              Back to Runs
-            </Link>
-          </ErrorNote>
-        ) : q.error ? (
-          <ErrorNote>{q.error}</ErrorNote>
-        ) : (
-          <Loading />
-        )}
+        {q.error ? <ErrorNote>{q.error}</ErrorNote> : <PageSkeleton bare />}
       </Page>
     );
   }
@@ -274,6 +285,8 @@ export function RunDetail({ id }: { id: string }) {
       <LinkedDiscussion />
       <PageHeader
         back={back}
+        // rirs-24: on a phone the run's name shows in full under the bar, wrapping.
+        phoneTitle
         // The run by its human name, never an id (qa-company-11).
         title={
           <span className="break-words" data-testid="run-name">
@@ -284,14 +297,18 @@ export function RunDetail({ id }: { id: string }) {
           <>
             <RunStatusBadge run={run} />
             {/* qa-work-8: the document in words, never its slug. */}
+            {/* rirs-17: the document under a label of its own; one the run writes says so in words. */}
             {run.document_slug &&
               (run.document_id ? (
-                <Link href={`/documents/${run.document_slug}`} className="text-sm font-medium text-accent-ink hover:underline" data-testid="run-document">
-                  {runDocName(run)}
-                </Link>
+                <span className="inline-flex min-h-6 items-center gap-1 text-sm text-text2">
+                  For
+                  <Link href={`/documents/${run.document_slug}`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline" data-testid="run-document">
+                    {runDocName(run)}
+                  </Link>
+                </span>
               ) : (
-                <span className="text-sm text-text2" data-testid="run-document">
-                  {runDocName(run)} (new)
+                <span className="inline-flex min-h-6 items-center text-sm text-text2" data-testid="run-document" title="This run writes the first version of this document">
+                  {runDocName(run)} (written by this run)
                 </span>
               ))}
             {run.source && (
@@ -311,7 +328,15 @@ export function RunDetail({ id }: { id: string }) {
               </Chip>
             )}
             {/* H1: the stops this run had approved or sent back, in the decision log. */}
-            <Link href={`/company/decisions?run=${run.id}`} data-testid="run-decision-log" className="text-sm font-medium text-accent-ink hover:underline">
+            {/* rirs-17: set apart from the document; rirs-25: a 24 px tap target. */}
+            <span aria-hidden className="text-sm text-text2" data-testid="run-header-sep">
+              ·
+            </span>
+            <Link
+              href={`/company/decisions?run=${run.id}`}
+              data-testid="run-decision-log"
+              className="inline-flex min-h-6 items-center text-sm font-medium text-accent-ink hover:underline"
+            >
               Decisions in this run
             </Link>
           </>
@@ -334,7 +359,8 @@ export function RunDetail({ id }: { id: string }) {
                 )
               ) : (
                 // The run waits on a checkpoint this member decides: scroll to its decision and focus it.
-                <Button variant="primary" icon="flag" onClick={toDecision}>
+                // rirs-21: it goes to the one decision below (no second decision of its own).
+                <Button icon="chevron-down" onClick={toDecision} title="Go to the decision below" data-testid="run-go-decide">
                   Decide
                 </Button>
               ))}
@@ -343,14 +369,33 @@ export function RunDetail({ id }: { id: string }) {
                 Resume
               </Button>
             )}
+            {/* qa-onboarding-16: one destructive action at a time. A run not finished is cancelled
+                (Oracle refuses to delete it while it is open); once it is, it can be deleted. */}
+            {mayManage("cancel_run") && WORKING.has(run.status) && (
+              <Button
+                variant="danger"
+                disabled={busy}
+                data-testid="run-cancel"
+                onClick={async () => {
+                  if (await confirmInPage({ destructive: true, action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
+                    void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)));
+                  }
+                }}
+              >
+                Cancel run
+              </Button>
+            )}
             {/* #482: a run alone goes to Trash (its document stays); qa-work-27: a plain Delete button. */}
-            <DeleteButton
-              op="delete_run"
-              title={run.flow_title}
-              dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [] })}
-              remove={(query) => unwrap(api.DELETE("/v1/runs/{run_id}", { params: { path: { run_id: run.id }, query: { reason: query.reason } } }))}
-              onDeleted={() => router.push("/runs")}
-            />
+            {!WORKING.has(run.status) && (
+              <DeleteButton
+                op="delete_run"
+                // qa-onboarding-16: the dialog names the run, not its flow: "Delete the Team onboarding PRD run".
+                title={`the ${runName(run)} run`}
+                dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [] })}
+                remove={(query) => unwrap(api.DELETE("/v1/runs/{run_id}", { params: { path: { run_id: run.id }, query: { reason: query.reason } } }))}
+                onDeleted={() => router.push("/runs")}
+              />
+            )}
           </>
         }
       />
@@ -452,6 +497,7 @@ export function RunDetail({ id }: { id: string }) {
             </span>
           </Notice>
         )}
+        {run.status === "paused_overrun" && <OverrunHeld run={run} mayResume={can("resume_run")} />}
         {checked && <Notice testId="tick-result">{checked}</Notice>}
         <Panel
           // qa-work-9: no run id in the panel head; the page names the run.
@@ -461,8 +507,8 @@ export function RunDetail({ id }: { id: string }) {
               <span className="tnum text-sm font-semibold text-text2" data-testid="segments-done">
                 {done} of {run.segments.length} done
               </span>
-              {/* qa-work-28: an outlined button, like Cancel run next to it. */}
-              {can("tick") && open && (
+              {/* qa-onboarding-31, rirs-20: only once agents have started; Cancel run and Delete sit in the header. */}
+              {can("tick") && open && run.segments.some((s) => s.status !== "pending") && (
                 <Button
                   disabled={busy}
                   onClick={() => {
@@ -474,20 +520,7 @@ export function RunDetail({ id }: { id: string }) {
                     });
                   }}
                 >
-                  Check agents now
-                </Button>
-              )}
-              {mayManage("cancel_run") && !FINAL_STATUSES.includes(run.status) && (
-                <Button
-                  disabled={busy}
-                  data-testid="run-cancel"
-                  onClick={async () => {
-                    if (await confirmInPage({ destructive: true, action: "Cancel run", message: "Cancel this run? Agents still working are stopped." })) {
-                      void act(() => unwrap(api.POST("/v1/runs/{run_id}/cancel", path)));
-                    }
-                  }}
-                >
-                  Cancel run
+                  Refresh progress
                 </Button>
               )}
             </>
@@ -532,7 +565,31 @@ export function RunDetail({ id }: { id: string }) {
 }
 
 /**
- * #258: what "Check agents now" checked: "Checked 1 active run at 9:24 AM: 1 segment finished."
+ * rirs-19: what Resume lets go on, beside it: "Spent $14.20, past the $13.50 limit. The PRD
+ * review is held until you resume; resuming allows up to $4.50 more."
+ */
+function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
+  const last = [...run.segments].reverse().find((s) => s.status === "succeeded");
+  const next =
+    last?.checkpoint && last.checkpoint_on && !run.checkpoints.some((c) => c.segment_seq === last.seq)
+      ? `The ${CHECKPOINT_LABEL[last.checkpoint]}`
+      : (() => {
+          const s = run.segments.find((x) => x.status === "pending");
+          return s ? `The next step, ${s.title},` : "The run";
+        })();
+  const who = mayResume ? "you resume it" : "an owner resumes it";
+  // A resumed run may spend half its estimate more before it pauses again (the 1.5× rule).
+  const more = run.estimate_usd != null ? ` Resuming allows up to ${usd(run.estimate_usd * 0.5)} more; Cancel run stops it.` : "";
+  return (
+    <Notice testId="run-overrun-held">
+      Spent {usd(run.spent_usd)}
+      {run.overrun_ceiling_usd != null && <>, past the {usd(run.overrun_ceiling_usd)} limit</>}. {next} is held until {who}.{more}
+    </Notice>
+  );
+}
+
+/**
+ * #258: what "Refresh progress" checked: "Checked 1 active run at 9:24 AM: 1 segment finished."
  * qa-work-20: with no agent at work, why, from this run's state: "No agents are working right
  * now; the run is waiting for your review." Runs the check could not read are still named.
  */
@@ -574,6 +631,7 @@ function RunInspector({ run }: { run: RunOut }) {
   const approval = run.status === "awaiting_approval";
   const overrun = run.status === "paused_overrun";
   const roleName = useRoleNames();
+  const { can } = useMe();
   // qa-work-27: a run no segment of which has started says so, not "Segment 1 of 4".
   const started = run.segments.some((s) => s.status !== "pending");
   return (
@@ -621,25 +679,36 @@ function RunInspector({ run }: { run: RunOut }) {
           }
         >
           <RunCost run={run} />
+          {approval && (
+            // qa-onboarding-13: who approves, for everyone; the owner's Approve is in the header.
+            <p className="mt-1.5 text-sm text-text" data-testid="run-approval-who">
+              {can("approve_run")
+                ? `Waiting for your approval of ${usd(run.estimate_usd)}. No agent starts until you approve it.`
+                : `Waiting for an owner to approve ${usd(run.estimate_usd)}. No agent starts until then: ask an owner of your company to approve it.`}
+            </p>
+          )}
         </InspectorSection>
       )}
       <InspectorSection label="Details" testId="run-details">
-        <InspectorRow
-          value={
-            // qa-work-25: one format, in the normal font: "$4.90 of $14.50 estimated".
-            <span data-testid="run-cost" data-cost="small" className="tnum text-sm text-text2">
-              {run.estimate_usd == null ? (
-                costText(run)
-              ) : (
-                <>
-                  <span data-testid="run-spent">{usd(run.spent_usd)}</span> of {usd(run.estimate_usd)} estimated
-                </>
-              )}
-            </span>
-          }
-        >
-          Cost
-        </InspectorRow>
+        {/* rirs-18: one cost line per panel: with the cost section above, Details does not repeat it. */}
+        {!(approval || overrun) && (
+          <InspectorRow
+            value={
+              // qa-work-25: one format, in the normal font: "$4.90 of $14.50 estimated".
+              <span data-testid="run-cost" data-cost="small" className="tnum text-sm text-text2">
+                {run.estimate_usd == null ? (
+                  costText(run)
+                ) : (
+                  <>
+                    <span data-testid="run-spent">{usd(run.spent_usd)}</span> of {usd(run.estimate_usd)} estimated
+                  </>
+                )}
+              </span>
+            }
+          >
+            Cost
+          </InspectorRow>
+        )}
         {/* qa-work-54: plain words for the run's depth, its proposals and where it runs. */}
         <InspectorRow value={DEPTH_WORDS[run.knobs.depth] ?? run.knobs.depth}>How thorough</InspectorRow>
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
@@ -648,7 +717,7 @@ function RunInspector({ run }: { run: RunOut }) {
         <InspectorRow
           value={
             <span className="inline-flex items-center gap-2">
-              {run.runtime === "fake" ? "This Oracle (test runtime)" : "SwarmCloud"}
+              {run.runtime === "fake" ? "On this server (test mode)" : "SwarmCloud"}
               <InfoTip label="the runtime" side="top">
                 <RunsWhere runtime={run.runtime} />
                 {run.notes.length > 0 && (
@@ -662,7 +731,7 @@ function RunInspector({ run }: { run: RunOut }) {
             </span>
           }
         >
-          Runs in
+          Where it runs
         </InspectorRow>
       </InspectorSection>
       <RunDecisions run={run} />
@@ -991,8 +1060,15 @@ function SegmentItem({
                 {CHECKPOINT_LABEL[kind]}
               </Chip>
             ) : (
-              <Chip kind="na" title={`${CHECKPOINT_LABEL[kind]}: off`} className={WRAP_CHIP} data-testid="segment-checkpoint">
-                {CHECKPOINT_LABEL[kind]}: off
+              // rirs-15: in words, with why on hover.
+              <Chip
+                kind="na"
+                title={`${CHECKPOINT_LABEL[kind]} was turned off when the run started, so the run ${s.status === "pending" || s.status === "running" ? "will not stop here to ask anyone" : "went on without asking anyone"}.`}
+                className={WRAP_CHIP}
+                data-testid="segment-checkpoint"
+              >
+                <span className="sr-only">{CHECKPOINT_LABEL[kind]}: </span>
+                {s.status === "pending" || s.status === "running" ? "Won't ask (checkpoint off)" : "Not asked (checkpoint skipped)"}
               </Chip>
             ))}
           {mine.length > 0 && (
@@ -1800,13 +1876,26 @@ function FeatureSetCheckLine({ check }: { check: NonNullable<SegmentOut["feature
   );
 }
 
-/** B2: "Review in Baseline · 3 need you", the run's rows in the Baseline (the files stay below). */
+/** rirs-6: who may decide a checkpoint, by the least role it needs. */
+const WHO_DECIDES: Record<string, string> = {
+  viewer: "Anyone in the company can decide",
+  commenter: "Commenters, approvers and owners can decide",
+  approver: "Approvers and owners can decide",
+  owner: "Owners can decide",
+};
+
+/**
+ * B2: "Review in Baseline · 3 need you", the run's rows in the Baseline (the files stay below);
+ * rirs-22: with none for this person, "Open the baseline (nothing flagged for you)".
+ */
 function FromRunLink({ runId }: { runId: string }) {
   const q = useQuery(`baseline-from-run:${runId}`, () => unwrap(api.GET("/v1/baseline/from-run/{run_id}", { params: { path: { run_id: runId } } })));
   return (
     <p className="mt-2">
       <LinkButton href={`/baseline?run=${runId}`} icon="baseline">
-        Review in Baseline{q.data ? ` · ${q.data.summary.need_you} need you` : ""}
+        {q.data && q.data.summary.need_you === 0
+          ? "Open the baseline (nothing flagged for you)"
+          : `Review in Baseline${q.data ? ` · ${q.data.summary.need_you} need you` : ""}`}
       </LinkButton>
     </p>
   );
@@ -2071,9 +2160,10 @@ function CheckpointRow({
           <Icon name="clock" size={16} />
           {CP_LABEL[cp.status]}
         </Chip>
-        <Chip kind="line" title={`Needs an ${cp.approver_role} or above`}>
+        {/* rirs-6: who decides, in words. */}
+        <Chip kind="line" data-testid="checkpoint-who">
           <Icon name="user" size={16} />
-          {cp.approver_role}+
+          {WHO_DECIDES[cp.approver_role] ?? "Owners can decide"}
         </Chip>
         {review && <WaitChip wait={review.wait} forYou role={cp.approver_role} />}
       </div>
@@ -2270,7 +2360,7 @@ function GateList({ gate, message, onWaive }: { gate: NonNullable<CheckpointOut[
               {x.waivable && onWaive && waiving !== key(x) && (
                 <button
                   type="button"
-                  className="font-medium text-accent-ink underline"
+                  className="inline-flex min-h-6 items-center font-medium text-accent-ink underline max-[600px]:min-h-11"
                   onClick={() => {
                     setWaiving(key(x));
                     setReason("");
@@ -2354,7 +2444,7 @@ function DeleteButton(props: Parameters<typeof DeleteMenu>[0]) {
   if (!can(props.op)) return null;
   return (
     <>
-      <Button onClick={() => setOpen(true)} data-testid="run-delete">
+      <Button variant="danger" onClick={() => setOpen(true)} data-testid="run-delete">
         Delete
       </Button>
       {open &&

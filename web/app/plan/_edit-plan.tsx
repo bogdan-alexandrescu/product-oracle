@@ -345,7 +345,7 @@ function Superseded({ set, me, canWrite }: { set: ChangeSet; me: string | null; 
         · it can&apos;t be approved
       </p>
       <div className="flex items-center justify-end gap-2">
-        <Link href={`/documents/${set.roadmap}/v/${n}`} className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
+        <Link href={`/documents/${set.roadmap}/v/${n}`} className="inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
           Open version {n}
         </Link>
         {approves(set, me, canWrite) && (
@@ -398,7 +398,7 @@ function Proposal({
       <Diff set={set} />
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex items-center justify-end gap-2">
-        <Link href={`/documents/${set.roadmap}/v/${n}`} className="text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
+        <Link href={`/documents/${set.roadmap}/v/${n}`} className="inline-flex min-h-6 items-center text-sm font-semibold text-accent-ink underline-offset-2 hover:underline">
           Open version {n}
         </Link>
         {mine && (

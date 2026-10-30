@@ -603,17 +603,17 @@ function AnnotationsSection({
 }) {
   const [quiet, setQuiet] = useState(false);
   const total = outputs.reduce((n, o) => n + o.annotations.length, 0);
-  const counts = { All: total, "No comments": outputs.reduce((n, o) => n + o.annotations.filter((a) => a.reviews.length === 0).length, 0) };
+  const counts = { All: total, "Without comments": outputs.reduce((n, o) => n + o.annotations.filter((a) => a.reviews.length === 0).length, 0) };
   const filter = (
     <span className="inline-flex gap-1">
-      {(["All", "No comments"] as const).map((label) => {
-        const on = (label === "No comments") === quiet;
+      {(["All", "Without comments"] as const).map((label) => {
+        const on = (label === "Without comments") === quiet;
         return (
           <button
             key={label}
             type="button"
             aria-pressed={on}
-            onClick={() => setQuiet(label === "No comments")}
+            onClick={() => setQuiet(label === "Without comments")}
             className={`rounded-full px-2.5 py-0.5 text-[13px] whitespace-nowrap font-semibold ${on ? "bg-accent text-on-accent" : "bg-surface2 text-text2 hover:text-text"}`}
           >
             {label} <span className="tnum">{counts[label]}</span>
@@ -748,12 +748,14 @@ function EventRow({ e, meId }: { e: ReviewEvent; meId: string | null }) {
   );
 }
 
-/** A comment box: the API's refusal (an empty comment) shows under it. */
+/** A comment box: Comment is off until there is text; any refusal from the API shows under it. */
 function Composer({ label, send }: { label: string; send: (body: string) => Promise<void> }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const empty = !text.trim();
   const submit = async () => {
+    if (empty) return;
     setBusy(true);
     setErr(null);
     try {
@@ -769,10 +771,12 @@ function Composer({ label, send }: { label: string; send: (body: string) => Prom
     <div className="flex flex-col gap-2">
       <textarea aria-label={label} placeholder={label} className={TEXTAREA} value={text} onChange={(e) => setText(e.target.value)} />
       {err && <ErrorNote>{err}</ErrorNote>}
-      <div>
-        <Button variant="solid" disabled={busy} onClick={() => void submit()}>
+      {/* qa-docs-11: an empty comment cannot be sent; the hint says why the button is off. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="solid" disabled={busy || empty} onClick={() => void submit()}>
           Comment
         </Button>
+        {empty && <span className="text-[13px] text-text2">Write a comment first</span>}
       </div>
     </div>
   );

@@ -145,7 +145,7 @@ test("members: the owner names the approver in the inspector, and a commenter na
   await inspector.getByRole("button", { name: "Save" }).click();
   await expect(inspector.getByRole("button", { name: "Saved" })).toBeVisible();
   await expect(memberRow(page, "approver@example.com")).toContainText("Design approver");
-  await inspector.getByRole("button", { name: "Back to invites" }).click();
+  await inspector.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.getByRole("form", { name: "Invite" })).toBeVisible();
 
   // "Find a person" filters by name or email.
@@ -172,7 +172,7 @@ test("members: a commenter reads the people list, with no role selects, Remove o
   // AC 33
   await login(page, "commenter@example.com");
   await page.goto("/settings/members");
-  await expect(page.getByTestId("role-note")).toContainText("Your role is commenter. Owners manage members and sign-in.");
+  await expect(page.getByTestId("role-note")).toContainText("Your role is Commenter. Owners manage members and sign-in.");
   const list = page.getByTestId("people-readonly");
   const rows = list.getByTestId("person-row");
   await expect(rows.filter({ hasText: "approver@example.com" })).toContainText("Approver");
@@ -195,7 +195,7 @@ test("members: an approver invites viewers and commenters only and sees only the
   await login(page, "approver@example.com");
   await page.goto("/settings/members");
   await expect(page.getByTestId("role-note")).toContainText(
-    "Your role is approver. You can invite viewers and commenters and approve their access requests.",
+    "Your role is Approver. You can invite viewers and commenters and approve their access requests.",
   );
   const form = page.getByRole("form", { name: "Invite" });
   await expect(form.getByLabel("Role", { exact: true }).locator("option")).toHaveText(["Commenter", "Viewer"]);

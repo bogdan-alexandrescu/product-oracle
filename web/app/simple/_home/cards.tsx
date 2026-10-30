@@ -7,9 +7,12 @@ import { Icon, type IconName } from "@/components/ds/Icon";
 
 /**
  * The parts of Simple's Home (#723 S1, "Brief as cards"): a section card with its header row
- * (icon, title, count chip, "All ->"), the rows that share one layout with their actions in
+ * (icon, title, count chip, "All ->" named for its card), the rows that share one layout with their actions in
  * one right-hand column, and a block's loading and failed states.
  */
+
+/** A link's target: at least 24 px tall, 44 px on a phone (qa-simple-home-27). */
+const TARGET = "inline-flex min-h-6 items-center max-[600px]:min-h-11";
 
 /** A section card: header row, then its rows (or its state). */
 export function HomeCard({
@@ -18,6 +21,7 @@ export function HomeCard({
   title,
   count,
   all,
+  allLabel,
   extra,
   children,
 }: {
@@ -28,6 +32,8 @@ export function HomeCard({
   /** Beside the count ("1 late"). */
   extra?: ReactNode;
   all?: string;
+  /** "All ->"'s name for a screen reader, from the card ("All decisions"); else "All: <title>". */
+  allLabel?: string;
   children: ReactNode;
 }) {
   return (
@@ -44,7 +50,7 @@ export function HomeCard({
         )}
         {extra}
         {all && (
-          <Link href={all} className="simple-link whitespace-nowrap">
+          <Link href={all} aria-label={allLabel ?? `All: ${title}`} data-testid={`home-${id}-all`} className={`simple-link whitespace-nowrap ${TARGET}`}>
             All -&gt;
           </Link>
         )}
@@ -146,6 +152,7 @@ export function HomeRow({
   change,
   thumb,
   actions,
+  inlineActions = false,
   testId = "home-row",
 }: {
   lead: ReactNode;
@@ -154,6 +161,8 @@ export function HomeRow({
   change?: { before: string; after: string } | null;
   thumb?: boolean;
   actions?: ReactNode;
+  /** The actions in a row (the primary first, the others beside it, wrapping), so the row hugs its text. */
+  inlineActions?: boolean;
   testId?: string;
 }) {
   const [wide, setWide] = useState(false);
@@ -187,7 +196,14 @@ export function HomeRow({
           </div>
         )}
       </div>
-      {actions && <div className="simple-actions">{actions}</div>}
+      {actions && (
+        <div
+          data-testid="home-row-actions"
+          className={inlineActions ? "simple-actions max-w-[22rem] flex-row! flex-wrap! items-center! justify-end! max-[600px]:max-w-none max-[600px]:justify-start!" : "simple-actions"}
+        >
+          {actions}
+        </div>
+      )}
     </li>
   );
 }
@@ -216,14 +232,14 @@ export function RowIcon({ name }: { name: IconName }) {
   );
 }
 
-/** The top rows and a "+ N more" line to the full list. */
-export function Top<T>({ rows, max = 3, more, children }: { rows: T[]; max?: number; more: string; children: (row: T) => ReactNode }) {
+/** The top rows and a "+ N more" line to the full list (`what` names its rows for a screen reader: "2 more of the decisions"). */
+export function Top<T>({ rows, max = 3, more, what, children }: { rows: T[]; max?: number; more: string; what?: string; children: (row: T) => ReactNode }) {
   const left = rows.length - max;
   return (
     <>
       <ul className="flex flex-col">{rows.slice(0, max).map(children)}</ul>
       {left > 0 && (
-        <Link href={more} data-testid="home-more" className="simple-more">
+        <Link href={more} data-testid="home-more" aria-label={what ? `${left} more ${what}` : undefined} className={`simple-more ${TARGET}`}>
           {left} more -&gt;
         </Link>
       )}

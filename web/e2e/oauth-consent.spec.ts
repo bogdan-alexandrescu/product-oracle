@@ -25,8 +25,8 @@ test("consent: signed out goes to sign-in first, then approve returns a code", a
   await expect(page.getByRole("heading", { name: "Connect an MCP client" })).toBeVisible();
   const consent = page.getByTestId("consent");
   await expect(consent).toContainText(`${MOCK_CONSENT.client_name} wants to use Product Oracle as you.`);
-  await expect(consent).toContainText("oracle:read");
-  await expect(consent).toContainText("oracle:write");
+  await expect(consent).toContainText("Read");
+  await expect(consent).toContainText("Write");
   await expect(page.getByTestId("consent-user")).toHaveText(ADMIN.email);
   await expect(consent).toContainText("Owner");
   await expect(consent).toContainText(CALLBACK.host);
@@ -55,8 +55,8 @@ test("consent: read-only access says the client acts as a viewer", async ({ page
   await login(page);
   await page.goto(`/oauth/consent?request=${MOCK_HANDLES.readOnly}`);
   const consent = page.getByTestId("consent");
-  await expect(consent).toContainText("oracle:read");
-  await expect(consent).not.toContainText("oracle:write");
+  await expect(consent).toContainText("Read");
+  await expect(consent.locator('[data-scope="oracle:write"]')).toHaveCount(0);
   await expect(page.getByTestId("consent-effective-role")).toContainText("viewer rights only");
 });
 

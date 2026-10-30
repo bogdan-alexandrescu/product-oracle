@@ -1,12 +1,11 @@
 import { Suspense } from "react";
 
-import { Loading } from "@/components/ui";
-
 import { NotificationsSettings } from "./NotificationsSettings";
+import { PageSkeleton } from "@/components/ds";
 
 export default function NotificationsPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <NotificationsSettings />
     </Suspense>
   );

@@ -9,11 +9,12 @@ import { errorMessage } from "@/lib/use-query";
 import { ChatThreadView, usePendingPoll } from "./ChatThread";
 
 const POLL_MS = 2000;
-const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter + named people" };
+// qa-simple-decide-7: the same words as the start sheet and the meeting's header.
+const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter plus one or two people" };
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 
 function rulesLine(r: ChatRules): string {
-  if (r.change_mode === "named") return `Presenter + ${r.change_people.length ? r.change_people.map((p) => p.name).join(", ") : "no one named yet"}`;
+  if (r.change_mode === "named") return `Presenter plus ${r.change_people.length ? r.change_people.map((p) => p.name).join(", ") : "no one named yet"}`;
   return MODE_WORDS[r.change_mode];
 }
 
@@ -23,7 +24,24 @@ function rulesLine(r: ChatRules): string {
  * presenter, the control that changes it. Viewers ask questions only. `onCardChanged`: a card
  * here was applied, discarded or undone (the host reads its meeting again).
  */
-export function MeetingChat({ meetingId, sessionId, onCardChanged }: { meetingId: string; sessionId: string; onCardChanged?: () => void }) {
+export function MeetingChat({
+  meetingId,
+  sessionId,
+  onCardChanged,
+  rulesControl = true,
+  scroll = false,
+  heading = true,
+}: {
+  meetingId: string;
+  sessionId: string;
+  onCardChanged?: () => void;
+  /** The presenter's "who changes things" control; the meeting screen sets it in its attendee bar instead. */
+  rulesControl?: boolean;
+  /** The lines scroll inside the card (the meeting screen's right column). */
+  scroll?: boolean;
+  /** The card's own title; the chat's own page has it as the page title. */
+  heading?: boolean;
+}) {
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -63,7 +81,7 @@ export function MeetingChat({ meetingId, sessionId, onCardChanged }: { meetingId
   const rules = thread?.rules ?? null;
   return (
     <section aria-label="Meeting chat" data-testid="meeting-chat" data-session={sessionId || undefined} className="simple-card flex min-h-0 flex-col gap-3 max-[600px]:mb-[76px]">
-      <h2 className="simple-h2">Meeting chat</h2>
+      {heading && <h2 className="simple-h2">Meeting chat</h2>}
       {error && !thread && (
         <p role="alert" className="simple-small text-crit">
           {error}
@@ -72,18 +90,20 @@ export function MeetingChat({ meetingId, sessionId, onCardChanged }: { meetingId
       {rules && (
         <div className="flex flex-col gap-2 border-b border-line pb-3">
           <p className="simple-small" data-testid="chat-rules">
-            Who may apply: <strong>{rulesLine(rules)}</strong>
+            Who changes things: <strong>{rulesLine(rules)}</strong>
             {rules.ended && " · The meeting has ended"}
           </p>
-          {rules.is_presenter && !rules.ended && <ModeControl meetingId={meetingId} rules={rules} onSaved={(r) => setThread((t) => (t ? { ...t, rules: r } : t))} />}
+          {rulesControl && rules.is_presenter && !rules.ended && <ModeControl meetingId={meetingId} rules={rules} onSaved={(r) => setThread((t) => (t ? { ...t, rules: r } : t))} />}
         </div>
       )}
       {thread && (
         <ChatThreadView
           testId="meeting-chat-thread"
           thread={thread}
-          placeholder={rules?.ask_only ? "Ask a question about the plan…" : "Ask a question or ask for a change…"}
-          hint={rules?.ask_only ? "You can ask questions here; viewers don't change the plan." : undefined}
+          // qa-simple-decide-3: this chat makes changes and notes; questions go to Ask Oracle.
+          placeholder={rules?.ask_only ? "Type “note: …” or “open question: …”" : "Ask for a change, or type “note: …”"}
+          hint={rules?.ask_only ? "Viewers don't change the plan. For a question, use Ask Oracle." : "For a question about the plan, use Ask Oracle."}
+          scroll={scroll ? "max-h-[50vh]" : undefined}
           send={async (text) => setThread(await meetingSay(meetingId, text))}
           onCardChanged={() => {
             void load();
@@ -126,9 +146,9 @@ function ModeControl({ meetingId, rules, onSaved }: { meetingId: string; rules: 
   return (
     <div className="flex flex-col gap-2" data-testid="chat-mode">
       <label className="simple-small flex flex-wrap items-center gap-2">
-        Change who may apply
+        Who changes things
         <select
-          aria-label="Who may apply"
+          aria-label="Who changes things"
           value={mode}
           onChange={(e) => {
             const m = e.target.value as ChangeMode;

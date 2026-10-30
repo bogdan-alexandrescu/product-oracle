@@ -66,7 +66,7 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   await openRituals(page);
   await expect(page.getByRole("navigation", { name: "Company" }).filter({ visible: true }).getByRole("link")).toHaveText(["Strategy", "Decisions", "Rituals", "Updates", "Metrics", "Market"]);
   const row = ritualRow(page, "Monthly roadmap refresh");
-  await expect(row).toContainText("First Tuesday of the month, 10:00 AM PT");
+  await expect(row).toContainText("First Tuesday of the month, 10:00 AM");
   await row.click();
   const panel = inspector(page);
   await expect(panel).toContainText("Monthly roadmap refresh");
@@ -75,8 +75,8 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   await panel.getByLabel("Day").selectOption("4");
   await panel.getByRole("combobox", { name: /^Time\b/ }).selectOption({ label: "4:00 PM" });
   await panel.getByRole("button", { name: "Save" }).click();
-  await expect(row).toContainText("Last Friday of the month, 4:00 PM PT");
-  await expect(row.locator('[data-col="next"]')).toHaveText("Fri, Oct 30, 4:00 PM PDT");
+  await expect(row).toContainText("Last Friday of the month, 4:00 PM");
+  await expect(row.locator('[data-col="next"]')).toHaveText("Fri, Oct 30, 4:00 PM");
   // Oracle's words: a company, never a workspace or tenant.
   await expect(page.getByTestId("rituals-panel")).not.toContainText(/workspace|tenant/i);
   await expect(panel).not.toContainText(/workspace|tenant/i);
@@ -147,7 +147,7 @@ test("12d: an approver sees the table and the Summaries choice without edit cont
   await expect(page.getByRole("button", { name: "Add ritual" })).toHaveCount(0);
   await ritualRow(page, "Weekly goals check-in").click();
   const panel = inspector(page);
-  await expect(panel).toContainText("Mondays 9:00 AM PT");
+  await expect(panel).toContainText("Mondays 9:00 AM");
   await expect(panel.getByRole("button")).toHaveCount(0);
   await expect(panel.getByRole("combobox")).toHaveCount(0);
 });
@@ -184,16 +184,18 @@ test("12f: the owner turns summaries to Every pre-read; the estimate follows, su
   await expect(mode.getByRole("button", { name: "On demand" })).toHaveAttribute("aria-pressed", "true");
   await expect(line.getByTestId("summaries-estimate")).toHaveText("Every pre-read would cost about $17 a month (about 6 summaries)");
   await mode.getByRole("button", { name: "Every pre-read" }).click();
-  await expect(line.getByTestId("summaries-estimate")).toHaveText("About $17 a month (6 summaries)");
+  // qa-company-23: a recurring cost is asked about first.
+  await page.getByRole("alertdialog", { name: "Summarize every pre-read" }).getByRole("button", { name: "Summarize every pre-read" }).click();
+  await expect(line.getByTestId("summaries-estimate")).toHaveText("Every pre-read costs about $17 a month (about 6 summaries)");
   await line.getByRole("button", { name: "About the summaries estimate" }).click();
   await expect(line.getByRole("tooltip")).toContainText("Weekly goals check-in: about 4 a month, $3.00 each");
   await page.reload();
   await expect(mode.getByRole("button", { name: "Every pre-read" })).toHaveAttribute("aria-pressed", "true");
-  await expect(line.getByTestId("summaries-estimate")).toHaveText("About $17 a month (6 summaries)");
+  await expect(line.getByTestId("summaries-estimate")).toHaveText("Every pre-read costs about $17 a month (about 6 summaries)");
   await ritualRow(page, "Weekly goals check-in").click();
   await inspector(page).getByRole("button", { name: "Pause" }).click();
   await expect(ritualRow(page, "Weekly goals check-in")).toContainText("Paused");
-  await expect(line.getByTestId("summaries-estimate")).toHaveText("About $4 a month (1 summary)");
+  await expect(line.getByTestId("summaries-estimate")).toHaveText("Every pre-read costs about $4 a month (about 1 summary)");
 });
 
 test("12g: an approver asks Oracle for a summary and sees it written; a failed summary says so", async ({ page }) => {
@@ -288,12 +290,12 @@ test("One zone: a ritual has no Time zone field; the inspector names the Company
   const panel = inspector(page);
   await expect(panel.getByLabel("Repeats")).toBeVisible();
   await expect(panel.getByLabel("Time zone")).toHaveCount(0);
-  await expect(panel.getByTestId("ritual-zone")).toHaveText("Company time zone · Not set · Pacific is used");
+  await expect(panel.getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles), not set yet");
   await expect(panel.getByRole("link", { name: "Change" })).toHaveAttribute("href", "/settings/company#timezone");
   await page.getByRole("button", { name: "Add ritual" }).click();
   const form = page.getByRole("form", { name: "Add ritual" });
   await form.getByLabel("Title").fill("Pricing sync");
   await form.getByRole("button", { name: "Add" }).click();
   await ritualRow(page, "Pricing sync").click();
-  await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Company time zone · Not set · Pacific is used");
+  await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles), not set yet");
 });

@@ -512,7 +512,7 @@ async def test_suggestions_regenerate_once_a_day_and_on_demand(client, clock):
         assert await suggestions.daily(s) is True
         await s.commit()
     (first,) = await open_suggestions(ctx)
-    # 30 days, the median of the one dated item (no confidence either).
+    # 30 days, about the same as the one dated item (no confidence either).
     assert (first.start_date, first.end_date) == (date(2026, 10, 1), date(2026, 10, 30))
     async with tenant_session(ctx.tenant_id) as s:
         assert await suggestions.daily(s) is False

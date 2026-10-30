@@ -14,7 +14,7 @@ import { useRequestsState } from "./_components/RequestsState";
  */
 const ITEMS = [
   { label: "All requests", href: "/requests", testId: "requests-tab-all", exact: true },
-  { label: "To decide", href: "/requests/new", testId: "requests-tab-new", exact: true },
+  { label: "To decide", href: "/requests/to-decide", testId: "requests-tab-new", exact: true },
   { label: "Themes", href: "/requests/themes", testId: "requests-tab-themes", exact: true },
   { label: "Interviews", href: "/requests/interviews", testId: "requests-tab-interviews", exact: false },
 ];

@@ -1,8 +1,7 @@
 import { Suspense } from "react";
 
-import { Loading } from "@/components/ui";
-
 import { OccurrenceDetail } from "../_components/OccurrenceDetail";
+import { PageSkeleton } from "@/components/ds";
 
 // Typed by hand rather than with Next's generated PageProps, so a plain `tsc --noEmit`
 // (without a build's .next/types) checks it.
@@ -16,7 +15,7 @@ async function Detail({ params }: Params) {
 /** One ritual occurrence, inside the Company shell with the Rituals tab selected. */
 export default function OccurrencePage({ params }: Params) {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <Detail params={params} />
     </Suspense>
   );

@@ -52,7 +52,7 @@ test("owner: every Settings tab, the owner's buttons, no View only", async ({ pa
   await openSettings(page, "admin@example.com");
   await expect(page).toHaveURL(/\/settings\/members$/);
   expect(await tabsShown(page)).toEqual(ALL);
-  await expect(page.getByRole("button", { name: "Invite", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send invite", exact: true })).toBeVisible();
   await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveCount(0);
 
   await settingsNav(page).getByTestId("nav-claude-accounts").click();

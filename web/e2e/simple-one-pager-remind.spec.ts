@@ -25,8 +25,8 @@ const bar = (page: Page) => page.getByRole("status", { name: "Working draft" });
 async function submitted(page: Page) {
   await login(page);
   await page.goto(URL);
-  await page.getByRole("button", { name: "Edit line 2" }).click();
-  await page.getByLabel("Line 2").fill("A setup checklist with the next two steps");
+  await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+  await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(bar(page)).toContainText("1 change");
   await bar(page).getByRole("button", { name: "Submit for review" }).click();

@@ -15,7 +15,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
-import { stableUuid } from "./ids";
+import { newCompany, stableUuid } from "./ids";
 import { canEditRoadmap, closed, GOALS, goalId, knowTalkGoals, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
@@ -218,7 +218,8 @@ export async function routeGoalSuggestions(
     const only = q.get("goal_id") ? goalOf(q.get("goal_id")!) : undefined;
     if (q.get("goal_id") && !only) return json(404, { detail: "No such goal" });
     const status = q.get("status") ?? "open";
-    const goals = Object.keys(GOALS).filter((g) => !only || g === only);
+    // A new company has no confirmed goal yet: none to suggest under.
+    const goals = newCompany() ? [] : Object.keys(GOALS).filter((g) => !only || g === only);
     return json(200, {
       goals: goals.map((g) => {
         const d = goalDecider(db, g, ctx);

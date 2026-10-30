@@ -8,7 +8,7 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { interviewsCall, LIMITS, type InterviewCreate, type InterviewLink, type InterviewOut, type InterviewPatch } from "@/lib/api/interviews";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { failedAt, formatDateTime } from "@/lib/format";
+import { failedAt, formatDay } from "@/lib/format";
 
 type About = "intake" | "theme" | "topic";
 type Step = "subject" | "guide" | "link";
@@ -30,8 +30,17 @@ const QUESTIONS: { value: Questions; label: string; testId: string }[] = [
   { value: "pricing", label: "Use the pricing question set", testId: "interview-questions-pricing" },
 ];
 
-/** A link's expiry in the Company time zone, labelled ("Oct 29, 9:14 AM PDT", #447). */
-const formatPt = (iso: string) => formatDateTime(iso);
+/**
+ * When a link stops working, in days and the day (rirs-26): "in 7 days, Nov 5". A time of day
+ * would jump an hour across a daylight-saving change, though the link lasts whole days.
+ */
+export function expiresIn(iso: string, now: number = Date.now()): string {
+  const days = Math.round((new Date(iso).getTime() - now) / 86_400_000);
+  const day = formatDay(iso);
+  if (days <= 0) return `today, ${day}`;
+  if (days === 1) return `tomorrow, ${day}`;
+  return `in ${days} days, ${day}`;
+}
 
 /**
  * Interview a customer (C3): who and what about; then Oracle drafts the questions (a queued
@@ -434,7 +443,7 @@ export function LinkShown({ link }: { link: InterviewLink }) {
         </Button>
       </div>
       <p data-testid="interview-link-terms" className="text-sm font-semibold">
-        Works once · expires {formatPt(link.expires_at)}
+        Works once · expires {expiresIn(link.expires_at)}
       </p>
     </>
   );

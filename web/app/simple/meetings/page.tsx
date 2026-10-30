@@ -4,13 +4,14 @@ import Link from "next/link";
 import { notFound, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, PageSkeleton } from "@/components/ds";
 import { PreRead } from "@/components/simple/meetings/PreRead";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { zoneName } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 import { SIMPLE_MODE } from "../_flag";
@@ -26,7 +27,7 @@ import { SIMPLE_MODE } from "../_flag";
  */
 export default function SimpleMeetings() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton />}>
       <Meetings />
     </Suspense>
   );
@@ -49,9 +50,22 @@ function Meetings() {
     if (o) setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o });
   }
   if (!SIMPLE_MODE) notFound();
-  const when = (at: string) => formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  // qa-simple-decide-50: the zone is said once, in the lead; the rows show the day and time.
+  const when = (at: string) => formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "");
+  // The live reviews are listed under Live only (qa-simple-decide-34).
+  const liveIds = new Set((q.data?.live ?? []).map((m) => m.id));
+  const upcoming = (q.data?.upcoming ?? []).filter((o) => !o.meeting_id || !liveIds.has(o.meeting_id));
   return (
-    <SimplePage title="Meetings" lead={<Button variant="primary" onClick={() => setSheet({})}>Start a review</Button>}>
+    <SimplePage
+      title="Meetings"
+      lead={
+        // qa-simple-decide-38: a one-line lead, as on Decisions; qa-simple-decide-34: one verb, "Start review".
+        <span className="flex flex-wrap items-center gap-3">
+          <span>Start a review of a PRD, join the one that is on, and read past minutes. Times are in {zoneName(zone)}.</span>
+          <Button variant="primary" onClick={() => setSheet({})}>Start review</Button>
+        </span>
+      }
+    >
       {q.loading && !q.data && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {q.data && (
@@ -59,7 +73,7 @@ function Meetings() {
           {preRead && <PreRead review={preRead} />}
           {preReadParam && !preRead && <SimpleEmpty testId="meetings-pre-read-gone">This review is no longer scheduled.</SimpleEmpty>}
           <SimpleSection title="Live" testId="meetings-live">
-            {q.data.live.length === 0 && <SimpleEmpty testId="meetings-live-empty">No meeting is on now.</SimpleEmpty>}
+            {q.data.live.length === 0 && <p className="simple-meta" data-testid="meetings-live-empty">No meeting is on now.</p>}
             <ul className="space-y-2">
               {q.data.live.map((m) => (
                 <li key={m.id} className="flex flex-wrap items-center justify-between gap-2">
@@ -72,12 +86,23 @@ function Meetings() {
             </ul>
           </SimpleSection>
           <SimpleSection title="Upcoming" testId="meetings-upcoming">
-            {q.data.upcoming.length === 0 && <SimpleEmpty testId="meetings-upcoming-empty">No review is scheduled. Rituals in Detailed schedule them.</SimpleEmpty>}
+            {upcoming.length === 0 && <SimpleEmpty testId="meetings-upcoming-empty">No review is scheduled. Rituals in Detailed schedule them.</SimpleEmpty>}
             <ul className="space-y-2">
-              {q.data.upcoming.map((o) => (
+              {upcoming.map((o) => (
                 <li key={o.occurrence_id ?? `${o.ritual_id}|${o.due_at}`} data-testid="meetings-upcoming-row" className="flex flex-wrap items-center justify-between gap-2">
                   <span>
                     <strong>{o.ritual_title}</strong> · {when(o.due_at)} · {o.length_min} min · {o.attendees.map((a) => a.name).join(", ")}
+                    {/* qa-simple-decide-37: its pre-read and agenda before it starts. */}
+                    {o.occurrence_id ? (
+                      <>
+                        {" · "}
+                        <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/meetings?pre_read=${o.occurrence_id}`} data-testid="meetings-pre-read-link">
+                          Pre-read and agenda
+                        </Link>
+                      </>
+                    ) : (
+                      <span className="simple-small"> · Pre-read not ready yet</span>
+                    )}
                   </span>
                   {o.meeting_id ? (
                     <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/meetings/${o.meeting_id}`}>Open</Link>

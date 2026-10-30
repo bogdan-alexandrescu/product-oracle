@@ -3,7 +3,8 @@
 Home's Set up checklist reads it. Every step is worked out live from tables that already
 record it (connections, sources, users, invites, tenant_settings); nothing is stored
 besides the person's ``setup_hidden`` preference. The cost is fixed whatever the
-company's size: one statement per step, plus one for the preferences and the welcome.
+company's size: one statement per step (two for the baseline build), plus one for the
+preferences and the welcome.
 
 It also says whether Home welcomes the caller (A1 welcome, #140): a member who joined
 through an invite, however long ago, until they dismiss it (their ``welcome_dismissed``
@@ -29,7 +30,8 @@ from oracle.connections.models import Connection
 from oracle.members.models import Invite
 from oracle.preferences.models import UserPreference
 from oracle.runs.models import Run
-from oracle.sources.models import Source
+from oracle.runs.service import BUILD_UNDER_WAY
+from oracle.sources.models import Source, SourceItem
 from oracle.sources.service import company_domains
 from oracle.tenant_settings import TenantSetting
 
@@ -59,6 +61,10 @@ class SetupStep(BaseModel):
     # The single domain when there is exactly one; build_baseline: when the last build
     # finished (ISO 8601).
     detail: str | None = None
+    # invite: the invites still open, beside the people who joined ("4 people · 3 invited").
+    invited: int | None = None
+    # build_baseline: the Build the baseline run under way, if any (Home links to it).
+    run_id: str | None = None
 
 
 class SetupOut(BaseModel):
@@ -92,8 +98,14 @@ async def _connect(db: AsyncSession, principal: Principal) -> SetupStep:
 
 
 async def _sources(db: AsyncSession, principal: Principal) -> SetupStep:
+    """Done once a source of the person's holds something to read: an empty source (an
+    Uploads source with no files, a source never synced) gives the baseline nothing, so
+    it does not tick the step (qa-onboarding-11). Counts those sources."""
     n = await db.scalar(
-        select(func.count()).select_from(Source).where(Source.owner_user_id == principal.user_id)
+        select(func.count(func.distinct(Source.id)))
+        .select_from(Source)
+        .join(SourceItem, SourceItem.source_id == Source.id)
+        .where(Source.owner_user_id == principal.user_id, SourceItem.deleted_at.is_(None))
     )
     return SetupStep(key="sources", done=bool(n), count=n)
 
@@ -108,7 +120,9 @@ async def _invite(db: AsyncSession, principal: Principal) -> SetupStep:
     )
     row = (await db.execute(select(members.scalar_subquery(), invites.scalar_subquery()))).one()
     people, open_invites = row
-    return SetupStep(key="invite", done=people >= 2 or open_invites >= 1, count=people)
+    return SetupStep(
+        key="invite", done=people >= 2 or open_invites >= 1, count=people, invited=open_invites
+    )
 
 
 async def _domains(db: AsyncSession, principal: Principal) -> SetupStep:
@@ -153,16 +167,24 @@ async def _timezone(db: AsyncSession, principal: Principal) -> SetupStep:
 
 
 async def _build_baseline(db: AsyncSession, principal: Principal) -> SetupStep:
-    """Done once a Build the baseline run succeeded (B1); detail: the last one's finish."""
+    """Done once a Build the baseline run succeeded (B1); detail: the last one's finish;
+    run_id: the build under way, if any (the first started, as the one-at-a-time rule names)."""
     finished = await db.scalar(
         select(func.max(func.coalesce(Run.finished_at, Run.created_at))).where(
             Run.flow == "baseline", Run.status == "succeeded"
         )
     )
+    under_way = await db.scalar(
+        select(Run.id)
+        .where(Run.flow == "baseline", Run.status.in_(BUILD_UNDER_WAY))
+        .order_by(Run.created_at)
+        .limit(1)
+    )
     return SetupStep(
         key="build_baseline",
         done=finished is not None,
         detail=finished.isoformat() if finished else None,
+        run_id=str(under_way) if under_way is not None else None,
     )
 
 

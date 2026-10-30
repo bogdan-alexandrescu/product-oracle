@@ -22,8 +22,8 @@ const OTHER = "/simple/one-pagers/checkout-redesign";
 const LINE_2 = "A setup checklist that shows the next step";
 
 async function editLine2(page: Page, text: string) {
-  await page.getByRole("button", { name: "Edit line 2" }).click();
-  await page.getByLabel("Line 2").fill(text);
+  await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+  await page.getByLabel("New wording for").fill(text);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.locator('[data-line="bets-1"]')).toHaveAttribute("data-state", "edited");
 }

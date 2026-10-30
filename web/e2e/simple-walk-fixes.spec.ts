@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -41,7 +41,6 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { width: 1366, height: 820 };
 const PHONE = { width: 390, height: 844 };
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom of the screen). */
 async function tap(l: Locator) {
@@ -68,8 +67,7 @@ for (const phone of [false, true]) {
       test(`a roadmap item's flow shows up when drawn, without a reload (${where})`, async ({ page }) => {
         await login(page);
         await page.goto("/simple/roadmap");
-        await expect(bar(page, "alert-digest")).toBeVisible();
-        await bar(page, "alert-digest").click();
+        await openRoadmapItem(page, "alert-digest");
         const card = page.getByTestId("floating-card");
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
         await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
@@ -82,20 +80,19 @@ for (const phone of [false, true]) {
       test(`a one-pager bet's thumbnail shows its drawn flow without a reload (${where})`, async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        const wide = page.getByRole("group", { name: "User flow of bet 3" });
+        const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
         await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await tap(wide.getByRole("button", { name: "Ask Oracle to draw it" }));
         await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
-        await expect(wide.getByRole("button", { name: "Flow for bet 3" })).toBeVisible();
+        await expect(wide.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" })).toBeVisible();
         await expect(wide).not.toContainText("No flow yet");
       });
 
       test(`a drawing that fails says so and Retry draws it (${where})`, async ({ page }) => {
         await login(page);
         await page.goto("/simple/roadmap");
-        await expect(bar(page, "alert-export")).toBeVisible();
-        await bar(page, "alert-export").click();
+        await openRoadmapItem(page, "alert-export");
         const card = page.getByTestId("floating-card");
         await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
         await expect(card.getByTestId("flow-empty")).toContainText("Oracle could not draw this flow");
@@ -109,8 +106,7 @@ for (const phone of [false, true]) {
       test(`a failed redraw with no open comment still offers Retry (${where})`, async ({ page }) => {
         await login(page);
         await page.goto("/simple/roadmap");
-        await expect(bar(page, "alert-mobile")).toBeVisible();
-        await bar(page, "alert-mobile").click();
+        await openRoadmapItem(page, "alert-mobile");
         const card = page.getByTestId("floating-card");
         // The flow pick's row says so under the drawing, with Retry.
         const failed = card.getByTestId("flow-row").getByTestId("flow-failed");
@@ -130,8 +126,7 @@ for (const phone of [false, true]) {
       test(`the item card names the PRD's F-code, not the section key (${where})`, async ({ page }) => {
         await login(page, "viewer@example.com");
         await page.goto("/simple/roadmap");
-        await expect(bar(page, "alert-digest")).toBeVisible();
-        await bar(page, "alert-digest").click();
+        await openRoadmapItem(page, "alert-digest");
         const reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
         await expect(reasons).toContainText("F-06 Weekly digest of fired alerts.");
         await expect(reasons).not.toContainText("section f-06");

@@ -17,6 +17,7 @@ import {
   Panel,
   Split,
 } from "@/components/ds";
+import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
 import { ProblemList, TemplateBodyEditor, WarningList, useTemplateCheck } from "@/components/TemplateBodyEditor";
 import { Loading } from "@/components/ui";
@@ -33,7 +34,7 @@ function message(e: unknown) {
 }
 
 const BACK = (
-  <Link href="/settings/templates" className="hover:text-text hover:underline">
+  <Link href="/settings/templates" className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11">
     ← Templates
   </Link>
 );
@@ -176,7 +177,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               <input className={INPUT} value={nameValue} onChange={(e) => setName(e.target.value)} />
             </Field>
             <Field label="Description">
-              <input className={INPUT} value={descriptionValue} onChange={(e) => setDescription(e.target.value)} />
+              <GrowingTextarea value={descriptionValue} onChange={(e) => setDescription(e.target.value)} />
             </Field>
             <div>
               <Button onClick={saveDetails} disabled={!detailsChanged || !nameValue.trim() || busy !== null}>
@@ -194,9 +195,9 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
         <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
         {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
         {latest.suggest_when && (
-          <div className="flex min-h-8 items-center gap-2.5">
-            <span className="flex-1">Suggested when</span>
-            <InfoTip label="Suggested when">{latest.suggest_when}</InfoTip>
+          <div data-testid="suggest-when" className="flex flex-col gap-0.5 py-1.5">
+            <span>Suggested when</span>
+            <span className="font-semibold break-words">{latest.suggest_when}</span>
           </div>
         )}
       </InspectorSection>

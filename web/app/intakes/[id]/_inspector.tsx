@@ -12,7 +12,7 @@ import { useMe, type Role } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { DECIDED_GAP, HARD_BLOCKERS, categoryNote, criticalCount, tally, unknownGaps, type Batch, type Gap, type Summary } from "./_lib";
+import { DECIDED_GAP, HARD_BLOCKERS, categoryNote, criticalCount, holdCount, tally, unknownGaps, type Batch, type Gap, type Summary } from "./_lib";
 
 type Decision = Schemas["DecisionIn"]["decision"];
 
@@ -143,7 +143,7 @@ function missingGaps(s: Summary): Summary["gaps"] {
 /** Where the brief stands, as the inspector's chip says it: archived, blocked, open critical questions, or ready. */
 export function readiness(s: Summary): { label: string; kind: ChipKind } {
   if (s.intake.status === "archived") return { label: "Archived", kind: "na" };
-  if (s.readiness.gate === "blocked") return { label: `${criticalCount(s.readiness.blocking_gap_ids.length)} open`, kind: "crit" };
+  if (s.readiness.gate === "blocked") return { label: holdCount(s.readiness.blocking_gap_ids.length), kind: "crit" };
   const missing = missingGaps(s).length;
   if (missing > 0) return { label: `${criticalCount(missing)} open`, kind: "warn" };
   return { label: "Ready to draft", kind: "pass" };
@@ -168,7 +168,7 @@ export function IntakeInspector({
   /** Unused (#370: the capabilities decide); kept for the intake shell. */
   role?: Role | null;
   onChanged: () => void;
-  /** The question that asks about a gap, when one was asked (qa-docs-19: it gets an Answer). */
+  /** The question that asks about a gap, when one was asked (qa-docs-19: it gets a way to it). */
   questionFor?: (gapId: string) => string | null;
   /** Shows that question in the thread, ready to answer. */
   onAnswer?: (questionId: string) => void;
@@ -200,7 +200,7 @@ export function IntakeInspector({
       stats={[
         { label: "Open", value: counts.open, testId: "stat-open" },
         { label: "Answered", value: counts.answered, testId: "stat-answered" },
-        { label: "Critical", value: gate.open_critical, tone: gate.open_critical ? "crit" : undefined, testId: "stat-critical" },
+        { label: "Critical open", value: gate.open_critical, tone: gate.open_critical ? "crit" : undefined, testId: "stat-critical" },
       ]}
     >
       <InspectorSection testId="ready-to-draft">
@@ -234,13 +234,14 @@ export function IntakeInspector({
                       {[categoryNote(g), unknown.has(g.id) && "answered “I don't know”"].filter(Boolean).join(" · ")}
                     </span>
                   )}
-                  {/* qa-docs-19: each open question has a way to answer it, in the thread. */}
+                  {/* qa-docs-19: each open question has a way to answer it, in the thread.
+                      qa-docs-23: the thread is the one place to answer; this takes you there. */}
                   {(() => {
                     const q = questionFor?.(g.id);
                     return q && onAnswer ? (
                       <div className="mt-1">
-                        <Button variant="secondary" aria-label={`Answer: ${g.statement}`} onClick={() => onAnswer(q)}>
-                          Answer
+                        <Button variant="secondary" aria-label={`Go to question: ${g.statement}`} onClick={() => onAnswer(q)}>
+                          Go to question
                         </Button>
                       </div>
                     ) : (
@@ -258,7 +259,7 @@ export function IntakeInspector({
         ) : (
           <div className="flex flex-col gap-2.5">
             <Chip kind="crit" dot>
-              {criticalCount(blocking.length)} open
+              {holdCount(blocking.length)}
             </Chip>
             <ul className="flex flex-col gap-2.5">
               {blocking.map((g) => (

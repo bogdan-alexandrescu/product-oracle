@@ -56,6 +56,8 @@ async function nameLeadFromSetup(page: Page) {
 async function setZoneFromSetup(page: Page) {
   await row(page, "timezone").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#timezone$/);
+  // Save waits for a pick: with none chosen the zone stays unset.
+  await page.getByTestId("timezone-panel").getByLabel("Company time zone").selectOption("America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await backToHome(page);
@@ -64,8 +66,9 @@ async function setZoneFromSetup(page: Page) {
 async function confirmHorizonsFromSetup(page: Page) {
   await row(page, "horizons").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#horizons$/);
-  await page.locator("#horizons").getByRole("button", { name: "Confirm" }).click();
-  await expect(page.locator("#horizons").getByRole("button", { name: "Reset" })).toBeVisible();
+  await page.locator("#horizons").getByRole("button", { name: "Save" }).click();
+  await expect(page.locator("#horizons").getByRole("status")).toContainText("Saved");
+  await expect(page.locator("#horizons").getByRole("button", { name: "Reset to defaults" })).toBeVisible();
   await backToHome(page);
 }
 
@@ -113,16 +116,16 @@ test("setup: Connect tools opens Connections and Back to Home shows it done", as
   await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 8");
   await expect(row(page, "connect")).toHaveAttribute("data-done", "true");
   await expect(row(page, "connect").getByTestId("setup-status")).toHaveText("1 connected");
-  // Another settings tab drops the way back.
-  await row(page, "connect").getByRole("link", { name: "Open" }).click();
+  // Another settings tab drops the way back. A done step's button says Change (qa-onboarding-37).
+  await row(page, "connect").getByRole("link", { name: "Change" }).click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-members").click();
   await expect(page).toHaveURL(/\/settings\/members$/);
   await expect(page.getByRole("link", { name: "Back to Home" })).toHaveCount(0);
 });
 
-test("setup: Horizons opens the Company page with the defaults and Confirm ticks it", async ({ page }) => {
+test("setup: Horizons opens the Company page with the defaults and Save ticks it", async ({ page }) => {
   // protects=checking the horizons from the checklist; fails_when=the page shows other
-  // defaults, Confirm stores nothing, or the step stays open; no_claim=the API's validation.
+  // defaults, Save stores nothing, or the step stays open; no_claim=the API's validation.
   await newCompany(page);
   await login(page);
   await row(page, "horizons").getByRole("link", { name: "Open" }).click();
@@ -133,9 +136,10 @@ test("setup: Horizons opens the Company page with the defaults and Confirm ticks
   await expect(horizons.getByLabel("Next").locator("option:checked")).toHaveText("Next 2 quarters");
   await expect(horizons.getByLabel("From")).toHaveValue("12");
   await expect(horizons.getByLabel("To")).toHaveValue("24");
-  await expect(horizons.getByRole("button", { name: "Reset" })).toHaveCount(0);
-  await horizons.getByRole("button", { name: "Confirm" }).click();
-  await expect(horizons.getByRole("button", { name: "Reset" })).toBeVisible();
+  await expect(horizons.getByRole("button", { name: "Reset to defaults" })).toHaveCount(0);
+  await horizons.getByRole("button", { name: "Save" }).click();
+  await expect(horizons.getByRole("status")).toHaveText("Saved · Back to Home");
+  await expect(horizons.getByRole("button", { name: "Reset to defaults" })).toBeVisible();
   await backToHome(page);
   await expect(row(page, "horizons")).toHaveAttribute("data-done", "true");
   await expect(row(page, "horizons").getByTestId("setup-status")).toHaveText("Checked");
@@ -148,21 +152,21 @@ test("setup: a change shows Save, a bad span shows the error, Reset reopens the 
   await newCompany(page);
   await login(page);
   await confirmHorizonsFromSetup(page);
-  await row(page, "horizons").getByRole("link", { name: "Open" }).click();
+  await row(page, "horizons").getByRole("link", { name: "Change" }).click();
   const horizons = page.locator("#horizons");
   await expect(horizons.getByRole("button", { name: "Save" })).toHaveCount(0);
   await horizons.getByLabel("From").fill("6");
   await horizons.getByRole("button", { name: "Save" }).click();
-  await expect(horizons.getByRole("alert")).toContainText("long_from_months must start after Next ends (at least 9 months)");
+  await expect(horizons.getByRole("alert")).toContainText("'From' must start after Next ends (at least 9 months)");
   await horizons.getByLabel("From").fill("18");
   await horizons.getByLabel("To").fill("30");
   await horizons.getByRole("button", { name: "Save" }).click();
   await expect(horizons.getByRole("alert")).toHaveCount(0);
   await expect(horizons.getByRole("button", { name: "Save" })).toHaveCount(0);
-  await horizons.getByRole("button", { name: "Reset" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Reset" }).click();
+  await horizons.getByRole("button", { name: "Reset to defaults" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Reset to defaults" }).click();
   await expect(horizons.getByLabel("From")).toHaveValue("12");
-  await expect(horizons.getByRole("button", { name: "Confirm" })).toBeVisible();
+  await expect(horizons.getByRole("button", { name: "Save" })).toBeVisible();
   await backToHome(page);
   await expect(row(page, "horizons")).toHaveAttribute("data-done", "false");
 });
@@ -180,7 +184,7 @@ test("setup: with Now on two quarters, Next still reads as the next quarters", a
   await horizons.getByLabel("From").fill("18");
   await horizons.getByLabel("To").fill("30");
   await horizons.getByRole("button", { name: "Save" }).click();
-  await expect(horizons.getByRole("button", { name: "Reset" })).toBeVisible();
+  await expect(horizons.getByRole("button", { name: "Reset to defaults" })).toBeVisible();
   await page.reload();
   await expect(horizons.getByLabel("Now").locator("option:checked")).toHaveText("Current and next quarter");
   await expect(horizons.getByLabel("Next").locator("option:checked")).toHaveText("Next 2 quarters");
@@ -260,7 +264,8 @@ test("setup: on a phone each row keeps one line and nothing scrolls sideways", a
   await newCompany(page);
   await login(page);
   await expect(panel(page)).toBeVisible();
-  const opens = panel(page).getByRole("link", { name: "Open" });
+  // Open on the six steps to do, Change on the two done (qa-onboarding-37).
+  const opens = panel(page).getByTestId("setup-action");
   await expect(opens).toHaveCount(8);
   for (const link of await opens.all()) {
     await link.scrollIntoViewIfNeeded();

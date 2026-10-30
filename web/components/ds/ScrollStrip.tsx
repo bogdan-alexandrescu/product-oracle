@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 
 import { Icon } from "./Icon";
 
@@ -52,14 +52,7 @@ function reveal(s: HTMLElement) {
   s.scrollLeft = showing(s, items, span);
 }
 
-export function ScrollStrip({
-  children,
-  className = "",
-  stripClassName = "",
-  itemsName,
-  ref,
-  ...rest
-}: Omit<HTMLAttributes<HTMLDivElement>, "className"> & {
+type StripProps = Omit<HTMLAttributes<HTMLDivElement>, "className"> & {
   children: ReactNode;
   /** The wrapper (strip plus buttons). */
   className?: string;
@@ -68,7 +61,33 @@ export function ScrollStrip({
   /** What the strip holds, for its chevrons' names ("tabs": Scroll tabs right); none: Scroll right. */
   itemsName?: string;
   ref?: Ref<HTMLDivElement>;
-}) {
+};
+
+/**
+ * `wrap`: the items wrap onto more lines instead of scrolling, with no chevrons, so every
+ * item is in view (a section's few tabs on a phone, qa-plan-4).
+ */
+export function ScrollStrip({ wrap = false, ...props }: StripProps & { wrap?: boolean }) {
+  if (!wrap) return <ScrollingStrip {...props} />;
+  const { children, className = "", stripClassName = "", itemsName, ref, ...rest } = props;
+  void itemsName;
+  return (
+    <div className={`flex min-w-0 items-stretch ${className}`}>
+      <div ref={ref} {...rest} data-wrap className={`flex min-w-0 flex-1 flex-wrap ${stripClassName}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ScrollingStrip({
+  children,
+  className = "",
+  stripClassName = "",
+  itemsName,
+  ref,
+  ...rest
+}: StripProps) {
   const el = useRef<HTMLDivElement | null>(null);
   const [more, setMore] = useState({ left: false, right: false });
 
@@ -209,12 +228,18 @@ export function ScrollStrip({
     );
   };
 
+  // cld-2: the spacer's own gap is taken back (a negative start margin as wide as the strip's
+  // gap-N, a quarter rem each), so it adds its 1 px only.
+  const gap = /(?:^|\s)gap(?:-x)?-(\d+(?:\.\d+)?)(?=\s|$)/.exec(stripClassName)?.[1];
+  const spacer = { "--strip-gap": gap ? `${Number(gap) * 0.25}rem` : "0px" } as CSSProperties;
+
   return (
     <div className={`flex min-w-0 items-stretch ${className}`}>
       {overflow && button(-1)}
       <div
         ref={setRef}
         {...rest}
+        style={{ ...spacer, ...rest.style }}
         id={id}
         data-more-left={more.left || undefined}
         data-more-right={more.right || undefined}
@@ -224,7 +249,7 @@ export function ScrollStrip({
         // The 1 px spacer after the last item: items have fractional widths while the scroll
         // range is whole pixels, so without it the last item ends up to a pixel past the
         // strip's edge at the end of the scroll, clipped there.
-        className={`relative flex min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-fade after:w-px after:flex-none after:content-[''] [&>*]:snap-start ${stripClassName}`}
+        className={`relative flex min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-fade after:-ms-[var(--strip-gap)] after:w-px after:flex-none after:content-[''] [&>*]:snap-start ${stripClassName}`}
       >
         {children}
       </div>

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 
 import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -17,6 +17,9 @@ type Data = { providers: Provider[]; connections: Connection[] };
 
 const STATUS_KIND: Record<Connection["status"], ChipKind> = { active: "pass", expired: "warn", revoked: "na", error: "crit" };
 const STATUS_LABEL = { active: "Connected", expired: "Expired", revoked: "Revoked", error: "Error" } as const;
+/** An active row's chip says how it was connected, in words (qa-onboarding-22). */
+const connectedBy = (mode: Connection["auth_mode"]) =>
+  mode === "oauth" ? "Connected by signing in" : "Connected with a token";
 /** The chip on a card: what a provider pulls in, in a word or two. */
 const KIND_SHORT: Record<string, string> = {
   github: "Repos",
@@ -72,7 +75,7 @@ export function ConnectionsSettings() {
           <>
             {q.data && (
               <Chip kind="line">
-                <span className="tnum">{active}</span> active
+                <span className="tnum">{active}</span> connected
               </Chip>
             )}
             {broken > 0 && (
@@ -181,8 +184,10 @@ function ProviderCard({
           </Button>
         )}
         {!pasting && (
+          // With an account already here, its row's Reconnect is the one way to renew it;
+          // this adds another account (qa-onboarding-22).
           <Button variant="ghost" className="first:-ml-2.5" onClick={() => setPasting(true)}>
-            Paste a token
+            {connections.length ? "Add another account" : "Paste a token"}
           </Button>
         )}
       </div>
@@ -241,9 +246,8 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
           {name}
         </span>
         <Chip kind={STATUS_KIND[c.status]} dot>
-          {STATUS_LABEL[c.status]}
+          {c.status === "active" ? connectedBy(c.auth_mode) : STATUS_LABEL[c.status]}
         </Chip>
-        <Chip kind="line">{c.auth_mode === "oauth" ? "signed in" : "token"}</Chip>
         {c.scopes.length > 0 && (
           <InfoTip label={`${name} scopes`}>Scopes: {c.scopes.join(", ")}</InfoTip>
         )}
@@ -315,12 +319,14 @@ function TokenForm({
   const [label, setLabel] = useState("");
   const [endpoint, setEndpoint] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPending(true);
     setError(null);
+    setTokenError(null);
     try {
       await unwrap(
         api.POST("/v1/connections/{provider}/token", {
@@ -333,7 +339,10 @@ function TokenForm({
       close();
       await reload();
     } catch (e) {
-      setError(errorMessage(e));
+      // The provider turned the token down (400): say so in words under the field (qa-settings-9).
+      const rejected = e instanceof ApiError && e.status === 400;
+      setTokenError(rejected ? `${provider.name} did not accept this token. Check that you copied all of it, then paste it again.` : null);
+      setError(rejected ? null : errorMessage(e));
     } finally {
       setPending(false);
     }
@@ -346,28 +355,40 @@ function TokenForm({
       aria-label={`${provider.name} token`}
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field
-          label="Token"
-          htmlFor={`${id}-token`}
-          tip={
-            provider.token_help ? (
-              <InfoTip label={`${provider.name} tokens`} align="start">
-                {provider.token_help}
-              </InfoTip>
-            ) : undefined
-          }
-        >
+        {/* The token's help sits under the field, not in an (i) tip: the tip, opened under the
+            pointer or the first Tab, covered the card (qa-onboarding-23). Its error sits here too. */}
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor={`${id}-token`} className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
+            Token
+          </label>
           <input
             id={`${id}-token`}
             type="password"
             autoComplete="off"
             spellCheck={false}
             required
+            // Opening the form puts the cursor in the token field.
+            autoFocus
+            aria-invalid={tokenError ? true : undefined}
+            aria-describedby={[provider.token_help ? `${id}-help` : "", tokenError ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined}
             value={token}
-            onChange={(e) => setToken(e.target.value)}
+            onChange={(e) => {
+              setToken(e.target.value);
+              setTokenError(null);
+            }}
             className={`${INPUT} font-mono`}
           />
-        </Field>
+          {provider.token_help && (
+            <p id={`${id}-help`} className="text-sm text-text2">
+              {provider.token_help}
+            </p>
+          )}
+          {tokenError && (
+            <p id={`${id}-error`} role="alert" className="text-sm font-medium text-crit" data-testid="token-error">
+              {tokenError}
+            </p>
+          )}
+        </div>
         <Field label="Label (optional)">
           <input value={label} onChange={(e) => setLabel(e.target.value)} className={INPUT} maxLength={200} />
         </Field>
@@ -387,13 +408,14 @@ function TokenForm({
           </Field>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" variant="solid" disabled={pending || !token.trim()}>
           {pending ? "Checking…" : "Connect"}
         </Button>
         <Button variant="ghost" onClick={close}>
           Cancel
         </Button>
+        {!token.trim() && <span className="text-sm text-text2">Paste a token to connect</span>}
       </div>
       {error && <Notice tone="error">{error}</Notice>}
     </form>

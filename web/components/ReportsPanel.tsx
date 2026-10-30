@@ -85,7 +85,8 @@ export function ReportsPanel({
         )}
         {job && job.status !== "succeeded" && <JobStatusChip status={job.status} at={job.finished_at} />}
         <span className="ml-auto flex gap-1.5">
-          {canAct && (
+          {/* qa-docs-13: after a failed job the alert's Retry is the one way to write again. */}
+          {canAct && job?.status !== "failed" && (
             <Button disabled={busy} onClick={generate}>
               {r ? "Write again" : "Write reports"}
             </Button>

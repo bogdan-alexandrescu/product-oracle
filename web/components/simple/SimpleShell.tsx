@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Mark } from "@/components/ds/Brand";
 import { Icon, type IconName } from "@/components/ds/Icon";
 import { ModeSwitch } from "@/components/ds/ModeSwitch";
 import { TAB_BAR } from "@/components/ds/rail";
-import { setPanelOpen } from "@/components/hop/open-state";
+import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
@@ -47,6 +47,7 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [meetings, setMeetings] = useState<number | null>(null);
+  const [live, setLive] = useState(0);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
@@ -71,13 +72,18 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     if (!enabled) return;
     let alive = true;
     unwrap(api.GET("/v1/simple/meetings"))
-      .then((m) => alive && setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length))
+      .then((m) => {
+        if (!alive) return;
+        setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length);
+        setLive(m.live.length);
+      })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, [enabled, changes, meetingsPath]);
-  return counts && { ...counts, Meetings: meetings ?? 0 };
+  // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now (else the count is neutral).
+  return counts && { ...counts, Meetings: meetings ?? 0, "Meetings live": live };
 }
 
 /** What a rail count counts, said in words (its label and tooltip). */
@@ -115,6 +121,38 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
     setLastPath(pathname);
     setMore(false);
   }
+  // qa-simple-home-2: opening Ask (another surface) closes the More sheet.
+  const askOpen = usePanelOpen();
+  const [lastAsk, setLastAsk] = useState(askOpen);
+  if (lastAsk !== askOpen) {
+    setLastAsk(askOpen);
+    if (askOpen) setMore(false);
+  }
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  // qa-simple-home-2: Escape closes the sheet and returns focus to More; a tap or focus
+  // outside it (the page, the header's Ask) closes it too.
+  useEffect(() => {
+    if (!more) return;
+    const inside = (t: EventTarget | null) => t instanceof Node && (!!sheetRef.current?.contains(t) || !!moreButton.current?.contains(t));
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setMore(false);
+      moreButton.current?.focus();
+    };
+    const onOutside = (e: Event) => {
+      if (!inside(e.target)) setMore(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onOutside);
+    document.addEventListener("focusin", onOutside);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onOutside);
+      document.removeEventListener("focusin", onOutside);
+    };
+  }, [more]);
   const off = !!me && capsReady && !simpleMode;
   useEffect(() => {
     if (off) router.replace(switchTarget(pathname, "detailed"));
@@ -133,7 +171,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       >
         <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
-          <span className="font-display text-[18px] font-semibold text-rail-active-text">Oracle</span>
+          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">Product Oracle</span>
         </span>
         {SIMPLE_DESTINATIONS.map((d) => (
           <span key={d.href} aria-hidden className="flex h-12 items-center gap-3 px-3">
@@ -148,9 +186,20 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   const tabDests = TABS.map((t) => SIMPLE_DESTINATIONS.find((d) => d.label === t)!);
   const moreDests = SIMPLE_DESTINATIONS.filter((d) => !TABS.includes(d.label));
   const moreActive = moreDests.some((d) => isActive(pathname, d));
+  // qa-simple-home-29: the phone shows the rail's counts too; More sums the counts in its sheet.
+  const countOf = (d: Dest) => counts?.[d.label] ?? 0;
+  const moreCount = moreDests.reduce((sum, d) => sum + countOf(d), 0);
+  const tabBadge = (id: string, n: number, words: string) =>
+    n > 0 && (
+      <span id={id} data-testid={id} aria-label={words} title={words} className="simple-count simple-count-tab tnum">
+        {n}
+      </span>
+    );
 
   return (
     <>
+      {/* qa-simple-home-6: from 1200 px the open Ask panel sits beside the page (it keeps the shell's third column), not over it. */}
+      {askOpen && me && !/\/present\/?$/.test(pathname) && <span aria-hidden data-testid="simple-ask-room" className="col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block" />}
       <nav
         aria-label="Simple"
         data-testid="simple-nav"
@@ -158,7 +207,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       >
         <Link href={SIMPLE_HOME} aria-label="Product Oracle" data-testid="simple-nav-brand" className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
-          <span className="font-display text-[18px] font-semibold text-rail-active-text">Oracle</span>
+          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">Product Oracle</span>
         </Link>
         <ModeSwitch placement="wide" />
         {SIMPLE_DESTINATIONS.map((d) => {
@@ -177,7 +226,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {n > 0 && (
-                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className="simple-count tnum">
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className={`simple-count tnum ${d.label === "Meetings" && !counts?.["Meetings live"] ? "simple-count-quiet" : ""}`}>
                   {n}
                 </span>
               )}
@@ -197,7 +246,10 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         <div data-testid="simple-person" className="flex items-center gap-3 border-t border-line pt-3">
           {account("rail")}
           <span className="flex min-w-0 flex-col pt-2 leading-5">
-            <span className="truncate text-[15px] font-semibold text-rail-active-text">{me?.name || me?.email || ""}</span>
+            {/* qa-simple-home-25: the name (or email) in full, wrapped, never cut to "viewer@example.c…". */}
+            <span data-testid="simple-person-name" title={me?.email || me?.name || undefined} className="text-[15px] font-semibold [overflow-wrap:anywhere] text-rail-active-text">
+              {me?.name || me?.email || ""}
+            </span>
             <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>
           </span>
         </div>
@@ -210,23 +262,31 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       >
         {tabDests.map((d) => {
           const active = isActive(pathname, d) && !more;
+          const id = `simple-tab-${d.testId.slice("simple-nav-".length)}`;
+          const n = countOf(d);
           return (
             <Link
               key={d.href}
               href={d.href}
-              data-testid={`simple-tab-${d.testId.slice("simple-nav-".length)}`}
+              data-testid={id}
               aria-current={active ? "page" : undefined}
+              aria-label={d.label}
+              aria-describedby={n > 0 ? `${id}-count` : undefined}
               className={`relative flex min-w-0 flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
                 active ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
               }`}
             >
               <Icon name={d.icon} stroke={1.7} />
               <span className="max-w-full truncate">{d.label}</span>
+              {tabBadge(`${id}-count`, n, countWords(d.label, n))}
             </Link>
           );
         })}
         <button
+          ref={moreButton}
           type="button"
+          aria-label="More"
+          aria-describedby={moreCount > 0 ? "simple-tab-more-count" : undefined}
           aria-expanded={more}
           aria-controls="simple-more-sheet"
           data-testid="simple-tab-more"
@@ -237,29 +297,39 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         >
           <Icon name="more" stroke={1.7} />
           More
+          {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`)}
         </button>
       </nav>
       {more && (
         <div
+          ref={sheetRef}
           id="simple-more-sheet"
+          data-testid="simple-more-sheet"
           role="dialog"
           aria-label="More"
           className="fixed inset-x-0 bottom-[var(--phone-tab-bar)] z-40 hidden rounded-t-inspector border-t border-line bg-surface p-3 shadow-tip max-[600px]:block"
         >
           <ModeSwitch placement="sheet" />
           <ul className="mb-2 grid grid-cols-3 gap-1">
-            {moreDests.map((d) => (
-              <li key={d.href}>
-                <Link
-                  href={d.href}
-                  aria-current={isActive(pathname, d) ? "page" : undefined}
-                  className="flex flex-col items-center gap-1 rounded-xl py-2.5 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
-                >
-                  <Icon name={d.icon} />
-                  {d.label}
-                </Link>
-              </li>
-            ))}
+            {moreDests.map((d) => {
+              const n = countOf(d);
+              const id = `simple-more-${d.testId.slice("simple-nav-".length)}-count`;
+              return (
+                <li key={d.href}>
+                  <Link
+                    href={d.href}
+                    aria-current={isActive(pathname, d) ? "page" : undefined}
+                    aria-label={d.label}
+                    aria-describedby={n > 0 ? id : undefined}
+                    className="relative flex flex-col items-center gap-1 rounded-xl py-2.5 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
+                  >
+                    <Icon name={d.icon} />
+                    {d.label}
+                    {tabBadge(id, n, countWords(d.label, n))}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
           {account("sheet")}
         </div>

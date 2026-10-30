@@ -25,7 +25,7 @@ test("approvals with their notes are listed in the run's Decisions, as the agent
   await expect(items.nth(0)).toHaveText("Baseline · approved by an owner · note: Name an owner for every goal");
 
   // The feature set, approved with the note the later segments must respect.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const featureSet = page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" });
   await featureSet.getByLabel("Note for the agents").fill("Keep bulk import out of v1");
   await featureSet.getByRole("button", { name: "Approve and continue" }).click();

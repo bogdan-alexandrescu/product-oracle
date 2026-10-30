@@ -6,6 +6,7 @@ import { Chip, CodeChip, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, To
 import { namedText } from "@/lib/codes";
 import { percent } from "@/lib/goal-tree";
 
+import { buildRun, type BaselineState } from "./_setup";
 import { assess, changeText, formatFigure, shownGoals, spanMonths, type GoalView, type Point } from "./_goals";
 
 /** One goal: id and title, current over target, confidence ring, trend when there is history, distance to go. */
@@ -153,7 +154,7 @@ function GoalsSkeleton() {
     <ul
       aria-hidden
       data-testid="goals-loading"
-      className="grid grid-cols-4 divide-x divide-line max-[600px]:grid-cols-2 max-[600px]:divide-x-0 max-[600px]:[&>li]:border-b max-[600px]:[&>li:nth-child(odd)]:border-r"
+      className="grid grid-cols-4 divide-x divide-line max-[600px]:grid-cols-1 max-[600px]:divide-x-0 max-[600px]:[&>li]:border-b max-[600px]:[&>li:last-child]:border-b-0"
     >
       {[0, 1, 2, 3].map((i) => (
         <li key={i} className="flex min-w-0 flex-col gap-3 border-line px-4 pt-3.5 pb-3 max-[600px]:px-3">
@@ -177,6 +178,7 @@ export function GoalsPanel({
   loading,
   canImport,
   canInterview = false,
+  baseline,
   testId = "home-goals",
 }: {
   goals: GoalView[] | undefined;
@@ -189,6 +191,8 @@ export function GoalsPanel({
   canImport: boolean;
   /** B6: commenters and up get Make measurable on a goal with No target. */
   canInterview?: boolean;
+  /** Home's baseline step (Set up): a build under way, or the Set up row that starts one. */
+  baseline?: BaselineState;
   /** Home's band by default; Plan shows the same band under its own id. */
   testId?: string;
 }) {
@@ -239,17 +243,32 @@ export function GoalsPanel({
             Oracle reads your sources and proposes your goals; they show here once confirmed. You can also push a
             baseline YAML with <code>oracle push</code>.
           </InfoTip>
-          {canImport && (
-            <LinkButton href="/baseline?build=1" className="ml-auto">
-              Build the baseline
+          {/* qa-onboarding-10, -37: one baseline action on Home. A build under way opens its run;
+              while Set up shows the step, the card points at it rather than start a second build. */}
+          {baseline?.runId ? (
+            <LinkButton href={buildRun(baseline.runId)} className="ml-auto" data-testid="goals-open-build">
+              Open the build
             </LinkButton>
+          ) : baseline?.inSetup ? (
+            <span className="ml-auto text-[15px] text-text2" data-testid="goals-build-in-setup">
+              Build it from Set up, above
+            </span>
+          ) : (
+            canImport && (
+              <LinkButton href="/baseline?build=1" className="ml-auto">
+                Build the baseline
+              </LinkButton>
+            )
           )}
         </div>
       )}
+      {/* qa-shell-18: on a phone, one goal per row, so an odd one never sits beside an empty half. */}
       {shown.length > 0 && (
         <ul
           aria-label="Goals"
-          className="grid divide-x divide-line max-[600px]:grid-cols-2! max-[600px]:divide-x-0 max-[600px]:[&>li]:border-b max-[600px]:[&>li:nth-child(odd)]:border-r"
+          data-testid="goal-cards"
+          // qa-company-32: one goal per row on a phone, so none sits alone at half width.
+          className="grid divide-x divide-line max-[600px]:grid-cols-1! max-[600px]:divide-x-0 max-[600px]:[&>li]:border-b max-[600px]:[&>li:last-child]:border-b-0"
           style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
         >
           {shown.map((g) => (

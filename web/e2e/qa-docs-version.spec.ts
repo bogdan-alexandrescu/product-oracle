@@ -168,9 +168,8 @@ test.describe("desktop", () => {
     const visible = form.getByRole("group", { name: "Visible to" });
     await expect(visible.getByRole("button", { name: "Everyone" })).toHaveAttribute("aria-pressed", "true");
     const ask = form.getByRole("checkbox", { name: "Ask Oracle" });
-    // Alone in it, Oracle answers anyway: the box says so.
-    await expect(ask).toBeChecked();
-    await expect(ask).toBeDisabled();
+    // Alone in it, Oracle answers anyway: said in words (qa-docs-33: no greyed-out ticked box).
+    await expect(ask).toHaveCount(0);
     await expect(form.getByTestId("oracle-rule")).toHaveText("Oracle will reply");
     await visible.getByRole("button", { name: "Only people I pick" }).click();
     await form.getByRole("searchbox", { name: "Find a person" }).fill("approver");

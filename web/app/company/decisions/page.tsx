@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { Avatar, Button, Chip, DataTable, FilterChips, InfoTip, Panel, Sheet, Split, type Column } from "@/components/ds";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
+import { Button, Chip, type Column, DataTable, FilterChips, InfoTip, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
+import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { paths } from "@/lib/api/schema";
 import { useMe } from "@/lib/me";
@@ -65,7 +65,7 @@ function useIsPhone(): boolean {
 
 export default function DecisionsPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <Decisions />
     </Suspense>
   );
@@ -117,6 +117,14 @@ function Decisions() {
   const from = params.get("from") ?? "";
   const q = params.get("q") ?? "";
   const [search, setSearch] = useState(q);
+  // qa-company-9: the list follows the search as it is typed, once typing pauses.
+  useEffect(() => {
+    const next = search.trim();
+    if (next === q) return;
+    const timer = window.setTimeout(() => setParams({ q: next || null, d: null }), 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   // ?propose=1 (a section's or a blocker's "Record a decision") opens the form about it.
   const [proposing, setProposing] = useState(params.get("propose") === "1");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -170,9 +178,9 @@ function Decisions() {
     { keepPrevious: true },
   );
   const rows = useMemo(() => listQ.data?.rows ?? [], [listQ.data]);
-  // The count of what the filters choose from (the class, the run or subject), so a filter
-  // that hides rows reads "2 of 5", never a bare 0.
-  const baseQuery: ListQuery = { class: cls, run_id: run ?? undefined, subject_kind: subject?.kind, subject_id: subject?.id };
+  // The count of what the filters choose from (the run or subject, every kind), so a filter
+  // that hides rows reads "2 of 5", never a bare 0 (qa-company-10: the Kind filter too).
+  const baseQuery: ListQuery = { run_id: run ?? undefined, subject_kind: subject?.kind, subject_id: subject?.id };
   const baseKey = JSON.stringify(baseQuery);
   const totalQ = useQuery(`decisions|total|${baseKey}`, () => loadPages(baseQuery, 1), { keepPrevious: true });
   const total = totalQ.data ? `${totalQ.data.rows.length}${totalQ.data.more ? "+" : ""}` : null;
@@ -183,9 +191,11 @@ function Decisions() {
     fromDef ? `From: ${fromDef.label}` : null,
     q ? `Search: \u201c${q}\u201d` : null,
   ].filter((x): x is string => !!x);
+  const clsLabel = cls === "checkpoint" ? "checkpoint decisions" : "judgement calls";
   const clearFilters = () => {
     setSearch("");
-    setParams({ state: "all", from: null, q: null, d: null });
+    // Every filter, the kind too: one click brings the rows back.
+    setParams({ state: "all", from: null, q: null, d: null, ...(cls !== "all" ? { class: "all" } : {}) });
   };
 
   // The picked decision stays open after it leaves the filtered rows (decided from Needs me).
@@ -212,7 +222,8 @@ function Decisions() {
       header: "No.",
       width: "64px",
       phone: "meta",
-      cell: (d) => <span className="tnum font-mono text-sm text-accent-ink">{d.ref}</span>,
+      // qa-company-39: the number in body text, not a link-coloured code.
+      cell: (d) => <span className="tnum text-sm">{d.ref}</span>,
     },
     // The title wraps: it is what a row is read by, never cut mid-word.
     { key: "title", header: "Title", phone: "title", wrap: true, cell: (d) => <span className="font-medium">{d.title}</span> },
@@ -238,13 +249,14 @@ function Decisions() {
     {
       key: "approver",
       header: "Approver",
-      width: "84px",
+      width: "150px",
       phone: "hide",
+      // qa-company-39: the approver's name, not their initials (cut with an ellipsis, whole on hover).
       cell: (d) => {
         const name = nameOf(d.approver_id, d.approver_email);
         return (
-          <span data-col="approver" title={name ? `${name}${d.approver_email ? ` · ${d.approver_email}` : ""}` : undefined}>
-            <Avatar name={name ?? "?"} />
+          <span data-col="approver" className="block truncate text-sm" title={name ? `${name}${d.approver_email ? ` · ${d.approver_email}` : ""}` : undefined}>
+            {name ?? "—"}
           </span>
         );
       },
@@ -285,7 +297,7 @@ function Decisions() {
       <Split inspector={!phone ? inspector : undefined}>
         <Panel
           title="Decisions"
-          count={listQ.data ? (filtered && total !== null && total !== String(rows.length) ? `${rows.length} of ${total}` : rows.length) : undefined}
+          count={listQ.data ? (total !== null && total !== String(rows.length) ? `${rows.length} of ${total}` : rows.length) : undefined}
           tools={
             <InfoTip label="the decision log" align="end">
               Every product decision is one record with one approver: its options, why it was chosen, what should happen and when to look at it
@@ -404,7 +416,19 @@ function Decisions() {
                   .
                 </p>
               ) : (
-                <p>{hiding.length > 0 ? `No decisions match ${hiding.join(", ")}.` : "No decisions here yet."}</p>
+                <p>
+                  {hiding.length > 0
+                    ? `No decisions match ${hiding.join(", ")}.`
+                    : cls === "all"
+                      ? "No decisions here yet."
+                      : `No ${clsLabel}.`}
+                </p>
+              )}
+              {/* qa-company-10: the Kind filter alone hides every row: one step back to all kinds. */}
+              {!filtered && cls !== "all" && (
+                <Button onClick={() => setClass("all")} data-testid="decisions-all-kinds">
+                  Show all kinds
+                </Button>
               )}
               {filtered && (
                 <Button onClick={clearFilters} data-testid="decisions-clear">
@@ -435,7 +459,7 @@ function Decisions() {
         </Panel>
       </Split>
       {phone && (
-        <Sheet open={sheetOpen && !!detail} title={detail ? `${detail.ref} ${detail.title}` : "Decision"} onClose={() => setSheetOpen(false)} testId="decision-sheet">
+        <Sheet open={sheetOpen && !!detail} title="Decision" onClose={() => setSheetOpen(false)} testId="decision-sheet">
           {inspector}
         </Sheet>
       )}

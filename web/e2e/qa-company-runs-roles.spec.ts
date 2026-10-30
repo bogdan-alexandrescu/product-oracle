@@ -48,7 +48,7 @@ test("an owner gets each row's action", async ({ page }) => {
 test("runs are named by document and flow, with no slug or short id", async ({ page }) => {
   await openRuns(page);
   const table = page.getByTestId("runs-table");
-  await expect(run(page, "team-onboarding").getByRole("link").first()).toHaveText("Team onboarding PRD · Baseline to PRD");
+  await expect(run(page, "team-onboarding").getByRole("link").first()).toHaveText("Team onboarding PRD");
   await expect(run(page, "team-workspaces").getByRole("link").first()).toHaveText("Team workspaces PRD");
   await expect(table).not.toContainText("team-onboarding");
   await expect(table).not.toContainText("usage-alerts-v2");
@@ -67,6 +67,6 @@ test.describe("on a phone", () => {
     await openRuns(page, "viewer");
     await page.waitForTimeout(1000);
     await expect(page.getByTestId("runs-table").getByRole("button", { name: /^(Approve|Decide|Open)$/ })).toHaveCount(0);
-    await expect(run(page, "usage-alerts-v2").locator('td[data-phone="title"]')).toHaveText("Usage alerts v2 PRD · Baseline to PRD");
+    await expect(run(page, "usage-alerts-v2").locator('td[data-phone="title"]')).toHaveText("Usage alerts v2 PRD");
   });
 });

@@ -59,7 +59,7 @@ for (const phone of [false, true]) {
       test("the three steps, the clock and the chat column", async ({ page }) => {
         await start(page);
         await expect(steps(page).getByRole("button", { name: "1 One-pager" })).toHaveAttribute("aria-pressed", "true");
-        const stage = page.getByRole("main", { name: "Stage" });
+        const stage = page.getByRole("region", { name: "Stage" });
         await expect(stage.getByRole("article", { name: "One-pager" })).toBeVisible();
         const clock = page.getByRole("timer", { name: "Meeting clock" });
         await expect(clock).toHaveText(/^0:0\d \/ 60:00$/);
@@ -85,11 +85,11 @@ for (const phone of [false, true]) {
 
       test("changes, an accepted proposal and a comment become the meeting's decisions", async ({ page }) => {
         await start(page);
-        await page.getByRole("button", { name: "Edit line 2" }).click();
-        await page.getByLabel("Line 2").fill("A setup checklist with the next two steps");
+        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+        await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup: “A setup checklist with the next two steps”");
-        await expect(page.getByRole("note").filter({ hasText: "You changed line 2" }).filter({ visible: true })).toContainText(", in Review: Guided setup");
+        await expect(page.getByRole("note").filter({ hasText: "You changed “A setup checklist" }).filter({ visible: true })).toContainText(", in Review: Guided setup");
         await steps(page).getByRole("button", { name: "2 Roadmap" }).click();
         await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
         await expect(allDecisions(page)).toContainText("Moved Setup checklist");
@@ -111,11 +111,11 @@ for (const phone of [false, true]) {
         await start(page);
         await page.getByRole("button", { name: "Approver is here" }).click();
         await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Approver");
-        await page.getByRole("button", { name: "Edit line 3" }).click();
-        await page.getByLabel("Line 3").fill("Invite suggestions from a shared calendar");
+        await page.getByRole("button", { name: "Edit “Invite suggestions from the admin's" }).click();
+        await page.getByLabel("New wording for").fill("Invite suggestions from a shared calendar");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
-        await page.getByRole("button", { name: "Approve", exact: true }).click();
+        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
         await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toContainText("not yet published: Waiting on Approver's approval");
         await expect(allDecisions(page)).toContainText("Approved Guided setup (not yet published: Waiting on Approver's approval)");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("Approved in Review: Guided setup · not yet published: Waiting on Approver's approval");
@@ -124,10 +124,10 @@ for (const phone of [false, true]) {
         await switchTo(page, "commenter@example.com");
         await page.goto(url);
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: /is here/ })).toHaveCount(0);
-        await expect(page.getByTestId("change-mode")).toHaveText("Changes: Everyone");
+        await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Everyone");
       });
 
       test("the presenter lets only named people change things", async ({ page }) => {
@@ -143,7 +143,7 @@ for (const phone of [false, true]) {
         await page.goto("/simple/meetings");
         await switchTo(page, "commenter@example.com");
         await page.goto(url);
-        await expect(page.getByTestId("change-mode")).toHaveText("Changes: Only the presenter");
+        await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Only the presenter");
         await steps(page).getByRole("button", { name: "2 Roadmap" }).click();
         await expect(page.getByRole("region", { name: "Roadmap slice" })).toContainText("Setup checklist");
         await expect(page.getByRole("button", { name: /^Move / })).toHaveCount(0);

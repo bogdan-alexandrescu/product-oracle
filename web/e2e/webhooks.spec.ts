@@ -337,7 +337,7 @@ test("webhooks: AC17, a run's checkpoint waiting, decided and the run succeeding
   await expect(build).toHaveCount(0);
   await page.getByTestId("baseline-build-banner").getByRole("link", { name: "Open run" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const cp = page.getByTestId("checkpoint-baseline_confirm").filter({ hasText: "Waiting" });
   await cp.getByRole("button", { name: "Approve and continue" }).click();
   await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Succeeded");

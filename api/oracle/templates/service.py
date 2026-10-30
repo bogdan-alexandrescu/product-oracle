@@ -254,7 +254,11 @@ async def _checked_version(
 ) -> tuple[str, list[str]]:
     result = await validate_template(db, body, required)
     if not result.valid:
-        raise InvalidError(f"template rejected: {len(result.problems)} problem(s)", result.problems)
+        n = len(result.problems)
+        raise InvalidError(
+            f"The template was not saved: it has {n} problem{'' if n == 1 else 's'}.",
+            result.problems,
+        )
     check = await safe_yaml.run_parse(version_meta, body)
     return body, required if required is not None else check.default_required_sections()
 
@@ -263,7 +267,9 @@ async def create_template(db: AsyncSession, data: TemplateCreate, principal: Pri
     await seed_builtins(db)  # the built-in themes a template may name
     body, required = await _checked_version(db, data.body, data.required_sections)
     if await db.scalar(select(Template.id).where(Template.key == data.key)):
-        raise ConflictError(f"a template with key '{data.key}' exists (archived ones too)")
+        raise ConflictError(
+            f"A template with key {data.key} already exists. Archived templates keep their keys."
+        )
     template = Template(
         key=data.key, name=data.name, kind=data.kind, description=data.description, builtin=False
     )
@@ -272,7 +278,7 @@ async def create_template(db: AsyncSession, data: TemplateCreate, principal: Pri
         await db.flush()
     except IntegrityError as e:
         await db.rollback()
-        raise ConflictError(f"a template with key '{data.key}' exists") from e
+        raise ConflictError(f"A template with key {data.key} already exists.") from e
     db.add(
         TemplateVersion(
             template_id=template.id,
@@ -364,7 +370,8 @@ def _slide_css(value: str | None) -> str | None:
 def _raise_if(problems: list[Problem], what: str) -> None:
     if problems:
         contrast = [p for p in problems if p.code == "insufficient_contrast"]
-        detail = contrast[0].message if contrast else f"{what} rejected: {problems[0].message}"
+        first = problems[0].message
+        detail = contrast[0].message if contrast else f"The {what} was not saved. {first}"
         raise InvalidError(detail, problems)
 
 
@@ -390,7 +397,9 @@ async def create_theme(db: AsyncSession, data: ThemeCreate, principal: Principal
     await seed_builtins(db)  # a built-in key is taken before a company theme can claim it
     _raise_if(_check_theme(data.tokens, data.css, data.slide_css), "theme")
     if await db.scalar(select(Theme.id).where(Theme.key == data.key)):
-        raise ConflictError(f"a theme with key '{data.key}' exists (archived ones too)")
+        raise ConflictError(
+            f"A theme with key {data.key} already exists. Archived themes keep their keys."
+        )
     theme = Theme(
         key=data.key,
         name=data.name,
@@ -407,7 +416,7 @@ async def create_theme(db: AsyncSession, data: ThemeCreate, principal: Principal
         await db.flush()
     except IntegrityError as e:
         await db.rollback()
-        raise ConflictError(f"a theme with key '{data.key}' exists") from e
+        raise ConflictError(f"A theme with key {data.key} already exists.") from e
     await audit.record(db, principal, "theme.created", "theme", theme.id, {"key": data.key})
     await db.commit()
     await db.refresh(theme)

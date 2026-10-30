@@ -29,6 +29,22 @@ brief: [problem, solution]
 <!-- The only place for sources, numbers and evidence. -->
 `;
 
+/**
+ * Each section id's heading as written in the body ("problem" → "Problem"), so the
+ * editor names sections in words. Level 1-3 headings outside code fences, as the API reads them.
+ */
+export function sectionTitles(body: string): Map<string, string> {
+  const out = new Map<string, string>();
+  let fence = false;
+  for (const line of body.replace(/\r\n/g, "\n").split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) fence = !fence;
+    if (fence) continue;
+    const m = /^ {0,3}#{1,3}\s+(.*?)\s*\{#([A-Za-z0-9_-]+)\}\s*#*\s*$/.exec(line);
+    if (m && !out.has(m[2])) out.set(m[2], m[1].trim() || m[2]);
+  }
+  return out;
+}
+
 const validateBody = (body: string) => unwrap(api.POST("/v1/templates/validate", { body: { body } }));
 
 /**
@@ -107,6 +123,8 @@ export function TemplateBodyEditor({
   const own = useTemplateCheck(value, !given);
   const live = given ?? own;
   const check = live.data;
+  const titles = sectionTitles(value);
+  const named = (keys: string[]) => keys.map((k) => titles.get(k) ?? k).join(", ");
   return (
     <div className="flex flex-col gap-2">
       <span className="flex items-center gap-1.5">
@@ -136,7 +154,9 @@ export function TemplateBodyEditor({
               {live.pending ? "Checking…" : "Valid."}
             </Chip>
             <Label>Sections:</Label>
-            <span className="min-w-0 font-mono text-[13px] break-words">{check.section_keys.join(", ")}</span>
+            <span data-testid="section-names" className="min-w-0 break-words">
+              {named(check.section_keys)}
+            </span>
             {check.suggested_theme && (
               <>
                 <Label>· theme</Label>
@@ -146,8 +166,8 @@ export function TemplateBodyEditor({
             {check.brief_sections.length > 0 && (
               <>
                 <Label>· brief</Label>
-                <span data-testid="brief-sections" className="font-mono text-[13px]">
-                  {check.brief_sections.join(", ")}
+                <span data-testid="brief-sections" className="min-w-0 break-words">
+                  {named(check.brief_sections)}
                 </span>
               </>
             )}
