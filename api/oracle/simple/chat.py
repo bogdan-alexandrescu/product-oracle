@@ -46,6 +46,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision, DecisionReview
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.members.names import display_name
+from oracle.simple import change_words as cut_words
 from oracle.simple import changes, constraints, drafts, service, targets
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
@@ -1735,6 +1736,13 @@ async def cards_out(
         e = read_.by_id().get(c.item_id) if c.item_id else None
         flags: list[SimpleItemFlags] = []
         fixes: list[ChatFix] = []
+        # fix5-cut-dependents: what "Cut it and its dependents" cuts with the item, as the
+        # reader reads the roadmap now.
+        dependents = (
+            [x.row.title for x in changes.dependents(e, read_.by_id())]
+            if c.status == "open" and c.op == "cut" and e is not None
+            else []
+        )
         if c.status == "open" and e is not None:
             after = (
                 read_
@@ -1768,7 +1776,7 @@ async def cards_out(
             flow=await _flow(db, c), change_id=c.change_id,
             decided_by_name=names.get(c.decided_by) if c.decided_by else None,  # type: ignore[arg-type]
             decided_at=c.decided_at, decision_id=c.decision_id, change_words=change_words,
-            correct=correct if c.status == "open" else None,
+            correct=correct if c.status == "open" else None, dependents=dependents,
         ))  # fmt: skip
     return outs
 
@@ -1797,15 +1805,20 @@ async def apply(
     card_id: uuid.UUID,
     fix: int | None = None,
     values: dict[str, Any] | None = None,
+    with_dependents: bool = False,
 ) -> tuple[ChatCardOut, SimpleChangeResult]:
     """Apply a card (or one of its fixes) through the change engine with the caller's own
     rights; in a meeting an applied card is a meeting decision. ``values`` (roadmap-talk's
-    Correct): the card is rebuilt from them first, so the corrected values apply."""
+    Correct): the card is rebuilt from them first, so the corrected values apply.
+    ``with_dependents`` (fix5-cut-dependents): a cut card applies as cut_with_dependents,
+    the item and everything that waits on it in one change; the card then names them."""
     me = _me(principal)
     card, rules = await _get(db, principal, card_id)
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
+    if with_dependents and (card.op != "cut" or fix is not None or values):
+        raise ChatError(422, "Only a cut card cuts its dependents too")
     if values:
         if fix is not None:
             raise ChatError(422, "A fix takes no corrections")
@@ -1822,8 +1835,9 @@ async def apply(
     else:
         if card.status != "open":
             raise ChatError(409, f"This card is {card.status} already")
-        body = SimpleChangeIn(op=card.op, target=card.target, before=card.before,  # type: ignore[arg-type]
-                              after=card.after)  # fmt: skip
+        body = SimpleChangeIn(op=changes.CUT_ALL if with_dependents else card.op,  # type: ignore[arg-type]
+                              target=card.target, before=card.before,
+                              after={} if with_dependents else card.after)  # fmt: skip
     # In a meeting the change goes into the meeting's session, whoever the mode lets apply
     # (S8's engine takes them; their own rights still decide): made in the meeting.
     body.session_id = getattr(rules, "session_id", None) if rules is not None else None
@@ -1854,6 +1868,11 @@ async def apply(
     if fix is None:
         card.status = "applied" if status == "applied" else "proposed"
         card.change_id, card.decided_by, card.decided_at = result.change.id, me, company_time.now()
+        if with_dependents:
+            # The card names every item the one change cut.
+            t = result.change.target
+            said = cut_words.phrase(changes.CUT_ALL, t, {}, {}, (t.get("titles") or [None])[0])
+            card.summary = said[:1].upper() + said[1:]
         if card.op == "add_item" and status == "applied" and card.item_id is None:
             # roadmap-talk: the new item, so its bar flashes on the timeline.
             new = (result.change.target or {}).get("item_id")

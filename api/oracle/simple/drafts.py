@@ -687,6 +687,8 @@ async def _logs(db: AsyncSession, ds: list[SimpleDraft]) -> dict[uuid.UUID, list
         entry = SimpleDraftChange(
             id=c.id, op=c.op, item_id=item_id, by=c.by, by_name=names.get(c.by, "someone"),
             at=c.at, session_kind=kind, in_meeting=kind == "meeting",  # type: ignore[arg-type]
+            titles=[str(t) for t in c.target.get("titles") or []]
+            if c.op == "cut_with_dependents" else [],
         )  # fmt: skip
         for i in c.draft_ids:
             if i in out:
@@ -780,6 +782,7 @@ OP_WORDS = {
     "add_item": "Added",
     "merge_item": "Merged",
     "keep_both": "Kept beside its look-alikes:",
+    "cut_with_dependents": "Cut with its dependents:",
 }
 
 
@@ -861,6 +864,8 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
         what = (
             f"'{kd['name']}'"
             if isinstance(kd, dict)
+            else ", ".join(str(t) for t in c.target.get("titles") or [])
+            if c.op == "cut_with_dependents"
             else titles.get(str(c.target.get("item_id")), "an item")
         )
         lines.append(f"- {OP_WORDS.get(c.op, c.op)} {what}")

@@ -56,6 +56,10 @@ Ops and the fields they write (``before`` must name the key fields):
   (``merged_into``: the kept item's key); or linked to a baseline feature
   (``target.feature_id``). Keyed by item id like the fixes; ``before`` is read, not given.
 - ``keep_both`` (S7): kept_both; the draft's look-alikes are no longer offered.
+- ``cut_with_dependents`` (fix5-cut-dependents): the item and every item that waits on it,
+  transitively (``dependents``), cut as one change, undone as one; ``before`` is the
+  item's own ``{"cut"}`` as seen; keyed by item id like the fixes; ``target.titles`` names
+  every item it cut, the item first.
 """
 
 import uuid
@@ -109,8 +113,10 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "set_decider": ("decider_id",),
 }
 FIXES = ("shift_dependents", "move_dependency")
+# fix5-cut-dependents: the item and every item that waits on it, cut as one change.
+CUT_ALL = "cut_with_dependents"
 # The ops that key ``before``/``after`` by item id.
-KEYED = (*FIXES, "merge_item")
+KEYED = (*FIXES, "merge_item", CUT_ALL)
 FLAG_KINDS = (
     "dependency_order",
     "blocker_date",
@@ -482,6 +488,25 @@ def _fix_plan(
     return moves
 
 
+def dependents(entry: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> list[service.Entry]:
+    """Every item that waits on ``entry``, transitively (breadth first, in the roadmap's
+    order at each step), but those cut or merged already: what cut_with_dependents cuts
+    with it. An item that also waits on a kept item is still cut: it waits on this one."""
+    out: list[service.Entry] = []
+    seen = {entry.row.id}
+    queue: deque[service.Entry] = deque([entry])
+    while queue:
+        cur = queue.popleft()
+        for nid in cur.needed_by:
+            n = by_id.get(nid)
+            if n is None or nid in seen or n.status in ("cut", "merged"):
+                continue
+            seen.add(nid)
+            out.append(n)
+            queue.append(n)
+    return out
+
+
 async def _plan(
     db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: service.Read
 ) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -521,6 +546,21 @@ async def _plan(
         return entry, target, before, after
     if op == "merge_item":
         return await _merge_plan(db, entry, target, by_id)
+    if op == CUT_ALL:
+        # As a cut: ``before`` is the item's own {"cut"} as seen; the change is keyed by
+        # item id, the item and its dependents (target.titles names them, the item first).
+        if "cut" not in body.before:
+            raise ChangeError(422, "before: cut as you saw it")
+        current = read(row, ("cut",), target)
+        if _normal(("cut",), body.before) != current:
+            raise await _conflict(db, current, {str(row.id)}, "Changed since you saw it")
+        cut = [entry, *dependents(entry, by_id)]
+        if len(cut) == 1:
+            raise ChangeError(422, "No item depends on this one: cut it alone")
+        target["titles"] = [e.row.title for e in cut]
+        before = {str(e.row.id): read(e.row, ("cut",), target) for e in cut}
+        after = {str(e.row.id): {"cut": True} for e in cut}
+        return entry, target, before, after
     fields = FIELDS[op]
     missing = [f for f in fields if f not in body.before]
     if missing:
@@ -834,9 +874,9 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
             )
             if i not in ids
         ]
-    elif body.op in FIXES:
-        # A fix may move any item of the version (dependents, transitively): every one is
-        # locked before service.load reads them.
+    elif body.op in (*FIXES, CUT_ALL):
+        # A fix may move any item of the version (dependents, transitively), a cut with its
+        # dependents cut them: every one is locked before service.load reads them.
         version = await db.scalar(
             select(RoadmapItem.roadmap_version_id).where(RoadmapItem.id == ids[0])
         )
