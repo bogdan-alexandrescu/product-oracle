@@ -118,12 +118,13 @@ for (const [where, use] of [
       const next = page.locator('[data-testid="board-column"][data-horizon-column="next"]');
       const from = (await card.boundingBox())!;
       await next.scrollIntoViewIfNeeded();
-      const to = (await next.boundingBox())!;
+      const below = (await next.boundingBox())!;
       await card.scrollIntoViewIfNeeded();
       const at = (await card.boundingBox())!;
-      // To the Next column's top (a phone's columns stack: down; a desktop's sit side by side: right).
+      const to = (await next.boundingBox())!;
+      // To the Next column (a phone's columns stack: down; a desktop's sit side by side: across, at the card's height).
       const dx = phone ? 0 : to.x + 40 - (at.x + Math.min(at.width / 2, 20));
-      const dy = phone ? Math.min(to.y - from.y + 60, 300) : to.y + 60 - (at.y + at.height / 2);
+      const dy = phone ? Math.min(below.y - from.y + 60, 300) : 0;
       const during = async () => {
         expect((await reads(page)).getBoundingClientRect).toBe(0);
       };
