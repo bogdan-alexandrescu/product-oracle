@@ -55,6 +55,8 @@ const MARK_ROW = 20;
 /** A lane's row pitch and its pills' height (B2: 28 and 20); a lane is its rows plus 8 px. */
 const RH = 28;
 const BAR_H = 20;
+/** The line a broken link's callout takes under its row (the callout with its fix buttons, and a gap to the next row's pills). */
+const CALL_H = 34;
 /** QA2 finding 11: a slice or bar is never drawn narrower than this, so a short run of work
  * still reads as a pill, not an unreadable blob, at a coarse scale. */
 const MIN_PILL_W = 28;
@@ -110,8 +112,8 @@ function useFontsReady(): number {
 /** A piece of work in a lane: one dated slice of a planned feature, or an item's own span. */
 export type Piece = { key: string; code: string | null; name: string; start: string; end: string; milestone: string | null; pm: boolean; slice: Slice | null };
 type Unit = { item: Item; pieces: Piece[]; row: number };
-/** `lines`: the lane's height in rows (a row with a callout takes one line more, under it); `line`: each row's first line. */
-export type LaneModel = { key: string; title: string; kind: "group" | "pm" | "below"; units: Unit[]; rows: number; count: number; lines: number; line: number[]; callouts: Set<number> };
+/** `line`: each row's top in the lane and `h` the rows' height, in px (a row with a callout takes a callout line more, under it). */
+export type LaneModel = { key: string; title: string; kind: "group" | "pm" | "below"; units: Unit[]; rows: number; count: number; h: number; line: number[]; callouts: Set<number> };
 
 const datedSlices = (i: Item): Slice[] => i.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : a.start_date! > b.start_date! ? 1 : 0));
 const pmSlice = (x: Slice) => x.pm_owned || x.effort_weeks == null;
@@ -193,11 +195,12 @@ function laneModels(data: Roadmap, lane: Lane, moved: Record<string, [string, st
   const lanes = groups.map((g) => {
     const p = pack(g.items, moved, (i) => g.kind !== "below" && broken(i).some((f) => f.kind === "dependency_order"));
     const line: number[] = [];
-    for (let r = 0, at = 0; r < p.rows; r++) {
-      line.push(at);
-      at += p.callouts.has(r) ? 2 : 1;
+    let h = 0;
+    for (let r = 0; r < p.rows; r++) {
+      line.push(h);
+      h += RH + (p.callouts.has(r) ? CALL_H : 0);
     }
-    return { key: g.key, title: g.title, kind: g.kind, units: p.units.map(kept), rows: p.rows, count: g.items.length, lines: p.rows + p.callouts.size, line, callouts: p.callouts };
+    return { key: g.key, title: g.title, kind: g.kind, units: p.units.map(kept), rows: p.rows, count: g.items.length, h, line, callouts: p.callouts };
   });
   return { lanes, places: new Map(below.map((i, n) => [i.id, n + 1])) };
 }
@@ -559,7 +562,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     const out: { top: number; height: number }[] = [];
     for (const l of lanes) {
       const prev = out[out.length - 1];
-      out.push({ top: prev ? prev.top + prev.height : top, height: l.lines * RH + 8 });
+      out.push({ top: prev ? prev.top + prev.height : top, height: l.h + 8 });
     }
     return out;
   }, [lanes, top]);
@@ -571,8 +574,9 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     const under = new Map<string, number>();
     lanes.forEach((l, n) =>
       l.units.forEach((u) => {
-        y.set(u.item.id, geo[n].top + 4 + l.line[u.row] * RH);
-        if (l.callouts.has(u.row)) under.set(u.item.id, geo[n].top + 4 + (l.line[u.row] + 1) * RH);
+        y.set(u.item.id, geo[n].top + 4 + l.line[u.row]);
+        // The callout (drawn 3 px into its box) 2 px under the pill.
+        if (l.callouts.has(u.row)) under.set(u.item.id, geo[n].top + 4 + l.line[u.row] + 4 + BAR_H + 2 - 3);
       }),
     );
     return { rows: [], rowH: RH, labelW: LABEL_W, top, height, y, under };
@@ -825,7 +829,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
                     unit={u}
                     item={u.item}
                     lane={l.key}
-                    y={geo[n].top + 4 + l.line[u.row] * RH + 4}
+                    y={geo[n].top + 4 + l.line[u.row] + 4}
                     sc={sc}
                     width={W}
                     span={moved[u.item.id]}

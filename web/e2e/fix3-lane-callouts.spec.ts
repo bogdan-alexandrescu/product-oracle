@@ -13,6 +13,8 @@ import { expect, test, type Locator, type Page } from "./test";
 
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 const RH = 28;
+/** A callout's line under its row. */
+const CALL_H = 34;
 
 const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 const callout = (page: Page, key: string): Locator => page.locator(`[data-testid="broken-callout"][data-item="${key}"]`);
@@ -44,7 +46,7 @@ async function checkUnder(page: Page) {
     const b = bar(page, key);
     const bb = (await b.locator("rect[data-body], rect[data-slice-body]").first().boundingBox())!;
     expect(cb.y, `${key}'s callout sits under its pill`).toBeGreaterThanOrEqual(bb.y + bb.height - 1);
-    expect(cb.y - (bb.y + bb.height), `${key}'s callout sits right under its pill`).toBeLessThan(RH);
+    expect(cb.y - (bb.y + bb.height), `${key}'s callout sits right under its pill`).toBeLessThan(6);
     const laneKey = (await b.getAttribute("data-lane"))!;
     const row = Number(await b.getAttribute("data-row"));
     (perLane.get(laneKey) ?? perLane.set(laneKey, new Set()).get(laneKey)!).add(row);
@@ -54,7 +56,7 @@ async function checkUnder(page: Page) {
   for (const [laneKey, calloutRows] of perLane) {
     const rows = new Set(await page.locator(`g[data-testid="bar"][data-lane="${laneKey}"]`).evaluateAll((els) => els.map((e) => e.getAttribute("data-row"))));
     const lane = (await page.locator(`[data-testid="chart-group"][data-lane="${laneKey}"]`).boundingBox())!;
-    expect(Math.round(lane.height), `lane ${laneKey}: ${rows.size} rows and ${calloutRows.size} callout lines`).toBe((rows.size + calloutRows.size) * RH + 8);
+    expect(Math.round(lane.height), `lane ${laneKey}: ${rows.size} rows and ${calloutRows.size} callout lines`).toBe(rows.size * RH + calloutRows.size * CALL_H + 8);
   }
 }
 
