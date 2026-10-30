@@ -475,7 +475,10 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
     <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
       {suggests && (
         <>
-          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open={formOpen} onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={a.reload} />
+          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open={formOpen} onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={async () => {
+            await a.reload();
+            setTab("people");
+          }} />
           <Button
             variant="secondary"
             data-testid="suggest-from-chat"
@@ -603,7 +606,7 @@ function useDrawerFocus(open: boolean) {
  * goes back to the button that opened it (phone and desktop), and the page behind does not scroll
  * (one scrollbar).
  */
-function useDrawerClose(onClose: () => void) {
+function useDrawerClose(onClose: () => void, lock: boolean) {
   const [opener] = useState(() => (typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null));
   const close = useRef(onClose);
   useEffect(() => {
@@ -618,20 +621,22 @@ function useDrawerClose(onClose: () => void) {
       close.current();
     };
     document.addEventListener("keydown", onKey);
-    const overflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
+    // On <body>, not <html>: a Sheet (the phone's drawer, the chat) saves and restores <html>'s own.
+    const body = document.body.style;
+    const overflow = body.overflow;
+    if (lock) body.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.documentElement.style.overflow = overflow;
+      if (lock) body.overflow = overflow;
       if (opener?.isConnected) requestAnimationFrame(() => opener.focus());
     };
-  }, [opener]);
+  }, [opener, lock]);
 }
 
 export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; api: GoalSuggestionsApi; onClose: () => void; start?: GoalPanelStart }) {
   const phone = usePhone();
   const drawer = useDrawerFocus(!phone);
-  useDrawerClose(onClose);
+  useDrawerClose(onClose, !phone);
   const title = `Suggestions · ${goal.title}`;
   if (phone)
     return (

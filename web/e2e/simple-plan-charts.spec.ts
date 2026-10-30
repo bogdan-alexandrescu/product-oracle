@@ -276,7 +276,7 @@ for (const v of VIEWS) {
       const legend = page.getByLabel("Legend");
       await expect(legend.getByTestId("vxe-legend-no-goal")).toHaveText("No goal");
       await expect(legend).toContainText("Each mark shows the feature's code; its rank is in the list. Hollow: below the line (not this quarter).");
-      await expect(page.getByText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys).")).toBeVisible();
+      await expect(page.getByText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)")).toBeVisible();
 
       // B's Ranked rows: one line each (rank, code, the name cut with "…", the score), a row
       // that misses the line carrying a small "Misses" chip (the line in its title).
