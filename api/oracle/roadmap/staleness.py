@@ -240,22 +240,41 @@ def _stored_reasons(detail: str) -> list[str] | None:
     return None
 
 
+def _old_reasons(detail: str, hidden: Any) -> list[str]:
+    """The reasons of a line stored before cld-4, joined by ``"; "``: split on it, and the
+    parts that only together name something hidden (a title holding ``"; "``, cut in two)
+    said as :data:`HIDDEN_REASON`. Judged on the stored text, before any part is put into
+    words or counted, which could break the title up; the other parts are kept."""
+    parts = detail.split("; ")
+    if hidden is None:
+        return parts
+    cut = [False] * len(parts)
+    for i in range(len(parts)):
+        if hidden.names(parts[i]):
+            continue  # hidden on its own (for_reader)
+        for j in range(i + 1, len(parts)):
+            if hidden.names("; ".join(parts[i : j + 1])):
+                # Only the fewest parts that name it: not a reason before the title.
+                if not hidden.names("; ".join(parts[i + 1 : j + 1])):
+                    cut[i : j + 1] = [True] * (j + 1 - i)
+                break
+    return [HIDDEN_REASON if c else p for p, c in zip(parts, cut, strict=True)]
+
+
 def detail_for_reader(detail: str | None, hidden: Any) -> str | None:
     """A stored stale alert's reasons (:func:`stored_detail`) as one line for the reader:
     what they may not see is hidden first (:func:`for_reader`), then the rest is put into
     words (:func:`in_words`), so a reader never learns the kind of a hidden item ("A
     decision ... changed"). A line stored before cld-4, its reasons joined by ``"; "``, is
-    split on it, and when the line read still names something hidden (a title holding
-    ``"; "``, cut in two and joined again) it is said only as :data:`HIDDEN_REASON`. A reason
-    stored in an older form (worded, or prod-6's literal refs) reads the same way, with
-    no migration needed."""
+    split on it (:func:`_old_reasons`). A reason stored in an older form (worded, or
+    prod-6's literal refs) reads the same way, with no migration needed."""
     if not detail:
         return detail
     reasons = _stored_reasons(detail)
     if reasons is None:
-        reasons = detail.split("; ")
+        reasons = _old_reasons(detail, hidden)
     line = "; ".join(in_words(one_count(for_reader(reasons, hidden))))
-    # The halves of a cut title, joined again, name it whole.
+    # The last word: a line read that still names something hidden is not shown.
     return HIDDEN_REASON if hidden is not None and hidden.names(line) else line
 
 
