@@ -10,12 +10,15 @@ no_claim=<what green does not prove>.
 
 from datetime import timedelta
 
+import pytest
 from sqlalchemy import update
 
 from oracle.baseline.models import Entity
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import confirm, entity
 from tests.ritual_helpers import START, at, ctx, occurrences_of, rituals_of, tick  # noqa: F401
+
+pytestmark = pytest.mark.rituals_wait_for_goal
 
 # The built-ins on by default (kinds.enabled_by_default; F6's report is on by default).
 DEFAULTS = {

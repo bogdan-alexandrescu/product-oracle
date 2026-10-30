@@ -107,6 +107,22 @@ def _forget_items_checks():
     roadmap._checks.clear()
 
 
+@pytest.fixture(autouse=True)
+def _rituals_seed_on(request, monkeypatch):
+    """The tests written before "Start paused until goals" (owner decision 2026-10-29)
+    model a company that already has a confirmed goal: its built-in rituals are seeded on.
+    A test marked ``rituals_wait_for_goal`` (tests/test_rituals_wait_for_goal.py) sees
+    the real check, so a new company's built-ins wait paused for its first goal."""
+    if request.node.get_closest_marker("rituals_wait_for_goal"):
+        return
+    from oracle.rituals import service as rituals
+
+    async def seeded_on(db) -> bool:
+        return True
+
+    monkeypatch.setattr(rituals, "has_confirmed_goal", seeded_on)
+
+
 async def make_tenant(name: str = "Example Co") -> uuid.UUID:
     async with unscoped_session() as s:
         tenant = Tenant(name=name)
