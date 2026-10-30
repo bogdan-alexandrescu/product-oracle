@@ -94,8 +94,9 @@ for (const phone of [false, true]) {
         const form = drawer.getByTestId("suggest-form");
         await expect(form.getByText("Goal: Grow retention")).toBeVisible();
         await expect(drawer.getByTestId("suggest-decider")).toHaveText(/ will review your suggestion\.$/);
-        await expect(drawer.getByRole("tab", { name: "People · 0" })).toHaveAttribute("aria-selected", "true");
-        await expect(drawer.getByRole("tab", { name: "✦ Oracle · 1" })).toBeVisible();
+        // QA pass 3 (qa-simple-plan-10): the drawer opens on the tab that holds the suggestions.
+        await expect(drawer.getByRole("tab", { name: "✦ Oracle · 1" })).toHaveAttribute("aria-selected", "true");
+        await expect(drawer.getByRole("tab", { name: "People · 0" })).toBeVisible();
         await form.getByLabel("Feature name").fill("Shared alert notes");
         await form.getByLabel("What it does, and for whom").fill("Leads leave a note on an alert so the next person on call knows what was tried");
         await form.getByRole("button", { name: "Send suggestion" }).click();
@@ -146,7 +147,7 @@ for (const phone of [false, true]) {
       test(`a commenter suggests a feature from the chat (${where})`, async ({ page }) => {
         await signIn(page, EMAILS.commenter);
         const drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        await drawer.getByRole("button", { name: "Ask Oracle in the chat" }).click();
         await expect(page.getByTestId("goal-panel")).toHaveCount(0);
         const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
         await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
@@ -190,7 +191,7 @@ for (const phone of [false, true]) {
         await expect(panel.getByTestId("ask-chat-thread").getByTestId("chat-message").first()).toBeVisible();
         if (phone) await page.keyboard.press("Escape");
         const drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        await drawer.getByRole("button", { name: "Ask Oracle in the chat" }).click();
         const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
         await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
         await noSidewaysScroll(page, phone);
@@ -206,13 +207,13 @@ for (const phone of [false, true]) {
       test(`"Suggest from the chat" again, and from Recent chats (${where})`, async ({ page }) => {
         await signIn(page, EMAILS.commenter);
         let drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        await drawer.getByRole("button", { name: "Ask Oracle in the chat" }).click();
         const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
         await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
         await box.fill("");
         if (phone) await page.keyboard.press("Escape");
         drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        await drawer.getByRole("button", { name: "Ask Oracle in the chat" }).click();
         await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
         const panel = page.getByTestId("hop-panel").filter({ visible: true });
         await panel.getByTestId("ask-recent").click();
@@ -224,7 +225,7 @@ for (const phone of [false, true]) {
           await page.keyboard.press("Escape");
         }
         drawer = await openDrawer(page);
-        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        await drawer.getByRole("button", { name: "Ask Oracle in the chat" }).click();
         await expect(page.getByTestId("hop-panel").filter({ visible: true }).getByTestId("ask-recent-list")).toHaveCount(0);
         await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
         await noSidewaysScroll(page, phone);
@@ -284,11 +285,11 @@ for (const phone of [false, true]) {
         await signIn(page, EMAILS.viewer, "/simple/priorities?tab=buckets");
         const bucket = page.locator('[data-testid="goal-bucket"][data-key="grow-retention"]');
         await expect(bucket.getByTestId("goal-suggestion")).toHaveCount(0);
-        await expect(bucket.getByTestId("goal-suggestions-open")).toHaveText("Suggestions · 1");
+        await expect(bucket.getByTestId("goal-suggestions-open")).toHaveText("See suggestions · 1");
         await bucket.getByTestId("goal-suggestions-open").click();
         const drawer = page.getByTestId("goal-panel");
         await expect(drawer.getByTestId("suggest-form")).toHaveCount(0);
-        await expect(drawer.getByRole("button", { name: "Suggest from the chat" })).toHaveCount(0);
+        await expect(drawer.getByRole("button", { name: "Ask Oracle in the chat" })).toHaveCount(0);
         await drawer.getByRole("tab", { name: "✦ Oracle · 1" }).click();
         await expect(drawer.getByTestId("goal-suggestion")).toHaveCount(1);
         await expect(drawer.getByRole("button", { name: "✦ Ask Oracle for more" })).toHaveCount(0);

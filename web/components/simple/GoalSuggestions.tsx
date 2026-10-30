@@ -250,7 +250,7 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
       </div>
       {wide && !phone && s.flow && (
         // qa-simple-plan-36: the opened flow scrolls into view.
-        <div ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })} data-testid="flow-detail">
+        <div ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })} data-testid="flow-detail-wrap">
           <FlowDetail flow={s.flow} />
         </div>
       )}

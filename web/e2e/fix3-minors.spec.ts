@@ -101,6 +101,7 @@ for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 84
       // A line on a picked day that only two rows make, far apart by rank.
       await page.locator("#prio-line").selectOption("pick");
       await page.getByLabel("The line's date").fill("2026-11-16");
+      await page.getByRole("button", { name: "Apply" }).click();
       await expect(page.getByTestId("line-caption")).toContainText(/^\d+ of \d+ miss Nov 16, 2026/);
       let list = await listed(page);
       expect(list.filter((r) => r.above).length).toBe(2);

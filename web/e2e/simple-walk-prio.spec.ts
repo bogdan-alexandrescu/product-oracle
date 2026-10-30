@@ -48,8 +48,11 @@ async function checkLine(page: Page, scope: Locator, rows: Locator, titleOf: (ro
   const missing = m.filter((r) => !r.above);
   for (const r of m) {
     expect(r.misses, r.title).toBe(!r.above);
-    expect(r.tag, r.title).toBe(r.above ? null : compact ? "Misses" : `Misses ${label}`);
-    if (compact) expect(r.tagTitle, r.title).toBe(r.above ? null : `Misses ${label}`);
+    // QA pass 3 (qa-simple-plan-27): a feature tagged with the milestone it misses says so.
+    const own = `Misses its own milestone, ${label}`;
+    if (r.above) expect(r.tag, r.title).toBe(null);
+    else expect([compact ? "Misses" : `Misses ${label}`, own], r.title).toContain(r.tag);
+    if (compact) expect([r.above ? null : `Misses ${label}`, own], r.title).toContain(r.tagTitle);
   }
   const caption = scope.getByTestId("line-caption");
   await expect(caption).toContainText(`${missing.length} of ${m.length} miss ${label}`);
@@ -103,6 +106,7 @@ for (const [where, size] of [
           }
           await select.selectOption("pick");
           await page.getByLabel("The line's date").fill("2026-12-31");
+          await page.getByRole("button", { name: "Apply" }).click();
           await expect(page.getByTestId("line-caption")).toContainText(" miss Dec 31, 2026");
           sawInterleaved = (await checkLine(page, list, rows, title, "Dec 31, 2026")) || sawInterleaved;
           // The mock's plan has a line where a row that makes it ranks below one that misses it.
@@ -214,6 +218,7 @@ test("Value/effort's side caption names three that miss the line and counts the 
   const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
   await select.selectOption("pick");
   await page.getByLabel("The line's date").fill("2026-10-28");
+  await page.getByRole("button", { name: "Apply" }).click();
   const label = "Oct 28, 2026";
   await expect(page.getByTestId("line-caption")).toContainText(` miss ${label}`);
   const titles = async (rows: Locator) => (await rows.evaluateAll((rs) => rs.filter((r) => r.getAttribute("data-misses") === "true").map((r) => r.querySelector('[data-testid="prio-title"]')!.textContent!.trim())));
