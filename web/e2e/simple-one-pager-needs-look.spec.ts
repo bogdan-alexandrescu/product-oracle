@@ -20,6 +20,7 @@ import { expect, test, type Page } from "./test";
 
 const URL = "/simple/prds/guided-setup";
 const note = (page: Page) => page.getByRole("note", { name: "Needs a look" });
+const lineText = (page: Page, text: string) => page.getByTestId("one-pager-line-text").filter({ hasText: text });
 
 async function setUp(page: Page) {
   await page.context().addInitScript(([key]) => localStorage.setItem(key, "one-pager-needs-look"), [MOCK_SCENARIO_KEY] as const);
@@ -37,15 +38,16 @@ for (const phone of [false, true]) {
       await expect(note(page)).toContainText("Needs a look");
       await expect(note(page)).toContainText("2 bets; a one-pager has 3 to 5");
       await expect(note(page)).toContainText("A line in “Risks and open decisions” says “TBD”");
-      await expect(page.getByText("Pricing for teams is TBD")).toBeVisible();
+      await expect(lineText(page, "Pricing for teams is TBD")).toBeVisible();
+      await expect(lineText(page, "A sample project created on day one")).toHaveCount(0);
     });
 
     test("a commenter reads the last good version and no note", async ({ page }) => {
       await setUp(page);
       await login(page, "commenter@example.com");
       await page.goto(URL);
-      await expect(page.getByText("A sample project created on day one").first()).toBeVisible();
-      await expect(page.getByText("Pricing for teams is TBD")).toHaveCount(0);
+      await expect(lineText(page, "A sample project created on day one")).toBeVisible();
+      await expect(lineText(page, "Pricing for teams is TBD")).toHaveCount(0);
       await expect(note(page)).toHaveCount(0);
     });
   });
