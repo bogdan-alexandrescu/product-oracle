@@ -11,6 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.simple import one_pager, plan
 from oracle.simple.changes import ChangeError
@@ -48,5 +49,7 @@ async def read_simple_prd_plan_again(prd: str, principal: Owner, db: TenantDB) -
     if v is None:
         raise HTTPException(status.HTTP_409_CONFLICT, plan.NO_VERSION)
     out = await plan.plan_out(db, document, row, v, principal)
+    await audit.record(db, principal, "simple_prd_plan.read_again", "document", document.id,
+                       data={"version": v.number})  # fmt: skip
     await db.commit()
     return out
