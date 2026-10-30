@@ -10,9 +10,10 @@ no_claim=<what green does not prove>.
 import pytest
 from sqlalchemy import select, update
 
+from oracle.decisions.models import Decision
 from oracle.rituals import service as rituals
 from oracle.rituals.models import Ritual
-from oracle.roadmap.models import RoadmapItem
+from oracle.roadmap.models import RoadmapItem, TrackAlert
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.decision_helpers import clock, today  # noqa: F401
@@ -100,6 +101,99 @@ async def test_a_stale_reason_names_a_hidden_decision_only_to_who_may_see_it(
     # The track's alerts read in words for everyone; only who may see it learns a decision changed.
     assert f"decision:{key}" not in overview.text, who
     assert ("A decision and a requirement changed" in overview.text) is sees, who
+
+
+# cld-4: a hidden decision whose title holds the old separator.
+SPLIT_TITLE = "Pricing; enterprise tier"
+
+
+async def _stale_by_split_title(client, ctx, runtime) -> dict:
+    """A built roadmap whose shipping-step item is stale because the hidden pricing
+    decision, retitled SPLIT_TITLE, changed (a reason naming it by title), and because a
+    company requirement did; the track."""
+    owner = ctx.as_("owner")
+    await approved_prd(client, owner)
+    await seed_baseline(ctx.tenant_id)
+    await seed_trace(ctx.tenant_id)
+    await built_roadmap(client, owner, runtime)
+    entity_id = await _decided(client, ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(Decision).where(Decision.entity_id == entity_id).values(title=SPLIT_TITLE)
+        )
+        await s.execute(
+            update(RoadmapItem)
+            .where(RoadmapItem.item_key == "shipping-step")
+            .values(
+                freshness="potentially_stale",
+                stale_reasons=[f"{SPLIT_TITLE} changed", "requirement:saved-cards changed"],
+            )
+        )
+        await s.commit()
+    track = await track_of(client, owner)
+    assert (await client.post(f"/v1/tracks/{track['id']}/monitor", headers=owner)).status_code
+    return track
+
+
+async def _stale_detail(client, me) -> str:
+    stale = [a for a in await alerts_of(client, me) if a["kind"] == "stale"]
+    assert len(stale) == 1
+    return stale[0]["detail"]
+
+
+@pytest.mark.parametrize(("who", "sees"), ROLES)
+async def test_a_stale_alert_never_splits_a_hidden_title(client, ctx, runtime, who, sees):
+    """protects=cld-4: a stale reason naming a hidden decision whose title holds "; " is
+    one reason in the alert's detail: an owner and an approver read the title whole, a
+    commenter and a viewer read neither half of it, on the alert, in the Inbox and on the
+    track; fails_when=the stored line is cut on the title's "; " and each half, holding
+    no whole title, is shown; no_claim=a title named in other words (Hidden.names)."""
+    track = await _stale_by_split_title(client, ctx, runtime)
+    me = ctx.as_(who)
+    detail = await _stale_detail(client, me)
+    if sees:
+        assert f"{SPLIT_TITLE} changed" in detail, (who, detail)
+    else:
+        assert detail == "a linked baseline item changed; a requirement changed", (who, detail)
+    inbox = await client.get("/v1/inbox", headers=me)
+    overview = await client.get(f"/v1/tracks/{track['id']}", headers=me)
+    assert inbox.status_code == 200 and overview.status_code == 200
+    for body in (detail, inbox.text, overview.text):
+        assert sees or "enterprise tier" not in body, (who, body)
+
+
+@pytest.mark.parametrize(("who", "sees"), ROLES)
+async def test_an_old_stale_alert_line_reads_as_before(client, ctx, runtime, who, sees):
+    """protects=cld-4: a stale alert stored before the fix, its reasons joined by "; ",
+    reads as it did: each part hidden or put into words; and when the whole line names a
+    hidden title that no part does (cut on the title's "; "), a commenter and a viewer
+    read only "a linked baseline item changed"; fails_when=an old line is read as one
+    reason, or either half of a hidden title is shown; no_claim=new lines (above)."""
+    key, _ = await _stale_by_hidden_decision(client, ctx, runtime)
+    me = ctx.as_(who)
+    async with tenant_session(ctx.tenant_id) as s:
+        old = f"decision:{key} changed; requirement:saved-cards changed"
+        await s.execute(update(TrackAlert).where(TrackAlert.kind == "stale").values(detail=old))
+        await s.commit()
+    detail = await _stale_detail(client, me)
+    if sees:
+        assert detail == "A decision and a requirement changed", (who, detail)
+    else:
+        assert detail == "a linked baseline item changed; a requirement changed", (who, detail)
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(Decision)
+            .where(Decision.number == int(key.split("-")[1]))
+            .values(title=SPLIT_TITLE)
+        )
+        old = f"{SPLIT_TITLE} changed"
+        await s.execute(update(TrackAlert).where(TrackAlert.kind == "stale").values(detail=old))
+        await s.commit()
+    detail = await _stale_detail(client, me)
+    if sees:
+        assert detail == "Pricing; enterprise tier changed", (who, detail)
+    else:
+        assert detail == "a linked baseline item changed", (who, detail)
 
 
 async def _stopped_for_pricing_review(client, ctx, runtime) -> str:
