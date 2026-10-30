@@ -13,7 +13,7 @@
 <meta name="generator" content="Product Oracle">
 <meta name="oracle-theme" content="{{ theme_key }}">
 {% if page_fit %}<meta name="oracle-page-fit" content="{{ page_fit }}">{% endif %}
-<title>{{ title }}{% if not link_holder %} — v{{ number }}{% endif %}{% if layer != "full" %} ({{ layer_label }}){% endif %}{% if audience_label %} ({{ audience_label }}){% endif %}</title>
+<title>{{ title }}{% if not link_holder %} — v{{ number }}{% endif %}{% if layer != "full" %} ({{ layer_label }}){% endif %}{% if audience_label and not link_holder %} ({{ audience_label }}){% endif %}</title>
 <meta name="oracle-layer" content="{{ layer }}">
 <style>
 {{ css }}

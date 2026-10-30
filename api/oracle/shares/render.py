@@ -172,13 +172,17 @@ def for_reader(html: str) -> str:
 
 def reader_body(body_md: str, section_key: str) -> str:
     """A section's text as a link holder reads it (qa-docs-12, qa-docs-13): no left-out
-    line (the company's note on what it left out), and in each table no column every row
+    line (the company's note on what it left out) nor an item's no-goal flag, and in each table no column every row
     leaves empty and, under a goal group's heading, no Goal column (it repeats the
     heading). The first column always stays."""
     from oracle.roadmap import variants
 
     group = variants.spans_row(section_key)
-    lines = [ln for ln in (body_md or "").split("\n") if not _LEFT_OUT.match(ln.strip())]
+    lines = [
+        ln
+        for ln in (body_md or "").split("\n")
+        if not _LEFT_OUT.match(ln.strip()) and ln.strip() != variants.NO_GOAL_FLAG
+    ]
     parts = variants._table_rows(lines)
     out: list[str] = []
     i = 0

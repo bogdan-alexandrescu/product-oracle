@@ -13,6 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { formatInZone } from "@/lib/dates";
 import { displayName as personName } from "@/lib/names";
 
+import { NO_GOAL_FLAG } from "./audience";
 import type { SectionSeed } from "./fixtures";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -748,12 +749,12 @@ const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
 
 /**
  * A section's text as a link holder reads it (qa-docs-12, qa-docs-13; as the API's render.reader_body): no
- * left-out line, and in each table no column every row leaves empty and, under a goal group's heading, no Goal
+ * left-out line nor an item's no-goal flag, and in each table no column every row leaves empty and, under a goal group's heading, no Goal
  * column (it repeats the heading). The first column always stays.
  */
 export function readerBody(md: string, sectionKey: string): string {
   const group = GROUP_KEY.test(sectionKey);
-  const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()));
+  const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()) && l.trim() !== NO_GOAL_FLAG);
   const out: string[] = [];
   for (let i = 0; i < lines.length; ) {
     const head = lines[i].trim().startsWith("|") ? splitRow(lines[i]) : null;

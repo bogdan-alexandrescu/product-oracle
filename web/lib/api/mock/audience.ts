@@ -289,7 +289,7 @@ export type BoardItem = {
 };
 
 export const NO_GOAL_GROUP = "No goal";
-const NO_GOAL_FLAG = "\u2691 Serves no confirmed goal.";
+export const NO_GOAL_FLAG = "\u2691 Serves no confirmed goal.";
 const byTitle = (a: string, b: string) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0);
 
 /** The goal a Board row's Goal column and a Team card name: the group's goal (owner answer 2026-10-26, as the API's variants.goal_names). */
