@@ -541,6 +541,7 @@ async def join(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Simpl
     if me in m.absent_ids:
         m.absent_ids = [i for i in m.absent_ids if i != me]
     await db.flush()
+    await audit.record(db, principal, "simple_meeting.joined", "simple_meeting", m.id)
     return m
 
 
@@ -1498,6 +1499,7 @@ async def edit_minutes(
     if m.minutes_state == "drafting":
         m.minutes_state = "ready"
     await db.flush()
+    await audit.record(db, principal, "simple_meeting.minutes_edited", "simple_meeting", m.id)
     return m
 
 

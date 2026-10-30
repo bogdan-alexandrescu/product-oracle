@@ -20,6 +20,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from oracle import audit
 from oracle.auth.deps import Principal, TenantDB
 from oracle.authz import require_role
 from oracle.simple import changes, drafts, service, suggestions
@@ -93,6 +94,8 @@ async def list_date_suggestions(
 async def refresh_date_suggestions(principal: Approver, db: TenantDB) -> RefreshOut:
     """Regenerate the suggestions now (the minute tick does it once a day)."""
     count = await suggestions.regenerate(db)
+    await audit.record(db, principal, "roadmap_date_suggestion.refresh", "roadmap_date_suggestion",
+                       data={"open": count})  # fmt: skip
     await db.commit()
     return RefreshOut(open=count)
 

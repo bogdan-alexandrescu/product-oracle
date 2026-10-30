@@ -487,6 +487,9 @@ def _b_move(c: Ctx, a: dict[str, Any]) -> Built:
                {"start_date": s, "end_date": en},
                {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
                 "end_date": en})  # fmt: skip
+    if by is not None:
+        # A move by a span: offered again on newer dates, it moves from those (rebase).
+        card["preview"]["shift"] = list(by)
     if period is not None and start < c.today:
         # "this quarter" / "this month" / the current Qn start on their first day.
         return Reply("cards", f"Here is the change. That period began {start:%b} {start.day}, "
@@ -1588,7 +1591,12 @@ async def apply_all(
                 await apply(db, principal, card_id)
         except (ChatError, ChangeError) as e:
             await db.rollback()
-            stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(e.detail))
+            # dod-data: the engine's answer's words, not its raw detail (ids, raw dates);
+            # a card whose item changed is offered again on the new state.
+            why = e.detail.get("message") if isinstance(e.detail, dict) else e.detail
+            stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(why))
+            if isinstance(e, ChangeError) and e.status == 409:
+                await rebase(db, card_id, e.detail)
             break
         applied.append(card_id)
     return await _out(db, principal, meeting_id, page, discussion_id), applied, stopped
@@ -1903,6 +1911,33 @@ async def apply(
                 raise ChatError(e.status, e.detail) from e
     await db.commit()
     return await one(db, principal, card, rules), result
+
+
+async def rebase(db: AsyncSession, card_id: uuid.UUID, detail: Any) -> None:
+    """dod-data: a card refused because its item changed since it was made (409 with the
+    current values, after the failed apply is rolled back) stays open and is offered again
+    on the new state: its ``before`` is what the item has now, so a second Apply is the
+    person's choice on what they see. The caller has checked the card is theirs to apply."""
+    current = detail.get("current") if isinstance(detail, dict) else None
+    if not isinstance(current, dict) or not current:
+        return
+    card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
+    if card is None or card.status != "open" or not set(current) <= set(card.before or {}):
+        return
+    card.before = {**card.before, **current}
+    shift = (card.preview or {}).get("shift")
+    if card.op == "move_dates" and shift and current.get("start_date") and current.get("end_date"):
+        # A move by a span ("out a quarter") lands that span from where the item is now.
+        start, end = (_add_months(date.fromisoformat(current[k]), shift[0])
+                      + timedelta(days=shift[1]) for k in ("start_date", "end_date"))  # fmt: skip
+        old = card.after
+        s, en = start.isoformat(), end.isoformat()
+        card.after = {"start_date": s, "end_date": en}
+        card.preview = {**card.preview, "start_date": s, "end_date": en}
+        was = f"{_day_words(date.fromisoformat(old['start_date']))} – " \
+              f"{_day_words(date.fromisoformat(old['end_date']), True)}"  # fmt: skip
+        card.summary = card.summary.replace(was, f"{_day_words(start)} – {_day_words(end, True)}")
+    await db.commit()
 
 
 async def _apply_direct(

@@ -213,14 +213,15 @@ export async function routeGoalSuggestions(
   const rows = db.goal_suggestions!;
   if (p[2] === "goals") {
     if (m !== "POST" || (p[4] !== "suggest" && p[4] !== "suggestions")) return null;
+    // As the API (additions.suggest): the role first, then the goal (422, never found across companies).
+    if (p[4] === "suggest" && ctx.role === "viewer") return json(403, { detail: "Commenters and up ask Oracle for suggestions" });
     const goal = goalOf(p[3]);
-    if (!goal) return json(404, { detail: "No such goal" });
+    if (!goal) return json(422, { detail: "No such goal" });
     if (p[4] === "suggestions") {
       const body = (await req.json().catch(() => ({}))) as { title?: string; outcome?: string };
       const r = fileSuggestion(db, ctx, goal, body.title ?? "", body.outcome ?? "");
       return "detail" in r ? json(r.status, { detail: r.detail }) : json(201, out(db, r, ctx));
     }
-    if (ctx.role === "viewer") return json(403, { detail: "Commenters and up ask Oracle for suggestions" });
     const job = (db.goal_jobs![goal] ??= { until: mockNowMs() + SUGGEST_JOB_MS, job_id: crypto.randomUUID(), origin: "on_demand" });
     return json(200, { goal_id: goalId(goal), pending: true, job_id: job.job_id });
   }
