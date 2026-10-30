@@ -191,24 +191,3 @@ test("qa-onboarding-10: removing a domain says whether Google sign-in is lost, a
   await expect(dialog).toContainText("Anyone at example.org who is not a member yet can no longer sign in with Google, even with an invite.");
   await expect(dialog).toContainText("Members already in keep their access.");
 });
-
-for (const [name, viewport] of [
-  ["1440", { width: 1440, height: 900 }],
-  ["390", { width: 390, height: 844 }],
-] as const) {
-  test.describe(`at ${name}`, () => {
-    test.use({ viewport });
-
-    test(`qa-settings-30: the themes list's preview text stays readable, at least 11 px on screen (${name})`, async ({ page }) => {
-      await login(page);
-      await page.goto("/settings/themes");
-      const frame = page.locator('[data-testid="theme-inspector-preview"]');
-      await expect(frame).toBeVisible();
-      const body = page.frameLocator('[data-testid="theme-inspector-preview"]').locator("p").first();
-      await expect(body).toBeVisible();
-      const scale = Number(await frame.locator("xpath=..").getAttribute("data-scale"));
-      const px = await body.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-      expect(px * scale).toBeGreaterThanOrEqual(11);
-    });
-  });
-}

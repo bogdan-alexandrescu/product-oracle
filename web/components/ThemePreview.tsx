@@ -79,8 +79,6 @@ export function SlidePreview({
 
 /** The width a sample document is laid out at: an A4 page at 96 dpi. */
 const PAGE_WIDTH = 794;
-/** The smallest a fitted page is drawn: its body text stays about 12 px on screen. */
-const MIN_SCALE = 0.75;
 
 /**
  * The sample laid out at a page's width and scaled down to fit its box, like a page
@@ -98,10 +96,7 @@ function FittedPage({ html, title, testId, height }: { html: string | undefined;
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  // Never below MIN_SCALE (fix4-settings review, qa-settings-30): a narrow box lays the page
-  // out narrower instead, so its text stays readable.
-  const layout = width && width < PAGE_WIDTH ? Math.min(PAGE_WIDTH, width / MIN_SCALE) : null;
-  const scale = width && layout ? width / layout : 1;
+  const scale = width && width < PAGE_WIDTH ? width / PAGE_WIDTH : 1;
   return (
     <div ref={box} data-scale={scale.toFixed(3)} className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface`}>
       <iframe
@@ -113,7 +108,7 @@ function FittedPage({ html, title, testId, height }: { html: string | undefined;
         style={
           scale === 1
             ? { width: "100%", height: "100%" }
-            : { width: layout ?? PAGE_WIDTH, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }
+            : { width: PAGE_WIDTH, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }
         }
       />
     </div>
