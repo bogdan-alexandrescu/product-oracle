@@ -73,11 +73,13 @@ export default function ReportsPage() {
         info={
           <InfoTip label="Alignment reports" align="start" side="bottom">
             Each week Oracle reports how the tracks stand against their milestones and posts it to Slack. A report
-            opens from here; the newest is also the Alignment report link.
+            opens from here; the newest is also the Latest report link.
           </InfoTip>
         }
+        // fix4 qa-plan-15: with no report yet, Generate now is the empty state's only.
         action={
-          can("create_alignment_report") && (
+          can("create_alignment_report") &&
+          !!q.data?.length && (
             <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
               Generate now
             </Button>
@@ -89,7 +91,12 @@ export default function ReportsPage() {
       {q.data && (
         // qa-plan-40: headed "Reports", its count only when there are some; with none, the
         // empty state offers Generate now to a member who may (as /plan/reports/latest does).
-        <Panel title="Reports" count={q.data.length || undefined} testId="reports-panel">
+        <Panel
+          title="Reports"
+          // fix4 qa-plan-27: a neutral count, not an accent figure.
+          count={q.data.length ? <span className="text-text2">{q.data.length}</span> : undefined}
+          testId="reports-panel"
+        >
           {q.data.length === 0 ? (
             <div data-testid="reports-empty" className="flex flex-col items-center gap-3 px-4 py-8 text-center text-[15px] text-text2">
               <p>

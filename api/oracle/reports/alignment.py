@@ -26,6 +26,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -427,6 +428,12 @@ def prd_moved_text(track: dict[str, Any]) -> str:
     return f"v{n} of the PRD is approved" if n else "A newer version of the PRD is approved"
 
 
+def rebuild_link(prd_slug: str) -> str:
+    """fix4 qa-plan-3: where the roadmap is built again from the newer approved version: the
+    PRD's Build roadmap on Plan > Roadmap documents, the PRD picked."""
+    return f"/plan/documents?prd={quote(prd_slug, safe='')}"
+
+
 def _link_text(text: str | None) -> str:
     """A link's text: brackets (and backslashes) escaped so a "]" does not end it early."""
     return _line(text).replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
@@ -468,7 +475,8 @@ def markdown(content: dict[str, Any]) -> str:
             f"{a['untracked']} untracked, {a['done']} done"
         )
         if t.get("prd_moved"):
-            lines.append(f"- {prd_moved_text(t)} · [Update the roadmap]({t['link']})")
+            link = rebuild_link(t["prd"]["slug"])
+            lines.append(f"- {prd_moved_text(t)} · [Build the roadmap from it]({link})")
         if t["needs_attention"]:
             lines += ["", f"### Needs attention ({when})", ""]
             lines += [

@@ -70,7 +70,8 @@ const P_BAR_ROW = 16;
 const P_BAR_H = 14;
 
 /** "27 Nov" (the mock-up's day words). */
-const dm = (day: string) => calendarDay(day, { day: "numeric", month: "short" }, "en-GB");
+/** A day as the app writes it everywhere ("Oct 31"), the warnings' way too (qa-plan-54). */
+const dm = (day: string) => calendarDay(day);
 
 // ---------------------------------------------------------------- text widths
 
@@ -245,7 +246,7 @@ function calendar(t0: string, t1: string) {
   for (let d = new Date(ms(t0)); d.getTime() < ms(t1); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
     const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0, 10);
     const day = first < t0 ? t0 : first;
-    const name = calendarDay(first, { month: "short" }, "en-GB");
+    const name = calendarDay(first, { month: "short" });
     // A span of more than a year names each January's year.
     months.push({ day, label: long && d.getUTCMonth() === 0 ? `${name} ${d.getUTCFullYear()}` : name, start: first >= t0 });
   }
@@ -538,7 +539,7 @@ function Grid({ months, mondays, sc, top, height, weeks, noWork }: { months: { d
   );
 }
 
-/** "Holidays 24 Dec – 1 Jan" (the legend's words for the no-work weeks). */
+/** "Holidays Dec 24 – Jan 1" (the legend's words for the no-work weeks). */
 const holidayWords = (noWork: { start: string; end: string }[]) => noWork.map((h) => `${dm(h.start)} – ${dm(h.end)}`).join(", ");
 
 // ---------------------------------------------------------------- B2: the desktop
@@ -836,6 +837,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
                     canDrag={canDrag}
                     cut={l.kind === "below"}
                     place={places.get(u.item.id)}
+                    after={roomAfter(l.units, u, sc, W)}
                     fonts={fonts}
                     {...pills}
                   />
@@ -872,6 +874,8 @@ type PillProps = {
   cut: boolean;
   /** Its place in the return queue (below the line). */
   place?: number;
+  /** Where the next pill on its row starts (or the chart's edge): a short pill's label goes beside it, up to there. */
+  after: number;
   /** The web fonts have loaded (the labels are fitted again). */
   fonts: number;
   onDown: (e: ReactPointerEvent<SVGGElement>, item: Item) => void;
@@ -883,7 +887,7 @@ type PillProps = {
 };
 
 /** One item in its lane: its pieces as B2's pills (a planned feature's slices on one row, joined by a dotted line). */
-const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, flash, canDrag, cut, place, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: PillProps) {
+const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, flash, canDrag, cut, place, after, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: PillProps) {
   const { pieces } = unit;
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
@@ -973,6 +977,9 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
               const b = all[n];
               const c = look(p, item, cut);
               const words = fit(p.code ? [`${p.code} ${p.name}`, p.code] : [p.name], b.w - 16);
+              // qa-plan-55: a pill too short for its code has it beside it, up to the next pill.
+              const nextX = n + 1 < all.length ? all[n + 1].x : after;
+              const beside = words ? "" : fit([p.code ?? p.name], nextX - (b.x + b.w) - 10);
               return (
                 <g
                   key={p.key}
@@ -1003,12 +1010,17 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
                       {words}
                     </text>
                   )}
+                  {beside && (
+                    <text data-testid="slice-label" data-beside="true" x={b.x + b.w + 5} y={y + BAR_H / 2} dominantBaseline="central" fontSize={12} fontWeight={650} fill="var(--text2)" pointerEvents="none">
+                      {beside}
+                    </text>
+                  )}
                 </g>
               );
             })}
           </>
         ) : (
-          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} />
+          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} after={after} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} stroke={strokeOf} strokeW={strokeW} />
         )}
         {item.milestone?.date && !sliced && (
           <rect
@@ -1078,15 +1090,25 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   );
 });
 
+/** Where the next pill on `u`'s row of the lane starts (else the chart's edge): the room for a label beside `u`. */
+function roomAfter(list: Unit[], u: Unit, sc: Scale, width: number): number {
+  const end = u.pieces[u.pieces.length - 1].start;
+  const next = list.filter((o) => o !== u && o.row === u.row && o.pieces[0].start > end).map((o) => sc.x(o.pieces[0].start));
+  return Math.min(width, ...next);
+}
+
 /** An item with no plan as one pill: its code and title where they fit; a draft says so, a cut item is struck through with its place in the return queue. */
-function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number }) {
+function PlainPiece({ item, piece, b, y, cut, place, after, stop, stroke, strokeW }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; after: number; stop?: number; stroke: (base: string) => string; strokeW: number }) {
   const c = look(piece, item, cut);
   const draft = item.draft && !cut;
   const name = piece.code ? `${piece.code} ${piece.name}` : piece.name;
   const lead = place != null ? `#${place} ` : "";
-  const room = b.w - 16;
+  // qa-plan-55: the item's milestone diamond on the pill ends the label's room (never "F-0◆").
+  const room = stop != null && stop > b.x && stop < b.x + b.w ? Math.min(b.w - 16, stop - b.x - 15) : b.w - 16;
   const variants = draft ? [`Draft · ${name}`, "Draft"] : [`${lead}${name}`, ...(piece.code ? [`${lead}${piece.code}`] : []), ...(lead ? [lead.trim()] : [])];
   const words = fit(variants, room);
+  // Too short for any of it: the code (or name) beside the pill, up to the next pill on its row.
+  const beside = words ? "" : fit(piece.code ? [piece.code] : [name], after - (b.x + b.w) - 10);
   const w = words ? textWidth(words, 12, 650) : 0;
   const tag = draft && words.startsWith("Draft");
   return (
@@ -1107,6 +1129,11 @@ function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW }: { item: 
           ) : (
             words
           )}
+        </text>
+      )}
+      {beside && (
+        <text data-testid="bar-label" data-beside="true" x={b.x + b.w + 5} y={y + BAR_H / 2} dominantBaseline="central" fontSize={12} fontWeight={650} fill="var(--text2)" pointerEvents="none" textDecoration={cut ? "line-through" : undefined}>
+          {beside}
         </text>
       )}
       {draft && !tag && <title>Draft</title>}

@@ -12,7 +12,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { ACCEPT_LOCKS } from "./common";
-import { COMPARISONS, figure, GoalFields, goalDraft, goalPatch, HORIZONS, shortDay, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
+import { COMPARISONS, figure, GoalFields, goalDraft, goalPatch, HORIZONS, missingFields, shortDay, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
 
 /**
  * B6 Goals interview, in the goal drawer's Discuss view: the missing-field chips, the thread
@@ -22,9 +22,8 @@ import { COMPARISONS, figure, GoalFields, goalDraft, goalPatch, HORIZONS, shortD
 
 type Message = Schemas["DiscussionMessageOut"];
 
-/** The fields a person reads as one: a target is its value, unit and comparison. */
-const GROUP: Record<string, string> = { metric: "Metric", unit: "Target", comparison: "Target", target: "Target", horizon: "Horizon", owner: "Owner" };
-const groups = (missing: readonly string[] | undefined) => [...new Set((missing ?? []).map((k) => GROUP[k] ?? k))];
+/** The goal's missing fields, the same list its chip and drawer name (qa-plan-36). */
+const groups = missingFields;
 
 /** The strip under the header: each field the goal lacked, green once an accepted change settles it. */
 function MissingStrip({ asked, goal }: { asked: string[]; goal: EntityOut }) {

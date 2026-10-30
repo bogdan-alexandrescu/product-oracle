@@ -168,6 +168,14 @@ export default function PlanPage() {
   ) : item ? (
     <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} links={links} onChanged={reload} />
   ) : undefined;
+  // qa-plan-32: in the phone sheet the item's title shows once (the sheet's head says "Item",
+  // the inspector the whole title), and the sheet scrolls with no second visible scrollbar.
+  const sheetInspector =
+    !msTrack && item ? (
+      <PlanInspector key={item.id} item={item} goals={tags} history={history} me={userId} links={links} onChanged={reload} inSheet />
+    ) : (
+      inspector
+    );
 
   return (
     <div className="min-w-0 px-6 pb-6 max-[600px]:px-2.5 max-[600px]:pb-24">
@@ -202,21 +210,6 @@ export default function PlanPage() {
           </InfoTip>
         }
       />
-      {/* qa-plan-12: the scope is this tab's own filter, so it sits in the tab, not in the
-          header that every Plan tab shares (the page-wide links are in the tab strip). */}
-      <div className="mb-3 flex flex-wrap items-center justify-end gap-2" data-testid="plan-scope-bar">
-        <span className="text-sm text-text2">Show</span>
-        <SegmentedControl<PlanScope>
-          label="Plan scope"
-          size="sm"
-          value={scope}
-          onChange={setScope}
-          items={[
-            { value: "all", label: "Approved + drafts" },
-            { value: "approved", label: "Approved only" },
-          ]}
-        />
-      </div>
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
         <GoalsBand canImport={canBaseline} />
@@ -244,14 +237,29 @@ export default function PlanPage() {
               title="Roadmap"
               tools={
                 <>
+                  {/* qa-plan-9 (fix4): the live roadmap and Edit plan on a phone too. */}
                   {roadmaps.map((r) => (
-                    <span key={r.slug} data-testid="plan-live-version" className="text-sm text-text2 max-[600px]:hidden">
+                    <span key={r.slug} data-testid="plan-live-version" className="text-sm text-text2">
                       {roadmapName(r.slug, roadmapDocs)} v{r.version}
                     </span>
                   ))}
                   {canWrite && <EditPlanButton roadmaps={roadmaps} docs={roadmapDocs} onOpened={setOpened} />}
                   <span data-testid="plan-legend" className="text-sm text-text2 max-[600px]:hidden">
                     Dashed: proposed by a draft, not approved
+                  </span>
+                  {/* qa-plan-60 (fix4): the scope filters the roadmap, so it sits in the Roadmap's head. */}
+                  <span className="inline-flex flex-wrap items-center gap-2" data-testid="plan-scope-bar">
+                    <span className="text-sm text-text2">Show</span>
+                    <SegmentedControl<PlanScope>
+                      label="Plan scope"
+                      size="sm"
+                      value={scope}
+                      onChange={setScope}
+                      items={[
+                        { value: "all", label: "Approved + drafts" },
+                        { value: "approved", label: "Approved only" },
+                      ]}
+                    />
                   </span>
                   <SegmentedControl<GroupBy>
                     label="Group by"
@@ -292,8 +300,10 @@ export default function PlanPage() {
           {inspector}
         </Sheet>
       ) : (
-        <Sheet open={sheet && !!item} title={item?.title ?? "Item"} onClose={() => setSheet(false)} testId="sheet-plan-item">
-          {inspector}
+        <Sheet open={sheet && !!item} title="Item" onClose={() => setSheet(false)} testId="sheet-plan-item" scroll={false}>
+          <div data-testid="sheet-plan-item-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {sheetInspector}
+          </div>
         </Sheet>
       )}
       {linking && <LinkIssueDialog item={linking.item} term={linking.term} items={data?.items ?? []} onClose={() => setLinking(null)} onLinked={reload} />}

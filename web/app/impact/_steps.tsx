@@ -170,7 +170,8 @@ function Settle({ output, review, onChanged }: { output: Output; review: boolean
               <Button disabled={busy} onClick={() => void act("accept_regeneration")}>
                 Accept regeneration
               </Button>
-              <Button variant="ghost" disabled={busy} onClick={() => setReconciling(true)}>
+              {/* qa-plan-45: a bordered button like its neighbours, not grey text that reads as disabled. */}
+              <Button disabled={busy} onClick={() => setReconciling(true)}>
                 Reconcile…
               </Button>
             </>

@@ -175,12 +175,13 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
             {a.aligned} aligned · {a.drift} drift · {a.untracked} untracked · {a.done} done
           </span>
         </Row>
-        {/* qa-plan-43: which version is approved, and where to update the roadmap from it. */}
+        {/* qa-plan-43: which version is approved; fix4 qa-plan-3: the link lands on the PRD's
+            Build roadmap (Plan > Roadmap documents, the PRD picked), as the markdown's does. */}
         {t.prd_moved && (
           <Notice tone="warn" testId="report-prd-moved">
             {t.prd_moved_to ? `v${t.prd_moved_to} of the PRD is approved` : "A newer version of the PRD is approved"} ·{" "}
-            <Link href={t.link} prefetch={false} className="font-semibold text-accent-ink hover:underline">
-              Update the roadmap
+            <Link href={`/plan/documents?prd=${encodeURIComponent(t.prd.slug)}`} prefetch={false} className="font-semibold text-accent-ink hover:underline">
+              Build the roadmap from it
             </Link>
           </Notice>
         )}

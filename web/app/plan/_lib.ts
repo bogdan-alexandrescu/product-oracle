@@ -20,20 +20,25 @@ const STATE: Record<Exclude<PlanItem["state"], "proposed">, { kind: ChipKind; la
   planned: { kind: "na", label: "Planned" },
 };
 
-/** The state chip (F1 §5): a draft's item is "Proposed", with how it differs from its approved twin. */
-export function stateChip(i: PlanItem): { kind: ChipKind; label: string; dashed: boolean } {
+/**
+ * The state chip (F1 §5): a draft's item is "Proposed", with how it differs from its approved twin.
+ * `label` is the whole state; `head` the pill's word and `detail` the rest, said outside the pill
+ * where room is short (qa-plan-30: "Proposed" then "Next → Now", never wrapped inside the pill).
+ */
+export function stateChip(i: PlanItem): { kind: ChipKind; label: string; dashed: boolean; head: string; detail: string; sep: string } {
   // qa-plan-31: an approved item its draft drops has one state, not "Planned" and "Dropped" at once.
   if (i.state !== "proposed" && i.change?.kind === "dropped") {
-    const draft = i.change.draft_version != null ? ` in draft ${i.change.draft_version}` : "";
-    return { kind: "warn", label: `Dropped${draft} (was ${STATE[i.state].label})`, dashed: false };
+    const draft = i.change.draft_version != null ? `in draft ${i.change.draft_version} ` : "";
+    const detail = `${draft}(was ${STATE[i.state].label})`;
+    return { kind: "warn", label: `Dropped ${detail}`, dashed: false, head: "Dropped", detail, sep: " " };
   }
-  if (i.state !== "proposed") return { ...STATE[i.state], dashed: false };
+  if (i.state !== "proposed") return { ...STATE[i.state], dashed: false, head: STATE[i.state].label, detail: "", sep: "" };
   const c = i.change;
-  let suffix = "";
-  if (c?.kind === "new") suffix = " · new";
-  else if (c?.kind === "moved" && c.from_horizon && c.to_horizon) suffix = ` · ${HORIZON_LABEL[c.from_horizon]} → ${HORIZON_LABEL[c.to_horizon]}`;
-  else if (c?.kind === "changed") suffix = " · changed";
-  return { kind: "line", label: `Proposed${suffix}`, dashed: true };
+  let detail = "";
+  if (c?.kind === "new") detail = "new";
+  else if (c?.kind === "moved" && c.from_horizon && c.to_horizon) detail = `${HORIZON_LABEL[c.from_horizon]} → ${HORIZON_LABEL[c.to_horizon]}`;
+  else if (c?.kind === "changed") detail = "changed";
+  return { kind: "line", label: detail ? `Proposed · ${detail}` : "Proposed", dashed: true, head: "Proposed", detail, sep: detail ? " · " : "" };
 }
 
 /** The Engineering cell (F1 §6): the issue part, then the date part, joined by " · "; "—" when both are empty. */
@@ -89,6 +94,42 @@ export function whoLabel(who: Schemas["PlanWho"] | null | undefined, me: string 
     default:
       return `${who.role}s`;
   }
+}
+
+/** The next decision as a verb phrase: [for many or "you", for one]. */
+const NEXT_VERB: Record<string, [string, string]> = {
+  review_prd: ["review the PRD", "reviews the PRD"],
+  verify_date: ["verify the date", "verifies the date"],
+  reverify_date: ["re-verify the date", "re-verifies the date"],
+  decide_slip: ["decide on the slip", "decides on the slip"],
+  resolve_blocker: ["resolve the blocker", "resolves the blocker"],
+  reconcile: ["reconcile the plan with the tracker", "reconciles the plan with the tracker"],
+  link_issue: ["link a tracker issue", "links a tracker issue"],
+};
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The button that takes the next decision, for a viewer who may: "Review the PRD", "Link issue". */
+export function nextButton(n: PlanItem["next"]): string {
+  if (n.action === "link_issue") return "Link issue";
+  const v = n.action ? NEXT_VERB[n.action] : undefined;
+  return v ? cap(v[0]) : n.label;
+}
+
+/**
+ * qa-plan-29: the next decision as one sentence, who first: "Owners decide on the slip",
+ * "Waiting on approvers to review the PRD", "You verify the date".
+ */
+export function nextSentence(n: PlanItem["next"], me: string | null | undefined): string {
+  if (!n.action) return "—";
+  const v = NEXT_VERB[n.action];
+  const who = whoLabel(n.who, me);
+  if (!v) return who ? `${n.label} · ${who}` : n.label;
+  if (!who) return cap(v[0]);
+  if (who === "you") return n.action === "review_prd" ? "Review the PRD" : `You ${v[0]}`;
+  if (n.action === "review_prd") return `Waiting on ${who} to review the PRD`;
+  const many = who === "owners" || who === "approvers" || who.endsWith("s");
+  return `${cap(who)} ${many ? v[0] : v[1]}`;
 }
 
 /** "Usage alerts PRD v1" or "Checkout redesign PRD draft 2". */

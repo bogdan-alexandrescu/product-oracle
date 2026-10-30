@@ -107,3 +107,13 @@ export function treeCodes(names: Names): Map<string, string | null> {
 
 /** "62%": a goal's progress (0 to 1) as people read it. */
 export const percent = (v: number) => `${Math.round(v * 100)}%`;
+
+/**
+ * An item's confidence as every page shows it (qa-plan-4): the score is built on its evidence,
+ * so with none it has no score (qa-plan-8). Baseline's rings and Home's and Plan's goal cards
+ * read this one rule, so a goal never shows 78 on one page and "–" on another.
+ */
+export function scoredConfidence(confidence: number | null | undefined, evidence: number | null | undefined): number | null {
+  if (evidence === 0) return null;
+  return confidence ?? null;
+}

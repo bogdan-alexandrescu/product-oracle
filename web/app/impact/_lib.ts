@@ -25,6 +25,21 @@ export const CATEGORY: Record<Output["category"], string> = {
   document: "Document",
 };
 
+/** An artifact's kind in words, as its title says it ("Checkout flow (user flow)"): "User flow". */
+const KIND: Record<string, string> = {
+  tech_brief: "Tech brief",
+  engineering_spec: "Engineering spec",
+  user_flow: "User flow",
+  wireframe: "Wireframe",
+  figma_design: "Figma design",
+  prototype: "Prototype",
+  acceptance_tests: "Acceptance tests",
+};
+
+/** qa-plan-41: one kind name per output, the one its title says; its category where it has no artifact kind. */
+export const kindOf = (o: Pick<Output, "artifact_kind" | "category">): string =>
+  (o.artifact_kind ? KIND[o.artifact_kind] : undefined) ?? CATEGORY[o.category] ?? statusLabel(o.category);
+
 export const FRESH: Record<Freshness, { label: string; kind: ChipKind }> = {
   fresh: { label: "Fresh", kind: "pass" },
   potentially_stale: { label: "Potentially stale", kind: "warn" },
@@ -59,6 +74,8 @@ export type Upstream = {
   deletedAt: string | null;
   entityId: string | null;
   entityKey: string | null;
+  /** A baseline item's kind in words ("Requirement"); null for a section or a version. */
+  typeLabel: string | null;
 };
 
 /** "Checkout redesign PRD v1": a dependency's document version in words. */
@@ -81,26 +98,27 @@ export function upstreamOf(d: Dependency, names?: Names): Upstream {
     return {
       key: `e:${e.id}`, kind: "entity", label: e.title, sub: [statusLabel(e.type), conf].filter(Boolean).join(" · "),
       short: u.deleted ? `${e.title} (deleted)` : e.title, deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null,
-      entityId: e.id, entityKey: e.key,
+      entityId: e.id, entityKey: e.key, typeLabel: statusLabel(e.type),
     };
   }
   if (u.section_key) {
     const section = sectionOf(u, names);
     return {
       key: `s:${u.document_slug ?? ""}#${u.section_key}`, kind: "section", label: section, sub: where ? `Section of ${where}` : "Section",
-      short: section, deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null, entityId: null, entityKey: null,
+      short: section, deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null, entityId: null, entityKey: null, typeLabel: null,
     };
   }
   return {
     key: `v:${u.version_id ?? where}`, kind: "version", label: where || "Upstream version", sub: "All of it",
-    short: where || "the version", deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null, entityId: null, entityKey: null,
+    short: where || "the version", deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null, entityId: null, entityKey: null, typeLabel: null,
   };
 }
 
 /** "Checkout redesign PRD v1 · Scope": a dependency's upstream in one line. */
 export function upstreamLine(d: Dependency, names?: Names): string {
   const u = d.upstream;
-  if (u.entity) return `${u.entity.key} · ${u.entity.title}`;
+  // qa-plan-10: the item by its title and kind ("Guided setup · Feature"), never its baseline key.
+  if (u.entity) return `${u.entity.title} · ${statusLabel(u.entity.type)}`;
   return [whereOf(u, names), sectionOf(u, names)].filter(Boolean).join(" · ") || "Upstream";
 }
 

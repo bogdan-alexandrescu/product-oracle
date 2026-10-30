@@ -819,13 +819,17 @@ function HopDock() {
   // about 600 px of page is left beside it (never over a row's buttons); narrower, it is a drawer
   // over the page with a backdrop that closes it (docked there, it squeezed the page to a column
   // of single words). Elsewhere it overlays below 1600 px, beside its strip.
+  // qa-onboarding-29: a page's own modal (fixed z-40 inside <main>) ties with the dock's z-40 and
+  // loses on DOM order, leaving the Ask column bright beside the dimmed page. While one is open the
+  // dock steps down to z-30 so the overlay covers the whole window.
+  const modalOver = "[body:has(#main_[aria-modal=true])_&]:z-30";
   const width = simple ? "w-0 min-[1240px]:w-[400px] min-[1240px]:border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
   return (
     <aside
       aria-label="Ask Oracle"
       data-testid="hop-dock"
       data-open={open ? "true" : "false"}
-      className={`sticky top-0 z-40 col-start-3 row-start-1 h-dvh border-line bg-surface max-[600px]:hidden ${width}`}
+      className={`sticky top-0 z-40 col-start-3 row-start-1 h-dvh border-line bg-surface max-[600px]:hidden ${modalOver} ${width}`}
     >
       {!simple && (
         <button

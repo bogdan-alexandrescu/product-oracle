@@ -47,6 +47,8 @@ export function usePhone(): boolean {
 }
 
 const fmt = (n: number | null | undefined, digits = 1): string => (n == null ? "–" : Number(n.toFixed(digits)).toString());
+/** A score, always to two places (1.60 · 1.25 · 1.00), so a list of them reads one way (qa-plan-53). */
+const scoreFmt = (n: number | null | undefined): string => (n == null ? "–" : n.toFixed(2));
 
 /** A feature as people read it: its title and its short code ("Sample data import (F-12)"), never its key. */
 const nameOf = (r: { title: string; short_code?: string | null }): string => (r.short_code ? `${r.title} (${r.short_code})` : r.title);
@@ -390,7 +392,8 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
               {mayChange && r.can_reorder && (
                 <button
                   aria-label={`Drag ${nameOf(r)} to reorder`}
-                  title="Drag to reorder (or use the arrow keys)"
+                  // A role whose move is a proposal is told so (qa-plan-14): the row's own `applies`.
+                  title={r.applies ? "Drag to reorder (or use the arrow keys)" : "Drag to propose a new rank (or use the arrow keys): the decider decides"}
                   className="cursor-grab touch-none rounded-md px-1 text-[length:var(--simple-h2)] leading-none text-text2 hover:bg-surface2"
                   onPointerDown={(e) => start(e, i)}
                   onPointerMove={(e) => drag && setDrag({ ...drag, to: targetIndex(e.clientY, drag.from) })}
@@ -441,7 +444,7 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
                   </span>
                   {`value ${fmt(r.goal_value)} · ${fmt(r.effort)} wk · score `}
                   <span className="font-semibold text-text" data-testid="prio-score">
-                    {fmt(r.score, 2)}
+                    {scoreFmt(r.score)}
                   </span>
                 </span>
               </span>
@@ -479,7 +482,7 @@ function OracleOrder({ rows }: { rows: Row[] }) {
               <span className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums">{r.oracle_rank ?? "–"}</span>
               <CodeChip r={r} />
               <span className="flex-1 font-medium">{r.title}</span>
-              <span className="text-[length:var(--simple-small)] text-text2">score {fmt(r.score, 2)}</span>
+              <span className="text-[length:var(--simple-small)] text-text2">score {scoreFmt(r.score)}</span>
             </div>
             {r.oracle_rank !== r.rank && (
               <p className="mt-1 pl-12 text-[length:var(--simple-small)] text-text2" data-testid="oracle-why">
@@ -723,12 +726,14 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
               <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
               {mayChange && (
                 <span className="flex gap-2">
+                  {/* qa-plan-14: who only proposes (the draft's own `applies`) is offered Propose, not Confirm. */}
                   <Button
+                    title={d.applies ? undefined : "Propose confirming it: the decider decides"}
                     onClick={async () =>
                       changed(await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }), `Confirmed ${d.title}`)
                     }
                   >
-                    Confirm
+                    {d.applies ? "Confirm" : "Propose"}
                   </Button>
                   <Button variant="secondary" aria-expanded={merging === d.item_id} onClick={() => setMerging(merging === d.item_id ? null : d.item_id)}>
                     Merge into…
@@ -762,7 +767,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
                   ))}
                 </select>
                 <Button type="submit" disabled={!into}>
-                  Merge
+                  {d.applies ? "Merge" : "Propose merge"}
                 </Button>
               </form>
             )}
@@ -1229,7 +1234,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                     {r.title}
                   </span>
                   {!r.above_line && <MissesTag data={data} compact />}
-                  <span className="flex-none tabular-nums text-text2">{fmt(r.score, 2)}</span>
+                  <span className="flex-none tabular-nums text-text2">{scoreFmt(r.score)}</span>
                 </button>
                 {/* The badge on a line of its own, so the name stays readable. */}
                 {words && (

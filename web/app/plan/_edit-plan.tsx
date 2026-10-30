@@ -72,8 +72,8 @@ export function EditPlanButton({
     }
   };
   return (
-    // The Roadmap panel's head has no room on a phone (as its legend): the plan is edited on a wider screen.
-    <span className="inline-flex items-center gap-2 max-[600px]:hidden">
+    // qa-plan-9 (fix4): Edit plan on a phone too; its rows stack there (qa-plan-15).
+    <span className="inline-flex flex-wrap items-center gap-2">
       {roadmaps.length > 1 && (
         <select aria-label="Roadmap to edit" value={picked} onChange={(e) => setSlug(e.target.value)} className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-sm">
           {roadmaps.map((r) => (

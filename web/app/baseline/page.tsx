@@ -48,12 +48,17 @@ function TabFromUrl({ onTab, onFrom, onRun }: { onTab: (tab: Tab) => void; onFro
   return null;
 }
 
-/** ?build=1 opens the Build the baseline sheet (Home, Set up and the New run dialog link here). */
-function BuildFromUrl({ onBuild }: { onBuild: () => void }) {
-  const build = useSearchParams().get("build") === "1";
+/**
+ * ?build=1 opens the Build the baseline sheet (Home, Set up and the New run dialog link here);
+ * with ?from=setup (Home's Set up row) its links keep the way back to Home (qa-onboarding-17).
+ */
+function BuildFromUrl({ onBuild }: { onBuild: (fromSetup: boolean) => void }) {
+  const params = useSearchParams();
+  const build = params.get("build") === "1";
+  const fromSetup = params.get("from") === "setup";
   useEffect(() => {
-    if (build) onBuild();
-  }, [build, onBuild]);
+    if (build) onBuild(fromSetup);
+  }, [build, fromSetup, onBuild]);
   return null;
 }
 
@@ -153,9 +158,14 @@ export default function BaselinePage() {
   const runs = useQuery("baseline-builds", () => unwrap(api.GET("/v1/runs")));
   const build = currentBuild(runs.data);
   const [building, setBuilding] = useState(false);
-  const openBuild = useCallback(() => setBuilding(true), []);
+  const [buildFromSetup, setBuildFromSetup] = useState(false);
+  const openBuild = useCallback((fromSetup: boolean) => {
+    setBuildFromSetup(fromSetup);
+    setBuilding(true);
+  }, []);
   const closeBuild = () => {
     setBuilding(false);
+    setBuildFromSetup(false);
     router.replace("/baseline", { scroll: false });
   };
   const started = () => {
@@ -414,7 +424,7 @@ export default function BaselinePage() {
         {canInterview && <InterviewFromUrl onGoal={makeMeasurable} onVague={() => void interviewVague()} />}
         {canWrite && <BuildFromUrl onBuild={openBuild} />}
       </Suspense>
-      {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} />}
+      {building && canWrite && <BuildBaselineSheet onClose={closeBuild} onStarted={started} fromSetup={buildFromSetup} />}
       {adding && canWrite && (
         <AddItemSheet kind={adding} graph={graph.data} tags={tags} onClose={() => setAdding(null)} onAdded={added} />
       )}
@@ -438,7 +448,7 @@ export default function BaselinePage() {
               (build && build.status !== "failed" ? (
                 <BuildChip build={build} />
               ) : (
-                <Button variant="primary" icon="baseline" onClick={openBuild}>
+                <Button variant="primary" icon="baseline" onClick={() => openBuild(false)}>
                   Build baseline
                 </Button>
               ))}

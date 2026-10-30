@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { Chip, CodeChip, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, ToGo } from "@/components/ds";
 import { namedText } from "@/lib/codes";
+import { missingFields } from "@/app/baseline/_components/goal-fields";
 import { percent } from "@/lib/goal-tree";
 
 import { buildRun, type BaselineState } from "./_setup";
@@ -55,7 +56,8 @@ function GoalCard({
             <b className="tnum font-display text-[34px] leading-9 font-bold tracking-[-0.03em]">{formatFigure(g.current!)}</b>
           )}
           {g.targetText && (
-            <span className="tnum ml-1 text-[15px] font-medium text-text2 max-[600px]:ml-0 max-[600px]:block">/ {g.targetText}</span>
+            // qa-plan-34 (fix4): value and target on one line on a phone too ("38% / 45%").
+            <span className={`tnum ml-1 text-[15px] font-medium text-text2 ${p.state === "raw" ? "break-words" : "whitespace-nowrap"}`}>/ {g.targetText}</span>
           )}
         </span>
         {!noValue && (
@@ -93,7 +95,7 @@ function GoalCard({
           ) : p.state === "none" ? (
             <span className="text-text2">{p.text}</span>
           ) : p.state === "notarget" ? (
-            <span className="font-semibold whitespace-nowrap text-warn" title={`Not measurable yet: missing ${(g.missing ?? ["target", "unit"]).join(", ")}`}>
+            <span className="font-semibold whitespace-nowrap text-warn" title={`Not measurable yet: missing ${missingFields(g.missing ?? ["target"]).map((f) => f.toLowerCase()).join(", ")}`}>
               {p.text}
             </span>
           ) : null}

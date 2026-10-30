@@ -38,7 +38,7 @@ const slugWords = (slug: string) => {
 /** "6. Success metrics" → "Success metrics". */
 const bareHeading = (h: string) => h.replace(/^\s*(?:\d+(?:\.\d+)*\.?|[A-Z]\.)\s+/, "").trim() || h;
 
-function wanted(report: Report | undefined): { slugs: string[]; versions: [string, number][] } {
+function wanted(report: Report | undefined, extra?: string | null): { slugs: string[]; versions: [string, number][] } {
   const slugs = new Set<string>();
   const versions = new Map<string, [string, number]>();
   const add = (slug: string | null | undefined, n: number | null | undefined) => {
@@ -46,6 +46,7 @@ function wanted(report: Report | undefined): { slugs: string[]; versions: [strin
     slugs.add(slug);
     if (n != null) versions.set(`${slug}@${n}`, [slug, n]);
   };
+  add(extra, null);
   if (report) {
     const subj = parseRef(report.change?.subject_ref ?? report.subject.ref);
     if (subj) add(subj.slug, subj.n);
@@ -85,9 +86,19 @@ async function loadNames(slugs: string[], versions: [string, number][]): Promise
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** The slug of the PRD version's Impact a "?from=" names, for useNames to load its title. */
+export const fromSlug = (from: string | null | undefined): string | null => {
+  const m = from ? /^\/documents\/([^/?#]+)\/v\/\d+\/impact\/?$/.exec(from) : null;
+  try {
+    return m ? decodeURIComponent(m[1]) : null;
+  } catch {
+    return null;
+  }
+};
+
 /** The names an impact report needs, loaded once per set of documents it mentions. */
-export function useNames(report: Report | undefined): Names {
-  const { slugs, versions } = wanted(report);
+export function useNames(report: Report | undefined, extraSlug?: string | null): Names {
+  const { slugs, versions } = wanted(report, extraSlug);
   const key = `impact-names|${slugs.join(",")}|${versions.map(([s, n]) => `${s}@${n}`).join(",")}`;
   const q = useQuery(key, () => loadNames(slugs, versions), { keepPrevious: true });
   const loaded = q.data ?? { docs: {}, headings: {}, byKey: {} };
@@ -115,6 +126,24 @@ const slugOnly: Names = { doc: slugWords, section: (k) => slugWords(k), words: (
 /** The report's names, for the explorer's parts (ImpactExplorer provides them). */
 export const NamesContext = createContext<Names>(slugOnly);
 export const useNamesOf = () => useContext(NamesContext);
+
+/**
+ * qa-plan-12: where a recorded change's page was opened from (its "?from="), as its back link:
+ * a PRD version's Impact ("Impact of Checkout redesign PRD v2"). Anything else (or a path that
+ * is not this site's) is ignored, and the page leads back to what the change is about.
+ */
+export function parseFrom(from: string | null | undefined, names: Names): { href: string; label: string } | null {
+  if (!from || !from.startsWith("/") || from.startsWith("//")) return null;
+  const m = /^\/documents\/([^/?#]+)\/v\/(\d+)\/impact\/?$/.exec(from);
+  if (!m) return null;
+  let slug: string;
+  try {
+    slug = decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
+  return { href: `/documents/${encodeURIComponent(slug)}/v/${m[2]}/impact`, label: `Impact of ${names.doc(slug)} v${m[2]}` };
+}
 
 /** What a change did, in words: "edited", "deleted", "permission changed". */
 const CAUSE: Record<string, string> = {
@@ -154,7 +183,13 @@ export function subjectWords(report: Report, names: Names): SubjectWords {
   }
   const kindKey = ref ? /^([a-z_]+):(.+)$/.exec(ref) : null;
   const kind = kindKey?.[1] ?? c?.subject_kind ?? report.subject.kind;
-  const named = report.subject.title ?? (kindKey ? `${slugWords(kindKey[1])} ${kindKey[2]}` : ref ? names.words(ref) : slugWords(kind));
+  const titled = report.subject.title;
+  // A recorded change on a baseline item: its kind and title, quoted ("Requirement “Guest checkout
+  // keeps the cart” deleted"), so the verb never reads as part of the title.
+  const named =
+    titled && c && kindKey
+      ? `${slugWords(kindKey[1])} “${titled}”`
+      : (titled ?? (kindKey ? `${slugWords(kindKey[1])} ${kindKey[2]}` : ref ? names.words(ref) : slugWords(kind)));
   const title = c ? `${named} ${causeWords(c.cause)}` : named;
   const back =
     kind === "source"

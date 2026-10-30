@@ -32,7 +32,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import { NewLaunchDialog } from "./_new-launch";
+import { approvedRoadmap, NewLaunchDialog, NoRoadmapReason } from "./_new-launch";
 
 type Summary = Schemas["LaunchSummary"];
 type Task = Schemas["TaskOut"];
@@ -112,6 +112,12 @@ function Launches() {
   const [sheet, setSheet] = useState(false);
   const [creating, setCreating] = useState(false);
   const { can } = useMe();
+  // fix4 qa-plan-13: New launch plans from a track's approved roadmap; with none, it is
+  // disabled and the page says why and what to approve (the dialog shares this query).
+  const tracksQ = useQuery("new-launch-tracks", () => unwrap(api.GET("/v1/tracks")));
+  const tracks = tracksQ.data ?? [];
+  const canCreate = can("create_launch");
+  const noRoadmap = !!tracksQ.data && !tracks.some((t) => approvedRoadmap(t));
 
   const rows = q.data ?? [];
   const count = (s: Summary["state"]) => rows.filter((l) => l.state === s).length;
@@ -201,8 +207,16 @@ function Launches() {
             <LinkButton href="/roadmap/changelog" icon="doc" className={HEADER_BUTTON} data-testid="changelog-link">
               Changelog
             </LinkButton>
-            {can("create_launch") && (
-              <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="new-launch">
+            {/* fix4 qa-plan-15: while there is no launch, New launch is the empty state's only. */}
+            {canCreate && !none && (
+              <Button
+                variant="primary"
+                icon="plus"
+                onClick={() => setCreating(true)}
+                disabled={noRoadmap}
+                aria-describedby={noRoadmap ? "new-launch-why" : undefined}
+                data-testid="new-launch"
+              >
                 New launch
               </Button>
             )}
@@ -211,6 +225,11 @@ function Launches() {
       />
       <div className="flex flex-col gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
+        {canCreate && noRoadmap && !none && (
+          <div id="new-launch-why">
+            <NoRoadmapReason track={tracks[0]} />
+          </div>
+        )}
         <Split inspector={phone ? undefined : inspector}>
           {/* qa-plan-39: the card is named after the filter, not "Launches" again under the page title. */}
           <Panel
@@ -238,14 +257,26 @@ function Launches() {
               <div data-testid="launches-empty" className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2">
                 <p className="font-display text-lg font-bold text-text">No launches yet</p>
                 <p data-testid="launches-empty-text">
-                  {can("create_launch")
+                  {canCreate && !noRoadmap
                     ? "Use New launch to plan the first, or approve a roadmap: its Now items get a launch each."
                     : "They are planned when a roadmap is approved."}
                 </p>
-                {can("create_launch") && (
-                  <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="launches-empty-new">
+                {canCreate && (
+                  <Button
+                    variant="primary"
+                    icon="plus"
+                    onClick={() => setCreating(true)}
+                    disabled={noRoadmap}
+                    aria-describedby={noRoadmap ? "new-launch-why" : undefined}
+                    data-testid="launches-empty-new"
+                  >
                     New launch
                   </Button>
+                )}
+                {canCreate && noRoadmap && (
+                  <div id="new-launch-why" className="max-w-md">
+                    <NoRoadmapReason track={tracks[0]} />
+                  </div>
                 )}
               </div>
             ) : (

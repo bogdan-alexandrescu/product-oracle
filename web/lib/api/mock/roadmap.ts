@@ -277,7 +277,9 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO)
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
     // "launches": a second track, Checkout redesign PRD, with no roadmap yet (New launch's Track picker).
-    const checkout = scenario === "launches" ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
+    // fix4: the alignment report scenarios have it too, so a report's second track is one the mock keeps.
+    const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved";
+    const checkout = secondTrack ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
     if (checkout) {
       const started = latest(ctx, checkout.id)?.number ?? 1;
       db.tracks.push({
@@ -593,7 +595,7 @@ function isStale(i: { freshness?: string | null; stale_reasons?: readonly string
 /** As oracle.roadmap.views._headline: one plain sentence, naming only what means something. */
 function trackHeadline(health: Schemas["TrackOverview"]["health"], counts: Record<string, number>, when: string, movedTo: number | null): string {
   if (health === "closed") return "Closed.";
-  if (health === "paused") return "Paused.";
+  if (health === "paused") return "Paused: not checked hourly and raises no alerts, and updates take no dates from it. Reports still list it.";
   if (health === "no_roadmap") return "No roadmap items yet: derive the roadmap from the PRD.";
   const moved = movedTo ? ` The PRD has a newer approved version (v${movedTo}).` : "";
   const n = counts.items;
@@ -1170,6 +1172,93 @@ function planTrackItems(db: RoadmapDb): Schemas["AtRiskItem"][] {
     horizon: s.horizon,
     reasons: db.accepted?.[s.key] ? [] : (s.reasons ?? []).map((r) => ({ ...r })),
   }));
+}
+
+const PLAN_REPORT_DRIFT: Schemas["DriftEntry"][] = [
+  { kind: "ahead", item_key: "spend-forecast", tracker_ref: null, detail: "Engineering has started work planned for Next." },
+  { kind: "unplanned", item_key: null, tracker_ref: "ENG-433", detail: "ENG-433 (Alert storage cleanup) is not on the roadmap." },
+];
+
+/**
+ * fix4 qa-plan-1, qa-plan-2: each active or paused track's part of an alignment report, as
+ * oracle.reports.alignment._track_content builds it: read off the track's own overview (the
+ * one the Plan reads), so the report's headline, item count and approved version are the Plan's.
+ * `calm` gives the part an earlier, quiet week had: on track, nothing needing attention.
+ */
+export function reportTracks(ctx: RoadmapContext, db: RoadmapDb, calm = false): (Schemas["ReportTrack"] & { untracked_now: number })[] {
+  return db.tracks
+    .filter((t) => t.status === "active" || t.status === "paused")
+    .map((t) => {
+      const o = overview(ctx, db, t);
+      const prd = ctx.documents.find((d) => d.id === t.prd_id)!;
+      const link = (key?: string | null) => `/plan?item=${prd.slug}${key ? `:${key}` : ""}`;
+      // The roadmap's alignment counts: the Plan's own rows for the Plan's track.
+      const counts = { aligned: 0, drift: 0, untracked: 0, done: 0 };
+      const titles = new Map<string, string>();
+      let untrackedNow = 0;
+      // The Plan's track keeps no tracker drift of its own in the mock: this week's stand-in
+      // (#418 picked up early, and an issue on no item), named as the Plan names the items.
+      const driftIn: Schemas["DriftEntry"][] = t.plan ? [...PLAN_REPORT_DRIFT, ...o.drift] : o.drift;
+      const driftKeys = new Set(driftIn.filter((d) => d.kind === "ahead").map((d) => d.item_key).filter(Boolean));
+      const rows = t.plan
+        ? ALERTS_APPROVED.map((s) => ({
+            key: s.key,
+            title: s.title,
+            horizon: s.horizon as string,
+            states: [...(s.records ?? []).map((r) => r.state as string), ...(db.records as LinkedRecord[]).filter((r) => r.prd_document_id === prd.id && r.item_key === s.key).map((r) => r.state as string)],
+            drifting: !calm && (o.at_risk.some((a) => a.item_key === s.key && a.reasons.some((r) => r.kind === "slipping")) || driftKeys.has(s.key)),
+          }))
+        : (() => {
+            const roadmap = t.roadmap_id ? ctx.documents.find((d) => d.id === t.roadmap_id) : undefined;
+            const rv = roadmap ? itemsVersion(ctx, db, roadmap, null, true) : undefined;
+            return (rv ? db.items[rv.id] ?? [] : []).map((i) => ({
+              key: i.item_key,
+              title: i.title,
+              horizon: i.horizon as string,
+              states: db.records.filter((r) => r.track_id === i.track_id && r.item_key === i.item_key).map((r) => r.state as string),
+              drifting: !calm && drift(db, i).length > 0,
+            }));
+          })();
+      for (const r of rows) {
+        titles.set(r.key, r.title);
+        const a = !r.states.length ? "untracked" : r.drifting ? "drift" : r.states.every((s) => s === "done") ? "done" : "aligned";
+        counts[a] += 1;
+        if (a === "untracked" && r.horizon === "now") untrackedNow += 1;
+      }
+      const nxt = o.next_milestone;
+      const n = o.counts.items;
+      const when = nxt ? ` Next milestone: ${nxt.name}${nxt.target_date ? `, ${calendarDay(nxt.target_date)}` : ""}.` : "";
+      const quiet = calm && o.health !== "paused" && o.health !== "no_roadmap";
+      const bases = (status: string) =>
+        calm ? [] : db.bases.filter((b) => b.prd_document_id === prd.id && b.status === status).map((b) => ({ reference: b.reference, supports_date: b.supports_date, reason: status === "withdrawn" ? b.withdrawn_reason ?? null : null }));
+      return {
+        track_id: t.id,
+        status: t.status,
+        prd: { slug: prd.slug, title: prd.title },
+        link: link(),
+        health: quiet ? "on_track" : o.health,
+        // As the monitor last recorded it: the Plan's track was on track before this week.
+        health_before: t.plan || quiet ? "on_track" : o.health,
+        headline: quiet ? `On track: ${n} ${n === 1 ? "item" : "items"}.${when}` : o.headline,
+        next_milestone: nxt ? { name: nxt.name, date: nxt.target_date ?? null, verified: nxt.dated } : null,
+        alignment: counts,
+        needs_attention: calm
+          ? []
+          : o.at_risk.flatMap((a) =>
+              a.reasons.map((r) => ({ item_key: a.item_key, title: a.title, horizon: a.horizon, kind: r.kind, detail: r.detail, alert_id: null, link: link(a.item_key) })),
+            ),
+        drift: calm
+          ? []
+          : driftIn
+              .filter((d) => d.kind === "ahead" || d.kind === "unplanned")
+              .map((d) => ({ kind: d.kind, item_key: d.item_key ?? null, tracker_ref: d.tracker_ref ?? null, detail: d.detail, title: (d.item_key && titles.get(d.item_key)) || null, link: d.item_key ? link(d.item_key) : null })),
+        dates: { verified: bases("verified"), withdrawn: bases("withdrawn") },
+        prd_moved: !calm && o.prd_moved,
+        prd_moved_to: !calm && o.prd_moved ? o.latest_approved_version : null,
+        // The report's figures count these (summaryOf): a Now item with no tracker issue.
+        untracked_now: untrackedNow,
+      } as Schemas["ReportTrack"] & { untracked_now: number };
+    });
 }
 
 /** F5 lane 3: the title of a feature or requirement the mock plan's items trace, by its id. */

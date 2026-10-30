@@ -77,9 +77,11 @@ const METHODS: { method: Method; label: string }[] = [
 ];
 const METHOD_LABEL = Object.fromEntries(METHODS.map((m) => [m.method, m.label])) as Record<Method, string>;
 
-const FLAGS: Record<string, { label: string; kind: ChipKind; title: string }> = {
+/** Each flag: its label, a short one for the table's Flags column (qa-plan-49), its colour and meaning. */
+const FLAGS: Record<string, { label: string; short?: string; kind: ChipKind; title: string }> = {
   no_confirmed_goal: {
     label: "Serves no confirmed goal",
+    short: "No goal",
     kind: "crit",
     title: "Linked to no confirmed goal, so it is ranked after every feature that serves one.",
   },
@@ -89,15 +91,17 @@ const FLAGS: Record<string, { label: string; kind: ChipKind; title: string }> = 
     title: "Part of a set of features that depend on each other.",
   },
   missing_inputs: { label: "Missing inputs", kind: "warn", title: "Some inputs this method needs are not set." },
-  no_confidence: { label: "No confidence data", kind: "warn", title: "No evidence or confidence value: 50% assumed." },
+  no_confidence: { label: "No confidence data", short: "No confidence", kind: "warn", title: "No evidence or confidence value: 50% assumed." },
   low_confidence: { label: "Low confidence", kind: "warn", title: "Confidence below 40%." },
   moved_for_dependency: {
     label: "Moved for a dependency",
+    short: "Moved up",
     kind: "acc",
     title: "Placed earlier than its score because a higher-ranked feature depends on it.",
   },
   held_by_dependency: {
     label: "Held by a dependency",
+    short: "Held back",
     kind: "warn",
     title: "A person's change could not place it above a feature it depends on.",
   },
@@ -153,10 +157,19 @@ const sortFlags = (flags: string[]) => [...flags].sort((a, b) => flagRank(a) - f
 
 const flagOf = (flag: string) => FLAGS[flag] ?? { label: flag.replace(/_/g, " "), kind: "na" as const, title: flag };
 
-function FlagChip({ flag, hero = false }: { flag: string; hero?: boolean }) {
+/** A flag; in the table (compact) its short label on one line, the full one in its tooltip. */
+function FlagChip({ flag, hero = false, compact = false }: { flag: string; hero?: boolean; compact?: boolean }) {
   const f = flagOf(flag);
+  if (compact && f.short) {
+    return (
+      <Chip kind={f.kind} title={`${f.label}. ${f.title}`}>
+        <span aria-hidden>{f.short}</span>
+        <span className="sr-only">{f.label}</span>
+      </Chip>
+    );
+  }
   return (
-    <Chip kind={f.kind} hero={hero} title={f.title} wrap>
+    <Chip kind={f.kind} hero={hero} title={compact ? `${f.label}. ${f.title}` : f.title} wrap={!compact}>
       {f.label}
     </Chip>
   );
@@ -180,7 +193,11 @@ function featureName(features: RankedFeature[], key: string): string {
   return features.find((x) => x.key === key)?.title ?? key;
 }
 
-type RankReason = { label: string; title: string; flag?: string };
+/**
+ * A row's reason: a short label the chip shows on one line (qa-plan-49), the rest of the
+ * sentence for screen readers and the tooltip, and why in general.
+ */
+type RankReason = { label: string; detail?: string; title: string; flag?: string };
 
 /**
  * Why a row sits where its score alone would not put it (a higher score below it, or a lower
@@ -203,7 +220,8 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
     if (earlier) {
       const n = names(earlier[1]!);
       out.push({
-        label: `Ranked higher: ${n.join(", ")} ${n.length > 1 ? "depend" : "depends"} on it`,
+        label: "Ranked higher",
+        detail: `: ${n.join(", ")} ${n.length > 1 ? "depend" : "depends"} on it`,
         title: "Placed above its score because a higher-ranked feature needs it first.",
         flag: "moved_for_dependency",
       });
@@ -211,7 +229,8 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
     const after = o.match(/^placed after its prerequisite\(s\) (.+)$/);
     if (after) {
       out.push({
-        label: `Ranked lower: depends on ${names(after[1]!).join(", ")}`,
+        label: "Ranked lower",
+        detail: `: depends on ${names(after[1]!).join(", ")}`,
         title: "Placed below its score because it needs these features first.",
       });
     }
@@ -221,14 +240,16 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
   }
   if (!f.serves_goal) {
     out.push({
-      label: "Ranked lower: no confirmed goal",
+      label: "Ranked lower",
+      detail: ": no confirmed goal",
       title: "Features that serve no confirmed goal rank after every feature that serves one, whatever their score.",
       flag: "no_confirmed_goal",
     });
   } else if (f.score == null) {
     const missing = f.explanation.missing.map(inputLabel).join(", ");
     out.push({
-      label: missing ? `Not scored: no ${missing}` : "Not scored",
+      label: "Not scored",
+      detail: missing ? `: no ${missing}` : undefined,
       title: "Features with a goal but no score rank after the scored ones and before features with no goal.",
       flag: "missing_inputs",
     });
@@ -243,7 +264,8 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
     const above = higher.filter((x) => !x.override).map((x) => x.title);
     if (above.length > 0) {
       out.push({
-        label: `Below ${above.join(", ")}: placed earlier for a dependency`,
+        label: "Ranked lower",
+        detail: `: below ${above.join(", ")}, placed earlier for a dependency`,
         title: "A feature that others depend on is placed above its score, so features scored higher can sit below it.",
       });
     }
@@ -254,16 +276,34 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
       .map((x) => (x.override ? moved(x) : `${x.title} (${!x.serves_goal ? "no confirmed goal" : "waits for a dependency"})`));
     if (higher.length === 0 && below.length > 0) {
       out.push({
-        label: `Above ${below.join(", ")}`,
+        label: "Ranked higher",
+        detail: `: above ${below.join(", ")}`,
         title: "Features scored higher rank below this one: a person moved them, features with no confirmed goal come last, or a feature waits for those it depends on.",
       });
     }
   }
   if (movedAbove.length > 0) {
     out.push({
-      label: `Below ${movedAbove.join(", ")}`,
+      label: "Ranked lower",
+      detail: `: below ${movedAbove.join(", ")}`,
       title: "A person moved or pinned these features above their score.",
     });
+  }
+  return out;
+}
+
+/** Reasons with the same short label as one chip: their details and tips joined. */
+function mergeReasons(reasons: RankReason[]): RankReason[] {
+  const out: RankReason[] = [];
+  for (const r of reasons) {
+    const same = out.find((x) => x.label === r.label);
+    if (!same) out.push({ ...r });
+    else {
+      const details = [same.detail, r.detail].map((d) => d?.replace(/^: /, "")).filter(Boolean);
+      same.detail = details.length > 0 ? `: ${details.join("; ")}` : undefined;
+      same.title = `${same.title} ${r.title}`;
+      same.flag = same.flag ?? r.flag;
+    }
   }
   return out;
 }
@@ -429,7 +469,7 @@ function FeatureInspector({
   return (
     <div id={id}>
       <Inspector
-        eyebrow="Feature · selected"
+        eyebrow="Feature"
         title={f.title}
         label={`Feature ${f.title}`}
         testId="priority-inspector"
@@ -449,7 +489,8 @@ function FeatureInspector({
           },
           ...(run ? [{ label: "Live", value: run.live_rank == null ? "—" : `#${run.live_rank}` }] : []),
           { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} text={confidencePercent(e.confidence.value)} size={46} /> },
-          { label: "Score", value: scoreText(f.score) },
+          // The score always fits its tile (qa-plan-6): a long one ("5,400", "83.33") in smaller figures.
+          { label: "Score", testId: "inspector-score", figure: <TileFigure text={scoreText(f.score, e.method)} /> },
         ]}
       >
         {run && (
@@ -483,7 +524,7 @@ function FeatureInspector({
           >
             <ol className="tnum list-decimal space-y-1 pl-5 text-sm break-words" aria-label="Steps">
               {e.steps.map((s, i) => (
-                <li key={i}>{words(stepWords(stepText(s, e.confidence.value)))}</li>
+                <li key={i}>{words(stepWords(stepText(s, e.confidence.value), e.method))}</li>
               ))}
             </ol>
             {e.calibration && (
@@ -526,7 +567,10 @@ function FeatureInspector({
                           : typeof v?.from === "string"
                             ? v.from.charAt(0).toUpperCase() + v.from.slice(1)
                             : v?.attr
-                              ? `${inputLabel(String(v.attr))} (from the feature)`
+                              ? // The Input column already names it: just where it came from (qa-plan-51).
+                                inputLabel(String(v.attr)) === inputLabel(name)
+                                ? "The feature"
+                                : `The feature's ${inputLabel(String(v.attr)).toLowerCase()}`
                               : "—"}
                       </td>
                     </tr>
@@ -612,6 +656,20 @@ function FeatureInspector({
   );
 }
 
+/**
+ * A tile's figure in the Numeral's face, sized to its length so it never runs past the
+ * tile: 34 px up to four characters, then smaller; a very long one wraps, never cut.
+ */
+function TileFigure({ text }: { text: string }) {
+  const size = text.length <= 4 ? "text-[34px] leading-9" : text.length <= 6 ? "text-[26px] leading-9" : "text-xl leading-9";
+  return <span className={`tnum block font-display font-bold tracking-[-0.03em] break-all ${size}`}>{text}</span>;
+}
+
+/** A panel's count as neutral text: the panel's own count is accent blue, which reads as a link (qa-plan-27). */
+function PlainCount({ n }: { n: number }) {
+  return <span className="text-text2">{n}</span>;
+}
+
 function AssumedMark() {
   return (
     <span className="rounded-goal bg-warn-bg px-1.5 font-sans text-[13px] leading-5 font-semibold text-warn">assumed</span>
@@ -653,7 +711,8 @@ function Snapshots({
   return (
     <Panel
       title="Snapshots"
-      count={q.data?.length || undefined}
+      // A plain count in neutral text, never a link's blue (qa-plan-27).
+      count={q.data?.length ? <PlainCount n={q.data.length} /> : undefined}
       testId="snapshots-panel"
     >
       {save && <div className="border-b border-line px-4 py-3 max-[600px]:px-3">{save}</div>}
@@ -1054,14 +1113,25 @@ function Priorities() {
       header: "Confidence",
       // The bar and its figure to the tenth ("57.8%").
       width: "112px",
-      hideOnPhone: true,
+      // A phone's card shows it too, as its figure beside the rank and score (qa-plan-52).
+      phone: "meta",
+      phoneLabel: "Confidence",
       // Kept at 1440 px and up with the inspector docked; only a table under 820 px drops it.
       narrow: "laptop",
       cell: (f) => {
         const v = f.explanation.confidence.value;
         if (v == null) return <span className="text-text2">—</span>;
         const text = confidencePercent(v);
-        return <Meter value={pct(v)!} max={100} showMax={false} text={text} label={`Confidence ${text}`} />;
+        return (
+          <>
+            <div className="max-[600px]:hidden">
+              <Meter value={pct(v)!} max={100} showMax={false} text={text} label={`Confidence ${text}`} />
+            </div>
+            <span className="tnum hidden max-[600px]:inline" data-testid="phone-confidence">
+              {text}
+            </span>
+          </>
+        );
       },
     },
     {
@@ -1073,7 +1143,7 @@ function Priorities() {
       phoneLabel: "Score",
       cell: (f) => (
         <span data-testid="score" className="tnum block text-right whitespace-nowrap max-[600px]:inline">
-          {scoreText(f.score)}
+          {scoreText(f.score, method)}
         </span>
       ),
     },
@@ -1110,18 +1180,32 @@ function Priorities() {
         const shown = changed || cmp || reasons.length > 0 ? 0 : 1;
         const rest = flags.slice(shown);
         return (
-          <span data-testid="row-flags" className="flex flex-wrap items-center gap-1.5 py-0.5">
+          // On the selected row (accent-soft) a blue chip keeps a chip of its own: the card
+          // surface with an accent edge, never the row's blue (qa-plan-48).
+          <span
+            data-testid="row-flags"
+            className={`flex flex-wrap items-center gap-1.5 py-0.5 ${
+              current?.key === f.key ? "[&_[data-kind=acc]]:bg-surface! [&_[data-kind=acc]]:shadow-[inset_0_0_0_1px_var(--accent)]" : ""
+            }`}
+          >
             {byKey.get(f.key)?.problems.map((p) => (
               <ProblemChip key={p.code} p={p} />
             ))}
             {changed && <RowChips f={f} name={nameOf} />}
-            {reasons.map((r) => (
-              <Chip key={r.label} kind={r.flag === "moved_for_dependency" ? "acc" : "warn"} wrap title={r.title} data-testid="rank-reason">
+            {/* One short chip per label, the full sentence in its tooltip (qa-plan-49). */}
+            {mergeReasons(reasons).map((r) => (
+              <Chip
+                key={r.label}
+                kind={r.flag === "moved_for_dependency" ? "acc" : "warn"}
+                title={`${r.label}${r.detail ?? ""}. ${r.title}`}
+                data-testid="rank-reason"
+              >
                 {r.label}
+                {r.detail && <span className="sr-only">{r.detail}</span>}
               </Chip>
             ))}
             {flags.slice(0, shown).map((flag) => (
-              <FlagChip key={flag} flag={flag} />
+              <FlagChip key={flag} flag={flag} compact />
             ))}
             {rest.length > 0 && (
               <Chip kind="na" title={rest.map((x) => flagOf(x).label).join(", ")}>
@@ -1312,7 +1396,7 @@ function Priorities() {
           </Panel>
 
           {goals.length > 0 && (
-            <Panel title="By goal" count={goals.length}>
+            <Panel title="By goal" count={<PlainCount n={goals.length} />}>
               <DataTable<GoalRow>
                 label="By goal"
                 columns={[

@@ -280,8 +280,9 @@ function Outcomes() {
           )
         }
         action={
-          // While the form is open its own submit tracks the outcome.
-          canApprove && !tracking && (
+          // While the form is open its own submit tracks the outcome; fix4 qa-plan-15: with no
+          // outcome yet, Track outcome is the empty state's only.
+          canApprove && !tracking && !none && (
             <Button
               variant="primary"
               onClick={() => setTracking(true)}
@@ -362,7 +363,7 @@ function Outcomes() {
                     : ""}
                 </p>
                 {canApprove && !tracking && (
-                  <Button variant="primary" onClick={() => setTracking(true)}>
+                  <Button variant="primary" onClick={() => setTracking(true)} data-testid="outcome-track">
                     Track outcome
                   </Button>
                 )}
@@ -1085,10 +1086,11 @@ function TrackOutcomeForm({
   );
 }
 
+// fix4 qa-plan-26: what a learning is attached to and what it asks, in plain words.
 const APPLIES_TO: Record<Learning["applies_to"], string> = {
-  module: "Module",
-  question_category: "Question topic",
-  criterion: "Quality check",
+  module: "A part of Oracle",
+  question_category: "A kind of interview question",
+  criterion: "A quality check",
 };
 /** Names for a learning's target: question categories, quality criteria and modules by their titles. */
 function useTargetNames() {
@@ -1119,14 +1121,15 @@ function humanize(key: string): string {
 
 /** The target field's label for each kind of learning. */
 const TARGET_WORD: Record<Learning["applies_to"], string> = {
-  module: "Which module",
-  question_category: "Which topic",
+  module: "Which part",
+  question_category: "Which kind of question",
   criterion: "Which check",
 };
+/** What Oracle does with the learning next time. */
 const DIRECTION: Record<Learning["direction"], string> = {
-  recommend_more: "Recommend more",
-  recommend_less: "Recommend less",
-  note: "Note",
+  recommend_more: "Suggest it more often",
+  recommend_less: "Suggest it less often",
+  note: "Just keep it in mind",
 };
 
 /** Learnings: what outcomes taught, kept from a draft or added by hand; an approver retires one with a reason. */
@@ -1146,7 +1149,8 @@ function LearningsPanel({
   return (
     <Panel
       title="Learnings"
-      count={rows?.length}
+      // fix4 qa-plan-27: the count is neutral text, not an accent figure that reads as a link.
+      count={rows && <span className="text-text2">{rows.length}</span>}
       testId="learnings-panel"
       bodyClassName="px-4 py-3 max-[600px]:px-3"
       tools={
@@ -1276,7 +1280,7 @@ function LearningForm({
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-text2">Applies to</span>
+        <span className="text-text2">What it is about</span>
         <select
           className={FIELD}
           value={appliesTo}
@@ -1311,7 +1315,7 @@ function LearningForm({
             value={target}
             onChange={(e) => setTarget(e.target.value)}
           >
-            <option value="">Choose one</option>
+            <option value="">Pick one</option>
             {names.options[appliesTo].map((o) => (
               <option key={o.key} value={o.key}>
                 {o.name}
@@ -1321,7 +1325,7 @@ function LearningForm({
         )}
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-text2">Direction</span>
+        <span className="text-text2">What Oracle should do</span>
         <select
           className={FIELD}
           value={direction}

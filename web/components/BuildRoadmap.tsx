@@ -142,6 +142,8 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
       onClose={onClose}
       dirty={dirty}
       size="lg"
+      // fix4 qa-plan-24: taller than the window, the body scrolls and Start run stays in view.
+      scrollBody
       testId="build-roadmap-dialog"
       head={
         <p className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -165,7 +167,8 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
       actions={
         <>
           <Button onClick={runEstimate} disabled={busy || !templateKey || (target === NEW && !slug.trim())}>
-            {draft ? "Re-estimate" : "Estimate"}
+            {/* fix4 qa-plan-25: what it estimates. */}
+            {draft ? "Estimate cost again" : "Estimate cost"}
           </Button>
           <Button variant="primary" onClick={start} disabled={busy || !estimate || !estimate.within_budget}>
             {estimate?.needs_approval ? "Ask an owner to approve" : "Start run"}

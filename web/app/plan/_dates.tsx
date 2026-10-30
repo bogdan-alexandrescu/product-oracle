@@ -129,12 +129,13 @@ export function DatesTab() {
             <Button variant="solid" onClick={() => verify(b)}>
               Verify
             </Button>
-            <Button variant="ghost" onClick={() => setDialog({ kind: "reject", basis: b })}>
+            {/* fix4 qa-plan-20: row actions are outlined buttons, never plain grey text. */}
+            <Button variant="secondary" onClick={() => setDialog({ kind: "reject", basis: b })}>
               Reject
             </Button>
           </div>
         ) : b.status === "verified" ? (
-          <Button variant="ghost" onClick={() => setDialog({ kind: "withdraw", basis: b })}>
+          <Button variant="secondary" onClick={() => setDialog({ kind: "withdraw", basis: b })}>
             Withdraw
           </Button>
         ) : null,
@@ -159,10 +160,28 @@ export function DatesTab() {
             each one before a date rests on it.
           </InfoTip>
         }
+        // fix4 qa-plan-59: summary chips by the title, as the other Plan tabs have ("1 verified · 1 withdrawn").
+        status={
+          rows && (
+            <span data-testid="dates-summary" className="contents">
+              {rows.length === 0 ? (
+                <Chip kind="acc">No dates yet</Chip>
+              ) : (
+                (["proposed", "verified", "withdrawn", "rejected"] as const)
+                  .filter((st) => count(st))
+                  .map((st) => (
+                    <Chip key={st} kind="acc">
+                      {count(st)} {STATUS[st].label.toLowerCase()}
+                    </Chip>
+                  ))
+              )}
+            </span>
+          )
+        }
         action={
           rights.data?.rights ? (
             <Button variant="primary" icon="plus" onClick={() => setDialog({ kind: "record" })}>
-              Record basis
+              Add a date source
             </Button>
           ) : null
         }
@@ -173,12 +192,14 @@ export function DatesTab() {
           testId="dates-filter"
           value={filter}
           onChange={setPicked}
+          // fix4 qa-plan-19: one row (it scrolls sideways on a phone); a filter with nothing in it
+          // is an ordinary chip reading 0, not one that looks disabled (it shows an empty table).
+          oneRow
           items={[
-            // qa-plan-47: a filter with nothing in it is dimmed and cannot be picked.
-            { value: "proposed", label: "Proposed", count: count("proposed"), disabled: count("proposed") === 0 },
-            { value: "verified", label: "Verified", count: count("verified"), disabled: count("verified") === 0 },
-            { value: "withdrawn", label: "Withdrawn", count: count("withdrawn"), disabled: count("withdrawn") === 0 },
-            { value: "all", label: "All", count: rows ? rows.length : null, disabled: rows?.length === 0 },
+            { value: "proposed", label: "Proposed", count: count("proposed") },
+            { value: "verified", label: "Verified", count: count("verified") },
+            { value: "withdrawn", label: "Withdrawn", count: count("withdrawn") },
+            { value: "all", label: "All", count: rows ? rows.length : null },
           ]}
         />
       </div>

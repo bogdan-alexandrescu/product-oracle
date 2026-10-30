@@ -140,14 +140,21 @@ export function RowChips({ f, name }: { f: RankedFeature; name: NameOf }) {
   const o = f.override;
   return (
     <>
+      {/* Short on one line in the Flags column; who and why in the tooltip (qa-plan-49). */}
       {o && (
-        <Chip kind="acc" wrap title={o.reason} data-testid="override-chip">
-          {o.kind === "move" ? `Moved by ${o.by}` : `Pinned #${o.position} by ${o.by}`}
+        <Chip
+          kind="acc"
+          title={`${o.kind === "move" ? "Moved" : `Pinned #${o.position}`} by ${o.by}${o.reason ? `: ${o.reason}` : ""}`}
+          data-testid="override-chip"
+        >
+          {o.kind === "move" ? "Moved" : `Pinned #${o.position}`}
+          <span className="sr-only"> by {o.by}</span>
         </Chip>
       )}
       {f.held_below && (
-        <Chip kind="warn" wrap title={`Held below ${name(f.held_below)}: it depends on it`} data-testid="held-chip">
-          Held below {name(f.held_below)}
+        <Chip kind="warn" title={`Held below ${name(f.held_below)}: it depends on it`} data-testid="held-chip">
+          Held below
+          <span className="sr-only"> {name(f.held_below)}</span>
         </Chip>
       )}
     </>
@@ -661,7 +668,8 @@ export function ChangesPanel({
   return (
     <Panel
       title="Changes"
-      count={q.data?.length || undefined}
+      // A plain count in neutral text, never a link's blue (qa-plan-27).
+      count={q.data?.length ? <span className="text-text2">{q.data.length}</span> : undefined}
       tools={
         <RadioSwitch
           label="Changes filter"

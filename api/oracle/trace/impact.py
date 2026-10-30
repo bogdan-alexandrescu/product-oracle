@@ -75,8 +75,10 @@ def _proposal(view: TraceOutput, subject_kind: str) -> RegenerationProposal | No
     else:
         action = "regenerate"
         label = (view.artifact_kind or view.category).replace("_", " ")
+        # qa-plan-43: "these acceptance tests", "this wireframe".
+        this = "these" if label.endswith("tests") else "this"
         how = (
-            f"Propose a new version of this {label} covering only {scope_text}, from the "
+            f"Propose a new version of {this} {label} covering only {scope_text}, from the "
             f"current upstream; {keeps} until a reviewer approves the new one."
         )
     return RegenerationProposal(
