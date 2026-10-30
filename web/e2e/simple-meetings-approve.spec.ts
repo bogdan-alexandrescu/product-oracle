@@ -58,6 +58,8 @@ async function startWithAnEdit(page: Page, absent?: string, attendee = "Commente
   await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   if (absent) {
+    // qa-simple-decide-29: on a phone the attendees fold into one row.
+    if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
     const here = page.getByRole("button", { name: `${absent} is here` });
     await here.click();
     await expect(here).toHaveAttribute("aria-pressed", "false");

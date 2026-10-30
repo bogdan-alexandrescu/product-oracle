@@ -121,10 +121,10 @@ test.describe("desktop · Decisions", () => {
     await decisions(page, "meetings");
     await page.getByRole("combobox", { name: "Goal" }).selectOption({ index: 1 });
     const group = page.getByTestId("meeting-group").first();
-    if (await group.count()) await expect(group.getByTestId("meeting-group-filtered")).toContainText("of this meeting match");
+    if (await group.count()) await expect(group.getByTestId("meeting-group-filtered")).toContainText(/of this meeting match(es)?\./);
     await page.getByRole("combobox", { name: "Goal" }).selectOption({ index: 0 });
     await page.getByRole("combobox", { name: "PRD" }).selectOption({ label: "Guided setup" });
-    await page.getByRole("combobox", { name: "Meeting" }).selectOption({ label: "Review: Usage alerts" });
+    await page.getByRole("combobox", { name: "Meeting" }).selectOption({ index: 1 });
     await expect(page.getByTestId("decisions-empty")).toContainText("No decision matches.");
     await page.getByTestId("decisions-clear-filters").click();
     await expect(page.getByTestId("decisions-empty")).toHaveCount(0);

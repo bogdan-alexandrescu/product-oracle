@@ -158,6 +158,25 @@ export function companyDayInWords(at: string | Date): string {
   }
 }
 
+/**
+ * "Thu Oct 29": the Company time zone's day at `at`, as oracle.company_time.date_in_words
+ * (qa-simple-decide-7, qa-simple-decide-11): a moment, not a pure calendar day, so it must
+ * read the zone, not UTC (as the shared ``dayWords`` helpers do for already-zoned days).
+ */
+export function companyDateInWords(at: string | Date): string {
+  const options = { weekday: "short", month: "short", day: "numeric" } as const;
+  let timeZone = "America/Los_Angeles";
+  try {
+    timeZone = String(mockSettingValue("company_timezone") ?? timeZone);
+    new Intl.DateTimeFormat("en-US", { timeZone });
+  } catch {
+    timeZone = "America/Los_Angeles";
+  }
+  const parts = new Intl.DateTimeFormat("en-US", { ...options, timeZone }).formatToParts(new Date(at));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("weekday")} ${get("month")} ${get("day")}`;
+}
+
 /** Stores a company setting's value, as PUT /v1/settings/{key} would. */
 export function setMockSetting(key: string, value: unknown) {
   const db = load();

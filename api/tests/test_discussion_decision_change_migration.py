@@ -69,7 +69,7 @@ def _change(tenant: uuid.UUID, d: uuid.UUID, kind: str) -> None:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0092_feedback_discussion"]
+    assert script.get_heads() == ["0093_meeting_comments_as_notes"]
 
 
 def test_upgrade_and_downgrade(scratch_db):

@@ -7,6 +7,7 @@ import { askWith } from "@/components/hop/open-state";
 import { toast } from "@/components/ds/Toast";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -121,14 +122,17 @@ export function sourceName(questions: Question[]): string | null {
   return `${questions[0]!.prd.title}${v ? ` draft ${v}` : ""}`;
 }
 
-/** "From Guided setup draft 3 · read Oct 22": where and when the questions shown were read. */
+/** qa-simple-decide-18: "Questions from the Guided setup PRD (draft 3), checked Oct 22": where and when the questions shown were read. */
 export function useSourceLine(questions: Question[]): string | null {
   const zone = useCompanyZone();
-  const name = sourceName(questions);
-  if (!name) return null;
+  if (questions.length === 0) return null;
+  const prds = new Set(questions.map((q) => q.prd.id));
+  const versions = new Set(questions.map((q) => q.source?.version ?? null));
+  const v = versions.size === 1 ? questions[0]!.source?.version : null;
+  const name = prds.size > 1 ? `${prds.size} PRDs` : `the ${questions[0]!.prd.title} PRD${v ? ` (draft ${v})` : ""}`;
   const reads = questions.map((q) => q.source?.read_at).filter((x): x is string => !!x).sort();
   const last = reads.at(-1);
-  return `From ${name}${last ? ` · read ${formatInZone(last, zone, { month: "short", day: "numeric" })}` : ""}`;
+  return `Questions from ${name}${last ? `, checked ${formatInZone(last, zone, { month: "short", day: "numeric" })}` : ""}`;
 }
 
 /** A chosen chip (qa-simple-home-28): filled and solid, as the pressed state reads. */
@@ -229,11 +233,18 @@ export function PersonPicker({
       {members.error && <span className="simple-meta text-crit">{members.error}</span>}
       {!members.data && !members.error && <span className="simple-meta">Loading people…</span>}
       <div className="simple-chips">
-        {(members.data ?? []).map((m) => (
-          <button key={m.id} type="button" disabled={busy} className="simple-chip" onClick={() => onPick(m)}>
-            {m.name}
-          </button>
-        ))}
+        {/* qa-simple-decide-16: the current decider is marked and cannot be picked again. */}
+        {(members.data ?? []).map((m) =>
+          m.id === q.decider?.id ? (
+            <button key={m.id} type="button" disabled className="simple-chip" data-testid="question-people-current">
+              Already {m.name}
+            </button>
+          ) : (
+            <button key={m.id} type="button" disabled={busy} className="simple-chip" onClick={() => onPick(m)}>
+              {m.name}
+            </button>
+          ),
+        )}
         <button type="button" className="simple-chip simple-chip-dashed" onClick={onClose}>
           Cancel
         </button>
@@ -273,6 +284,7 @@ export function QuestionRow({
   as: Tag = "li",
   testId = "question-row",
   plain = false,
+  forOthers = false,
 }: {
   q: Question;
   mode: Mode;
@@ -281,8 +293,11 @@ export function QuestionRow({
   actions: ReturnType<typeof useQuestionActions>;
   as?: "li" | "div";
   testId?: string;
+  /** Listed under "Waiting for others": an owner's Decide is an override for the decider. */
+  forOthers?: boolean;
 }) {
   const zone = useCompanyZone();
+  const { me } = useMe();
   const [open, setOpen] = useState<"answers" | "people" | "answerer" | null>(null);
   const { busy, decide, nameDecider, undo } = actions;
   const writes = q.can.decide || q.can.propose;
@@ -343,15 +358,25 @@ export function QuestionRow({
     const nameIt = q.missing === "decider" && q.can.name_decider;
     const askSomeone = q.missing === "recommendation" && writes;
     // qa-simple-home-6: the column stays as it was while the answers show (the recommended one is a chip there too).
-    const primary = recommended;
+    // qa-simple-decide-14: someone else's call (an owner may still decide it): secondary, and it says for whom.
+    const forOther = forOthers && q.can.decide && !!q.decider && q.decider.id !== me?.user_id;
+    // qa-simple-decide-17: your proposal is sent: no second one.
+    const proposed = !q.can.decide && !!q.pending && q.pending.by.id === me?.user_id;
+    const primary = recommended && !proposed;
     buttons = (
       <>
-        {primary && (
-          <button type="button" disabled={busy} className="simple-button simple-button-primary" onClick={() => void decide(q, { option: "recommended" })}>
-            {verb} as recommended
+        {proposed && (
+          <button type="button" disabled className="simple-button" data-testid="question-proposed">
+            Proposed · waiting for {q.decider?.name ?? "the decider"}
           </button>
         )}
-        {writes && another("Another answer")}
+        {primary && (
+          <button type="button" disabled={busy} className={`simple-button ${forOther ? "" : "simple-button-primary"}`} onClick={() => void decide(q, { option: "recommended" })}>
+            {forOther ? `Decide for ${q.decider!.name}` : `${verb} as recommended`}
+          </button>
+        )}
+        {/* qa-simple-decide-15: the primary action on top, then Another answer. */}
+        {writes && !proposed && !(!primary && (nameIt || askSomeone)) && another("Another answer")}
         {nameIt && open !== "people" && (
           <button type="button" ref={nameRef} className={`simple-button ${primary ? "" : "simple-button-primary"}`} onClick={() => toggle("people")}>
             Name a decider
@@ -362,6 +387,7 @@ export function QuestionRow({
             Ask someone to answer
           </button>
         )}
+        {writes && !proposed && !primary && (nameIt || askSomeone) && another("Another answer")}
         <AskButton q={q} />
       </>
     );
@@ -446,7 +472,8 @@ export function QuestionRow({
           />
         )}
       </div>
-      {buttons && <div className="simple-actions">{buttons}</div>}
+      {/* qa-simple-decide-15: the same column width on every List and agenda row. */}
+      {buttons && <div className={`simple-actions ${mode === "list" || mode === "due" ? "min-[601px]:w-[232px]" : ""}`}>{buttons}</div>}
     </Tag>
   );
 }

@@ -52,7 +52,8 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("region", { name: "Live" })).toContainText("No meeting is on now.");
         const past = page.getByRole("region", { name: "Past" });
         await expect(past).toContainText("Review: Usage alerts");
-        await expect(past).toContainText("Comment: keep quiet hours on by default.");
+        // qa-simple-decide-1 / -6: a comment is no decision and the summary is prose.
+        await expect(past).not.toContainText("Comment:");
         await expect(past.getByRole("link", { name: "Its decisions" })).toHaveAttribute("href", /\/simple\/decisions\?meeting=/);
         await page.getByRole("button", { name: "Start review" }).first().click();
         const s = sheet(page);
@@ -70,6 +71,8 @@ for (const phone of [false, true]) {
         await expect(page).toHaveURL(/\/simple\/meetings\/[0-9a-f-]+$/);
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await expect(page.getByRole("timer", { name: "Meeting clock" })).toContainText("/ 45:00");
+        // qa-simple-decide-29: on a phone the attendees and the mode fold into one row.
+        if (phone) await page.getByTestId("meeting-people-toggle").click();
         await expect(page.getByLabel("Attendees")).toContainText("Commenter");
         await expect(page.getByTestId("change-mode").getByRole("combobox")).toHaveValue("named");
         await page.getByTestId("meeting-screen").getByRole("link", { name: "Meetings" }).click();
@@ -104,11 +107,9 @@ for (const phone of [false, true]) {
       for (const [email, role] of [["approver@example.com", "an approver"], ["commenter@example.com", "a commenter"], ["viewer@example.com", "a viewer"]] as const) {
         test(`${role} sees who starts a review and cannot start it`, async ({ page }) => {
           await meetings(page, email);
-          await page.getByRole("button", { name: "Start review" }).first().click();
-          await sheet(page).getByLabel("PRD").selectOption({ label: "Guided setup" });
-          await expect(sheet(page).getByTestId("start-not-allowed")).toContainText("Only Admin can start this review");
-          await expect(sheet(page).getByRole("button", { name: "Start", exact: true })).toHaveCount(0);
-          await expect(sheet(page).getByRole("checkbox")).toHaveCount(0);
+          // qa-simple-decide-8: no dead-end Start review; the reason stands in its place.
+          await expect(page.getByTestId("meetings-start-why")).toContainText("An owner or a review's owner starts reviews");
+          await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
         });
       }
 
@@ -121,9 +122,7 @@ for (const phone of [false, true]) {
         await page.goto("/simple/meetings");
         await switchTo(page, "commenter@example.com");
         await page.goto("/simple/meetings");
-        await page.getByRole("button", { name: "Start review" }).first().click();
-        await sheet(page).getByLabel("PRD").selectOption({ label: "Guided setup" });
-        await sheet(page).getByRole("button", { name: "Join" }).click();
+        await page.getByRole("region", { name: "Live" }).getByRole("link", { name: "Join" }).first().click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await expect(page.getByLabel("Attendees")).not.toContainText("Commenter");
         await page.getByRole("button", { name: "Join" }).click();
@@ -145,10 +144,9 @@ test.describe("the PRD's decider", () => {
     test(`Dana Decider starts Guided setup's review; an approver may not (${phone ? "phone" : "desktop"})`, async ({ page }) => {
       await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1366, height: 820 });
       await meetings(page, "approver@example.com");
-      await page.getByRole("button", { name: "Start review" }).first().click();
-      await sheet(page).getByLabel("PRD").selectOption({ label: "Guided setup" });
-      await expect(sheet(page).getByTestId("start-not-allowed")).toContainText("Only Dana Decider, Admin can start this review");
-      await sheet(page).getByRole("button", { name: "Close" }).click();
+      // qa-simple-decide-8: an approver who starts no review gets the reason, not the button.
+      await expect(page.getByTestId("meetings-start-why")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
       await switchTo(page, "dana.decider@example.com");
       await page.goto("/simple/meetings");
       await page.getByRole("button", { name: "Start review" }).first().click();

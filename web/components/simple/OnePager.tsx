@@ -356,8 +356,11 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           )}
         </span>
       )}
-      {/* qa-simple-prd-p3-28: the four actions in one style. */}
-      <Link className={`${btn(phone)} ${phone ? TAP44 : ""}`} href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
+      {!sessionId && !v.can_start && <span id="start-review-why" className="text-[14px] text-text2">{startWhy}</span>}
+      {/* qa-simple-prd-p3-28: the four actions in one style; in a meeting it opens in a new tab (qa-simple-decide). */}
+      <Link className={`${btn(phone)} ${phone ? TAP44 : ""}`} href={`/documents/${v.document.slug}`} {...(sessionId ? { target: "_blank", rel: "noopener" } : {})}>
+        Open the detailed view{sessionId ? " (new tab)" : ""}
+      </Link>
     </>
   );
   const toast = saved && (
@@ -406,6 +409,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
       <div className={`mx-auto flex max-w-[1180px] flex-col gap-5 px-12 pt-[26px] max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
         <PrdHeader
+          inMeeting={!!sessionId}
           v={v}
           plan={planShown ? plan : null}
           summary={summary}
@@ -637,7 +641,7 @@ function Glyph({ d }: { d: string }) {
  * A phone (D2) keeps the title, the facts and the actions, smaller; its header bar names
  * the page (One-pagers), so the title there is a level-1 heading that is not an H1.
  */
-function PrdHeader({ v, plan, summary, phone, presenting, draft, actions }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; phone: boolean; presenting: boolean; draft: boolean; actions: ReactNode }) {
+function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeeting = false }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; phone: boolean; presenting: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean }) {
   // qa-simple-prd-3: the plan's own span only; with no dated milestone the header says so.
   // qa-simple-prd-p3-16: a PRD without a plan heads its one-pager the same way, with its own span.
   const span = plan ? (plan.span ? { start: plan.span.start, end: plan.span.end } : null) : v.span_start && v.span_end ? { start: v.span_start, end: v.span_end } : null;
@@ -652,7 +656,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions }: { v:
     <div className="flex flex-col gap-2.5">
       {!phone && (
         <div className="flex items-center gap-2.5">
-          {!presenting && <BackLink />}
+          {!presenting && !inMeeting && <BackLink />}
           <span className="flex-1" />
           {actions}
         </div>

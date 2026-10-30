@@ -37,7 +37,7 @@ async function signIn(page: Page, email: string, to: string) {
 /** The meeting's chat, signed in as `email`. */
 async function meeting(page: Page, email: string): Promise<Locator> {
   await signIn(page, email, MEETING);
-  await expect(page.getByTestId("chat-rules")).toBeVisible();
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
   return page.getByTestId("meeting-chat");
 }
 

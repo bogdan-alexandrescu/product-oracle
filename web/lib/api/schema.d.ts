@@ -38321,7 +38321,9 @@ export interface components {
         };
         /**
          * SimpleMeetingNote
-         * @description chat-actions: a minutes note or open question added during the meeting.
+         * @description chat-actions: a minutes note or open question added during the meeting; also a
+         *     comment (qa-simple-decide-1), which is not a meeting decision and stays out of
+         *     minutes.
          */
         SimpleMeetingNote: {
             /** Id */
@@ -38330,11 +38332,13 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "note" | "question";
+            kind: "note" | "question" | "comment";
             /** Text */
             text: string;
             /** By Name */
             by_name: string;
+            /** At */
+            at?: string | null;
             /** Card Id */
             card_id?: string | null;
         };

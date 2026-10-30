@@ -731,11 +731,15 @@ const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question", "a
 
 type Clause = { op: string; x: string; months?: number; period?: [string, string]; rest?: string };
 
-/** The line's changes, one clause per verb ("… and cut …"; an item's own "and" stays). */
-function clauses(text: string): Clause[] {
-  const t = text.trim().replace(/\s+/g, " ").replace(/[?.!]+$/, "");
+/**
+ * The line's changes, one clause per verb ("… and cut …"; an item's own "and" stays), each
+ * line or ";" its own part; qa-simple-decide-24: a part it cannot read goes to `skipped`.
+ */
+function clauses(text: string, skipped: string[] = []): Clause[] {
   const out: Clause[] = [];
-  for (const part of t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make|let'?s|skip|note|we decided|add)\b)/i)) {
+  const lines = text.split(/\n|;/).map((l) => l.trim().replace(/\s+/g, " ").replace(/[?.!]+$/, "")).filter(Boolean);
+  for (const part of lines.flatMap((t) => t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make|let'?s|skip|note|we decided|add)\b)/i))) {
+    const had = out.length;
     let m: RegExpExecArray | null;
     // roadmap-talk: "push X after Y" (start the day after Y ends), "add a(n) X item to M2 under Growth".
     if ((m = /^(?:push|move|shift|slip)\s+(.+?)\s+(?:to\s+start\s+)?after\s+(.+)$/i.exec(part))) {
@@ -775,9 +779,13 @@ function clauses(text: string): Clause[] {
     else if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:to|into)\s+(.+)$/i.exec(part)) && parsePeriod(m[2])) out.push({ op: "move_dates", x: m[1], period: parsePeriod(m[2])! });
     else if ((m = /\b(?:cut|drop)\s+(.+)$/i.exec(part))) out.push({ op: "cut", x: m[1] });
     else if ((m = /\bmake\s+(.+?)\s+(?:the\s+owner\s+of|own)\s+(.+)$/i.exec(part))) out.push({ op: "set_owner", x: m[2], rest: m[1] });
+    if (out.length === had) skipped.push(part);
   }
   return out;
 }
+
+/** qa-simple-decide-24: the parts of a line the reader could not read, said back (as chat.interpret's `skipped`). */
+const unread = (skipped: string[]) => skipped.slice(0, 3).map((p) => `I did not understand: “${p.slice(0, 120)}”.`);
 
 const QUESTION = /^(why|how|what|who|when|where|which|should|is|are|does|do)\b/i;
 const SAY_AGAIN = "I could not tell what to change. Say it another way.";
@@ -793,7 +801,8 @@ function named(items: Item[], x: string): Item[] {
 
 /** The reader's reply to one line (deterministic). */
 function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["reading"]>, items: Item[], meeting: Meeting | null): Reply {
-  const cs = clauses(r.text);
+  const skipped: string[] = [];
+  const cs = clauses(r.text, skipped);
   // "What should we cut first?" is a question, whatever verbs it holds.
   if (!cs.length || QUESTION.test(r.text.trim())) {
     if (QUESTION.test(r.text.trim()) || r.text.trim().endsWith("?"))
@@ -829,9 +838,11 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
     if ("card" in o) drafts.push(o.card);
     else refusals.push(o.refusal);
   }
-  if (!drafts.length) return { kind: "note", body: refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, cards: [] };
+  if (!drafts.length) return { kind: "note", body: [refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, ...unread(skipped)].join(" "), cards: [] };
   const n = drafts.length;
-  return { kind: "cards", body: `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`, cards: drafts };
+  // The valid cards stay; the line says which ones it cannot do and what it did not read.
+  const cant = refusals.length ? [`${["One", "Two", "Three"][refusals.length - 1] ?? refusals.length} I can't do: ${refusals.join(" ")}`] : [];
+  return { kind: "cards", body: [...cant, ...unread(skipped), `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`].join(" "), cards: drafts };
 }
 
 let readerWrote = false;

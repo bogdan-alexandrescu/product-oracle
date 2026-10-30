@@ -100,15 +100,18 @@ for (const phone of [false, true]) {
         await expect(pending).toContainText("No proposal waits.");
         await page.getByRole("textbox", { name: "Comment" }).fill("Keep the checklist to five steps");
         await page.getByRole("button", { name: "Add comment" }).click();
+        // qa-simple-decide-1: the comment is the meeting's comment, not a decision.
+        await expect(page.getByTestId("meeting-comment")).toContainText("Keep the checklist to five steps");
         const rows = allDecisions(page).getByTestId("meeting-decision");
-        await expect(rows).toHaveCount(4);
-        await expect(rows.first()).toContainText("Comment: Keep the checklist to five steps");
-        await expect(rows.first()).toContainText("Admin");
+        await expect(rows).toHaveCount(3);
+        await expect(allDecisions(page)).not.toContainText("Comment:");
         await expect(rows.first()).toContainText(/D-\d+/);
       });
 
       test("approve with an absent reviewer waits on them; a commenter has no controls", async ({ page }) => {
         await start(page);
+        // qa-simple-decide-29: on a phone the attendees fold behind one row.
+        if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
         await page.getByRole("button", { name: "Approver is here" }).click();
         await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Approver");
         await page.getByRole("button", { name: "Edit “Invite suggestions from the admin's" }).click();
@@ -127,11 +130,12 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: /is here/ })).toHaveCount(0);
-        await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Everyone");
+        await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Everyone except viewers");
       });
 
       test("the presenter lets only named people change things", async ({ page }) => {
         await start(page);
+        if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
         const mode = page.getByTestId("change-mode");
         await mode.getByRole("combobox").selectOption("named");
         await expect(mode.getByRole("button", { name: "Approver changes things" })).toHaveAttribute("aria-pressed", "true");

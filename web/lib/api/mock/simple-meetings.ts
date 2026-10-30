@@ -39,6 +39,7 @@ import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, que
 import { plainFlow } from "./simple-visuals";
 import { seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
+import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
@@ -114,6 +115,8 @@ interface Decision {
   change_ids: string[];
   /** The roadmap items its changes touched (meetings.decided_flows reads them). */
   item_ids?: string[];
+  /** A PRD's question decided in the meeting: its code, title and answer (the Decisions page's row, as the API's). */
+  question?: { code: string; title: string; chosen: string };
 }
 
 interface Occurrence {
@@ -225,14 +228,16 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
       d(2, "Keep the free plan's alert limit at three", { subjects: [{ kind: "document", id: alerts.id }] }),
       d(3, "Should muted teams still get the weekly digest?", { origin: "oracle", status: "proposed", approver_id: null, subjects: [{ kind: "document", id: alerts.id }] }),
       d(4, `Moved ${digest?.title ?? "Alert digest"}`, { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 20 * 60_000), subjects: [...(digest ? [{ kind: "roadmap_item", id: digest.id, ref: digest.key }] : []), { kind: "document", id: alerts.id }] }),
-      d(5, "Comment: keep quiet hours on by default", { origin: "meeting", meeting_id: past, at: iso(Date.parse(startedAt) + 35 * 60_000), subjects: [{ kind: "document", id: alerts.id }] }),
     ],
     meetings: [{
       id: past, title: "Review: Usage alerts", prd: "usage-alerts", origin: "one_pager", occurrence_id: null, session_id: stableUuid("simple-meeting-session/past"),
       presenter_id: owner, attendee_ids: people, absent_ids: [], change_mode: "everyone", change_people: [], length_min: 60, status: "ended",
       started_at: startedAt, ended_at: iso(Date.parse(startedAt) + 50 * 60_000), ended_by: owner,
+      // qa-simple-decide-1: the comment made in this meeting is a note, not a decision.
+      notes: [{ id: stableUuid("simple-meeting-note/past-comment"), kind: "comment", text: "keep quiet hours on by default", by_name: nameOf(ctx, approver ?? owner), at: iso(Date.parse(startedAt) + 35 * 60_000), card_id: null }],
       minutes: {
-        summary: `Moved ${digest?.title ?? "Alert digest"}; Comment: keep quiet hours on by default.`,
+        // qa-simple-decide-6: a short prose count, never the decision's own title or a note's text.
+        summary: "1 decision taken.",
         open_questions: ["D-3: Should muted teams still get the weekly digest?"],
         action_items: commenter ? [{ title: "Draft the quiet hours copy", owner_id: commenter.id, owner_name: nameOf(ctx, commenter.id), due_date: iso(now + 7 * day).slice(0, 10) }] : [],
         waits: [{ what: "Usage alerts: the working draft is not approved yet", on: [] }],
@@ -355,7 +360,7 @@ function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
     const quick = extract(ctx, db, m);
     const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
     // An empty record: the plain line, no model's words (meetings.run_job); notes and open questions count as the record.
-    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? withNotes(m, `Oracle's minutes of ${m.title}: ${n} decisions taken.`) : quick.summary, written_by: "oracle" };
+    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
   }
@@ -580,10 +585,18 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   return res;
 }
 
-/** The chat's minutes notes, as "Notes: <text>" lines after the summary. */
-function withNotes(m: Meeting, summary: string): string {
-  const lines = (m.notes ?? []).filter((n) => n.kind === "note").map((n) => `Notes: ${n.text}`);
-  return [summary, ...lines].join("\n");
+/**
+ * qa-simple-decide-6: a short prose count ("4 decisions taken, 2 notes and 1 open
+ * question."), matching the API's minutes.summary_sentence; never the decisions'
+ * titles or a note's own text.
+ */
+function summarySentence(nDecisions: number, nNotes: number, nQuestions: number): string {
+  let out = `${nDecisions} ${nDecisions === 1 ? "decision" : "decisions"} taken`;
+  const extra: string[] = [];
+  if (nNotes) extra.push(`${nNotes} ${nNotes === 1 ? "note" : "notes"}`);
+  if (nQuestions) extra.push(`${nQuestions} open ${nQuestions === 1 ? "question" : "questions"}`);
+  if (extra.length) out += `, ${extra.join(" and ")}`;
+  return `${out}.`;
 }
 
 /** The chat's open questions, for the minutes' open_questions. */
@@ -671,8 +684,12 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const titles = db.decisions.filter((d) => d.meeting_id === m.id).sort((a, b) => -newestFirst(a, b)).map((d) => d.title);
   // Only the meeting's own record (minutes.record): its decisions and its chat's lines.
   const lines = ctx.chatLines?.(m.id) ?? [];
+  // Only the meeting's own record: its open questions, then the chat's questions.
+  // qa-simple-decide-4 (minutes.Record.questions): each once; a chat command is not asked again with its prefix.
+  const allQuestions = [...new Map([...questionsOf(m), ...lines.filter((x) => x.trim().endsWith("?") && !/^\s*(open question|question|note)\s*:/i.test(x))].map((x) => [x.toLowerCase().split(/\s+/).join(" "), x])).values()];
+  const nNotes = (m.notes ?? []).filter((n) => n.kind === "note" && n.text).length;
   const summary = titles.length
-    ? `${titles.slice(0, 6).join("; ")}${titles.length > 6 ? "…" : "."}`
+    ? summarySentence(titles.length, nNotes, allQuestions.length)
     : lines.length || (m.notes ?? []).length
       ? `${m.title}: no decision was taken.`
       : `${m.title}: nothing was decided or recorded.`;
@@ -686,10 +703,8 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
     if (made.has(c.id) && c.status === "proposed") waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
   }
   return {
-    summary: withNotes(m, summary).slice(0, 4000),
-    // Only the meeting's own record: its open questions, then the chat's questions.
-    // qa-simple-decide-4 (minutes.Record.questions): each once; a chat command is not asked again with its prefix.
-    open_questions: [...new Map([...questionsOf(m), ...lines.filter((x) => x.trim().endsWith("?") && !/^\s*(open question|question|note)\s*:/i.test(x))].map((x) => [x.toLowerCase().split(/\s+/).join(" "), x])).values()].slice(0, 5),
+    summary: summary.slice(0, 4000),
+    open_questions: allQuestions.slice(0, 5),
     action_items: [],
     waits,
     written_by: "extract",
@@ -709,8 +724,9 @@ export function meetingInboxRows(db: MeetingsDb | undefined, me: string, seen: s
 
 function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
   return {
-    id: d.id, number: d.number, title: d.title, origin: d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
+    id: d.id, number: d.number, title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
     decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
+    code: d.question?.code ?? null, chosen: d.question?.chosen ?? null,
   };
 }
 
@@ -761,7 +777,9 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
     prds: [...ps].sort((a, b) => a.title.localeCompare(b.title)).map((x) => ({ id: x.slug, title: x.title })),
     goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
-    meeting_options: ms.map((m) => ({ id: m.id, title: m.title })),
+    // qa-simple-decide-11: the meeting's title carries its day (the company's zone) and,
+    // while it is still live, " · live".
+    meeting_options: ms.map((m) => ({ id: m.id, title: `${m.title} · ${companyDateInWords(m.started_at)}${m.status === "live" ? " · live" : ""}` })),
     // prd-questions: the PRD's open questions (List and Board), counts and the remembered view.
     questions: qs,
     ...(({ waiting_count, late_count, approvals_waiting, approvals_example }) => ({ waiting_count, late_count, approvals_waiting, approvals_example }))(questionsCounts(ctx, qd, qs)),
@@ -880,7 +898,10 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (!text || text.length > 1000) return json(422, { detail: "text: 1 to 1000 characters" });
     if (!mayChange(m, ctx.me.id) && !m.attendee_ids.includes(ctx.me.id)) return json(403, { detail: "Join the meeting to comment in it" });
     if (m.status === "ended") return json(409, { detail: "This meeting has ended" });
-    record(db, ctx, m, `Comment: ${text}`, [...((b.subjects ?? []) as Decision["subjects"]), { kind: "document", id: prd.id }], []);
+    // qa-simple-decide-1: a comment is kept as a note, not a meeting decision; it stays
+    // out of meeting_decisions, the minutes and the Decisions page.
+    const note: MeetingNote = { id: `comment-${crypto.randomUUID()}`, kind: "comment", text, by_name: nameOf(ctx, ctx.me.id), at: iso(mockNowMs()), card_id: null };
+    (m.notes ??= []).push(note);
     return json(201, one(ctx, db, m));
   }
   if (p[4] === "approve" && method === "POST") {
@@ -926,7 +947,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const quick = extract(ctx, db, m);
     const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
     // An empty record: the plain line, no model's words (meetings.run_job); notes and open questions count as the record.
-    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? withNotes(m, `Oracle's minutes of ${m.title}: ${n} decisions taken.`) : quick.summary, written_by: "oracle" };
+    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
     return ok();
@@ -980,12 +1001,13 @@ function qdb(ctx: MeetingsCtx, db: MeetingsDb): QuestionsDb {
  * undo); with a live meeting's session_id the decision lands in that meeting's minutes.
  */
 export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
-  return routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title) => {
+  return routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title, own) => {
     const m = db.meetings.find((x) => x.session_id === sessionId);
     if (!m) return false;
     if (m.status !== "live") return "ended";
     const prd = prds(ctx).find((x) => x.slug === m.prd);
-    record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+    const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+    if (own) d.question = own;
     return m.id;
   });
 }

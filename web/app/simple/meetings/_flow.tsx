@@ -4,10 +4,24 @@ import { useState, type ReactNode } from "react";
 
 import { Sheet } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { formatInZone } from "@/lib/dates";
 
 import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
 
 import { usePhone } from "../priorities/priorities";
+
+/** qa-simple-decide-30: the one link style of Meetings, a meeting and Decisions. */
+export const LINK = "font-semibold text-accent-ink hover:underline";
+
+/**
+ * qa-simple-decide-31: one way to write a moment on Meetings, a meeting and Decisions:
+ * "Thu Oct 29, 7:01 PM" in the company zone (each page names the zone once); `day` alone
+ * gives "Thu Oct 29", as the API's decided label words it.
+ */
+export function momentWords(at: string, zone: string, day = false): string {
+  const d = formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+  return day ? d : `${d}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+}
 
 /**
  * A decision in a list, with the new flow or feature it decided (S8: each decided flow is

@@ -26,9 +26,11 @@ Test cards (protects / fails_when / no_claim):
   fails_when=a card is built outside a meeting; no_claim=Ask's General tab.
 - test_notes_questions_and_agenda_in_a_meeting: protects=in a meeting a commenter's notes,
   open questions, "next" and "skip" apply (everyone mode), show on the meeting for every
-  attendee, Undo removes a note and puts the agenda back, and the drafted minutes carry
-  the notes and questions; a viewer gets the viewers' note; fails_when=an effect is missing,
-  survives its Undo, or a viewer gets a card; no_claim=the minutes job's own text.
+  attendee, Undo removes a note and puts the agenda back, and the drafted minutes' open
+  questions carry the chat's questions (never a note's own text, qa-simple-decide-6); a
+  viewer gets the viewers' note; fails_when=an effect is missing, survives its Undo, a
+  viewer gets a card, or a note's text leaks into the summary; no_claim=the minutes job's
+  own text.
 - test_presenter_mode_bars_direct_actions: protects=the presenter's change mode bars the
   direct actions as it bars engine cards; fails_when=a barred attendee adds a note;
   no_claim=the named mode (chat's own tests).
@@ -182,7 +184,9 @@ async def test_notes_questions_and_agenda_in_a_meeting(client):
     assert v["kind"] == "note" and v["cards"] == [] and v["body"] == chat.VIEWER_NOTE
 
     out = await end(client, w, mid)
-    assert "Notes: Ship the checklist first" in out["minutes"]["summary"]
+    # qa-simple-decide-6: the quick summary is prose, never a note's own text.
+    assert out["minutes"]["summary"] == f"{mt['title']}: no decision was taken."
+    assert "Ship the checklist first" not in out["minutes"]["summary"]
     assert "Drop the video" not in out["minutes"]["summary"]
     assert "Who writes the tour?" in out["minutes"]["open_questions"]
     # An ended meeting takes no more notes.

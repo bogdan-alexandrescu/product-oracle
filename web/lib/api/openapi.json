@@ -115394,7 +115394,8 @@
             "type": "string",
             "enum": [
               "note",
-              "question"
+              "question",
+              "comment"
             ],
             "title": "Kind"
           },
@@ -115405,6 +115406,18 @@
           "by_name": {
             "type": "string",
             "title": "By Name"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
           },
           "card_id": {
             "anyOf": [
@@ -115427,7 +115440,7 @@
           "by_name"
         ],
         "title": "SimpleMeetingNote",
-        "description": "chat-actions: a minutes note or open question added during the meeting."
+        "description": "chat-actions: a minutes note or open question added during the meeting; also a\ncomment (qa-simple-decide-1), which is not a meeting decision and stays out of\nminutes."
       },
       "SimpleMeetingOut": {
         "properties": {

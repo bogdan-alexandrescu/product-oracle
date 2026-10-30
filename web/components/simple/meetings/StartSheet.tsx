@@ -211,7 +211,7 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
             <legend className="font-semibold">Who changes things in the chat</legend>
             {/* fix4 qa-simple-roadmap-23: each choice explained in one line. */}
             <p className="simple-small" data-testid="start-change-mode-help">Who may move dates and edit the plan by asking the review&apos;s chat; everyone else can still comment.</p>
-            {([["everyone", "Everyone"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
+            {([["everyone", "Everyone except viewers"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
               <label key={v} className={CHOICE}>
                 <input type="radio" className={CHECK} name="change-mode" checked={mode === v} onChange={() => setMode(v)} />
                 {label}
@@ -219,7 +219,9 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
             ))}
             {mode === "named" && (
               <div className="ml-6 mt-1" aria-label="Who else changes things">
-                {people.map((id) => (
+                {/* qa-simple-decide-26: the list is the attendees ticked above; empty, it says so. */}
+                {others.length === 0 && <p className="simple-small" data-testid="start-named-empty">Tick attendees above to pick them here.</p>}
+                {others.map((id) => (
                   <label key={id} className={CHOICE}>
                     <input type="checkbox" className={CHECK} checked={named.includes(id)} disabled={!named.includes(id) && named.length >= 2} onChange={() => toggleNamed(id)} />
                     {name(id)}
