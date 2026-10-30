@@ -312,9 +312,9 @@ test("Simple's Home: each part says when it has nothing", async ({ page }) => {
   }
   await page.goto("/simple");
   await expectSimple(page, "/simple");
-  await expect(page.getByTestId("home-decisions-empty")).toContainText("No decision waits on you");
+  // fix4 (qa-simple-home-16): nothing waiting is one line, not two empty cards.
+  await expect(page.getByTestId("home-nothing-waits")).toContainText("Nothing waits on you. Decisions and proposals on your items show here when they come.");
   await expect(page.getByTestId("home-meeting-empty")).toContainText("No review meeting scheduled");
-  await expect(page.getByTestId("home-proposals-empty")).toContainText("When someone suggests a change to your items, it shows here.");
 });
 
 test("phone: Simple's rail is a tab bar and a More drawer, every page fits 390 px", async ({ page }) => {

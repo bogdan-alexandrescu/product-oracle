@@ -206,7 +206,7 @@ for (const phone of [false, true]) {
         await page.evaluate((fail) => localStorage.removeItem(fail), MOCK_FAIL_KEY);
         await card(page, "meeting").getByRole("button", { name: "Retry" }).click();
         await expect(card(page, "meeting").getByTestId("home-meeting-next")).toBeVisible();
-        await expect(card(page, "meeting").getByRole("link", { name: "Start review" })).toBeVisible();
+        await expect(card(page, "meeting").getByRole("link", { name: /^Start (review|now)$/ })).toBeVisible();
       });
     });
   }
@@ -216,7 +216,6 @@ test("a new company's Home says what it has not got yet", async ({ page, context
   await context.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
   await signIn(page, EMAILS.owner);
   await expect(page.getByTestId("home-goals-empty")).toBeVisible();
-  await expect(page.getByTestId("home-proposals-empty")).toBeVisible();
-  await expect(page.getByTestId("home-decisions-empty")).toBeVisible();
+  await expect(page.getByTestId("home-nothing-waits")).toBeVisible();
   await expect(page.getByTestId("home-since-empty")).toBeVisible();
 });

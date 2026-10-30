@@ -96,7 +96,16 @@ test.describe("desktop", () => {
       expect(new Set(boxes.map((b) => b.y)).size).toBe(1);
       expect(new Set(boxes.map((b) => b.h)).size).toBe(1);
     }
-    await expect(home(page).getByTestId("home-nothing-waits")).toHaveText(/^Nothing waits on you\./);
+    // No decision waits on the commenter: no empty card, no 0 tile, above what does.
+    await expect(home(page).getByTestId("home-proposal").first()).toBeVisible();
+    await expect(home(page).getByTestId("home-decisions-empty")).toHaveCount(0);
+    await expect(home(page).getByTestId("home-summary-decisions")).toHaveCount(0);
+    await expect(home(page).getByTestId("home-summary-proposals")).toBeVisible();
+  });
+
+  test("qa-simple-home-16: with nothing waiting, Home says so in one line", async ({ page }) => {
+    await signIn(page, ADMIN.email, "empty");
+    await expect(home(page).getByTestId("home-nothing-waits")).toHaveText(/^Nothing waits on you\. .+ Open the roadmap$/);
     await expect(home(page).getByTestId("home-decisions-empty")).toHaveCount(0);
     await expect(home(page).getByTestId("home-proposals-empty")).toHaveCount(0);
     await expect(home(page).getByTestId("home-summary-decisions")).toHaveCount(0);

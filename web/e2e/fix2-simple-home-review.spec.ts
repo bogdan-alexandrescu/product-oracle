@@ -39,14 +39,6 @@ async function openAsk(page: Page): Promise<Locator> {
   return panel;
 }
 
-/** How many lines an element's text takes (its height over its line height). */
-const lines = (l: Locator) =>
-  l.evaluate((el) => {
-    const s = getComputedStyle(el);
-    const line = parseFloat(s.lineHeight) || parseFloat(s.fontSize) * 1.2;
-    return Math.round(el.getBoundingClientRect().height / line);
-  });
-
 test("an established company's Simple Home has no Set up card; a new company's leads with it", async ({ page }) => {
   // fails_when: the 8-row Set up card closes every established owner's Simple Home while a step is open
   await signIn(page, ADMIN.email, null);

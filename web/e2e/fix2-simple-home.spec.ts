@@ -236,7 +236,7 @@ test("qa-simple-home-28: Proposals' All opens the review list", async ({ page })
   // fails_when: All goes to the bare roadmap, or the empty card says only "No proposals on your items."
   await signIn(page, EMAILS.owner);
   const all = page.getByRole("link", { name: "All proposals", exact: true });
-  await expect(all).toHaveAttribute("href", "/simple/roadmap?review=1");
+  await expect(all).toHaveAttribute("href", "/simple/roadmap?review=proposals");
   await all.click();
   await expect(page).toHaveURL(/\/simple\/roadmap/);
   await expect(page.getByTestId("decision-tray")).toBeVisible();
@@ -244,7 +244,8 @@ test("qa-simple-home-28: Proposals' All opens the review list", async ({ page })
 
 test("qa-simple-home-28: a new company's empty proposals card says what will show there", async ({ page }) => {
   await signIn(page, EMAILS.owner, "empty");
-  await expect(page.getByTestId("home-proposals-empty")).toHaveText("When someone suggests a change to your items, it shows here.");
+  // fix4 (qa-simple-home-16): folded into the one "Nothing waits" line, which still says what will show.
+  await expect(page.getByTestId("simple-page").getByTestId("home-nothing-waits")).toContainText("Decisions and proposals on your items show here when they come.");
 });
 
 test("qa-simple-home-34: a broken link's actions sit in a row, so the row hugs its text", async ({ page }) => {

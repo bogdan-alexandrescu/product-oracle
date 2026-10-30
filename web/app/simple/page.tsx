@@ -266,7 +266,11 @@ export default function SimpleHome() {
   const counted = [waiting, changes, roadmap, meeting].every((q) => q.data !== undefined || !!q.error);
   const nothingToWalk = counted && decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
   // qa-simple-home-16: nothing waits on me (no decision, no proposal): one line, not two empty cards and two 0 tiles.
-  const quiet = !!waiting.data && !!changes.data && decisionCount === 0 && proposalRows.length === 0 && mineApart.length === 0;
+  // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
+  const decisionRows = waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined;
+  const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
+  const proposalsEmpty = !!changes.data && proposalRows.length === 0;
+  const quiet = decisionsEmpty && proposalsEmpty && mineApart.length === 0;
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
@@ -274,7 +278,7 @@ export default function SimpleHome() {
       ["proposals", changes.data ? proposalRows.length : null, proposalRows === toDecide ? "proposals on your items" : "of your proposals waiting", "proposals"],
       ["broken-links", roadmap.data ? broken.length : null, "broken links", "broken links"],
     ] as const
-  ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : !quiet));
+  ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty : !proposalsEmpty));
   // The goal band's weights as their share of the score ("50% of the score").
   const weightSum = (tiles ?? []).reduce((n, g) => n + (g.weight != null && g.weight > 0 ? g.weight : 0), 0);
   /** A goal's features on the roadmap (filtered to it), or Priorities when none is planned yet. */
@@ -564,7 +568,7 @@ export default function SimpleHome() {
         </section>
       )}
 
-      {!reads && !quiet && (
+      {!reads && !decisionsEmpty && (
         <HomeCard
           id="decisions"
           icon="flag"
@@ -572,7 +576,7 @@ export default function SimpleHome() {
           all="/simple/decisions"
           allLabel="All decisions"
         >
-          <Block q={{ ...decisions, error: waiting.error ?? decisions.error, data: waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined }} testId="home-decisions">
+          <Block q={{ ...decisions, error: waiting.error ?? decisions.error, data: decisionRows }} testId="home-decisions">
             {(rows) =>
               rows.length === 0 ? (
                 <p className="simple-small" data-testid="home-decisions-empty">
@@ -594,8 +598,8 @@ export default function SimpleHome() {
         </HomeCard>
       )}
 
-      {!reads && !quiet && (
-        <HomeCard id="proposals" icon="comment" title={proposalTitle} all={REVIEW} allLabel="All proposals, on the roadmap's Needs a decision">
+      {!reads && !proposalsEmpty && (
+        <HomeCard id="proposals" icon="comment" title={proposalTitle} all={REVIEW} allLabel="All proposals">
           <Block q={changes} testId="home-proposals">
             {() =>
               proposalRows.length === 0 ? (
