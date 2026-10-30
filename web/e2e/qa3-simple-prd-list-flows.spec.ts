@@ -1,7 +1,7 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
 import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -209,15 +209,12 @@ test.describe("desktop", () => {
   for (const scheme of ["light", "dark"] as const) {
     test(`qa-simple-prd-p3-24: a "No flow yet" box's dashed border reads against its card (${scheme})`, async ({ page }) => {
       await setUp(page, { scheme });
-      // The drawing box stays while it is read (the job takes a minute here).
-      await page.context().addInitScript(([key]) => localStorage.setItem(key, "60000"), [MOCK_VISUAL_JOB_MS_KEY] as const);
-      await page.goto(ONE_PAGER);
-      await expect(page.getByTestId("one-pager")).toBeVisible();
-      for (const n of [3, 4]) {
-        // 2026-10-30: a bet with no flow has no box until it is asked for; the box shows while drawing.
-        await page.getByRole("button", { name: `Draw the flow for ${BETS[n]}` }).click();
-        const empty = bet(page, n).getByTestId("flow-empty");
-        await expect(empty).toContainText("Oracle is drawing the flow");
+      // 2026-10-30: a one-pager bet with no flow shows no box (only "Draw the flow"); the
+      // "No flow yet" box is a roadmap card's now.
+      await page.goto("/simple/roadmap");
+      await openRoadmapItem(page, "alert-digest");
+      for (const empty of [page.getByTestId("floating-card").getByTestId("flow-empty")]) {
+        await expect(empty).toContainText("No flow yet");
         const box = empty.locator("span[aria-hidden]").first();
         const look = await box.evaluate((el) => {
           const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
@@ -250,7 +247,7 @@ test.describe("desktop", () => {
         });
         expect(look.style).toBe("dashed");
         expect(look.width).toBeGreaterThanOrEqual(1);
-        expect(look.ratio, `bet ${n}'s box border against its card`).toBeGreaterThanOrEqual(3);
+        expect(look.ratio, `the box border against its card`).toBeGreaterThanOrEqual(3);
       }
     });
   }

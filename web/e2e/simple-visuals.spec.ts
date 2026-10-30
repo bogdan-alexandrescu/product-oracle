@@ -136,8 +136,8 @@ for (const [where, use] of [
         const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
         await expect(wide).toHaveCount(0);
         await page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" }).click();
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
-        await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
+        // The mock draws at once here (the drawing state: "a one-pager bet line: drawing, then version 1").
+        await expect(page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" })).toHaveCount(0);
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
         await wide.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" }).click();
         const opened = page.getByTestId("flow-detail");
@@ -156,7 +156,7 @@ for (const [where, use] of [
         const wide = page.getByRole("group", { name: "User flow of “A sample project created on" });
         await expect(wide).toHaveCount(0);
         await page.getByRole("button", { name: "Draw the flow for “A sample project created on" }).click();
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
+        // The mock draws at once here (the drawing state: "a one-pager bet line: drawing, then version 1").
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
         await wide.getByRole("button", { name: "Flow for “A sample project created on" }).click();
         await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toContainText("Version 1 · drawn");

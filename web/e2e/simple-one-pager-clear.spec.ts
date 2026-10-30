@@ -55,10 +55,11 @@ for (const phone of [false, true]) {
       await expect(page.getByRole("group", { name: /^User flow of “Invite suggestions/ })).toHaveCount(0);
       const draw = bet.getByRole("button", { name: /^Draw the flow for “Invite suggestions/ });
       await expect(draw).toHaveText("Draw the flow");
-      // The link sits at the end of the bet's line, not under it.
+      // The link follows the bet's words in its line (on a desktop beside them; a phone wraps it right after them).
       const lineBox = (await bet.getByTestId("one-pager-line-text").boundingBox())!;
       const drawBox = (await draw.boundingBox())!;
-      expect(drawBox.y).toBeLessThan(lineBox.y + lineBox.height);
+      expect(drawBox.y).toBeLessThanOrEqual(lineBox.y + lineBox.height + 1);
+      if (!phone) expect(drawBox.x).toBeGreaterThan(lineBox.x + lineBox.width - 1);
       await draw.click();
       const flow = page.getByRole("group", { name: /^User flow of “Invite suggestions/ });
       await expect(flow.getByTestId("flow-drawn")).toContainText("Version 1");
