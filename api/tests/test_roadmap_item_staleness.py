@@ -4,12 +4,13 @@ reconcile. Against Postgres with the FakeRuntime."""
 
 import uuid
 
+import pytest
 from sqlalchemy import select
 
 from oracle import changes
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
-from oracle.docs.visibility import Hidden
+from oracle.docs.visibility import Hidden, _words_of
 from oracle.roadmap import staleness
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
@@ -303,3 +304,48 @@ def test_an_old_literal_reason_naming_a_hidden_decision_is_hidden_before_it_is_r
     assert staleness.for_reader([old], None) == [
         "PRD section s-5-1 links a decision, which changed"
     ]
+
+
+def _hiding(title: str) -> Hidden:
+    """What a reader who may not see the decision titled ``title`` may not see."""
+    return Hidden(decision_ids=frozenset(), document_ids=frozenset(), ids=frozenset(),
+                  numbers=frozenset(), words=frozenset(_words_of(title)))  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("title", "shown"),
+    [
+        # A half that reads as a ref-named reason ("plan:x renamed") is put into words.
+        ("plan:enterprise renamed; tier two", "tier two"),
+        # A half that reads as a counted reason is absorbed by a later count.
+        ("2 baseline items changed; tier two", "tier two"),
+    ],
+)
+def test_an_old_alert_line_cut_on_a_hidden_title_is_hidden_before_it_is_reworded(title, shown):
+    """cld-4 review: an old stale alert line, its reasons joined by "; ", that names a
+    hidden title holding "; " is hidden on the stored text, before its halves are put into
+    words or counted, so neither half reaches the reader; fails_when=one half is reworded
+    or absorbed, the line read no longer names the title whole, and the other half is
+    shown; no_claim=a title named in other words (Hidden.names)."""
+    hidden = _hiding(title)
+    detail = staleness.detail_for_reader(
+        f"{title} changed; 5 baseline items changed; requirement:x changed", hidden
+    )
+    assert shown not in detail, detail
+    assert detail == f"{staleness.HIDDEN_REASON}; 5 baseline items changed; a requirement changed"
+
+
+def test_an_old_alert_line_cut_on_a_hidden_title_keeps_its_other_reasons():
+    """cld-4 review: an old stale alert line naming a hidden title cut on its "; " hides
+    only the parts that make up the title; the line's other reasons are read as before;
+    fails_when=the whole line reads only "a linked baseline item changed"; no_claim=a
+    title named in other words (Hidden.names)."""
+    title = "Pricing; enterprise; tier"
+    hidden = _hiding(title)
+    old = f"requirement:x changed; {title} changed; feature:y moved"
+    detail = staleness.detail_for_reader(old, hidden)
+    assert detail == f"A requirement changed; {staleness.HIDDEN_REASON}; the feature moved", detail
+    # Who may see it reads the line split on "; " as before.
+    assert staleness.detail_for_reader(old, None) == (
+        "A requirement changed; Pricing; enterprise; tier changed; the feature moved"
+    )
