@@ -639,11 +639,8 @@ async def set_status(
     ritual = await get_ritual(db, ritual_id, lock=True)
     # A person's Pause or Resume: the ritual is theirs, the first goal leaves it as it is.
     waited, ritual.waits_for_goal = ritual.waits_for_goal, False
-    if ritual.status == status and waited:
-        ritual.lock_version += 1
-        await audit.record(db, principal, f"ritual.{'resumed' if status == 'active' else 'paused'}",
-                           "ritual", ritual.id)  # fmt: skip
-        await db.commit()
+    if ritual.status == status and not waited:
+        return ritual
     if ritual.status != status:
         ritual.status = status
         ritual.next_due_at = None
@@ -653,7 +650,6 @@ async def set_status(
                 if ritual.kind == "alignment_report" and ritual.builtin
                 else next_occurrence(ritual.schedule, clock.now())
             )
-        ritual.lock_version += 1
         if status == "paused":
             # A paused ritual's failed preparation leaves the owners' Inbox.
             for occ in await db.scalars(
@@ -663,9 +659,10 @@ async def set_status(
             ):
                 occ.status = "skipped"
                 occ.skip_reason = "The ritual was paused"
-        await audit.record(db, principal, f"ritual.{'resumed' if status == 'active' else 'paused'}",
-                           "ritual", ritual.id)  # fmt: skip
-        await db.commit()
+    ritual.lock_version += 1
+    await audit.record(db, principal, f"ritual.{'resumed' if status == 'active' else 'paused'}",
+                       "ritual", ritual.id)  # fmt: skip
+    await db.commit()
     return ritual
 
 
