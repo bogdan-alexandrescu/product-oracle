@@ -1871,6 +1871,7 @@ class InboxSimpleMinutes(BaseModel):
     meeting_id: uuid.UUID
     title: str
     ended_at: dt.datetime | None
+    sent_at: dt.datetime | None
     decisions: int
     state: Literal["new", "open"]
 

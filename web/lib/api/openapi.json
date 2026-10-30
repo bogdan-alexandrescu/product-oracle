@@ -80182,6 +80182,18 @@
             ],
             "title": "Ended At"
           },
+          "sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
           "decisions": {
             "type": "integer",
             "title": "Decisions"
@@ -80200,6 +80212,7 @@
           "meeting_id",
           "title",
           "ended_at",
+          "sent_at",
           "decisions",
           "state"
         ],

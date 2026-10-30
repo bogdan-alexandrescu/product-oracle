@@ -23,7 +23,7 @@ export function minutesRows(rows: Minutes[]): StatedNeed[] {
       </span>
     ),
     context: <span className="text-text2">{m.decisions === 1 ? "1 decision" : `${m.decisions} decisions`}</span>,
-    at: m.ended_at,
+    at: m.sent_at,
     state: m.state,
     counted: false,
     group: "minutes",

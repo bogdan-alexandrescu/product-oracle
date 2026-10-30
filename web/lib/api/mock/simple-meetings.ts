@@ -726,7 +726,7 @@ export function meetingInboxRows(db: MeetingsDb | undefined, me: string, seen: s
     .filter((m) => m.minutes_state === "sent" && m.attendee_ids.includes(me))
     .sort((a, b) => ((a.sent_at ?? "") < (b.sent_at ?? "") ? 1 : -1))
     .map((m) => ({
-      meeting_id: m.id, title: m.title, ended_at: m.ended_at, decisions: db!.decisions.filter((d) => d.meeting_id === m.id).length,
+      meeting_id: m.id, title: m.title, ended_at: m.ended_at, sent_at: m.sent_at, decisions: db!.decisions.filter((d) => d.meeting_id === m.id).length,
       state: !seen || (m.sent_at ?? "") > seen ? "new" : "open",
     }));
 }
