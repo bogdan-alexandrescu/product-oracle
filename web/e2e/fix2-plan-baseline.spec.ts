@@ -25,6 +25,20 @@ async function openBaseline(page: Page, email?: string) {
 const goalsTable = (page: Page) => page.getByRole("grid", { name: "Goals" });
 const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the baseline" });
 
+/** An empty company's first source, one file in it, from Settings > Sources (Start waits for items: qa-onboarding-2). */
+async function addFileSource(page: Page) {
+  await page.goto("/settings/sources");
+  const form = page.getByRole("form", { name: "Add a source" });
+  await form.getByLabel("Kind").selectOption("upload");
+  await form.getByLabel("Name").fill("Research notes");
+  await form.getByRole("button", { name: "Add source" }).click();
+  const notes = page.getByRole("listitem", { name: "Research notes" });
+  await notes.getByLabel("Upload files to Research notes").setInputFiles([
+    { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
+  ]);
+  await expect(notes.getByTestId("source-items")).toHaveText("1 item");
+}
+
 /** True when the element cuts its own content off (sideways or downwards). */
 const clipped = (el: Locator) =>
   el.evaluate((e) => {
@@ -42,7 +56,7 @@ test.describe("desktop", () => {
   test("progress says it is measured from the goal's start", async ({ page }) => {
     await openBaseline(page);
     const progress = page.getByTestId("goal-g.activation").locator('[data-attr="progress"]');
-    await expect(progress).toHaveText("50% of the way from 31%");
+    await expect(progress).toHaveText("50% of the way from 31% to ≥ 45%");
     await expect(progress).toHaveAttribute("title", /31% \(start\) to ≥ 45%; 38% now/);
   });
 
@@ -107,6 +121,7 @@ test.describe("desktop", () => {
   test("empty company: one build banner, no blockers, no half-drawn Goals table", async ({ page }) => {
     await scenario(page, "empty");
     await login(page);
+    await addFileSource(page);
     await page.goto("/baseline?build=1");
     await sheet(page).getByRole("button", { name: "Start" }).click();
     await expect(sheet(page)).toHaveCount(0);

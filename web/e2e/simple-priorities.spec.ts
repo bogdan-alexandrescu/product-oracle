@@ -217,11 +217,11 @@ test.describe("desktop", () => {
   test("a commenter's Confirm and Merge on a draft wait inline for the decider", async ({ page }) => {
     const cory = await as(page, "commenter@example.com");
     const draft = cory.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
-    await draft.getByRole("button", { name: "Confirm" }).click();
+    await draft.getByRole("button", { name: "Propose", exact: true }).click();
     await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     await draft.getByRole("button", { name: "Merge into…" }).click();
     await draft.getByLabel("Merge into").selectOption({ label: "Setup checklist" });
-    await draft.getByRole("button", { name: "Merge", exact: true }).click();
+    await draft.getByRole("button", { name: "Propose merge", exact: true }).click();
     const cards = draft.getByTestId("prio-proposal");
     await expect(cards).toHaveCount(2);
     await expect(cards.nth(0)).toContainText("Commenter proposes confirming it · waiting for Admin");

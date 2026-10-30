@@ -77,7 +77,7 @@ test("qa-plan-23: the alignment reports have their own Plan tab, selected on the
 test("qa-plan-24: with no report yet, Alignment report says so and an owner can Generate now", async ({ page }) => {
   await login(page);
   await page.goto("/plan");
-  await page.getByRole("link", { name: "Alignment report" }).filter({ visible: true }).click();
+  await page.getByRole("link", { name: "Latest report" }).filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/plan\/reports\/latest$/);
   const none = page.getByTestId("no-report-yet").filter({ visible: true });
   await expect(none).toContainText("No report yet");
@@ -163,10 +163,10 @@ test("qa-plan-26: on a phone the withdrawal reason has its own line too", async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("qa-plan-28: Record basis submits as 'Record and verify', marks required fields and names what is missing", async ({ page }) => {
+test("qa-plan-28: Add a date source submits as 'Record and verify', marks required fields and names what is missing", async ({ page }) => {
   await withScenario(page, DATE_BASES_SCENARIO);
   await page.goto("/plan/dates");
-  await page.getByRole("button", { name: "Record basis" }).click();
+  await page.getByRole("button", { name: "Add a date source" }).click();
   const dialog = page.getByTestId("date-basis-dialog");
   const submit = dialog.getByRole("button", { name: "Record and verify" });
   await expect(submit).toBeDisabled();

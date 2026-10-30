@@ -118,7 +118,7 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(build).toHaveAttribute("data-done", "false");
   await expect(build.getByTestId("setup-action")).toHaveText("Open");
   await build.getByTestId("setup-action").click();
-  await expect(page).toHaveURL(/\/baseline\?build=1$/);
+  await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
   const sheet = page.getByRole("dialog", { name: "Build the baseline" });
   await expect(sheet).toBeVisible();
   await sheet.getByRole("button", { name: "Start" }).click();

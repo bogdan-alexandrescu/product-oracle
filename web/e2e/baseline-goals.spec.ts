@@ -55,7 +55,7 @@ test("goals table: typed target, horizon and owner; a Not measurable chip on a g
   await expect(churn.locator('[data-attr="target"]')).toHaveAttribute("title", "Not checked yet: fill from text or edit");
   await expect(churn.locator('[data-attr="target"]')).toHaveAttribute("data-text", "true");
   await expect(churn.getByTestId("not-measurable")).toHaveText("Not measurable");
-  await expect(churn.getByTestId("not-measurable")).toHaveAttribute("title", "Missing: unit, comparison, target, horizon, owner");
+  await expect(churn.getByTestId("not-measurable")).toHaveAttribute("title", "Missing: target, horizon, owner");
 });
 
 // protects: a target never saves without its unit and which way is success, and the person
@@ -132,8 +132,8 @@ test("owner picker: an owner is sent to the invite form; an approver gets the li
 // no_claim: no model call is made in the mock either; proposals on locked goals are pytest's.
 test("Fill from text: the result notice, and early churn's target becomes < 8%", async ({ page }) => {
   await openBaseline(page);
-  await page.getByRole("button", { name: "Fill goals from text (1 goal)" }).click();
-  await page.getByRole("alertdialog", { name: "Fill 1 goal from text" }).getByRole("button", { name: "Fill 1 goal from text" }).click();
+  await page.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
+  await page.getByRole("alertdialog", { name: "Read targets from 1 goal's text" }).getByRole("button", { name: "Read targets from 1 goal's text" }).click();
   await expect(page.getByRole("status")).toContainText("1 goal filled.");
   const churn = page.getByTestId("goal-g.early-churn");
   await expect(churn.locator('[data-attr="target"]')).toHaveText("< 8%");
@@ -201,7 +201,7 @@ test("confirm a Not measurable goal: Confirmed with the chip still on, and Home 
   await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
   await expect(g3.getByTestId("goal-to-go").locator("[title]")).toHaveAttribute(
     "title",
-    "Not measurable yet: missing unit, comparison, target, horizon, owner",
+    "Not measurable yet: missing target, horizon, owner",
   );
 });
 

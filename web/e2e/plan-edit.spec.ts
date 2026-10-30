@@ -35,7 +35,7 @@ async function horizonOf(page: Page): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   let group = "";
   for (const el of await page.locator('[data-testid="plan-group"], [data-testid="plan-row"]').filter({ visible: true }).all()) {
-    if ((await el.getAttribute("data-testid")) === "plan-group") group = (await el.innerText()).replace(/\s*\d+\s*$/, "").trim();
+    if ((await el.getAttribute("data-testid")) === "plan-group") group = (await el.innerText()).replace(/\s*·?\s*\d+\s*$/, "").trim();
     else out[(await el.getByTestId("plan-title").innerText()).trim()] = group;
   }
   return out;

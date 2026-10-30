@@ -112,7 +112,7 @@ async def test_impact_of_a_requirement_change_reaches_acceptance_tests(client):
     assert "tech_brief" not in kinds
     assert str(chain["ac"]) in {e["id"] for e in report["affected_entities"]}
     tests_item = next(a for a in report["affected"] if a["artifact_kind"] == "acceptance_tests")
-    assert any("pick-saved" in r for r in tests_item["reasons"])
+    assert any("Pick a saved address" in r for r in tests_item["reasons"])
 
 
 async def test_previewing_an_entity_impact_changes_nothing(client):

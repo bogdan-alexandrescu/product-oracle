@@ -16,29 +16,24 @@ async function start(page: Page, opts: { scenario?: string; role?: "viewer" | "a
 }
 
 test("qa-plan-18: New launch names the track and points to approving its roadmap, with no dead Create", async ({ page }) => {
+  // fix4 qa-plan-13: with no approved roadmap, New launch is disabled and the page says why.
   await start(page);
   await page.goto("/roadmap/launches");
-  await page.getByTestId("new-launch").click();
-  const dialog = page.getByTestId("new-launch-dialog");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByTestId("new-launch-track")).toHaveText("Track: Usage alerts PRD");
-  const blocked = dialog.getByTestId("new-launch-blocked");
+  await expect(page.getByTestId("launches-empty-new")).toBeDisabled();
+  const blocked = page.getByTestId("launches-empty").getByTestId("new-launch-blocked");
   await expect(blocked).toContainText("Usage alerts PRD has no approved roadmap yet");
   await expect(blocked).not.toContainText("This track");
   const link = blocked.getByRole("link", { name: "Usage alerts roadmap" });
   await expect(link).toHaveAttribute("href", "/documents/usage-alerts-roadmap");
-  // No dead button: Create launch is not offered until there is something to plan.
-  await expect(dialog.getByRole("button", { name: "Create launch" })).toHaveCount(0);
-  await expect(dialog.getByLabel("Name")).toHaveCount(0);
-  await dialog.getByTestId("dialog-footer").getByRole("button", { name: "Close" }).click();
-  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId("new-launch-dialog")).toHaveCount(0);
 });
 
 test("qa-plan-17: an approved version 1 with a later draft still offers its items, named in words", async ({ page }) => {
   // As the API: the track's roadmap is its latest approved version with items, even while a later one is open.
   await start(page, { scenario: "roadmap-diff" });
   await page.goto("/roadmap/launches");
-  await page.getByTestId("new-launch").click();
+  // No launch yet: the empty state's New launch (fix4 qa-plan-15).
+  await page.getByTestId("launches-empty-new").click();
   const dialog = page.getByTestId("new-launch-dialog");
   await expect(dialog.getByTestId("new-launch-blocked")).toHaveCount(0);
   await expect(dialog.locator("legend")).toHaveText("Items · Usage alerts roadmap, version 1");
@@ -51,13 +46,15 @@ test("qa-plan-51: empty Launches and Changelog say so in a sentence and suggest 
   await page.goto("/roadmap/launches");
   // qa-plan-48: with no launch at all, the empty state stands alone (no table).
   await expect(page.getByTestId("launches-empty")).toContainText("No launches yet");
-  await expect(page.getByTestId("launches-empty-text")).toHaveText(
-    "Use New launch to plan the first, or approve a roadmap: its Now items get a launch each.",
-  );
+  // fix4 qa-plan-13: no roadmap is approved yet, so New launch is not suggested; the reason is.
+  await expect(page.getByTestId("launches-empty-text")).toHaveText("They are planned when a roadmap is approved.");
+  await expect(page.getByTestId("launches-empty").getByTestId("new-launch-blocked")).toBeVisible();
   await page.goto("/roadmap/changelog");
-  await expect(page.getByTestId("changelog-empty")).toHaveText(
-    "No entries yet. Use New entry to add the first; Oracle adds one when it drafts a launch's kit.",
+  await expect(page.getByTestId("changelog-empty-text")).toHaveText(
+    "No entries yet. Add the first; Oracle adds one when it drafts a launch's kit.",
   );
+  // fix4 qa-plan-58: the empty card holds New entry.
+  await expect(page.getByTestId("changelog-empty").getByRole("button", { name: "New entry" })).toBeVisible();
   await expect(page.getByText("No changelog entries yet")).toHaveCount(0);
 });
 
@@ -120,10 +117,9 @@ test.describe("phone", () => {
     await expect(page.getByTestId("export-why")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     await page.goto("/roadmap/launches");
-    await page.getByTestId("new-launch").click();
-    const dialog = page.getByTestId("new-launch-dialog");
-    await expect(dialog.getByTestId("new-launch-blocked")).toBeVisible();
-    const box = await dialog.boundingBox();
+    const blocked = page.getByTestId("new-launch-blocked");
+    await expect(blocked).toBeVisible();
+    const box = await blocked.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   });

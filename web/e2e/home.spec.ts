@@ -19,7 +19,8 @@ test("Home: goals show current over target, distance to go, confidence and trend
   await expect(g1.getByTestId("goal-figure")).toHaveText("38%/ 45%");
   // I3: distance to go in the goal's own unit, never a percentage of target.
   await expect(g1.getByTestId("goal-to-go")).toHaveText("7 pts to go");
-  await expect(g1.getByRole("img", { name: "Confidence 78" })).toBeVisible();
+  // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
+  await expect(g1.getByRole("img", { name: "No confidence" })).toBeVisible();
   // The trend comes from the goal's recorded revisions, with the target dashed.
   await expect(g1.getByTestId("goal-trend").locator("line[data-target='45']")).toHaveCount(1);
   await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
@@ -144,7 +145,7 @@ test("Home for a new company: one line per block with what to do next", async ({
   // qa-onboarding-37: one baseline action on Home; the Set up row holds it, the card points there.
   await expect(goals.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
   await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("Build it from Set up, above");
-  await expect(setup.getByTestId("setup-row-build_baseline").getByRole("link", { name: "Open" })).toHaveAttribute("href", "/baseline?build=1");
+  await expect(setup.getByTestId("setup-row-build_baseline").getByRole("link", { name: "Open" })).toHaveAttribute("href", "/baseline?build=1&from=setup");
   await expect(page.getByTestId("home-needs-empty")).toHaveText("Nothing waiting");
   const flight = page.getByTestId("home-in-flight-empty");
   await expect(flight).toContainText("Nothing in flight");

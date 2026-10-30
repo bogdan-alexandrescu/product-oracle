@@ -27,7 +27,7 @@ test("priorities: method switch changes the ranking and the formula", async ({ p
 
   await methods.getByRole("radio", { name: "RICE" }).click();
   await expect(page.getByTestId("formula")).toContainText("reach × impact × confidence");
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400.00");
+  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
   // F-4 has no reach: unscored and flagged.
   await expect(page.getByTestId("priority-row-F-4")).toContainText("Not scored: no Reach");
   await expect(page.getByTestId("priority-row-F-4").getByTestId("score")).toHaveText("—");
@@ -55,7 +55,7 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Score = 6 × 75% ÷ 2 = 2.25");
   await expect(ex).toContainText("from evidence");
   await expect(ex).toContainText("Interview 07");
-  await expect(ex.getByRole("cell", { name: "Effort (from the feature)" })).toBeVisible();
+  await expect(ex.getByRole("row", { name: /^Effort\b/ }).getByRole("cell", { name: "The feature", exact: true })).toBeVisible();
 
   // Assumed goal weight, and an order note.
   await page.getByTestId("priority-row-F-3").getByRole("button", { name: "Shared projects" }).click();

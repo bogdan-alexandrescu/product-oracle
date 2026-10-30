@@ -60,7 +60,8 @@ test("goals: the confidence ring is named and hidden without a current value; th
   const g1 = page.getByTestId("home-goal-G1");
   await expect(g1.getByTestId("goal-confidence")).toBeVisible();
   await expect(g1.getByTestId("goal-confidence")).toContainText("confidence");
-  await expect(g1.getByRole("img", { name: "Confidence 78" })).toBeVisible();
+  // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
+  await expect(g1.getByRole("img", { name: "No confidence" })).toBeVisible();
   await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
 
   // Cut early churn has no current value: no ring, no number beside the "–".

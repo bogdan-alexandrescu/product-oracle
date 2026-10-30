@@ -6,7 +6,7 @@ import { login } from "./helpers";
 
 /*
  * The design system's one Dialog (qa-plan-29, qa-plan-55, qa-settings-12), driven as a person
- * would on the mock API: Record basis on Plan › Dates, New entry on the changelog and New
+ * would on the mock API: Add a date source on Plan › Dates, New entry on the changelog and New
  * launch on Launches share one frame (title and close X, body, Cancel as a bordered button
  * before the primary action), focus moves into it and back to the button that opened it,
  * and typed work is not lost to a stray Escape or click outside.
@@ -23,7 +23,7 @@ async function openDates(page: Page) {
   await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, DATE_BASES_SCENARIO]);
   await login(page, LEAD);
   await page.goto("/plan/dates");
-  await expect(page.getByRole("button", { name: "Record basis" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add a date source" })).toBeVisible();
 }
 
 /** The one frame: a modal named by its title, a close X, and a bordered Cancel before the primary action. */
@@ -43,12 +43,12 @@ async function expectOneStyle(dialog: Locator, title: string) {
   expect(variants[variants.length - 1]).toBe("primary");
 }
 
-test("Record basis: focus moves to the first field, Tab stays inside, and focus returns to Record basis", async ({ page }) => {
+test("Add a date source: focus moves to the first field, Tab stays inside, and focus returns to Add a date source", async ({ page }) => {
   await openDates(page);
-  const open = page.getByRole("button", { name: "Record basis" });
+  const open = page.getByRole("button", { name: "Add a date source" });
   await open.click();
-  const dialog = page.getByRole("dialog", { name: "Record basis" });
-  await expectOneStyle(dialog, "Record basis");
+  const dialog = page.getByRole("dialog", { name: "Add a date source" });
+  await expectOneStyle(dialog, "Add a date source");
   await expect(dialog.getByLabel("PRD")).toBeFocused();
   // Tab round the whole dialog: focus never leaves it.
   for (let i = 0; i < 20; i++) {
@@ -61,11 +61,11 @@ test("Record basis: focus moves to the first field, Tab stays inside, and focus 
   await expect(open).toBeFocused();
 });
 
-test("Record basis: with typed text, Escape asks first; Keep editing keeps the text and Discard closes", async ({ page }) => {
+test("Add a date source: with typed text, Escape asks first; Keep editing keeps the text and Discard closes", async ({ page }) => {
   await openDates(page);
-  const open = page.getByRole("button", { name: "Record basis" });
+  const open = page.getByRole("button", { name: "Add a date source" });
   await open.click();
-  const dialog = page.getByRole("dialog", { name: "Record basis" });
+  const dialog = page.getByRole("dialog", { name: "Add a date source" });
   await dialog.getByLabel("Reference").fill("ENG-999");
 
   await page.keyboard.press("Escape");
@@ -176,7 +176,7 @@ test("New launch: a track-only change asks before closing, and Cancel waits whil
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("Record basis opened from a Plan item's sheet: Escape asks inside the dialog and keeps the sheet", async ({ page }) => {
+  test("Add a date source opened from a Plan item's sheet: Escape asks inside the dialog and keeps the sheet", async ({ page }) => {
     // protects=Escape in a dialog over a sheet goes to the dialog (its discard question), not the
     // sheet; fails_when=the sheet's own Escape closes the sheet and the typed text with it;
     // no_claim=the basis itself (date-bases.spec.ts).
@@ -187,7 +187,7 @@ test.describe("phone", () => {
     const sheet = page.getByTestId("sheet-plan-item");
     await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: "Verify date" }).click();
-    const dialog = page.getByRole("dialog", { name: "Record basis" });
+    const dialog = page.getByRole("dialog", { name: "Add a date source" });
     await dialog.getByLabel("Reference").fill("ENG-999");
     await page.keyboard.press("Escape");
     await expect(dialog.getByTestId("dialog-discard")).toContainText("Discard your changes?");

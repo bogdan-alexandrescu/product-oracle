@@ -114,7 +114,7 @@ test("PRD cards: the engineering check waits for the engineering lead", async ({
 // wrong, or a note counts as a change; no_claim = the diff (api/tests/test_plan.py).
 test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Proposed", async ({ page }) => {
   await openPlan(page);
-  await expect(groups(page)).toHaveText(["Now 7", "Next 1", "Later 2"]);
+  await expect(groups(page)).toHaveText(["Now · 7", "Next · 1", "Later · 2"]);
   await expect(rows(page)).toHaveCount(10);
   const state = (title: string) => row(page, title).getByTestId("plan-state");
   await expect(state("Alert rules API")).toHaveText("Proposed");
@@ -131,8 +131,8 @@ test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Pro
   await expect(row(page, "Daily alert digest email").getByTestId("plan-engineering")).toHaveText("ENG-405 · slipped 9 d");
   await expect(row(page, "Alerts in the team chat").getByTestId("plan-engineering")).toHaveText("ENG-431 · unverified");
   await expect(row(page, "Budgets per team").getByTestId("plan-engineering")).toHaveText("—");
-  await expect(row(page, "Daily alert digest email").getByTestId("plan-next")).toHaveText("Decide on slip · owners");
-  await expect(row(page, "One-page checkout").getByTestId("plan-next").getByRole("link", { name: "PRD review" })).toHaveAttribute(
+  await expect(row(page, "Daily alert digest email").getByTestId("plan-next")).toHaveText("Owners decide on the slip");
+  await expect(row(page, "One-page checkout").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" })).toHaveAttribute(
     "href",
     "/documents/checkout-redesign/v/2",
   );
@@ -147,7 +147,7 @@ test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Pro
   await group.getByRole("button", { name: "PRD" }).click();
   await expect(groups(page)).toHaveText(["Usage alerts PRD 7", "Checkout redesign PRD 3"]);
   await group.getByRole("button", { name: "Horizon" }).click();
-  await expect(groups(page)).toHaveText(["Now 7", "Next 1", "Later 2"]);
+  await expect(groups(page)).toHaveText(["Now · 7", "Next · 1", "Later · 2"]);
 });
 
 // protects = "Approved only" hides every Proposed row and is kept after a reload (per viewer,
@@ -162,7 +162,7 @@ test("Approved only hides every Proposed row, and the choice is kept", async ({ 
   await expect(rows(page)).toHaveCount(7);
   await expect(page.locator('[data-testid="plan-state"][data-state="proposed"]').filter({ visible: true })).toHaveCount(0);
   await expect(page.getByTestId("plan-count-proposed")).toHaveCount(0);
-  await expect(groups(page)).toHaveText(["Now 5", "Next 1", "Later 1"]);
+  await expect(groups(page)).toHaveText(["Now · 5", "Next · 1", "Later · 1"]);
   await page.reload();
   await expect(rows(page).first()).toBeVisible();
   await expect(page.getByRole("group", { name: "Plan scope" }).getByRole("button", { name: "Approved only" })).toHaveAttribute(
@@ -179,7 +179,8 @@ test("Approved only hides every Proposed row, and the choice is kept", async ({ 
 test("selecting a row opens the inspector with its links", async ({ page }) => {
   await openPlan(page);
   const inspector = page.getByTestId("plan-inspector").filter({ visible: true });
-  await expect(inspector).toContainText("Item · selected");
+  await expect(inspector).toContainText("Item");
+  await expect(inspector).not.toContainText("· selected");
   await expect(inspector).toContainText(await rows(page).first().getByTestId("plan-title").innerText());
   await row(page, "Daily alert digest email").click();
   await expect(inspector.getByRole("heading", { name: "Daily alert digest email" })).toBeVisible();
@@ -245,7 +246,7 @@ test("phone: rows are cards, a tap opens the sheet, no sideways scroll", async (
   await login(page);
   await page.goto("/plan");
   await expect(rows(page).first()).toBeVisible();
-  await expect(groups(page)).toHaveText(["Now 7", "Next 1", "Later 2"]);
+  await expect(groups(page)).toHaveText(["Now · 7", "Next · 1", "Later · 2"]);
   const first = row(page, "Daily alert digest email");
   // A card: the state chip beside the title, PRD, goal, engineering and Next below it.
   const [title, chip] = await Promise.all([first.getByTestId("plan-title").boundingBox(), first.getByTestId("plan-state").boundingBox()]);

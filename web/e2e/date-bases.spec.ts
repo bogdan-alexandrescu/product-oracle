@@ -53,12 +53,12 @@ test("lead: Plan › Dates shows the proposed basis; Verify turns it Verified an
   await expect(page.getByTestId("inbox-date")).toHaveCount(0);
 });
 
-test("approver with a lead named: Record basis proposes, and the row shows Proposed", async ({ page }) => {
+test("approver with a lead named: Add a date source proposes, and the row shows Proposed", async ({ page }) => {
   // protects=AC12; fails_when=the submit says Verify for an approver while a lead is named,
   // or the row is verified at once; no_claim=the lead's Inbox (AC11).
   await asScenario(page, APPROVER);
   await openDates(page);
-  await page.getByRole("button", { name: "Record basis" }).click();
+  await page.getByRole("button", { name: "Add a date source" }).click();
   const dialog = page.getByTestId("date-basis-dialog");
   await dialog.getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
   await dialog.getByLabel("Reference").fill("CAP-7");
@@ -99,10 +99,10 @@ test("withdraw: the impact sentence comes first; afterwards the roadmap marks th
   const popover = page.getByTestId("date-mark-popover");
   await expect(popover).toContainText("ENG-412 was withdrawn by Admin");
   await expect(popover).toContainText("The team re-estimated");
-  await expect(popover.getByRole("button", { name: "Record a new basis" })).toBeVisible();
+  await expect(popover.getByRole("button", { name: "Add a new date source" })).toBeVisible();
 });
 
-test("an unverified marker opens the popover; Record basis is pre-filled and verifying removes the marker", async ({ page }) => {
+test("an unverified marker opens the popover; Add a date source is pre-filled and verifying removes the marker", async ({ page }) => {
   // protects=AC14; fails_when=the marker is not a button, the dialog is not pre-filled with
   // the date and the reference the text names, or the marker stays after verifying;
   // no_claim=the run's import of the marker (API).
@@ -113,7 +113,7 @@ test("an unverified marker opens the popover; Record basis is pre-filled and ver
   await mark.click();
   const popover = page.getByTestId("date-mark-popover");
   await expect(popover).toContainText("No verified basis supports this date.");
-  await popover.getByRole("button", { name: "Record basis" }).click();
+  await popover.getByRole("button", { name: "Add a date source" }).click();
   const dialog = page.getByTestId("date-basis-dialog");
   await expect(dialog.getByLabel("Date it supports")).toHaveValue("2026-12-15");
   await expect(dialog.getByLabel("Reference")).toHaveValue("ENG-413");
@@ -123,7 +123,7 @@ test("an unverified marker opens the popover; Record basis is pre-filled and ver
 });
 
 test("viewer: markers open the popover without buttons, and the Dates tab has no actions", async ({ page }) => {
-  // protects=AC15; fails_when=a viewer is offered Record basis, Verify, Reject or Withdraw;
+  // protects=AC15; fails_when=a viewer is offered Add a date source, Verify, Reject or Withdraw;
   // no_claim=the API's 403s (pytest).
   await asScenario(page, VIEWER);
   const item = await openItem(page);
@@ -136,7 +136,7 @@ test("viewer: markers open the popover without buttons, and the Dates tab has no
   await expect(row(page, "ENG-420")).toBeVisible();
   const table = page.getByTestId("dates-table");
   await expect(table.getByRole("button", { name: /Verify|Reject|Withdraw/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Record basis" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add a date source" })).toHaveCount(0);
 });
 
 test("phone: at 390 px the Dates tab renders rows as cards and the dialog fits the screen", async ({ page }) => {
@@ -151,7 +151,7 @@ test("phone: at 390 px the Dates tab renders rows as cards and the dialog fits t
   // wrapping flex block (title, action, meta), no longer a table row.
   expect(await card.evaluate((el) => getComputedStyle(el).display)).toBe("flex");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  await page.getByRole("button", { name: "Record basis" }).click();
+  await page.getByRole("button", { name: "Add a date source" }).click();
   const box = await page.getByTestId("date-basis-dialog").boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
@@ -209,7 +209,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
   // A later basis on the same date and item that the date does not name is not what it rests on.
   await openDates(page);
-  await page.getByRole("button", { name: "Record basis" }).click();
+  await page.getByRole("button", { name: "Add a date source" }).click();
   await dialog.getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
   await dialog.getByLabel("Reference").fill("CAP-9");
   await dialog.getByLabel("Date it supports").fill("2026-11-30");
@@ -225,7 +225,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
 });
 
 test("plan inspector: an unverified date offers Verify date; the dialog picks the item and the tracker record", async ({ page }) => {
-  // protects=AC13 (unverified line) and the Record basis dialog's pickers (§2); fails_when=
+  // protects=AC13 (unverified line) and the Add a date source dialog's pickers (§2); fails_when=
   // One item is a free-text key, there is no tracker-record picker, the record does not fill
   // Reference and Date, its id is not sent (the API then cannot check the record's target), or
   // a basis the date does not name (CAP-9; the date's source is ENG-431) verifies it;

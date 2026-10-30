@@ -91,11 +91,11 @@ test("Unlink from the inspector returns the cell to Untracked", async ({ page })
   await expect(inspector.getByRole("heading", { name: "Spend forecast for the month" })).toBeVisible();
   const line = inspector.getByTestId("plan-record");
   await expect(line).toHaveCount(1);
-  await expect(line).toContainText("acme/app#418 · Open · Nov 30");
+  await expect(line).toContainText("acme/app#418 · Open · due Nov 30 in the tracker");
   await line.getByRole("button", { name: "Unlink" }).click();
   await expect(cell(page, "Spend forecast for the month")).toHaveText("Untracked");
   await expect(inspector.getByTestId("plan-record")).toHaveCount(0);
-  await expect(row(page, "Spend forecast for the month").getByTestId("plan-next")).toHaveText("Link issue · approvers");
+  await expect(row(page, "Spend forecast for the month").getByTestId("plan-next")).toHaveText("Link issue");
 });
 
 // protects = 14: a commenter sees the linked issue in the inspector but no Link issue or Unlink
@@ -106,11 +106,11 @@ test("a commenter sees the linked issue with no Link or Unlink buttons", async (
   await openApprovedPlan(page);
   await row(page, "Spend forecast for the month").click();
   const inspector = page.getByTestId("plan-inspector").filter({ visible: true });
-  await expect(inspector.getByTestId("plan-record")).toContainText("acme/app#418 · Open · Nov 30");
+  await expect(inspector.getByTestId("plan-record")).toContainText("acme/app#418 · Open · due Nov 30 in the tracker");
   await expect(inspector.getByRole("link", { name: "acme/app#418" })).toHaveAttribute("href", "https://github.com/acme/app/issues/418");
   await expect(inspector.getByRole("button", { name: "Unlink" })).toHaveCount(0);
   await expect(inspector.getByRole("button", { name: "+ Link issue" })).toHaveCount(0);
-  await expect(row(page, "Usage dashboard").getByTestId("plan-next")).toHaveText("Link issue · approvers");
+  await expect(row(page, "Usage dashboard").getByTestId("plan-next")).toHaveText("Approvers link a tracker issue");
   await expect(page.getByRole("button", { name: "Link issue" })).toHaveCount(0);
 });
 

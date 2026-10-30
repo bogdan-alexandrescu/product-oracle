@@ -118,8 +118,8 @@ test("Add learning: Escape on an open select just closes it; elsewhere it asks b
   const form = page.getByTestId("learning-form");
   await form.getByLabel("Learning").fill("Onboarding confuses new admins");
 
-  // Escape while the "Applies to" select has focus: no question, nothing lost.
-  await form.getByLabel("Applies to").focus();
+  // Escape while the "What it is about" select has focus: no question, nothing lost.
+  await form.getByLabel("What it is about").focus();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(form).toBeVisible();
@@ -148,7 +148,7 @@ test("Add learning: a failed quality-checks list still lets you type the key, wi
   await page.getByRole("button", { name: "Add learning" }).click();
   const form = page.getByTestId("learning-form");
 
-  await form.getByLabel("Applies to").selectOption({ label: "Quality check" });
+  await form.getByLabel("What it is about").selectOption({ label: "A quality check" });
   await expect(form.getByText("The list did not load; type its key.")).toBeVisible();
   const key = form.getByTestId("learning-target-key");
   await expect(key).toBeVisible();
@@ -156,6 +156,6 @@ test("Add learning: a failed quality-checks list still lets you type the key, wi
   await expect(key).toHaveValue("clarity");
 
   // A kind whose list did load still offers the pick list, not the fallback.
-  await form.getByLabel("Applies to").selectOption({ label: "Question topic" });
+  await form.getByLabel("What it is about").selectOption({ label: "A kind of interview question" });
   await expect(form.getByTestId("learning-target-key")).toHaveCount(0);
 });

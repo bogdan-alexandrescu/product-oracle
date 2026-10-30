@@ -56,7 +56,8 @@ test("a commenter opens a milestone and sees it read only", async ({ page }) => 
   await openPlan(page, "commenter@example.com");
   await track(page).getByTestId("track-milestone").filter({ hasText: "First release" }).click();
   const e = page.getByTestId("plan-milestone").filter({ visible: true });
-  await expect(e).toContainText("Milestone · selected");
+  await expect(e).toContainText("Milestone");
+  await expect(e).not.toContainText("· selected");
   await expect(e.getByTestId("milestone-name")).toHaveText("First release");
   await expect(e.getByTestId("milestone-date")).toHaveText("Nov 30");
   await expect(e.getByTestId("milestone-state")).toHaveText("Planned");
