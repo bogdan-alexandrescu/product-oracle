@@ -244,7 +244,7 @@ test("the changes-in-review notice never pushes the goal band down", async ({ pa
   await login(page, "commenter@example.com");
   await page.goto("/simple");
   const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-  await broken.getByRole("button", { name: "Propose: Move dependents" }).click();
+  await broken.getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
   await signOut(page);
   await login(page, ROLES.viewer);

@@ -113,10 +113,10 @@ test("qa-onboarding-34: a setup step opened from Simple's Home returns to Simple
   await login(page, ADMIN.email);
   await page.getByRole("navigation", { name: "Oracle" }).getByRole("radiogroup", { name: "Mode" }).getByRole("radio", { name: "Simple" }).click();
   await expect(page).toHaveURL(/\/simple$/);
-  const zoneStep = setupCard(page).getByTestId("home-setup-step").filter({ hasText: "Set the company time zone" });
+  const zoneStep = setupCard(page).getByTestId("home-setup-step").filter({ hasText: "Time zone" });
   await expect(zoneStep).not.toContainText("Done");
 
-  await setupCard(page).getByRole("link", { name: "Set the company time zone", exact: true }).click();
+  await setupCard(page).getByRole("link", { name: "Time zone", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=simple-setup#timezone$/);
   await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();

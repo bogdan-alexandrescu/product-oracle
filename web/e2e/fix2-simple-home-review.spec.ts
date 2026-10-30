@@ -71,9 +71,10 @@ test("at 1440 px with Ask open, a goal card's code and its share of the score st
   const goals = page.getByTestId("home-goal");
   await expect(goals.getByTestId("home-goal-weight").first()).toBeVisible();
   for (const g of await goals.all()) {
-    expect(await lines(g.locator(".simple-code"))).toBe(1);
+    // fix4 (qa-simple-home-13, -26): no code on the card; the share in words wraps inside the card, never past it.
+    await expect(g.locator(".simple-code")).toHaveCount(0);
     const weight = g.getByTestId("home-goal-weight");
-    if (await weight.count()) expect(await lines(weight)).toBe(1);
+    if (await weight.count()) expect(await weight.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   }
 });
 

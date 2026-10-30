@@ -64,14 +64,14 @@ test("qa-simple-home-4: a commenter's greeting names the broken links they can p
 test("qa-simple-home-5: after proposing a fix the broken-link row says so and offers no second Propose", async ({ page }) => {
   // fails_when: the row looks the same after Propose, so a second click sends a duplicate
   await signIn(page, EMAILS.commenter);
-  await expect(digest(page).getByRole("button", { name: "Propose: Move dependents" })).toBeVisible();
-  await digest(page).getByRole("button", { name: "Propose: Move dependents" }).click();
+  await expect(digest(page).getByRole("button", { name: "Propose: move the dependents" })).toBeVisible();
+  await digest(page).getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
-  await expect(digest(page).getByTestId("home-broken-proposed")).toHaveText(/^You proposed: Move dependents · waiting for \S.*$/);
+  await expect(digest(page).getByTestId("home-broken-proposed")).toHaveText(/^You proposed: Move the dependents · waiting for \S.*$/);
   await expect(digest(page).getByRole("button", { name: /^Propose/ })).toHaveCount(0);
   // A new visit reads it from the proposals: still marked.
   await page.reload();
-  await expect(digest(page).getByTestId("home-broken-proposed")).toContainText("You proposed: Move dependents");
+  await expect(digest(page).getByTestId("home-broken-proposed")).toContainText("You proposed: Move the dependents");
   await expect(digest(page).getByRole("button", { name: /^Propose/ })).toHaveCount(0);
 });
 
@@ -93,8 +93,7 @@ test("qa-simple-home-10: a goal's weight reads as its share of the score", async
   // fails_when: a goal card shows "weight 3"
   await signIn(page, EMAILS.owner);
   const weights = page.getByTestId("home-goal-weight");
-  await expect(weights.first()).toHaveText(/^\d+% of the score$/);
-  await expect(weights.first()).toHaveAttribute("title", /priority score/);
+  await expect(weights.first()).toHaveText(/^Counts for \d+% of each feature's score$/);
   await expect(page.getByTestId("home-goals")).not.toContainText(/weight \d/);
 });
 
@@ -102,13 +101,13 @@ test("qa-simple-home-13: Accept as risk shows pressed, asks for a reason, and sa
   // fails_when: the field's submit is "Accept the risk" beside the unpressed opener, with no hint
   await signIn(page, EMAILS.owner);
   const row = mobilePush(page);
+  // qa-simple-home-10 (fix4): open, the reason line takes the opener's place, its submit in the same words.
   const opener = row.getByRole("button", { name: "Accept as risk" });
-  await expect(opener).toHaveAttribute("aria-pressed", "false");
+  await expect(opener).toHaveAttribute("aria-expanded", "false");
   await opener.click();
-  await expect(opener).toHaveAttribute("aria-pressed", "true");
   await expect(row.getByTestId("home-risk-hint")).toHaveText("Say why, in one line, to save it.");
   await expect(row.getByLabel("Why the risk is acceptable")).toHaveAccessibleDescription("Say why, in one line, to save it.");
-  const save = row.getByRole("button", { name: "Save risk note" });
+  const save = row.getByRole("button", { name: "Accept as risk" });
   await expect(save).toBeDisabled();
   await expect(row.getByRole("button", { name: "Accept the risk" })).toHaveCount(0);
   await row.getByLabel("Why the risk is acceptable").fill("Push ships behind a flag");
@@ -120,14 +119,14 @@ test("qa-simple-home-13: Accept as risk shows pressed, asks for a reason, and sa
 test("qa-simple-home-13: a commenter's risk note is a proposal", async ({ page }) => {
   await signIn(page, EMAILS.commenter);
   const row = mobilePush(page);
-  await row.getByRole("button", { name: "Propose: Accept as risk" }).click();
-  await expect(row.getByRole("button", { name: "Propose risk note" })).toBeDisabled();
+  await row.getByRole("button", { name: "Propose: accept as risk" }).click();
+  await expect(row.getByRole("button", { name: "Propose: accept as risk" })).toBeDisabled();
 });
 
 test("qa-simple-home-14: a fix's toast says what happened, and its Undo waits while hovered", async ({ page }) => {
   // fails_when: the toast reads "Move dependents: applied to your working draft", or it closes under the pointer
   await signIn(page, EMAILS.owner);
-  await digest(page).getByRole("button", { name: "Move dependents", exact: true }).click();
+  await digest(page).getByRole("button", { name: "Move the dependents", exact: true }).click();
   const toast = page.getByRole("status").filter({ hasText: "Dependents moved in your working draft" });
   await expect(toast).toHaveText(/^Dependents moved in your working draft/);
   await toast.hover();
@@ -142,7 +141,7 @@ test("qa-simple-home-14: a fix's toast says what happened, and its Undo waits wh
 
 test("qa-simple-home-14: a toast holds while focus is on its Undo", async ({ page }) => {
   await signIn(page, EMAILS.owner);
-  await digest(page).getByRole("button", { name: "Move dependents", exact: true }).click();
+  await digest(page).getByRole("button", { name: "Move the dependents", exact: true }).click();
   const toast = page.getByRole("status").filter({ hasText: "Dependents moved in your working draft" });
   await toast.getByRole("button", { name: "Undo" }).focus();
   await page.clock.runFor(12_000);
@@ -152,7 +151,7 @@ test("qa-simple-home-14: a toast holds while focus is on its Undo", async ({ pag
 test("qa-simple-home-15: since my last visit says my own change as mine and drops it once undone", async ({ page }) => {
   // fails_when: my change reads "Admin moved ..." or stays as "... · undone" with an undo row
   await signIn(page, EMAILS.owner);
-  await digest(page).getByRole("button", { name: "Move dependents", exact: true }).click();
+  await digest(page).getByRole("button", { name: "Move the dependents", exact: true }).click();
   const since = page.getByTestId("home-since");
   const rows = since.getByTestId("home-since-row").filter({ hasText: "Weekly alert digest" });
   await expect(rows).toHaveCount(1);
@@ -169,7 +168,7 @@ test("qa-simple-home-15: since my last visit says my own change as mine and drop
 test("qa-simple-home-24: one change in review reads 'until it is approved'", async ({ page }) => {
   // fails_when: "1 change is in review. You see the published plan until they are approved."
   await signIn(page, EMAILS.commenter, null);
-  await digest(page).getByRole("button", { name: "Propose: Move dependents" }).click();
+  await digest(page).getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
   await signOut(page);
   await signIn(page, EMAILS.viewer, null);
@@ -222,7 +221,7 @@ test("qa-simple-home-27: on a phone the All and more links are 44 px tall, and m
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, EMAILS.commenter);
   // A fourth proposal: the card shows three and "1 more".
-  await digest(page).getByRole("button", { name: "Propose: Move dependents" }).click();
+  await digest(page).getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
   const all = page.getByRole("link", { name: "All proposals", exact: true });
   await expect(all).toBeVisible();

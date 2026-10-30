@@ -89,7 +89,7 @@ for (const phone of [false, true]) {
         await expect(goals).toHaveCount(3);
         const retention = goals.filter({ hasText: "Grow retention" });
         await expect(retention).toContainText("G-R");
-        await expect(retention.getByTestId("home-goal-weight")).toHaveText(/^\d+% of the score$/);
+        await expect(retention.getByTestId("home-goal-weight")).toHaveText(/^Counts for \d+% of each feature's score$/);
         await expect(retention.getByTestId("home-goal-path")).toHaveText("From 50 teams · now 100 teams · target 200 teams with weekly alerts on");
         await expect(retention.getByTestId("home-goal-status")).toHaveText("At risk");
         await expect(retention.getByTestId("home-goal-need")).toContainText("need you");
@@ -130,7 +130,7 @@ for (const phone of [false, true]) {
         // A broken dependency: Move dependents applies into the roadmap's working draft, with Undo.
         const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
         await expect(broken).toContainText("which it depends on, ends");
-        await broken.getByRole("button", { name: "Move dependents" }).click();
+        await broken.getByRole("button", { name: "Move the dependents" }).click();
         await expect(page.getByText("Dependents moved in your working draft")).toBeVisible();
         await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" })).toHaveCount(0);
         await expect(page.getByTestId("home-draft")).toContainText("Your working draft of Alerts roadmap has 2 changes");
@@ -143,7 +143,7 @@ for (const phone of [false, true]) {
         const mobile = card(page, "plan").getByTestId("home-broken").filter({ hasText: "Mobile alert push" });
         await mobile.getByRole("button", { name: "Accept as risk" }).click();
         await mobile.getByLabel("Why the risk is acceptable").fill("Push ships behind a flag");
-        await mobile.getByRole("button", { name: "Save risk note" }).click();
+        await mobile.getByRole("button", { name: "Accept as risk" }).click();
         await expect(page.getByText("Risk accepted in your working draft")).toBeVisible();
         await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
       });
@@ -168,7 +168,7 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
         const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
         await expect(broken).toContainText("Admin decides");
-        await broken.getByRole("button", { name: "Propose: Move dependents" }).click();
+        await broken.getByRole("button", { name: "Propose: move the dependents" }).click();
         await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
         // A long list: the top three, the rest behind "more".
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(3);
