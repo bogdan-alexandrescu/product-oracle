@@ -584,12 +584,14 @@ function SourceRow({
   const pickIds = drive || !allowlist ? [] : entries(source.config, allowlist.key);
   // qa-work-46: Slack and Notion picks are opaque ids; one with no saved name is counted, not shown by id.
   const opaqueIds = source.kind === "slack" || source.kind === "notion";
+  // A Drive pick without a saved name carries its id as its name (driveFiles).
+  const docs = picked.filter((f) => f.kind === "doc");
   const items = drive
-    ? picked.filter((f) => f.kind === "doc").map((f) => f.name)
+    ? docs.filter((f) => f.name !== f.id).map((f) => f.name)
     : opaqueIds
       ? pickIds.filter((id) => names[id]).map((id) => names[id])
       : pickIds.map((id) => names[id] ?? id);
-  const unnamedIds = opaqueIds ? pickIds.filter((id) => !names[id]) : [];
+  const unnamedIds = drive ? docs.filter((f) => f.name === f.id).map((f) => f.id) : opaqueIds ? pickIds.filter((id) => !names[id]) : [];
   const unnamed = unnamedIds.length;
   const unknown: [string, string] = UNKNOWN[source.kind] ?? (allowlist ? [`Unknown ${allowlist.noun.replace(/s$/, "")}`, `unknown ${allowlist.noun}`] : ["", ""]);
   const picks = allowlist ? picksSummary(items, unnamedIds, unknown) : { text: "", title: "" };

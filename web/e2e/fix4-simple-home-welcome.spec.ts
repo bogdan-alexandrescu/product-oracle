@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login, signOut } from "./helpers";
+import { ADMIN, login, pickZone, signOut } from "./helpers";
 
 /*
  * qa-onboarding-6, qa-onboarding-41 and qa-onboarding-34 (desktop, mock-backed, through the UI
@@ -126,9 +126,10 @@ test("qa-onboarding-34: a setup step opened from Simple's Home returns to Simple
 
   await setupCard(page).getByRole("link", { name: "Time zone", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=simple-setup#timezone$/);
-  await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
+  // Settings' time zone picker and its save from Set up (fix4-settings: qa-settings time zone picker, qa-onboarding-16).
+  await pickZone(page.getByTestId("timezone-panel"), "America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
 
   await page.getByTestId("nav-back-home").click();
   await expect(page).toHaveURL(/\/simple$/);
