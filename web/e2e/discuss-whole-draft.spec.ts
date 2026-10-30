@@ -130,3 +130,45 @@ test("the approver opens a General item's thread, and resolving the item closes 
   await items(page).filter({ hasText: REMARK }).getByRole("button", { name: "Open the thread" }).click();
   await expect(thread(page)).toContainText("Closed");
 });
+
+// fix3-discuss review 2: an item someone acted on outlives its thread's first message. The
+// approver accepted Oracle's suggestion (which resolved the item); the starter reopens the thread
+// and deletes that message: the item stays, done, with its text, and no longer leads to the thread.
+test("a General item resolved by accepting Oracle's suggestion stays when its first message is deleted", async ({ page }) => {
+  await login(page, "commenter@example.com");
+  await page.goto(DOC);
+  await openSection(page, "problem");
+  await page.getByTestId("doc-discuss").click();
+  await startThread(page);
+  await signOut(page);
+
+  await login(page, "approver@example.com");
+  await page.goto(DOC);
+  await openSection(page, "problem");
+  await general(page).click();
+  await items(page).filter({ hasText: REMARK }).getByRole("button", { name: "Accept", exact: true }).click();
+  await panel(page).getByRole("button", { name: /^Done/ }).click();
+  await expect(items(page).filter({ hasText: REMARK })).toHaveCount(1);
+  await signOut(page);
+
+  await login(page, "commenter@example.com");
+  await page.goto(DOC);
+  await openSection(page, "problem");
+  await general(page).click();
+  await panel(page).getByRole("button", { name: /^Done/ }).click();
+  await items(page).filter({ hasText: REMARK }).getByRole("button", { name: "Open the thread" }).click();
+  await expect(thread(page)).toContainText("Closed");
+  await thread(page).getByRole("button", { name: "Discussion actions" }).click();
+  await thread(page).getByRole("menuitem", { name: "Reopen" }).click();
+  await expect(thread(page)).not.toContainText("Closed");
+  await thread(page).getByRole("button", { name: "Delete message" }).first().click();
+  await page.getByRole("alertdialog", { name: "Delete message" }).getByRole("button", { name: "Delete message" }).click();
+  await expect(thread(page)).toContainText("Message deleted");
+  await thread(page).getByRole("button", { name: "All feedback" }).click();
+
+  await general(page).click();
+  await panel(page).getByRole("button", { name: /^Done/ }).click();
+  const kept = items(page).filter({ hasText: REMARK });
+  await expect(kept).toHaveCount(1);
+  await expect(kept.getByRole("button", { name: "Open the thread" })).toHaveCount(0);
+});

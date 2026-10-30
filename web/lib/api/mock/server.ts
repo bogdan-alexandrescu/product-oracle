@@ -4850,8 +4850,20 @@ async function route(db: Db, req: Request): Promise<Response> {
         Object.assign(f, { summary: body, updated_at: now() });
         return null;
       },
+      // As the API's _withdraw_feedback (fix3-discuss review 2): an item no one acted on goes,
+      // with its suggestions; one triaged, answered, staged or with a suggestion decided is
+      // kept with its text and leaves the thread.
       feedbackWithdrawn: (d) => {
-        db.feedback = db.feedback.filter((x) => x.discussion_id !== d.id);
+        const f = db.feedback.find((x) => x.discussion_id === d.id);
+        if (!f) return;
+        const decided = db.llm?.suggestions.some((x) => x.feedback_item_id === f.id && x.status !== "open" && x.status !== "superseded");
+        if (f.status !== "open" || f.resolution_note || f.staged_for_agents_at || decided) {
+          Object.assign(f, { discussion_id: null, updated_at: now() });
+        } else {
+          db.feedback = db.feedback.filter((x) => x.id !== f.id);
+          if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
+        }
+        touch(db, f.document_id);
       },
       uuid,
       now,
