@@ -26,6 +26,9 @@ async function approveSection(page: Page, key: string) {
   const review = (await openSection(page, key)).getByTestId("review-bar");
   await review.getByRole("button", { name: "Approve" }).click();
   await review.getByTestId("verdict-submit").click();
+  // qa-docs-74: the state reads "Approved · Not saved yet" while it saves; once saved the page
+  // stays on this section, so the next one opens only after that.
+  await expect(review.getByTestId("verdict-pending")).toHaveCount(0);
   await expect(review.getByTestId("verdict-state")).toContainText("Approved");
 }
 
