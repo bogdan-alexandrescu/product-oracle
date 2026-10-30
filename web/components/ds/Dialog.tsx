@@ -39,6 +39,7 @@ export function Dialog({
   onSubmit,
   size = "md",
   phoneSheet = false,
+  closeButton = true,
   children,
 }: {
   title: string;
@@ -59,6 +60,8 @@ export function Dialog({
   size?: keyof typeof SIZE;
   /** On a phone the dialog fills the screen (a full-height sheet, #329 rule 5). */
   phoneSheet?: boolean;
+  /** false: no close X in the head row; Cancel, Escape and the backdrop close it (qa-company-24). */
+  closeButton?: boolean;
   children: ReactNode;
 }) {
   const id = useId();
@@ -158,15 +161,17 @@ export function Dialog({
             </h2>
             {head}
           </div>
-          <button
-            type="button"
-            onClick={requestClose}
-            disabled={busy}
-            aria-label="Close"
-            className="grid size-8 flex-none place-items-center rounded-lg text-text2 hover:bg-surface2 hover:text-text disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-          >
-            <Icon name="x" size={20} />
-          </button>
+          {closeButton && (
+            <button
+              type="button"
+              onClick={requestClose}
+              disabled={busy}
+              aria-label="Close"
+              className="grid size-8 flex-none place-items-center rounded-lg text-text2 hover:bg-surface2 hover:text-text disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+            >
+              <Icon name="x" size={20} />
+            </button>
+          )}
         </div>
         {asking && (
           <div

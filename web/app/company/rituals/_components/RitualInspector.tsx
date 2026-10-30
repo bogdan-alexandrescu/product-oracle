@@ -81,6 +81,7 @@ export function RitualInspector({
   zoneDefault = false,
   canEdit,
   onChanged,
+  inSheet = false,
 }: {
   ritual: Ritual;
   members: Member[] | undefined;
@@ -89,6 +90,8 @@ export function RitualInspector({
   zoneDefault?: boolean;
   canEdit: boolean;
   onChanged: (r?: Ritual) => Promise<void>;
+  /** In the phone's sheet, whose title already names the ritual (qa-company-33): no second title, no "selected". */
+  inSheet?: boolean;
 }) {
   const router = useRouter();
   const saved = useMemo(() => scheduleOf(ritual.schedule), [ritual.schedule]);
@@ -165,6 +168,8 @@ export function RitualInspector({
     </InspectorSection>
   );
 
+  // qa-company-33: the sheet's title names the ritual; beside the table the head does.
+  const head = inSheet ? { eyebrow: "Ritual", label: ritual.title } : { eyebrow: "Ritual · selected", title: ritual.title };
   const chips = (
     <Chip hero kind={ritual.status === "active" ? "now" : "na"}>
       {ritual.status === "active" ? "On" : "Paused"}
@@ -173,7 +178,7 @@ export function RitualInspector({
 
   if (!canEdit) {
     return (
-      <Inspector eyebrow="Ritual · selected" title={ritual.title} chips={chips} testId="ritual-inspector">
+      <Inspector {...head} chips={chips} testId="ritual-inspector">
         <InspectorSection label="Schedule">
           <InspectorRow value={whenText(saved)}>When</InspectorRow>
           <InspectorRow value={<span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>}>Time zone</InspectorRow>
@@ -205,8 +210,7 @@ export function RitualInspector({
   const weekField = preset === "monthly" || preset === "quarterly" || preset === "yearly";
   return (
     <Inspector
-      eyebrow="Ritual · selected"
-      title={ritual.title}
+      {...head}
       chips={chips}
       testId="ritual-inspector"
       action={

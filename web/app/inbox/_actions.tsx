@@ -149,6 +149,8 @@ export function InboxActions({
       {error}
     </span>
   );
+  // qa-company-4 (round 3): on a phone the actions keep one line under the row, the lead
+  // button then the text ones, as on a question's row; only the field's buttons stack.
   const stack = "max-[600px]:w-full";
 
   if (settled) {
@@ -213,28 +215,27 @@ export function InboxActions({
           { message: `Staged for draft ${(f.latest_version ?? f.raised_on_version) + 1} · agents: ${f.summary}` },
         )
       }
-      className={stack}
     >
       Stage for agents
     </Button>
   );
   const openLink = (
-    <LinkButton variant={lead === "open" ? "secondary" : "ghost"} href={href} aria-label={`Open ${f.summary}`} className={stack}>
+    <LinkButton variant={lead === "open" ? "secondary" : "ghost"} href={href} aria-label={`Open ${f.summary}`}>
       Open
     </LinkButton>
   );
   const decline = primary !== "Merge" && (
-    <Button variant="ghost" disabled={busy} onClick={() => open("decline")} className={stack}>
+    <Button variant="ghost" disabled={busy} onClick={() => open("decline")}>
       Decline
     </Button>
   );
   return (
     <span
       data-inbox-actions
-      className="inline-flex flex-wrap items-center justify-end gap-1.5 whitespace-nowrap min-[601px]:flex-nowrap max-[600px]:flex max-[600px]:w-full max-[600px]:flex-col max-[600px]:items-stretch"
+      className="inline-flex flex-wrap items-center justify-end gap-1.5 whitespace-nowrap min-[601px]:flex-nowrap max-[600px]:flex max-[600px]:w-full max-[600px]:justify-start"
     >
       {primary && (
-        <Button disabled={busy} onClick={onPrimary} className={stack}>
+        <Button disabled={busy} onClick={onPrimary}>
           {primary}
         </Button>
       )}
@@ -256,9 +257,13 @@ export function SuggestionPeek({ href, summary, text }: { href: string; summary:
   const id = useId();
   const ref = useRef<HTMLAnchorElement>(null);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+  // qa-company-15: the item's own text, cut with "…" in the row, heads the peek in full.
+  const [cut, setCut] = useState(false);
   const show = () => {
-    const r = ref.current?.getBoundingClientRect();
-    if (!r) return;
+    const el = ref.current;
+    const r = el?.getBoundingClientRect();
+    if (!el || !r) return;
+    setCut(el.scrollWidth > el.clientWidth + 1);
     const room = document.documentElement.clientWidth;
     setAt({ left: Math.max(12, Math.min(r.left, room - 432)), top: r.bottom + 6 });
   };
@@ -293,6 +298,11 @@ export function SuggestionPeek({ href, summary, text }: { href: string; summary:
           style={at ?? undefined}
           className="fixed z-50 w-max max-w-[min(420px,calc(100vw-24px))] rounded-button bg-tip px-3.5 py-2.5 text-left text-sm leading-5 font-normal whitespace-pre-wrap text-tip-text shadow-tip"
         >
+          {cut && (
+            <span className="mb-2 block" data-testid="suggestion-peek-summary">
+              {summary}
+            </span>
+          )}
           <span className="mb-1 block font-semibold">Oracle suggests</span>
           {text}
         </span>

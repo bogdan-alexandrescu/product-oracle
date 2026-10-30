@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useId, useState } from "react";
 
-import { Button, Chip, Empty, FilterChips, InfoTip, Panel } from "@/components/ds";
+import { Button, Chip, FilterChips, InfoTip, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
+import { CompanyEmpty } from "../../_empty";
 import { FINDING_LABEL, FINDING_STATES, canWaive, shortDate, subjectHref, subjectName, type Finding, type FindingState, type Stack } from "./lib";
 
 /** Waive a finding with a reason (the reason is required, as the API); Plan items use it too. */
@@ -158,16 +159,23 @@ export function DriftList({
           <Loading />
         </div>
       ) : rows && rows.length === 0 ? (
-        <Empty testId="drift-empty">
-          {state === "open" ? "No open findings" : state === "waived" ? "Nothing waived" : "Nothing resolved"}
+        // qa-company-23: the same empty state as the cards and the stack (bold title, narrow text).
+        <CompanyEmpty
+          testId="drift-empty"
+          title={state === "open" ? "No open findings" : state === "waived" ? "Nothing waived" : "Nothing resolved"}
+        >
           {/* qa-company-13: an empty list still says what Drift looks for. */}
-          {state === "open" && (
-            <span data-testid="drift-what" className="mt-1 block text-sm">
+          {state === "open" ? (
+            <span data-testid="drift-what">
               Oracle checks every day that each goal follows from the product strategy and each roadmap item from a goal, and that the
-              vision and strategy are reviewed on time. What does not shows here.
+              vision and strategy are reviewed on time. Anything that does not shows up here.
             </span>
+          ) : state === "waived" ? (
+            "Findings someone waived with a reason show here until their subject changes again."
+          ) : (
+            "Findings that cleared, because the goal or item now lines up, show here."
           )}
-        </Empty>
+        </CompanyEmpty>
       ) : (
         <ul>
           {(rows ?? []).map((f) => (

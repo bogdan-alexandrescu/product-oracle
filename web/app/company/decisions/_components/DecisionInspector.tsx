@@ -54,6 +54,8 @@ export function DecisionInspector({
   const [mode, setMode] = useState<Mode>(autoDecide && d.can_decide ? "decide" : null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // qa-company-25: what Ask Oracle for options changed (the keys it added, the one it recommends).
+  const [asked, setAsked] = useState<{ added: string[]; recommended: string | null } | null>(null);
   const checkpoint = isCheckpoint(d);
   // People by name (qa-company-28); the email only where no member record names them.
   const name = (id: string | null | undefined) => {
@@ -76,6 +78,7 @@ export function DecisionInspector({
   async function askOracle() {
     setBusy(true);
     setError(null);
+    setAsked(null);
     try {
       // A click-and-wait job on Oracle's own model: queued, then read until it ends.
       let job = await unwrap(api.POST("/v1/decisions/{decision}/options-job", path(d)));
@@ -84,6 +87,11 @@ export function DecisionInspector({
         job = await unwrap(api.GET("/v1/llm-jobs/{job_id}", { params: { path: { job_id: job.id } } }));
       }
       if (job.status !== "succeeded") setError(job.error ?? `Oracle's options job ${job.status}`);
+      else {
+        const out = (job.output ?? {}) as { options?: unknown; recommended?: unknown };
+        const added = Array.isArray(out.options) ? out.options.filter((k): k is string => typeof k === "string") : [];
+        setAsked({ added, recommended: typeof out.recommended === "string" ? out.recommended : null });
+      }
       await onChanged();
     } catch (e) {
       setError(errorMessage(e));
@@ -110,8 +118,13 @@ export function DecisionInspector({
             {STATE_LABEL[d.state]}
           </Chip>
           {!checkpoint && <Chip hero>{REVERSIBILITY_LABEL[d.reversibility]}</Chip>}
-          <Chip hero>{ORIGIN_LABEL[d.origin]}</Chip>
         </>
+      }
+      head={
+        // qa-company-31: where it came from is a line of meta, not a chip beside the state.
+        <p data-testid="decision-origin" className="mt-2.5 text-sm text-hero-text2">
+          {d.origin === "manual" ? `Added by ${named(d.created_by) ?? "a member"}` : ORIGIN_LABEL[d.origin]}
+        </p>
       }
       action={
         checkpoint && d.run_id ? (
@@ -172,6 +185,11 @@ export function DecisionInspector({
               )
             }
           >
+            {asked && (
+              <p role="status" data-testid="decision-options-note" className="mb-2.5 rounded-lg bg-accent-soft px-3 py-2 text-sm">
+                {askedNote(asked, d.options)}
+              </p>
+            )}
             {d.options.length === 0 ? <p className="text-sm text-text2">No options yet</p> : <Options options={d.options} chosen={d.chosen_option} />}
           </InspectorSection>
           {d.chosen_option && (
@@ -311,6 +329,15 @@ function versionHref(ref: string): string {
   return n ? `/documents/${slug}/versions/${n}` : `/documents/${slug}`;
 }
 
+/** "Oracle added 2 options and now recommends “Caps first”." */
+function askedNote(asked: { added: string[]; recommended: string | null }, options: DecisionOption[]): string {
+  const n = asked.added.length;
+  const pick = options.find((o) => o.key === asked.recommended)?.label;
+  const recommends = pick ? `recommends \u201c${pick}\u201d` : null;
+  if (n === 0) return recommends ? `Oracle had no new options; it ${recommends}.` : "Oracle had no new options to add.";
+  return `Oracle added ${n === 1 ? "1 option" : `${n} options`}${recommends ? ` and now ${recommends}` : ""}.`;
+}
+
 function Options({ options, chosen }: { options: DecisionOption[]; chosen?: string | null }) {
   return (
     <ul className="flex flex-col gap-2.5">
@@ -320,10 +347,15 @@ function Options({ options, chosen }: { options: DecisionOption[]; chosen?: stri
           data-testid="decision-option"
           className={`rounded-lg border px-3 py-2 ${o.key === chosen ? "border-accent bg-accent-soft" : "border-line"}`}
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold">{o.label}</span>
-            {o.recommended && <Chip kind="acc">Oracle recommends</Chip>}
-            {o.key === chosen && <Chip kind="pass">Chosen</Chip>}
+          {/* qa-company-25: the badges sit top right on every card, whatever the label's length. */}
+          <div className="flex items-start gap-2">
+            <span className="min-w-0 flex-1 font-semibold break-words">{o.label}</span>
+            {(o.recommended || o.key === chosen) && (
+              <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                {o.recommended && <Chip kind="acc">Oracle recommends</Chip>}
+                {o.key === chosen && <Chip kind="pass">Chosen</Chip>}
+              </span>
+            )}
           </div>
           {o.summary && <p className="mt-0.5 text-sm text-text2">{o.summary}</p>}
           {o.pros.length > 0 && <Lines label="Pros" lines={o.pros} />}
@@ -339,7 +371,7 @@ function Options({ options, chosen }: { options: DecisionOption[]; chosen?: stri
           )}
           {o.cost_if_wrong && (
             <p className="mt-1 text-sm">
-              <span className="font-semibold text-text2">Cost if wrong </span>
+              <span className="font-semibold text-text2">Cost if wrong: </span>
               {o.cost_if_wrong}
             </p>
           )}
@@ -352,7 +384,8 @@ function Options({ options, chosen }: { options: DecisionOption[]; chosen?: stri
 function Lines({ label, lines }: { label: string; lines: string[] }) {
   return (
     <p className="mt-1 text-sm">
-      <span className="font-semibold text-text2">{label} </span>
+      {/* qa-company-26: "Pros: One sprint", the label set off from what it says. */}
+      <span className="font-semibold text-text2">{label}: </span>
       {lines.join(" · ")}
     </p>
   );
@@ -431,6 +464,7 @@ function FormShell({
   error,
   busy,
   danger = false,
+  ready = true,
 }: {
   name: string;
   onSubmit: () => Promise<void>;
@@ -441,6 +475,8 @@ function FormShell({
   busy: boolean;
   /** A submit that undoes something (Withdraw): styled as danger. */
   danger?: boolean;
+  /** False while the form lacks its one choice (Reassign without a new approver): the submit is disabled. */
+  ready?: boolean;
 }) {
   const form = useRef<HTMLFormElement>(null);
   // qa-company-14: a form opens below the actions, often under the fold of the inspector:
@@ -465,7 +501,7 @@ function FormShell({
       {children}
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex gap-2">
-        <Button type="submit" variant={danger ? "danger" : "solid"} disabled={busy}>
+        <Button type="submit" variant={danger ? "danger" : "solid"} disabled={busy || !ready}>
           {submit}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
@@ -746,24 +782,28 @@ function ReviewForm({ d, onDone, onCancel }: { d: Decision; onDone: Done; onCanc
 }
 
 function ReassignForm({ d, people, onDone, onCancel }: { d: Decision; people: Person[]; onDone: Done; onCancel: () => void }) {
-  const approvers = people.filter((p) => hasRole(p.role, "approver"));
-  const [approver, setApprover] = useState(d.approver_id);
+  // qa-company-29: someone else than the approver now, nobody picked to begin with.
+  const approvers = people.filter((p) => hasRole(p.role, "approver") && p.id !== d.approver_id);
+  const [approver, setApprover] = useState("");
   const [reason, setReason] = useState("");
   const { busy, error, setError, run } = useSubmit(onDone);
   return (
     <FormShell
       name="Reassign"
       submit="Reassign"
+      ready={!!approver}
       busy={busy}
       error={error}
       onCancel={onCancel}
       onSubmit={async () => {
+        if (!approver) return setError("Pick the new approver");
         if (!reason.trim()) return setError("Say why");
         await run(() => unwrap(api.POST("/v1/decisions/{decision}/reassign", { ...path(d), body: { approver_id: approver, reason } })));
       }}
     >
       <Field label="New approver">
         <select aria-label="New approver" className={INPUT} value={approver} onChange={(e) => setApprover(e.target.value)}>
+          <option value="">Choose the new approver</option>
           {approvers.map((p) => (
             <option key={p.id} value={p.id}>
               {personOption(p)}

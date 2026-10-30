@@ -73,9 +73,9 @@ function Updates() {
     {
       key: "template",
       header: "Template",
-      width: "104px",
+      width: "136px",
       phone: "meta",
-      cell: (u) => <span className="text-sm text-text2">{templateOf(u.template)?.short ?? u.template ?? "—"}</span>,
+      cell: (u) => <span className="text-sm text-text2">{templateOf(u.template)?.name ?? "—"}</span>,
     },
     {
       key: "period",
@@ -96,8 +96,8 @@ function Updates() {
       phone: "meta",
       cell: (u) => (
         <span data-testid="update-visibility" className="inline-flex">
-          {/* qa-company-41: who sees it is not a state: an outlined chip, never the blue of "In review". */}
-          <Chip kind="line">{VISIBILITY_LABEL[u.visibility]}</Chip>
+          {/* qa-company-41, -37: who sees it is not a state (never the blue of "In review") and not a button: a flat grey chip. */}
+          <Chip kind="na">{VISIBILITY_LABEL[u.visibility]}</Chip>
         </span>
       ),
     },
@@ -113,7 +113,7 @@ function Updates() {
           {
             key: "actions",
             header: <span className="sr-only">Actions</span>,
-            width: "104px",
+            width: "176px",
             phone: "action" as const,
             // qa-company-16: one action, so a labelled button, not a ⋯ menu holding it.
             cell: (u: Update) => {
@@ -126,7 +126,8 @@ function Updates() {
                     title={opening ? "Share with the whole company" : "Limit to owners and approvers"}
                     onClick={() => setChanging(u)}
                   >
-                    {opening ? "Share…" : "Limit…"}
+                    {/* qa-company-37: the button says whom it shares with. */}
+                    {opening ? "Share with company…" : "Limit…"}
                   </Button>
                 </div>
               );

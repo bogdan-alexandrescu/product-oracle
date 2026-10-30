@@ -126,21 +126,21 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
                 # item, so "Starts ..." alone read as the moved item's own start.
                 years = n.start.date.year != dep.end.date.year
                 reason = (
-                    f"'{_t(n.title)}' starts {_day(n.start.date, years)}, but "
-                    f"'{_t(dep.title)}', which it depends on, ends {_day(dep.end.date, years)}"
+                    f"‘{_t(n.title)}’ starts {_day(n.start.date, years)}, but "
+                    f"‘{_t(dep.title)}’, which it depends on, ends {_day(dep.end.date, years)}"
                 )
                 flags.append(_flag(n, "dependency_order", reason, dep.id))
         for b in n.blockers:
             if b.open and b.expected is not None and b.expected > n.start.date:
                 reason = (
-                    f"'{_t(n.title)}' starts {_day(n.start.date)}, but blocker '{_t(b.title)}' "
+                    f"‘{_t(n.title)}’ starts {_day(n.start.date)}, but blocker ‘{_t(b.title)}’ "
                     f"is expected to clear {_day(b.expected)}"
                 )
                 flags.append(_flag(n, "blocker_date", reason, b.id))
         if n.milestone is not None and n.end.date > n.milestone[1]:
             name, day = n.milestone
             reason = (
-                f"'{_t(n.title)}' ends {_day(n.end.date)}, after its milestone '{_t(name)}' "
+                f"‘{_t(n.title)}’ ends {_day(n.end.date)}, after its milestone ‘{_t(name)}’ "
                 f"({_day(day)})"
             )
             flags.append(_flag(n, "outside_milestone", reason, name))
@@ -148,7 +148,7 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
             live = [d for d in dependents[n.id] if d.status != "cut"]
             if live:
                 more = f" and {len(live) - 1} other" + ("s" if len(live) > 2 else "")
-                reason = f"Cut, but '{_t(live[0].title)}'{more if len(live) > 1 else ''} " + (
+                reason = f"Cut, but ‘{_t(live[0].title)}’{more if len(live) > 1 else ''} " + (
                     "depend on it" if len(live) > 1 else "depends on it"
                 )
                 flags.append(_flag(n, "cut_with_dependents", reason))

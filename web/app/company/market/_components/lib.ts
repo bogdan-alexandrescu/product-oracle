@@ -48,7 +48,7 @@ export const FIELDS: { key: FieldKey; title: string; hint: string }[] = [
   { key: "unique_attributes", title: "Unique attributes", hint: "What the company has that the alternatives lack." },
   { key: "value_and_proof", title: "Value and proof", hint: "What those attributes do for customers, and the proof." },
   { key: "best_fit_customers", title: "Best-fit customers", hint: "Who cares most about that value." },
-  { key: "market_category", title: "Market category", hint: "The market the company says it competes in. People choose it." },
+  { key: "market_category", title: "Market category", hint: "The market buyers would put the company in." },
   { key: "trends", title: "Relevant trends", hint: "Trends that make the value matter now." },
 ];
 export const FIELD_TITLE = Object.fromEntries(FIELDS.map((f) => [f.key, f.title])) as Record<FieldKey, string>;

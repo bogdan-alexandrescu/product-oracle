@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { Chip, CodeChip, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, ToGo } from "@/components/ds";
+import { Chip, CodeChip, CodeTag, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, ToGo } from "@/components/ds";
 import { namedText } from "@/lib/codes";
 import { percent } from "@/lib/goal-tree";
 
@@ -16,12 +16,14 @@ function GoalCard({
   history,
   historyPending,
   canInterview,
+  openGoal,
 }: {
   g: GoalView;
   subs: GoalView[];
   history: Point[] | undefined;
   historyPending: boolean;
   canInterview: boolean;
+  openGoal: boolean;
 }) {
   const trend = history && history.length >= 2 ? history : null;
   const change = trend ? Math.round((trend.at(-1)!.value - trend[0].value) * 10) / 10 : null;
@@ -36,9 +38,22 @@ function GoalCard({
       className="flex min-w-0 flex-col gap-2 border-line px-4 pt-3.5 pb-3 max-[600px]:px-3"
     >
       <div className="flex min-w-0 items-start gap-2">
-        <span className="flex min-w-0 flex-1 font-semibold">
-          <CodeChip kind="goal" entityId={g.id} title={g.title} code={g.code} proposed={g.proposed} wrap />
-        </span>
+        {openGoal ? (
+          // qa-company-10: the goal's name opens the goal; a card that only repeated the name
+          // and target over the figure is not drawn.
+          <Link
+            href={`/baseline?entity=${g.id}`}
+            data-testid="goal-open"
+            className="flex min-w-0 flex-1 items-start gap-1.5 rounded-goal font-semibold outline-offset-2 hover:underline"
+          >
+            {g.code && <CodeTag code={g.code} proposed={g.proposed} />}
+            <span className={`line-clamp-2 min-w-0 font-medium ${g.proposed && !g.code ? "text-warn" : ""}`}>{g.name || g.title}</span>
+          </Link>
+        ) : (
+          <span className="flex min-w-0 flex-1 font-semibold">
+            <CodeChip kind="goal" entityId={g.id} title={g.title} code={g.code} proposed={g.proposed} wrap />
+          </span>
+        )}
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0" data-testid="goal-figure">
@@ -55,7 +70,8 @@ function GoalCard({
             <b className="tnum font-display text-[34px] leading-9 font-bold tracking-[-0.03em]">{formatFigure(g.current!)}</b>
           )}
           {g.targetText && (
-            <span className="tnum ml-1 text-[15px] font-medium text-text2 max-[600px]:ml-0 max-[600px]:block">/ {g.targetText}</span>
+            // qa-company-11: the target stays on the value's line, on a phone too.
+            <span className="tnum ml-1 text-[15px] font-medium whitespace-nowrap text-text2">/ {g.targetText}</span>
           )}
         </span>
         {!noValue && (
@@ -179,6 +195,7 @@ export function GoalsPanel({
   canImport,
   canInterview = false,
   baseline,
+  openGoals = false,
   testId = "home-goals",
 }: {
   goals: GoalView[] | undefined;
@@ -193,6 +210,8 @@ export function GoalsPanel({
   canInterview?: boolean;
   /** Home's baseline step (Set up): a build under way, or the Set up row that starts one. */
   baseline?: BaselineState;
+  /** Home: each goal's name is a link to the goal (Plan keeps the code chip and its card). */
+  openGoals?: boolean;
   /** Home's band by default; Plan shows the same band under its own id. */
   testId?: string;
 }) {
@@ -243,16 +262,17 @@ export function GoalsPanel({
             Oracle reads your sources and proposes your goals; they show here once confirmed. You can also push a
             baseline YAML with <code>oracle push</code>.
           </InfoTip>
-          {/* qa-onboarding-10, -37: one baseline action on Home. A build under way opens its run;
-              while Set up shows the step, the card points at it rather than start a second build. */}
-          {baseline?.runId ? (
+          {/* qa-onboarding-10, -37, -14, -15: one baseline action on Home. While Set up shows the
+              step, its row holds it (start, or open the build under way) and the card points there;
+              with Set up hidden, the card opens the build under way, or starts one. */}
+          {baseline?.inSetup ? (
+            <span className="ml-auto text-[15px] text-text2" data-testid="goals-build-in-setup">
+              {baseline.runId ? "The baseline is building: open it from Set up, above" : "Build the baseline from Set up, above"}
+            </span>
+          ) : baseline?.runId ? (
             <LinkButton href={buildRun(baseline.runId)} className="ml-auto" data-testid="goals-open-build">
               Open the build
             </LinkButton>
-          ) : baseline?.inSetup ? (
-            <span className="ml-auto text-[15px] text-text2" data-testid="goals-build-in-setup">
-              Build it from Set up, above
-            </span>
           ) : (
             canImport && (
               <LinkButton href="/baseline?build=1" className="ml-auto">
@@ -279,6 +299,7 @@ export function GoalsPanel({
               history={history.get(g.id)}
               historyPending={historyPending}
               canInterview={canInterview}
+              openGoal={openGoals}
             />
           ))}
         </ul>

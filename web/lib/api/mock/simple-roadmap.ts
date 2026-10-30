@@ -397,7 +397,7 @@ const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…
 function dependencyLine(title: string, start: string, depTitle: string, end: string): string {
   const years = start.slice(0, 4) !== end.slice(0, 4);
   const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ""}`;
-  return `'${short(title)}' starts ${day(start)}, but '${short(depTitle)}', which it depends on, ends ${day(end)}`;
+  return `‘${short(title)}’ starts ${day(start)}, but ‘${short(depTitle)}’, which it depends on, ends ${day(end)}`;
 }
 
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
@@ -414,13 +414,13 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   }
   if (s.milestone) {
     const day = addDays(w[0], s.milestone.day);
-    if (r.end.date > day) flag("outside_milestone", `'${short(s.title)}' ends ${word(r.end.date)}, after its milestone '${s.milestone.name}' (${word(day)})`, ["accept_risk"], s.milestone.name);
+    if (r.end.date > day) flag("outside_milestone", `‘${short(s.title)}’ ends ${word(r.end.date)}, after its milestone ‘${s.milestone.name}’ (${word(day)})`, ["accept_risk"], s.milestone.name);
   }
   if (s.status === "cut") {
     const live = [...all.values()].filter((x) => x.s.status !== "cut" && x.s.depends?.includes(s.key));
     if (live.length) {
       const more = live.length > 1 ? ` and ${live.length - 1} other${live.length > 2 ? "s" : ""}` : "";
-      flag("cut_with_dependents", `Cut, but '${short(live[0].s.title)}'${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
+      flag("cut_with_dependents", `Cut, but ‘${short(live[0].s.title)}’${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
     }
   }
   if (s.draft && !s.track && !closed(s)) flag("draft_without_owner", "Draft with no owner to confirm it", []);
@@ -560,7 +560,7 @@ function regenerate(db: SimpleDb, today: string): number {
     const latest = deps.sort((a, b) => (a.r.end.date < b.r.end.date ? 1 : -1))[0];
     if (latest && addDays(latest.r.end.date, 1) > start) {
       start = addDays(latest.r.end.date, 1);
-      why = `starts the day after '${latest.s.title}' ends`;
+      why = `starts the day after ‘${latest.s.title}’ ends`;
     }
     const same = [...(durations.get(s.confidence ?? "") ?? [])].sort((a, b) => a - b);
     const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 42;

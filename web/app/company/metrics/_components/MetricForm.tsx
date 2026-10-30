@@ -304,15 +304,20 @@ export function MetricForm({
                 value={goalId}
                 onChange={(e) => setGoal(e.target.value)}
               >
-                <option value="">No goal</option>
+                <option value="">{goalChoices.length || unit.trim() ? "No goal" : "Pick a unit to see goals measured in it"}</option>
                 {goalChoices.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.title}
                   </option>
                 ))}
               </select>
-              <span id="metric-goal-help" className="text-[13px] font-normal">
-                Confirmed goals measured in the same unit. Each weekly value becomes the goal&apos;s current value.
+              {/* qa-company-40: an empty list says why. */}
+              <span id="metric-goal-help" data-testid="metric-goal-help" className="text-[13px] font-normal">
+                {goalChoices.length
+                  ? "Confirmed goals measured in the same unit. Each weekly value becomes the goal’s current value."
+                  : unit.trim()
+                    ? `No confirmed goal is measured in ${unit.trim()} yet.`
+                    : "Pick a unit to see goals measured in it."}
               </span>
             </div>
           )}

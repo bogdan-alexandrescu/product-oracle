@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cloneElement, isValidElement, Suspense, type ReactElement, type ReactNode } from "react";
 
-import { InfoTip, PageHeader, PageTabsProvider, ScrollStrip } from "@/components/ds";
+import { Chip, InfoTip, PageHeader, PageTabsProvider, ScrollStrip, ViewOnly } from "@/components/ds";
 import { usePhone } from "@/components/ds/page-info";
 import { useMe } from "@/lib/me";
 
@@ -15,22 +15,36 @@ export function visibleTabs(can: ReturnType<typeof useMe>["can"]): CompanyTab[] 
   return COMPANY_TABS.filter((t) => !t.read || can(t.read, true));
 }
 
+/** The Company tab the page is in (Rituals for one ritual's occurrence too). */
+function useCurrentTab(): CompanyTab | undefined {
+  const pathname = usePathname();
+  return COMPANY_TABS.find((t) => pathname === t.href || pathname.startsWith(`${t.href}/`));
+}
+
 /**
  * Company's tabs: a strip under the page title (PageHeader draws it, see the layout). On a
- * phone the tabs scroll sideways inside their strip; the page never does.
+ * wider window the tabs scroll sideways inside their strip; on a phone they wrap onto a
+ * second line, so every tab shows (qa-company-44), with the tab's add button, labelled, at
+ * the end of the last line.
  */
-export function CompanyNav() {
+export function CompanyNav({ action }: { action?: ReactNode }) {
   const pathname = usePathname();
   const { can } = useMe();
+  const phone = usePhone();
   return (
     <nav aria-label="Company" data-testid="company-nav" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
       {/* qa-company-33: the strip's edge stops at the last whole tab: no 12 px fade over the
           current tab when it ends at the edge, and no sliver of the next tab beside the
           chevron (the chevrons say there is more). */}
       <ScrollStrip
+        wrap={phone}
         itemsName="tabs"
         className="min-h-9"
-        stripClassName="items-center gap-1 [--fade-l0:var(--cut-l,0px)]! [--fade-l1:var(--cut-l,0px)]! [--fade-r0:var(--cut-r,0px)]! [--fade-r1:var(--cut-r,0px)]!"
+        stripClassName={
+          phone
+            ? "items-center gap-1"
+            : "items-center gap-1 [--fade-l0:var(--cut-l,0px)]! [--fade-l1:var(--cut-l,0px)]! [--fade-r0:var(--cut-r,0px)]! [--fade-r1:var(--cut-r,0px)]!"
+        }
       >
         {visibleTabs(can).map((t) => {
           const on = pathname === t.href || pathname.startsWith(`${t.href}/`);
@@ -40,7 +54,7 @@ export function CompanyNav() {
               href={t.href}
               data-testid={t.testId}
               aria-current={on ? "page" : undefined}
-              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap ${
+              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap max-[600px]:px-2.5 ${
                 on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
               }`}
             >
@@ -48,6 +62,11 @@ export function CompanyNav() {
             </Link>
           );
         })}
+        {action && (
+          <div data-testid="company-action" className="ml-auto flex flex-none [&>button]:h-8 [&>button]:px-3">
+            {action}
+          </div>
+        )}
       </ScrollStrip>
     </nav>
   );
@@ -61,44 +80,56 @@ const COMPANY_INFO = (
   </InfoTip>
 );
 
-/** The primary button's own words, for its name and tooltip when it shows as an icon only. */
+/**
+ * The primary button on a phone (qa-company-44): its words without the verb, beside the
+ * plus ("+ Ritual" for "Add ritual", "+ Decision" for "Propose decision"); its name and
+ * tooltip keep the whole words.
+ */
 function compact(action: ReactNode): ReactNode {
   if (!isValidElement(action)) return action;
   const el = action as ReactElement<{ children?: ReactNode; title?: string; "aria-label"?: string }>;
   const words = typeof el.props.children === "string" ? el.props.children : undefined;
-  return words ? cloneElement(el, { title: words, "aria-label": words }) : el;
+  if (!words) return el;
+  const rest = words.split(" ").slice(1).join(" ");
+  const short = rest ? rest[0].toUpperCase() + rest.slice(1) : words;
+  return cloneElement(el, { title: words, "aria-label": words, children: short });
+}
+
+/**
+ * qa-company-45: a View only names its tab ("View only: Strategy"), so a member does not read
+ * the whole of Company as read-only when one tab is.
+ */
+function tabStatus(status: ReactNode, tab: CompanyTab | undefined): ReactNode {
+  if (!tab || !isValidElement(status) || status.type !== ViewOnly) return status;
+  return (
+    <Chip kind="na" data-testid="view-only">
+      View only: {tab.label}
+    </Chip>
+  );
 }
 
 /**
  * Every Company tab's header: the title "Company" with the same (i), status chips, and the
  * tab's one primary action. The title row is as tall as the primary button whether or not
  * the tab has one, so the tab strip under it never moves between tabs (qa-company-33). On
- * a phone the action sits at the end of the tab strip's row as a compact "+" button, not
- * on a row of its own above the tabs (qa-company-34).
+ * a phone the action sits at the end of the tab strip, labelled in short ("+ Ritual"), not
+ * on a row of its own above the tabs (qa-company-34, -44).
  */
 export function CompanyHeader({ status, action, testId }: { status?: ReactNode; action?: ReactNode; testId?: string }) {
   const phone = usePhone();
+  const tab = useCurrentTab();
   const title = <span className="inline-flex min-h-10 items-center">Company</span>;
-  if (!phone || !action) return <PageHeader title={title} info={COMPANY_INFO} status={status} action={action} testId={testId} />;
+  const shown = tabStatus(status, tab);
+  if (!phone || !action) return <PageHeader title={title} info={COMPANY_INFO} status={shown} action={action} testId={testId} />;
   return (
     <PageTabsProvider
       tabs={
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <Suspense fallback={<div className="h-12" />}>
-              <CompanyNav />
-            </Suspense>
-          </div>
-          <div
-            data-testid="company-action"
-            className="flex flex-none [&>button]:h-11 [&>button]:w-11 [&>button]:gap-0 [&>button]:px-0 [&>button]:text-[0px]"
-          >
-            {compact(action)}
-          </div>
-        </div>
+        <Suspense fallback={<div className="h-12" />}>
+          <CompanyNav action={compact(action)} />
+        </Suspense>
       }
     >
-      <PageHeader title={title} info={COMPANY_INFO} status={status} testId={testId} />
+      <PageHeader title={title} info={COMPANY_INFO} status={shown} testId={testId} />
     </PageTabsProvider>
   );
 }

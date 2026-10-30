@@ -11,7 +11,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingCh
 
 import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
-import { allNeeds, NeedTable, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
 import { useReminderRows } from "./_reminders";
 import { useWebhookRows } from "./_webhooks";
@@ -25,7 +25,7 @@ const ACTED: [prefix: string, message: string][] = [
   ["ritual-retry-", "Preparing it again"],
   ["open-answer-", ""],
   ["open-", ""],
-  ["approve-", "Run approved: it starts now"],
+  ["approve-", "Approved: run started"],
   ["resume-", "Run resumed"],
   ["cancel-", "Run cancelled"],
   ["retry-", "Trying again"],
@@ -130,7 +130,7 @@ function SourcesNeedingAttention({ sources, mayEdit }: { sources: Source[]; mayE
   return (
     <div className="mt-3">
       <Panel title="Sources that need attention" count={rows.length}>
-        <NeedTable title="Sources that need attention" testId="inbox-sources" rows={rows} />
+        <NeedTable title="Sources that need attention" testId="inbox-sources" rows={rows} columns={SOURCE_COLUMNS} />
       </Panel>
     </div>
   );
@@ -224,6 +224,12 @@ function InboxTabs({
   // Until the person picks a tab, the rule holds on every visit: a page kept from an earlier
   // visit and shown again, whose New has emptied into Seen, shows Seen too.
   const [picked, setPicked] = useState(false);
+  // qa-company-17: Next keeps this page mounted while I am elsewhere and shows it again when I
+  // come back (its effects run again then): a tab picked on the earlier visit does not hold New
+  // open once it has emptied into Seen.
+  useEffect(() => {
+    setPicked(false);
+  }, []);
   const tab: InboxState = !picked && chosen === "new" && count("new") === 0 && count("open") > 0 ? "open" : chosen;
   const pick = (t: InboxState) => {
     setPicked(true);
@@ -232,8 +238,11 @@ function InboxTabs({
   };
   const shown = rows.filter((r) => r.state === tab);
   const label = STATE_TABS.find((t) => t.id === tab)!.label;
+  // qa-company-16: the heading and its count follow the tab: New and Seen are what needs me
+  // (the rail badge's count); Staged, Declined and Done are named, with their own counts.
+  const live = tab === "new" || tab === "open";
   return (
-    <Panel title="Needs you" count={waiting} testId="inbox-needs">
+    <Panel title={live ? "Needs you" : label} count={live ? waiting : count(tab)} testId="inbox-needs">
       {/* qa-company-47: on a phone the five tabs keep one line: smaller tabs, no "0" counts. */}
       <div
         className="px-4 pt-1 max-[600px]:overflow-x-auto max-[600px]:px-2 max-[600px]:[&_[role=tab]]:px-1.5 max-[600px]:[&_[role=tablist]]:flex-nowrap"
