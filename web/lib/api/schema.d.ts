@@ -37782,6 +37782,11 @@ export interface components {
             subject?: string | null;
             /** Risk Note */
             risk_note?: string | null;
+            /**
+             * Moves
+             * @default []
+             */
+            moves: string[];
         };
         /**
          * SimpleFlow

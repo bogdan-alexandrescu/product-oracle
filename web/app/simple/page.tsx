@@ -85,40 +85,14 @@ function problemWords(reason: string, title: string): string {
 }
 
 const joinAnd = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : (xs[0] ?? ""));
-const dayAfter = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 
 /**
- * What "Move the dependents" moves (qa-simple-home-1), as the change engine moves it
- * (oracle.simple.changes._fix_plan, shift_dependents): every dependent of the dependency that
- * starts too early (a sibling whose order was accepted as a risk stays) starts the day after it
- * ends, keeping its length; then their own dependents that would overlap move the same way.
+ * What "Move the dependents" moves (qa-simple-home-1): the items the flag names (SimpleFlag.moves),
+ * as the change engine moves them, the clicked item first.
  */
 function shiftMoves(b: BrokenLink, items: Schemas["SimpleRoadmapItem"][]): Schemas["SimpleRoadmapItem"][] {
-  const dep = b.dependency;
-  if (!dep) return [b.item];
   const byId = new Map(items.map((i) => [i.id, i]));
-  const ends = new Map<string, string>();
-  const moved: Schemas["SimpleRoadmapItem"][] = [];
-  const move = (i: Schemas["SimpleRoadmapItem"], start: string) => {
-    ends.set(i.id, new Date(Date.parse(`${start}T00:00:00Z`) + daysBetween(i.start.date, i.end.date) * 86_400_000).toISOString().slice(0, 10));
-    moved.push(i);
-  };
-  for (const id of dep.needed_by) {
-    const next = byId.get(id);
-    if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
-    if (id !== b.item.id && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === dep.id)) continue;
-    move(next, dayAfter(dep.end.date));
-  }
-  for (let k = 0; k < moved.length; k++) {
-    const end = ends.get(moved[k].id)!;
-    for (const id of moved[k].needed_by) {
-      const next = byId.get(id);
-      if (next && !ends.has(id) && next.status !== "cut" && next.start.date <= end) move(next, dayAfter(end));
-    }
-  }
-  // The clicked item first.
-  return [...moved.filter((m) => m.id === b.item.id), ...moved.filter((m) => m.id !== b.item.id)];
+  return (b.flag.moves ?? []).map((id) => byId.get(id)).filter((i): i is Schemas["SimpleRoadmapItem"] => !!i);
 }
 
 const STATUS_TONE: Record<GoalTile["status"], string> = {

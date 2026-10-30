@@ -404,7 +404,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   const out: Flag[] = [];
   const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
     const risk = s.risks?.find((x) => x.flag === kind && (!x.subject || x.subject === subject));
-    out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null });
+    out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null, moves: [] });
   };
   for (const key of s.depends ?? []) {
     const dep = all.get(key);
@@ -425,6 +425,44 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   }
   if (s.draft && !s.track && !closed(s)) flag("draft_without_owner", "Draft with no owner to confirm it", []);
   return out;
+}
+
+const days = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY);
+
+/**
+ * The new [start, end] of every item "Move the dependents" moves (changes.shift_plan): the
+ * roadmap's flags name them (SimpleFlag.moves) and the change engine moves them (./simple-changes.ts).
+ */
+export function shiftPlan(items: Map<string, Item>, itemId: string, depId: string): Record<string, [string, string]> {
+  // #9: every direct dependent of `dep` that starts too early moves, not only the one whose
+  // callout was clicked (two items can share a dependency, each estimated or slice-dated);
+  // then the move walks forward transitively through each moved item's own dependents.
+  const dep = items.get(depId);
+  const moves: Record<string, [string, string]> = {};
+  const queue: string[] = [];
+  if (!dep) return moves;
+  for (const n of dep.needed_by) {
+    const next = items.get(n);
+    if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
+    // A sibling whose order on dep was accepted as a risk stays where it is (as the API).
+    if (n !== itemId && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === depId)) continue;
+    const delta = days(next.start.date, addDays(dep.end.date, 1));
+    moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
+    queue.push(n);
+  }
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const n of items.get(cur)!.needed_by) {
+      const next = items.get(n);
+      if (!next || moves[n] || next.status === "cut") continue;
+      if (next.start.date <= moves[cur][1]) {
+        const delta = days(next.start.date, addDays(moves[cur][1], 1));
+        moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
+        queue.push(n);
+      }
+    }
+  }
+  return moves;
 }
 
 /** S4: the item's track owner, by name (service: an enabled track owner). */
@@ -690,6 +728,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
     };
   });
+  // qa-simple-home-1: what "Move the dependents" moves, as the change engine moves it (service.read).
+  const byItem = new Map(items.map((i) => [i.id, i]));
+  for (const i of items)
+    for (const f of i.flags) if (f.kind === "dependency_order" && f.fixes.includes("shift_dependents") && f.subject) f.moves = Object.keys(shiftPlan(byItem, i.id, f.subject));
   // The Roadmap filter (service.build's ``roadmap``): one readable roadmap, by id or slug.
   const readable = ROADMAP_SLUGS().filter((r) => readsRoadmap(r, role));
   const chosen = readableRoadmap(q.get("roadmap"), role);

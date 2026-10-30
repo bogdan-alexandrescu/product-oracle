@@ -113958,6 +113958,15 @@
               }
             ],
             "title": "Risk Note"
+          },
+          "moves": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Moves",
+            "default": []
           }
         },
         "type": "object",
