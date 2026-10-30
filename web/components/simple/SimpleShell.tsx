@@ -267,10 +267,11 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       {mounted &&
         createPortal(
           <>
+            {/* z-39: last in the document now, it still paints under a page's own z-40 layers, as it did before the page. */}
             <nav
               aria-label="Simple"
               data-testid="simple-tab-bar"
-              className="fixed inset-x-0 bottom-0 z-40 hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
+              className="fixed inset-x-0 bottom-0 z-[39] hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
             >
               {tabDests.map((d) => {
                 const active = isActive(pathname, d) && !more;
