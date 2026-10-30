@@ -290,7 +290,8 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                     }`}
                   >
                     <Icon name={d.icon} stroke={1.7} />
-                    <span className="max-w-full truncate">{d.label}</span>
+                    {/* fix4 review: "One-pagers" fills a 390 px phone's fifth of the bar to the pixel; a hair tighter it is whole. */}
+                    <span className="max-w-full truncate tracking-[-0.02em]">{d.label}</span>
                     {tabBadge(`${id}-count`, n, countWords(d.label, n))}
                   </Link>
                 );
