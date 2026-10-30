@@ -165,7 +165,10 @@ test.describe("phone", () => {
     await expect(sheet.getByRole("heading", { name: "Item", exact: true })).toHaveCount(1);
     await expect(sheet).not.toContainText("· selected");
     const body = sheet.getByTestId("sheet-plan-item-body");
-    const bar = await body.evaluate((el) => ({ w: el.offsetWidth - el.clientWidth, sw: getComputedStyle(el).scrollbarWidth }));
+    const bar = await body.evaluate((el) => ({
+      w: (el as HTMLElement).offsetWidth - el.clientWidth,
+      sw: getComputedStyle(el).scrollbarWidth,
+    }));
     expect(bar.w, "no visible scrollbar gutter").toBe(0);
     expect(bar.sw).toBe("none");
   });
