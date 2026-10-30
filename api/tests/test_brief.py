@@ -490,6 +490,8 @@ async def test_deck_json_for_present_mode(client, tenant_id, doc):
     # The slide variant of the built-in theme comes with the shared slide CSS.
     assert ".theme-clean-document .slide-title" in deck["css"] and ".deck .slide {" in deck["css"]
     assert "Version 1" in deck["banner"] and deck["banner"] in slides[0]["html"]
+    # qa-docs-63: the title slide names the document's kind, not "Brief".
+    assert '<p class="slide-kicker">PRD</p>' in slides[0]["html"]
     summary = slides[1]
     assert summary["notes"] == "Open with the drop-off number."
     assert "Open with" not in summary["html"]

@@ -166,7 +166,7 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("documents-table")).not.toContainText("oracle-default");
   });
 
-  test("qa-docs-17: the row menu says it opens the latest version, and does", async ({
+  test("qa-docs-17, qa-docs-32: the row's Latest opens the latest version; the menu repeats no Open", async ({
     page,
   }) => {
     await open(page);
@@ -177,7 +177,9 @@ test.describe("desktop", () => {
       name: "Actions for Saved carts PRD",
     });
     await expect(menu.getByRole("menuitem", { name: "Edit" })).toHaveCount(0);
-    await menu.getByRole("menuitem", { name: "Open v2" }).click();
+    await expect(menu.getByRole("menuitem", { name: /^Open/ })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await row(page, "Saved carts PRD").getByRole("link", { name: "v2", exact: true }).click();
     await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2$/);
   });
 

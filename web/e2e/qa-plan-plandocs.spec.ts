@@ -89,7 +89,7 @@ test("qa-plan-54: Build roadmap template descriptions wrap, not cut", async ({ p
   await page.getByTestId("approved-prd").first().getByRole("button", { name: "Build roadmap" }).click();
   const dialog = page.getByTestId("build-roadmap-dialog");
   const description = dialog.getByTestId("template-option-now-next-later").getByTestId("template-description");
-  await expect(description).toHaveText("Direction by confidence horizon. Dated milestones only in Now. Goal tag on every card.");
+  await expect(description).toHaveText("What happens now, next and later. Only Now has dates; every card names the goal it serves.");
   const cut = await description.evaluate((el) => el.scrollWidth > el.clientWidth + 1 || getComputedStyle(el).textOverflow === "ellipsis");
   expect(cut).toBe(false);
 });

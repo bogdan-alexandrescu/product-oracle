@@ -66,13 +66,13 @@ test.describe("desktop", () => {
     expect(errors).toEqual([]);
   });
 
-  test("qa-docs-4: a failed report says so plainly with a Retry; the account detail is under Details", async ({ page }) => {
+  test("qa-docs-4: a failed report says so plainly with a Try again; the account detail is under Details", async ({ page }) => {
     await openVersion(page, CARTS);
     await openTab(page, "History");
     const reports = page.getByTestId("history-reports").filter({ visible: true }).getByTestId("reports-panel");
     const alert = reports.getByRole("alert");
-    await expect(alert).toContainText("The reports could not be written. Try again.");
-    await expect(alert.getByRole("button", { name: "Retry" })).toBeVisible();
+    await expect(alert).toContainText("The reports could not be written on Oct 18, 4:12 PM PDT.");
+    await expect(alert.getByRole("button", { name: "Try again" })).toBeVisible();
     const history = page.getByTestId("history").filter({ visible: true });
     const job = history.getByTestId("llm-job").filter({ hasText: "Reports" }).first();
     await expect(job.getByTestId("job-failed-plain")).toBeVisible();
@@ -88,8 +88,8 @@ test.describe("desktop", () => {
     await openTab(page, "History");
     const reports = page.getByTestId("history-reports").filter({ visible: true }).getByTestId("reports-panel");
     const alert = reports.getByRole("alert");
-    await expect(alert).toHaveText("The reports could not be written.");
-    await expect(alert.getByRole("button", { name: "Retry" })).toHaveCount(0);
+    await expect(alert).toHaveText("The reports could not be written on Oct 18, 4:12 PM PDT. An approver can try again.");
+    await expect(alert.getByRole("button", { name: "Try again" })).toHaveCount(0);
   });
 
   test("qa-docs-13: each review count says what it counts", async ({ page }) => {
@@ -141,9 +141,9 @@ test.describe("desktop", () => {
     await bar.getByRole("button", { name: "Request changes" }).click();
     await expect(bar.getByText("What should change?")).toBeVisible();
     await expect(bar.getByText("(optional)")).toHaveCount(0);
-    const save = bar.getByRole("button", { name: /^Save/ });
+    const save = bar.getByTestId("verdict-submit");
     await expect(save).toBeDisabled();
-    await expect(bar.getByTestId("verdict-note-hint")).toBeVisible();
+    await expect(bar.getByTestId("verdict-save-hint")).toBeVisible();
     await bar.getByRole("textbox").fill("Name the drop-off measure.");
     await expect(save).toBeEnabled();
     // Polled: the fill eases in from the disabled look.

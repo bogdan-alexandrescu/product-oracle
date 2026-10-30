@@ -47,7 +47,7 @@ async function askAlone(page: Page) {
   await login(page, COMMENTER);
   await page.goto(DOC);
   const s = await openSection(page, "problem");
-  await sectionAction(s, "2. Problem", "Discuss this section");
+  await sectionAction(s, "2. Problem", "Start a discussion");
   await page.getByTestId("start-discussion").filter({ visible: true }).getByRole("button", { name: "Start discussion" }).click();
   await expect(thread(page)).toBeVisible();
   await expect(thread(page).getByRole("textbox", { name: "Message" })).toHaveAttribute("placeholder", "Reply to Oracle and the team");

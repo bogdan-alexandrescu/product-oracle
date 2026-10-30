@@ -29,7 +29,7 @@ async function openStart(page: Page) {
   await login(page, COMMENTER);
   await page.goto(DOC);
   const s = await openSection(page, "problem");
-  await sectionAction(s, "2. Problem", "Discuss this section");
+  await sectionAction(s, "2. Problem", "Start a discussion");
   await expect(form(page)).toBeVisible();
 }
 

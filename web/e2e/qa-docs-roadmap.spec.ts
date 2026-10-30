@@ -125,7 +125,7 @@ test.describe("desktop", () => {
     await expect(status).toContainText(/· built /);
     await expect(
       visible(page, "draft-roadmap-auto").getByRole("checkbox", {
-        name: "Update the draft roadmap with each new draft",
+        name: "Refresh this roadmap whenever a new PRD version is drafted",
       }),
     ).toBeVisible();
     await expect(visible(page, "draft-roadmap")).not.toContainText(/Derive/);

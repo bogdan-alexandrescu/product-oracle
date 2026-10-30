@@ -105,7 +105,7 @@ test("with others in the chat live reads are off, and a chat holding live reads 
   // A private discussion with the approver: two people, so Oracle reads nothing live.
   await page.goto(DOC);
   const s = await openSection(page, "problem");
-  await sectionAction(s, "2. Problem", "Discuss this section");
+  await sectionAction(s, "2. Problem", "Start a discussion");
   const form = page.getByTestId("start-discussion").filter({ visible: true });
   await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
   await form.getByRole("searchbox", { name: "Find a person" }).fill("approver");

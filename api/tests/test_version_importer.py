@@ -1,5 +1,5 @@
 """#256: a version says who imported it by name (a member's display name, "Oracle" for
-a run, an API token's name), never by the raw id."""
+a run, "An integration" for an API token, never its name), never by the raw id."""
 
 import uuid
 
@@ -62,7 +62,7 @@ async def test_document_versions_name_their_importer(client):
     got = [(v["number"], v["imported_by_name"], v["imported_by"]) for v in resp.json()["versions"]]
     assert got == [
         (1, "Dana Reyes", str(member_id)),
-        (2, "API token release-bot", str(token_id)),
+        (2, "An integration", str(token_id)),
         (3, "Oracle", str(member_id)),
     ]
 
@@ -72,10 +72,10 @@ async def test_version_list_and_read_name_their_importer(client):
     listed = (await client.get(f"{DOC}/versions", headers=auth)).json()
     assert [v["imported_by_name"] for v in listed] == [
         "Dana Reyes",
-        "API token release-bot",
+        "An integration",
         "Oracle",
     ]
-    for n, name in ((1, "Dana Reyes"), (2, "API token release-bot"), (3, "Oracle")):
+    for n, name in ((1, "Dana Reyes"), (2, "An integration"), (3, "Oracle")):
         resp = await client.get(f"{DOC}/versions/{n}", headers=auth)
         assert resp.status_code == 200, resp.text
         assert resp.json()["imported_by_name"] == name

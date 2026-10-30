@@ -102,8 +102,8 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await expect(templates.getByRole("radio", { name: /Now \/ Next \/ Later/ })).toBeChecked();
   await dialog.getByTestId("template-option-outcome-roadmap").click();
   await expect(templates.getByRole("radio", { name: /Outcome roadmap/ })).toBeChecked();
-  await dialog.getByTestId("theme-option-roadmap-board").click();
-  await expect(dialog.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: "Roadmap board" })).toBeChecked();
+  // qa-docs-39: the one roadmap theme is named, not offered as a lone radio.
+  await expect(dialog.getByTestId("theme-only")).toHaveText("Roadmap board");
 
   // Estimate before start: per segment and the total.
   await expect(dialog.getByRole("button", { name: "Start run" })).toBeDisabled();

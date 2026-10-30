@@ -59,16 +59,13 @@ test("new roadmap: a board audience gets the outcome roadmap; company default", 
   await page.getByRole("link", { name: "New roadmap" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "New roadmap" })).toBeVisible();
   await expect(page.getByTestId("recommended-template")).toHaveText("Now / Next / Later");
-  await expect(page.getByRole("spinbutton", { name: /Confirmed goals/ })).toHaveValue("2");
+  // qa-docs-39: the baseline's count, read-only.
+  await expect(page.getByTestId("confirmed-goals-count")).toHaveText("2");
 
   await answer(page, "Who reads it first?", "Board or investors");
   await expect(page.getByTestId("recommended-template")).toHaveText("Outcome roadmap");
   await expect(page.getByTestId("recommendation-reason")).toContainText("are we working on the right things?");
-  await expect(page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name: "Roadmap board" })).toBeChecked();
-
-  // Fewer confirmed goals than the outcome roadmap needs: a warning.
-  await page.getByRole("spinbutton", { name: /Confirmed goals/ }).fill("1");
-  await expect(page.getByTestId("recommendation-warnings")).toContainText("Only 1 confirmed goal(s)");
+  await expect(page.getByTestId("theme-only")).toHaveText("Roadmap board");
 
   // The owner makes it the company default; it shows on the next visit.
   await page.getByRole("button", { name: "Make company default" }).click();

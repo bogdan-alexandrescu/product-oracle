@@ -201,7 +201,7 @@ test("sheet toggle: Engineering dates is on with its help, unchecking it lowers 
   await page.getByRole("link", { name: "New PRD" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill("Dates for the shipping step");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Buyers drop off when shipping options show up late in checkout.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const toggle = sheet(page).getByRole("switch", { name: "Engineering dates" });

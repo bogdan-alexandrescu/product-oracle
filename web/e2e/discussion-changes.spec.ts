@@ -37,7 +37,7 @@ const change = (page: Page, label: string) => card(page).getByTestId("change-row
 async function startDiscussion(page: Page, opts: { private?: boolean; ask?: boolean } = {}) {
   await page.goto(DOC);
   const s = await openSection(page, "problem");
-  await sectionAction(s, "2. Problem", "Discuss this section");
+  await sectionAction(s, "2. Problem", "Start a discussion");
   const form = page.getByTestId("start-discussion").filter({ visible: true });
   if (opts.private) await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
   await form.getByRole("button", { name: "Start discussion" }).click();

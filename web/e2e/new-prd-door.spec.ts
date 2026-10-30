@@ -56,7 +56,7 @@ async function writeBrief(page: Page, title: string) {
 }
 
 async function continueToIntake(page: Page): Promise<string> {
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   return page.url().split("/intakes/")[1];
 }
@@ -214,7 +214,7 @@ test("empty skeleton: the quiet link still creates an empty v1, and a commenter 
   await login(page, "commenter@example.com");
   await page.goto("/documents/new?kind=prd");
   await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue" }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Start from an empty skeleton instead" })).toHaveCount(0);
 });
 

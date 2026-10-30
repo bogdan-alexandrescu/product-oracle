@@ -58,7 +58,7 @@ test("a segment that starts during Refresh progress shows what that check read",
   await expect(page).toHaveURL(/\/documents\/new\?kind=prd$/);
   await page.getByRole("textbox", { name: "Title" }).fill("Saved carts across devices");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Shoppers lose their cart when they switch from phone to laptop.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });

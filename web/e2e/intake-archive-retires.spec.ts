@@ -25,7 +25,7 @@ async function newBrief(page: Page) {
   await page
     .getByRole("textbox", { name: "What problem does it solve?" })
     .fill("Returning buyers retype their address at every checkout. Saved addresses would make repeat checkout faster.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 }
 

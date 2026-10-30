@@ -167,7 +167,7 @@ test("ready: one line, the button enabled, a confirm step, then published", asyn
   await openPublish(page, "visit-reminders");
   await expect(page.getByTestId("publish-ready")).toHaveText("Publishable, but 4 sections are not reviewed");
   await expect(page.getByTestId("block-row")).toHaveCount(0);
-  await expect(page.getByTestId("blocks-chip")).toHaveText("0 blocks");
+  await expect(page.getByTestId("blocks-chip")).toHaveText("Not blocked");
   await expect(page.getByTestId("hard-check").filter({ hasText: "Fail" })).toHaveCount(0);
 
   const publish = page.getByTestId("publish-button");

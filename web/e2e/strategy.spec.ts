@@ -274,8 +274,10 @@ test("strategy: with no vision, an owner starts one with Oracle, or from the emp
   await sheet.getByRole("button", { name: "Start from the empty template" }).click();
   await expect(page).toHaveURL(/\/documents\/vision$/);
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" }).filter({ visible: true }).first();
-  await expect(crumb.getByRole("link", { name: "Vision", exact: true })).toBeVisible();
-  await expect(crumb).toContainText("Draft");
+  // qa-docs-24: the crumb leads back; the title and its status are said once, in the header.
+  await expect(crumb).toContainText("Company › Strategy");
+  await expect(crumb).not.toContainText("Draft");
+  await expect(page.locator("[data-page-header]")).toContainText("Draft");
 
   await page.goto("/company/strategy");
   // The vision exists now (a draft, not approved): the card offers it and a next version.
