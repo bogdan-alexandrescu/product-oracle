@@ -11,7 +11,9 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * Card simple-roadmap-500-paint: protects = in every view of /simple/roadmap (goal-lanes
  * timeline, Gantt, Now/Next/Later board, waterfall and, on a phone, the timeline's lane list)
- * the items are drawn under 2 s from navigation, desktop 1440x900 and phone 390x844;
+ * all of the items are drawn under 2 s from navigation (timed to the last item drawn, every view's
+ * count checked inside the timed window), desktop 1440x900 and phone 390x844 (a desktop has no
+ * list view: 4 views there, 5 on a phone);
  * fails_when = a view draws its 500 items slowly (re-laying out per item, drawing rows nobody
  * sees); no_claim = a real laptop's numbers (the mock in headless Chromium, best of three
  * loads so another worker's load does not count against the chart).
@@ -41,7 +43,17 @@ function itemsOf(page: Page, view: View, phone: boolean): Locator {
   return page.locator('g[data-testid="bar"]');
 }
 
-/** Navigation to the view's items drawn (the first in sight), in ms. */
+/**
+ * What a view draws of the 500 items when it is all drawn: every item's bar or card, and on a
+ * phone the timeline's 8 goal lanes and the first lane's 63 items.
+ */
+function drawn(view: View, phone: boolean): number {
+  if (view === "list") return 63;
+  if (view === "timeline" && phone) return 8;
+  return 500;
+}
+
+/** Navigation to all of the view's items drawn (the clock stops at the last, not the first), in ms. */
 async function paint(page: Page, view: View, phone: boolean): Promise<number> {
   const t0 = Date.now();
   await page.goto(URL);
@@ -52,6 +64,7 @@ async function paint(page: Page, view: View, phone: boolean): Promise<number> {
     await page.getByTestId("phone-lane").first().click();
   }
   await expect(itemsOf(page, view, phone).first()).toBeVisible({ timeout: 15_000 });
+  await expect(itemsOf(page, view, phone)).toHaveCount(drawn(view, phone), { timeout: 15_000 });
   return Date.now() - t0;
 }
 
@@ -72,10 +85,8 @@ async function recordFrames(page: Page) {
     const w = window as unknown as { __perfFrames: number[]; __perfOn: boolean };
     w.__perfFrames = [];
     w.__perfOn = true;
-    let last = 0;
     const tick = (t: number) => {
-      if (last) w.__perfFrames.push(t - last);
-      last = t;
+      w.__perfFrames.push(t);
       if (w.__perfOn) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -84,12 +95,15 @@ async function recordFrames(page: Page) {
 
 /**
  * The drag's frame times. The mock clock (e2e/test.ts) runs requestAnimationFrame on its own
- * timers, in whole milliseconds, so a frame can fire a few ms late and the next one early
- * (21 then 11 ms) with no frame missed. Each frame is placed on the 60 Hz schedule from the
- * first; its frame time is the slots it moved on (16.7 ms for one, 33.3 for a frame missed).
+ * timers: each frame is due on its 16 ms grid (Playwright's clock: 16 - now % 16) and is given
+ * the clock's time when it runs, so a frame can run a few ms late and the next one early
+ * (24 then 8 ms) with no frame missed. Each frame is placed in the grid slot it was due in
+ * (floor(t / 16)); its frame time is the slots it moved on (16.7 ms for one, 33.3 for a frame
+ * missed). dod-perf review: rounding against a 16.7 ms schedule counted a late frame as missed.
  */
+const GRID = 16;
 async function stopFrames(page: Page, label: string): Promise<{ p95: number; raw95: number; median: number; n: number }> {
-  const frames = await page.evaluate(() => {
+  const stamps = await page.evaluate(() => {
     const w = window as unknown as { __perfFrames: number[]; __perfOn: boolean };
     w.__perfOn = false;
     return w.__perfFrames;
@@ -98,15 +112,8 @@ async function stopFrames(page: Page, label: string): Promise<{ p95: number; raw
     const sorted = [...xs].sort((a, b) => a - b);
     return sorted[Math.min(sorted.length - 1, Math.ceil(0.95 * sorted.length) - 1)] ?? Infinity;
   };
-  let at = 0;
-  let slot = 0;
-  const paced = frames.map((d) => {
-    at += d;
-    const next = Math.max(slot, Math.round(at / FRAME));
-    const t = (next - slot) * FRAME;
-    slot = next;
-    return t;
-  });
+  const frames = stamps.slice(1).map((t, n) => t - stamps[n]);
+  const paced = stamps.slice(1).map((t, n) => (Math.floor(t / GRID) - Math.floor(stamps[n] / GRID)) * FRAME);
   const sorted = [...frames].sort((a, b) => a - b);
   const r = { p95: q95(paced), raw95: q95(frames), median: sorted[Math.floor(sorted.length / 2)] ?? Infinity, n: frames.length };
   if (process.env.PERF_SEQ) console.log(frames.map((f) => Math.round(f)).join(" "));
@@ -169,11 +176,8 @@ for (const [where, use] of [
     for (const view of views) {
       test(`${view}: items drawn under 2 s @timing`, async ({ page }) => {
         // simple-roadmap-500-paint (see the file's cards).
+        // The clock stops when every item is drawn (paint counts them), in every view.
         expect(await bestPaint(page, view, phone)).toBeLessThan(2000);
-        if (view === "timeline" && !phone) {
-          // Every one of the 500 items is on the goal lanes (none lost to drawing less).
-          await expect(page.locator('[data-testid="bar"]')).toHaveCount(500);
-        }
       });
     }
 
