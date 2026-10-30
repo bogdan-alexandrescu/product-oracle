@@ -47,7 +47,9 @@ test("Pick sources: a Slack source added and synced from Set up is counted on Ho
   // Pick sources: Slack, "Team chat", one channel; then Sync now.
   await row(page, "sources").getByRole("link", { name: "Open Pick sources" }).click();
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
-  await page.getByTestId("sources-empty").getByRole("button", { name: "Add a source" }).click();
+  // One way in: the header's Add a source; the empty list has no button of its own (qa-onboarding-18).
+  await expect(page.getByTestId("sources-empty")).toContainText("No sources yet");
+  await page.getByRole("button", { name: "Add a source" }).click();
   const form = page.getByRole("form", { name: "Add a source" });
   await form.getByLabel("Kind").selectOption("slack");
   await expect(form.getByLabel("Connection")).toHaveValue(/.+/);

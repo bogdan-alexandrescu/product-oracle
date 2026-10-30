@@ -47,8 +47,9 @@ test("qa-shell-9, 10, 30: the owner of a new company walks every empty page and 
 
   // Runs.
   await open(page, "nav-runs", "Runs");
-  await expect(page.getByTestId("runs-empty")).toHaveText("No runs yet. Start one with New run.");
-  await expect(page.getByRole("button", { name: "New run" })).toBeVisible();
+  // Runs' own words (fix4-work): its header's button is Start a run….
+  await expect(page.getByTestId("runs-empty")).toContainText("No runs yet. Start one from Start a run… or from the page it works on.");
+  await expect(page.getByRole("button", { name: "Start a run…" })).toBeVisible();
 
   // Baseline: no 0/0 counts, and each empty table says how to fill it.
   await open(page, "nav-baseline", "Baseline");
@@ -91,8 +92,8 @@ test("qa-shell-9: a viewer's empty pages offer nothing they cannot do", async ({
   await expect(page.getByRole("link", { name: "New PRD" })).toHaveCount(0);
 
   await open(page, "nav-runs", "Runs");
-  await expect(page.getByTestId("runs-empty")).toHaveText("No runs yet. They appear here once someone starts one.");
-  await expect(page.getByRole("button", { name: "New run" })).toHaveCount(0);
+  await expect(page.getByTestId("runs-empty")).toContainText("No runs yet. Runs show here once an approver starts one.");
+  await expect(page.getByRole("button", { name: "Start a run…" })).toHaveCount(0);
 
   await open(page, "nav-baseline", "Baseline");
   await expect(page.getByTestId("kpi-goals")).toContainText("No goals yet");

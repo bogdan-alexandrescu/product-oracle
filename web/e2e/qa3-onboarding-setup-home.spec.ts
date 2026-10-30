@@ -70,7 +70,8 @@ test("while the first build runs: one Open the build, and its segment under way 
   // Next repeats the segment under way; no_claim=a run waiting on a person (Next stays).
   await newCompanyOwner(page);
   await row(page, "build_baseline").getByRole("link", { name: "Open Build baseline" }).click();
-  await expect(page).toHaveURL(/\/baseline\?build=1$/);
+  // From Set up the sheet keeps the way back to Home (fix4-plan, qa-onboarding-17).
+  await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
   const sheet = page.getByRole("dialog", { name: "Build the baseline" });
   await sheet.getByRole("button", { name: "Start" }).click();
   await expect(sheet).toHaveCount(0);

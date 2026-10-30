@@ -26,11 +26,21 @@ const selectFits = (select: Locator) =>
     return { whole: box.width + 0.5 >= needs, inCell: box.left >= cell.left - 0.5 && box.right <= cell.right + 0.5 };
   });
 
-/** Each part of an email ("commenter", "@example.com") sits on one line: a wrap falls at the @ only. */
+/**
+ * Each part of an email ("commenter@", "example", ".com") sits on one line: a wrap falls only
+ * after the @ or before a dot (the Members page's own Email, the settings lane's, over the shell lane's).
+ */
 const emailWhole = (email: Locator) =>
   email.evaluate((el) => {
-    const parts = [...el.querySelectorAll("[data-email-part]")];
-    return parts.length === 2 && parts.every((p) => p.getClientRects().length === 1);
+    const parts = [...el.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE);
+    return (
+      parts.length > 1 &&
+      parts.every((p) => {
+        const range = document.createRange();
+        range.selectNodeContents(p);
+        return range.getClientRects().length === 1;
+      })
+    );
   });
 
 /** The status cell's content stays inside the cell, so it never covers Last sign-in. */
@@ -59,9 +69,9 @@ for (const width of [1440, 1512]) {
         const former = memberRow(page, "former.pm@example.com");
         await expect(former).toBeVisible();
 
-        // qa-shell-4: the chip says Removed; the date sits under it, inside the column.
-        await expect(former.getByTestId("member-removed")).toHaveText("Removed");
-        await expect(former.getByTestId("member-removed-on")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+        // qa-shell-4: the chip says Removed; the date sits under it, inside the column (the settings
+        // lane's status cell: its date is part of member-removed).
+        await expect(former.getByTestId("member-removed")).toHaveText(/^Removed\s*[A-Z][a-z]{2} \d{1,2}, \d{4}$/);
         expect(await statusInside(former)).toEqual({ inside: true, clearOfNext: true });
 
         // qa-shell-5: "Commenter" whole in its select, the select inside the Role column.
@@ -88,9 +98,9 @@ test("qa-shell-27: the Roles panel has one heading and a line for the engineerin
   for (const role of ["owner", "approver", "commenter", "viewer"]) {
     await expect(panel.getByTestId(`role-${role}`).getByTestId("role-can")).toBeVisible();
   }
-  await expect(panel.getByTestId("roles-engineering-lead").getByTestId("role-can")).toHaveText(
-    "Decides both engineering stops and verifies dates. Any commenter or above can carry it.",
-  );
+  // The settings lane's Engineering lead section (qa-settings-7) is the lead's line.
+  await expect(panel.getByTestId("roles-lead")).toContainText("Engineering lead");
+  await expect(panel.getByTestId("roles-engineering-lead")).toContainText("Any commenter or above can carry it");
 });
 
 test.describe("on a phone", () => {
@@ -117,6 +127,8 @@ test.describe("on a phone", () => {
     const was = await lead.isChecked();
     await lead.click();
     await expect(lead).toBeChecked({ checked: !was });
+    // The tick shows at once; reload only once the change is saved.
+    await expect(page.getByTestId("lead-saved")).toHaveText("Saved");
     await page.reload();
     await expect(memberRow(page, "admin@example.com").getByRole("checkbox", { name: "Engineering lead: admin@example.com" })).toBeChecked({ checked: !was });
     // Someone else's card keeps its Remove.
