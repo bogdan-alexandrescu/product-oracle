@@ -98,14 +98,14 @@ test.describe("fix4-simple-plan review: Priorities", () => {
   });
 
   /* qa-simple-plan-34: a look-alike links to its own row (marked there); its button says what it does. */
-  test("a look-alike opens its own row and says it closes the suggestion", async ({ page }) => {
+  test("a look-alike opens its own row and says it declines the suggestion", async ({ page }) => {
     await setUp(page, { scenario: "simple-plan" });
     await open(page, "?tab=buckets");
     await page.getByTestId("goal-ask-oracle").first().click();
     const drawer = page.getByTestId("goal-panel");
     const looks = drawer.getByTestId("suggestion-looks-like");
     await expect(looks.first()).toBeVisible({ timeout: 15_000 });
-    await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Same as this: close the suggestion");
+    await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Same as this: decline the suggestion");
     const link = looks.first().getByTestId("looks-like-link");
     const title = ((await link.textContent()) ?? "").trim();
     await link.click();

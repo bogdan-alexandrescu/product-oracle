@@ -277,7 +277,7 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
 
 /**
  * qa-simple-plan-34: a look-alike feature, linked to its own row in the Ranked list (marked
- * there), and for whoever decides "Same as this: close the suggestion" (it is closed as the
+ * there), and for whoever decides "Same as this: decline the suggestion" (it is declined as the
  * same as that feature; nothing is merged).
  */
 function LooksLike({ m, merges, busy, onMerge }: { m: GoalSuggestion["looks_like"][number]; merges: boolean; busy: boolean; onMerge: () => void }) {
@@ -291,7 +291,7 @@ function LooksLike({ m, merges, busy, onMerge }: { m: GoalSuggestion["looks_like
       </span>
       {merges && (
         <button type="button" disabled={busy} onClick={onMerge} className="font-semibold text-accent-ink underline" data-testid="looks-like-merge">
-          Same as this: close the suggestion
+          Same as this: decline the suggestion
         </button>
       )}
     </p>

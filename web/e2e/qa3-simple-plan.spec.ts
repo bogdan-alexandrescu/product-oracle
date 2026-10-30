@@ -423,7 +423,7 @@ test.describe("QA pass 3: simple-plan, the suggestions drawer", () => {
     await expect(drawer.getByTestId("goal-suggestion").first()).toBeVisible({ timeout: 15_000 });
     if ((await looks.count()) > 0) {
       await expect(looks.first().getByTestId("looks-like-link")).toBeVisible();
-      await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Same as this: close the suggestion");
+      await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Same as this: decline the suggestion");
     }
     // qa-simple-plan-36: one scrollbar (the page behind does not scroll); an opened flow comes into view.
     expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe("hidden");
