@@ -66,6 +66,8 @@ export type LlmContext = {
   /** Whether a feedback-loop run still going was sent this suggestion (Build next draft, D12). */
   sentToAgents?: (suggestionId: string) => boolean;
   reply: (feedbackId: string, body: string) => void;
+  /** fix3-discuss review: a decision that closes whole-draft feedback made in Discuss closes its thread. */
+  closeThread?: (item: Feedback) => void;
   /** Imports a revised section as the next version and applies the resolutions. */
   importRevision: (
     doc: Doc,
@@ -784,6 +786,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
         } else if (s.kind === "duplicate") {
           Object.assign(item, { status: "superseded", resolution_note: `Duplicate of feedback item ${s.duplicate_of}`, updated_at: ctx.now() });
         }
+        if (item.status !== "open") ctx.closeThread?.(item);
       }
       return json(200, shownSuggestion(item, s));
     }
@@ -829,6 +832,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
           addressed_in_version: latest,
           updated_at: ctx.now(),
         });
+        ctx.closeThread?.(item);
       }
       return json(200, shownSuggestion(item, s));
     }

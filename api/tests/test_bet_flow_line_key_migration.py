@@ -174,7 +174,7 @@ def flow(brief: str) -> tuple[str, str, str]:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0092_feedback_discussion"]
 
 
 def test_flows_move_to_the_line_and_back(scratch_db):

@@ -101,10 +101,10 @@ test.describe("desktop", () => {
     await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/\d+ of 20 sections reviewed/);
   });
 
-  test("qa-docs-47: each action once: the whole-draft comment in the Feedback tab, Brief / Full in the switch", async ({ page }) => {
+  test("qa-docs-47/33: each action once: whole-draft feedback through the header's Discuss, Brief / Full in the switch", async ({ page }) => {
     await openVersion(page, CARTS);
-    await expect(page.getByRole("button", { name: "Comment on the whole draft" }).filter({ visible: true })).toHaveCount(1);
-    await expect(panel(page).getByRole("button", { name: "Comment on the whole draft" })).toBeVisible();
+    await expect(page.getByTestId("doc-discuss").filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Comment on the whole draft" })).toHaveCount(0);
     await expect(page.getByTestId("doc-general-feedback")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Show full document|Show brief/ })).toHaveCount(0);
     await expect(page.getByTestId("view-note")).toContainText("Brief: 8 of 20 sections");

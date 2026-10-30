@@ -93,7 +93,7 @@ def test_chains_on_the_single_head():
     fails_when=a second head appears; no_claim=none beyond protects."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0092_bet_flow_line_key"]
+    assert script.get_heads() == ["0092_feedback_discussion"]
 
 
 def test_upgrade_backfills_accepted_assumptions_and_downgrade_removes_it_all(scratch_db):

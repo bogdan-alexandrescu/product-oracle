@@ -17,6 +17,8 @@ export type DiscussionSubject = {
   kind: Schemas["DiscussionCreate"]["subject_kind"];
   subject: Record<string, unknown>;
   label: string;
+  /** qa-docs-33: a whole version during its review: an open thread's first message is also whole-draft feedback. */
+  review?: boolean;
 };
 
 /**
@@ -30,7 +32,7 @@ export function StartDiscussion({
   onCancel,
 }: {
   subject: DiscussionSubject;
-  onStarted: (id: string) => void;
+  onStarted: (id: string, visibility: "open" | "private") => void;
   onCancel?: () => void;
 }) {
   const id = useId();
@@ -62,7 +64,7 @@ export function StartDiscussion({
           },
         }),
       );
-      onStarted(d.id);
+      onStarted(d.id, d.visibility);
     } catch (e) {
       setError(errorMessage(e));
       setSaving(false);
@@ -134,7 +136,10 @@ export function StartDiscussion({
           />
         </div>
       ) : (
-        <p className="text-sm leading-5 text-text2">Everyone who can see this can read it.</p>
+        <p className="text-sm leading-5 text-text2">
+          Everyone who can see this can read it.
+          {subject.review && " During the review, your first message also counts as feedback on the whole draft."}
+        </p>
       )}
       <label className="text-sm font-semibold text-text2" htmlFor={`${id}-first`}>
         First message

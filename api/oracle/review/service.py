@@ -265,6 +265,7 @@ async def feedback_out(
                 intake_id=intakes.get(item.intake_question_id) if item.intake_question_id else None,
                 intake_question_id=item.intake_question_id,
                 intake_answer_id=item.intake_answer_id,
+                discussion_id=item.discussion_id,
             )
         )
     return out
@@ -403,9 +404,11 @@ async def create_general_feedback(
     n: int,
     body: str,
     severity: str | None = None,
+    discussion_id: uuid.UUID | None = None,
 ) -> FeedbackItemOut:
     """Feedback on the whole draft (D13): a ``general`` item with no section, raised on
-    version ``n`` by ``principal``."""
+    version ``n`` by ``principal``. Made from a Discuss thread (``discussion_id``), it
+    follows the thread and does not start the review of a draft: a discussion is not."""
     version = await get_version(session, doc, n)
     item = FeedbackItem(
         document_id=version.document_id,
@@ -416,13 +419,15 @@ async def create_general_feedback(
         author_id=principal.id,
         status="open",
         severity=severity,
+        discussion_id=discussion_id,
         created_at=_now(),
     )
     session.add(item)
     await session.flush()
-    await _mark_in_review(
-        session, await session.get(Document, version.document_id), principal, version.number
-    )
+    if discussion_id is None:
+        await _mark_in_review(
+            session, await session.get(Document, version.document_id), principal, version.number
+        )
     await audit.record(
         session,
         principal,
@@ -859,6 +864,11 @@ async def update_feedback(
     for key, value in fields.items():
         setattr(item, key, value)
     await session.flush()
+    if fields.get("status") not in (None, "open") and item.discussion_id is not None:
+        # fix3-discuss: resolving whole-draft feedback made in Discuss closes its thread.
+        from oracle.discussions import service as discussions
+
+        await discussions.close_for_feedback(session, principal, item.discussion_id)
     if fields:
         await audit.record(
             session,
