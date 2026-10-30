@@ -193,6 +193,43 @@ export function liveBreaks(items: Map<string, Item>, id: string, start: string, 
   return out;
 }
 
+/**
+ * dod-perf review: a dragged bar moves on a layer of its own over the chart (a copy of it, the
+ * chart's own bar hidden while it is lifted), so a drag frame repaints that one bar, not the
+ * chart's other 499. Draw the move on `bar`; `drop` puts the chart's bar back.
+ */
+export type Lifted = { bar: SVGGElement; drop: () => void };
+export function liftBar(g: SVGGElement): Lifted {
+  const svg = g.ownerSVGElement!;
+  const layer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  layer.setAttribute("width", svg.getAttribute("width") ?? "0");
+  layer.setAttribute("height", svg.getAttribute("height") ?? "0");
+  layer.setAttribute("aria-hidden", "true");
+  layer.dataset.testid = "drag-layer";
+  // The chart's svg sits at the top left of its box: the layer lies exactly over it.
+  layer.style.cssText = "position:absolute;left:0;top:0;overflow:visible;pointer-events:none;will-change:transform";
+  const bar = g.cloneNode(true) as SVGGElement;
+  for (const a of ["data-testid", "data-bar-id", "tabindex", "role", "aria-label"]) bar.removeAttribute(a);
+  layer.appendChild(bar);
+  svg.after(layer);
+  g.style.visibility = "hidden";
+  return {
+    bar,
+    drop: () => {
+      layer.remove();
+      g.style.visibility = "";
+    },
+  };
+}
+
+/** The dragged bar's dates on the chart's own bar, written only when they change. */
+export function markDrag(g: SVGGElement, start: string, end: string, broken: boolean) {
+  const live = broken ? "broken" : "ok";
+  if (g.dataset.dragStart !== start) g.dataset.dragStart = start;
+  if (g.dataset.dragEnd !== end) g.dataset.dragEnd = end;
+  if (g.dataset.live !== live) g.dataset.live = live;
+}
+
 export class ChangeFailed extends Error {
   constructor(
     message: string,

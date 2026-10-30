@@ -12,7 +12,10 @@ import {
   closedItem,
   DAY_MS,
   daysBetween,
+  liftBar,
   liveBreaks,
+  markDrag,
+  type Lifted,
   milestonePrd,
   ms,
   planMilestones,
@@ -366,7 +369,7 @@ export function Lanes(props: LanesProps) {
   return props.compact ? <PhoneLanes {...props} /> : <DesktopLanes {...props} />;
 }
 
-type Drag = { id: string; mode: "move" | "start" | "end"; x0: number; start: string; end: string; dx: number; moved: boolean; frame: number | null; pointer: number; touch: boolean; armed: boolean; timer: number | null };
+type Drag = { id: string; mode: "move" | "start" | "end"; x0: number; start: string; end: string; dx: number; moved: boolean; frame: number | null; pointer: number; touch: boolean; armed: boolean; timer: number | null; lift?: Lifted };
 
 declare global {
   interface Window {
@@ -711,8 +714,10 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     if (!d) return;
     d.frame = null;
     const t0w = performance.now();
-    const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
-    if (!g) return;
+    const own = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
+    if (!own) return;
+    d.lift ??= liftBar(own);
+    const g = d.lift.bar;
     const days = Math.round(d.dx / sc.px);
     const start = d.mode === "end" ? d.start : addDays(d.start, days);
     const end = d.mode === "start" ? d.end : addDays(d.end, days);
@@ -732,10 +737,8 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
       hit?.setAttribute("x", String(x));
       hit?.setAttribute("width", String(w + 6 + Number(label.dataset.w ?? 0)));
     }
-    g.dataset.dragStart = s;
-    g.dataset.dragEnd = e;
     const breaks = liveBreaks(items, d.id, s, e);
-    g.dataset.live = breaks.length ? "broken" : "ok";
+    markDrag(own, s, e, breaks.length > 0);
     rect?.setAttribute("stroke", breaks.length ? "var(--crit)" : "var(--accent-ink)");
     if (live.current) {
       live.current.hidden = false;
@@ -811,6 +814,8 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     if (d.frame != null) cancelAnimationFrame(d.frame);
     if (frames.current.raf != null) cancelAnimationFrame(frames.current.raf);
     if (live.current) live.current.hidden = true;
+    // The chart's bar back in place (its last move is still written to its dates below).
+    d.lift?.drop();
     const item = items.get(d.id);
     if (!item) return;
     const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);

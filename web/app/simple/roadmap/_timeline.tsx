@@ -11,7 +11,10 @@ import {
   broken,
   closedItem,
   daysBetween,
+  liftBar,
   liveBreaks,
+  markDrag,
+  type Lifted,
   milestonePrd,
   milestoneWords,
   ms,
@@ -328,6 +331,8 @@ type Drag = {
   touch: boolean;
   armed: boolean;
   timer: number | null;
+  /** The bar on its own layer while it is dragged (liftBar). */
+  lift?: Lifted;
 };
 
 declare global {
@@ -435,8 +440,10 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     if (!d) return;
     d.frame = null;
     const t0 = performance.now();
-    const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
-    if (!g) return;
+    const own = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
+    if (!own) return;
+    d.lift ??= liftBar(own);
+    const g = d.lift.bar;
     const days = Math.round(d.dx / sc.px);
     const start = d.mode === "end" ? d.start : addDays(d.start, days);
     const end = d.mode === "start" ? d.end : addDays(d.end, days);
@@ -449,10 +456,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     rect?.setAttribute("width", String(w));
     const it = items.get(d.id);
     if (format === "waterfall" && it) drawPhases(g, rephase(it, s, e), sc, x, w);
-    g.dataset.dragStart = s;
-    g.dataset.dragEnd = e;
     const breaks = liveBreaks(items, d.id, s, e);
-    g.dataset.live = breaks.length ? "broken" : "ok";
+    markDrag(own, s, e, breaks.length > 0);
     rect?.setAttribute("stroke", breaks.length ? "var(--crit)" : "var(--accent-ink)");
     if (live.current) {
       live.current.hidden = false;
@@ -535,6 +540,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     if (d.frame != null) cancelAnimationFrame(d.frame);
     if (frames.current.raf != null) cancelAnimationFrame(frames.current.raf);
     if (live.current) live.current.hidden = true;
+    // The chart's bar back in place (its last move is still written to its dates below).
+    d.lift?.drop();
     const item = items.get(d.id);
     if (!item) return;
     const g = svg.current?.querySelector<SVGGElement>(`g[data-bar-id="${d.id}"]`);
