@@ -17,9 +17,14 @@ Test cards (protects / fails_when / no_claim):
   key dates' draft rules (test_simple_key_dates_api).
 - test_draft_item_ops_roles_record_and_undo: protects=add_item, keep_both, confirm_item
   and merge_item on a draft item: owner and decider apply, the approver who reviews the
-  draft proposes (nothing written), a commenter does not see the draft's item, viewer refused; each is a change row with its author and now; an
-  undo of keep_both, confirm_item and merge_item puts back every stored column of every
-  item it touched; fails_when=any of these; no_claim=the drafting job's text.
+  draft proposes (nothing written), a commenter does not see the draft's item, a viewer is
+  refused; each is a change row with its author and now; an undo of keep_both,
+  confirm_item and merge_item puts back every stored column of every item it touched;
+  fails_when=any of these; no_claim=the drafting job's text.
+- test_a_viewer_attendee_is_refused_every_meeting_write: protects=a viewer invited to a
+  live review meeting is refused joining as a changer, its rules, comments, approval, chat
+  mode, ending it and its minutes (edit, redraft, send), and the meeting is as it was;
+  fails_when=one lets a viewer in; no_claim=reading the meeting (viewers read).
 - test_every_simple_write_refuses_a_run: protects=every write route under /v1/simple
   refuses a call made for a run (people only act in Simple), before reading its body;
   fails_when=a route lets a run in (a new route without the people-only guard);
@@ -182,3 +187,29 @@ async def test_draft_item_ops_roles_record_and_undo(client):
         r = await client.post(f"{CHANGES}/{c['id']}/undo", headers=w.as_("decider"))
         assert r.status_code == 201, (op, r.text)
         assert await rows(w.ctx, touched) == seen, op
+
+
+async def test_a_viewer_attendee_is_refused_every_meeting_write(client):
+    from tests import test_simple_meetings_api as mt
+
+    w = await mt.world()
+    m = await mt.start(client, w, attendee_ids=[mt.uid(w, x) for x in ("approver", "viewer")])
+    seen = await mt.get(client, w, m["id"])
+    url = f"{mt.MEETINGS}/{m['id']}"
+    writes = [
+        ("POST", f"{url}/join", None),
+        ("PATCH", f"{url}/rules", {"change_mode": "presenter"}),
+        ("POST", f"{url}/comments", {"text": "Keep the beta"}),
+        ("POST", f"{url}/approve", None),
+        ("PUT", f"{url}/chat/mode", {"change_mode": "presenter"}),
+        ("POST", f"{url}/end", None),
+        ("PUT", f"{url}/minutes", {"summary": "Mine"}),
+        ("POST", f"{url}/minutes/redraft", None),
+        ("POST", f"{url}/send", {"email": True}),
+    ]
+    for method, path, body in writes:
+        r = await client.request(method, path, json=body, headers=w.ctx.as_("viewer"))
+        assert r.status_code == 403, (method, path, r.text)
+    after = await mt.get(client, w, m["id"])
+    for key in ("status", "change_mode", "attendees", "comments", "decisions"):
+        assert after.get(key) == seen.get(key), key
