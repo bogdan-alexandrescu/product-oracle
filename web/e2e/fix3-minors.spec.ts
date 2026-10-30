@@ -25,18 +25,22 @@ async function open(page: Page, width: number, height: number): Promise<void> {
   await expect(rows(page).first()).toBeVisible();
 }
 
-/** The rows as listed: rank, whether each makes the line, title. */
+/** The rows as listed: rank, whether each makes the line, title, and code chip. */
 async function listed(
   page: Page,
-): Promise<{ rank: number; above: boolean; title: string }[]> {
+): Promise<{ rank: number; above: boolean; title: string; code: string }[]> {
   return rows(page).evaluateAll((els) =>
     els.map((e) => ({
       rank: Number(e.querySelector('[data-testid="prio-rank"]')!.textContent),
       above: e.getAttribute("data-above") === "true",
       title: e.querySelector('[data-testid="prio-title"]')!.textContent ?? "",
+      code: e.querySelector('[data-testid="prio-code"]')!.textContent ?? "",
     })),
   );
 }
+
+/** A row named as the move dialog's heading names it: its title, then its short code. */
+const named = (r: { title: string; code: string }): string => (r.code && r.code !== r.title ? `${r.title} (${r.code})` : r.title);
 
 /** Drags row `from`'s handle to just past the middle of row `to`, as a person would. */
 async function drag(page: Page, from: number, to: number): Promise<void> {
@@ -70,7 +74,7 @@ for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 84
       await drag(page, from, to);
       const dialog = moveDialog(page);
       await expect(dialog.getByRole("heading")).toHaveText(new RegExp(`to rank ${list[to].rank}$`));
-      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${list[to].title}, above the line.`);
+      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${named(list[to])}, above the line.`);
     });
 
     test("dragged past the line, it asks for the last rank above it and stays above it", async ({ page }) => {
@@ -81,13 +85,39 @@ for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 84
       await drag(page, split - 2, split + 1);
       const dialog = moveDialog(page);
       await expect(dialog.getByRole("heading")).toHaveText(new RegExp(`to rank ${last.rank}$`));
-      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${last.title}, above the line.`);
+      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${named(last)}, above the line.`);
       await dialog.getByLabel("Reason").fill("Ship it with the plan");
       await dialog.getByRole("button", { name: /^Move/ }).click();
       await expect(dialog).toBeHidden();
       await expect(rows(page).nth(split - 1).getByTestId("prio-title")).toHaveText(moving.title);
       const after = await listed(page);
-      expect(after[split - 1]).toEqual({ rank: last.rank, above: true, title: moving.title });
+      expect(after[split - 1]).toEqual({ rank: last.rank, above: true, title: moving.title, code: moving.code });
+    });
+
+    // fix3-minors review: the clamp holds for any dated plan, also one whose rows are already in
+    // rank order (what makes the line has the first ranks), not only one the dates regroup.
+    test("in a dated plan whose rows are in rank order, a drag past the line still stays above it", async ({ page }) => {
+      await open(page, width, height);
+      // A line on a picked day that only two rows make, far apart by rank.
+      await page.locator("#prio-line").selectOption("pick");
+      await page.getByLabel("The line's date").fill("2026-11-16");
+      await expect(page.getByTestId("line-caption")).toContainText(/^\d+ of \d+ miss Nov 16, 2026/);
+      let list = await listed(page);
+      expect(list.filter((r) => r.above).length).toBe(2);
+      // Move the second one up to just under the first, so the rows are in rank order.
+      await drag(page, 1, 0);
+      let dialog = moveDialog(page);
+      await dialog.getByLabel("Reason").fill("Ship it with the plan");
+      await dialog.getByRole("button", { name: /^Move/ }).click();
+      await expect(dialog).toBeHidden();
+      await expect.poll(async () => (await listed(page)).map((r) => r.rank)).toEqual(list.map((_, i) => i + 1));
+      list = await listed(page);
+      expect(list.map((r) => r.above).slice(0, 3)).toEqual([true, true, false]);
+      // Dragged onto a row below the line, it asks for the last rank above it.
+      await drag(page, 0, 3);
+      dialog = moveDialog(page);
+      await expect(dialog.getByRole("heading")).toHaveText(new RegExp(`to rank ${list[1].rank}$`));
+      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${named(list[1])}, above the line.`);
     });
   });
 }
