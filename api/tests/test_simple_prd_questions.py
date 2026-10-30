@@ -60,6 +60,11 @@ Fidelity (option A "Imported as decisions", 2026-10-28):
   meeting stays on it with Undo for who decided it (others see no Undo); Undo opens it again;
   fails_when=another milestone's question is on the agenda, a decided one leaves it, or the
   Undo is offered to someone else; no_claim=the minutes' words.
+- test_decided_label_company_zone (qa-simple-decide-7): protects=``decided_label`` reads a
+  decision's day in the company's zone (America/Los_Angeles), so a decision decided at 7 PM
+  PDT Oct 29 (02:00 UTC Oct 30) reads "Oct 29", not "Oct 30"; the mock's own decided_label
+  (web/lib/api/mock/simple-questions.ts) must read the same day; fails_when=the label uses
+  UTC; no_claim=the mock itself (web tests cover it).
 """
 
 import asyncio
@@ -462,3 +467,23 @@ async def test_meeting_agenda_keeps_what_it_decided(client):
     again = {q["code"]: q for q in (await client.get(url, headers=ctx.as_("decider"))).json()[
         "decisions_due"]}  # fmt: skip
     assert again["Q3"]["status"] == "proposed" and again["Q3"]["undo_id"] is None
+
+
+async def test_decided_label_company_zone(client):
+    """qa-simple-decide-7: decided_label reads the company's zone (America/Los_Angeles),
+    not UTC. The mock's decided_label (web/lib/api/mock/simple-questions.ts) must match."""
+    ctx = await make_ctx()
+    await seed(ctx)
+    q = next(q for q in (await page(client, ctx))["questions"] if q["code"] == "Q3")
+    r = await client.post("/v1/simple/changes", headers=ctx.as_("decider"), json={
+        "op": "decide_question", "target": {"decision_id": q["id"]},
+        "before": {"status": "proposed"}, "after": {"option": "recommended"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.get(Decision, uuid.UUID(q["id"]))
+        # 7 PM PDT Oct 29, 2026 is 02:00 UTC Oct 30: the company's day is still Oct 29.
+        d.decided_at = datetime(2026, 10, 30, 2, 0, tzinfo=UTC)
+        await s.commit()
+    assert company_time.date_in_words(company_time.day(d.decided_at)) == "Thu Oct 29"
+    after = {x["code"]: x for x in (await page(client, ctx))["questions"]}["Q3"]
+    assert after["decided_label"].startswith("Decided on Thu Oct 29 by")

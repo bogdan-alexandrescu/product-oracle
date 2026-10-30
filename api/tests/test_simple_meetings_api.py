@@ -15,9 +15,10 @@ Test cards (protects / fails_when / no_claim):
   fails_when=anyone else starts one or the sheet hides who starts it; no_claim=the sheet.
 - test_every_action_is_a_meeting_decision: protects=a change through the meeting's
   session (applied by the decider, proposed by a commenter), an accept and a decline with
-  the meeting's session, an undo and a comment each become a ``decisions`` row (origin
+  the meeting's session, and an undo each become a ``decisions`` row (origin
   ``meeting``, approver who decided, subjects the item and the PRD) listed newest first
-  on the meeting; the change is marked made in the meeting; with the change mode
+  on the meeting; a comment (qa-simple-decide-1) is a note, not a decision, and does not
+  appear there; the change is marked made in the meeting; with the change mode
   "presenter" a commenter's change through it is 403 and "named" lets the named person
   in; ``meeting_rules`` and ``record_meeting_decision`` (the contract) answer as named;
   fails_when=an action is not recorded, is recorded with the wrong approver, or the mode
@@ -28,8 +29,9 @@ Test cards (protects / fails_when / no_claim):
   is a meeting decision and the roadmap item links to it (``decided_in``); approver and
   commenter may not approve (403); fails_when=it publishes early, asks the present
   reviewer, or never publishes; no_claim=PRD drafts (same path, S5's tests).
-- test_end_and_minutes_job: protects=ending writes Oracle's quick minutes at once (the
-  decisions in the summary, what waits on whom) and queues the ``meeting_minutes`` job;
+- test_end_and_minutes_job: protects=ending writes Oracle's quick minutes at once (a short
+  prose count of decisions, notes and open questions, qa-simple-decide-6; what waits on
+  whom) and queues the ``meeting_minutes`` job;
   its answer (fake) replaces them, held to the meeting's record (an item nobody said is
   dropped, test_simple_minutes_record has the rest); a person's edit wins over
   a later answer; only the presenter, decider or an owner ends; a change through an
@@ -44,13 +46,17 @@ Test cards (protects / fails_when / no_claim):
   API (oracle.slack.outbox's tests).
 - test_decisions_page_grouping_and_filters: protects=the page groups a meeting's
   decisions under it with its minutes, keeps decisions outside meetings apart, filters
-  by PRD, goal and meeting (an unknown one is 404); fails_when=a decision lands in the
-  wrong group or a filter leaks; no_claim=Detailed's decision log.
+  by PRD, goal and meeting (an unknown one is 404); a meeting_option's title carries its
+  day (qa-simple-decide-11); fails_when=a decision lands in the wrong group or a filter
+  leaks; no_claim=Detailed's decision log.
 - test_an_open_decision_named_in_minutes_is_not_listed_twice: protects=an open decision
   the shown meeting's minutes name as an open question ("D-<n>: ...") is left out of the
   decisions outside meetings, and is listed there again once decided; fails_when=it shows
   twice (under the meeting's open questions and in "other") or never comes back;
   no_claim=the minutes' wording.
+- test_meeting_option_title_carries_the_day_and_live (qa-simple-decide-11): protects=a
+  live meeting's option title ends " · live", an ended one's does not; fails_when=the
+  suffix is missing or shown once ended; no_claim=the web's filter control.
 """
 
 import uuid
@@ -58,6 +64,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
+from oracle import company_time
 from oracle.auth.models import User
 from oracle.decisions.models import Decision
 from oracle.jobs.models import LlmJob
@@ -188,9 +195,12 @@ async def test_every_action_is_a_meeting_decision(client):
     assert r.status_code == 200, r.text
     r = await client.post(f"{CHANGES}/{applied['id']}/undo", headers=w.ctx.as_("decider"))
     assert r.status_code == 201, r.text
+    # qa-simple-decide-1: a comment is a note, not a meeting decision.
     r = await client.post(f"{MEETINGS}/{m['id']}/comments", json={"text": "Keep the beta"},
                           headers=w.ctx.as_("approver"))  # fmt: skip
     assert r.status_code == 201, r.text
+    comment_out = r.json()
+    assert [n["text"] for n in comment_out["notes"] if n["kind"] == "comment"] == ["Keep the beta"]
     rows = await meeting_decisions(w)
     titles = [d.title for d in rows]
     assert titles == [
@@ -200,18 +210,20 @@ async def test_every_action_is_a_meeting_decision(client):
         "Proposed: Cut Cut A",
         "Declined: Cut Cut A",
         "Undone: Renamed Edit_Title A",
-        "Comment: Keep the beta",
     ]
+    assert "Comment: Keep the beta" not in titles
     first = rows[0]
     assert first.status == "decided" and first.approver_id == w.ctx.users["decider"].id
     assert {"kind": "roadmap_item", "id": w.ids["edit_title-a"], "ref": "edit_title-a"} in (
         first.subjects
     )
-    by_approver = {d.title: d.approver_id for d in rows}
-    assert by_approver["Comment: Keep the beta"] == w.ctx.users["approver"].id
     out = await get(client, w, m["id"])
     assert [d["title"] for d in out["meeting_decisions"]] == list(reversed(titles))
     assert out["decisions"] == len(titles)
+    [comment_note] = [n for n in out["notes"] if n["kind"] == "comment"]
+    assert (comment_note["text"] == "Keep the beta"
+            and comment_note["by_name"] == "approver@example.com")  # fmt: skip
+    assert comment_note["at"] is not None
     # The draft marks the change as made in the meeting.
     [d] = (await client.get(DRAFTS, headers=w.ctx.as_("decider"))).json()
     assert d["change_log"] and all(c["in_meeting"] for c in d["change_log"])
@@ -319,7 +331,8 @@ async def test_end_and_minutes_job(client):
         assert r.status_code == 403, (who, r.text)
     out = await end(client, w, m["id"])
     assert out["status"] == "ended" and out["minutes_state"] == "drafting"
-    assert "Renamed Edit_Title A" in out["minutes"]["summary"]
+    # qa-simple-decide-6: a short prose count, not the decision's title.
+    assert out["minutes"]["summary"] == "1 decision taken, 1 open question."
     assert out["minutes"]["written_by"] == "extract"
     assert any("working draft" in x["what"] for x in out["minutes"]["waits"])
     r = await w.post(client, "decider", "reorder", session_id=m["session_id"])
@@ -460,7 +473,10 @@ async def test_decisions_page_grouping_and_filters(client):
     assert [d["title"] for d in g["decisions"]] == ["Renamed Edit_Title A"]
     assert [d["title"] for d in page["other"]] == ["Elsewhere", "Approved the PRD"]
     assert PRD in [p["id"] for p in page["prds"]]
+    # qa-simple-decide-11: the meeting's title carries its day and (while live) " · live".
+    words = company_time.date_in_words(company_time.day(m["started_at"]))
     assert [o["id"] for o in page["meeting_options"]] == [m["id"]]
+    assert page["meeting_options"][0]["title"] == f"{m['title']} · {words}"
     r = await client.get("/v1/simple/decisions", params={"prd": PRD}, headers=w.ctx.as_("viewer"))
     page = r.json()
     assert len(page["meetings"]) == 1 and [d["title"] for d in page["other"]] == [
@@ -512,3 +528,19 @@ async def test_an_open_decision_named_in_minutes_is_not_listed_twice(client):
         (await s.get(Decision, decision_id)).status = "decided"
         await s.commit()
     assert "Pick the ledger" in await other()
+
+
+async def test_meeting_option_title_carries_the_day_and_live(client):
+    """qa-simple-decide-11: a meeting_option's title is "<title> · <day>", plus " · live"
+    while the meeting is still live."""
+    w = await world()
+    ended = await start(client, w, title="Ended review")
+    await end(client, w, ended["id"])
+    live = await start(client, w, title="Live review")
+    r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    options = {o["id"]: o["title"] for o in r.json()["meeting_options"]}
+    ended_words = company_time.date_in_words(company_time.day(ended["started_at"]))
+    live_words = company_time.date_in_words(company_time.day(live["started_at"]))
+    assert options[ended["id"]] == f"Ended review · {ended_words}"
+    assert options[live["id"]] == f"Live review · {live_words} · live"
