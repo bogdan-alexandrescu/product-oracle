@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * #447: the shared formatters (lib/format.ts) show days and times in the Company time zone,
@@ -16,7 +16,7 @@ const scenario = (page: Page, name: string) => page.addInitScript(([key, value])
 
 async function setZone(page: Page, zone: string) {
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption(zone);
+  await pickZone(page, zone);
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
 }

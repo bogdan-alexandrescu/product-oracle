@@ -37,7 +37,9 @@ test("Pick sources: an empty Uploads source does not tick it, the build sheet wa
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
   const empty = page.getByTestId("sources-empty");
   await expect(empty).toContainText("No sources yet");
-  await empty.getByRole("button", { name: "Add a source" }).click();
+  // One way in: the header's Add a source (qa-onboarding-18).
+  await expect(empty.getByRole("button")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add a source" }).click();
   const form = page.getByRole("form", { name: "Add a source" });
   await expect(form.getByLabel("Name")).toBeFocused();
   // Add source says why it is greyed out.

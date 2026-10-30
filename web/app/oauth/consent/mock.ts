@@ -42,10 +42,10 @@ export async function consentMockFetch(req: Request): Promise<Response> {
       redirect_uri: MOCK_CONSENT.redirect_uri,
       redirect_host: new URL(MOCK_CONSENT.redirect_uri).host,
       scopes: [
-        { name: "oracle:read", description: "Read the baseline, sources you can see, documents and runs, and list the titles of every Notion page shared with Product Oracle, including pages in no source." },
+        { name: "oracle:read", description: "See what you can see: the baseline, documents, runs and your sources. It also sees the names of all Notion pages shared with Product Oracle, even ones not added as a source." },
         ...(readOnly
           ? []
-          : [{ name: "oracle:write", description: "Make changes with your role: propose, comment, approve, edit." }]),
+          : [{ name: "oracle:write", description: "Make the changes you are allowed to: propose, comment, approve and edit." }]),
       ],
       user_email: user.email,
       user_role: user.role,

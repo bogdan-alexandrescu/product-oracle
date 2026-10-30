@@ -12,7 +12,7 @@
  * Whether an account (and the pool) takes calls is the API's rule (accounts.py choose and
  * eligibility): AVAILABLE, readable, and its binding window at least 15% clear, an old
  * reading counted at half; with none, a fallback credential covers no account at all or every one
- * spent (fallback.py covers). The "pool-spent" scenario has one account over its weekly limit.
+ * spent (fallback.py covers). The "pool-spent" scenario has one account at 100% of its weekly limit.
  */
 import type { Schemas } from "@/lib/api/client";
 import { inWords } from "@/lib/format";
@@ -74,7 +74,7 @@ function seed(scenario: string | null): PoolDb {
           assigned: 0,
           windows: {
             five_hour: { utilization: 0.09, resets_at: at(3 * HOUR), reset: false },
-            seven_day: { utilization: 0.95, resets_at: at((2 * 24 + 13) * HOUR), reset: false },
+            seven_day: { utilization: 1, resets_at: at((2 * 24 + 13) * HOUR), reset: false },
           },
           observed_at: at(-2 * MIN),
           last_refresh_at: at(-4 * MIN),

@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 
 import { expect, test } from "./test";
 
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * QA round 2 on Settings › Company and Settings › Notifications, driven through the UI on the
@@ -132,19 +132,23 @@ test("qa-settings-19: time zones in words with offsets and a search; unset agree
 
   await page.goto("/settings/company");
   const panel = page.getByTestId("timezone-panel");
-  const zone = panel.getByLabel("Company time zone");
+  // qa-settings-12: one searchable picker (a combobox), its list right under it.
+  const zone = panel.getByRole("combobox", { name: "Company time zone" });
   await expect(zone).toHaveValue("");
-  await expect(zone.locator("option:checked")).toHaveText("Not set · Pacific is used");
-  await expect(zone.locator("optgroup").first()).toHaveAttribute("label", "Common");
-  await expect(zone.locator("optgroup").first().locator("option").first()).toHaveText(/^Pacific Time \(Los Angeles\) · UTC-[78]$/);
-  for (const text of await zone.locator("option").allTextContents()) expect(text).not.toMatch(/^[A-Za-z]+\/[A-Za-z_]+$/);
+  await expect(zone).toHaveAttribute("placeholder", "Not set · Pacific is used");
+  await zone.click();
+  const list = panel.getByRole("listbox", { name: "Time zones" });
+  await expect(list.getByRole("group").first()).toHaveAttribute("aria-label", "Common");
+  await expect(list.getByRole("group").first().getByRole("option").first()).toHaveText(/^Pacific Time \(Los Angeles\) · UTC-[78]$/);
+  for (const text of await list.getByRole("option").allTextContents()) expect(text).not.toMatch(/^[A-Za-z]+\/[A-Za-z_]+$/);
 
-  await panel.getByLabel("Find a time zone").fill("tokyo");
-  const tokyo = zone.locator('option[value="Asia/Tokyo"]');
+  await zone.fill("tokyo");
+  const tokyo = list.locator('[data-zone="Asia/Tokyo"]');
   await expect(tokyo).toHaveText(/\(Tokyo\) · UTC\+9$/);
-  await expect(zone.locator('option[value="Europe/Berlin"]')).toHaveCount(0);
+  await expect(list.locator('[data-zone="Europe/Berlin"]')).toHaveCount(0);
   const name = (await tokyo.textContent())!.split(" · ")[0];
-  await zone.selectOption("Asia/Tokyo");
+  await tokyo.click();
+  await expect(zone).toHaveValue(/\(Tokyo\) · UTC\+9$/);
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(panel.getByRole("status")).toHaveText("Saved");
 
@@ -234,7 +238,7 @@ test("time zone: with none chosen, Save waits for a pick and the zone stays unse
   await expect(page.getByTestId("report-zone")).toHaveText("Not set · Pacific is used");
 
   await page.goto("/settings/company");
-  await panel.getByLabel("Company time zone").selectOption("Asia/Tokyo");
+  await pickZone(panel, "Asia/Tokyo");
   await expect(panel.getByTestId("timezone-save-reason")).toHaveCount(0);
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(panel.getByRole("status")).toHaveText("Saved");

@@ -1,6 +1,7 @@
 "use client";
 
 import createClient from "openapi-fetch";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -24,6 +25,18 @@ const ROLE_LABEL: Record<ConsentRequest["user_role"], string> = {
   approver: "Approver",
   owner: "Owner",
 };
+
+/** Loopback hosts: the MCP client runs on this computer (RFC 8252 redirects). */
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/**
+ * Where the browser returns, in words (qa-settings-41): a loopback address is "an app on this
+ * computer", its host and port only in the title; any other host as it is.
+ */
+function returnPlace(host: string): { text: string; title?: string } {
+  const name = host.replace(/:\d+$/, "").toLowerCase();
+  return LOOPBACK.has(name) ? { text: "an app on this computer", title: host } : { text: host };
+}
 
 /**
  * The OAuth consent screen: an MCP client asks to act for the signed-in user. Reached
@@ -74,9 +87,20 @@ export function ConsentScreen() {
     }
   }
 
+  const back = returnPlace(detail?.redirect_host ?? "");
   return (
     <AuthCard title="Connect an MCP client">
-      {error && <Notice tone="error">{error}</Notice>}
+      {error && (
+        <>
+          <Notice tone="error">{error}</Notice>
+          {/* qa-settings-40: no request to decide on: a way on, not a dead end. */}
+          {!detail && (
+            <Link href="/" className="mt-4 inline-block text-[15px] font-semibold text-accent-ink hover:underline">
+              Go to Oracle
+            </Link>
+          )}
+        </>
+      )}
       {!error && !detail && <Loading />}
       {detail && (
         <div className="flex flex-col gap-5" data-testid="consent">
@@ -119,11 +143,13 @@ export function ConsentScreen() {
 
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Label>Returns to</Label>
-            <span className="min-w-0 font-mono text-[13px] break-all">{detail.redirect_host}</span>
+            <span data-testid="consent-return" title={back.title} className="min-w-0 text-sm break-all">
+              {back.text}
+            </span>
             <InfoTip label="Consent" align="end">
-              The name is the one the client gave itself. After you decide, your browser returns to{" "}
-              {detail.redirect_host}. Approve only if you just started this from an MCP client you trust. Access lasts
-              until it is revoked or unused for 30 days.
+              The name is the one the client gave itself. After you decide, your browser returns to {back.text}.
+              Approve only if you just started this from an MCP client you trust. Access lasts until it is revoked or
+              unused for 30 days.
             </InfoTip>
           </div>
 

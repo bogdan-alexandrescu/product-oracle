@@ -53,7 +53,10 @@ async function createWebhook(page: Page, name: string, url: string, groups: stri
 test("webhooks: an owner creates one, gets the secret once, sends a test event the receiver can verify", async ({ page }) => {
   const calls = await stubReceiver(page);
   await openWebhooks(page);
-  await expect(page.getByText("Tell your other tools when runs, drafts and approvals change.")).toBeVisible();
+  // qa-settings-11: the intro is in the page's tip, as on every Settings tab.
+  await page.getByRole("button", { name: "About Webhooks" }).click();
+  await expect(page.getByRole("tooltip").filter({ hasText: "Tell your other tools when runs, drafts and approvals change." })).toBeVisible();
+  await page.getByRole("button", { name: "About Webhooks" }).click();
 
   // https only, and an event to send.
   await page.getByRole("button", { name: "New webhook" }).click();

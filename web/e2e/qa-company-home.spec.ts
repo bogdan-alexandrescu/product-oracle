@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /*
  * QA findings on Home (Detailed): goal chips' keyboard behaviour, the confidence ring, the
@@ -138,9 +138,9 @@ test("set up: time zone says the default is used, then names the zone that was s
   await expect(step.getByTestId("setup-status")).toHaveText("Not set · Pacific is used");
   await step.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company/);
-  await page.getByLabel("Company time zone").selectOption("Asia/Tokyo");
+  await pickZone(page, "Asia/Tokyo");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
   await page.goto("/home");
   const status = page.getByTestId("setup-row-timezone").getByTestId("setup-status");
   await expect(status).toContainText("(Tokyo)");

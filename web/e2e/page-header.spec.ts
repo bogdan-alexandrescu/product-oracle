@@ -5,7 +5,8 @@ import { login, openSeeded, seedConsoleHeld, seedRun } from "./helpers";
 
 /**
  * I3 rule 3: one primary action per page, top-right, drawn as primary (filled), even while
- * it is disabled (New PRD's Create draft, a theme's Save, a template's Save as new version).
+ * it is disabled (New PRD's Create draft). The template and theme forms keep theirs under the
+ * form instead (qa-settings-28; see FORM_PRIMARY).
  */
 const PAGES = [
   "/documents",
@@ -16,12 +17,16 @@ const PAGES = [
   "/settings/sources",
   "/settings/claude-accounts",
   "/settings/themes",
-  "/settings/themes/new",
-  "/settings/themes/clean-document",
   "/settings/templates",
-  "/settings/templates/new",
-  "/settings/templates/ai-feature",
 ];
+
+/** qa-settings-28: forms whose one primary sits under the form, not in the header. */
+const FORM_PRIMARY = [
+  ["/settings/themes/new", "Create theme"],
+  ["/settings/themes/clean-document", "Save"],
+  ["/settings/templates/new", "Create template"],
+  ["/settings/templates/ai-feature", "Save as new version"],
+] as const;
 
 const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
@@ -77,6 +82,12 @@ for (const scheme of ["light", "dark"] as const) {
     for (const path of PAGES) {
       await page.goto(path);
       await expectOneFilledPrimary(page, path);
+      await expectOnePrimaryOnPage(page, path);
+    }
+    for (const [path, name] of FORM_PRIMARY) {
+      await page.goto(path);
+      await expect(page.locator('main [data-variant="primary"]').filter({ visible: true }).filter({ hasText: name })).toHaveCount(1);
+      await expect(page.locator("header[data-page-header]").filter({ visible: true }).locator('[data-variant="primary"]')).toHaveCount(0);
       await expectOnePrimaryOnPage(page, path);
     }
     // Members' one primary is the invite form's Send invite, its one way to invite (qa-settings).

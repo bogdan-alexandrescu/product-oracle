@@ -158,7 +158,19 @@ def may_sign_in(user: User | None) -> bool:
     return user is not None and user.disabled_at is None
 
 
-async def authenticate_user(email: str, password: str) -> User | None:
+class RemovedMemberError(Exception):
+    """A removed (disabled) member signed in with their right password (qa-settings-42):
+    the refusal says so, in words, naming who to ask."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+async def _authenticate(email: str, password: str) -> tuple[User | None, User | None]:
+    """(the active member the password signs in, the removed member it is right for). The
+    second only when the email has no active member: a removed member's password is checked
+    in place of the dummy one, so a wrong password takes as long as for an unknown email."""
     # Runs before a tenant is known, hence unscoped.
     async with unscoped_session() as s:
         users = (await s.scalars(select(User).where(User.email == email.strip().lower()))).all()
@@ -167,11 +179,41 @@ async def authenticate_user(email: str, password: str) -> User | None:
         # A disabled member's password no longer signs in; the same email may be an
         # active member of another company, so a disabled row never ends the search.
         if await verify_password_async(user.password_hash, password):
-            return user
-    # Equalise timing when the email is unknown or only disabled.
-    if not active:
+            return user, None
+    if active:
+        return None, None
+    removed = [u for u in users if not may_sign_in(u)]
+    for user in removed:
+        if await verify_password_async(user.password_hash, password):
+            return None, user
+    # Equalise timing when the email is unknown.
+    if not removed:
         await verify_password_async(_DUMMY_HASH, password)
-    return None
+    return None, None
+
+
+async def authenticate_user(email: str, password: str) -> User | None:
+    return (await _authenticate(email, password))[0]
+
+
+async def _removed_message(removed: User) -> str:
+    """Who a removed member asks: the owner who removed them while still an active owner,
+    else any owner (the same words as /access's "removed"). The refused sign-in is audited
+    on the removed member's row."""
+    from oracle.audit import record
+    from oracle.authz import has_role
+    from oracle.members.names import display_name
+    from oracle.tenancy import tenant_session
+
+    who = "an owner"
+    async with tenant_session(removed.tenant_id) as s:
+        if removed.disabled_by is not None:
+            by = await s.get(User, removed.disabled_by)
+            if by is not None and may_sign_in(by) and has_role(by.role, "owner"):
+                who = display_name(by.email, by.name)
+        await record(s, None, "login_refused_removed", "user", removed.id)
+        await s.commit()
+    return f"An owner removed you from this Oracle. Ask {who} to restore you."
 
 
 async def sign_in(email: str, password: str) -> tuple[User, str] | None:
@@ -181,12 +223,15 @@ async def sign_in(email: str, password: str) -> tuple[User, str] | None:
     password re-checked against the hash read under that lock: a password change (or a
     sign-out everywhere) locks the row too and reads its time after the lock, so a
     session signed in with the old password while a change commits is always older than
-    the change's ``sessions_valid_after`` and never survives it. Records the sign-in."""
+    the change's ``sessions_valid_after`` and never survives it. Records the sign-in. A
+    removed member who gives the right password raises ``RemovedMemberError`` (qa-settings-42)."""
     from oracle.audit import record
     from oracle.auth.deps import Principal
     from oracle.tenancy import tenant_session
 
-    found = await authenticate_user(email, password)
+    found, removed = await _authenticate(email, password)
+    if removed is not None:
+        raise RemovedMemberError(await _removed_message(removed))
     if found is None:
         return None
     async with tenant_session(found.tenant_id) as s:

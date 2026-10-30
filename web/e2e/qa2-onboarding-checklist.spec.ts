@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * qa-onboarding-44: a new company's owner walks Home's whole Set up checklist, from "2 of 8"
@@ -107,9 +107,9 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(row(page, "timezone").getByTestId("setup-status")).toHaveText("Not set · Pacific is used");
   await openStep(page, "timezone", /\/settings\/company\?from=setup#timezone$/);
   // Save waits for a zone to be picked (fix2-settings: "Not set" never stores Los Angeles).
-  await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
+  await pickZone(page, "America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
   await backToHome(page);
   await seeDone(page, "timezone", /Pacific/, 7);
 

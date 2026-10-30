@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN, login } from "./helpers";
+import { ADMIN, login, pickZone } from "./helpers";
 
 /*
  * qa-onboarding-4 and qa-onboarding-48 (desktop, mock-backed, through the UI only): a new
@@ -69,9 +69,9 @@ async function checkHorizons(page: Page) {
 async function setZone(page: Page) {
   await openStep(page, "Time zone", /\/settings\/company\?from=simple-setup#timezone$/);
   // Save waits for a zone to be picked (fix2-settings: "Not set" never stores Los Angeles).
-  await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
+  await pickZone(page, "America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
   await toSimple(page);
 }
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { INPUT } from "@/app/settings/_components/fields";
-import { Avatar, Chip, DataTable, Notice, Panel, type Column } from "@/components/ds";
+import { Avatar, Button, Chip, DataTable, Notice, Panel, type Column } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
@@ -31,6 +31,18 @@ export function FindPerson({ value, onChange }: { value: string; onChange: (v: s
   );
 }
 
+/** qa-settings-8: a search that finds nobody says so, with the way back (owner table and this list). */
+export function NoMatch({ find, onClear }: { find: string; onClear: () => void }) {
+  return (
+    <span data-testid="people-no-match" className="inline-flex flex-wrap items-center justify-center gap-2 break-words">
+      <span>Nobody matches “{find.trim()}”</span>
+      <Button variant="ghost" onClick={onClear}>
+        Clear search
+      </Button>
+    </span>
+  );
+}
+
 /**
  * Settings › Members for a non-owner (A5, 3.10): the active members with their names and
  * role chips, read-only, from GET /v1/people. No status, sign-in, tokens or actions.
@@ -48,7 +60,7 @@ export function PeopleReadOnly() {
           <Avatar name={p.name || p.email} size={28} />
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="truncate font-semibold">{p.name}</span>
-            {p.name !== p.email && <span className="truncate text-[13px] text-text2">{p.email}</span>}
+            {p.name !== p.email && <span title={p.email} className="truncate text-[13px] text-text2">{p.email}</span>}
           </span>
         </span>
       ),
@@ -70,7 +82,7 @@ export function PeopleReadOnly() {
             loading={!peopleQ.data}
             rowKey={(p) => p.user_id}
             rowProps={() => ({ "data-testid": "person-row" })}
-            empty={q ? "Nobody matches" : "No members"}
+            empty={q.trim() ? <NoMatch find={q} onClear={() => setQ("")} /> : "No members"}
           />
         )}
       </Panel>

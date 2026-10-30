@@ -36,7 +36,8 @@ test("members: remove asks in an in-app dialog, then restore lets them sign in a
   // Disabled, not deleted: the row stays in place with its outcome, then offers Restore.
   await expect(row.getByTestId("acted")).toContainText("Removed");
   await expect(row).toHaveAttribute("data-status", "disabled");
-  await expect(row).toContainText(/Removed \w+ \d+/);
+  // "Removed" with its date on a line under the chip (fix4 qa-settings-1).
+  await expect(row.getByTestId("member-removed")).toHaveText(/^Removed\s*\w{3} \d{1,2}, \d{4}$/);
   await expect(page.getByTestId("member-row")).toHaveCount(5);
   await expect(row.getByRole("button", { name: "Restore commenter@example.com" })).toBeVisible();
   expect(nativeDialog).toBe(false);

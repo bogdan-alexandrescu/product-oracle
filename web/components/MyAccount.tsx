@@ -293,41 +293,57 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
 
   return (
     <Panel title="Password" testId="password-panel">
-      <form onSubmit={submit} aria-label="Change password" className="grid grid-cols-3 items-end gap-3 p-4 max-[900px]:grid-cols-1">
+      {/* qa-settings-38: each field's problem under it, so the three line up at the top. */}
+      <form onSubmit={submit} aria-label="Change password" className="grid grid-cols-3 items-start gap-3 p-4 max-[900px]:grid-cols-1">
         {/* qa-shell-29: whose password this is, for a password manager to save it under. */}
         <input type="email" name="username" autoComplete="username" value={account.email} readOnly hidden data-testid="password-username" />
         <Field label="Current password">
           <input type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} className={INPUT} />
         </Field>
-        <Field label={`New password · ${min}+ characters`}>
-          <input
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={min}
-            value={next}
-            aria-invalid={short || undefined}
-            onChange={(e) => setNext(e.target.value)}
-            className={INPUT}
-          />
-        </Field>
-        <Field label="New password again">
-          <input
-            type="password"
-            autoComplete="new-password"
-            required
-            value={again}
-            aria-invalid={mismatch || undefined}
-            onChange={(e) => setAgain(e.target.value)}
-            className={INPUT}
-          />
-        </Field>
+        {/* The message sits outside the label, so the field keeps its name. */}
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Field label={`New password · ${min}+ characters`}>
+            <input
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={min}
+              value={next}
+              aria-invalid={short || undefined}
+              aria-describedby={short ? "password-short" : undefined}
+              onChange={(e) => setNext(e.target.value)}
+              className={INPUT}
+            />
+          </Field>
+          {short && (
+            <span id="password-short" data-testid="password-short" className="text-sm text-warn">
+              At least {min} characters
+            </span>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Field label="New password again">
+            <input
+              type="password"
+              autoComplete="new-password"
+              required
+              value={again}
+              aria-invalid={mismatch || undefined}
+              aria-describedby={mismatch ? "password-mismatch" : undefined}
+              onChange={(e) => setAgain(e.target.value)}
+              className={INPUT}
+            />
+          </Field>
+          {mismatch && (
+            <span id="password-mismatch" data-testid="password-mismatch" className="text-sm text-warn">
+              The two new passwords differ
+            </span>
+          )}
+        </div>
         <div className="col-span-full flex flex-wrap items-center gap-3">
           <Button type="submit" variant="solid" disabled={pending || !current || !next || short || mismatch || again !== next}>
             {pending ? "Changing…" : "Change password"}
           </Button>
-          {short && <span className="text-sm text-warn">At least {min} characters</span>}
-          {mismatch && <span className="text-sm text-warn">The two new passwords differ</span>}
         </div>
         <p className="col-span-full text-sm text-text2" data-testid="password-revokes">
           Changing it signs out every other session and revokes {REVOKES_TOO}.

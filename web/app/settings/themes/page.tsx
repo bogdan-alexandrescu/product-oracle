@@ -18,6 +18,7 @@ import {
   Split,
   type Column,
 } from "@/components/ds";
+import { revealOnPhone } from "@/app/settings/_components/reveal";
 import { ThemePreview } from "@/components/ThemePreview";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
@@ -73,7 +74,7 @@ const COLUMNS: Column<Theme>[] = [
         <Link
           href={`/settings/themes/${t.key}`}
           onClick={(e) => e.stopPropagation()}
-          className={`min-w-0 truncate font-medium hover:underline ${t.archived_at ? "text-text2" : "text-text"}`}
+          className={`min-w-0 truncate font-medium hover:underline max-[600px]:inline-flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal ${t.archived_at ? "text-text2" : "text-text"}`}
         >
           {t.name}
         </Link>
@@ -137,9 +138,9 @@ function ThemeInspector({ t }: { t: Theme }) {
         <Swatches t={t} size={28} />
       </InspectorSection>
       <InspectorSection label="Facts">
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
-        <InspectorRow value={t.tokens.page ? `${t.tokens.page.size} · ${t.tokens.page.orientation}` : "—"}>Page</InspectorRow>
+        <InspectorRow value={t.tokens.page ? `${t.tokens.page.size} · ${t.tokens.page.orientation === "landscape" ? "Landscape" : "Portrait"}` : "—"}>Page</InspectorRow>
         <InspectorRow value={formatDate(t.updated_at)}>Updated</InspectorRow>
+        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {t.description && (
         <InspectorSection label="Description">
@@ -207,7 +208,10 @@ export default function ThemesPage() {
             rowKey={(t) => t.key}
             group={(t) => GROUP_LABEL[t.kind]}
             selected={current?.key}
-            onSelect={(k) => setSelected(k)}
+            onSelect={(k) => {
+              setSelected(k);
+              revealOnPhone("theme-inspector");
+            }}
             rowProps={(t) => ({ "data-testid": `theme-row-${t.key}` })}
             empty="No themes yet"
           />

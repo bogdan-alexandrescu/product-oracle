@@ -178,7 +178,7 @@ export function MemberInspector({
   const rows = detail?.responsibilities ?? [];
   return (
     <Inspector
-      eyebrow="Members · member"
+      eyebrow="Members"
       title={personName(member)}
       label={`Member ${member.email}`}
       testId="member-inspector"
@@ -229,7 +229,7 @@ export function MemberInspector({
                 {formatDate(member.last_sign_in_at)}
               </span>
             ) : (
-              "Not known"
+              "Never"
             )
           }
         >

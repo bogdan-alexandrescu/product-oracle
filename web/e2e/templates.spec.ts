@@ -73,7 +73,7 @@ test("templates: create a new one from the skeleton", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "New template" })).toBeVisible();
   await page.getByLabel("Key").fill("launch-brief");
   await page.getByLabel("Name").fill("Launch brief");
-  await expect(page.getByTestId("validation-ok")).toContainText("<Title>, Problem, Solution, Sources and data points");
+  await expect(page.getByTestId("validation-ok")).toContainText("Title, Problem, Solution, Sources and data points");
   await page.getByRole("button", { name: "Create template" }).click();
   await expect(page).toHaveURL(/\/settings\/templates\/launch-brief$/);
   await expect(page.getByRole("heading", { level: 1, name: "Launch brief" })).toBeVisible();

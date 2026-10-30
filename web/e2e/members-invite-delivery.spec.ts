@@ -21,7 +21,7 @@ test("invite: Oracle emails the invite and grants access, and the page says so",
 
   await expect(page.getByTestId("invite-outcome")).toHaveText("Invite sent to pat@example.com");
   const row = inviteRow(page, "pat@example.com");
-  await expect(row.getByTestId("invite-access")).toHaveText("Access granted");
+  await expect(row.getByTestId("invite-access")).toHaveText("Google sign-in ready");
   await expect(row.getByTestId("invite-email")).toContainText("Sent");
   // The Copy link button says what it does.
   await expect(row.getByRole("button", { name: "Copy link for pat@example.com" })).toHaveText("Copy link");
@@ -55,10 +55,10 @@ test("invite: access not granted yet, and Retry grants it", async ({ page }) => 
   const row = inviteRow(page, "pat@example.com");
   await expect(row.getByTestId("invite-access")).toHaveText("Access not granted yet");
   await row.getByRole("button", { name: "Retry access for pat@example.com" }).click();
-  await expect(row.getByTestId("invite-access")).toHaveText("Access granted");
+  await expect(row.getByTestId("invite-access")).toHaveText("Google sign-in ready");
   await expect(row.getByRole("button", { name: "Retry access for pat@example.com" })).toHaveCount(0);
   await page.reload();
-  await expect(inviteRow(page, "pat@example.com").getByTestId("invite-access")).toHaveText("Access granted");
+  await expect(inviteRow(page, "pat@example.com").getByTestId("invite-access")).toHaveText("Google sign-in ready");
 });
 
 test("invite: a failed email offers Resend, which sends it", async ({ page }) => {

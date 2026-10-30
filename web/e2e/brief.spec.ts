@@ -328,5 +328,5 @@ test("templates: the editor shows the brief sections and refuses a template with
   await expect(create).toBeEnabled();
   await create.click();
   await expect(page).toHaveURL(/\/settings\/templates\/no-brief$/);
-  await expect(page.getByTestId("version-brief")).toHaveText("problem");
+  await expect(page.getByTestId("version-brief")).toHaveText("Problem");
 });

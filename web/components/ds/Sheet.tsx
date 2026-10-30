@@ -45,6 +45,7 @@ export function Sheet({
   id,
   bare = false,
   side = false,
+  dialog = false,
 }: {
   open: boolean;
   title: string;
@@ -65,6 +66,8 @@ export function Sheet({
   bare?: boolean;
   /** qa-docs-28: wider than a phone, a panel at the right edge (full height, no handle); a bottom sheet on a phone. */
   side?: boolean;
+  /** A form: a bottom sheet on a phone, a centred dialog of readable width (640 px) from 640 px up (qa-settings-33). */
+  dialog?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number; captured?: boolean } | null>(null);
@@ -153,7 +156,7 @@ export function Sheet({
     <div
       className={`fixed inset-x-0 top-0 z-50 flex flex-col justify-end ${above ? "bottom-[var(--phone-tab-bar)]" : "bottom-0"} ${
         side ? "min-[601px]:flex-row" : ""
-      }`}
+      } ${dialog ? "sm:items-center sm:justify-center sm:p-6" : ""}`}
       data-testid={testId}
     >
       <div data-testid="sheet-scrim" aria-hidden className="absolute inset-0 bg-hero/50" onClick={onClose} />
@@ -181,7 +184,7 @@ export function Sheet({
             <div
               data-testid="sheet-handle"
               aria-hidden
-              className={`${side ? "min-[601px]:hidden" : ""} flex h-6 flex-none cursor-grab touch-none items-center justify-center`}
+              className={`${side ? "min-[601px]:hidden" : ""} flex h-6 flex-none cursor-grab touch-none items-center justify-center ${dialog ? "sm:hidden" : ""}`}
               onPointerDown={onDown}
               onPointerMove={onMove}
               onPointerUp={onUp}

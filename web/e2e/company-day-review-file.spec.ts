@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "./test";
 
-import { login, seedRoadmapReview } from "./helpers";
+import { login, seedRoadmapReview, pickZone } from "./helpers";
 
 /**
  * #463 review fixes 1: the review.yaml a run page shows names the Company day it was sent
@@ -9,7 +9,7 @@ import { login, seedRoadmapReview } from "./helpers";
 
 async function setZone(page: Page, zone: string) {
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption(zone);
+  await pickZone(page, zone);
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
 }

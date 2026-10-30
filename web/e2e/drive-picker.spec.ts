@@ -72,8 +72,13 @@ test("sources › Google Docs: choose files and a folder from Drive, remove one,
 
   await form.getByRole("button", { name: "Add source" }).click();
   const row = page.getByRole("listitem", { name: "Planning docs" });
-  await expect(row).toContainText("Roadmap notes, 1DocPastedExample");
+  // A pasted id has no name: it reads as unknown, the id only in the title (qa-settings-23).
+  await expect(row.getByTestId("source-picks")).toHaveText("Roadmap notes, Unknown file");
+  await expect(row.getByTestId("source-picks")).toHaveAttribute("title", "Roadmap notes. No name saved for 1DocPastedExample");
   await expect(row).toContainText("FoldersPlanning");
+  // The folder picked through the picker reads by its name, never its Drive id (qa-settings-23).
+  await expect(row.getByTestId("source-folders")).toHaveText("Planning");
+  await expect(row).not.toContainText("1FolderPlanningExample");
   // Saved as {docs, folders, names}: the editor reads it back.
   await row.getByRole("button", { name: "More actions for Planning docs" }).click();
   await row.getByRole("menuitem", { name: "Edit files and folders" }).click();
@@ -221,7 +226,9 @@ test("sources › Google Docs: a connection without drive.readonly asks to recon
   const legacy = page.getByRole("listitem", { name: "Drive folders" });
   await expect(legacy.getByTestId("reconnect-to-choose")).toContainText("Reconnect to choose files");
   await expect(legacy.getByRole("link", { name: "Reconnect" })).toHaveAttribute("href", "/settings/connections");
-  await expect(legacy).toContainText("1FolderProductExample");
+  // The folder by its name, never its Drive id (qa-settings-23).
+  await expect(legacy).toContainText("Product planning");
+  await expect(legacy).not.toContainText("1FolderProductExample");
 
   const form = page.getByRole("form", { name: "Add a source" });
   await form.getByLabel("Kind").selectOption("google_docs");

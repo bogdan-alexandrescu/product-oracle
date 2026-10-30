@@ -79,19 +79,24 @@ export function clearsIn(iso: string | null | undefined, now: number): string {
   return humaniseUntil(t - now);
 }
 
-/** Time SINCE an instant. Never point it at a future instant: that is `clearsIn`. */
+/** "3 hours", "1 day": a count with its unit in words. */
+const units = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+
+/**
+ * Time SINCE an instant, in the screen's one relative style (qa-settings-19): `just now`,
+ * `4 min ago`, `3 hours ago`, `9 days ago`. Never point it at a future instant: that is `clearsIn`.
+ */
 export function timeAgo(when: string | number, now: number = Date.now()): string {
   const t = typeof when === "number" ? when : new Date(when).getTime();
   if (!Number.isFinite(t)) return "at an unknown time";
   const s = Math.max(0, Math.round((now - t) / 1000));
-  if (s < 5) return "just now";
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.round(s / 60)}m ago`;
-  if (s < 48 * 3600) return `${Math.round(s / 3600)}h ago`;
-  return `${Math.round(s / 86400)}d ago`;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 48 * 3600) return `${units(Math.round(s / 3600), "hour")} ago`;
+  return `${units(Math.round(s / 86400), "day")} ago`;
 }
 
-/** An age past a day in days AND hours: `1d 20h ago`, not `44h ago`. */
+/** An age past a day in days AND hours: `1 day 20 hours ago`, not `44 hours ago`. */
 export function agoPastDay(when: string, now: number = Date.now()): string {
   const t = Date.parse(when);
   if (!Number.isFinite(t)) return timeAgo(when, now);
@@ -99,13 +104,13 @@ export function agoPastDay(when: string, now: number = Date.now()): string {
   if (h < 24) return timeAgo(t, now);
   const d = Math.floor(h / 24);
   const r = h % 24;
-  return r === 0 ? `${d}d ago` : `${d}d ${r}h ago`;
+  return r === 0 ? `${units(d, "day")} ago` : `${units(d, "day")} ${units(r, "hour")} ago`;
 }
 
-/** `five_hour` -> `5h`, `seven_day` -> `7d`; any other window by its name. */
+/** `five_hour` -> `5-hour`, `seven_day` -> `7-day`; any other window by its name. */
 export function windowWord(key: string): string {
-  if (key === FIVE_HOUR) return "5h";
-  if (key === SEVEN_DAY) return "7d";
+  if (key === FIVE_HOUR) return "5-hour";
+  if (key === SEVEN_DAY) return "7-day";
   return key.replace(/_/g, "-");
 }
 
@@ -115,7 +120,7 @@ export interface Clears {
   tilde: boolean;
   unmeasured: boolean;
   title: string;
-  /** Which window, in the figures' own words (`5h`), or null with no binding window. */
+  /** Which window, in the figures' own words (`5-hour`), or null with no binding window. */
   win: string | null;
 }
 
@@ -212,14 +217,17 @@ export function defaultAccount(accounts: readonly Account[]): Account | null {
   return used[0] ?? [...accounts].sort(byName)[0] ?? null;
 }
 
-/** `readings 2m–14m old`: the youngest to the oldest reading, rows with none left out. */
+/** `Usage read 2–50 min ago`: the youngest to the oldest reading, rows with none left out. */
 export function readingAges(accounts: Account[], now: number): string | null {
   const ages = accounts
     .map((a) => (a.observed_at === null ? Number.NaN : now - new Date(a.observed_at).getTime()))
     .filter((ms) => Number.isFinite(ms));
   if (ages.length === 0) return null;
-  const span = (ms: number) => timeAgo(now - ms, now).replace(" ago", "");
-  const youngest = span(Math.min(...ages));
-  const oldest = span(Math.max(...ages));
-  return `readings ${youngest === oldest ? youngest : `${youngest}–${oldest}`} old`;
+  const youngest = timeAgo(now - Math.min(...ages), now);
+  const oldest = timeAgo(now - Math.max(...ages), now);
+  if (youngest === oldest) return `Usage read ${oldest}`;
+  // One unit said once: "2–50 min ago"; mixed units each keep theirs.
+  const m = /^(\d+) min ago$/;
+  const [y, o] = [m.exec(youngest), m.exec(oldest)];
+  return `Usage read ${y && o ? `${y[1]}–${o[1]} min ago` : `${youngest.replace(/ ago$/, "")} – ${oldest}`}`;
 }

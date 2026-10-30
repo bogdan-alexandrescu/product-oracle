@@ -84,6 +84,17 @@ export async function signOut(page: Page) {
   await expect(page).toHaveURL(/\/login/);
 }
 
+/**
+ * Picks `zone` ("Asia/Tokyo") in Settings › Company's time zone picker (a combobox,
+ * qa-settings-12): types its city and clicks its option. `scope`: the page or the panel.
+ */
+export async function pickZone(scope: Page | Locator, zone: string) {
+  const box = scope.getByRole("combobox", { name: "Company time zone" });
+  await box.fill(zone.split("/").pop()!.replace(/_/g, " "));
+  await scope.getByRole("listbox", { name: "Time zones" }).locator(`[data-zone="${zone}"]`).click();
+  await expect(box).toHaveAttribute("data-zone", zone);
+}
+
 /** The version view's outline rail (>= 1280 px; one section is open at a time). */
 export function sectionStrip(page: Page): Locator {
   return page.getByTestId("outline-rail").filter({ visible: true });

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -75,8 +76,14 @@ export function expiryText(expiresAt?: string | null): string {
   return `${Date.parse(expiresAt) <= Date.now() ? "Expired" : "Expires"} ${formatDate(expiresAt)}`;
 }
 
-/** A credential's expiry in a table cell; a revoked one's expiry no longer matters. */
+/** A credential's expiry in a table cell; a revoked one's expiry no longer matters, so it reads — (qa-settings-36). */
 export function Expiry({ t }: { t: Pick<ApiToken, "revoked_at" | "expires_at"> }) {
+  if (t.revoked_at)
+    return (
+      <span className="tnum text-text2" title="Revoked: it no longer works, so its expiry does not apply." data-testid="token-expiry">
+        —
+      </span>
+    );
   return (
     <span className={`tnum ${t.revoked_at ? "text-text2" : "text-text"}`} title={t.expires_at ? formatDateTime(t.expires_at) : undefined} data-testid="token-expiry">
       {expiryText(t.expires_at)}
@@ -84,9 +91,16 @@ export function Expiry({ t }: { t: Pick<ApiToken, "revoked_at" | "expires_at"> }
   );
 }
 
-/** Scopes as plain chips ("Read", "Read & write"), wrapping, never cut; a service token's role. */
+/** Scopes as plain chips ("Read", "Read & write"), wrapping, never cut; a service token's role as a chip too. */
 export function Scopes({ scopes, role }: { scopes?: string[] | null; role?: string }) {
-  if (!scopes?.length) return <span className="text-text2">acts as {role}</span>;
+  if (!scopes?.length)
+    return (
+      <span className="flex flex-wrap gap-1" data-testid="token-scopes">
+        <Chip kind="acc" wrap title="A service token has no scopes: it acts with its own role.">
+          {role ? `${role.charAt(0).toUpperCase()}${role.slice(1)} role` : "Its own role"}
+        </Chip>
+      </span>
+    );
   return (
     <span className="flex flex-wrap gap-1" data-testid="token-scopes">
       {scopeChips(scopes).map((c) => (
@@ -106,6 +120,42 @@ export const when = (iso?: string | null, never = "Never") =>
   ) : (
     <span className="whitespace-nowrap text-text2">{never}</span>
   );
+
+/**
+ * Where each kind is made (qa-settings-35): this page lists and revokes, it makes none. As
+ * the API makes them: personal tokens on My account (POST /v1/me/tokens), run tokens by
+ * Oracle for each run segment (runtokens.mint_run_token), MCP clients when a member approves
+ * one (OAuth consent); no API call makes a service token.
+ */
+function WhereTokensComeFrom() {
+  const LINK = "font-medium text-accent underline underline-offset-2";
+  return (
+    <Panel title="Where tokens come from" testId="tokens-made-where" className="mb-4">
+      <ul className="flex flex-col gap-1 px-4 py-3 text-[15px] max-[600px]:px-3">
+        <li>
+          <b>Personal</b>: each member makes their own on{" "}
+          <Link href="/account" className={LINK}>
+            My account › Personal API tokens
+          </Link>
+          .
+        </li>
+        <li>
+          <b>Run</b>: Oracle makes one for each run&apos;s agents; it ends with the run.
+        </li>
+        <li>
+          <b>MCP client</b>: made when a member approves an AI tool&apos;s request to connect to Oracle; they manage it on{" "}
+          <Link href="/account" className={LINK}>
+            My account
+          </Link>
+          .
+        </li>
+        <li>
+          <b>Service</b>: Oracle has no way to make one. Any listed here were made outside the app; revoke the ones nobody uses.
+        </li>
+      </ul>
+    </Panel>
+  );
+}
 
 /** What revoking a credential of each kind does, for the confirm dialog. */
 function revokeConsequences(t: ApiToken): Consequence[] {
@@ -267,6 +317,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
           </>
         }
       />
+      <WhereTokensComeFrom />
       <Split>
         <Panel
           title="Tokens"

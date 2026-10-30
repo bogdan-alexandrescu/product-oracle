@@ -1,6 +1,6 @@
 import { expect, test } from "./test";
 
-import { login } from "./helpers";
+import { login, pickZone } from "./helpers";
 
 /**
  * One Company time zone (owner decision 2026-10-22) and the company's goal horizons (B5
@@ -23,14 +23,16 @@ test("Company time zone: set on Settings › Company, read by the weekly report"
   await step.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company/);
   const zone = page.getByLabel("Company time zone");
-  // Unset: no zone is chosen and the select says Pacific is used, as Home does.
+  // Unset: no zone is chosen and the picker says Pacific is used, as Home does.
   await expect(zone).toHaveValue("");
-  await expect(zone.locator("option:checked")).toHaveText("Not set · Pacific is used");
-  await zone.selectOption("Asia/Tokyo");
+  await expect(zone).toHaveAttribute("placeholder", "Not set · Pacific is used");
+  await pickZone(page, "Asia/Tokyo");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  // Opened from Set up: the way back to Home (qa-onboarding-16).
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved · Back to Home");
   await page.reload();
-  await expect(page.getByLabel("Company time zone")).toHaveValue("Asia/Tokyo");
+  await expect(page.getByLabel("Company time zone")).toHaveAttribute("data-zone", "Asia/Tokyo");
+  await expect(page.getByLabel("Company time zone")).toHaveValue(/\(Tokyo\)/);
 
   await page.goto("/settings/notifications");
   const report = page.getByTestId("report-schedule");

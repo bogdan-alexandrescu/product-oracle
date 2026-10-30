@@ -30,6 +30,8 @@ const GROUPS = ["knowledge", "planning", "documents", "operating", "outside"];
 
 type Prop = { title?: string; type?: string; minimum?: number; maximum?: number; fixed?: boolean; items?: { enum?: string[] } };
 const propsOf = (item: Item) => ((item.limits_schema?.properties ?? {}) as Record<string, Prop>);
+/** Whether Act's limits have anything an owner can change; all fixed, they are shown, not edited (qa-settings-34). */
+const limitsEditable = (item: Item) => !!item.limits_schema && Object.values(propsOf(item)).some((p) => !p.fixed);
 
 /**
  * Settings › Autonomy (H11): how far Oracle goes on its own, per responsibility. Everyone
@@ -50,6 +52,8 @@ export function AutonomySettings() {
         title="Autonomy"
         info={
           <InfoTip label="autonomy" align="start" side="bottom">
+            {/* qa-settings-11: the page's intro in its tip, as on every Settings tab. */}
+            <span className="block">How far Oracle goes on its own. You can change this any time.</span>
             {LEVELS.map((l) => (
               <span key={l.value} className="block">
                 <b>{l.title}:</b> {LEVEL_COPY[l.value]}
@@ -60,7 +64,6 @@ export function AutonomySettings() {
         status={capsReady && !owner && <ViewOnly />}
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
-        <p className="text-[15px] text-text2">How far Oracle goes on its own. You can change this any time.</p>
         {saved && <Notice tone="pass">Saved. Oracle follows this from now on.</Notice>}
         {q.error && <Notice tone="error">{q.error}</Notice>}
         {q.data &&
@@ -143,7 +146,7 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
             <span className="truncate">{item.limits_summary}</span>
           </Chip>
         )}
-        {owner && item.level === "act" && item.limits_schema && (
+        {owner && item.level === "act" && limitsEditable(item) && (
           <Button variant="ghost" onClick={() => onPick("act")}>
             Edit limits
           </Button>
@@ -212,7 +215,7 @@ function ChangeSheet({
   const [why, setWhy] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const editLimits = level === "act" && item.limits_schema;
+  const editLimits = level === "act" && limitsEditable(item);
 
   async function save() {
     setBusy(true);
@@ -236,8 +239,8 @@ function ChangeSheet({
   }
 
   return (
-    <Sheet open title={`Change ${item.title}`} onClose={onClose} testId="autonomy-sheet">
-      <div className="mx-auto flex w-full max-w-[640px] flex-col gap-3 px-4 py-3 text-[15px]">
+    <Sheet open dialog title={`Change ${item.title}`} onClose={onClose} testId="autonomy-sheet">
+      <div className="flex w-full flex-col gap-3 px-4 py-3 text-[15px]">
         <p data-testid="autonomy-from">
           <span className="font-semibold">Now, {TITLE[item.level]}:</span> {item.levels[item.level]}
         </p>

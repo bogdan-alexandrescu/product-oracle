@@ -84,6 +84,8 @@ export function WebhooksSettings() {
         title="Webhooks"
         info={
           <InfoTip label="Webhooks" align="start" side="bottom">
+            {/* qa-settings-11: the page's intro in its tip, as on every Settings tab. */}
+            <span className="block">Tell your other tools when runs, drafts and approvals change.</span>
             Oracle posts each event as signed JSON (Standard Webhooks: webhook-id, webhook-timestamp, webhook-signature). Check the
             signature with the secret and refuse a timestamp more than 5 minutes off; the runbook (docs/ops-webhooks.md) has a verify
             example. Payloads carry ids, states, titles, names and links, never document text.
@@ -97,7 +99,6 @@ export function WebhooksSettings() {
           )
         }
       />
-      <p className="-mt-2 mb-4 text-[15px] text-text2">Tell your other tools when runs, drafts and approvals change.</p>
       <Split
         inspector={
           selected && (

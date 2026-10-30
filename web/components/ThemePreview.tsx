@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useLive } from "@/lib/use-live";
@@ -77,6 +77,44 @@ export function SlidePreview({
   );
 }
 
+/** The width a sample document is laid out at: an A4 page at 96 dpi. */
+const PAGE_WIDTH = 794;
+
+/**
+ * The sample laid out at a page's width and scaled down to fit its box, like a page
+ * thumbnail (qa-settings-30): a narrow box no longer squeezes the text between the page
+ * margins. A box wider than the page shows it at full size. It still scrolls inside.
+ */
+function FittedPage({ html, title, testId, height }: { html: string | undefined; title: string; testId: string; height: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    setWidth(el.clientWidth);
+    const observer = new ResizeObserver(() => setWidth(el.clientWidth));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const scale = width && width < PAGE_WIDTH ? width / PAGE_WIDTH : 1;
+  return (
+    <div ref={box} data-scale={scale.toFixed(3)} className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface`}>
+      <iframe
+        title={title}
+        data-testid={testId}
+        sandbox=""
+        srcDoc={html ?? ""}
+        className="block border-0"
+        style={
+          scale === 1
+            ? { width: "100%", height: "100%" }
+            : { width: PAGE_WIDTH, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }
+        }
+      />
+    </div>
+  );
+}
+
 function PreviewFrame({
   html,
   pending,
@@ -98,13 +136,7 @@ function PreviewFrame({
   return (
     <div className="relative">
       {scale === 1 ? (
-        <iframe
-          title={title}
-          data-testid={testId}
-          sandbox=""
-          srcDoc={html ?? ""}
-          className={`${height} w-full rounded-button border border-line bg-surface`}
-        />
+        <FittedPage html={html} title={title} testId={testId} height={height} />
       ) : (
         <div className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface2`}>
           <iframe

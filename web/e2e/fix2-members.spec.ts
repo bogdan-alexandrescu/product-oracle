@@ -222,7 +222,8 @@ test("qa-onboarding-42: Set up › Invite team › Open, send an invite, see it 
   await expect(inviteRow(page, "new.teammate@example.com")).toBeVisible();
   await backToHome(page);
   await expect(setupRow(page, "invite")).toHaveAttribute("data-done", "true");
-  await expect(setupRow(page, "invite").getByTestId("setup-status")).toHaveText("4 people");
+  // The open invite is said beside the people (qa-onboarding-18: "4 people · 3 invited").
+  await expect(setupRow(page, "invite").getByTestId("setup-status")).toHaveText("4 people · 1 invited");
 });
 
 test("qa-onboarding-43: Set up › Company domains › Open, add and remove a domain, Home follows", async ({ page }) => {
@@ -242,6 +243,8 @@ test("qa-onboarding-43: Set up › Company domains › Open, add and remove a do
   await setupRow(page, "domains").getByTestId("setup-action").click();
   const again = page.getByTestId("company-domains");
   await again.getByRole("button", { name: "Remove acme.dev" }).click();
+  // Removing a domain asks first: it also decides who may sign in (qa-onboarding-10).
+  await page.getByRole("alertdialog", { name: "Remove acme.dev?" }).getByRole("button", { name: "Remove domain" }).click();
   await expect(again.getByRole("listitem", { name: "acme.dev" })).toHaveCount(0);
   await backToHome(page);
   await expect(setupRow(page, "domains").getByTestId("setup-status")).toHaveText("example.com");

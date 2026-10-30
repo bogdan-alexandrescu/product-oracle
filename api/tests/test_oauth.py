@@ -325,6 +325,13 @@ async def test_consent_details_and_deny(client):
     assert detail["client_name"] == "Example Agent"
     assert detail["redirect_host"] == "127.0.0.1:33418"
     assert [s["name"] for s in detail["scopes"]] == ["oracle:read", "oracle:write"]
+    # qa-settings-41: plain words, no jargon (the web mock says the same).
+    assert [s["description"] for s in detail["scopes"]] == [
+        "See what you can see: the baseline, documents, runs and your sources. It also sees "
+        "the names of all Notion pages shared with Product Oracle, even ones not added as "
+        "a source.",
+        "Make the changes you are allowed to: propose, comment, approve and edit.",
+    ]
     assert detail["user_email"] == "admin@example.com"
     assert (detail["user_role"], detail["effective_role"]) == ("commenter", "commenter")
 

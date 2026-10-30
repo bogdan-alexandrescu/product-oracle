@@ -50,16 +50,31 @@ function useLogoUrls(logos: (BrandLogo | null | undefined)[]) {
   return (logo: BrandLogo | null | undefined) => (logo ? urls[logo.sha256] : undefined);
 }
 
-/** The contrast of the accent on white, as the API checks it (WCAG AA, 4.5:1). */
-function ContrastResult({ accent }: { accent: string }) {
+/** Whether the API would refuse the accent: not a hex colour, or too light on white. */
+const accentRefused = (accent: string) => {
   const hex = normalHex(accent);
+  return !!accent.trim() && (!hex || !passesAA(contrastOnWhite(hex)));
+};
+
+/**
+ * The contrast of the accent on white, as the API checks it (WCAG AA, 4.5:1). qa-settings-14:
+ * the one place a refused accent is said; after a Save it is the field's alert.
+ */
+function ContrastResult({ accent, alert }: { accent: string; alert: boolean }) {
+  const hex = normalHex(accent);
+  const role = alert ? "alert" : undefined;
   if (!accent.trim()) return <span className="text-[13px] text-text2">No accent: Oracle&apos;s own</span>;
-  if (!hex) return <span className="text-[13px] text-text2">Not a hex colour</span>;
+  if (!hex)
+    return (
+      <span role={role} className={`text-[13px] ${alert ? "font-semibold text-crit" : "text-text2"}`}>
+        Not a hex colour like #0369a1
+      </span>
+    );
   const ratio = contrastOnWhite(hex);
   const ok = passesAA(ratio);
   return (
-    <span className={`text-[13px] font-semibold ${ok ? "text-pass" : "text-crit"}`}>
-      {ratio.toFixed(2)}:1 · {ok ? "Passes AA" : "Too light"}
+    <span role={ok ? undefined : role} className={`text-[13px] font-semibold ${ok ? "text-pass" : "text-crit"}`}>
+      {ratio.toFixed(2)}:1 · {ok ? "Passes AA" : alert ? "Too light to read on white. Pick a darker one." : "Too light"}
     </span>
   );
 }
@@ -69,7 +84,8 @@ function ContrastResult({ accent }: { accent: string }) {
  * `white` and `black` (and the tokens) onto its own surface and text, so they are inline here.
  */
 const PREVIEW_LIGHT = { background: "#ffffff", color: "#111827", border: "1px solid #d1d9e2" };
-const PREVIEW_DARK = { background: "#111827", color: "#ffffff", border: "1px solid #111827" };
+// qa-settings-16: each framed by an edge that shows on the app's light and dark backgrounds.
+const PREVIEW_DARK = { background: "#111827", color: "#ffffff", border: "1px solid #6b7280" };
 
 /** The live preview: the logo and name on a light header and on a dark slide. */
 function Preview({ name, accent, light, dark }: { name: string; accent: string | null; light?: string; dark?: string }) {
@@ -188,6 +204,8 @@ export function BrandingPanel() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A Save tried with an accent the API refuses: said next to the field, not sent (qa-settings-14).
+  const [accentTried, setAccentTried] = useState(false);
   const form = edit ?? (brand ? formOf(brand) : null);
   const urlOf = useLogoUrls([brand?.logo, brand?.logo_dark]);
 
@@ -195,6 +213,8 @@ export function BrandingPanel() {
     if (!form) return;
     setEdit({ ...form, ...patch });
     setSaved(false);
+    setError(null);
+    if ("accent" in patch) setAccentTried(false);
   };
 
   async function run(action: () => Promise<BrandingOut>, after?: () => void) {
@@ -222,15 +242,23 @@ export function BrandingPanel() {
       () => setFileNames((n) => ({ ...n, [variant]: undefined })),
     );
 
-  const save = () =>
-    form &&
-    run(
+  const save = () => {
+    if (!form) return;
+    if (accentRefused(form.accent)) {
+      setSaved(false);
+      setError(null);
+      setAccentTried(true);
+      return;
+    }
+    return run(
       () => putBranding({ display_name: form.name, accent: form.accent.trim() || null, public_disclaimer: form.disclaimer, oracle_mark: form.mark }),
       () => {
         setEdit(null);
         setSaved(true);
       },
     );
+  };
+  const accentAlert = accentTried && !!form && accentRefused(form.accent);
 
   const light = urlOf(brand?.logo);
   const dark = urlOf(brand?.logo_dark) ?? light;
@@ -306,22 +334,25 @@ export function BrandingPanel() {
                       <span
                         aria-hidden
                         data-testid="accent-swatch"
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line-strong text-[11px] font-semibold text-text2"
+                        // qa-settings-15: "None" in the form's own 13 px, the swatch widening to hold it.
+                        className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong px-1.5 text-[13px] font-semibold text-text2"
                         style={previewAccent ? { background: previewAccent } : undefined}
                       >
                         {previewAccent ? "" : "None"}
                       </span>
                       <input
-                        className={`${INPUT} max-w-40 font-mono`}
+                        className={`${INPUT} max-w-40`}
                         placeholder="e.g. #0369a1"
+                        aria-invalid={accentAlert || undefined}
+                        aria-describedby="accent-contrast"
                         spellCheck={false}
                         value={form.accent}
                         onChange={(e) => set({ accent: e.target.value })}
                       />
                     </span>
                   </Field>
-                  <span data-testid="accent-contrast">
-                    <ContrastResult accent={form.accent} />
+                  <span id="accent-contrast" data-testid="accent-contrast">
+                    <ContrastResult accent={form.accent} alert={accentAlert} />
                   </span>
                 </div>
                 <Field label="Public disclaimer">
