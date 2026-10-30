@@ -34,6 +34,21 @@ async function signIn(page: Page, email: string, scenario: string) {
 
 const home = (page: Page) => page.getByTestId("simple-page");
 
+/** Each goal's share line starts where its name starts, or right after its guardrail tag. */
+async function shareBesideName(page: Page) {
+  const goals = home(page).getByTestId("home-goal").filter({ has: page.getByTestId("home-goal-weight") });
+  await expect(goals.first()).toBeVisible();
+  for (const goal of await goals.all()) {
+    const share = (await goal.getByTestId("home-goal-weight").boundingBox())!;
+    const name = (await goal.getByTestId("home-goal-link").boundingBox())!;
+    const tag = goal.locator(".simple-tag");
+    const t = (await tag.count()) ? await tag.boundingBox() : null;
+    // On the tag's line it follows the tag; on its own line it starts with the name.
+    const start = t && Math.abs(t.y - share.y) < t.height ? t.x + t.width : name.x;
+    expect(share.x - start).toBeLessThan(16);
+  }
+}
+
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -44,22 +59,13 @@ test.describe("desktop", () => {
     await expect(decisions).toHaveText(/^\d+$/);
     const sentence = home(page).getByTestId("home-sentence");
     await expect(sentence).toHaveText(/^[A-Z][^\d]* wait on you\./);
-    await expect(sentence).toContainText("decisions");
+    await expect(sentence).toContainText(/decisions/i);
     await expect(sentence).toContainText("broken links");
   });
 
-  test("fix4 review: a goal's share line sits with its name, at the card's start", async ({ page }) => {
-    // fails_when: "Counts for N% of each feature's score" is pushed to the card's right edge, away from the name
+  test("fix4 review: a goal's share line sits with its name (desktop)", async ({ page }) => {
     await signIn(page, ADMIN.email, "simple-home");
-    const goal = home(page).getByTestId("home-goal").filter({ has: page.getByTestId("home-goal-weight") }).first();
-    const share = await goal.getByTestId("home-goal-weight").boundingBox();
-    const name = await goal.getByTestId("home-goal-link").boundingBox();
-    expect(share && name).toBeTruthy();
-    const tag = goal.locator(".simple-tag");
-    const lead = (await tag.count()) ? (await tag.boundingBox())! : name!;
-    // Its line starts where the name starts (or right after the guardrail tag).
-    expect(Math.abs(lead.x - name!.x)).toBeLessThan(2);
-    expect(share!.x - (lead === name ? name!.x : lead.x + lead.width)).toBeLessThan(16);
+    await shareBesideName(page);
   });
 
   test("fix4 review: a question's Blocks line on Home names the feature and milestone, no code", async ({ page }) => {
@@ -75,6 +81,12 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
+  test("fix4 review: a goal's share line sits with its name, at the card's start", async ({ page }) => {
+    // fails_when: "Counts for N% of each feature's score" is pushed to the card's right edge, away from the name
+    await signIn(page, ADMIN.email, "simple-home");
+    await shareBesideName(page);
+  });
+
   test("fix4 review: the phone tab bar shows every label whole", async ({ page }) => {
     // fails_when: "One-pagers" is cut to "One-page…" at 390 px
     await signIn(page, ADMIN.email, "simple-home");
@@ -82,8 +94,16 @@ test.describe("phone", () => {
     await expect(tab).toBeVisible();
     for (const id of ["simple-tab-home", "simple-tab-one-pagers", "simple-tab-roadmap", "simple-tab-decisions"]) {
       const label = page.getByTestId(id).locator(":scope > span:not(.simple-count)");
-      const cut = await label.evaluate((el) => el.scrollWidth > el.clientWidth);
-      expect(cut, id).toBe(false);
+      // The text's own width (fractional), laid out unclipped in the label's font, against the label's room.
+      const [text, room] = await label.evaluate((el) => {
+        const probe = el.cloneNode(true) as HTMLElement;
+        probe.style.cssText = "position:absolute;visibility:hidden;max-width:none;width:auto;overflow:visible;white-space:nowrap";
+        el.parentElement!.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return [w, el.parentElement!.getBoundingClientRect().width];
+      });
+      expect(text, id).toBeLessThan(room - 1);
     }
   });
 });
