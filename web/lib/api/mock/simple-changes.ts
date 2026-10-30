@@ -31,6 +31,7 @@ import {
   canDecideItem,
   canEditRoadmap,
   closed,
+  companyToday,
   deciderIds,
   draftChanges,
   GOALS,
@@ -884,7 +885,7 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     if (!title || title.length > 200) return json(422, { detail: "after.title: 1 to 200 characters" });
     const where = target.where as { kind?: string; value?: string } | undefined;
     const value = String(where?.value ?? "");
-    const w = simpleWindows(new Date(mockNowMs()).toISOString().slice(0, 10));
+    const w = simpleWindows(companyToday());
     let horizon: SeedItem["horizon"] = "next";
     let goal: string | undefined;
     let quarter: { start: string; end: string } | null = null;

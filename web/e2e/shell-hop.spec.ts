@@ -21,7 +21,7 @@ test("a private Ask thread names its subject once and its reply box says Reply t
   await login(page);
   await page.goto("/priorities");
   await page.getByTestId("hop-strip").click();
-  await expect(panel(page).getByTestId("hop-about")).toHaveText("About: Priority order");
+  await expect(panel(page).getByTestId("hop-about")).toHaveText("New chat about Priority order");
   await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("Why is checkout first?");
   await panel(page).getByRole("button", { name: "Send" }).click();
   const thread = panel(page).getByTestId("discussion-thread");

@@ -15,7 +15,7 @@ import { CHANNEL_LABEL } from "./RequestList";
 type Request = Schemas["RequestOut"];
 
 /**
- * New request (#329): the button on the Requests header and in its empty state. #370: a role
+ * New request (#329): the button on the Requests header (qa-shell-10: the only one). #370: a role
  * that cannot file a request (a viewer) is not shown it. The header's opens at once at
  * ?compose=request (where /requests/new leads); closing it drops that from the address.
  */

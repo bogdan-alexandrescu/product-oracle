@@ -69,6 +69,8 @@ for (const phone of [false, true]) {
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
           await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · 12 items" }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap\?prd=guided-setup$/);
+          // qa-shell-24: a phone's pickers sit behind the Filters button.
+          if (phone) await page.getByTestId("filters-toggle").click();
           await expect(page.getByLabel("PRD")).toHaveValue("guided-setup");
         });
       }
@@ -98,6 +100,7 @@ for (const phone of [false, true]) {
           expect(prd).toMatch(/^\/simple\/roadmap\?prd=[a-z-]+$/);
           await rows.first().click();
           await expect(page).toHaveURL(new RegExp(`${prd.replace("?", "\\?")}$`));
+          if (phone) await page.getByTestId("filters-toggle").click();
           await expect(page.getByLabel("PRD")).toHaveValue(prd.split("=")[1]);
         });
       }

@@ -131,7 +131,7 @@ class SimpleSlice(BaseModel):
 
 
 class SimplePlanSpan(BaseModel):
-    """plan-model: first milestone start to last milestone end, "2 Nov - 12 Feb"."""
+    """plan-model: first milestone start to last milestone end, "Nov 2 - Feb 12"."""
 
     start: dt.date
     end: dt.date

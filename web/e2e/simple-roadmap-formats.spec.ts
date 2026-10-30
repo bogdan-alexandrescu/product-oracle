@@ -143,7 +143,10 @@ for (const [where, use] of [
        */
       test("every format exports as PNG and PDF, branded, with its filters", async ({ page }) => {
         await open(page, "timeline");
-        await page.getByLabel("Goal").selectOption("faster-activation");
+        // qa-shell-24: a phone's pickers sit behind the Filters button.
+        const toggle = page.getByTestId("filters-toggle");
+        if (await toggle.isVisible()) await toggle.click();
+        await page.getByLabel("Goal").and(page.locator("select")).selectOption("faster-activation");
         await expect(page.locator('g[data-testid="bar"][data-item="alert-rules"]')).toHaveCount(0);
         await page.evaluate(() => (window.__poExports = []));
         for (const f of FORMATS) {

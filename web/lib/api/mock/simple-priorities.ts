@@ -10,9 +10,8 @@
  * dependency. `estimate_feature` writes a person's goal value or effort, which the score uses.
  */
 import type { Schemas } from "@/lib/api/client";
-import { mockNowMs } from "./clock";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { closed, companyToday, roadmapOut, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 
 type Row = Schemas["SimplePriorityRow"];
@@ -213,7 +212,7 @@ export function prioritiesOut(
   decides: (itemId: string) => boolean,
   lineKey: string | null = null,
 ): Schemas["SimplePrioritiesOut"] {
-  const today = new Date(mockNowMs()).toISOString().slice(0, 10);
+  const today = companyToday();
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
   const lines = linesOf(read);
   const line = pickLine(lineKey, lines);
@@ -343,7 +342,7 @@ export function prioritiesOut(
     yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
   }
   return {
-    // The plan-model lane: with a plan, its span ("2 Nov - 12 Feb"), else the calendar quarter.
+    // The plan-model lane: with a plan, its span ("Nov 2 - Feb 12"), else the calendar quarter.
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,

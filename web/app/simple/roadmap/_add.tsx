@@ -177,7 +177,9 @@ export function QuickAdd({
         id="quick-add-title"
         value={title}
         maxLength={200}
-        placeholder="Type a title, then drag it onto a quarter, a column or a goal"
+        // qa-shell-24: a placeholder that fits the box's narrowest width; the full words in its title.
+        placeholder="Type a title, then drag it"
+        title="Type a title, then drag it onto a quarter, a column or a goal"
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
           if (e.key !== "Enter" || !title.trim()) return;

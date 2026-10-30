@@ -18,6 +18,7 @@ export default function NotFound() {
     <NotFoundPanel
       title="Page not found"
       testId="not-found"
+      home={false}
       actions={
         <>
           <LinkButton href="/" variant="primary" icon="home">

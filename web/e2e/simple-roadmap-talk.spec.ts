@@ -122,7 +122,7 @@ for (const [phone, dark] of [
       await say(talk, "What is it for?");
       const answer = last(talk);
       await expect(answer).toHaveAttribute("data-kind", "answer");
-      await expect(answer.getByTestId("chat-message-body")).toContainText("Adaptive pacing runs 16 Nov – 27 Nov");
+      await expect(answer.getByTestId("chat-message-body")).toContainText("Adaptive pacing runs Nov 16 – Nov 27");
       // The source is the Ask chat's link line (pick C: "From the PRD · …" in accent ink with its icon).
       await expect(answer.getByTestId("answer-source")).toHaveText("From the PRD · F-16 Adaptive pacing");
       await expect(talk.getByTestId("chat-card")).toHaveCount(0);
@@ -163,7 +163,7 @@ for (const [phone, dark] of [
 
     /**
      * Card roadmap-talk-move: protects = "move it two weeks later" in the item's talk is
-     * restated ("I understood: move F-16 Adaptive pacing two weeks later, to 30 Nov – 11 Dec,
+     * restated ("I understood: move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11,
      * 2026.") with one card showing Before → After and its red reason; Apply applies it, the
      * item's bar flashes on the timeline and the card's dates change; fails_when = no
      * restatement, no Before/After, Apply does not change the dates or the bar does not
@@ -173,10 +173,10 @@ for (const [phone, dark] of [
       await signIn(page, EMAILS.owner, "/simple/roadmap");
       const { card: floating, talk } = await openTalk(page, "adaptive-pacing", phone);
       await say(talk, "move it two weeks later");
-      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move F-16 Adaptive pacing two weeks later, to 30 Nov – 11 Dec.");
+      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11.");
       const c = talk.getByTestId("chat-card");
       await expect(c).toHaveCount(1);
-      await expect(c.getByTestId("chat-card-summary")).toHaveText("Move F-16 Adaptive pacing two weeks later, to 30 Nov – 11 Dec");
+      await expect(c.getByTestId("chat-card-summary")).toHaveText("Move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11");
       // qa-simple-roadmap-26: the card's own Before/After reads month-first, like the rest of the app.
       await expect(c.getByTestId("chat-card-change")).toHaveText("Before: Nov 16 – Nov 27 → After: Nov 30 – Dec 11");
       await expect(c.getByTestId("chat-card-flag").first()).toContainText("M1 Launch prep");
@@ -209,8 +209,8 @@ for (const [phone, dark] of [
       await expect(panel.getByRole("button", { name: "Apply all" })).toBeVisible();
       const move = card(panel, "Reliability work");
       const add = card(panel, "Add Dashboard");
-      await expect(move.getByTestId("chat-card-summary")).toHaveText("Move F-18 Reliability work after Sign-up work, to 11 Nov – 1 Dec");
-      await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, 5 Dec – 18 Dec");
+      await expect(move.getByTestId("chat-card-summary")).toHaveText("Move F-18 Reliability work after Sign-up work, to Nov 11 – Dec 1");
+      await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, Dec 5 – Dec 18");
 
       await tap(add.getByRole("button", { name: "Correct" }));
       const fields = add.getByTestId("chat-card-correct");
@@ -222,7 +222,7 @@ for (const [phone, dark] of [
       await fields.getByLabel("Start").fill("2026-12-07");
       await fields.getByLabel("End").fill("2026-12-16");
       await tap(add.getByRole("button", { name: "Apply" }));
-      await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, 7 Dec – 16 Dec");
+      await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, Dec 7 – Dec 16");
       await expect(add).toHaveAttribute("data-status", "applied");
 
       await tap(move.getByRole("button", { name: "Reject" }));
@@ -249,7 +249,7 @@ for (const [phone, dark] of [
       await fields.getByLabel("End").fill("2026-12-16");
       await tap(c.getByRole("button", { name: "Apply" }));
       await expect(c).toHaveAttribute("data-status", "applied");
-      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move F-16 Adaptive pacing to 7 Dec – 16 Dec.");
+      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move F-16 Adaptive pacing to Dec 7 – Dec 16.");
       await expect(bar(page, "adaptive-pacing")).toHaveAttribute("data-start", "2026-12-07");
     });
 

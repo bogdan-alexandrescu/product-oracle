@@ -11,6 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
+import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
 import { flowFor, type VisualsDb } from "./simple-visuals";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
@@ -211,7 +212,8 @@ const METRICS: Record<string, string> = { "grow-retention": "Teams active after 
 const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
-export const ROADMAP_SLUGS = (): string[] => Object.keys(ROADMAPS);
+// A new company has no roadmap yet (qa-shell-8: oracle.simple.service reads none).
+export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
 /** Whether a commenter or viewer reads the roadmap (oracle.docs.visibility). */
 export const readsRoadmap = (slug: string, role: Role): boolean => !(role === "commenter" || role === "viewer") || ROADMAPS[slug]?.visibility === "company";
 /** The roadmap a slug or id names, when the role reads it. */
@@ -239,6 +241,8 @@ const DAY = 86_400_000;
 const iso = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 const ms = (day: string): number => Date.parse(`${day}T00:00:00Z`);
 const addDays = (day: string, n: number): string => iso(ms(day) + n * DAY);
+/** Today: the company's day (its time zone), as oracle.company_time.company_today (qa-shell-6). */
+export const companyToday = (): string => companyDayIso(new Date(mockNowMs()));
 const span = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY) + 1;
 const word = (day: string): string => new Date(ms(day)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
@@ -289,7 +293,7 @@ export function seedSimpleRoadmap(): SimpleDb {
 
 /** Roadmap-plus: invented key dates, days from this quarter's start on the mock's clock. */
 export function seedKeyDates(): Record<string, MockKeyDate[]> {
-  const q = simpleWindows(iso(mockNowMs())).now[0];
+  const q = simpleWindows(companyToday()).now[0];
   return {
     "alerts-roadmap": [{ id: stableUuid("simple-key-date/conference"), name: "Customer conference", date: addDays(q, 44), note: "Keynote slot for alerts" }],
     "onboarding-roadmap": [{ id: stableUuid("simple-key-date/board"), name: "Board meeting", date: addDays(q, 75), note: null }],
@@ -305,7 +309,7 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
   if (own) return { start: own.start, end: own.end };
   const s = db.items.find((x) => x.key === key)!;
   if (s.source !== "typed" && s.source !== "accepted") return { start: null, end: null };
-  const w = simpleWindows(iso(mockNowMs()))[s.horizon];
+  const w = simpleWindows(companyToday())[s.horizon];
   return { start: s.start !== undefined ? addDays(w[0], s.start) : null, end: s.end !== undefined ? addDays(w[0], s.end) : null };
 }
 
@@ -337,7 +341,7 @@ export function seedSimpleMany(n = 500): SimpleDb {
 export function ownDates(db: SimpleDb, s: SeedItem): SimpleDb["own"][string] | undefined {
   if (db.own[s.key]) return db.own[s.key];
   if ((s.source !== "typed" && s.source !== "accepted") || s.start === undefined || s.end === undefined) return undefined;
-  const w = simpleWindows(iso(mockNowMs()))[s.horizon];
+  const w = simpleWindows(companyToday())[s.horizon];
   return { start: addDays(w[0], s.start), end: addDays(w[0], s.end), source: s.source };
 }
 
@@ -631,7 +635,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   };
   const reader = { ...(me ? readerView(db, me) : { db, hidden: 0, visible: [] }), full: db };
   db = reader.db;
-  const today = iso(mockNowMs());
+  const today = companyToday();
   const w = simpleWindows(today);
   const group = (q.get("group") ?? "goal") as Schemas["SimpleRoadmapOut"]["group"];
   if (!["goal", "track", "prd"].includes(group)) return null;
@@ -834,7 +838,7 @@ export function settleDrafting(db: SimpleDb): void {
 export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "roadmap") return null;
   const m = req.method;
-  const today = iso(mockNowMs());
+  const today = companyToday();
   if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
   settleDrafting(db);
   if (!p[3] && m === "GET") {

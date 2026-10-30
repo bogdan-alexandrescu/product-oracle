@@ -173,7 +173,13 @@ const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_
 /** Home's narrower lines: one action each. */
 export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
   c.key === "kind"
-    ? { ...c, width: "150px" }
+    ? {
+        ...c,
+        width: "150px",
+        // qa-shell-23: on a phone the last line's "More" comes before its "+N more in Inbox", as on a desktop.
+        className: `${c.className ?? ""} max-[600px]:has-[[data-needs-more]]:order-0`,
+        cell: (n) => (n.key === "more" ? <span data-needs-more className="contents">{c.cell(n)}</span> : c.cell(n)),
+      }
     : c.key === "item"
       ? { ...c, wrap: true, className: `${c.className ?? ""} ${WRAP_TWO}` }
       : c.key === "context"

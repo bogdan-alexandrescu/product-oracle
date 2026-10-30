@@ -88,16 +88,20 @@ test("qa-simple-home-2: the phone's More sheet closes on Escape, a tap outside a
   await expect(more).toBeFocused();
   await expect(more).toHaveAttribute("aria-expanded", "false");
 
+  // qa-shell-17: the sheet has Detailed's backdrop: a tap on it (over the page, the header's Ask) closes it.
   await more.click();
   await expect(sheet).toBeVisible();
-  await page.getByTestId("phone-title").click();
+  const title = (await page.getByTestId("phone-title").boundingBox())!;
+  await page.mouse.click(title.x + title.width / 2, title.y + title.height / 2);
   await expect(sheet).toBeHidden();
 
   await more.click();
   await expect(sheet).toBeVisible();
+  const ask = (await page.getByTestId("phone-ask").boundingBox())!;
+  await page.mouse.click(ask.x + ask.width / 2, ask.y + ask.height / 2);
+  await expect(sheet).toBeHidden();
   await page.getByTestId("phone-ask").click();
   await expect(page.getByTestId("phone-ask-sheet")).toBeVisible();
-  await expect(sheet).toBeHidden();
 });
 
 test("qa-simple-home-29: the phone's tabs and More sheet show the rail's counts", async ({ page }) => {
@@ -185,8 +189,11 @@ test("qa-simple-home-31: the rail's, the More sheet's and the account menu's swi
   await page.getByTestId("simple-tab-more").click();
   const sheet = page.getByTestId("mode-switch-sheet");
   await expect(sheet).toBeVisible();
-  expect(await look(sheet.locator('[aria-checked="true"]'))).toBe(railOn);
-  expect(await look(sheet.locator('[aria-checked="false"]'))).toBe(railOff);
+  // qa-shell-17: the shared phone sheet gives every button its 44 px touch target; the rest is the rail's.
+  const butHeight = (look: string) => look.split(" | ").filter((_, i) => i !== 6).join(" | ");
+  expect(butHeight(await look(sheet.locator('[aria-checked="true"]')))).toBe(butHeight(railOn));
+  expect(butHeight(await look(sheet.locator('[aria-checked="false"]')))).toBe(butHeight(railOff));
+  expect(await sheet.locator('[aria-checked="true"]').evaluate((el) => getComputedStyle(el).height)).toBe("44px");
   expect(await track(sheet)).toBe(railTrack);
 });
 

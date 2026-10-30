@@ -38817,7 +38817,7 @@ export interface components {
         };
         /**
          * SimplePlanSpan
-         * @description plan-model: first milestone start to last milestone end, "2 Nov - 12 Feb".
+         * @description plan-model: first milestone start to last milestone end, "Nov 2 - Feb 12".
          */
         SimplePlanSpan: {
             /**

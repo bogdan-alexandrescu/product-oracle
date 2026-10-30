@@ -221,14 +221,13 @@ export function RunDetail({ id }: { id: string }) {
     </Link>
   );
 
-  // qa-shell-8: a missing run in the app's one not-found pattern.
+  // qa-shell-8: a missing run in the app's one not-found pattern; one way back (qa-shell-11).
   if (!run && q.error === RUN_MISSING) {
     return (
       <NotFoundPanel
         title="Run not found"
         icon="search"
         testId="run-not-found"
-        back={back}
         actions={
           <LinkButton href="/runs" variant="primary" icon="back">
             Back to Runs

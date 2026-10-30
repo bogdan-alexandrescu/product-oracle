@@ -56,8 +56,8 @@ test.describe("desktop", () => {
     await expect(part.getByTestId("part-risks")).toContainText("Likelihood: Medium · Impact: Medium");
     await expect(part.getByTestId("part-risks")).toContainText("Likelihood: Low · Impact: High");
     // The same day in the same words, in the timeline and in the card.
-    await expect(tl.getByTestId("timeline-decision").filter({ hasText: "Q8" })).toContainText("at the M1 review, 27 Nov");
-    await expect(part.getByTestId("part-decisions").getByRole("listitem").filter({ hasText: "Q8" })).toContainText("at the M1 review, 27 Nov");
+    await expect(tl.getByTestId("timeline-decision").filter({ hasText: "Q8" })).toContainText("at the M1 review, Nov 27");
+    await expect(part.getByTestId("part-decisions").getByRole("listitem").filter({ hasText: "Q8" })).toContainText("at the M1 review, Nov 27");
     await expect(part).not.toContainText("M1 exit");
   });
 
@@ -71,7 +71,7 @@ test.describe("desktop", () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
     await expect(part.getByRole("heading", { level: 2 })).toBeInViewport();
     await page.evaluate(() => window.scrollTo(0, 0));
-    await tl.getByRole("button", { name: "M3 ends 12 Feb" }).click();
+    await tl.getByRole("button", { name: "M3 ends Feb 12" }).click();
     await expect(part.getByRole("heading", { level: 2 })).toHaveText("M3 Open to all");
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
     await expect(part.getByRole("heading", { level: 2 })).toBeInViewport();
@@ -104,7 +104,7 @@ test.describe("desktop", () => {
   test("labels in the strip sit on the card's paper, off the lines (qa-30)", async ({ page }) => {
     await open(page);
     const tl = page.getByRole("region", { name: "Timeline" });
-    const flag = tl.getByRole("button", { name: "M3 ends 12 Feb" });
+    const flag = tl.getByRole("button", { name: "M3 ends Feb 12" });
     await expect(flag).toBeVisible();
     expect(await flag.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
     // The Today pill and the month names do not touch.
@@ -153,7 +153,7 @@ test.describe("phone", () => {
     await open(page);
     const tl = page.getByRole("region", { name: "Timeline" });
     const m1 = tl.getByTestId("timeline-step").first();
-    await expect(m1).toContainText("to 27 Nov · 4 weeks · 16 engineer-weeks");
+    await expect(m1).toContainText("to Nov 27 · 4 weeks · 16 engineer-weeks");
     await expect(m1.getByTestId("part-done-when")).toHaveCount(0);
     await expect(m1).not.toContainText("Ten pilot teams finish setup in a day");
     await expect(page.getByText("Ten pilot teams finish setup in a day")).toHaveCount(1);

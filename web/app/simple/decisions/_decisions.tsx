@@ -102,8 +102,20 @@ export function SimpleDecisions() {
         <>
           {d.meetings.length === 0 && other.length === 0 && (
             <SimpleEmpty testId="decisions-empty">
-              No decision matches.{" "}
-              {filtered && <ClearFilters onClear={clear} />}
+              {/* qa-shell-9: "matches" only when a filter is set; with none, what comes next. */}
+              {filtered ? (
+                <>
+                  No decision matches. <ClearFilters onClear={clear} />
+                </>
+              ) : (
+                <>
+                  No decisions yet. They are taken in{" "}
+                  <Link href="/simple/meetings" className="font-[650] text-accent-ink hover:underline">
+                    Meetings
+                  </Link>{" "}
+                  and on a PRD&apos;s open questions, then listed here.
+                </>
+              )}
             </SimpleEmpty>
           )}
           {d.meetings.map((g) => (

@@ -16,7 +16,7 @@ Test cards (protects / fails_when / no_claim):
   no_claim=dates the PRD gives a slice itself.
 - test_weeks_per_goal_and_span_label: protects=engineer-weeks per goal per milestone count
   each slice once under its feature's first goal, planned vs capacity per milestone, and
-  the span's label "2 Nov - 12 Feb"; fails_when=a feature is counted twice or under its
+  the span's label "Nov 2 - Feb 12"; fails_when=a feature is counted twice or under its
   second goal; no_claim=the web's charts.
 - test_undated_milestones_say_so: protects=a milestones table with no dates gives an
   undated plan that says so plainly; fails_when=dates are invented; no_claim=the job.
@@ -105,7 +105,7 @@ def test_weeks_per_goal_and_span_label():
     planned = {m.code: (m.planned_weeks, m.effort_weeks) for m in view.milestones}
     assert planned == {"M1": (7.0, 8.0), "M2": (3.0, 8.0), "M3": (4.0, 12.0)}
     assert view.milestones[0].feature_codes == ["F-01", "F-02", "F-03"]
-    assert view.span is not None and view.span.label == "2 Nov - 12 Feb"
+    assert view.span is not None and view.span.label == "Nov 2 - Feb 12"
     assert (view.span.start, view.span.end) == (date(2026, 11, 2), date(2027, 2, 12))
     assert view.dated is True and view.message is None
     goals = {g.name: g.targets for g in view.goals}

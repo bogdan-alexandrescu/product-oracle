@@ -13,6 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { calendarDay } from "@/lib/dates";
 import type { AcceptDateOut, InboxTrack, TrackAlertAction, TrackAlertOut, TrackerRecordEventOut } from "@/lib/api/track-alerts";
 
+import { companyDayIso } from "./connections";
 import { mockUuid, seeded, stableUuid } from "./ids";
 import type { PlanEditItem, PlanEditsDb } from "./plan-edits";
 import { diffItems, snapshot } from "./roadmap-diff";
@@ -119,7 +120,8 @@ export const PLAN_STALE_SCENARIO = "plan-stale";
 export const APPROVED_PLAN_SCENARIO = "approved-plan";
 
 const now = () => new Date().toISOString();
-const today = () => now().slice(0, 10);
+// The company's day (its time zone), as oracle.company_time.company_today (qa-shell-6).
+const today = () => companyDayIso(new Date());
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }

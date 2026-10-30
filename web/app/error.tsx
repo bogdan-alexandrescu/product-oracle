@@ -18,6 +18,7 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
       title="Something went wrong"
       icon="alert"
       testId="app-error"
+      home={false}
       actions={
         <>
           <Button variant="primary" onClick={reset}>

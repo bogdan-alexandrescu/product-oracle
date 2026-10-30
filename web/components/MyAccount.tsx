@@ -294,6 +294,8 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
   return (
     <Panel title="Password" testId="password-panel">
       <form onSubmit={submit} aria-label="Change password" className="grid grid-cols-3 items-end gap-3 p-4 max-[900px]:grid-cols-1">
+        {/* qa-shell-29: whose password this is, for a password manager to save it under. */}
+        <input type="email" name="username" autoComplete="username" value={account.email} readOnly hidden data-testid="password-username" />
         <Field label="Current password">
           <input type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} className={INPUT} />
         </Field>

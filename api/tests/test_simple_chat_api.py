@@ -346,7 +346,7 @@ async def test_questions_are_answered_from_oracle_data(client):
     assert owns["kind"] == decides["kind"] == when["kind"] == "answer"
     assert "Approver" in owns["body"] or "approver" in owns["body"]
     assert "Dee Cider" in decides["body"]
-    assert "20 Nov" in when["body"] and "20 Dec 2026" in when["body"]
+    assert "Nov 20" in when["body"] and "Dec 20, 2026" in when["body"]
     assert owns["cards"] == decides["cards"] == when["cards"] == []
 
 

@@ -115,7 +115,8 @@ export default function InboxPage() {
         />
       )}
       {asked.sheet}
-      {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit={perms.can("update_source")} />}
+      {/* qa-shell-19: only someone who can edit a source is asked to fix one. */}
+      {sourcesQ.data && perms.can("update_source") && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit />}
     </Page>
   );
 }
@@ -265,6 +266,9 @@ function InboxTabs({
                     Seen
                   </button>{" "}
                 </>
+              ) : count("staged") + count("declined") + count("done") === 0 ? (
+                // qa-shell-9: an empty Inbox says what will arrive, not only that nothing is here.
+                <>Nothing needs you yet. Decisions, approvals and questions for you will show up here. </>
               ) : (
                 <>Nothing new </>
               )

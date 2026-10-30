@@ -27,10 +27,10 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await login(page);
   await openRequests(page);
 
-  // The first request, from the empty state.
+  // The first request, from the header's New request (qa-shell-10: the empty state has none).
   const empty = page.getByTestId("requests-empty");
-  await expect(empty).toContainText("Nothing yet");
-  await empty.getByRole("button", { name: "New request" }).click();
+  await expect(empty).toContainText("No requests yet");
+  await page.getByTestId("requests-actions").getByRole("button", { name: "New request" }).click();
   const dialog = page.getByRole("dialog", { name: "New request" });
   await expect(dialog).toContainText("No goals yet");
   await dialog.getByLabel("Title").fill(TITLE);

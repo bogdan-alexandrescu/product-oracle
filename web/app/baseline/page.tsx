@@ -380,9 +380,15 @@ export default function BaselinePage() {
         .filter((e) => e.status !== "rejected")
         .reduce((n, e) => n + (e.evidence_count ?? 0), 0)
     : undefined;
+  // qa-shell-30: a count of nothing reads "No goals yet", never "0/0".
+  const none = (text: string) => <span className="font-sans text-[15px] font-semibold tracking-normal text-text2">{text}</span>;
   const kpis: Kpi[] = [
-    { label: "Goals confirmed", value: s?.confirmed_goals ?? "–", of: s?.goals, testId: "kpi-goals" },
-    { label: "Features traced", value: traced ?? "–", of: s?.features, testId: "kpi-traced" },
+    s?.goals === 0
+      ? { label: "Goals", value: none("No goals yet"), testId: "kpi-goals" }
+      : { label: "Goals confirmed", value: s?.confirmed_goals ?? "–", of: s?.goals, testId: "kpi-goals" },
+    s?.features === 0
+      ? { label: "Features", value: none("No features yet"), testId: "kpi-traced" }
+      : { label: "Features traced", value: traced ?? "–", of: s?.features, testId: "kpi-traced" },
     { label: "Evidence items", value: evidence ?? "–", testId: "kpi-evidence" },
     {
       label: "Weak evidence",
@@ -448,7 +454,7 @@ export default function BaselinePage() {
           <>
             {/* On a phone the Counts strip right below says it ("Goals confirmed"): the chip
                 would stand on a line by itself above the actions (qa-plan-50). */}
-            {s && (
+            {s && s.goals > 0 && (
               <span className="inline-flex max-[600px]:hidden">
                 <Chip kind="pass" data-testid="confirmed-chip">
                   {s.confirmed_goals} confirmed

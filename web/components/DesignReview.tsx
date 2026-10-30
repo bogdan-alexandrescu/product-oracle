@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { Button, Chip, Icon, Inspector, InspectorSection, LinkButton, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
+import { Button, Chip, Icon, Inspector, InspectorSection, LinkButton, NotFoundPanel, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
 import { FRESHNESS } from "@/components/tech-brief";
 import { ErrorNote } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -106,6 +106,9 @@ function reasonText(reason: string, w: PrdWords): string {
   return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
+/** A design version that is not there, said without its id (the API's 404 names it). */
+const DESIGN_MISSING = "This design doesn't exist or was deleted.";
+
 /**
  * v2 screen 4: one flow or wireframe version of a spec (picks.md 4: A's canvas + review
  * inspector, C's "no comments" filter, B's side by side for 2-4 wireframe screens). Every
@@ -119,7 +122,9 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
     unwrap(api.GET("/v1/spec-requests/{request_id}", { params: { path: { request_id: specId } } })),
   );
   const designQ = useQuery(`design-artifact|${versionId}`, () =>
-    unwrap(api.GET("/v1/design-artifacts/{version_id}", { params: { path: { version_id: versionId } } })),
+    unwrap(api.GET("/v1/design-artifacts/{version_id}", { params: { path: { version_id: versionId } } })).catch((e) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, DESIGN_MISSING) : e;
+    }),
   );
   const words = usePrdWords(specQ.data, designQ.data);
   const [picked, setPicked] = useState<string | null>(null);
@@ -127,6 +132,26 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const error = designQ.error ?? specQ.error;
+  // qa-shell-7: an old link to a design version, in the app's one not-found pattern.
+  if (designQ.error === DESIGN_MISSING) {
+    const back = specQ.data ? briefHref(specQ.data) : null;
+    return (
+      <NotFoundPanel
+        title="Design not found"
+        icon="search"
+        testId="design-not-found"
+        actions={
+          back && (
+            <LinkButton href={back} variant="primary" icon="back" className="h-10">
+              Back to the tech brief
+            </LinkButton>
+          )
+        }
+      >
+        <p>{DESIGN_MISSING}</p>
+      </NotFoundPanel>
+    );
+  }
   if (error) {
     const back = specQ.data ? briefHref(specQ.data) : null;
     return (

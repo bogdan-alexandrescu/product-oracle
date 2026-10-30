@@ -582,7 +582,7 @@ export default function SimpleHome() {
         <Block q={roadmap} testId="home-plan">
           {(r) => (
             <>
-              {/* The plan's span, when the PRD's plan dates it ("2 Nov - 12 Feb"). */}
+              {/* The plan's span, when the PRD's plan dates it ("Nov 2 - Feb 12"). */}
               {r.span && (
                 <p className="simple-small" data-testid="home-plan-span">
                   {r.span.label}

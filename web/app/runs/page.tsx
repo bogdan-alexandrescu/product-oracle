@@ -214,7 +214,11 @@ export default function RunsPage() {
         >
           {q.data && runs.length === 0 ? (
             <Empty>
-              No runs yet{" "}
+              <span data-testid="runs-empty">
+                No runs yet.{" "}
+                {/* qa-shell-9: the next step, only for someone who can take it. */}
+                {can("create_run", true) ? "Start one with New run." : "They appear here once someone starts one."}
+              </span>{" "}
               <InfoTip label="runs" align="start">
                 Runs turn the baseline into a PRD draft: each one plans the work, gathers evidence from your sources and
                 writes a cited draft for review.

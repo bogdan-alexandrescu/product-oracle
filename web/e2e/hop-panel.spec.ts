@@ -82,12 +82,12 @@ test("the panel is about the open section, or General", async ({ page }) => {
   await page.goto(DOC);
   await openSection(page, "problem");
   await strip(page).click();
-  await expect(panel(page).getByTestId("hop-about")).toHaveText(/^About: Checkout redesign PRD · .*Problem$/);
+  await expect(panel(page).getByTestId("hop-about")).toHaveText(/^New chat about Checkout redesign PRD · .*Problem$/);
   await expect(panel(page).getByRole("textbox", { name: "Ask Oracle" })).toHaveAttribute("placeholder", /^Ask about Checkout redesign PRD · .*Problem…$/);
   await expect(panel(page).getByTestId("hop-visibility")).toHaveText(/Just you and Oracle/);
-  await expect(panel(page).getByTestId("hop-empty")).toHaveText("Ask why something is ranked, what to cut, or what is missing.");
+  await expect(panel(page).getByTestId("hop-empty")).toHaveText("Nothing yetAsk why something is ranked, what to cut, or what is missing.");
   await panel(page).getByRole("button", { name: "General" }).click();
-  await expect(panel(page).getByTestId("hop-about")).toHaveText("About: General");
+  await expect(panel(page).getByTestId("hop-about")).toHaveText("New chat about General");
   await panel(page).getByRole("button", { name: "This page" }).click();
   await expect(panel(page).getByTestId("hop-about")).toHaveText(/Problem$/);
 });
@@ -97,10 +97,10 @@ test("the diff and publish pages are about their document, and a chat started th
   await login(page);
   await page.goto(`${DOC_HOME}/diff`);
   await strip(page).click();
-  await expect(panel(page).getByTestId("hop-about")).toHaveText("About: Checkout redesign PRD");
+  await expect(panel(page).getByTestId("hop-about")).toHaveText("New chat about Checkout redesign PRD");
   // The panel stays open (remembered) on the publish page.
   await page.goto(`${DOC_HOME}/publish`);
-  await expect(panel(page).getByTestId("hop-about")).toHaveText("About: Checkout redesign PRD");
+  await expect(panel(page).getByTestId("hop-about")).toHaveText("New chat about Checkout redesign PRD");
   await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("What is left before we publish?");
   await panel(page).getByRole("button", { name: "Send" }).click();
   await expect(panel(page).getByTestId("discussion-thread")).toBeVisible();
@@ -205,9 +205,10 @@ test("a panel chat is private, Oracle's reply streams in, and Share as discussio
   await expect(shared.getByTestId("discussion-visibility")).toHaveText("Open");
   await expect(shared.getByTestId("discussion-message").first()).toContainText("Name the drop-off measure before we ship.");
 
-  // The chat itself is still private, under Recent.
+  // The chat itself is still private, under Recent chats.
   await panel(page).getByRole("button", { name: "New chat" }).click();
-  const recent = panel(page).getByRole("region", { name: "Recent" });
+  await panel(page).getByRole("button", { name: "Recent chats" }).click();
+  const recent = panel(page).getByRole("region", { name: "Recent chats" });
   await recent.getByTestId("hop-chat-row").first().click();
   await expect(panel(page).getByTestId("discussion-visibility")).toHaveText("Private");
 });

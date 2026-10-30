@@ -17,7 +17,6 @@ import {
   DataTable,
   InfoTip,
   Inspector,
-  InspectorRow,
   InspectorSection,
   Notice,
   PageHeader,
@@ -42,6 +41,8 @@ const INVITE_FORM = "invite-form";
 /** A3: the engineering lead is a flag any commenter or above carries, not a fifth role. */
 const LEAD_TIP =
   "Engineering lead: decides both engineering stops (the check after the feature set and the dates after the PRD draft) and verifies dates. Any commenter or above can carry it.";
+/** The Roles list's line for the engineering lead, as each role has one (qa-shell-27). */
+const LEAD_CAN = "Decides both engineering stops and verifies dates. Any commenter or above can carry it.";
 const VIEWER_NOT_LEAD = "Viewers can't be the engineering lead";
 const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50";
 /** Room for the longest role ("Commenter") with the select's arrow: never cut mid-word. */
@@ -104,6 +105,19 @@ function subscribeHash(onChange: () => void) {
   return () => window.removeEventListener("hashchange", onChange);
 }
 
+/** An email that wraps at its @ when the line is short ("commenter" / "@example.com"), never mid-word. */
+function EmailWords({ email }: { email: string }) {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return <>{email}</>;
+  return (
+    <>
+      <span data-email-part>{email.slice(0, at)}</span>
+      <wbr />
+      <span data-email-part>{email.slice(at)}</span>
+    </>
+  );
+}
+
 /** Settings > Members: the people of this company's Oracle, their roles and status, and invites. */
 export function MembersSettings() {
   const { me, loading, can, capsReady, capsError } = useMe();
@@ -146,10 +160,10 @@ function RoleNote() {
 }
 
 /** The four roles and the engineering lead flag, what each can do in words, and how many active people hold each. */
-function RolesSection({ members }: { members?: Member[] }) {
+function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?: string | null }) {
   const leads = members?.filter((m) => m.engineering_lead && m.status !== "disabled").length;
   return (
-    <InspectorSection label="Roles">
+    <InspectorSection label={label ?? undefined}>
       {ROLES.map((r) => (
         <div key={r.role} data-testid={`role-${r.role}`} className="flex items-start gap-2.5 py-1">
           <span className="min-w-0 flex-1">
@@ -163,23 +177,23 @@ function RolesSection({ members }: { members?: Member[] }) {
           )}
         </div>
       ))}
-      <div data-testid="roles-engineering-lead">
-        <InspectorRow
-          value={
-            leads != null ? (
-              <span className="tnum" data-testid="engineering-lead-count">
-                {leads}
-              </span>
-            ) : undefined
-          }
-        >
+      <div data-testid="roles-engineering-lead" className="flex items-start gap-2.5 py-1">
+        <span className="min-w-0 flex-1">
           <span className="inline-flex items-center gap-1.5">
-            Engineering lead
+            <span className="font-semibold">Engineering lead</span>
             <InfoTip label="the engineering lead" align="start">
               {LEAD_TIP}
             </InfoTip>
           </span>
-        </InspectorRow>
+          <span data-testid="role-can" className="block text-[13px] leading-5 break-words text-text2">
+            {LEAD_CAN}
+          </span>
+        </span>
+        {leads != null && (
+          <span className="tnum flex-none font-semibold" data-testid="engineering-lead-count">
+            {leads}
+          </span>
+        )}
       </div>
     </InspectorSection>
   );
@@ -187,8 +201,9 @@ function RolesSection({ members }: { members?: Member[] }) {
 
 function RolesInspector() {
   return (
-    <Inspector eyebrow="Members · roles" title="Roles" label="Roles">
-      <RolesSection />
+    // qa-shell-27: one heading, the panel's title; the section under it has none of its own.
+    <Inspector eyebrow="Members" title="Roles" label="Roles">
+      <RolesSection label={null} />
     </Inspector>
   );
 }
@@ -285,23 +300,33 @@ function EmailState({ invite, resending, onResend }: { invite: Invite; resending
   );
 }
 
-/** "Removed Oct 18, 2026" */
+/**
+ * "Active", or "Removed" with its date on a line under it (qa-shell-4): the chip alone fits
+ * the column, so nothing runs over Last sign-in; the time is in the title.
+ */
 function StatusChip({ m }: { m: Member }) {
   const status = !removed(m) ? (
     <Chip kind="pass" dot>
       Active
     </Chip>
   ) : (
-    <Chip kind="na" dot title={m.disabled_at ? `Removed ${formatDateTime(m.disabled_at)}` : undefined}>
-      Removed{m.disabled_at ? ` ${shortDate(m.disabled_at)}` : ""}
-    </Chip>
+    <span className="flex flex-col items-start gap-0.5" title={m.disabled_at ? `Removed ${formatDateTime(m.disabled_at)}` : undefined}>
+      <Chip kind="na" dot data-testid="member-removed">
+        Removed
+      </Chip>{" "}
+      {m.disabled_at && (
+        <span data-testid="member-removed-on" className="tnum pl-1 text-[13px] leading-4 text-text2">
+          {shortDate(m.disabled_at)}
+        </span>
+      )}
+    </span>
   );
   if (!m.access_pending) return status;
   // A Google IAP access change that failed; Oracle retries it on its own.
   return (
     <span className="flex flex-col items-start gap-1">
       {status}
-      <Chip kind="warn" data-testid="member-access" title="Google refused the change; Oracle retries it for a day">
+      <Chip kind="warn" wrap data-testid="member-access" title="Google refused the change; Oracle retries it for a day">
         {m.access_pending === "revoke" ? "Access not removed yet" : "Access not granted yet"}
       </Chip>
     </span>
@@ -558,23 +583,35 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
   const roleCell = (m: Member) => {
     if (removed(m)) return <Chip kind="line">{ROLE_LABEL[m.role]}</Chip>;
     const lastOwner = m.role === "owner" && activeOwners <= 1;
-    if (m.id === selfId && lastOwner) {
+    if (m.id === selfId) {
+      // qa-shell-28: on a phone your own card shows your role and status only, on one line.
       return (
-        <span className="flex flex-col gap-1">
-          <Unavailable reason="You are the only owner. Make someone else owner first." testId="role-unavailable">
-            {(props) => (
-              <button type="button" {...props} aria-label={`Role for ${m.email}`} className={`${SELECT} inline-flex items-center opacity-70`}>
-                {ROLE_LABEL[m.role]}
-              </button>
+        <span className="flex flex-col gap-1 max-[600px]:contents">
+          <Chip kind="line" className="hidden max-[600px]:inline-flex" data-testid="own-role">
+            {ROLE_LABEL[m.role]}
+          </Chip>
+          <span className="contents max-[600px]:hidden">
+            {lastOwner ? (
+              <Unavailable reason="You are the only owner. Make someone else owner first." testId="role-unavailable">
+                {(props) => (
+                  <button type="button" {...props} aria-label={`Role for ${m.email}`} className={`${SELECT} inline-flex items-center opacity-70`}>
+                    {ROLE_LABEL[m.role]}
+                  </button>
+                )}
+              </Unavailable>
+            ) : (
+              <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} className="self-start" />
             )}
-          </Unavailable>
+          </span>
+          {/* Your own lead box too: on a phone the Eng lead column hides. */}
           {phoneLead(m)}
         </span>
       );
     }
     return (
       <span className="flex flex-col gap-1">
-        <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} />
+        {/* Its own width, not the cell's (qa-shell-5): the browser sizes a select to its longest role and its arrow. */}
+        <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} className="self-start" />
         {phoneLead(m)}
       </span>
     );
@@ -661,19 +698,19 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           </span>
           <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
             {/* A5: the name in bold, the email under it (the email alone with no name); opens the member inspector.
-                Both wrap, never cut: the chips sit under them. */}
+                Both wrap, never cut: the chips sit under them. A name wraps between words, an email at its @ (qa-shell-5). */}
             <button
               type="button"
               data-testid="member-open"
               onClick={() => setInspecting(m.id)}
-              className={`flex max-w-full min-w-0 flex-col text-left leading-tight [overflow-wrap:anywhere] hover:underline ${removed(m) ? "text-text2" : ""}`}
+              className={`flex max-w-full min-w-0 flex-col text-left leading-tight break-words hover:underline ${removed(m) ? "text-text2" : ""}`}
             >
               <span data-testid="member-name" className="font-semibold">
-                {personName(m)}
+                {m.name?.trim() ? personName(m) : <EmailWords email={m.email} />}
               </span>
               {m.name?.trim() && (
                 <span data-testid="member-email" className="text-[13px] font-normal text-text2">
-                  {m.email}
+                  <EmailWords email={m.email} />
                 </span>
               )}
             </button>
@@ -696,7 +733,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </span>
       ),
     },
-    { key: "role", header: "Role", width: "140px", wrap: true, cell: roleCell },
+    { key: "role", header: "Role", width: "156px", wrap: true, cell: roleCell },
     {
       key: "lead",
       // The anchor of A1's Engineering lead step (Set up on Home).
@@ -720,7 +757,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           leadBox(m)
         ),
     },
-    { key: "status", header: "Status", width: "132px", wrap: true, cell: (m) => <StatusChip m={m} /> },
+    { key: "status", header: "Status", width: "120px", wrap: true, cell: (m) => <StatusChip m={m} /> },
     {
       key: "signin",
       header: "Last sign-in",
@@ -756,7 +793,16 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </Link>
       ),
     },
-    { key: "action", header: <span className="sr-only">Actions</span>, width: "124px", align: "right", phone: "action", wrap: true, cell: actionCell },
+    {
+      key: "action",
+      header: <span className="sr-only">Actions</span>,
+      width: "120px",
+      align: "right",
+      phone: "action",
+      wrap: true,
+      // qa-shell-28: on a phone your own card shows your role and status only, not a Remove you can't use.
+      cell: (m) => (m.id === selfId && !removed(m) ? <span className="contents max-[600px]:hidden">{actionCell(m)}</span> : actionCell(m)),
+    },
   ];
 
   const invites = invitesQ.data;
