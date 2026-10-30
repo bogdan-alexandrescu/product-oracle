@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { CONSOLE_HELD_RUN_ID } from "../lib/api/mock/runs";
+import { login, openSeeded, seedConsoleHeld } from "./helpers";
 
 /**
  * I3 rule 3: one primary action per page, top-right, drawn as primary (filled), even while
@@ -95,9 +96,44 @@ for (const scheme of ["light", "dark"] as const) {
     await page.goto("/runs");
     await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
     await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
-    // One way to decide (rirs-21): the decision below; the header's Decide only goes to it, so
-    // neither is drawn as a second primary.
+    // One way to decide (rirs-21): the decision below; the header's Decide only goes to it, so it
+    // is not drawn as a second primary. The decision's Approve and continue is the page's one
+    // filled primary (cld-5).
     await expect(page.getByTestId("run-go-decide")).not.toHaveAttribute("data-variant", "primary");
-    await expect(page.locator("#decide").getByRole("button", { name: "Approve and continue" })).toBeVisible();
+    await expect(page.locator("#decide").getByRole("button", { name: "Approve and continue" })).toHaveAttribute("data-variant", "primary");
+    await expectOnePrimaryOnPage(page, "a run waiting at a checkpoint");
   });
 }
+
+/** The heights of the buttons in the decision row that holds `button`, by name. */
+async function rowHeights(button: ReturnType<Page["locator"]>) {
+  return button.locator("xpath=..").getByRole("button").evaluateAll((els) =>
+    els.map((el) => ({ name: el.textContent?.trim() ?? "", height: Math.round(el.getBoundingClientRect().height) })),
+  );
+}
+
+// fix3-minors review: the decision row's buttons share one height beside its filled primary, and
+// when Oracle asks to confirm a console answer, Confirm is the page's one filled primary.
+test("a run's decision row is one height, its primary Approve and continue", async ({ page }) => {
+  await login(page);
+  await page.goto("/runs");
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
+  const approve = page.locator("#decide").getByRole("button", { name: "Approve and continue" });
+  await expect(approve).toHaveAttribute("data-variant", "primary");
+  const heights = await rowHeights(approve);
+  expect(heights.length).toBeGreaterThan(1);
+  for (const b of heights) expect(b, `${b.name} is as tall as Approve and continue`).toEqual({ name: b.name, height: heights.find((x) => x.name === "Approve and continue")!.height });
+});
+
+test("a console answer waiting to be confirmed: Confirm is the one filled primary, the row one height", async ({ page }) => {
+  await login(page);
+  await openSeeded(page, seedConsoleHeld, `/runs/${CONSOLE_HELD_RUN_ID}`);
+  const decision = page.getByRole("group", { name: "Decide: Roadmap items" });
+  const confirm = decision.getByRole("button", { name: "Confirm approval" });
+  await expect(confirm).toHaveAttribute("data-variant", "primary");
+  await expect(decision.getByRole("button", { name: "Approve and continue" })).toHaveAttribute("data-variant", "secondary");
+  await expectOnePrimaryOnPage(page, "a console answer waiting to be confirmed");
+  const heights = await rowHeights(confirm);
+  expect(heights.length).toBeGreaterThan(1);
+  for (const b of heights) expect(b, `${b.name} is as tall as Confirm approval`).toEqual({ name: b.name, height: heights.find((x) => x.name === "Confirm approval")!.height });
+});
