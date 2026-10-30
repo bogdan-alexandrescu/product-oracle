@@ -29767,6 +29767,11 @@ export interface components {
             lines: components["schemas"]["OnePagerLine"][];
             /** Who */
             who?: string | null;
+            /**
+             * Missing
+             * @default false
+             */
+            missing: boolean;
         };
         /** OnePagerDraft */
         OnePagerDraft: {
@@ -38072,6 +38077,11 @@ export interface components {
             can_reject: boolean;
             /** Proposed By Name */
             proposed_by_name?: string | null;
+            /**
+             * Needs Look
+             * @default []
+             */
+            needs_look: string[];
         };
         /** SimpleGoalSuggestionGoal */
         SimpleGoalSuggestionGoal: {

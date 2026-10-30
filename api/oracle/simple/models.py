@@ -328,6 +328,11 @@ class SimpleOnePager(TenantScoped, Base):
     built_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # oracle.simple.quality: an answer that failed its checks twice: its failures
+    # ([{"check", "say"}]) and its blocks (``held``, read by owners only; ``blocks`` keeps
+    # the last good version). Null: the shown blocks passed.
+    checks: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    held: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
 
 
 class RoadmapKeyDate(TenantScoped, Base):
@@ -393,6 +398,9 @@ class SimpleGoalSuggestion(TenantScoped, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # A person's suggestion (origin "person"): who filed it.
     proposed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # oracle.simple.quality: Oracle's suggestion failed its checks twice ([{"check", "say"}]):
+    # owners read it with a "Needs a look" note, people below owner do not see it.
+    checks: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
 
 
 class SimpleGoalAuto(TenantScoped, Base):

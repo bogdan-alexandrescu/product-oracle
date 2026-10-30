@@ -233,7 +233,10 @@ def _answer(problem: str) -> dict:
     ]}  # fmt: skip
 
 
-async def test_problem_naming_no_one_is_asked_again(client):
+async def test_problem_naming_no_one_is_asked_again(client, monkeypatch):
+    # Only the who-check here: the job's quality checks (oracle.simple.quality) have their own
+    # tests, and this answer's empty "Not doing" would fail them.
+    monkeypatch.setattr(one_pager.quality, "one_pager", lambda *a, **k: [])
     ctx = await clear_world(client)
     await get(client, ctx, "owner", "team-invites")
     asked: list[dict] = []
@@ -249,8 +252,8 @@ async def test_problem_naming_no_one_is_asked_again(client):
         await s.commit()
     assert len(asked) == 2
     assert asked[0]["who"] == "New workspace admins; Team leads"
-    assert "retry" not in asked[0]
-    assert "names no one" in asked[1]["retry"]
+    assert "failed_checks" not in asked[0]
+    assert any("names no one" in x for x in asked[1]["failed_checks"])
     view = await get(client, ctx, "owner", "team-invites")
     assert texts(view, "problem") == ["New admins stall in week one."]
 

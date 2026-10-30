@@ -182,7 +182,7 @@ async def bet_line(
     if document_id is None:
         return None
     try:
-        page = await one_pager.read(db, principal, str(document_id))
+        page = await one_pager.read(db, principal, str(document_id), held=False)
     except ChangeError:
         return None
     doc_id = page.document.id

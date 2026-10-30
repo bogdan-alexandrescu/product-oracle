@@ -337,6 +337,10 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const draftShown = !!v.draft && (v.draft.changes > 0 || v.draft.status === "submitted");
   // qa-simple-prd-10: who may start a review is the start API's rule (can_start: an owner or the
   // PRD's decider); everyone else reads who can, on a disabled button.
+  // Owners' "Needs a look": the checks a held build failed (kind "check", oracle.simple.quality)
+  // in the note above the page; the PRD's numbers and codes to look at (ad-onepager) in NeedsALook.
+  const heldChecks = v.needs_look.filter((x) => x.kind === "check");
+  const prdLooks = v.needs_look.filter((x) => x.kind !== "check");
   const startWhy = v.decider ? `Ask ${v.decider.name} or an owner to start a review` : "Ask an owner to start a review";
   const actions = presenting ? (
     <button type="button" className={btn(phone)} onClick={stopPresenting}>Stop presenting</button>
@@ -412,6 +416,15 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · you read the published version
         </div>
       )}
+      {/* oracle.simple.quality: Oracle's build failed its checks twice; the API names them to owners only. */}
+      {heldChecks.length > 0 && !presenting && (
+        <div role="note" aria-label="Needs a look" data-testid="needs-look" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
+          <span className="font-semibold text-text2">Needs a look</span> · Oracle&apos;s page missed these checks; others read the last good version.
+          <ul className="mt-1 list-disc pl-5">
+            {heldChecks.map((c) => <li key={c.text}>{c.text}</li>)}
+          </ul>
+        </div>
+      )}
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
       <div className={`mx-auto flex max-w-[1180px] flex-col gap-5 px-12 pt-[26px] max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
@@ -445,7 +458,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
         <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
-          {v.needs_look.length > 0 && !presenting && <NeedsALook items={v.needs_look} />}
+          {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} />}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             <section key={b.key} aria-label={b.title} className="mt-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
@@ -620,7 +633,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                       <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
                     </li>
                   ))}
-                  {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">Not written yet</li>}
+                  {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">{b.missing ? "Not in the PRD yet" : "Not written yet"}</li>}
                   {b.key === "problem" && (
                     // 2026-10-30: who has the problem, from the PRD's users or personas section.
                     <li className="list-none px-2 text-base" data-testid="problem-who">

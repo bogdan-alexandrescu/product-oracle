@@ -67,7 +67,8 @@ export interface OnePagerDb {
   doc: { id: string; slug: string; title: string };
   version: number;
   sections: Sec[];
-  blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[] }[];
+  /** `missing`: Oracle marked the block "Not in the PRD yet" (nothing of the PRD maps to it). */
+  blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean }[];
   draft: null | {
     id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
@@ -86,6 +87,12 @@ export interface OnePagerDb {
   owner?: string;
   /** The PRD's roadmap slice, when not the default invented one (SLICE). */
   slice?: SliceItem[];
+  /**
+   * oracle.simple.quality: Oracle's build failed its checks twice: its blocks and the failed
+   * checks' plain words. Owners read it with a "Needs a look" note; everyone else `blocks`
+   * (the last good version).
+   */
+  held?: { blocks: OnePagerDb["blocks"]; checks: string[] } | null;
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
   approval?: { approved_in: string; waiting_on: { id: string; name: string }[]; blocked_by?: string[] } | null;
 }
@@ -199,6 +206,32 @@ const NOTED_SLICE: SliceItem[] = [
 ];
 export const WALK_PROBLEM =
   "New workspace admins stall during setup because the checklist hides the invite step. The queue of half-set-up teams grows every week a cohort lands; teams with more than ten people wait the longest, and the promise we make is a first teammate invited within a 48-hour window that we miss for most new teams after a weekend signup.";
+
+/**
+ * The "one-pager-needs-look" scenario: Oracle's build failed its checks twice (two bets, a
+ * risk saying "TBD"), so it is held: owners read it with the failed checks; everyone else
+ * the last good page. Invented data.
+ */
+export function seedNeedsLookOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  const blocks = db.blocks.map((b) => ({ ...b, lines: b.lines.map((l) => ({ ...l })) }));
+  const bets = blocks.find((b) => b.key === "bets")!;
+  bets.lines = bets.lines.slice(0, 2);
+  blocks.find((b) => b.key === "risks")!.lines = [{ id: "risks-1", text: "Pricing for teams is TBD", keys: ["risks"] }];
+  db.held = { blocks, checks: ["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"] };
+  return db;
+}
+
+/**
+ * The "one-pager-not-in-prd" scenario: the PRD has no "Not doing" section, and Oracle marked
+ * that block "Not in the PRD yet" (the API's OnePagerBlock.missing). Invented data.
+ */
+export function seedNotInPrdOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  db.sections = db.sections.filter((x) => x.key !== "not-doing");
+  db.blocks = db.blocks.map((b) => (b.key === "not_doing" ? { ...b, lines: [], missing: true } : b));
+  return db;
+}
 
 export function seedWalkOnePager(): OnePagerDb {
   const db = seedOnePager();
@@ -394,8 +427,10 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
   const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
   const span = milestoneSpan(db.slice ?? SLICE);
-  const blocks: Schemas["OnePagerBlock"][] = db.blocks.map((b) => ({
-      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null,
+  const held = ctx.role === "owner" ? db.held ?? null : null;
+  // A build held for owners (oracle.simple.quality) is what owners read; others the last good.
+  const blocks: Schemas["OnePagerBlock"][] = (held?.blocks ?? db.blocks).map((b) => ({
+      key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null, missing: !!b.missing && b.lines.length === 0,
       lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
         const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");
@@ -446,8 +481,12 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     can_edit: decides(ctx),
     can_propose: !decides(ctx) && RANK[ctx.role] >= RANK.commenter,
     can_start: starts(ctx),
-    // As one_pager.owns: a company owner, the PRD's track owners and its document owner.
-    needs_look: ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : [],
+    // As one_pager.owns: a company owner, the PRD's track owners and its document owner read the
+    // PRD's numbers and codes to look at; owners also read the checks a held build failed.
+    needs_look: [
+      ...(ctx.role === "owner" || (ctx.trackOwners ?? []).includes(ctx.id) || (!!owner && ctx.id === owner) ? looks : []),
+      ...(held ? held.checks.map((text) => ({ kind: "check", text, where: [], source_keys: [] })) : []),
+    ],
   };
 }
 

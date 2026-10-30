@@ -154,7 +154,8 @@ import {
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
+import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -1058,6 +1059,17 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * "simple-suggest-needs-look": "simple-home" plus Oracle's suggestion for Grow retention that
+ * failed its checks twice (oracle.simple.quality): owners read it with a "Needs a look" note,
+ * everyone else does not see it. Invented data.
+ */
+function seedSimpleSuggestNeedsLookScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  db.simple_roadmap!.goal_suggestions = [...seedGoalSuggestions(), seedHeldGoalSuggestion()];
   return db;
 }
 
@@ -2792,6 +2804,8 @@ function load(): Db {
                 ? seedSimpleHomeDecidersScenario
               : scenario === "simple-suggest-deciders"
                 ? seedSimpleSuggestDecidersScenario
+              : scenario === "simple-suggest-needs-look"
+                ? seedSimpleSuggestNeedsLookScenario
               : scenario === "simple-home-milestones"
                 ? seedSimpleHomeMilestonesScenario
               : scenario === "simple-home-one-prd"
@@ -5545,7 +5559,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
   // "one-pager-no-owner": the PRD was imported by a service token (no owner yet).
-  db.simple_one_pager ??= seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
+  // "one-pager-needs-look": Oracle's build failed its checks twice (oracle.simple.quality).
+  // "one-pager-not-in-prd": Oracle marked a block the PRD lacks "Not in the PRD yet".
+  db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
+    ? seedNeedsLookOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-not-in-prd"
+    ? seedNotInPrdOnePager()
+    : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;

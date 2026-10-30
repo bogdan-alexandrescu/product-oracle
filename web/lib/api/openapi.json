@@ -91231,6 +91231,11 @@
               }
             ],
             "title": "Who"
+          },
+          "missing": {
+            "type": "boolean",
+            "title": "Missing",
+            "default": false
           }
         },
         "type": "object",
@@ -114749,6 +114754,14 @@
               }
             ],
             "title": "Proposed By Name"
+          },
+          "needs_look": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Needs Look",
+            "default": []
           }
         },
         "type": "object",

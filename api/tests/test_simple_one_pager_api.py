@@ -16,9 +16,11 @@ Test cards (protects / fails_when / no_claim):
   changed mapped section rebuilds; fails_when=every read rebuilds or a changed section
   keeps the old lines; no_claim=the worker's scheduling (tests/test_llm_jobs.py).
 - test_job_answer_held_to_caps_and_keys: protects=the job's answer replaces the quick read
-  (built_by oracle), lines naming another block's sections are dropped, a block left
-  short keeps the quick read; fails_when=a line points at a section it does not rest on;
-  no_claim=the prompt's quality.
+  (built_by oracle; one failing its checks, for owners), lines naming another block's
+  sections are dropped, a block left
+  short fails its checks and is held for owners while others keep the quick read
+  (tests/test_simple_generation_quality.py has the checks); fails_when=a line points at a
+  section it does not rest on; no_claim=the prompt's quality.
 - test_template_blocks: protects=a template's ``one_pager.blocks`` front matter replaces
   the six blocks and maps sections by key; fails_when=the fallback ignores the template;
   no_claim=template editing.
@@ -251,16 +253,21 @@ async def test_job_answer_held_to_caps_and_keys(client):
 
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
-        assert (await one_pager.run_job(s, job, ask))["built"] is True
+        # The line naming another block's section fails its checks: held for owners.
+        assert (await one_pager.run_job(s, job, ask))["held"] is True
         await s.commit()
     view = await get(client, ctx)
     assert view["built_by"] == "oracle"
     assert [x["text"] for x in block(view, "bets")["lines"]] == ["Checklist", "Invites", "Sample"]
-    # A block left short of its minimum keeps the quick read.
+    # A block left short of its minimum fails its checks (oracle.simple.quality): asked
+    # again and failing again, it is held for owners; people below owner keep the quick read.
     answer["blocks"][1]["lines"] = answer["blocks"][1]["lines"][:1]
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
-        assert (await one_pager.run_job(s, job, ask))["built"] is False
+        out = await one_pager.run_job(s, job, ask)
+        assert "1 bet; a one-pager has 3 to 5" in out["checks"]
+        await s.commit()
+    assert (await get(client, ctx, "commenter"))["built_by"] == "extract"
 
 
 def test_template_blocks():

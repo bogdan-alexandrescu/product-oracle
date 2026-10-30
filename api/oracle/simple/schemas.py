@@ -1058,6 +1058,8 @@ class OnePagerBlock(BaseModel):
     # The problem block: who has it, from the PRD's users or personas section; null when
     # the PRD has none ("Who has it is not in the PRD yet").
     who: str | None = None
+    # Oracle marked it "Not in the PRD yet": nothing of the PRD maps to it (oracle.simple.quality).
+    missing: bool = False
 
 
 class OnePagerSectionPatch(BaseModel):
@@ -1196,8 +1198,9 @@ class OnePagerOut(BaseModel):
     can_propose: bool
     # Start review: the start API's own rule (meetings.may_start: an owner or the decider).
     can_start: bool
-    # "Needs a look" (2026-10-30): the PRD's numbers that disagree and its codes with no
-    # name, for the PRD's owners only (empty for everyone else).
+    # "Needs a look", for owners only (empty for everyone else): the PRD's numbers that
+    # disagree and its codes with no name (the PRD's owners; ad-onepager), and the checks a
+    # build held for owners failed twice (kind "check"; oracle.simple.quality).
     needs_look: list[OnePagerLook] = []
 
 
@@ -1239,6 +1242,9 @@ class SimpleGoalSuggestion(BaseModel):
     can_reject: bool
     # A person's suggestion (origin "person"): their display name.
     proposed_by_name: str | None = None
+    # oracle.simple.quality: Oracle's suggestion failed its checks twice (owners only; people
+    # below owner do not see it).
+    needs_look: list[str] = []
 
 
 class SimpleGoalSuggestionGoal(BaseModel):

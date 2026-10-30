@@ -95,6 +95,13 @@ export function seedGoalSuggestions(): GoalSuggestionRow[] {
   ];
 }
 
+/** Oracle's suggestion that failed its checks twice (its goal not named): owners only. */
+export function seedHeldGoalSuggestion(): GoalSuggestionRow {
+  const idea = POOL["grow-retention"][1];
+  const at = new Date(mockNowMs() - 86_400_000).toISOString();
+  return { ...row("grow-retention", idea, "on_demand", at, "held"), checks: [`“${idea.title}” does not name its goal`] };
+}
+
 /** Whether the goal has no live roadmap item. */
 const isEmpty = (db: SimpleDb, goal: string): boolean => !db.items.some((s) => !closed(s) && (s.goal === goal || (s.goals ?? []).includes(goal)));
 
@@ -152,7 +159,8 @@ export function fileSuggestion(db: SimpleDb, ctx: Ctx, goal: string, title: stri
   const t = title.replace(/\s+/g, " ").trim();
   const o = outcome.replace(/\s+/g, " ").trim();
   if (!t || t.length > 200 || !o || o.length > 1000) return { status: 422, detail: "A name and what it does, and for whom" };
-  if (db.goal_suggestions!.some((x) => x.goal === goal && x.status !== "accepted" && norm(x.title) === norm(t))) return { status: 409, detail: `${t} is suggested for ${GOALS[goal]} already` };
+  // As the API: a held suggestion (owners only) refuses no one else's like title.
+  if (db.goal_suggestions!.some((x) => x.goal === goal && x.status !== "accepted" && (ctx.role === "owner" || !x.checks?.length) && norm(x.title) === norm(t))) return { status: 409, detail: `${t} is suggested for ${GOALS[goal]} already` };
   const r: GoalSuggestionRow = {
     id: crypto.randomUUID(), goal, title: t, outcome: o, why: "", evidence: [], status: "open", reason: null, origin: "person", proposed_by: ctx.id,
     created_at: new Date(mockNowMs()).toISOString(), decided_by_name: null, decided_at: null, change_id: null, item_id: null, flow: null,
@@ -180,6 +188,8 @@ function out(db: SimpleDb, s: GoalSuggestionRow, ctx: Ctx): Schemas["SimpleGoalS
     proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? "someone") : null,
     can_accept: open && decides,
     can_reject: open && decides,
+    // oracle.simple.quality: a suggestion that failed its checks twice is the owners' to look at.
+    needs_look: ctx.role === "owner" ? [...(s.checks ?? [])] : [],
   };
 }
 
@@ -225,7 +235,7 @@ export async function routeGoalSuggestions(
         const d = goalDecider(db, g, ctx);
         return { goal: { id: goalId(g), key: g, title: GOALS[g] }, pending: !!db.goal_jobs![g], empty: isEmpty(db, g), decider_name: d.id ? (ctx.names[d.id] ?? null) : null, can_decide: d.mine };
       }),
-      suggestions: rows.filter((s) => goals.includes(s.goal) && s.status === status).map((s) => out(db, s, ctx)),
+      suggestions: rows.filter((s) => goals.includes(s.goal) && s.status === status && (ctx.role === "owner" || !s.checks?.length)).map((s) => out(db, s, ctx)),
     });
   }
   if (m !== "POST" || !p[3]) return null;
