@@ -341,9 +341,10 @@ async def test_unscored_evidence_is_scored_by_the_baseline(client, tenant_id):
 
 def test_goal_weighted_uses_a_persons_goal_value_estimate():
     """protects=S6: goal_weighted scores with the feature's attrs goal_value (a person's
-    estimate, > 0) in place of the goals' sum, marks the input estimated and says what the
-    goals give; a zero or non-numeric estimate is ignored, other methods are unchanged;
-    fails_when=the estimate is ignored, used when not positive, or leaks into rice;
+    estimate, 0 or more: qa-simple-plan-6) in place of the goals' sum, marks the input
+    estimated and says what the goals give; an estimate of 0 scores 0; a negative or
+    non-numeric estimate is ignored, other methods are unchanged; fails_when=the estimate is
+    ignored, used when negative, 0 falls back to the goals, or it leaks into rice;
     no_claim=where the estimate is written (tests/test_simple_priorities_api.py)."""
     goals = [("activation", 3, 2)]
     f = feature("checkout", goals=goals, attrs={"effort": 2, "goal_value": 10}, stored=0.5)
@@ -353,7 +354,10 @@ def test_goal_weighted_uses_a_persons_goal_value_estimate():
     assert (gv["value"], gv["estimated"]) == (10, True)
     assert [t["term"] for t in gv["terms"]] == [6]
     assert any("a person's estimate; the goals give 6" in step for step in s.explanation["steps"])
-    for raw in (0, "lots", None):
+    z = feature("checkout", goals=goals, attrs={"effort": 2, "goal_value": 0}, stored=0.5)
+    s = score_feature(z, "goal_weighted")
+    assert (s.score, s.explanation["inputs"]["goal_value"]["estimated"]) == (0, True)
+    for raw in (-1, "lots", None):
         g = feature("checkout", goals=goals, attrs={"effort": 2, "goal_value": raw}, stored=0.5)
         s = score_feature(g, "goal_weighted")
         assert s.score == pytest.approx(6 * 0.5 / 2)
