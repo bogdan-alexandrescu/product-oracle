@@ -24,6 +24,30 @@ Test cards (protects / fails_when / no_claim):
   checks: owners read it with "Needs a look" naming them, a commenter and a viewer read
   the last good version (the quick read) with no note; fails_when=the bad page reaches
   people below owner, or owners get no note; no_claim=the web's note (its spec).
+- test_a_block_the_prd_has_is_never_marked_missing: protects=a block marked "Not in the
+  PRD yet" ({"missing": true} or the one line) passes only when nothing of the PRD maps to
+  it; marking a block the PRD has fails "empty_block", a marked bets block still fails the
+  3 to 5 bets check, and clean_answer keeps its strict lines guard for such a block (a
+  block with nothing mapped is stored marked); fails_when=an answer marking every block
+  passes or is built; no_claim=which sections map to a block.
+- test_a_prd_quote_is_not_chatter_or_tbd: protects=a line quoting its own section's words
+  ("I can't find…", "TODO lists") is not flagged as chatter or TBD; words its section
+  does not hold still are; fails_when=a PRD quote fails the checks or chatter passes;
+  no_claim=quotes in suggestions.
+- test_an_all_missing_answer_never_blanks_the_page: protects=a model answering every
+  block "missing" twice leaves people below owner the quick read, never a blank page;
+  fails_when=it is asked once or a reader's blocks go empty; no_claim=the owner's held
+  view.
+- test_a_held_run_keeps_the_last_good_built_at: protects=a held run leaves the last good
+  page's built_at as it was; fails_when=it moves; no_claim=job bookkeeping.
+- test_an_owner_editing_a_held_line_is_told_why: protects=an owner editing a line of a
+  held page reads why it is refused (the last good line is what edits act on) with that
+  line; fails_when=they read only "This line changed since you read it"; no_claim=the
+  owner's pick of what such an edit should act on (open question).
+- test_a_held_suggestion_does_not_refuse_a_commenter_s_title: protects=a commenter's
+  suggestion titled like a held (owner-only) one is filed; an owner, who reads the held
+  one, is refused; fails_when=a commenter is refused for a row they cannot see;
+  no_claim=duplicate merging.
 - test_suggestion_checks_name_each_failure: protects=a suggestion not naming its goal, a
   duplicate of a roadmap item or a feature (the "Looks like" matcher), a title too long
   for one line and chatter are each named; a good one passes; fails_when=a kind passes;
@@ -43,11 +67,13 @@ Test cards (protects / fails_when / no_claim):
 """
 
 import uuid
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
 
+from oracle import company_time
 from oracle.jobs.models import LlmJob
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import additions, one_pager, quality, service
@@ -55,7 +81,7 @@ from oracle.simple.models import SimpleGoalSuggestion, SimpleOnePager
 from oracle.tenancy import tenant_session
 from tests.test_simple_additions_api import SUGGESTIONS, World
 from tests.test_simple_additions_api import clock as additions_clock  # noqa: F401
-from tests.test_simple_one_pager_api import block, get, world
+from tests.test_simple_one_pager_api import block, edit, get, world
 from tests.test_simple_one_pager_api import clock as one_pager_clock  # noqa: F401
 
 
@@ -165,9 +191,49 @@ def test_one_pager_checks_name_each_failure(edit, check, say):
 def test_good_one_pager_answer_passes_its_checks():
     assert quality.one_pager(good(), one_pager.FALLBACK, MAPPED) == []
     # A block with nothing in the PRD is marked, not filled.
-    marked = _checks(lambda b: b[3].update(lines=[{"text": "Not in the PRD yet"}]))
-    assert marked == []
-    assert _checks(lambda b: b[3].update(lines=[], missing=True)) == []
+    bare = {**MAPPED, "not_doing": []}
+    for edit in (lambda b: b[3].update(lines=[{"text": "Not in the PRD yet"}]),
+                 lambda b: b[3].update(lines=[], missing=True)):  # fmt: skip
+        a = good()
+        edit(a["blocks"])
+        assert quality.one_pager(a, one_pager.FALLBACK, bare) == []
+
+
+def _all_missing() -> dict:
+    return {"blocks": [{"key": s.key, "missing": True} for s in one_pager.FALLBACK]}
+
+
+def test_a_block_the_prd_has_is_never_marked_missing():
+    out = quality.one_pager(_all_missing(), one_pager.FALLBACK, MAPPED)
+    for title in ("Problem and who has it", "What we will build", "Not doing"):
+        assert {"check": "empty_block",
+                "say": f"“{title}” is marked “Not in the PRD yet” but the PRD has it"} in out, out  # fmt: skip
+    assert {"check": "bets", "say": "0 bets; a one-pager has 3 to 5"} in out
+    noted = _checks(lambda b: b[1].update(lines=[{"text": "Not in the PRD yet."}]))
+    assert {"check": "bets", "say": "0 bets; a one-pager has 3 to 5"} in noted
+    # Held to the strict guard: an answer marking blocks the PRD has is not usable.
+    assert one_pager.clean_answer(_all_missing(), one_pager.FALLBACK, MAPPED) is None
+    a = good()
+    a["blocks"][3] = {"key": "not_doing", "lines": [{"text": "Not in the PRD yet"}]}
+    assert one_pager.clean_answer(a, one_pager.FALLBACK, MAPPED) is None
+    # A block with nothing mapped is kept marked (the page reads "Not in the PRD yet").
+    a["blocks"][3] = {"key": "not_doing", "missing": True}
+    out = one_pager.clean_answer(a, one_pager.FALLBACK, {**MAPPED, "not_doing": []})
+    assert out is not None and out[3] == {"key": "not_doing", "lines": [], "missing": True}
+
+
+def test_a_prd_quote_is_not_chatter_or_tbd():
+    mapped = {**MAPPED, "problem": [_sec("problem", "Problem",
+              "Users say I can't find my shared TODO lists.")]}  # fmt: skip
+    a = good()
+    a["blocks"][0]["lines"] = [{"text": "Users say I can't find shared TODO lists",
+                                "source_keys": ["problem"]}]  # fmt: skip
+    assert quality.one_pager(a, one_pager.FALLBACK, mapped) == []
+    # Words the PRD does not hold are still flagged.
+    a["blocks"][0]["lines"][0]["text"] = "Users say I can't find lists, TBD"
+    assert {c["check"] for c in quality.one_pager(a, one_pager.FALLBACK, mapped)} == {"tbd"}
+    a["blocks"][0]["lines"][0]["text"] = "As an AI, users say lists are lost"
+    assert {c["check"] for c in quality.one_pager(a, one_pager.FALLBACK, mapped)} == {"chatter"}
 
 
 async def _run(ctx, answers: list[dict]) -> tuple[dict, list[dict]]:
@@ -236,6 +302,49 @@ async def test_one_pager_fails_twice(client):
     async with tenant_session(ctx.tenant_id) as s:
         row = await s.scalar(select(SimpleOnePager))
         assert {c["check"] for c in row.checks} >= {"bets", "tbd", "chatter"}
+
+
+async def test_an_all_missing_answer_never_blanks_the_page(client):
+    ctx = await world(client)
+    quick = await get(client, ctx)
+    out, asked = await _run(ctx, [_all_missing()])
+    assert len(asked) == 2 and out["built"] is False
+    for who in ("commenter", "viewer"):
+        view = await get(client, ctx, who)
+        assert view["blocks"] == quick["blocks"], who
+        assert all(b["lines"] for b in view["blocks"] if b["key"] != "timeline"), who
+
+
+async def test_a_held_run_keeps_the_last_good_built_at(client, monkeypatch):
+    ctx = await world(client)
+    await get(client, ctx)
+    await _run(ctx, [good()])
+    async with tenant_session(ctx.tenant_id) as s:
+        built_at = (await s.scalar(select(SimpleOnePager))).built_at
+    later = built_at + timedelta(days=2)
+    monkeypatch.setattr(company_time, "now", lambda: later)
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
+        job.status = "queued"
+        await s.commit()
+    out, _ = await _run(ctx, [bad(), bad()])
+    assert out["held"] is True
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(SimpleOnePager))
+        assert row.built_at == built_at and row.held is not None
+
+
+async def test_an_owner_editing_a_held_line_is_told_why(client):
+    ctx = await world(client)
+    await get(client, ctx)
+    await _run(ctx, [bad(), bad()])
+    owner = await get(client, ctx, "owner")
+    r = await edit(client, ctx, "owner", owner, "risks-1", "Calendar access worries admins")
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["message"] == (
+        "This line is from Oracle's draft that needs a look; edit the last good line"
+    )
+    assert r.json()["detail"]["current"]["line"] == "Calendar access may scare admins away"
 
 
 # --------------------------------------------------------------------------- suggestions
@@ -338,6 +447,20 @@ async def test_suggestions_fail_twice(client):
     async with tenant_session(w.ctx.tenant_id) as s:
         rows = {r.title: r.checks for r in await s.scalars(select(SimpleGoalSuggestion))}
         assert rows["Quiet hours"] is None and rows["Bulk import"][0]["check"] == "duplicate"
+
+
+async def test_a_held_suggestion_does_not_refuse_a_commenter_s_title(client):
+    w = await World().build()
+    await _suggest(w, [BAD, BAD])
+    r = await client.post(f"/v1/simple/goals/{w.goals['quiet']}/suggestions",
+                          headers=w.as_("commenter"),
+                          json={"title": "Bulk import", "outcome": "Fewer steps"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    # An owner reads the held one, so their like title is refused.
+    r = await client.post(f"/v1/simple/goals/{w.goals['quiet']}/suggestions",
+                          headers=w.as_("owner"),
+                          json={"title": "Alert digest", "outcome": "Fewer steps"})  # fmt: skip
+    assert r.status_code == 409, r.text
 
 
 # --------------------------------------------------------------------------- item drafts
