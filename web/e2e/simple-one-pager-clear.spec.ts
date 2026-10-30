@@ -1,3 +1,4 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -17,7 +18,8 @@ import { expect, test, type Page } from "./test";
  * - protects (ad-onepager review)=who has it never comes from "User stories" before it; a
  *   trailing "*" with no note is gone; an owner's Edit box starts from the PRD's words, not
  *   the code's name; fails_when=a story shows as who has it, a bare "*" stays, or the box
- *   holds "F-26 Calendar invites"; no_claim=the API's checks (pytest).
+ *   holds "F-26 Calendar invites"; the PRD's decider (an approver) offered "Draw the flow"
+ *   draws it; fails_when=the click is refused; no_claim=the API's checks (pytest).
  */
 const URL = "/simple/prds/guided-setup";
 const LOOK_COUNT = "“Eight features wait for next” says 8, but “Not this quarter” shows 6 items.";
@@ -80,6 +82,17 @@ for (const phone of [false, true]) {
       await risk.hover();
       await risk.locator('[data-edit-for="risks-3"]').click();
       await expect(page.locator("#edit-risks-3")).toHaveValue("F-26 may slip past M1†");
+    });
+
+    test("the PRD's decider draws a bet's flow from its link", async ({ page }) => {
+      await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "simple-deciders"] as const);
+      await login(page, "dana.decider@example.com");
+      await page.goto(URL);
+      const bet = page.locator('[data-line="bets-2"]');
+      await bet.getByRole("button", { name: /^Draw the flow for “Invite suggestions/ }).click();
+      const flow = page.getByRole("group", { name: /^User flow of “Invite suggestions/ });
+      await expect(flow.getByTestId("flow-drawn")).toContainText("Version 1");
+      await expect(bet.getByRole("button", { name: /^Draw the flow/ })).toHaveCount(0);
     });
 
     for (const who of ["viewer@example.com", "commenter@example.com"]) {
