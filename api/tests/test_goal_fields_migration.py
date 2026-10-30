@@ -86,7 +86,7 @@ def _tables() -> list[str]:
 def test_the_chain_ends_here_after_discussion_replies():
     script = ScriptDirectory.from_config(_cfg())
     # H2 Cadence engine's 0037_rituals chains on it; one head.
-    assert script.get_heads() == ["0092_bet_flow_line_key"]
+    assert script.get_heads() == ["0093_dont_know_open"]
     assert script.get_revision("0037_rituals").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 

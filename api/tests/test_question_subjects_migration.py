@@ -117,7 +117,7 @@ def _asked_to(q: uuid.UUID):
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0092_bet_flow_line_key"]
+    assert script.get_heads() == ["0093_dont_know_open"]
 
 
 def test_upgrade_moves_asked_questions_to_the_author_and_adds_subjects(scratch_db):
