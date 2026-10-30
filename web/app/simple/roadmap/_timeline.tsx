@@ -44,6 +44,8 @@ export interface Layout {
   top: number;
   height: number;
   y: Map<string, number>;
+  /** The goal lanes (desktop): a broken item's callout line, under its pill's row (qa-simple-roadmap-4). */
+  under?: Map<string, number>;
 }
 
 /** The header above the rows (roadmap-milestones D): the ticks' line, then a line per row of marks

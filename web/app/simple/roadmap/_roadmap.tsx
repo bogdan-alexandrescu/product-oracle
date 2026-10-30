@@ -1054,6 +1054,9 @@ export function SimpleRoadmap() {
                 const f0 = broken(i).find((x) => x.kind === "dependency_order");
                 if (!f0) return [];
                 const [start, end] = moved[i.id] ?? [i.start.date, i.end.date];
+                // qa-simple-roadmap-4 ("Under the lane"): on the desktop's lanes the callout takes the line under its pill.
+                const under = l.under?.get(i.id);
+                if (under != null) return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(start)} y={under} h={l.rowH} compact={phone} maxX={sc.width} />];
                 return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} before={sc.x(start) - 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
               })
             }
