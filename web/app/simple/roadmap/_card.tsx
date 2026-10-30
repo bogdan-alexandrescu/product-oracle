@@ -216,8 +216,10 @@ export function Callout({
       style={{ left, top: y + 3, minHeight: h - 6, maxWidth: Math.max(160, maxX - 8) }}
       className="pointer-events-none absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 [&_button]:pointer-events-auto"
     >
+      {/* fix4 review (qa-simple-roadmap-6): a phone has no hover for a cut reason's full
+       * words, so there the reason wraps inside the callout instead. */}
       <span
-        className={`min-w-0 truncate text-sm text-crit ${compact ? "max-w-[220px]" : "max-w-[360px]"}`}
+        className={`min-w-0 text-sm text-crit ${compact ? "max-w-[220px] leading-[18px] break-words" : "max-w-[360px] truncate"}`}
         title={flag.reason}
       >
         ⚠ {flag.reason}
@@ -683,11 +685,23 @@ export function FloatingCard({
               <FlowPicture flow={item.flow} />
             </button>
           ) : (
-            <span
-              className="rounded-md border border-dashed border-line px-2 py-0.5 text-text2"
-              data-testid="item-flow-none"
-            >
-              No flow yet
+            // fix4 review (qa-simple-roadmap-39): a draft has no flow to draw yet; it says why,
+            // and where it is confirmed (Priorities' "Not ranked yet").
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span
+                className="rounded-md border border-dashed border-line px-2 py-0.5 text-text2"
+                data-testid="item-flow-none"
+              >
+                No flow yet. Once the draft is confirmed, Oracle can draw one.
+              </span>
+              {canChange && (
+                <Link
+                  href="/simple/priorities"
+                  className="text-sm font-semibold text-accent-ink hover:underline"
+                >
+                  Confirm it in Priorities
+                </Link>
+              )}
             </span>
           )}
         </div>
@@ -1020,7 +1034,23 @@ export function FloatingCard({
       {/* #47: the card floats over the chart with nothing to say it has the page's
        * attention; a dimmed backdrop on desktop (a phone's sheet already reads as modal),
        * clicking it closes the card like the close button. */}
-      {!phone && <div aria-hidden data-testid="floating-card-backdrop" className="fixed inset-0 z-[35] bg-black/30" onClick={onClose} />}
+      {!phone && (
+        <div
+          aria-hidden
+          data-testid="floating-card-backdrop"
+          className="fixed inset-0 z-[35] bg-black/30"
+          onClick={(e) => {
+            // fix4 review: the rail is dimmed under the backdrop, yet a click on one of its
+            // links still goes there (not only closes the card).
+            const link = document
+              .elementsFromPoint(e.clientX, e.clientY)
+              .map((el) => el.closest<HTMLElement>('[data-testid="simple-nav"] a, [data-testid="simple-nav"] button'))
+              .find(Boolean);
+            onClose();
+            link?.click();
+          }}
+        />
+      )}
       <div
         ref={ref}
         tabIndex={-1}

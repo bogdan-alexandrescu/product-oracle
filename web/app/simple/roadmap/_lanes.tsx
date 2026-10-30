@@ -1356,7 +1356,7 @@ function LanesLegend({ data, lanes, noWork }: { data: Roadmap; lanes: LaneModel[
 // ---------------------------------------------------------------- B3: the phone
 
 /** A run of one milestone's work in a lane (a gap of more than two weeks starts a new one), as B3's thin bar. */
-type Run = { key: string; milestone: string | null; pm: boolean; plain: Item | null; start: string; end: string; row: number };
+type Run = { key: string; milestone: string | null; pm: boolean; plain: Item | null; start: string; end: string; row: number; names: string[] };
 
 function runsOf(l: LaneModel): { runs: Run[]; rows: number } {
   const by = new Map<string, { p: Piece; item: Item }[]>();
@@ -1371,9 +1371,10 @@ function runsOf(l: LaneModel): { runs: Run[]; rows: number } {
     for (const { p, item } of [...ps].sort((a, b) => ms(a.p.start) - ms(b.p.start))) {
       if (cur && ms(p.start) - ms(cur.end) <= 14 * DAY) {
         if (p.end > cur.end) cur.end = p.end;
+        if (!cur.names.includes(p.name)) cur.names.push(p.name);
         continue;
       }
-      cur = { key: `${k}:${p.start}`, milestone: p.milestone, pm: p.pm, plain: p.milestone || p.pm ? null : item, start: p.start, end: p.end, row: 0 };
+      cur = { key: `${k}:${p.start}`, milestone: p.milestone, pm: p.pm, plain: p.milestone || p.pm ? null : item, start: p.start, end: p.end, row: 0, names: [p.name] };
       runs.push(cur);
     }
   }
@@ -1524,7 +1525,10 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                         stroke={c.stroke}
                         strokeWidth={1.5}
                         strokeDasharray={c.dash}
-                      />
+                      >
+                        {/* fix4 review (qa-simple-roadmap-2): B3's thin bar carries no words; it names its items on a long press, hover and to a screen reader. */}
+                        <title>{r.names.join(", ")}</title>
+                      </rect>
                     );
                   })}
                 </g>
