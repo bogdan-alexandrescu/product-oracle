@@ -78,3 +78,46 @@ async def test_dont_know_on_a_delegated_question_stays_with_the_delegate(client)
     assert out["question"]["status"] == "delegated"
     counts = (await summary(client, ctx, intake_id))["batch"]
     assert (counts["asked"], counts["answered"]) == (3, 0)
+
+
+async def test_dont_know_on_a_deferred_or_researched_question_asks_it_again(client):
+    """protects=an "I don't know" on a deferred or researching question puts it back to asked
+    (open, in the Inbox), never answered; fails_when=it counts answered or stays deferred or
+    researching; no_claim=what the research run finds."""
+    ctx = await company()
+    intake_id, ids = await _brief(client, ctx)
+    await answer(client, ctx, ids[0], "commenter", kind="defer")
+    await answer(client, ctx, ids[1], "commenter", kind="research")
+    for qid in ids[:2]:
+        out = await answer(client, ctx, qid, "commenter", kind="dont_know")
+        assert out["question"]["status"] == "asked"
+        assert out["gap"]["status"] == "unknown"
+    counts = (await summary(client, ctx, intake_id))["batch"]
+    assert (counts["asked"], counts["answered"]) == (3, 0)
+    assert set(ids[:2]) <= {r["question"]["id"] for r in await inbox(client, ctx, "commenter")}
+
+
+async def test_the_same_person_says_i_dont_know_once(client):
+    """protects=once a person's latest answer to a still-open question is their own "I don't
+    know", they are not offered it again and another one is refused, so the ledger keeps one
+    row; anyone else may still say it, and after another answer they may again;
+    fails_when=a repeat adds a ledger row or the Inbox still offers it;
+    no_claim=the web (the Playwright spec)."""
+    ctx = await company()
+    intake_id, ids = await _brief(client, ctx)
+    await answer(client, ctx, ids[0], "commenter", kind="dont_know")
+    [row] = [r for r in await inbox(client, ctx, "commenter") if r["question"]["id"] == ids[0]]
+    assert "dont_know" not in row["answer_paths"] and "answer" in row["answer_paths"]
+    await answer(client, ctx, ids[0], "commenter", expect=409, kind="dont_know")
+    await answer(client, ctx, ids[0], "approver", kind="dont_know")
+    [card] = [
+        c
+        for c in (await batch(client, ctx, intake_id))["questions"]
+        if c["question"]["id"] == ids[0]
+    ]
+    assert [a["kind"] for a in card["answers"]] == ["dont_know", "dont_know"]
+    # The latest is now someone else's: the first person may say it again.
+    await answer(client, ctx, ids[0], "commenter", kind="dont_know")
+    # Other questions still offer it.
+    [other] = [r for r in await inbox(client, ctx, "commenter") if r["question"]["id"] == ids[1]]
+    assert "dont_know" in other["answer_paths"]

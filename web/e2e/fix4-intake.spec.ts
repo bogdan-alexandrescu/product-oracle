@@ -41,7 +41,7 @@ test("qa-work-2: an I don't know answer counts as open (owner 2026-10-29), and t
   await expect(inspector(page).getByTestId("stat-critical")).toContainText("1");
   // The "I don't know" question still waits on someone.
   await expect(page.getByTestId("intake-status")).toHaveText("Waiting for answers");
-  await expect(inspector(page).getByTestId("answered-unknown")).toHaveText(
+  await expect(inspector(page).getByTestId("open-unknown")).toHaveText(
     "1 still open after “I don't know”: what it asks stays a gap until someone answers or decides",
   );
 });

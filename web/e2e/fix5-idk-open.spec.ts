@@ -92,3 +92,19 @@ test("the I don't know note says the question is still open (phone)", async ({ p
   await expect(page.getByTestId("intake-readiness")).toContainText("1 still open after “I don't know”");
   await expect(page.getByTestId("intake-readiness")).not.toContainText("answered “I don't know”");
 });
+
+for (const size of [null, PHONE] as const) {
+  test(`after your own I don't know, the question offers a real answer but not I don't know again${size ? " (phone)" : ""}`, async ({ page }) => {
+    if (size) await page.setViewportSize(size);
+    await newBrief(page);
+    await reply(page, 0, "unsure");
+    await question(page, 0).getByRole("button", { name: "Change answer", exact: true }).click();
+    const form = question(page, 0).getByTestId("answer-question");
+    await expect(form.getByRole("button", { name: "Send answer" })).toBeVisible();
+    await expect(form.getByRole("button", { name: "I don't know" })).toHaveCount(0);
+    // Another question still offers it.
+    await form.getByRole("button", { name: "Cancel" }).click();
+    await question(page, 1).getByRole("button", { name: "Answer", exact: true }).click();
+    await expect(question(page, 1).getByTestId("answer-question").getByRole("button", { name: "I don't know" })).toBeVisible();
+  });
+}

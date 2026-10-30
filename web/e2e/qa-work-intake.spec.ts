@@ -60,7 +60,7 @@ test("qa-work-21: a question answered I don't know stays open (owner 2026-10-29)
   await mine.getByTestId("answer-question").getByRole("button", { name: /^I don't know/ }).click();
   await expect(mine.getByTestId("answer")).toBeVisible();
   // Owner 2026-10-29: an "I don't know" leaves the question open; Answered stays.
-  await expect(inspector(page).getByTestId("answered-unknown")).toContainText("1 still open after “I don't know”");
+  await expect(inspector(page).getByTestId("open-unknown")).toContainText("1 still open after “I don't know”");
   await expect(answered).toContainText("2");
   await expect(gate.getByTestId("missing-gap").filter({ hasText: "answered “I don't know”" })).toHaveCount(1);
 });
