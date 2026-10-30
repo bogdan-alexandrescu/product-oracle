@@ -78,7 +78,7 @@ const CHANNELS = (Object.keys(CHANNEL_LABEL) as Request["channel"][]).filter((c)
  */
 /** Two titles that read the same: case, spaces and end punctuation aside (qa-work-37). */
 const sameTitle = (a: string, b: string) => {
-  const norm = (t: string) => t.toLowerCase().replace(/[\s]+/g, " ").replace(/[.!?]+$/, "").trim();
+  const norm = (t: string) => t.toLowerCase().replace(/[\s]+/g, " ").trim().replace(/[.!?]+$/, "").trim();
   return norm(a) === norm(b);
 };
 

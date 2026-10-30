@@ -24,3 +24,8 @@ def test_no_goal_asks_for_the_outcome() -> None:
 
 def test_with_goals_asks_which_goal() -> None:
     assert question_prompt(_gap([uuid.uuid4()])) == cats.BY_KEY["goal_alignment"].prompt
+
+
+def test_the_company_s_goals_decide_over_the_gap_s_links() -> None:
+    assert question_prompt(_gap([uuid.uuid4()]), has_goal=False) == cats.NO_GOAL_PROMPT
+    assert question_prompt(_gap([]), has_goal=True) == cats.BY_KEY["goal_alignment"].prompt

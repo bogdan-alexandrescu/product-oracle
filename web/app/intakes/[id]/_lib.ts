@@ -125,9 +125,11 @@ export function unknownGaps(batches: Batch[] | undefined): Set<string> {
 /**
  * qa-work-2: the header's chip, in step with the counts beside it. "Waiting for answers" only
  * while a question waits on someone; with none waiting (each answered, an "I don't know"
- * among them) but a critical question still open, the brief waits for a decision.
+ * among them) but a critical question still open, the brief waits for a decision; with no
+ * question asked yet, it says so.
  */
 export function statusChip(s: Summary, counts: Tally): { label: string; kind: ChipKind } {
+  if (s.intake.status === "awaiting_answers" && counts.open === 0 && counts.answered === 0) return { label: "Nothing asked yet", kind: "warn" };
   if (s.intake.status === "awaiting_answers" && counts.open === 0 && s.readiness.open_critical > 0) return { label: "Waiting for a decision", kind: "warn" };
   return STATUS[s.intake.status];
 }

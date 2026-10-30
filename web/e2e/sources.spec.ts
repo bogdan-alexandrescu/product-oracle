@@ -115,8 +115,8 @@ test("/sources: search ranks by confidence and explains the badge", async ({ pag
   await badge.locator("summary").click();
   const factors = badge.getByRole("table", { name: "Confidence factors" });
   await expect(factors).toBeVisible();
-  await expect(factors).toContainText("Kind of source");
-  await expect(factors).toContainText("0.85");
+  await expect(factors.getByRole("row").filter({ hasText: "Kind of source" })).toContainText("High");
+  await expect(factors).not.toContainText("0.85");
   await expect(factors).toContainText("Freshness");
   await expect(hits.nth(1).getByTestId("confidence")).toContainText("Medium confidence");
 

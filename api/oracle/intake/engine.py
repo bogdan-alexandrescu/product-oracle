@@ -726,8 +726,17 @@ def register_findings(
     return reg, stale_ids
 
 
-def question_prompt(gap: KnowledgeGap) -> str:
-    return sharing.question_prompt(gap)
+def question_prompt(gap: KnowledgeGap, has_goal: bool | None = None) -> str:
+    return sharing.question_prompt(gap, has_goal=has_goal)
+
+
+async def has_confirmed_goal(db: AsyncSession) -> bool:
+    """Whether the company has a confirmed goal: a proposed one does not make the goal
+    question ask "which confirmed goal" (qa-onboarding-22)."""
+    found = await db.scalar(
+        select(Entity.id).where(Entity.type == "goal", Entity.status == "confirmed").limit(1)
+    )
+    return found is not None
 
 
 def priorities(
@@ -782,6 +791,7 @@ async def sync_questions(
         if q.gap_id is not None:
             by_gap.setdefault(q.gap_id, []).append(q)
     now = await learned(db)
+    has_goal = await has_confirmed_goal(db)
     before = synced_learned(intake)
     asked = {
         gid for gid, qs in by_gap.items() if any(q.status not in ("draft", "withdrawn") for q in qs)
@@ -828,7 +838,7 @@ async def sync_questions(
                 intake_id=intake.id,
                 document_id=intake.document_id,
                 category=gap.category,
-                prompt=question_prompt(gap),
+                prompt=question_prompt(gap, has_goal),
                 rationale=rationale,
                 priority=priority[gap.id],
                 asked_to=gap.owner_id,
