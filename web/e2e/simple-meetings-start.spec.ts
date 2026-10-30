@@ -71,6 +71,8 @@ for (const phone of [false, true]) {
         await expect(page).toHaveURL(/\/simple\/meetings\/[0-9a-f-]+$/);
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await expect(page.getByRole("timer", { name: "Meeting clock" })).toContainText("/ 45:00");
+        // qa-simple-decide-29: on a phone the attendees and the mode fold into one row.
+        if (phone) await page.getByTestId("meeting-people-toggle").click();
         await expect(page.getByLabel("Attendees")).toContainText("Commenter");
         await expect(page.getByTestId("change-mode").getByRole("combobox")).toHaveValue("named");
         await page.getByTestId("meeting-screen").getByRole("link", { name: "Meetings" }).click();

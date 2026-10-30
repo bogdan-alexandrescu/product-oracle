@@ -42,6 +42,7 @@ function Meetings() {
   const zone = useCompanyZone();
   const { can } = useMe();
   const q = useQuery("simple-meetings-page", () => unwrap(api.GET("/v1/simple/meetings")));
+  const opts = useQuery("simple-meetings-start-options", () => unwrap(api.GET("/v1/simple/meetings/options", { params: { query: {} } })));
   const [sheet, setSheet] = useState<{ occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"] } | null>(null);
   const params = useSearchParams();
   const startParam = params.get("start");
@@ -60,7 +61,8 @@ function Meetings() {
   // qa-simple-decide-31: the one day-and-time format of Meetings, a meeting and Decisions.
   const when = (at: string) => momentWords(at, zone);
   // qa-simple-decide-8: Start review only for who may start one (an owner, or a review's own owner).
-  const mayStart = can("start_simple_meeting", !!q.data?.upcoming.some((o) => o.can_start));
+  // A PRD's own decider may start its review too, so the PRDs' can_start counts as well.
+  const mayStart = can("start_simple_meeting", !!q.data?.upcoming.some((o) => o.can_start) || !!opts.data?.prds.some((p) => p.can_start));
   // The live reviews are listed under Live only (qa-simple-decide-34).
   const liveIds = new Set((q.data?.live ?? []).map((m) => m.id));
   const upcoming = (q.data?.upcoming ?? []).filter((o) => !o.meeting_id || !liveIds.has(o.meeting_id));

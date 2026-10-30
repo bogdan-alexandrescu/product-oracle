@@ -103,6 +103,8 @@ for (const phone of [false, true]) {
           expect(await height(first.getByRole("button", { name: `Cut ${title}` }))).toBeGreaterThanOrEqual(44);
           expect(await height(slice.getByRole("button", { name: /^Move / }).first())).toBeGreaterThanOrEqual(44);
           await tap(first.getByRole("button", { name: `Cut ${title}` }));
+          // qa-simple-decide-28: Cut asks first.
+          await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
           expect(await height(slice.getByRole("button", { name: `Restore ${title}` }))).toBeGreaterThanOrEqual(44);
           await endIt(page);
           const minutes = page.getByRole("region", { name: "Minutes" });
