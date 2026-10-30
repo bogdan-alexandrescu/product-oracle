@@ -36,8 +36,8 @@ async function brokenTile(page: Page): Promise<number> {
   return Number(await n.textContent());
 }
 
-const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-const mobilePush = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Mobile alert push" });
+const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
+const mobilePush = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Mobile alert push: / });
 
 test("qa-simple-home-3: Home's sentence and its list count every broken link the tile counts", async ({ page }) => {
   // fails_when: the sentence counts only the links I decide, or the list stops at three
