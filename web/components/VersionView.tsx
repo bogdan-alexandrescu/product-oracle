@@ -794,6 +794,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     // qa-docs-33: back from whole-draft feedback, on General, where the old comment went.
     setFilters((f) => (feedback ? { ...f, kind: "all", state: "open", scope: "general" } : { ...f, kind: "discussion" }));
     setDiscussionsKey((k) => k + 1);
+    // fix3-discuss review 2: deleting the first message or making the thread private
+    // withdrew or unlinked its item: the list and counts read it again.
+    if (feedback) {
+      void feedbackQ.reload();
+      docQ.reload();
+    }
   };
   const discussionPane =
     discussion &&
