@@ -119,7 +119,7 @@ test.describe("desktop", () => {
     // The tabs keep the page's 16 px from the title row, not 8.
     const title = await header.getByRole("heading", { level: 1 }).boundingBox();
     const action = await header.getByRole("button", { name: "Withdraw link" }).boundingBox();
-    const tabs = await page.getByTestId("requests-nav").boundingBox();
+    const tabs = await page.getByTestId("requests-nav").filter({ visible: true }).boundingBox();
     expect(title && action && tabs).toBeTruthy();
     const rowBottom = Math.max(title!.y + title!.height, action!.y + action!.height);
     expect(tabs!.y - rowBottom).toBeGreaterThanOrEqual(14);
