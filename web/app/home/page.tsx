@@ -106,16 +106,19 @@ export default function HomePage() {
   // A1 welcome: an invited member's first Home, until they dismiss it (a preference).
   // The panel closes once the preference is saved, so a reload right after Dismiss
   // cannot bring it back (the button is disabled while the save runs).
+  // Its own save state, apart from Set up's: one's spinner or error never shows in the other.
+  const [welcomeBusy, setWelcomeBusy] = useState(false);
+  const [welcomeError, setWelcomeError] = useState<string | null>(null);
   async function dismissWelcome() {
-    setSetupBusy(true);
-    setSetupError(null);
+    setWelcomeBusy(true);
+    setWelcomeError(null);
     try {
       await unwrap(api.PATCH("/v1/me/preferences", { body: { welcome_dismissed: true } }));
       setupQ.setData((s) => (s ? { ...s, welcome: false } : s));
     } catch (e) {
-      setSetupError(errorMessage(e));
+      setWelcomeError(errorMessage(e));
     } finally {
-      setSetupBusy(false);
+      setWelcomeBusy(false);
     }
   }
 
@@ -235,9 +238,18 @@ export default function HomePage() {
         }
       >
         {owner && poolQ.data && <ClaudeOffNotice page={poolQ.data} />}
-        {setupError && <Notice tone="error">{setupError}</Notice>}
+        {welcomeError && setupQ.data?.welcome && (
+          <Notice tone="error" testId="home-welcome-error">
+            {welcomeError}
+          </Notice>
+        )}
         {setupQ.data?.welcome && capsReady && (
-          <WelcomePanel onDismiss={dismissWelcome} busy={setupBusy} setup={setupQ.data} setupShown={!!setup && !setup.hidden} />
+          <WelcomePanel onDismiss={dismissWelcome} busy={welcomeBusy} setup={setupQ.data} setupShown={!!setup && !setup.hidden} />
+        )}
+        {setupError && (
+          <Notice tone="error" testId="home-setup-error">
+            {setupError}
+          </Notice>
         )}
         {setup && !setup.hidden && (
           <SetupPanel
