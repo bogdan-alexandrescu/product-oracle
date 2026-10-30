@@ -15,6 +15,11 @@ Test cards (protects / fails_when / no_claim):
   op is a change row with its author and now; another company's owner cannot add, edit
   or remove this company's roadmap's key dates; fails_when=either way; no_claim=the
   key dates' draft rules (test_simple_key_dates_api).
+- test_draft_item_ops_roles_record_and_undo: protects=add_item, keep_both, confirm_item
+  and merge_item on a draft item: owner and decider apply, the approver who reviews the
+  draft proposes (nothing written), a commenter does not see the draft's item, viewer refused; each is a change row with its author and now; an
+  undo of keep_both, confirm_item and merge_item puts back every stored column of every
+  item it touched; fails_when=any of these; no_claim=the drafting job's text.
 - test_every_simple_write_refuses_a_run: protects=every write route under /v1/simple
   refuses a call made for a run (people only act in Simple), before reading its body;
   fails_when=a route lets a run in (a new route without the people-only guard);
@@ -28,12 +33,16 @@ from datetime import datetime
 import pytest
 from sqlalchemy import select
 
+from oracle.roadmap.models import RoadmapItem
+from oracle.simple import drafts
 from oracle.simple.models import RoadmapKeyDate, SimpleChange
 from oracle.tenancy import tenant_session
 from tests.coverage_helpers import run_headers
 from tests.test_promote_csrf import _routes
+from tests.test_simple_additions_api import World as AddWorld
 from tests.test_simple_changes_api import CHANGES, make_people
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
+from tests.test_simple_dod_changes_api import columns
 from tests.test_simple_key_dates_api import LAUNCH, published_key_date
 from tests.test_simple_key_dates_api import post as post_key_date
 from tests.test_simple_key_dates_api import world as key_date_world
@@ -126,3 +135,50 @@ async def test_every_simple_write_refuses_a_run(client):
         assert r.status_code == 403, (method, path, r.text)
     async with tenant_session(ctx.tenant_id) as s:
         assert list(await s.scalars(select(SimpleChange))) == []
+
+
+async def rows(ctx, ids: list[str]) -> dict[str, dict]:
+    async with tenant_session(ctx.tenant_id) as s:
+        return {
+            i: columns(await drafts.effective_row(s, await s.get(RoadmapItem, uuid.UUID(i))))
+            for i in ids
+        }
+
+
+async def test_draft_item_ops_roles_record_and_undo(client):
+    w = await AddWorld().build()
+    for op in ("keep_both", "confirm_item", "merge_item"):
+        c = (await w.add(client, "owner", f"Draft for {op}"))["change"]
+        await recorded(w.ctx, c, "owner", "add_item")
+        draft = c["target"]["item_id"]
+        body = {
+            "keep_both": {"target": {"item_id": draft}, "before": {"kept_both": False},
+                          "after": {"kept_both": True}},
+            "confirm_item": {"target": {"item_id": draft}, "before": {"draft": True},
+                             "after": {"draft": False}},
+            "merge_item": {"target": {"item_id": draft, "into_id": w.ids["import-a"]},
+                           "before": {}, "after": {}},
+        }[op]  # fmt: skip
+        body = {"op": op, **body}
+        touched = [draft, w.ids["import-a"], w.ids["import-b"]]
+        seen = await rows(w.ctx, touched)
+        r = await client.post(CHANGES, json=body, headers=w.as_("viewer"))
+        assert r.status_code == 403, (op, r.text)
+        # A commenter does not see the working draft's new item (it is not theirs to see).
+        r = await client.post(CHANGES, json=body, headers=w.as_("commenter"))
+        assert r.status_code == 404, (op, r.text)
+        for who in ("approver",):
+            r = await client.post(CHANGES, json=body, headers=w.as_(who))
+            assert r.status_code == 201, (op, who, r.text)
+            assert r.json()["change"]["status"] == "proposed", (op, who)
+            await recorded(w.ctx, r.json()["change"], who, op)
+        assert await rows(w.ctx, touched) == seen, op
+        r = await client.post(CHANGES, json=body, headers=w.as_("decider"))
+        assert r.status_code == 201, (op, r.text)
+        c = r.json()["change"]
+        assert c["status"] == "applied", op
+        await recorded(w.ctx, c, "decider", op)
+        assert await rows(w.ctx, touched) != seen, op
+        r = await client.post(f"{CHANGES}/{c['id']}/undo", headers=w.as_("decider"))
+        assert r.status_code == 201, (op, r.text)
+        assert await rows(w.ctx, touched) == seen, op
