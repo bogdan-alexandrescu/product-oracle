@@ -1,4 +1,5 @@
 import { THEME_KEY } from "../lib/theme";
+import { CALL_H, RH } from "../app/simple/roadmap/_pitch";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -12,9 +13,9 @@ import { expect, test, type Locator, type Page } from "./test";
  */
 
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
-const RH = 28;
-/** A callout's line under its row. */
-const CALL_H = 34;
+/** A narrow desktop: the digest's callout is wider than the room right of its pill's start. */
+const NARROW = { viewport: { width: 1024, height: 820 } };
+const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
 const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 const callout = (page: Page, key: string): Locator => page.locator(`[data-testid="broken-callout"][data-item="${key}"]`);
@@ -104,3 +105,46 @@ for (const scheme of ["light", "dark"] as const) {
     });
   });
 }
+
+test.describe("narrow desktop", () => {
+  test.use(NARROW);
+
+  // A pill near the chart's right edge: its callout, on its own line, slides left to stay in the chart, still under its pill.
+  test("a callout with no room to its right slides left, inside the chart and still under its pill", async ({ page }) => {
+    await open(page, "light");
+    await checkUnder(page);
+    const c = callout(page, "alert-digest");
+    const cb = (await c.boundingBox())!;
+    const pb = (await bar(page, "alert-digest").locator("rect[data-body]").first().boundingBox())!;
+    const chart = (await page.getByTestId("simple-chart").boundingBox())!;
+    expect(cb.x + cb.width, "the callout ends inside the chart").toBeLessThanOrEqual(chart.x + chart.width);
+    expect(cb.x, "the callout starts inside the chart").toBeGreaterThanOrEqual(chart.x);
+    expect(cb.x, "the callout slid left of its pill's start").toBeLessThan(pb.x);
+    expect(cb.x + cb.width, "the callout still spans its pill").toBeGreaterThanOrEqual(pb.x + pb.width);
+    // Its fixes are whole and still work.
+    const accept = c.getByRole("button", { name: "Accept as risk" });
+    const ab = (await accept.boundingBox())!;
+    expect(ab.x + ab.width).toBeLessThanOrEqual(chart.x + chart.width);
+    await accept.click();
+    await expect(page.getByLabel("Why it is an accepted risk")).toBeVisible();
+  });
+});
+
+test.describe("phone", () => {
+  test.use(PHONE);
+
+  // The phone's lanes are unchanged: no callout over the chart; the broken item reads red in its lane's list.
+  test("the phone's goal lanes draw no callout; the broken item is marked in its lane's list", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/roadmap");
+    const chart = page.getByTestId("simple-chart");
+    await expect(chart).toHaveAttribute("data-view", "lanes-phone");
+    await expect(chart).toHaveAttribute("data-lanes", "goal");
+    await page.locator('[data-testid="phone-lane"][data-items~="alert-digest"]').click();
+    const row = page.locator('[data-testid="lane-row"][data-item="alert-digest"]');
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("⚠");
+    await expect(row.locator("[title]").last()).toHaveAttribute("title", /which it depends on, ends/);
+    await expect(page.getByTestId("broken-callout")).toHaveCount(0);
+  });
+});
