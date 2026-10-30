@@ -431,12 +431,39 @@ function bare(pathname: string): boolean {
   return pathname.startsWith("/login") || pathname.startsWith("/access") || pathname.startsWith("/oauth") || pathname.startsWith("/i/") || pathname.startsWith("/s/");
 }
 
+/*
+ * qa-shell-31: where the phone's tab bar is drawn, after the page. Kept out of AppShell's state:
+ * setting it there re-rendered Navs while its server HTML was still streaming in, so React drew
+ * the rail again on the client and the streamed copy stayed in the page, hidden, until React
+ * dropped it (two rails, two account buttons, for a moment after every load).
+ */
+let phoneSlotEl: HTMLElement | null = null;
+const phoneSlotListeners = new Set<() => void>();
+
+function setPhoneSlot(el: HTMLElement | null) {
+  if (phoneSlotEl === el) return;
+  phoneSlotEl = el;
+  phoneSlotListeners.forEach((listener) => listener());
+}
+
+function subscribePhoneSlot(listener: () => void) {
+  phoneSlotListeners.add(listener);
+  return () => {
+    phoneSlotListeners.delete(listener);
+  };
+}
+
 /**
  * Rail and tab bar; reads the pathname, so it renders inside its own Suspense boundary.
- * qa-shell-31: the phone's tab bar (and its More sheet) is drawn into `phoneSlot`, after the page,
- * so Tab reaches it last, as it sits at the bottom; the rail stays before the page.
+ * qa-shell-31: the phone's tab bar (and its More sheet) is drawn into the phone slot, after the
+ * page, so Tab reaches it last, as it sits at the bottom; the rail stays before the page.
  */
-function Navs({ phoneSlot }: { phoneSlot: HTMLElement | null }) {
+function Navs() {
+  const phoneSlot = useSyncExternalStore(
+    subscribePhoneSlot,
+    () => phoneSlotEl,
+    () => null,
+  );
   const pathname = usePathname();
   const { me, loading } = useMe();
   // While /v1/me loads, keep the rail so a signed-in page never jumps.
@@ -964,8 +991,6 @@ export function CapsError() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  // qa-shell-31: where the phone's tab bar is drawn, after the page (Navs).
-  const [phoneSlot, setPhoneSlot] = useState<HTMLDivElement | null>(null);
   return (
     <ScreenSubjectProvider>
       {/* qa-plan-63, qa-shell-17: the first stop of Tab. */}
@@ -988,12 +1013,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Suspense>
       <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)_auto] max-[600px]:min-h-[calc(100dvh-var(--phone-top-bar))]">
         <Suspense fallback={null}>
-          <Navs phoneSlot={phoneSlot} />
+          <Navs />
         </Suspense>
         <main id="main" tabIndex={-1} className="col-start-2 row-start-1 min-w-0 outline-none">
           <CapsError />
           {children}
         </main>
+        {/* qa-shell-31: the phone's tab bar (Navs). */}
         <div ref={setPhoneSlot} className="contents" />
         <Suspense fallback={null}>
           <HopDock />
