@@ -3,6 +3,7 @@ import { expect, test, type Page } from "./test";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
 import { V2_IDS } from "../lib/api/mock/v2";
+import { statusChip, type Summary } from "../app/intakes/[id]/_lib";
 
 import { login } from "./helpers";
 
@@ -53,6 +54,13 @@ test("qa-work-2 (review): a brief with critical questions not asked yet does not
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
   await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeAttached();
   await expect(page.getByTestId("intake-status")).toHaveText("Nothing asked yet");
+});
+
+test("qa-work-2 (review): the chip with a critical gap open and nothing asked yet", () => {
+  const s = { intake: { status: "awaiting_answers" }, readiness: { open_critical: 1 } } as unknown as Summary;
+  expect(statusChip(s, { open: 0, answered: 0, unknown: 0 }).label).toBe("Nothing asked yet");
+  expect(statusChip(s, { open: 0, answered: 1, unknown: 1 }).label).toBe("Waiting for a decision");
+  expect(statusChip(s, { open: 1, answered: 0, unknown: 0 }).label).toBe("Waiting for answers");
 });
 
 test("qa-work-2, qa-work-29 (phone): the summary card says what the inspector says, with no second way to Gaps", async ({ page }) => {
