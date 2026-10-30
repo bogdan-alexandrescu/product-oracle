@@ -64,7 +64,9 @@ function Requests({ view }: { view: RequestsView }) {
   const { goal, theme, search } = filters;
   // State and Replies to send are All requests' filters only: To decide does not show them.
   const state = view === "all" ? filters.state : "";
-  const toSend = view === "all" && filters.toSend;
+  // qa-work-40: Replies to send is for those who can send them, not viewers.
+  const canReply = can("update_request_reply", true);
+  const toSend = view === "all" && canReply && filters.toSend;
   // A request picked by hand stays picked across the tabs; a new ?request= (the Inbox's Open) wins.
   const selected = picked && picked.under === wanted ? picked.id : wanted;
   const setSelected = (id: string | null) => setPicked(id ? { id, under: wanted } : null);
@@ -191,22 +193,12 @@ function Requests({ view }: { view: RequestsView }) {
                       </option>
                     ))}
                   </select>
-                  {view === "all" && (
+                  {view === "all" && canReply && (
                     <label className="flex min-h-9 items-center gap-2 text-sm font-semibold text-text2 max-[600px]:min-h-11">
                       <input type="checkbox" className="max-[600px]:size-5" checked={toSend} onChange={(e) => setFilters({ toSend: e.target.checked })} />
                       Replies to send
                     </label>
                   )}
-                </div>
-              )}
-              {view === "all" && chosen.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-                  <Button variant="primary" onClick={() => router.push(startPrdHref(chosen))}>
-                    {`Start a PRD from ${plural(chosen.length, "request")}`}
-                  </Button>
-                  <Button variant="ghost" onClick={() => setChosen([])}>
-                    Clear
-                  </Button>
                 </div>
               )}
               {listed.data &&
@@ -232,6 +224,21 @@ function Requests({ view }: { view: RequestsView }) {
                     }
                   />
                 ))}
+              {view === "all" && chosen.length > 0 && (
+                // qa-work-8: the bar stays at the bottom of the screen, wherever the ticked row is
+                // (above the phone's bottom bar).
+                <div
+                  data-testid="start-prd-bar"
+                  className="sticky bottom-0 z-20 flex flex-wrap items-center gap-2 rounded-b-panel border-t border-line bg-surface px-4 py-3 shadow-tip max-[600px]:bottom-[68px] max-[600px]:px-3"
+                >
+                  <Button variant="primary" className="max-[600px]:h-11" onClick={() => router.push(startPrdHref(chosen))}>
+                    {`Start a PRD from ${plural(chosen.length, "request")}`}
+                  </Button>
+                  <Button variant="ghost" className="max-[600px]:h-11" onClick={() => setChosen([])}>
+                    Clear
+                  </Button>
+                </div>
+              )}
             </Panel>
           </Split>
         )}

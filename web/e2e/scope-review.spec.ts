@@ -51,8 +51,8 @@ test("a blocking dependency disables Approve until Include <dependency> fixes it
   await expect(approve).toHaveAttribute("title", "1 blocking problem left");
 
   const bulk = row(page, "Bulk edit");
-  await expect(bulk.getByTestId("row-reasons")).toContainText("Depends on a left-out feature");
-  await bulk.getByRole("button", { name: "Include Address book export" }).click();
+  await expect(bulk.getByTestId("row-reasons")).toContainText("Depends on Address book export, left out");
+  await bulk.getByRole("button", { name: "Include dependency" }).click();
   await expect(bulk.getByTestId("row-done")).toContainText("✓");
   await expect(bar(page).getByTestId("decision-tally")).toContainText("0 blocking problems left");
   await expect(bar(page).getByRole("button", { name: "Approve with 1 edit" })).toBeEnabled();
@@ -65,7 +65,7 @@ test("leave out asks a reason, stages a chip, and removing the chip undoes it", 
   await seeded(page);
   await openReview(page, "saved-addresses");
   const labels = row(page, "Address labels");
-  await expect(labels).toContainText("No goal");
+  await expect(labels.getByTestId("row-reasons")).toContainText("No confirmed goal");
   await labels.getByRole("button", { name: "Leave out", exact: true }).click();
   const why = labels.getByRole("group", { name: "Why leave it out?" });
   await expect(why).toBeVisible();
@@ -111,7 +111,7 @@ test("add a requirement, approve with edits, and the baseline lists it under its
   await seeded(page);
   await openReview(page, "saved-addresses");
   // The blocking dependency first, so Approve is open.
-  await row(page, "Bulk edit").getByRole("button", { name: "Include Address book export" }).click();
+  await row(page, "Bulk edit").getByRole("button", { name: "Include dependency" }).click();
   await page.getByRole("button", { name: /^All/ }).click();
   await row(page, "Saved addresses").getByTestId("feature-title").click();
   const inspector = page.getByTestId("scope-inspector");

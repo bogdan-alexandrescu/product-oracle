@@ -227,6 +227,12 @@ export function CoverageTable({
   );
 }
 
+/** A baseline type in words: "feature" is "Feature", "job_to_be_done" is "Job to be done". */
+const typeWords = (t: string) => {
+  const w = t.replace(/_/g, " ");
+  return w.charAt(0).toUpperCase() + w.slice(1);
+};
+
 /** One use: a link to the baseline item, the document version, or the section. */
 function UseRow({ use }: { use: UsedIn }) {
   let href = "";
@@ -236,7 +242,8 @@ function UseRow({ use }: { use: UsedIn }) {
   if (use.kind === "evidence") {
     icon = "baseline";
     title = use.entity?.title ?? "Baseline item";
-    extra = use.entity ? <Chip kind="acc">{use.entity.type}</Chip> : null;
+    // qa-work-34: the baseline type in words ("Feature"), never the lowercase enum.
+    extra = use.entity ? <Chip kind="acc">{typeWords(use.entity.type)}</Chip> : null;
     href = use.entity ? `/baseline?entity=${use.entity.id}` : "/baseline";
   } else if (use.document) {
     const base = `/documents/${use.document.slug}${use.version ? `/v/${use.version}` : ""}`;
@@ -338,7 +345,8 @@ export function CoverageInspector({
             value={
               <>
                 {n(k.items)}
-                {k.newest_at && <span className="ml-2 font-normal text-text2">{formatDate(k.newest_at)}</span>}
+                {/* qa-work-34: the date says what it is. */}
+                {k.newest_at && <span className="ml-1 font-normal text-text2"> · newest {formatDate(k.newest_at)}</span>}
               </>
             }
           >
@@ -439,7 +447,7 @@ export function CoverageInspector({
                 </Button>
               )}
               <LinkButton href={`/settings/sources#source-${c.source_id}`} icon="settings">
-                Edit picks
+                Edit picks in Settings
               </LinkButton>
               {c.status === "paused" && c.kind !== "upload" && <span className="text-sm text-text2">Paused: resume it to sync</span>}
             </div>

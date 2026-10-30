@@ -78,7 +78,7 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await expect(sheet).not.toContainText("Use the current baseline");
 
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^Estimated \$[\d,]+\.\d{2}/);
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^\$[\d,]+\.\d{2} estimated/);
   // An owner approves a cost over the threshold here (#259); under it the button just starts.
   await sheet.getByRole("button", { name: /^(Start drafting|Approve \$[\d,]+\.\d{2} and start)$/ }).click();
 

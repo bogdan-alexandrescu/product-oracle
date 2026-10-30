@@ -24,6 +24,8 @@ test("a running segment shows its agents and the cost so far, and Refresh progre
   const progress = items.getByTestId("segment-progress");
   await expect(progress).toContainText("$0.00 spent so far");
   await expect(progress).toContainText("Not checked yet");
+  // fix4 qa-work-16: in plain words.
+  await expect(progress).not.toContainText("Oracle reads the agents");
 
   // The first check: the agents are working; each shows its role, state, elapsed time and
   // last heartbeat, and the cost so far reaches the segment and the run.

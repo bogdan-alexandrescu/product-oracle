@@ -210,7 +210,8 @@ export function RequestInspector({
         />
       </InspectorSection>
       {(request.intake || request.document || (free(request) && can("create_intake", true))) && (
-        <InspectorSection label="PRD">
+        // qa-work-38: not "PRD" twice: Links holds the Linked PRD; this one starts a new PRD, or shows where it went.
+        <InspectorSection label={request.intake || request.document ? "Brief and PRD" : "New PRD"} testId="request-prd-section">
           <PrdLink request={request} canStart={free(request) && can("create_intake", true)} />
         </InspectorSection>
       )}
@@ -411,6 +412,13 @@ function Links({
     );
   };
   const live = themes.filter((t) => !t.archived || t.id === request.theme?.id);
+  // qa-work-38: Save links waits for a change.
+  const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+  const changed =
+    !same(goalIds, request.goal_ids) ||
+    themeId !== (request.theme?.id ?? "") ||
+    featureId !== (request.feature_id ?? "") ||
+    documentId !== (request.document?.id ?? "");
   return (
     <form className="flex flex-col gap-2" onSubmit={save}>
       <fieldset className="flex flex-col gap-1">
@@ -450,7 +458,7 @@ function Links({
         </select>
       </label>
       <label className={LABEL}>
-        PRD
+        Linked PRD
         <select className={INPUT} value={documentId} onChange={(e) => setDocumentId(e.target.value)}>
           <option value="">None</option>
           {(prds.data ?? []).map((d) => (
@@ -461,7 +469,7 @@ function Links({
         </select>
       </label>
       <div className="flex justify-end">
-        <Button variant="solid" type="submit" disabled={busy}>
+        <Button variant="solid" type="submit" disabled={busy || !changed} title={changed ? undefined : "Change a link first"}>
           Save links
         </Button>
       </div>

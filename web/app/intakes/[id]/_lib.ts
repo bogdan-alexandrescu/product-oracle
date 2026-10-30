@@ -122,6 +122,24 @@ export function unknownGaps(batches: Batch[] | undefined): Set<string> {
   );
 }
 
+/**
+ * qa-work-2: the header's chip, in step with the counts beside it. "Waiting for answers" only
+ * while a question waits on someone; with none waiting (each answered, an "I don't know"
+ * among them) but a critical question still open, the brief waits for a decision; with no
+ * question asked yet, it says so.
+ */
+export function statusChip(s: Summary, counts: Tally): { label: string; kind: ChipKind } {
+  if (s.intake.status === "awaiting_answers" && counts.open === 0 && counts.answered === 0) return { label: "Nothing asked yet", kind: "warn" };
+  if (s.intake.status === "awaiting_answers" && counts.open === 0 && s.readiness.open_critical > 0) return { label: "Waiting for a decision", kind: "warn" };
+  return STATUS[s.intake.status];
+}
+
+/** Why an "I don't know" counted as answered still leaves its gap open (qa-work-2), or null. */
+export function unknownNote(counts: Tally): string | null {
+  if (counts.unknown === 0) return null;
+  return `${counts.unknown} answered “I don't know”: what ${counts.unknown === 1 ? "it asks stays" : "they ask stays"} a gap until someone answers or decides`;
+}
+
 /** "1 critical question holds the draft" / "2 critical questions hold the draft". */
 export function holdCount(n: number): string {
   return `${criticalCount(n)} ${n === 1 ? "holds" : "hold"} the draft`;

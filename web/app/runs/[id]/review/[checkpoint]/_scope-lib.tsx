@@ -62,7 +62,7 @@ export function describeAction(a: Pick<Action, "kind" | "field" | "value" | "ans
   if (a.kind === "edit" && a.field === "blocker_keys") return "Remove blocker";
   if (a.kind === "edit") return `Edit ${a.field ?? "row"}`;
   if (a.kind === "add") return `Add requirement: ${((a.value ?? {}) as { text?: string }).text ?? ""}`;
-  if (a.kind === "accept") return "Keep";
+  if (a.kind === "accept") return "Include";
   if (a.kind === "waive") return `Waive (${((a.value ?? {}) as { reason?: string }).reason ?? "no reason"})`;
   if (a.kind === "question") return "Question";
   return `${a.kind} ${title(a.field ?? "")}`.trim();
@@ -88,7 +88,8 @@ export type Ui = {
   waive: (f: Feature, code: string) => void;
 };
 
-export type Fix = { label: string; run: () => Promise<void> | void; title?: string };
+/** `decision`: the fix is one of the feature's own decisions (Include, Leave out, Defer), which the inspector's Decision control offers once. */
+export type Fix = { label: string; run: () => Promise<void> | void; title?: string; decision?: boolean };
 
 /** Sets a row's decision: a person's write for an approver, a suggestion for a commenter. */
 export function setDecision(mode: Mode, ops: Ops, row: { id: string; key: string; lock_version: number }, decision: string, reason?: string | null) {
@@ -106,9 +107,10 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
   if (mode === "viewer") return [];
   const byKey = new Map(scope.features.map((x) => [x.key, x]));
   const approver = mode === "approver";
-  const keep = (label: string): Fix => ({ label, run: () => ops.act({ item_key: f.key, kind: "accept", answers: [reason.code] }) });
-  const leaveOut: Fix = { label: "Leave out", run: () => ui.leaveOut(f) };
-  const defer: Fix = { label: "Defer", run: () => setDecision(mode, ops, f, "defer") };
+  // qa-work-9: one word for keeping a feature in the set, as the Decision control says it (Include).
+  const keep = (label: string): Fix => ({ label, decision: true, run: () => ops.act({ item_key: f.key, kind: "accept", answers: [reason.code] }) });
+  const leaveOut: Fix = { label: "Leave out", decision: true, run: () => ui.leaveOut(f) };
+  const defer: Fix = { label: "Defer", decision: true, run: () => setDecision(mode, ops, f, "defer") };
   const waive: Fix | null = approver && reason.waivable ? { label: "Waive", run: () => ui.waive(f, reason.code) } : null;
   const removeDeps = (keys: string[]): Fix => ({ label: "Remove dependency", run: () => setField(mode, ops, f, "depends_on", f.depends_on.filter((d) => !keys.includes(d))) });
   let fixes: (Fix | null)[];
@@ -116,7 +118,8 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
     case "depends_on_excluded": {
       const dep = f.depends_on.map((d) => byKey.get(d)).find((d) => d && d.decision !== "include");
       fixes = dep
-        ? [{ label: `Include ${dep.title}`, title: `Include ${dep.title}`, run: () => setDecision(mode, ops, dep, "include") }, removeDeps([dep.key]), { label: "Leave this out too", run: () => ui.leaveOut(f) }, waive]
+        ? // qa-work-12: a short label on one line; the dependency is named in the reason chip and the tooltip.
+          [{ label: "Include dependency", title: `Include ${dep.title}`, run: () => setDecision(mode, ops, dep, "include") }, removeDeps([dep.key]), { label: "Leave this out too", decision: true, run: () => ui.leaveOut(f) }, waive]
         : [waive];
       break;
     }
@@ -137,20 +140,20 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
       fixes = [leaveOut];
       break;
     case "serves_no_goal":
-      fixes = [leaveOut, { label: "Pick a goal", run: () => ui.pickGoal(f) }, keep("Keep anyway")];
+      fixes = [leaveOut, { label: "Pick a goal", run: () => ui.pickGoal(f) }, keep("Include anyway")];
       break;
     case "low_confidence":
     case "linked_blocker":
-      fixes = [keep("Keep"), defer];
+      fixes = [keep("Include"), defer];
       break;
     case "new_feature":
-      fixes = [keep("Keep"), leaveOut];
+      fixes = [keep("Include"), leaveOut];
       break;
     case "duplicate_of_existing":
-      fixes = [{ label: "Leave out", run: () => setDecision(mode, ops, f, "exclude", "duplicate") }, keep("Keep")];
+      fixes = [{ label: "Leave out", decision: true, run: () => setDecision(mode, ops, f, "exclude", "duplicate") }, keep("Include")];
       break;
     default:
-      fixes = reason.severity === "blocking" ? [waive] : [keep("Keep")];
+      fixes = reason.severity === "blocking" ? [waive] : [keep("Include")];
   }
   const out = fixes.filter((x): x is Fix => !!x);
   // A commenter's Waive is never offered; every other fix becomes a suggestion.
@@ -192,3 +195,19 @@ export function reasonText(reason: Pick<Reason, "label">, scope: Scope): string 
 }
 
 export const pct = (c: number | null | undefined) => (c == null ? null : Math.round(c * 100));
+
+/**
+ * qa-work-9: the Decision control's Include on a feature the set already includes answers its
+ * open to-confirm reasons (what a row's Include fix does); on a left-out or deferred feature
+ * it includes it again.
+ */
+export function includeFeature(mode: Mode, ops: Ops, f: Feature): Promise<void> | void {
+  if (f.decision !== "include") return setDecision(mode, ops, f, "include");
+  const codes = f.reasons.filter((r) => !r.answered && r.severity !== "blocking").map((r) => r.code);
+  if (codes.length) return ops.act({ item_key: f.key, kind: "accept", answers: codes });
+}
+
+/** qa-work-16: what the agents proposed, in the Decision control's words ("Oracle proposes: Include"). */
+export function proposedText(decision: string): string {
+  return `Oracle proposes: ${{ exclude: "Leave out", defer: "Defer to a later PRD" }[decision] ?? "Include"}`;
+}

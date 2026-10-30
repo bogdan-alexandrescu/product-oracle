@@ -334,7 +334,13 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
   );
 }
 
-/** Where the flows with their own door start: one line each, linked when there is a screen. */
+/**
+ * A flow whose door is on every document (Build next draft) has no screen of its own: its line
+ * opens the documents list, where the PRD or roadmap is picked (qa-work-7: every line a link).
+ */
+const DOCUMENTS_HREF = "/documents";
+
+/** Where the flows with their own door start: one link each. */
 function FlowPointers({ flows }: { flows: Flow[] }) {
   if (!flows.length) return null;
   return (
@@ -343,13 +349,9 @@ function FlowPointers({ flows }: { flows: Flow[] }) {
         const start = f.starts_from!;
         return (
           <li key={f.key} className="flex items-center gap-1.5" data-testid="flow-pointer">
-            {start.href ? (
-              <Link href={start.href} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
-                {start.label}
-              </Link>
-            ) : (
-              <span>{start.label}</span>
-            )}
+            <Link href={start.href ?? DOCUMENTS_HREF} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+              {start.label}
+            </Link>
           </li>
         );
       })}

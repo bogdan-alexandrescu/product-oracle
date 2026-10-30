@@ -29,6 +29,24 @@ const DEPTHS: { value: Depth; label: string }[] = [
 
 const usd = formatMoney;
 
+/** "$50" for a whole-dollar line, else "$50.50" (as the baseline dialog writes it). */
+const lineUsd = (n: number) => (Number.isInteger(n) ? `$${n}` : usd(n));
+
+/**
+ * qa-onboarding-23: the estimate in the baseline dialog's words (BuildBaseline's
+ * estimateLine): the total, its parts (building the baseline, drafting the PRD), the
+ * approval line and who approves. "$36.50 estimated ($7.00 to build the baseline, $29.50 to
+ * draft the PRD) · below the $50 approval line · starts at once".
+ */
+export function draftEstimateLine(e: Schemas["EstimateOut"]): string {
+  const base = e.segments.filter((s) => s.name === "baseline" && !s.reused).reduce((n, s) => n + s.estimate_usd, 0);
+  const parts = base > 0 ? ` (${usd(base)} to build the baseline, ${usd(Math.max(0, Math.round((e.total_usd - base) * 100) / 100))} to draft the PRD)` : "";
+  const gate = e.needs_approval
+    ? `above the ${lineUsd(e.approval_threshold_usd)} approval line · an owner approves it before it starts`
+    : `below the ${lineUsd(e.approval_threshold_usd)} approval line · starts at once`;
+  return `${usd(e.total_usd)} estimated${parts} · ${gate}`;
+}
+
 /** Why the baseline is rebuilt first, as its tooltip says it. */
 function reasonText(status: ReviewStatus): string {
   if (status.reason === "build_under_way" || status.build_under_way) return "A baseline build is under way";
@@ -333,8 +351,7 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
         <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
           {estimate ? (
             <p data-testid="draft-estimate" className="min-w-0 flex-1 text-text">
-              <span className="tnum font-semibold">Estimated {usd(estimate.total_usd)}</span>
-              {estimate.needs_approval && <span className="text-text2"> · Needs an owner&apos;s approval before it starts</span>}
+              <span className="tnum">{draftEstimateLine(estimate)}</span>
             </p>
           ) : (
             // qa-onboarding-17: why Start drafting waits.

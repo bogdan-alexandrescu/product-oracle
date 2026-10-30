@@ -155,8 +155,9 @@ test("qa-work-43, qa-work-44, qa-work-45: an interview's page says what to do, w
   await expect(page).toHaveURL(/\/requests\/interviews\/[^/]+$/);
   const header = page.locator("[data-page-header]");
   await expect(header.getByRole("heading", { name: /Ana Lima/ })).toBeAttached();
-  // The tabs are a way back; rirs-40 adds "All interviews" above the name (its name is not the tab's).
-  await expect(header.getByRole("link", { name: "Interviews", exact: true })).toHaveCount(1);
+  // qa-work-44 (fix4): one way back, "← Interviews"; the Requests tabs are not drawn here.
+  await expect(header.getByRole("link", { name: "Interviews", exact: true })).toHaveCount(0);
+  await expect(header.getByTestId("interview-back")).toHaveText("← Interviews");
   await expect(header.getByRole("button", { name: "Withdraw link" })).toBeVisible();
   await expect(page.getByTestId("interview-link-note")).toContainText("can't be shown or copied again");
   await expect(page.getByTestId("interview-link-note")).toContainText("If Ana Lima lost it, use Make a new link; the old link stops working.");
@@ -191,13 +192,17 @@ test.describe("phone", () => {
     await login(page);
     await page.goto("/requests");
     await expect(rows(page).first()).toBeVisible();
-    // qa-shell-26: New request and More share one line that fills the width.
+    // qa-work-41 (fix4): one line, New request and More; Interview a customer sits under More.
     const actions = await box(page, "requests-actions");
-    const add = (await page.getByTestId("requests-actions").getByRole("button", { name: "New request", exact: true }).boundingBox())!;
-    const more = (await page.getByTestId("requests-more").boundingBox())!;
-    expect(Math.abs(add.x - actions.x)).toBeLessThan(1);
-    expect(Math.abs(more.x + more.width - (actions.x + actions.width))).toBeLessThan(1);
-    for (const b of [add, more]) expect(b.height).toBeGreaterThanOrEqual(44);
+    expect(actions.height).toBeLessThan(56);
+    for (const name of ["New request", "More"]) {
+      const b = (await page.getByTestId("requests-actions").getByRole("button", { name, exact: true }).boundingBox())!;
+      expect(b.height).toBeGreaterThanOrEqual(44);
+    }
+    await page.getByTestId("requests-more").click();
+    const interview = (await page.getByTestId("requests-more-panel").getByRole("button", { name: "Interview a customer" }).boundingBox())!;
+    expect(interview.height).toBeGreaterThanOrEqual(44);
+    await page.getByTestId("requests-more").click();
     const filters = page.getByTestId("request-filters");
     const widths = await Promise.all(
       ["Search requests", "State", "Goal", "Theme"].map(async (n) => (await filters.getByLabel(n, { exact: true }).boundingBox())!.width),

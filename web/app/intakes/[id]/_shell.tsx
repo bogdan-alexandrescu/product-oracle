@@ -18,8 +18,8 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { DraftSheet } from "./_draft-sheet";
 import { FindingsTab } from "./_findings";
 import { GapsTab } from "./_gaps";
-import { IntakeInspector, readiness } from "./_inspector";
-import { OPEN_GAP, STATUS, dayMonth, gateReason, tally, type Batch, type Summary } from "./_lib";
+import { IntakeInspector, readiness, readinessTitle } from "./_inspector";
+import { OPEN_GAP, dayMonth, gateReason, statusChip, tally, unknownNote, type Batch, type Summary } from "./_lib";
 import { ProposalsTab } from "./_proposals";
 import { QuestionsTab } from "./_questions";
 import { ReadLine } from "./_read";
@@ -86,7 +86,7 @@ export function BeforeDrafting({ id }: { id: string }) {
       }
       setFocusing(null);
       li.scrollIntoView({ block: "center" });
-      const button = [...li.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === "Answer");
+      const button = [...li.querySelectorAll<HTMLButtonElement>("button")].find((b) => ["Answer", "Change answer"].includes(b.textContent?.trim() ?? ""));
       if (button) return button.focus();
       // Asked of someone else: the question itself takes the focus.
       li.setAttribute("tabindex", "-1");
@@ -173,7 +173,8 @@ export function BeforeDrafting({ id }: { id: string }) {
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
   const reason = blocked ? gateReason(gate.blocking_gap_ids.length, gate.open_critical) : null;
-  const status = STATUS[s.intake.status];
+  // qa-work-2: the chip and the counts read one tally of the asked questions.
+  const status = statusChip(s, tally(s, batchesQ.data ?? undefined));
   const openGaps = s.gaps.filter((g) => OPEN_GAP.has(g.status)).length;
   const fresh = s.new_evidence.visible ? (s.new_evidence.count ?? 0) : 0;
 
@@ -283,6 +284,8 @@ export function BeforeDrafting({ id }: { id: string }) {
       {s.ai_read && (
         <ReadLine
           read={s.ai_read}
+          openGaps={openGaps}
+          asked={(batchesQ.data ?? []).reduce((n, b) => n + b.questions.length, 0)}
           mayRead={mayRead && !converted && !archived}
           mayDraft={mayDraft && !converted && !archived}
           busy={busy}
@@ -294,7 +297,7 @@ export function BeforeDrafting({ id }: { id: string }) {
       {archived && (
         <Notice testId="intake-archived">This brief is archived: it has left PRDs › Ideas and Oracle asks nothing more.</Notice>
       )}
-      {phone && <PhoneReadiness summary={s} batches={batchesQ.data ?? undefined} openGaps={openGaps} onOpen={() => setSheet(true)} />}
+      {phone && <PhoneReadiness summary={s} batches={batchesQ.data ?? undefined} onOpen={() => setSheet(true)} />}
       <Split inspector={phone ? undefined : inspector}>
         <TabBar<Tab>
           label="Before drafting"
@@ -358,26 +361,30 @@ function BackToPrds() {
 }
 
 /**
- * qa-work-22: on a phone the inspector is a sheet, so "Ready to draft?" stays on the page as a
- * short summary (where the brief stands, the counts) with the sheet behind "Gaps N open".
+ * qa-work-22: on a phone the inspector is a sheet, so a short summary stays on the page (where
+ * the brief stands, the counts) with the sheet behind "Show details". qa-work-29: in the
+ * inspector's own words (Before drafting, its title, its counts); the Gaps tab below is the
+ * one way to the gaps.
  */
-function PhoneReadiness({ summary: s, batches, openGaps, onOpen }: { summary: Summary; batches: Batch[] | undefined; openGaps: number; onOpen: () => void }) {
+function PhoneReadiness({ summary: s, batches, onOpen }: { summary: Summary; batches: Batch[] | undefined; onOpen: () => void }) {
   const state = readiness(s);
   const counts = tally(s, batches);
+  const note = unknownNote(counts);
   return (
-    <section aria-label="Ready to draft?" data-testid="intake-readiness" className="mb-3 flex flex-col gap-2 rounded-panel border border-line bg-surface p-3 shadow-panel">
+    <section aria-label="Before drafting" data-testid="intake-readiness" className="mb-3 flex flex-col gap-2 rounded-panel border border-line bg-surface p-3 shadow-panel">
+      <p className="text-[12px] font-semibold tracking-wide text-text2 uppercase">Before drafting</p>
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-[15px] font-semibold text-text">Ready to draft?</h2>
+        <h2 className="text-[15px] font-semibold text-text">{readinessTitle(s)}</h2>
         <Chip kind={state.kind} dot>
           {state.label}
         </Chip>
       </div>
       <p className="text-sm text-text2" data-testid="intake-readiness-counts">
-        {counts.open} open · {counts.answered} answered
-        {counts.unknown > 0 ? ` (${counts.unknown} as unknown)` : ""} · {plural(s.readiness.open_critical, "critical question")} open
+        {counts.open} open · {counts.answered} answered · {s.readiness.open_critical} critical open
       </p>
+      {note && <p className="text-[13px] text-text2">{note}</p>}
       <Button className="w-full" onClick={onOpen}>
-        Gaps {openGaps} open
+        Show details
       </Button>
     </section>
   );

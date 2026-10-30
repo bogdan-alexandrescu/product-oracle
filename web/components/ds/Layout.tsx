@@ -30,6 +30,7 @@ export function PageHeader({
   testId,
   phoneTitle = false,
   phoneActionStart = false,
+  statusBelow = false,
 }: {
   title: ReactNode;
   /** Right after the title, small: "v3". */
@@ -51,6 +52,11 @@ export function PageHeader({
   phoneTitle?: boolean;
   /** On a phone the action lines up with the page's left edge when it drops to a line of its own (qa-docs-65). */
   phoneActionStart?: boolean;
+  /**
+   * Off a phone, the status chips take a line of their own under the title and the actions, so
+   * the actions stay on the title's line however long the chips are (a run's page, qa-work-22).
+   */
+  statusBelow?: boolean;
 }) {
   // One flat wrapping row. The status chips take their full width (flex-auto, not a 0 basis)
   // so they drop to a line of their own when the title and the actions leave no room for
@@ -81,7 +87,9 @@ export function PageHeader({
       </h1>
       {info && <PageInfo info={info} />}
       <div
-        className={`flex min-w-0 flex-auto flex-wrap items-center gap-2 ${status ? "" : "max-[600px]:hidden"}`}
+        className={`flex min-w-0 flex-auto flex-wrap items-center gap-2 ${status ? "" : "max-[600px]:hidden"} ${
+          statusBelow ? "min-[601px]:order-last min-[601px]:basis-full" : ""
+        }`}
       >
         {status}
       </div>

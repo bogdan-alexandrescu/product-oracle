@@ -210,9 +210,9 @@ test("sheet toggle: Engineering dates is on with its help, unchecking it lowers 
     "After the PRD review, the engineering lead records the dates behind the draft's Now items.",
   );
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet(page).getByTestId("draft-estimate")).toHaveText("Estimated $29.50");
+  await expect(sheet(page).getByTestId("draft-estimate")).toContainText("$29.50 estimated");
   await toggle.uncheck();
-  await expect(sheet(page).getByTestId("draft-estimate")).toHaveText("Estimated $24.50");
+  await expect(sheet(page).getByTestId("draft-estimate")).toContainText("$24.50 estimated");
   // Off, the run skips the whole step, with its note.
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);

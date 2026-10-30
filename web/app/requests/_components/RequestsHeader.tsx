@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button, PageHeader, ViewOnly } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
@@ -11,19 +11,74 @@ import { InterviewDialog } from "./InterviewDialog";
 import { NewRequestButton } from "./NewRequest";
 import { ClassifyNow, DailyTriageSwitch, TriageMenu, TriageStatusLine } from "./Triage";
 
-/** On a phone the actions take the screen's width (qa-work-39): the Page's 10 px sides off it. */
+/** On a phone the actions take the screen's width (the Page's 10 px sides off it): New request, then More (qa-work-41). */
 const ACTIONS = "flex flex-wrap items-center justify-end gap-2 max-[600px]:w-[calc(100vw-1.25rem)] max-[600px]:flex-nowrap";
 
-const PHONE = "(max-width: 600px)";
-
-function subscribePhone(onChange: () => void) {
-  const mq = window.matchMedia(PHONE);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
+/** The phone's width, as the app's max-[600px] styles read it. */
+function usePhoneWidth(): boolean {
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia("(max-width: 600px)");
+    const on = () => setPhone(q.matches);
+    on();
+    q.addEventListener("change", on);
+    return () => q.removeEventListener("change", on);
+  }, []);
+  return phone;
 }
 
-function useIsPhone(): boolean {
-  return useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+/** The phone's More menu (qa-work-41): the header's other actions, under one button beside New request. */
+function MoreMenu({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      // The Auto-sort panel inside closes first on its own Escape.
+      if (e.key !== "Escape" || root.current?.querySelector("[data-testid=triage-menu-panel]")) return;
+      setOpen(false);
+      root.current?.querySelector<HTMLElement>("[data-more-button]")?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+  return (
+    <div ref={root} className="relative flex-none">
+      <Button
+        data-more-button=""
+        data-testid="requests-more"
+        variant="secondary"
+        className="h-11"
+        aria-expanded={open}
+        aria-controls="requests-more-panel"
+        onClick={() => setOpen((o) => !o)}
+      >
+        More
+      </Button>
+      {open && (
+        <div
+          id="requests-more-panel"
+          role="group"
+          aria-label="More actions"
+          data-testid="requests-more-panel"
+          className="absolute top-full right-0 z-30 mt-2 flex w-[calc(100vw-1.25rem)] flex-col items-stretch gap-2 rounded-panel border border-line bg-surface p-3 shadow-tip"
+          onClick={(e) => {
+            // A chosen action (Interview a customer) closes the menu; the Auto-sort control keeps it open.
+            if ((e.target as HTMLElement).closest("[data-closes-more]")) setOpen(false);
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -48,10 +103,18 @@ export function RequestsHeader({
 }) {
   const { can, capsReady } = useMe();
   const [interviewing, setInterviewing] = useState(false);
-  const phone = useIsPhone();
+  const phone = usePhoneWidth();
   const canChange = can("set_request_triage_daily");
   const canStart = can("start_request_triage");
-  const canInterview = can("create_interview");
+  const triageMenu = <TriageMenu triage={triage} canChange={canChange} canStart={canStart} />;
+  const interview = can("create_interview") && (
+    <Button data-closes-more="" className="max-[600px]:h-11" onClick={() => setInterviewing(true)}>
+      Interview a customer
+    </Button>
+  );
+  // qa-work-41: on a phone one primary button (New request) shows; the rest sit under More.
+  // Auto-sort's state alone (no switch for this role) stays a chip beside it.
+  const more = phone && (canChange || canStart || !!interview);
   return (
     <>
       <PageHeader
@@ -66,30 +129,22 @@ export function RequestsHeader({
         action={
           capsReady && (
             <div data-testid="requests-actions" className={ACTIONS}>
-              {phone && (canChange || canStart || canInterview) ? (
-                <PhoneMore>
-                  {canInterview && (
-                    <Button className="h-11 w-full" onClick={() => setInterviewing(true)}>
-                      Interview a customer
-                    </Button>
-                  )}
-                  {canChange || canStart ? (
-                    <div role="group" aria-label="Sort incoming requests automatically" data-testid="triage-menu-panel" className="flex flex-col gap-3">
-                      {canChange && <DailyTriageSwitch triage={triage} canChange />}
-                      {canStart && <ClassifyNow triage={triage} />}
-                    </div>
-                  ) : (
-                    // A commenter reads its state, as on a desktop.
-                    <TriageMenu triage={triage} canChange={false} canStart={false} />
-                  )}
-                </PhoneMore>
+              {more ? (
+                <>
+                  {!canChange && !canStart && triageMenu}
+                  <NewRequestButton onFiled={onFiled} className="h-11 min-w-0 flex-1" fromAddress />
+                  <MoreMenu>
+                    {(canChange || canStart) && triageMenu}
+                    {interview}
+                  </MoreMenu>
+                </>
               ) : (
                 <>
-                  <TriageMenu triage={triage} canChange={canChange} canStart={canStart} />
-                  {canInterview && <Button onClick={() => setInterviewing(true)}>Interview a customer</Button>}
+                  {triageMenu}
+                  {interview}
+                  <NewRequestButton onFiled={onFiled} className="max-[600px]:h-11 max-[600px]:flex-1" fromAddress />
                 </>
               )}
-              <NewRequestButton onFiled={onFiled} className="max-[600px]:h-11 max-[600px]:flex-1" fromAddress />
             </div>
           )
         }
@@ -107,52 +162,3 @@ export function RequestsHeader({
   );
 }
 
-/** The phone's More: the header's other actions in one panel under a single button (qa-shell-26). */
-function PhoneMore({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setOpen(false);
-      root.current?.querySelector<HTMLElement>("[data-requests-more]")?.focus();
-    };
-    const onDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
-    };
-  }, [open]);
-  return (
-    <div ref={root} className="relative order-last">
-      <Button
-        data-requests-more=""
-        data-testid="requests-more"
-        icon="more"
-        className="h-11"
-        aria-haspopup="true"
-        aria-expanded={open}
-        aria-controls="requests-more-panel"
-        onClick={() => setOpen((o) => !o)}
-      >
-        More
-      </Button>
-      {open && (
-        <div
-          id="requests-more-panel"
-          role="group"
-          aria-label="More request actions"
-          data-testid="requests-more-panel"
-          className="absolute top-full right-0 z-30 mt-2 flex w-[calc(100vw-1.25rem)] flex-col gap-3 rounded-panel border border-line bg-surface p-3 text-left shadow-tip"
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}

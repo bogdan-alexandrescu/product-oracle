@@ -92,20 +92,29 @@ export function TriageStatusLine({ status }: { status: Status | undefined }) {
   );
 }
 
+/** The United States' zones (cld-6): these keep their short names, PT/ET/CT/MT, AKT and HT. */
+const US_ZONE =
+  /^(US\/|America\/(New_York|Chicago|Denver|Phoenix|Los_Angeles|Anchorage|Juneau|Sitka|Nome|Yakutat|Metlakatla|Adak|Boise|Detroit|Menominee|Indiana\/|Kentucky\/|North_Dakota\/|Indianapolis|Louisville)|Pacific\/Honolulu$)/;
+
 /**
  * When the daily run starts, in the Company time zone (qa-onboarding-9: the API runs it at
  * 07:00 there): "7:00 AM PT", "7:00 AM Berlin time", the app's 12-hour style (rirs-26).
+ * cld-6 (owner): a US zone reads as PT/ET/CT/MT/AKT/HT; any other zone as its city's time
+ * (the zone id's last part). Only this time does so; other times keep lib/dates' names.
+ * Non-breaking spaces keep "7:00 AM PT" on one line (qa-work-36).
  */
 export function useTriageTime(): string {
   const zone = useCompanyZone();
   const shown = formatInZone(zoneInstant(todayIn(zone), "07:00", zone), zone, { hour: "numeric", minute: "2-digit" });
-  const m = /^(\d{1,2}:\d{2}\s[AP]M)\s(.+)$/.exec(shown);
+  const m = /^(\d{1,2}:\d{2})\s([AP]M)\s(.+)$/.exec(shown);
   if (!m) return shown;
-  const [, time, name] = m;
-  // "PDT"/"PST" read as "PT"; a zone with only an offset name reads as its city's time.
-  if (/^[A-Z][SD]T$/.test(name)) return `${time} ${name[0]}T`;
-  if (/^(GMT|UTC)[+-]/.test(name)) return `${time} ${(zone.split("/").pop() ?? zone).replace(/_/g, " ")} time`;
-  return `${time} ${name}`;
+  const [, clock, half, name] = m;
+  const time = `${clock}\u00a0${half}`;
+  // "PDT"/"PST" read as "PT", "AKDT" as "AKT", "HST" as "HT".
+  const us = /^(E|C|M|P|AK|H)[SD]?T$/.exec(name);
+  if (US_ZONE.test(zone) && us) return `${time}\u00a0${us[1]}T`;
+  const city = (zone.split("/").pop() ?? zone).replace(/_/g, " ").replace(/ /g, "\u00a0");
+  return `${time}\u00a0${city}\u00a0time`;
 }
 
 /**
@@ -139,7 +148,7 @@ export function TriageMenu({ triage, canChange, canStart }: { triage: Query<Stat
     const said = status ? daily(status) : null;
     return status ? (
       <Chip kind={status.daily_on ? "pass" : "na"} data-testid="daily-triage-state" title={said?.text}>
-        Auto-sort {status.daily_on ? "on" : "off"}
+        Auto-sort: {status.daily_on ? "On" : "Off"}
       </Chip>
     ) : null;
   }
@@ -164,8 +173,9 @@ export function TriageMenu({ triage, canChange, canStart }: { triage: Query<Stat
           data-testid="triage-menu-panel"
           className="absolute top-full right-0 z-30 mt-2 flex w-80 max-w-[calc(100vw-1.25rem)] flex-col gap-3 rounded-panel border border-line bg-surface p-3 text-left shadow-tip max-[600px]:w-full"
         >
-          {canChange && <DailyTriageSwitch triage={triage} canChange />}
-          {canStart && <ClassifyNow triage={triage} />}
+          {/* qa-work-36: one info tip in the panel, beside Sort now, when both are here. */}
+          {canChange && <DailyTriageSwitch triage={triage} canChange tip={!canStart} />}
+          {canStart && <ClassifyNow triage={triage} withDaily={canChange} />}
         </div>
       )}
     </div>
@@ -176,7 +186,7 @@ export function TriageMenu({ triage, canChange, canStart }: { triage: Query<Stat
  * "Auto-sort new requests daily at 7:00 AM PT" (owner decision 2026-10-21: off by default).
  * An approver or owner turns it on or off; commenters and viewers see its state only.
  */
-export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>; canChange: boolean }) {
+export function DailyTriageSwitch({ triage, canChange, tip = true }: { triage: Query<Status>; canChange: boolean; tip?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const status = triage.data;
@@ -226,21 +236,35 @@ export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>
       ) : (
         status && (
           <Chip kind={status.daily_on ? "pass" : "na"} data-testid="daily-triage-state" title={said?.text}>
-            Auto-sort {status.daily_on ? "on" : "off"}
+            Auto-sort: {status.daily_on ? "On" : "Off"}
           </Chip>
         )
       )}
-      <InfoTip label="Auto-sort">
-        While this is on, Oracle sorts new requests every day at {at}, about $1.50 a run. It runs as whoever turned it on,
-        while they are an approver or owner, otherwise as the longest-standing owner.
-        {status?.daily_changed_by && ` Last turned ${status.daily_on ? "on" : "off"} by ${status.daily_changed_by}.`}
-      </InfoTip>
+      {tip && (
+        <InfoTip label="Auto-sort">
+          <DailyTip status={status} at={at} />
+        </InfoTip>
+      )}
     </span>
   );
 }
 
-/** Sort now (approvers and owners): starts Oracle's triage run; it decides nothing. */
-export function ClassifyNow({ triage }: { triage: Query<Status> }) {
+/** What Auto-sort does, in its info tip. */
+function DailyTip({ status, at }: { status: Status | undefined; at: string }) {
+  return (
+    <>
+      While Auto-sort is on, Oracle sorts new requests every day at {at}, about $1.50 a run. It runs as whoever turned it
+      on, while they are an approver or owner, otherwise as the longest-standing owner.
+      {status?.daily_changed_by && ` Last turned ${status.daily_on ? "on" : "off"} by ${status.daily_changed_by}.`}
+    </>
+  );
+}
+
+/**
+ * Sort now (approvers and owners): starts Oracle's triage run; it decides nothing. With
+ * `withDaily` its tip also says what Auto-sort does, the panel's one tip (qa-work-36).
+ */
+export function ClassifyNow({ triage, withDaily = false }: { triage: Query<Status>; withDaily?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const active = triage.data?.active ?? false;
@@ -276,10 +300,16 @@ export function ClassifyNow({ triage }: { triage: Query<Status> }) {
       >
         Sort now
       </Button>
-      <InfoTip label="Sort now">
-        Oracle suggests a theme, goals, a duplicate and a feature for every new request, and looks through your own
-        sources for requests. You accept or ignore each suggestion. Oracle also sorts new requests every day at {at}
+      <InfoTip label={withDaily ? "Auto-sort and Sort now" : "Sort now"}>
+        Sort now: Oracle suggests a theme, goals, a duplicate and a feature for every new request, and looks through your
+        own sources for requests. You accept or ignore each suggestion. Oracle also sorts new requests every day at {at}{" "}
         while Auto-sort is on.
+        {withDaily && (
+          <>
+            {" "}
+            <DailyTip status={triage.data} at={at} />
+          </>
+        )}
       </InfoTip>
     </span>
   );

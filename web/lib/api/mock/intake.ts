@@ -469,6 +469,10 @@ function batchView(db: V2Db, intake: Intake, n: number | null): Schemas["Questio
   };
 }
 
+/** The goal question when the company has no confirmed goal yet (the API's categories.NO_GOAL_PROMPT). */
+export const NO_GOAL_PROMPT =
+  "Your company has no confirmed goal yet. What outcome for the business should this move, and should it go ahead before goals are set?";
+
 /** A new brief: one gap per category, its questions drafted in rank order. */
 function addIntake(db: V2Db, authorId: string, title: string, brief: string, sourceIds: string[], at = now(), id = uuid()): Intake {
   const scope = brief.split(/(?<=[.!?])\s+/)[1]?.replace(/\.$/, "") ?? title;
@@ -641,6 +645,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     Object.assign(intake, fields);
     if (requestIds.length) ctx.requests?.link(intake.id, requestIds);
     applyBriefFields(db, ctx, intake);
+    // qa-onboarding-22: with no confirmed company goal, Oracle does not ask which one it
+    // serves (as the API's sharing.question_prompt).
+    if (ctx.confirmedGoals && ctx.confirmedGoals().size === 0) {
+      const gap = db.gaps.find((g) => g.intake_id === intake.id && g.category === "goal_alignment");
+      for (const q of db.questions) if (gap && q.gap_id === gap.id && q.status === "draft") q.prompt = NO_GOAL_PROMPT;
+    }
     // At Observe and Draft a new brief asks no one; a person sends (H11 questions).
     if (questionsLevel(ctx) === "recommend" || questionsLevel(ctx) === "act") askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId));
@@ -999,7 +1009,8 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     const question = db.questions.find((x) => x.id === p[2]);
     if (!question) return fail(404, "Question not found");
     const input = await body<Schemas["AnswerIn"]>();
-    if (question.status === "answered") return fail(409, "This question is answered; it is not asked again");
+    // As the API: an approver may still write the answer to an answered question (answers.py).
+    if (question.status === "answered" && !(atLeast(ctx.role, "approver") && input?.kind === "answer")) return fail(409, "This question is answered; it is not asked again");
     if (question.status === "withdrawn" || question.status === "retired") return fail(409, `A ${question.status} question cannot be answered`);
     if (question.asked_to && question.asked_to !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "This question was asked of someone else");
     if (input.kind === "answer" && !input.body?.trim()) return fail(422, "An answer needs a body");

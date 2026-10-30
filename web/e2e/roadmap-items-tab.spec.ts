@@ -249,7 +249,7 @@ test("the version switcher keeps the Items tab; a version with no items says so"
   await expect(page.getByTestId("review-status")).toHaveText("Approved");
   await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
   await page.getByRole("button", { name: "Refresh progress" }).click();
-  await page.getByTestId("segment-roadmap_draft").getByRole("link", { name: "usage-alerts-roadmap v2" }).click();
+  await page.getByTestId("segment-roadmap_draft").getByRole("link", { name: / v2$/ }).click();
   await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap\/v\/2$/);
 
   // v2 has no items file: the empty state, no table.

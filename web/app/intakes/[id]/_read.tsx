@@ -15,13 +15,21 @@ type AiRead = Schemas["AiReadOut"];
 const LIVE = new Set<AiRead["state"]>(["queued", "running"]);
 const POLL_MS = 10_000;
 
-function line(read: AiRead): string {
-  if (read.state === "off") return read.off_reason === "company" ? "Oracle's read is off for this company." : "Oracle hasn't read this brief.";
+function line(read: AiRead, openGaps: number, asked: number): string {
+  if (read.state === "off") {
+    if (read.off_reason === "company") return "Oracle's read is off for this company.";
+    // qa-onboarding-22: the questions below are Oracle's, from what the brief says; only
+    // the deeper read (with the sources) has not run.
+    return asked > 0
+      ? `Oracle asked ${plural(asked, "question")} from what the brief says; it has not analysed it with your sources yet.`
+      : "Oracle hasn't read this brief.";
+  }
   if (LIVE.has(read.state)) return `Oracle is reading your brief and ${plural(read.sources, "source")}`;
   if (read.state === "failed") return read.error?.message ?? "Oracle's read failed. The rules read stands.";
-  // rirs-29: plain words, not "inferences" and "gaps".
+  // rirs-29: plain words, not "inferences" and "gaps". qa-work-3: the open gaps are the Gaps
+  // tab's count (the rules read's and Oracle's), not only those this read added.
   const added = read.added ?? { items: 0, gaps: 0 };
-  return `${plural(added.items, "thing Oracle assumed", "things Oracle assumed")}, ${plural(added.gaps, "open gap")} · private to you`;
+  return `${plural(added.items, "thing Oracle assumed", "things Oracle assumed")} (private to you), ${plural(openGaps, "open gap")}`;
 }
 
 /** The day the read started or finished, as the line ends with it (never split: qa-onboarding-40). */
@@ -40,6 +48,8 @@ function lineDay(read: AiRead): string | null {
  */
 export function ReadLine({
   read,
+  openGaps,
+  asked,
   mayRead,
   mayDraft = false,
   busy,
@@ -47,6 +57,10 @@ export function ReadLine({
   onPoll,
 }: {
   read: AiRead;
+  /** The brief's open gaps, as the Gaps tab counts them. */
+  openGaps: number;
+  /** The questions Oracle has asked so far, in every batch. */
+  asked: number;
   mayRead: boolean;
   /** Draft with Oracle shows in the header: the help line says what it does too (qa-docs-86). */
   mayDraft?: boolean;
@@ -71,7 +85,7 @@ export function ReadLine({
   return (
     <div data-testid="intake-read" className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2">
       <span title={at ? when(at) : undefined}>
-        {line(read)}
+        {line(read, openGaps, asked)}
         {day && (
           <>
             {" · "}
@@ -96,8 +110,8 @@ export function ReadLine({
           ) : (
             // qa-onboarding-28: the day's cap shows before the first read, not only after it.
             <span data-testid="intake-read-count" className="whitespace-nowrap">
-              {/* qa-docs-86: says what is counted. */}
-              {left} of {plural(read.reads_per_day, "analysis", "analyses")} left today
+              {/* qa-work-31: what is counted. */}
+              {plural(left, "analysis", "analyses")} left today
             </span>
           )}
           {/* rirs-29: this reads the brief and its sources again (capped); the menu's "Rank the

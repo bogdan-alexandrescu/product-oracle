@@ -125,7 +125,7 @@ test("a run that finished with no document: an Inbox row says why and what to do
   await expect(page).toHaveURL(new RegExp(`/runs/${NO_DOCUMENT_RUN}$`));
   const prd = page.getByTestId("segment-prd_draft").filter({ visible: true });
   await prd.getByRole("button", { name: "Retry import" }).click();
-  await expect(prd).toContainText("Imported as guest-checkout v");
+  await expect(prd).toContainText(/Imported as (?!guest-checkout).+ v\d/);
   await noRowInTheInbox(page);
   await page.goto("/documents/guest-checkout");
   const again = page.getByTestId("version-inspector").getByTestId("version-imported-again");
@@ -176,7 +176,7 @@ test("the No document row clears itself once a later run imports the document", 
   await bar.getByRole("group", { name: "Confirm Approve draft" }).getByRole("button", { name: "Approve draft" }).click();
   await expect(bar).toContainText("Approved");
   await page.goto(runUrl);
-  await expect(page.getByTestId("segment-prd_draft")).toContainText("Imported as guest-checkout v1");
+  await expect(page.getByTestId("segment-prd_draft")).toContainText(/Imported as (?!guest-checkout).+ v1/);
 
   // The finished run's row is gone, with nobody dismissing it.
   await noRowInTheInbox(page);

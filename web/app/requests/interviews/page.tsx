@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-import { Chip, DataTable, Page, Panel, type Column } from "@/components/ds";
+import { Chip, DataTable, Icon, Page, Panel, type Column } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewSummary } from "@/lib/api/interviews";
 import { formatAge, formatDateTime } from "@/lib/format";
@@ -22,7 +22,8 @@ const COLUMNS: Column<InterviewSummary>[] = [
     key: "customer",
     header: "Customer",
     cell: (r) => (
-      <span className="font-semibold">
+      // qa-work-44: the name reads as a link, and the row ends in a chevron: a row opens.
+      <span className="font-semibold text-accent-ink">
         {r.interviewee_name}
         {r.interviewee_company && <span className="font-normal text-text2"> · {r.interviewee_company}</span>}
       </span>
@@ -58,6 +59,18 @@ const COLUMNS: Column<InterviewSummary>[] = [
     phoneLabel: "Finished ",
   },
   { key: "requests", header: "Requests", width: "100px", align: "right", cell: (r) => <span className="tnum">{r.request_count}</span>, phoneLabel: "Requests " },
+  {
+    key: "open",
+    header: <span className="sr-only">Open</span>,
+    width: "40px",
+    align: "right",
+    cell: () => (
+      <span data-testid="interview-row-open" className="inline-flex text-text2">
+        <Icon name="chevron-right" size={16} />
+      </span>
+    ),
+    hideOnPhone: true,
+  },
 ];
 
 /**

@@ -284,7 +284,7 @@ async def _answer_gap(
             intake_id=intake.id,
             document_id=intake.document_id,
             category=gap.category,
-            prompt=engine.question_prompt(gap),
+            prompt=engine.question_prompt(gap, await engine.has_confirmed_goal(db)),
             priority=0,
             module_key=(gap.related_modules or [None])[0],
             status="draft",

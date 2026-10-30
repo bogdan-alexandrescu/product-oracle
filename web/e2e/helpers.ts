@@ -283,7 +283,7 @@ type RunSeed = { run: { id: string }; artifacts: Record<string, string> };
  * Adds a seeded run (and its files) to the mock's data in the mock's own turn
  * (`__poMockWrite`, lib/api/mock/server.ts): a call of the app's in flight cannot save over it.
  */
-async function seedRun(page: Page, seed: RunSeed): Promise<string> {
+export async function seedRun(page: Page, seed: RunSeed): Promise<string> {
   return page.evaluate((seed) => {
     type Db = { runs: { runs: { id: string }[]; artifacts: Record<string, string> } };
     const write = (globalThis as { __poMockWrite?: (change: (db: Db) => string) => Promise<string> }).__poMockWrite;
