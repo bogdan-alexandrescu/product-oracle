@@ -2264,8 +2264,9 @@ function CheckpointRow({
                 Confirm {answer.verdict === "MERGE" ? "approval" : "change request"}
               </Button>
             )}
+            {/* cld-5: Approve and continue is the page's one filled primary (the header's Decide only goes here). */}
             <Button
-              variant={answer?.needs === "confirm" ? "secondary" : "solid"}
+              variant={answer?.needs === "confirm" ? "secondary" : "primary"}
               icon={answer?.needs === "confirm" ? undefined : "check"}
               disabled={busy || !!approveBlocked}
               title={approveBlocked ?? undefined}

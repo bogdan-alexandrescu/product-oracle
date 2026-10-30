@@ -254,6 +254,17 @@ function moveBounds(rows: Row[], row: Row): { top: number; bottom: number; needs
   return { top: needs ? needs.rank + 1 : 1, bottom: neededBy ? neededBy.rank - 1 : rows.length, needs, neededBy };
 }
 
+/** Where a move to `position` puts the item in a dated plan's list: under which row, on which side of the line. */
+function landsUnder(rows: Row[], row: Row, position: number): string {
+  const order = rows.filter((x) => x !== row);
+  order.splice(position - 1, 0, row);
+  const side = order.filter((x) => x.above_line === row.above_line);
+  const under = side[side.indexOf(row) - 1];
+  const where = row.above_line ? "above the line" : "below the line";
+  if (under) return `It lands just under ${under.title}, ${where}.`;
+  return row.above_line ? "It lands at the top." : "It lands first below the line.";
+}
+
 // --------------------------------------------------------------------------- ranked list
 
 function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null }) {
@@ -289,6 +300,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
         <MoveDialog
           move={move}
           rows={data.rows}
+          dated={!!data.plan?.span}
           onClose={() => setMove(null)}
           changed={async (r, done) => {
             setMove(null);
@@ -308,8 +320,10 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
 
   // A dated plan lists what makes the line first, so a row's neighbour on screen is not its
   // neighbour by rank: the keys move by rank (data.rows), a drag stays on its side of the line.
+  // Its dates, not its rank, decide that side, so a row dragged above the line asks for a rank
+  // at most the last above-the-line rank (and one below it for at least the first below it).
   const split = lineSplit(rows);
-  const apart = split >= 0 && regrouped(data.rows);
+  const apart = split >= 0 && !!data.plan?.span;
 
   function targetIndex(y: number, from: number): number {
     let to = 0;
@@ -481,7 +495,7 @@ function OracleOrder({ rows }: { rows: Row[] }) {
   );
 }
 
-function MoveDialog({ move, rows, onClose, changed }: { move: { row: Row; position: number }; rows: Row[]; onClose: () => void; changed: Changed }) {
+function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row; position: number }; rows: Row[]; dated: boolean; onClose: () => void; changed: Changed }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [pushback, setPushback] = useState<string | null>(null);
@@ -503,6 +517,9 @@ function MoveDialog({ move, rows, onClose, changed }: { move: { row: Row; positi
       : move.position < row.rank
         ? `Can't go above ${bounds.needs?.title}, which it needs.`
         : `Can't go below ${bounds.neededBy?.title}, which needs it.`;
+  // A dated plan lists each side of the line by rank: where the item lands in its side, which the
+  // plan's dates, not the rank, decide.
+  const lands = dated ? landsUnder(rows, row, position) : null;
 
   async function submit(confirm = false) {
     if (refused) return;
@@ -555,6 +572,11 @@ function MoveDialog({ move, rows, onClose, changed }: { move: { row: Row; positi
         <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
           {verb} {nameOf(row)} to rank {position}
         </h2>
+        {lands && (
+          <p className="mt-1 text-[length:var(--simple-small)] text-text2" data-testid="move-lands">
+            {lands}
+          </p>
+        )}
         {stopped && (
           <p className="mt-1 text-[length:var(--simple-small)] text-text2" data-testid="move-stopped">
             {stopped}
@@ -1293,16 +1315,6 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
 const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now" ? "this quarter" : data.line.label.replace(/^By /, ""));
 
 /**
- * Where a single divider may sit: before the first row that misses the line, only when every
- * row after it misses it too (rank order is dependency order and stays; otherwise each row
- * that misses is marked on its own and there is no divider). -1: no divider.
- */
-/**
- * The rows as the list shows them: by rank, except that with a dated plan the plan's dates
- * decide what makes the line, so what makes it comes first and what misses it after (each
- * part by rank, every row keeping its #), and the line is drawn once between them.
- */
-/**
  * A row's goal: the item's, else the plan's (a row the item does not give a goal, but the plan
  * does, each feature under the goal it moves most), as Goal buckets shows it.
  */
@@ -1311,6 +1323,11 @@ function goalOfRow(data: Out): (r: Row) => string | null {
   return (r) => r.goal?.title ?? planGoal.get(r.short_code) ?? null;
 }
 
+/**
+ * The rows as the list shows them: by rank, except that with a dated plan the plan's dates
+ * decide what makes the line, so what makes it comes first and what misses it after (each
+ * part by rank, every row keeping its #), and the line is drawn once between them.
+ */
 function byLine(data: Out): Row[] {
   const rows = data.rows;
   if (!data.plan?.span) return rows;
@@ -1322,6 +1339,11 @@ function regrouped(rows: Row[]): boolean {
   return rows.some((r, i) => r.above_line && rows.slice(0, i).some((x) => !x.above_line));
 }
 
+/**
+ * Where a single divider may sit: before the first row that misses the line, only when every
+ * row after it misses it too (rank order is dependency order and stays; otherwise each row
+ * that misses is marked on its own and there is no divider). -1: no divider.
+ */
 function lineSplit(rows: Row[]): number {
   const first = rows.findIndex((r) => !r.above_line);
   return first >= 0 && rows.slice(first).every((r) => !r.above_line) ? first : -1;
