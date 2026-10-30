@@ -46,7 +46,7 @@ export default function RitualsPage() {
  * the Company time zone, named once above the table (qa-company-21).
  */
 function Rituals() {
-  const { can, capsReady } = useMe();
+  const { can, capsReady, capsError } = useMe();
   // #370: editing rituals is the ritual routes' role (owners).
   const owner = can("update_ritual");
   const ritualsQ = useQuery("rituals", () => unwrap(api.GET("/v1/rituals")));
@@ -187,6 +187,9 @@ function Rituals() {
     },
   ];
 
+  // fix4-company review (qa-company-34): the page is drawn once the role is known, so the
+  // owner's "+ Ritual" joining the tab strip (a second line on a phone) never moves it.
+  if (!capsReady && !capsError) return <PageSkeleton bare />;
   return (
     <>
       <CompanyHeader

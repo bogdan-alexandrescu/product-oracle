@@ -70,8 +70,8 @@ test("Pick sources: a Slack source added and synced from Set up is counted on Ho
   await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
   await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
 
-  // Sources, opened again from the step, lists the same one source.
-  await row(page, "sources").getByRole("link", { name: "Open Pick sources" }).click();
+  // Sources, opened again from the done step's Change, lists the same one source.
+  await row(page, "sources").getByRole("link", { name: "Change Pick sources" }).click();
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
   await expect(page.getByRole("list", { name: "My sources" }).getByRole("listitem")).toHaveCount(1);
   await expect(page.getByRole("listitem", { name: "Team chat" })).toBeVisible();

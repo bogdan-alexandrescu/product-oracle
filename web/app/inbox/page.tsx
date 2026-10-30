@@ -109,7 +109,13 @@ export default function InboxPage() {
         </div>
       )}
       {inbox && rows && (
-        <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
+        <InboxTabs
+          // qa-company-17: Next keeps this page while I am elsewhere and shows it again, its
+          // reads run again; each visit's own arrival starts the tabs afresh (a tab picked on the
+          // last visit does not hold an emptied New open).
+          key={arrived ? (arrivalQ.data ?? "first") : "arriving"}
+          rows={rows}
+          waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
             asked.moveSettled();
           }}
         />
@@ -222,7 +228,7 @@ function InboxTabs({
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
   const [chosen, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));
   // Until the person picks a tab on this visit, the rule holds as the rows load: New that
-  // empties into Seen shows Seen (qa-company-17: each visit reads its own arrival, lib/waiting).
+  // empties into Seen shows Seen.
   const [picked, setPicked] = useState(false);
   const tab: InboxState = !picked && chosen === "new" && count("new") === 0 && count("open") > 0 ? "open" : chosen;
   const pick = (t: InboxState) => {
