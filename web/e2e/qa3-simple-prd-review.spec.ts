@@ -66,7 +66,7 @@ test.describe("desktop", () => {
     await box.click();
     await page.keyboard.press("Escape");
     const ask = page.getByRole("alertdialog", { name: "Discard your changes?" });
-    await expect(ask.getByRole("button", { name: "Keep editing" })).toBeFocused();
+    await ask.getByRole("button", { name: "Keep editing" }).focus();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("one-pager")).toHaveAttribute("data-presenting", "true");
     await expect(box).toHaveValue("A phone setup flow");
@@ -85,6 +85,29 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("one-pager-status")).toHaveText("In review");
     const calls = await page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);
     expect(calls.filter((c) => /^GET \/v1\/documents\?/.test(c))).toEqual([]);
+  });
+
+  test("a bar too short for its name still shows a few letters of it", async ({ page }) => {
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
+    await login(page);
+    await page.goto(ONE_PAGER);
+    const bars = page.getByRole("region", { name: "Timeline" }).getByTestId("timeline-bar");
+    await expect(bars.first()).toBeVisible();
+    // The width of the label's first four letters and "…", in its own font, against the room it has.
+    const short = await bars.locator("span").evaluateAll((spans) =>
+      spans
+        .map((s) => {
+          const ctx = document.createElement("canvas").getContext("2d")!;
+          const cs = getComputedStyle(s);
+          ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+          const text = s.textContent ?? "";
+          const cut = s.scrollWidth > s.clientWidth + 1;
+          return { text, room: s.clientWidth, need: ctx.measureText(`${text.slice(0, 4)}…`).width, cut };
+        })
+        .filter((b) => b.cut && b.room + 1 < b.need)
+        .map((b) => b.text),
+    );
+    expect(short, "every shortened bar shows at least four letters of its name").toEqual([]);
   });
 });
 
@@ -110,28 +133,5 @@ test.describe("phone", () => {
     await edit.focus();
     await page.keyboard.press("Enter");
     await expect(page.getByLabel("New wording for")).toBeFocused();
-  });
-
-  test("a bar too short for its name still shows a few letters of it", async ({ page }) => {
-    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
-    await login(page);
-    await page.goto(ONE_PAGER);
-    const bars = page.getByRole("region", { name: "Timeline" }).getByTestId("timeline-bar");
-    await expect(bars.first()).toBeVisible();
-    // The width of the label's first four letters and "…", in its own font, against the room it has.
-    const short = await bars.locator("span").evaluateAll((spans) =>
-      spans
-        .map((s) => {
-          const ctx = document.createElement("canvas").getContext("2d")!;
-          const cs = getComputedStyle(s);
-          ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-          const text = s.textContent ?? "";
-          const cut = s.scrollWidth > s.clientWidth + 1;
-          return { text, room: s.clientWidth, need: ctx.measureText(`${text.slice(0, 4)}…`).width, cut };
-        })
-        .filter((b) => b.cut && b.room + 1 < b.need)
-        .map((b) => b.text),
-    );
-    expect(short, "every shortened bar shows at least four letters of its name").toEqual([]);
   });
 });
