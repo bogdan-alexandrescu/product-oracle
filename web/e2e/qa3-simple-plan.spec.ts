@@ -303,7 +303,7 @@ test.describe("QA pass 3: simple-plan, Value / effort", () => {
     await expect(legend).toContainText("Each mark shows the feature's code");
     await expect(legend).not.toContainText("Codes stay with the item");
     await page.locator('[data-testid="vxe-point"][data-code="setup-checklist"]').click();
-    await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value [\d.]+ · [\d.]+ wk · score [\d.]+$/);
+    await expect(page.locator('[data-testid="side-row"][data-code="setup-checklist"]').getByTestId("side-numbers")).toHaveText(/^goal value [\d.]+ · confidence [\d.]+ · [\d.]+ wk · score [\d.]+$/);
     // A goal value of 0 (No goal): ArrowDown and ArrowUp change nothing.
     const noGoal = page.locator('[data-testid="vxe-point"][aria-label*="no goal"]').first();
     const before = await noGoal.getAttribute("aria-label");
@@ -423,7 +423,7 @@ test.describe("QA pass 3: simple-plan, the suggestions drawer", () => {
     await expect(drawer.getByTestId("goal-suggestion").first()).toBeVisible({ timeout: 15_000 });
     if ((await looks.count()) > 0) {
       await expect(looks.first().getByTestId("looks-like-link")).toBeVisible();
-      await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Merge into it");
+      await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Same as this: close the suggestion");
     }
     // qa-simple-plan-36: one scrollbar (the page behind does not scroll); an opened flow comes into view.
     expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe("hidden");
