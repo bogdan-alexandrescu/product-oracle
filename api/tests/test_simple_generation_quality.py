@@ -38,6 +38,9 @@ Test cards (protects / fails_when / no_claim):
   block "missing" twice leaves people below owner the quick read, never a blank page;
   fails_when=it is asked once or a reader's blocks go empty; no_claim=the owner's held
   view.
+- test_a_block_not_in_the_prd_reads_missing: protects=a block Oracle marked "Not in the
+  PRD yet" (nothing maps to it) is read with ``missing`` (the web says so) by everyone, a
+  filled block without it; fails_when=the read drops the mark; no_claim=the web's words.
 - test_a_held_run_keeps_the_last_good_built_at: protects=a held run leaves the last good
   page's built_at as it was; fails_when=it moves; no_claim=job bookkeeping.
 - test_an_owner_editing_a_held_line_is_told_why: protects=an owner editing a line of a
@@ -74,6 +77,7 @@ import pytest
 from sqlalchemy import select
 
 from oracle import company_time
+from oracle.docs.models import DocumentVersion
 from oracle.jobs.models import LlmJob
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import additions, one_pager, quality, service
@@ -81,8 +85,9 @@ from oracle.simple.models import SimpleGoalSuggestion, SimpleOnePager
 from oracle.tenancy import tenant_session
 from tests.test_simple_additions_api import SUGGESTIONS, World
 from tests.test_simple_additions_api import clock as additions_clock  # noqa: F401
-from tests.test_simple_one_pager_api import block, edit, get, world
+from tests.test_simple_one_pager_api import MD, PRD, block, edit, get, world
 from tests.test_simple_one_pager_api import clock as one_pager_clock  # noqa: F401
+from tests.test_simple_roadmap_api import NOW
 
 
 def good() -> dict:
@@ -313,6 +318,39 @@ async def test_an_all_missing_answer_never_blanks_the_page(client):
         view = await get(client, ctx, who)
         assert view["blocks"] == quick["blocks"], who
         assert all(b["lines"] for b in view["blocks"] if b["key"] != "timeline"), who
+
+
+async def test_a_block_not_in_the_prd_reads_missing(client):
+    ctx = await world(client)
+    prd = PRD.split("## Not doing")[0] + "## Risks" + PRD.split("## Risks")[1]
+    r = await client.post("/v1/documents/guided-setup/versions", content=prd.encode(),
+                          headers=MD | ctx.as_("owner"))  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        for v in await s.scalars(select(DocumentVersion)):
+            v.approved_at = NOW
+        await s.commit()
+    await get(client, ctx)
+    a = good()
+    a["blocks"][3] = {"key": "not_doing", "missing": True}
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.scalar(
+            select(LlmJob).where(LlmJob.kind == "one_pager").order_by(LlmJob.created_at.desc())
+        )
+        out = await one_pager.run_job(s, job, lambda kind, payload: _answer(a))
+        await s.commit()
+    assert out["built"] is True, out
+    for who in ("owner", "commenter"):
+        view = await get(client, ctx, who)
+        assert block(view, "not_doing") | {"title": None} == {
+            "key": "not_doing", "title": None, "rules": block(view, "not_doing")["rules"],
+            "kind": "lines", "lines": [], "missing": True,
+        }, who  # fmt: skip
+        assert block(view, "bets")["missing"] is False, who
+
+
+async def _answer(a: dict) -> dict:
+    return a
 
 
 async def test_a_held_run_keeps_the_last_good_built_at(client, monkeypatch):
