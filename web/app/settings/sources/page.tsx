@@ -188,16 +188,17 @@ const PICKS_SHOWN = 5;
 
 /**
  * A row's picks in words (qa-work-46): "#product, #design, #eng and 40 more"; picks saved
- * before names were kept are counted ("120 channels"), never listed by id.
+ * before names were kept are counted as unknown ("120 unknown channels", qa-settings-23),
+ * never listed by id: the ids only in the title.
  */
-function picksSummary(names: string[], unnamed: number, noun: string): { text: string; title: string } {
-  const one = noun.endsWith("ies") ? `${noun.slice(0, -3)}y` : noun.replace(/s$/, "");
-  const unnamedNote = unnamed ? `${count(unnamed, one, noun)} saved before names were kept: edit and save to name them` : "";
-  const title = [names.join(", "), unnamedNote].filter(Boolean).join(". ");
-  if (!names.length) return { text: unnamed ? count(unnamed, one, noun) : "", title };
-  const rest = names.length - Math.min(names.length, PICKS_SHOWN) + unnamed;
+function picksSummary(names: string[], unnamedIds: string[], unknown: [string, string]): { text: string; title: string } {
+  const unnamed = unnamedIds.length;
+  const unknownText = unnamed === 0 ? "" : unnamed === 1 ? unknown[0] : `${unnamed} ${unknown[1]}`;
+  const title = [names.join(", "), unnamed ? `No name saved for ${unnamedIds.join(", ")}` : ""].filter(Boolean).join(". ");
+  const extra = names.length - Math.min(names.length, PICKS_SHOWN);
   const shown = names.slice(0, PICKS_SHOWN).join(", ");
-  return { text: rest ? `${shown} and ${rest} more` : shown, title };
+  if (!extra) return { text: [shown, unknownText].filter(Boolean).join(", "), title };
+  return { text: `${shown} and ${extra + unnamed} more`, title };
 }
 
 /** What a pick without a saved name reads as: "Unknown channel", "3 unknown channels". */
@@ -588,8 +589,10 @@ function SourceRow({
     : opaqueIds
       ? pickIds.filter((id) => names[id]).map((id) => names[id])
       : pickIds.map((id) => names[id] ?? id);
-  const unnamed = opaqueIds ? pickIds.length - items.length : 0;
-  const picks = allowlist ? picksSummary(items, unnamed, allowlist.noun) : { text: "", title: "" };
+  const unnamedIds = opaqueIds ? pickIds.filter((id) => !names[id]) : [];
+  const unnamed = unnamedIds.length;
+  const unknown: [string, string] = UNKNOWN[source.kind] ?? (allowlist ? [`Unknown ${allowlist.noun.replace(/s$/, "")}`, `unknown ${allowlist.noun}`] : ["", ""]);
+  const picks = allowlist ? picksSummary(items, unnamedIds, unknown) : { text: "", title: "" };
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";

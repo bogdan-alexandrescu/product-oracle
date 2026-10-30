@@ -180,19 +180,6 @@ function subscribeHash(onChange: () => void) {
   return () => window.removeEventListener("hashchange", onChange);
 }
 
-/** An email that wraps at its @ when the line is short ("commenter" / "@example.com"), never mid-word. */
-function EmailWords({ email }: { email: string }) {
-  const at = email.lastIndexOf("@");
-  if (at < 1) return <>{email}</>;
-  return (
-    <>
-      <span data-email-part>{email.slice(0, at)}</span>
-      <wbr />
-      <span data-email-part>{email.slice(at)}</span>
-    </>
-  );
-}
-
 /** Settings > Members: the people of this company's Oracle, their roles and status, and invites. */
 export function MembersSettings() {
   const { me, loading, can, capsReady, capsError } = useMe();
@@ -235,11 +222,11 @@ function RoleNote() {
 }
 
 /** The four roles and the engineering lead flag, what each can do in words, and how many active people hold each. */
-function RolesSection({ members }: { members?: Member[] }) {
+function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?: string | null }) {
   const leads = members?.filter((m) => m.engineering_lead && m.status !== "disabled").length;
   return (
     <>
-      <InspectorSection label="Roles" testId="roles-list">
+      <InspectorSection label={label ?? undefined} testId="roles-list">
         {ROLES.map((r) => (
           <div key={r.role} data-testid={`role-${r.role}`} className="flex items-start gap-2.5 py-1">
             <span className="min-w-0 flex-1">
@@ -285,8 +272,9 @@ function RolesSection({ members }: { members?: Member[] }) {
 
 function RolesInspector() {
   return (
+    // qa-shell-27: one heading, the panel's title; its roles section has none of its own.
     <Inspector eyebrow="Members" title="Roles" label="Roles">
-      <RolesSection />
+      <RolesSection label={null} />
     </Inspector>
   );
 }
@@ -809,7 +797,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               className={`flex max-w-full min-w-0 flex-col text-left leading-tight break-words hover:underline max-[600px]:min-h-11 max-[600px]:justify-center ${removed(m) ? "text-text2" : ""}`}
             >
               <span data-testid="member-name" className="font-semibold">
-                {m.name?.trim() ? personName(m) : <EmailWords email={m.email} />}
+                {personName(m)}
               </span>
               {personName(m) !== m.email && (
                 <span data-testid="member-email" title={m.email} className="text-[13px] font-normal text-text2">
