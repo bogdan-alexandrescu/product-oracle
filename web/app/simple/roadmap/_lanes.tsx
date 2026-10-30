@@ -81,8 +81,18 @@ const dm = (day: string) =>
 let measure: CanvasRenderingContext2D | null | undefined;
 let family = "sans-serif";
 /** The drawn width of `text` in the page's type (a label fitted to its pill is never cut). */
+const widths = new Map<string, number>();
 function textWidth(text: string, px: number, weight: number): number {
   if (typeof document === "undefined") return text.length * px * 0.6;
+  // fix4 (500 items): each label's width once (a pill's name is measured to pack and to draw it).
+  const key = `${weight}|${px}|${text}`;
+  const known = widths.get(key);
+  if (known !== undefined) return known;
+  const w = measured(text, px, weight);
+  if (measure) widths.set(key, w);
+  return w;
+}
+function measured(text: string, px: number, weight: number): number {
   if (measure === undefined) {
     measure = document.createElement("canvas").getContext("2d");
     family = getComputedStyle(document.body).fontFamily || family;
@@ -98,7 +108,11 @@ function useFontsReady(): number {
   useEffect(() => {
     let live = true;
     void document.fonts?.ready.then(() => {
-      if (live) setN(1);
+      if (live) {
+        // Widths measured in a fallback font are measured again in the web font.
+        widths.clear();
+        setN(1);
+      }
     });
     return () => {
       live = false;

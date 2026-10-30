@@ -92,7 +92,17 @@ export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group,
 /** A label's width in the chart's type (a canvas measures it; an estimate before there is one). */
 let measure: CanvasRenderingContext2D | null | undefined;
 let family = "";
+const widths = new Map<string, number>();
 function textWidth(s: string, size: number, weight: number): number {
+  // fix4 (500 items): each label's width once; a name is cut to fit by many measures (ellipsize).
+  const key = `${weight}|${size}|${s}`;
+  const known = widths.get(key);
+  if (known !== undefined) return known;
+  const w = measured(s, size, weight);
+  if (measure) widths.set(key, w);
+  return w;
+}
+function measured(s: string, size: number, weight: number): number {
   if (typeof document !== "undefined") {
     if (measure === undefined) measure = document.createElement("canvas").getContext("2d");
     if (measure) {
@@ -108,11 +118,17 @@ function textWidth(s: string, size: number, weight: number): number {
 /** fix4 qa-simple-roadmap-2/6: `s` whole when it fits `room`, else cut at a word (or a letter) with "…" ("" when not even a few letters fit). */
 export function ellipsize(s: string, room: number, size: number, weight: number): string {
   if (textWidth(s, size, weight) <= room) return s;
-  for (let n = s.length - 1; n >= 3; n--) {
-    const t = `${s.slice(0, n).trimEnd()}…`;
-    if (textWidth(t, size, weight) <= room) return t;
+  // The longest cut that fits, by halves (a few measures, not one per letter).
+  const cut = (n: number) => `${s.slice(0, n).trimEnd()}…`;
+  let lo = 3;
+  let hi = s.length - 1;
+  if (hi < lo || textWidth(cut(lo), size, weight) > room) return "";
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (textWidth(cut(mid), size, weight) <= room) lo = mid;
+    else hi = mid - 1;
   }
-  return "";
+  return cut(lo);
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

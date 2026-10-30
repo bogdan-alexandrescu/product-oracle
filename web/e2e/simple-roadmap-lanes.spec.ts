@@ -199,7 +199,7 @@ for (const scheme of ["light", "dark"] as const) {
 
       await phoneLane(page, "Growth").click();
       await expect(phoneLane(page, "Growth")).toHaveAttribute("aria-expanded", "true");
-      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items, up to 2 at once");
+      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items, up to 1 at once");
       await expect(list.getByTestId("lane-row")).toHaveCount(6);
       await list.locator('[data-testid="lane-row"][data-code="F-05b"]').click();
       const card = page.getByTestId("floating-card");
