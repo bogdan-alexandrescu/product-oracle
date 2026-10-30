@@ -25,7 +25,7 @@ async function start(page: Page, email?: string) {
 async function approveSection(page: Page, key: string) {
   const review = (await openSection(page, key)).getByTestId("review-bar");
   await review.getByRole("button", { name: "Approve" }).click();
-  await review.getByRole("button", { name: /^Save/ }).click();
+  await review.getByTestId("verdict-submit").click();
   await expect(review.getByTestId("verdict-state")).toContainText("Approved");
 }
 

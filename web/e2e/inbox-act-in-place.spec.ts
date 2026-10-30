@@ -200,7 +200,7 @@ for (const [width, height] of [
     const s = await openSection(page, "f-36");
     const bar = s.getByTestId("review-bar");
     await bar.getByRole("button", { name: "Approve" }).click();
-    await bar.getByRole("button", { name: /^Save/ }).click();
+    await bar.getByTestId("verdict-submit").click();
     await expect(bar.getByTestId("verdict-state")).toContainText("Locked");
 
     await page.goto("/inbox");

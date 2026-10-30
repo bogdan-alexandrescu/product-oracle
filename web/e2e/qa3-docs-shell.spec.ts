@@ -56,13 +56,15 @@ test("qa-docs-22: a commenter reads one role badge, in the same words, on every 
   }
 });
 
-test("qa-docs-22: a viewer reads View only, once, on every Documents page; an owner reads no badge", async ({ page }) => {
+test("qa-docs-22: a viewer reads View only, once, on every Documents page", async ({ page }) => {
   await login(page, "viewer@example.com");
   for (const url of COMMENTER_PAGES) {
     await page.goto(url);
     await expect(page.getByTestId("view-only").filter({ visible: true }), url).toHaveCount(1);
   }
-  await page.context().clearCookies();
+});
+
+test("qa-docs-22: an owner reads no role badge on Documents pages", async ({ page }) => {
   await login(page);
   for (const url of COMMENTER_PAGES.slice(0, 3)) {
     await page.goto(url);

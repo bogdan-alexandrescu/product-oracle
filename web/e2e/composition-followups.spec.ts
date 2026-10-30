@@ -82,7 +82,7 @@ test("adding a module under a custom order keeps Sources and data points last", 
 
 test("the header says which role the person views as", async ({ page }) => {
   await openComposition(page, "commenter");
-  await expect(page.getByTestId("role-badge")).toHaveText("Commenter: can comment");
+  await expect(page.getByTestId("role-badge").filter({ visible: true })).toHaveText("Commenter: can comment");
 });
 
 test("the legacy notice names the packs by title", async ({ page }) => {

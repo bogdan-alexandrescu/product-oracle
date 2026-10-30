@@ -1305,9 +1305,10 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
             </p>
           )}
 
-          {/* qa-onboarding-28: the form ends with its Continue too, where the last answer is given. */}
+          {/* qa-onboarding-28: the form ends with its Continue too, where the last answer is given;
+              filled (solid), the header keeps the page's one primary. */}
           <div className="flex justify-end">
-            <Button type="submit" variant="primary" disabled={busy !== null} data-testid="new-prd-continue-end">
+            <Button type="submit" variant="solid" disabled={busy !== null} data-testid="new-prd-continue-end">
               {busy === "continue" ? "Saving…" : "Continue"}
             </Button>
           </div>

@@ -25,7 +25,7 @@ test("edit a section by hand: the preview keeps citation chips, Save makes the n
   const problem = await openSection(page, "problem");
   const bar = problem.getByTestId("review-bar");
   await bar.getByRole("button", { name: "Approve" }).click();
-  await bar.getByRole("button", { name: /^Save/ }).click();
+  await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
 
   const chips = await problem.locator("[data-section-body]").getByRole("button", { name: /^Citation/ }).count();

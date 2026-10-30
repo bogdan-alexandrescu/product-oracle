@@ -78,6 +78,8 @@ def check_words(key: str) -> tuple[str, str]:
         return OTHER_CHECKS[key]
     words = key.rsplit(".", 1)[-1].replace("_", " ").strip()
     return words.capitalize() or "Readiness check", OTHER_CHECK_QUESTION
+
+
 STATUSES = ("pass", "warning", "critical", "not_applicable")
 
 

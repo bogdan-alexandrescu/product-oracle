@@ -161,7 +161,7 @@ for (const scheme of ["light", "dark"] as const) {
     expect(decodeURIComponent((await picture.getAttribute("src")) ?? "")).toContain("Example feature PRD");
 
     // Template descriptions wrap, whole.
-    const desc = page.getByTestId("template-option-oracle-default").getByText(/^Goal trace, problem alignment/);
+    const desc = page.getByTestId("template-option-oracle-default").getByText(/^Oracle's standard: the goal it serves/);
     await expect(desc).toBeVisible();
     const clipped = await desc.evaluate((el) => getComputedStyle(el).textOverflow === "ellipsis" || el.scrollWidth > el.clientWidth);
     expect(clipped).toBe(false);

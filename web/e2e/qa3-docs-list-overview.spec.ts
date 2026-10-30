@@ -44,8 +44,11 @@ async function pick(page: Page, title: string) {
 async function scrollToEnd(page: Page) {
   const { width, height } = page.viewportSize()!;
   await page.mouse.move(width / 2, height / 3);
-  for (let i = 0; i < 8; i++) await page.mouse.wheel(0, 2000);
-  await page.waitForTimeout(200);
+  // Twice, settling in between: rows that render late make the page longer.
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < 8; i++) await page.mouse.wheel(0, 2000);
+    await page.waitForTimeout(500);
+  }
 }
 
 /** The element's box ends above the phone's bottom tab bar. */
@@ -203,18 +206,17 @@ test.describe("phone", () => {
     await expect(page.getByTestId("sort-menu")).toBeVisible();
     for (const k of ["title", "status", "latest", "updated"]) await expect(page.getByTestId(`sort-${k}`)).toBeHidden();
     const first = page.getByTestId("document-row").first();
-    for (const cell of await first.locator("td").filter({ visible: true }).all()) {
-      const box = (await cell.boundingBox())!;
-      if (box.width < 2 || box.height < 2) continue;
-      const inRow = await first.evaluate(
-        (tr, [x, y]) => {
-          const hit = document.elementFromPoint(x, y);
-          return !!hit && tr.contains(hit);
-        },
-        [box.x + box.width / 2, box.y + box.height / 2] as const,
-      );
-      expect(inRow).toBe(true);
-    }
+    await expect(first).toBeVisible();
+    // Each visible cell's centre is the row's own, measured and hit-tested in one frame.
+    const misses = await first.evaluate((tr) =>
+      Array.from(tr.querySelectorAll("td"))
+        .map((td) => td.getBoundingClientRect())
+        .filter((r) => r.width >= 2 && r.height >= 2)
+        .map((r) => document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2))
+        .filter((hit) => !hit || !tr.contains(hit))
+        .map((hit) => hit?.outerHTML.slice(0, 120) ?? "nothing"),
+    );
+    expect(misses).toEqual([]);
   });
 
   test("qa-docs-8: at the end of the list the last PRD's status sits above the tab bar", async ({ page }) => {
