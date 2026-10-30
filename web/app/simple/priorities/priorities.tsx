@@ -183,7 +183,7 @@ export function Priorities() {
           <p className="text-text2" data-testid="prio-subtitle">
             {tab === "buckets" && data?.plan?.span && data.plan.milestones.length ? "Goal by goal, the features in the plan and what else is on this quarter." : SUBTITLE[tab]}
             {data ? ` ${data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}.` : ""}
-            {data && tab === "ranked" && regrouped(data.rows) ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? "" : "s"} what makes the line, so what makes it is listed first, each part by rank.` : ""}
+            {data && tab === "ranked" && splitAtLine(data) ? ` ${data.plan?.span ? "The plan's dates" : "Each feature's end date"} decide${data.plan?.span ? "" : "s"} what makes the line, so what makes it is listed first, each part by rank.` : ""}
           </p>
         </div>
         <Link href="/priorities" className="text-[length:var(--simple-small)] font-medium text-accent-ink underline">
@@ -334,7 +334,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
         <MoveDialog
           move={move}
           rows={data.rows}
-          dated={regrouped(data.rows)}
+          dated={splitAtLine(data)}
           onClose={() => {
             setMove(null);
             backToHandle(move.row.feature_id);
@@ -361,7 +361,7 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
   // Its dates, not its rank, decide that side, so a row dragged above the line asks for a rank
   // at most the last above-the-line rank (and one below it for at least the first below it).
   const split = lineSplit(rows);
-  const apart = split >= 0 && regrouped(data.rows);
+  const apart = split >= 0 && splitAtLine(data);
 
   function targetIndex(y: number, from: number): number {
     let to = 0;
@@ -690,7 +690,6 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
           </label>
           <input
             id="prio-reason"
-            required
             aria-required="true"
             autoFocus
             maxLength={500}
@@ -1485,9 +1484,20 @@ function goalOfRow(data: Out): (r: Row) => string | null {
  */
 function byLine(data: Out): Row[] {
   const rows = data.rows;
-  // qa-simple-plan-2: every line (a key date, a milestone, a picked day) splits the list the same way.
+  if (!dateLine(data)) return rows;
   return [...rows.filter((r) => r.above_line), ...rows.filter((r) => !r.above_line)];
 }
+
+/**
+ * qa-simple-plan-2: whether dates decide the line (a dated plan, a key date, a milestone, a
+ * picked day): then what makes it is listed first, as a dated plan's list is.
+ */
+function dateLine(data: Out): boolean {
+  return !!data.plan?.span || (!!data.line && data.line.kind !== "now");
+}
+
+/** The list is regrouped at the line: dates decide it and rank order alone would interleave. */
+const splitAtLine = (data: Out): boolean => dateLine(data) && regrouped(data.rows);
 
 /** True when the plan's dates put rows that make the line below rows that miss it. */
 function regrouped(rows: Row[]): boolean {
