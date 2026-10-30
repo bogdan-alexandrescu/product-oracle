@@ -1136,8 +1136,11 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
               const b = all[n];
               const c = look(p, item, cut);
               // fix4 qa-simple-roadmap-2/3: the slice's name, cut with "…" to its pill; qa-plan-55: a
-              // slice too short for it has it beside, up to the next slice (or pill) in its row.
-              const { words, beside } = pillWords(p.name, p.code, b, n + 1 < all.length ? all[n + 1].x - 4 : room, b.x + b.w + 6);
+              // slice too short for it has it beside, up to the next slice (or pill) in its row; the
+              // last slice's starts past Oracle's "?" when that sits right of the pill (as PlainPiece's).
+              const last = n + 1 === all.length;
+              const at = last && s && mark > x1 ? mark + 12 : b.x + b.w + 6;
+              const { words, beside } = pillWords(p.name, p.code, b, last ? room : all[n + 1].x - 4, at);
               return (
                 <g
                   key={p.key}
@@ -1167,7 +1170,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
                     <text
                       data-testid="slice-label"
                       data-beside={beside ? "true" : undefined}
-                      x={beside ? b.x + b.w + 6 : b.x + 8.5}
+                      x={beside ? at : b.x + 8.5}
                       y={y + BAR_H / 2}
                       dominantBaseline="central"
                       fontSize={12}
