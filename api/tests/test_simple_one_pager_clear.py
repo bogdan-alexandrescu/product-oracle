@@ -256,7 +256,7 @@ async def test_problem_naming_no_one_is_asked_again(client):
 
     # Twice naming no one ("Administrators" is not "admins" to names_who).
     asked.clear()
-    answers[1] = _answer("Administrators cannot onboard teams.")
+    answers[1] = _answer("Administrators cannot onboard anyone.")
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
         out = await one_pager.run_job(s, job, ask)
