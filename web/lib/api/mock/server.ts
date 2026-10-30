@@ -2011,6 +2011,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
     feedback: db.feedback,
     uuid,
     now,
+    closeThread: (item) => closeFeedbackThread(db, item),
     lockedKeys: (v) => lockedKeys(db, v as VersionRow),
     sentToAgents: (sid) =>
       (db.runs?.runs ?? []).some((r) => !["succeeded", "failed", "cancelled"].includes(r.status) && !!(r as SentRun).sent?.suggestion_ids.includes(sid)),
@@ -3171,6 +3172,12 @@ function discussionReviewFeedback(db: Db, me: { id: string; role: Role }, d: Dis
   const v = doc && findVersion(db, doc, Number(d.subject.version));
   if (!doc || !v || v.approved_at) return;
   addGeneralFeedback(db, llmContext(db, me.id, me.role), doc, v, me.id, body, null, d.id);
+}
+
+/** As discussions.service.close_for_feedback: closing whole-draft feedback made in Discuss closes its thread. */
+function closeFeedbackThread(db: Db, f: { discussion_id?: string | null }) {
+  const thread = f.discussion_id ? db.discussions?.discussions.find((x) => x.id === f.discussion_id) : null;
+  if (thread && thread.status !== "closed") Object.assign(thread, { status: "closed", lock_version: thread.lock_version + 1 });
 }
 
 /** As oracle.review.schemas.GENERAL_FEEDBACK_MAX and the API's FEEDBACK_TOO_LONG. */
@@ -5398,8 +5405,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (patch.status === "open" && !("addressed_in_version" in patch)) patch.addressed_in_version = null;
     Object.assign(f, patch, { updated_at: now() });
     // fix3-discuss review: resolving whole-draft feedback made in Discuss closes its thread.
-    const thread = f.discussion_id && patch.status && patch.status !== "open" ? db.discussions?.discussions.find((x) => x.id === f.discussion_id) : null;
-    if (thread && thread.status !== "closed") Object.assign(thread, { status: "closed", lock_version: thread.lock_version + 1 });
+    if (patch.status && patch.status !== "open") closeFeedbackThread(db, f);
     return json(200, f);
   }
 

@@ -124,7 +124,8 @@ test("the approver opens a General item's thread, and resolving the item closes 
   await thread(page).getByRole("button", { name: "All feedback" }).click();
 
   await general(page).click();
-  await items(page).filter({ hasText: REMARK }).getByRole("button", { name: "Resolve" }).click();
+  // Oracle answered it; the approver's Accept closes the item, and with it the thread.
+  await items(page).filter({ hasText: REMARK }).getByRole("button", { name: "Accept", exact: true }).click();
   await panel(page).getByRole("button", { name: /^Done/ }).click();
   await items(page).filter({ hasText: REMARK }).getByRole("button", { name: "Open the thread" }).click();
   await expect(thread(page)).toContainText("Closed");
