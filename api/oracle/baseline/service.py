@@ -1231,6 +1231,11 @@ async def set_entity_status(
         await scoring.rescore_around(db, [entity.id], include_supporters=True)
         await db.flush()
         await _record_change(db, writer.actor, entity, before, f"entity_{status}")
+        if entity.type == "goal" and status == "confirmed":
+            # The first confirmed goal turns on the built-in rituals waiting for it.
+            from oracle.rituals.service import wake_on_first_goal
+
+            await wake_on_first_goal(db)
     return entity
 
 
