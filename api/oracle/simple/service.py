@@ -490,10 +490,11 @@ def _candidates(
 def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
     if row.merged_into:
         return "merged"
-    if row.draft:
-        return "draft"
+    # dod-actions-meet: a cut draft reads cut (Restore), not a draft still in its horizon.
     if row.cut or row.item_key in cut:
         return "cut"
+    if row.draft:
+        return "draft"
     states = {r.state for r in recs if r.state != "cancelled"}
     if states and states <= {"done"}:
         return "done"

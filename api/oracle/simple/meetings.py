@@ -1860,6 +1860,7 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
             meeting_id=m.id,
             title=m.title,
             ended_at=m.ended_at,
+            sent_at=m.sent_at,
             decisions=counts.get(m.id, 0),
             state="new" if seen is None or (m.sent_at and m.sent_at > seen) else "open",
         )  # fmt: skip

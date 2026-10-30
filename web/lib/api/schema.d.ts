@@ -25680,6 +25680,8 @@ export interface components {
             title: string;
             /** Ended At */
             ended_at: string | null;
+            /** Sent At */
+            sent_at: string | null;
             /** Decisions */
             decisions: number;
             /**

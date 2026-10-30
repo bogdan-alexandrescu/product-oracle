@@ -13,6 +13,7 @@ import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
 import { allNeeds, NeedTable, SOURCE_COLUMNS, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
+import { minutesRows } from "./_minutes";
 import { useReminderRows } from "./_reminders";
 import { useWebhookRows } from "./_webhooks";
 
@@ -95,7 +96,7 @@ export default function InboxPage() {
   const webhookRows = useWebhookRows(busy, act, seenBefore);
   // Remind on a one-pager: a PRD's owner or decider nudged me to review its draft.
   const reminderRows = useReminderRows(seenBefore);
-  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows] : null;
+  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows, ...minutesRows(inbox.simple_minutes ?? [])] : null;
   const waiting = rows ? waitingNeeds(rows).length : undefined;
 
   return (
@@ -183,6 +184,7 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "outcomes", title: "Outcomes" },
   { id: "webhooks", title: "Webhooks" },
   { id: "reminders", title: "Review reminders" },
+  { id: "minutes", title: "Meeting minutes" },
   { id: "oracle-actions", title: "Oracle did" },
   { id: "feedback", title: "Feedback" },
   { id: "decisions", title: "Decisions" },
