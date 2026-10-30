@@ -15,6 +15,10 @@ Test cards (protects / fails_when / no_claim):
   with a reason naming who changed it, stays open, and is offered again on the new state
   (its before is the item's current value), so a second Apply lands the card's change;
   fails_when=the stale card lands, is lost, or keeps failing; no_claim=the card's words.
+- test_apply_all_stops_in_words_and_reoffers: protects=Apply all stops at a card whose
+  item changed under an earlier card, says why in words (no ids, no raw dates), and offers
+  that card again on the new state, so its own Apply then lands; fails_when=the reason is
+  the engine's raw answer or the stopped card keeps failing; no_claim=more than two cards.
 - test_two_proposals_on_one_field: protects=two proposals of the same field: once the
   first is accepted, the second is refused as outdated (never silently overwrites); once
   the first is declined instead, the second is accepted; fails_when=the second overwrites
@@ -164,3 +168,27 @@ async def test_undo_after_someone_else_changed_the_item(client):
     assert r.status_code == 409, r.text
     assert r.json()["detail"]["current"] == {"title": "Ledger v3"}
     assert (await w.item("edit_title-a")).title == "Ledger v3"
+
+
+async def test_apply_all_stops_in_words_and_reoffers(client):
+    ctx = await chat_people()
+    w = await ChatWorld(ctx).build()
+    ledger = w.ids["Ledger v2"]
+    await post(client, ctx, "owner", "push ledger out a month, then to March")
+    await read(ctx, actions(act("move_dates", item=ledger, shift="1 month"),
+                            act("move_dates", item=ledger, when="March 3")))  # fmt: skip
+    m = await last(client, ctx, "owner")
+    first, second = m["cards"]
+    r = await client.post(f"/v1/simple/chat/messages/{m['id']}/apply-all",
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    stopped = r.json()["stopped"]
+    assert stopped["card_id"] == second["id"]
+    assert stopped["reason"].startswith("Changed since you saw it: changed by"), stopped
+    assert "{" not in stopped["reason"] and "2026-" not in stopped["reason"], stopped
+    cards = {c["id"]: c for c in r.json()["thread"]["messages"][-1]["cards"]}
+    assert cards[second["id"]]["status"] == "open"
+    assert cards[second["id"]]["before"] == first["after"]
+    r = await client.post(f"{CARDS}/{second['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert str((await w.item("Ledger v2")).start_date) == second["after"]["start_date"]
