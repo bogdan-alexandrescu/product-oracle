@@ -5,15 +5,16 @@ import { useCallback, useEffect, useState } from "react";
 
 import { toast } from "@/components/ds/Toast";
 import { ChatCard } from "@/components/simple/chat/ChatCard";
-import type { Question } from "@/components/simple/questions/Questions";
+import { recommendsLine, type Question } from "@/components/simple/questions/Questions";
 import { api, unwrap } from "@/lib/api/client";
 import { askSay, askThread, PENDING_POLL_MS, undoCard, walk, type ChatCard as Card, type ChatMessage, type WalkStep } from "@/lib/api/simple-chat";
+import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { beforeAfter, OP_WORDS } from "@/lib/simple-home";
 import { errorMessage } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, waitingChanged } from "@/lib/waiting";
 
-/** What a step did, for Undo: an applied card or accepted proposal is undone; anything else goes back a step. */
-type Done = { step: number; card?: string; change?: string };
+/** What a step did, for Undo: an applied card or accepted proposal is undone; anything else goes back a step. `skipped`: Skip moved on. */
+type Done = { step: number; card?: string; change?: string; skipped?: boolean };
 
 /** A decision waiting for the reader (GET /v1/simple/decisions/waiting): a PRD's question, or another judgement call. */
 type DecisionStep = { id: string; kind: "decision"; title: string; why: string; question: Question | null; url: string };
@@ -24,9 +25,25 @@ const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 const KIND_WORDS: Record<Step["kind"], string> = {
   broken_link: "Broken link",
   decision: "Decision waiting for you",
-  agenda_decision: "On the next meeting's agenda",
+  agenda_decision: "On a meeting's agenda",
   proposal: "Proposal waiting for you",
 };
+
+/** qa-simple-home-8: the type box's hint, short enough for a phone, as the step asks. */
+const TYPE_HINT: Record<Step["kind"], string> = {
+  broken_link: "Or type the fix",
+  decision: "Or type your answer",
+  agenda_decision: "Or type a note",
+  proposal: "Or type what to do",
+};
+
+/** Home's "Next review meeting" (GET /v1/simple/meetings: Upcoming's first row). */
+type NextMeeting = { ritual_title: string; due_at: string };
+
+/** "1 decision", "5 broken links". */
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+/** "a, b and c". */
+const joinAnd = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
 /**
  * The walk's steps: the broken links (GET /v1/simple/walk), then the decisions waiting for the
@@ -37,9 +54,14 @@ const KIND_WORDS: Record<Step["kind"], string> = {
 /** A read's answer, or undefined when it failed. */
 const settle = <T,>(p: Promise<T>): Promise<T | undefined> => p.catch(() => undefined);
 
-async function loadSteps(): Promise<Step[]> {
+async function loadSteps(): Promise<{ steps: Step[]; meeting: NextMeeting | null }> {
   // The walk's own steps are the pass; a decisions read that fails leaves its steps out, never the whole walk.
-  const [w, waitingR, inboxR] = await Promise.all([walk(), settle(unwrap(api.GET("/v1/simple/decisions/waiting"))), settle(loadInbox())]);
+  const [w, waitingR, inboxR, meetingsR] = await Promise.all([
+    walk(),
+    settle(unwrap(api.GET("/v1/simple/decisions/waiting"))),
+    settle(loadInbox()),
+    settle(unwrap(api.GET("/v1/simple/meetings"))),
+  ]);
   const waiting = waitingR ?? { questions: [] as Question[] };
   const inbox = inboxR ?? { decisions: [] as Awaited<ReturnType<typeof loadInbox>>["decisions"] };
   const agenda = new Set(w.steps.flatMap((s) => (s.kind === "agenda_decision" && s.decision ? [s.decision.id] : [])));
@@ -55,7 +77,7 @@ async function loadSteps(): Promise<Step[]> {
       id: `decision:${q.id}`,
       kind: "decision" as const,
       title: `${q.code} ${q.title}`,
-      why: [q.due_label, q.blocks?.label, q.recommendation ? `${q.prd.title} recommends: ${q.recommendation}` : null].filter(Boolean).join(" · ") || `From ${q.prd.title}`,
+      why: [q.due_label, q.blocks?.label, recommendsLine(q)].filter(Boolean).join(" · ") || `From ${q.prd.title}`,
       question: q,
       url: "/simple/decisions",
     })),
@@ -71,7 +93,7 @@ async function loadSteps(): Promise<Step[]> {
     })),
   ];
   const broken = w.steps.filter((s) => s.kind === "broken_link");
-  return [...broken, ...decisions, ...w.steps.filter((s) => s.kind !== "broken_link")];
+  return { steps: [...broken, ...decisions, ...w.steps.filter((s) => s.kind !== "broken_link")], meeting: meetingsR?.upcoming[0] ?? null };
 }
 
 /**
@@ -82,14 +104,18 @@ async function loadSteps(): Promise<Step[]> {
  * problem once, and its card holds just the actions.
  */
 export function Walk({ onDone }: { onDone: () => void }) {
+  const zone = useCompanyZone();
   const [steps, setSteps] = useState<Step[] | null>(null);
+  const [meeting, setMeeting] = useState<NextMeeting | null>(null);
   const [at, setAt] = useState(0);
   const [done, setDone] = useState<Done[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try {
-      setSteps(await loadSteps());
+      const r = await loadSteps();
+      setSteps(r.steps);
+      setMeeting(r.meeting);
       setError(null);
     } catch (e) {
       setError(detail(e));
@@ -98,7 +124,11 @@ export function Walk({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     let live = true;
     loadSteps()
-      .then((s) => live && setSteps(s))
+      .then((r) => {
+        if (!live) return;
+        setSteps(r.steps);
+        setMeeting(r.meeting);
+      })
       .catch((e) => live && setError(detail(e)));
     return () => {
       live = false;
@@ -168,15 +198,40 @@ export function Walk({ onDone }: { onDone: () => void }) {
     }
   }
 
+  /** qa-simple-home-7: start again over what is left (the walk read afresh: what was decided is gone). */
+  async function again() {
+    setBusy(true);
+    await load();
+    setDone([]);
+    setAt(0);
+    setBusy(false);
+  }
+
   const step = steps?.[at];
   const total = steps?.length ?? 0;
+  // The steps whose last answer was Skip (Undo takes an answer back).
+  const lastOf = new Map<number, Done>();
+  for (const d of done) lastOf.set(d.step, d);
+  const skipped = [...lastOf.values()].filter((d) => d.skipped).map((d) => steps?.[d.step]).filter((s): s is Step => !!s);
+  const left = joinAnd(
+    [
+      count(skipped.filter((s) => s.kind === "decision" || s.kind === "agenda_decision").length, "decision", "decisions"),
+      count(skipped.filter((s) => s.kind === "broken_link").length, "broken link", "broken links"),
+      count(skipped.filter((s) => s.kind === "proposal").length, "proposal", "proposals"),
+    ].filter((x) => !x.startsWith("0 ")),
+  );
+  // qa-simple-home-5: an agenda step names Home's "Next review meeting" (the same read, with its date) only when it is that meeting's.
+  const agendaWords = (s: Step) =>
+    meeting && s.why.includes(meeting.ritual_title)
+      ? `On the agenda of the next review meeting, ${meeting.ritual_title}, ${formatInZone(meeting.due_at, zone, { weekday: "short", month: "short", day: "numeric" })}`
+      : KIND_WORDS[s.kind];
   // Nothing to undo before a step was answered or skipped (the walk's first step).
   const canUndo = !busy && done.length > 0;
   return (
     <section aria-label="Walk me through it" data-testid="walk" className="simple-card flex flex-col gap-4 max-[600px]:mb-[76px]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="simple-h2">Walk me through it</h2>
-        {steps && total > 0 && (
+        {step && (
           <span className="simple-small tnum" data-testid="walk-progress">
             {Math.min(at + 1, total)} of {total}
           </span>
@@ -187,7 +242,7 @@ export function Walk({ onDone }: { onDone: () => void }) {
           Undo
         </button>
         {step && (
-          <button type="button" className="simple-button disabled:cursor-not-allowed disabled:opacity-50" disabled={busy} onClick={() => next({ step: at })}>
+          <button type="button" className="simple-button disabled:cursor-not-allowed disabled:opacity-50" disabled={busy} onClick={() => next({ step: at, skipped: true })}>
             Skip
           </button>
         )}
@@ -206,10 +261,29 @@ export function Walk({ onDone }: { onDone: () => void }) {
           Nothing waits for you. You are up to date.
         </p>
       )}
-      {steps && total > 0 && !step && <p data-testid="walk-finished">That is everything for now.</p>}
+      {steps && total > 0 && !step && (
+        <div data-testid="walk-finished" className="flex flex-col gap-3">
+          {skipped.length === 0 ? (
+            <p>That is everything for now.</p>
+          ) : (
+            <>
+              <p data-testid="walk-left">
+                You skipped {skipped.length}. {left} still {skipped.length === 1 ? "waits" : "wait"}.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="simple-button" disabled={busy} onClick={() => void again()}>
+                  Start again from the first skipped
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
       {step && (
         <div key={`${step.id}-${at}`} data-testid="walk-step" data-kind={step.kind} className="flex flex-col gap-3">
-          <p className="simple-small text-text2">{KIND_WORDS[step.kind]}</p>
+          <p className="simple-small text-text2" data-testid="walk-step-kind">
+            {step.kind === "agenda_decision" ? agendaWords(step) : KIND_WORDS[step.kind]}
+          </p>
           <p className="font-semibold" data-testid="walk-step-title">
             {step.title}
           </p>
@@ -238,9 +312,6 @@ export function Walk({ onDone }: { onDone: () => void }) {
               <Link href={step.url} className="simple-button">
                 Open the decision
               </Link>
-              <button type="button" className="simple-button" onClick={() => next({ step: at })}>
-                Next
-              </button>
             </div>
           )}
           {step.kind === "agenda_decision" && step.decision && (
@@ -248,9 +319,6 @@ export function Walk({ onDone }: { onDone: () => void }) {
               <Link href={step.decision.url} className="simple-button">
                 Open the decision
               </Link>
-              <button type="button" className="simple-button simple-button-primary" onClick={() => next({ step: at })}>
-                Next
-              </button>
             </div>
           )}
           {step.kind === "proposal" && step.change && (
@@ -272,7 +340,7 @@ export function Walk({ onDone }: { onDone: () => void }) {
               </div>
             </div>
           )}
-          <TypeInstead />
+          <TypeInstead hint={TYPE_HINT[step.kind]} />
         </div>
       )}
     </section>
@@ -280,7 +348,7 @@ export function Walk({ onDone }: { onDone: () => void }) {
 }
 
 /** Answer by typing: the line goes to Oracle (the Ask thread); its reply and cards show here. */
-function TypeInstead() {
+function TypeInstead({ hint }: { hint: string }) {
   const [text, setText] = useState("");
   const [reply, setReply] = useState<ChatMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -322,7 +390,7 @@ function TypeInstead() {
           value={text}
           maxLength={2000}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Or type it: “move Weekly alert digest to Q2”"
+          placeholder={hint}
           className="h-10 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 text-text"
         />
         <button type="submit" className="simple-button" disabled={busy || !text.trim()}>

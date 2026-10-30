@@ -76,7 +76,7 @@ const STEPS: Record<string, Copy> = {
 };
 
 /** A step's copy; a step this build has no words for keeps its row: "Calendar", Done or Not done, no Open. */
-function copyOf(s: Step): Copy {
+export function copyOf(s: Step): Copy {
   const known = STEPS[s.key];
   if (known) return known;
   const words = String(s.key).replace(/_/g, " ");

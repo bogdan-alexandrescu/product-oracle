@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as KeyEvent, type ReactNode, type RefObject } from "react";
 
 import { Icon, Mark } from "@/components/ds";
+import { SIMPLE_ASK_PANEL_ID } from "@/components/simple/SimpleShell";
 import { takeAskDraft, useAskDraft } from "@/components/hop/open-state";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { askSay, askThread, linkAsk, recentChats, type ChatMessage, type ChatSummary, type ChatThread } from "@/lib/api/simple-chat";
@@ -156,7 +157,13 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
   const herePage = !chat.general && chat.page !== pathname ? pageName(chat.page) : "This page";
 
   return (
-    <div ref={root} className="flex h-full min-h-0 min-w-0 flex-col bg-surface text-[15px] leading-[22px] text-text" data-testid="hop-panel">
+    <div
+      ref={root}
+      // qa-simple-home-24: the docked panel (with its header and mark) is what the rail's Ask Oracle controls.
+      id={showHeader && mark ? SIMPLE_ASK_PANEL_ID : undefined}
+      className="flex h-full min-h-0 min-w-0 flex-col bg-surface text-[15px] leading-[22px] text-text"
+      data-testid="hop-panel"
+    >
       {showHeader && (
         <div className="flex min-h-14 flex-none items-center gap-2 border-b border-line pr-3 pl-4">
           {mark && <Mark size={22} tone="current" className="flex-none text-accent" />}
@@ -216,6 +223,7 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         key={session}
         chat={chat}
         name={name}
+        draftKey={chat.general ? "general" : chat.page}
         subject={chat.general ? GENERAL : chat.page === pathname ? screen : { kind: "screen", subject: { path: chat.page }, label: name }}
         asks={can("create_discussion")}
         changes={changes}
@@ -223,7 +231,8 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         top={(question) => (
           <p className="mb-3 flex items-center gap-2 text-sm text-text2">
             <span className="min-w-0 truncate" data-testid="ask-about" title={question ?? undefined}>
-              {question ?? (chat.reopened ? `Chat about ${name}` : `New chat about ${name}`)}
+              {/* qa-simple-home-23: "New general chat", not "New chat about General". */}
+              {question ?? (chat.general ? (chat.reopened ? "General chat" : "New general chat") : chat.reopened ? `Chat about ${name}` : `New chat about ${name}`)}
             </span>
             <button
               ref={trigger}
@@ -232,7 +241,8 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
               aria-expanded={recent !== null}
               aria-haspopup="true"
               onClick={() => (recent === null ? void openRecent() : setRecent(null))}
-              className="ml-auto inline-flex flex-none items-center gap-0.5 rounded font-semibold whitespace-nowrap text-accent-ink hover:underline"
+              // qa-simple-home-25: a 24 px tap target (44 px on a phone), the same text link.
+              className="ml-auto inline-flex min-h-6 flex-none items-center gap-0.5 rounded font-semibold whitespace-nowrap text-accent-ink hover:underline max-[600px]:min-h-11"
             >
               <History />
               Recent chats
@@ -359,6 +369,7 @@ type Line = { at: string; plan?: ChatMessage; ask?: AskMessage };
 function ChatView({
   chat,
   name,
+  draftKey,
   subject,
   asks,
   changes,
@@ -368,6 +379,8 @@ function ChatView({
 }: {
   chat: Chat;
   name: string;
+  /** qa-simple-home-22: whose words the box holds (the page's chat, or General): an unsent draft stays with its chat. */
+  draftKey: string;
   subject: ScreenSubject;
   asks: boolean;
   changes: boolean;
@@ -503,7 +516,7 @@ function ChatView({
   return (
     <section ref={here} aria-label="Ask or change the plan" data-testid="ask-chat" className="flex min-h-0 flex-1 flex-col">
       <div className="relative min-h-0 flex-1">
-        <div ref={scroller} className="relative h-full overflow-y-auto px-4 py-3">
+        <div ref={scroller} className="relative h-full overflow-x-hidden overflow-y-auto px-4 py-3">
           {top(question)}
           {error && (
             <p role="alert" className="mb-3 text-sm text-crit">
@@ -537,6 +550,7 @@ function ChatView({
           placeholder={changes ? `Ask about ${about}, or ask for a change…` : `Ask about ${about}…`}
           hint={changes ? undefined : "You can ask questions. To suggest a change, ask an owner for comment access."}
           typed={typed}
+          draftKey={draftKey}
         />
       </div>
     </section>
@@ -584,7 +598,7 @@ function AskLine({ message: m, askId, onEnded }: { message: AskMessage; askId: s
   return (
     <li data-testid="chat-message" data-kind={person ? "request" : "answer"} data-author={person ? "person" : "oracle"} className={`flex flex-col gap-2 ${person ? "items-end" : "items-start"}`}>
       <div
-        className={`max-w-[94%] rounded-[14px] px-3 py-2 ${person ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}
+        className={`min-w-0 max-w-[94%] rounded-[14px] px-3 py-2 ${person ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}
         {...(person ? {} : { "data-testid": "ask-answer", "data-status": live && !text ? "pending" : m.status })}
       >
         <Who name={person ? "You" : "Oracle"} at={m.created_at} zone={zone} mine={person} />
@@ -593,7 +607,7 @@ function AskLine({ message: m, askId, onEnded }: { message: AskMessage; askId: s
             {failed}
           </p>
         ) : person ? (
-          <p className="whitespace-pre-wrap" data-testid="chat-message-body">
+          <p className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]" data-testid="chat-message-body">
             {text}
           </p>
         ) : text ? (

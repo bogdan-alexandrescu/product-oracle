@@ -1401,7 +1401,7 @@ async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
         op === "accept_risk"
           ? { label: "Accept as risk", op, target: { item_id: i.id, flag: f.kind, subject: f.subject ?? null }, before: { risk: null }, after: { risk: { note: "Accepted as a risk in a walk-through" } } }
           : {
-              label: op === "shift_dependents" ? "Move dependents" : "Move dependency", op, target: { item_id: i.id, subject: f.subject ?? null },
+              label: op === "shift_dependents" ? "Move the dependents" : "Move the dependency", op, target: { item_id: i.id, subject: f.subject ?? null },
               before: { [i.id]: sd(i), ...(dep ? { [dep.id]: sd(dep) } : {}) }, after: {},
             },
       );

@@ -90,6 +90,7 @@ export function ChatComposer({
   typed,
   note,
   row = false,
+  draftKey,
 }: {
   send: (text: string) => Promise<unknown>;
   placeholder: string;
@@ -101,8 +102,17 @@ export function ChatComposer({
   note?: string;
   /** The Ask panel's box (the owner's pick C): the box and Send on one row, the box as tall as its words. */
   row?: boolean;
+  /** qa-simple-home-22: whose chat the box writes to; an unsent draft stays with it and comes back with it. */
+  draftKey?: string;
 }) {
   const [text, setText] = useState(typed?.text ?? "");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [draftAt, setDraftAt] = useState(draftKey);
+  if (draftKey !== draftAt) {
+    setDraftAt(draftKey);
+    if (draftAt !== undefined) setDrafts((d) => ({ ...d, [draftAt]: text }));
+    setText((draftKey !== undefined ? drafts[draftKey] : undefined) ?? "");
+  }
   const box = useRef<HTMLTextAreaElement>(null);
   const [had, setHad] = useState(typed?.n ?? 0);
   if ((typed?.n ?? 0) !== had) {
@@ -349,21 +359,22 @@ export function ChatLine({
       <div
         className={
           ask
-            ? `max-w-[94%] rounded-[14px] px-3 py-2 text-[15px] leading-[22px] ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
-            : `max-w-[95%] rounded-xl px-3 py-2 ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
+            ? `min-w-0 max-w-[94%] rounded-[14px] px-3 py-2 text-[15px] leading-[22px] ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
+            : `min-w-0 max-w-[95%] rounded-xl px-3 py-2 ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
         }
       >
         {ask ? <Who name={you ? "You" : m.author_name} at={m.at} zone={zone} mine={mine} /> : <p className="simple-small font-semibold">{m.author_name}</p>}
         {m.kind === "pending" ? (
           <p
-            className="whitespace-pre-wrap text-text2"
+            className="whitespace-pre-wrap text-text2 [overflow-wrap:anywhere]"
             data-testid="chat-pending"
             role="status"
           >
             <span data-testid="chat-message-body">{m.body}</span>
           </p>
         ) : (
-          <p className="whitespace-pre-wrap" data-testid="chat-message-body">
+          // qa-simple-home-29: a long unbroken word wraps inside the bubble (never a sideways scroll).
+          <p className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]" data-testid="chat-message-body">
             {m.body}
           </p>
         )}

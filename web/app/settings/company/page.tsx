@@ -13,6 +13,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { ZONE_NOT_SET } from "@/lib/zone";
 
 import { INPUT, SELECT_FIELD } from "../_components/fields";
+import { setupReturn } from "../_nav";
 import { BrandingPanel } from "./BrandingPanel";
 
 /** The planning_horizons setting (oracle.tenant_settings_api): B2 Goals framework. */
@@ -56,12 +57,15 @@ function laterError(f: Form): string | null {
   return null;
 }
 
-/** Whether the page was opened from Home's Set up checklist (?from=setup). */
-function useFromSetup(): boolean {
+/**
+ * The Home the page's "Back to Home" returns to when it was opened from a setup step: Detailed
+ * Home's checklist (?from=setup) or Simple Home's (?from=simple-setup, qa-onboarding-34); else null.
+ */
+function useFromSetup(): string | null {
   return useSyncExternalStore(
     () => () => {},
-    () => new URLSearchParams(window.location.search).get("from") === "setup",
-    () => false,
+    () => setupReturn(new URLSearchParams(window.location.search).get("from")),
+    () => null,
   );
 }
 
@@ -218,7 +222,7 @@ function HorizonsPanel() {
                   {fromSetup && (
                     <>
                       {" · "}
-                      <Link href="/home" className="text-accent-ink hover:underline">
+                      <Link href={fromSetup} className="text-accent-ink hover:underline">
                         Back to Home
                       </Link>
                     </>

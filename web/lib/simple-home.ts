@@ -185,7 +185,7 @@ export function milestoneOf(text: string | null): [string, string] {
   return head ? [head, head] : ["Milestone", "Milestone"];
 }
 
-export function planByMonth(items: PlanInput[], today: string): PlanStrip | null {
+export function planByMonth(items: PlanInput[], today: string, through: string | null = null): PlanStrip | null {
   if (items.length === 0) return null;
   // One row per milestone (the record the item links, else its code, else its text before
   // any note), not per text.
@@ -217,7 +217,8 @@ export function planByMonth(items: PlanInput[], today: string): PlanStrip | null
   const first = minOf([...items.map((i) => i.start), ...dated, ...begins]);
   const last = dated.length ? maxOf(dated) : maxOf(committed.length ? committed : items.map((i) => i.end));
   let start = monthOf(first);
-  const lastMonth = monthOf(last > first ? last : first);
+  // qa-simple-home-17: Home's strip runs to the end of the quarter (`through`), each month labelled.
+  const lastMonth = monthOf([last > first ? last : first, ...(through ? [through] : [])].sort().at(-1)!);
   let n = monthsBetween(start, lastMonth);
   if (n > PLAN_MONTHS) {
     const anchor = minOf([addMonths(monthOf(today), -1), addMonths(lastMonth, 1 - PLAN_MONTHS)]);
@@ -325,8 +326,8 @@ export const OP_WORDS: Record<string, string> = {
   edit_outcome: "Change the outcome",
   accept_date_suggestion: "Accept suggested dates",
   accept_risk: "Accept as a risk",
-  shift_dependents: "Move dependents",
-  move_dependency: "Move dependency",
+  shift_dependents: "Move the dependents",
+  move_dependency: "Move the dependency",
   override_priority: "Change the priority",
   add_item: "Add an item",
   merge_item: "Merge a duplicate",

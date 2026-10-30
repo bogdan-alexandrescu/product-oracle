@@ -276,6 +276,12 @@ function DecisionTray({
   suggestions: GoalSuggestionsApi;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
+  // qa-simple-home-14: Home's "All proposals" (?review=proposals) lands on the Proposals part.
+  const proposalsRef = useRef<HTMLElement>(null);
+  const atProposals = useSearchParams().get("review") === "proposals";
+  useEffect(() => {
+    if (atProposals) proposalsRef.current?.scrollIntoView({ block: "start" });
+  }, [atProposals]);
   const suggested = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject);
   const brokenItems = items.filter((i) => i.can_decide && broken(i).length);
   const dates = items.filter((i) => i.suggestion?.can_decide);
@@ -395,7 +401,7 @@ function DecisionTray({
           <p className="text-sm text-text2">No dates waiting.</p>
         )}
       </section>
-      <section className="mt-4">
+      <section id="review-proposals" ref={proposalsRef} className="mt-4 scroll-mt-4">
         <h3 className="font-semibold">Proposals waiting</h3>
         {others.length ? <ul>{others.map(row)}</ul> : <p className="text-sm text-text2">None waiting.</p>}
       </section>
@@ -445,13 +451,14 @@ export function SimpleRoadmap() {
   // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>)
   // or to one roadmap (?roadmap=<id or slug>).
   const params = useSearchParams();
-  const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "" }));
+  const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "", goal: params.get("goal") ?? "" }));
   const [format, setFormat] = useState<Format>("timeline");
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number; above: number } | null>(null);
   // Home's "All proposals" opens the roadmap with its Needs-a-decision tray open (?review=1).
-  const [tray, setTray] = useState(() => params.get("review") === "1");
+  // qa-simple-home-14: ?review=proposals opens it at its Proposals part.
+  const [tray, setTray] = useState(() => params.get("review") === "1" || params.get("review") === "proposals");
   const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -516,7 +523,7 @@ export function SimpleRoadmap() {
     setRestored(true);
     const pick = prefs.data?.simple_roadmap;
     const kept = prefs.data?.simple_filters;
-    const next = { ...f, goal: kept?.goal || f.goal, track: kept?.track || f.track };
+    const next = { ...f, goal: params.get("goal") || kept?.goal || f.goal, track: kept?.track || f.track };
     if (!params.get("prd")) next.prd = kept?.prd || f.prd;
     if (!params.get("roadmap") && pick && pick !== "all" && known.some((r) => r.roadmap.id === pick)) next.roadmap = pick;
     if (next.roadmap !== f.roadmap || next.prd !== f.prd || next.goal !== f.goal || next.track !== f.track) setF(next);
