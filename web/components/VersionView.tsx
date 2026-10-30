@@ -1049,6 +1049,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         onReply: reply,
         onResolve: resolve,
         discussions: { rows: discussionsQ.data ?? null, onOpen: (id) => setDiscussion({ id }) },
+        // fix3-discuss review: a General item made in Discuss opens its thread; back on General.
+        onOpenThread: (id) => setDiscussion({ id, feedback: true }),
         // A decision on an item: its counts, and the comment it may have resolved.
         onChanged: () => {
           void feedbackQ.reload();

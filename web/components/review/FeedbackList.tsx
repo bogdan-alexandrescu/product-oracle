@@ -467,7 +467,6 @@ export function FeedbackList({
                   ctx.onChanged(id);
                 },
                 onTriaged: () => ctx.onChanged(e.item.id),
-                onOpenThread: discussions?.onOpen,
               }}
             />
           ))}
