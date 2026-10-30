@@ -90,7 +90,7 @@ export function seedQuestions(ctx: QuestionsCtx): QuestionsDb {
       q(5, "Reminder default time", owner, -6, "M1", ["F-03", "Health log"], "9:00 in each person's zone", ["Noon", "Let each person pick"]),
       q(6, "Invite limit on the free plan", owner, 4, "M1", ["F-05", "Invite teammates"], "5 invites", ["3 invites", "No limit"]),
       q(7, "Legal input on health notes", approver, -2, "M1", ["F-03", "Health log"], "Ask outside counsel", ["Use our own template"]),
-      q(8, "Sign in with Google at launch", owner, 7, "M1", ["F-01", "Sign in"], "Yes, at launch", ["After launch"]),
+      q(8, "Sign-in choice: Google at launch", owner, 7, "M1", ["F-01", "Sign in"], "Yes, at launch", ["After launch"]),
       q(9, "Onboarding checklist length", owner, 12, "M1", ["F-04", "Onboarding checklist"], "Five steps", ["Three steps", "Seven steps"]),
       q(10, "Weekly summary email", owner, 15, "M2", ["F-08", "Weekly summary"], "Monday mornings", ["Friday afternoons"]),
       q(11, "Dark mode in the first release", owner, 20, "M2", ["F-12", "Themes"], "Yes", ["Later"]),
