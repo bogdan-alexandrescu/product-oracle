@@ -130,6 +130,7 @@ FLAG_KINDS = (
 WRITTEN = ("applied", "accepted", "undone")
 # Roadmap-plus: a roadmap's key dates (oracle.simple.key_dates).
 KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
+QUESTION_OPS = ("decide_question", "name_decider")
 
 
 class ChangeError(Exception):
@@ -387,8 +388,10 @@ def current_route(
     c: SimpleChange, by_id: dict[uuid.UUID, service.Entry], deciders: dict, owners: list
 ) -> list[uuid.UUID]:
     """An open proposal's decider now (S3a-minor: the decider may have changed since it
-    was made); its stored route when its item is not read."""
-    if c.status != "proposed" or c.op == "edit_line" or c.op in KEY_DATE_OPS:
+    was made); its stored route when its item is not read. A PRD question's proposal
+    (decide_question, name_decider) names no item: its stored route is the question's
+    decider (oracle.simple.questions), never the company's owners."""
+    if c.status != "proposed" or c.op in ("edit_line", *QUESTION_OPS) or c.op in KEY_DATE_OPS:
         return list(c.routed_to or [])
     if c.op == CUT_ALL:
         cut = cut_entries(c, by_id)
