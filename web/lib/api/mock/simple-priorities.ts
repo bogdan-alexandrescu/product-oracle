@@ -160,7 +160,8 @@ export function priorityAfter(op: string, after: Values): Values | string {
   for (const k of ["goal_value", "effort"]) {
     if (!(k in after)) continue;
     const v = Number(after[k]);
-    if (!(v > 0)) return `after.${k}: a number above 0`;
+    // qa-simple-plan-6: a goal value goes down to 0; an effort stays above 0 (targets.py).
+    if (k === "goal_value" ? !(v >= 0) : !(v > 0)) return `after.${k}: a number ${k === "goal_value" ? "0 or more" : "above 0"}`;
     out[k] = Math.round(v * 10) / 10;
   }
   return Object.keys(out).length ? out : "after: goal_value or effort";
@@ -306,6 +307,7 @@ export function prioritiesOut(
       goal_value: e.value,
       effort: e.effort,
       score: score.get(i.id) ?? null,
+      confidence: CONFIDENCE[i.confidence ?? ""] ?? 0.5,
       value_estimated: e.valueEstimated,
       depends_on: depsOf(i, byId).map((d) => byId.get(d)!.key),
       after,
@@ -339,7 +341,7 @@ export function prioritiesOut(
       const i = codes.get(String(c.target.item_id))!;
       return {
         change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureId(i.id), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
-        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
+        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), can_withdraw: c.by === ctx.id, flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
       };
     });
   const drafts: Schemas["SimplePriorityDraft"][] = live

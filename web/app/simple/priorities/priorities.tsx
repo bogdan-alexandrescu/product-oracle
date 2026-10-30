@@ -97,6 +97,14 @@ export function Priorities() {
     setTabPick({ tab: t, from: params.get("tab") });
     setParams({ tab: t === "ranked" ? null : t });
   };
+  // qa-simple-plan-42: while the URL still reads what it did at the pick (the line put back
+  // meanwhile rewrote it without the tab), the pick is written again, so a reload keeps it.
+  const urlTabParam = params.get("tab");
+  useEffect(() => {
+    if (!tabPick || tabPick.from !== urlTabParam) return;
+    const want = tabPick.tab === "ranked" ? null : tabPick.tab;
+    if (urlTabParam !== want) setParams({ tab: want });
+  }, [tabPick, urlTabParam, setParams]);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // qa-simple-plan-41: the arrow keys (and Home / End) move between the tabs, as a WAI-ARIA tablist.
   const tabKey = (e: KeyboardEvent, k: number) => {
@@ -355,6 +363,12 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const maxValue = Math.max(1, ...rows.map((r) => r.goal_value ?? 0));
+  // qa-simple-plan-34: a look-alike's link (?show=<its item or feature>) marks its row and brings it into view.
+  const show = useSearchParams().get("show");
+  const shown = (r: Row) => !!show && (r.feature_id === show || r.item_id === show);
+  useEffect(() => {
+    if (show) document.querySelector('[data-shown="true"]')?.scrollIntoView({ block: "center" });
+  }, [show]);
 
   // A dated plan lists what makes the line first, so a row's neighbour on screen is not its
   // neighbour by rank: the keys move by rank (data.rows), a drag stays on its side of the line.
@@ -430,7 +444,8 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
             data-end={r.end_date ?? ""}
             data-misses={r.above_line ? undefined : "true"}
             data-moved={words ? "true" : undefined}
-            className={`rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"} ${target || words ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
+            data-shown={shown(r) ? "true" : undefined}
+            className={`rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"} ${target || words || shown(r) ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {mayChange && r.can_reorder && (
@@ -487,6 +502,12 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
                   )}
                 </span>
                 {r.milestone && <span className="whitespace-nowrap">Milestone {r.milestone}</span>}
+                {/* qa-simple-plan-3: the confidence the score is worked out with, beside the numbers. */}
+                {r.effort != null && (
+                  <span data-testid="prio-confidence" className="whitespace-nowrap tabular-nums" title={SCORE_WORDS}>
+                    confidence {fmt(r.confidence, 2)}
+                  </span>
+                )}
                 {/* The numbers say what they are and wrap as one group. */}
                 <span data-testid="prio-numbers" className="flex items-center gap-1 whitespace-nowrap tabular-nums">
                   <span aria-hidden className="h-2 w-16 flex-none overflow-hidden rounded-full border border-line bg-surface2">
@@ -749,7 +770,8 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
   const phone = usePhone();
   const [busy, setBusy] = useState(false);
 
-  async function decide(action: "accept" | "decline") {
+  // qa-simple-plan-30: "withdraw" is the proposer taking it back (closed, nothing changes).
+  async function decide(action: "accept" | "decline" | "withdraw") {
     setBusy(true);
     const r = await api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: p.change_id } }, body: {} });
     setBusy(false);
@@ -757,7 +779,7 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
       r.response.ok && r.data
         ? { ok: true, change: { ...r.data.change, status: "applied", can_undo: false } }
         : { ok: false, status: r.response.status, message: `Could not decide: ${detailMessage(r.error, r.response)}`, pushback: false },
-      action === "accept" ? `Accepted the proposal for ${p.title}` : `Declined the proposal for ${p.title}`,
+      action === "accept" ? `Accepted the proposal for ${p.title}` : action === "withdraw" ? `Withdrew your proposal for ${p.title}` : `Declined the proposal for ${p.title}`,
       row,
       action === "accept",
     );
@@ -789,6 +811,11 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
             </Button>
           </span>
         )}
+        {p.can_withdraw && !p.can_decide && (
+          <Button variant="secondary" onClick={() => void decide("withdraw")} disabled={busy} title="Take your proposal back; nothing changes">
+            Withdraw
+          </Button>
+        )}
       </div>
       {open && !phone && flow}
       {phone && p.flow && (
@@ -803,6 +830,7 @@ function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Ch
 function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
   const [merging, setMerging] = useState<string | null>(null);
   const [into, setInto] = useState("");
+  const show = useSearchParams().get("show");
   return (
     <section aria-label="Not ranked yet" className="mt-6">
       <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Not ranked yet</h2>
@@ -811,7 +839,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
           // qa-simple-plan-29: a Confirm or Merge waiting for the decider; none more until it is decided.
           const pending = proposals.filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut" || p.op === "merge_item"));
           return (
-          <li key={d.item_id} data-testid="prio-draft" data-code={d.code} className="rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-3">
+          <li key={d.item_id} data-testid="prio-draft" data-code={d.code} data-shown={show === d.item_id ? "true" : undefined} className={`rounded-[var(--simple-card-radius)] border border-dashed bg-surface p-3 ${show === d.item_id ? "border-accent ring-2 ring-accent" : "border-line-strong"}`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
               <span className="flex-1 font-medium">{d.title}</span>
@@ -1090,7 +1118,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   /**
    * Where a drag of (dx, dy) takes the mark: sideways its effort (on the log scale: the same
    * distance is the same factor), up/down its goal value (none for a feature with no goal); the
-   * lowest either takes is 0.5 (the API's estimates are above 0). Null: no change.
+   * lowest effort is 0.5 (the API's are above 0), the lowest goal value 0. Null: no change.
    */
   function dragTo(r: Row, dx: number, dy: number): { goal_value?: number; effort?: number } | null {
     const { w: width, h: height } = plotSize;
@@ -1102,8 +1130,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     }
     if (!r.goal) return null;
     const value = Math.round(((r.goal_value ?? 0) - (dy / (height * 0.92)) * maxV) * 2) / 2;
-    if (value < 0.5 && (r.goal_value ?? 0) <= 0.5) return null;
-    const goal_value = Math.max(0.5, value);
+    if (value < 0 && (r.goal_value ?? 0) <= 0) return null;
+    const goal_value = Math.max(0, value);
     return goal_value === r.goal_value ? null : { goal_value };
   }
 
@@ -1122,13 +1150,13 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     const step = 0.5;
     const value = r.goal_value ?? 0;
     const effort = r.effort ?? 0;
-    // qa-simple-plan-6: a key never raises what it should lower; nothing goes under 0.5 (the API's
-    // estimates are above 0), and a feature with no goal has no goal value to change.
+    // qa-simple-plan-6: a key never raises what it should lower; an effort stays at 0.5 or more
+    // (the API's are above 0), a goal value goes down to 0, and a feature with no goal has none to change.
     const map: Record<string, { goal_value?: number; effort?: number } | null> = {
       ArrowRight: { effort: effort + step },
       ArrowLeft: effort - step >= 0.5 ? { effort: effort - step } : null,
       ArrowUp: r.goal ? { goal_value: value + step } : null,
-      ArrowDown: r.goal && value - step >= 0.5 ? { goal_value: value - step } : null,
+      ArrowDown: r.goal && value - step >= 0 ? { goal_value: value - step } : null,
     };
     if (e.key in map) {
       e.preventDefault();
@@ -1359,7 +1387,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                 </button>
                 {isSelected && (
                   <span data-testid="side-numbers" className="block px-2 pb-1 pl-[34px] text-[13px] tabular-nums text-text">
-                    {r.effort == null ? `goal value ${fmt(r.goal_value)} · PM-owned, no score` : `goal value ${fmt(r.goal_value)} · ${fmt(r.effort)} wk · score ${fmt(r.score, 2)}`}
+                    {r.effort == null ? `goal value ${fmt(r.goal_value)} · PM-owned, no score` : `goal value ${fmt(r.goal_value)} · confidence ${fmt(r.confidence, 2)} · ${fmt(r.effort)} wk · score ${fmt(r.score, 2)}`}
                   </span>
                 )}
                 {/* The badge on a line of its own, so the name stays readable. */}

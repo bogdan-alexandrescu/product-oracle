@@ -21,8 +21,9 @@ company's owners. A proposal writes nothing, an add creates no row, until accept
   feature's active override; its undo re-creates the previous one (which replaces this
   one) or, with none, removes it.
 - ``estimate_feature`` (S6): a person's estimate of the item's feature (``target.feature_id``)
-  in the baseline's attrs: ``after`` any of {goal_value, effort}, numbers > 0, rounded to
-  1 decimal (oracle.priorities.scoring reads ``goal_value`` in place of the goals' sum);
+  in the baseline's attrs: ``after`` any of {goal_value, effort}, numbers (goal_value 0 or
+  more, effort > 0), rounded to 1 decimal (oracle.priorities.scoring reads ``goal_value``
+  in place of the goals' sum);
   ``before`` {goal_value, effort} as the caller saw them (attrs ``goal_value``; ``effort``,
   else ``effort_weeks``, as the ranking reads it; null when absent). Its undo restores the
   attrs as they were (a key that was absent is removed).
@@ -191,7 +192,7 @@ def estimates(attrs: dict[str, Any] | None) -> dict[str, float | None]:
     attrs = attrs or {}
     goal = _number(attrs.get("goal_value"))
     effort = _number(attrs["effort"]) if "effort" in attrs else _number(attrs.get("effort_weeks"))
-    return {"goal_value": goal if goal is not None and goal > 0 else None, "effort": effort}
+    return {"goal_value": goal if goal is not None and goal >= 0 else None, "effort": effort}
 
 
 async def _feature(db: AsyncSession, feature_id: Any) -> Entity | None:
@@ -381,11 +382,15 @@ async def _plan(
             if k not in a:
                 continue
             v = a[k]
-            if isinstance(v, bool) or not isinstance(v, int | float) or v <= 0:
-                raise ChangeError(422, f"after.{k}: a number above 0")
+            # qa-simple-plan-6: a goal value may go down to 0 (worth nothing to the goals);
+            # an effort stays above 0 (the score divides by it).
+            zero = k == "goal_value"
+            words = "0 or more" if zero else "above 0"
+            if isinstance(v, bool) or not isinstance(v, int | float):
+                raise ChangeError(422, f"after.{k}: a number {words}")
             after[k] = round(float(v), 1)
-            if after[k] <= 0:
-                raise ChangeError(422, f"after.{k}: a number above 0")
+            if after[k] < 0 or (after[k] == 0 and not zero):
+                raise ChangeError(422, f"after.{k}: a number {words}")
         if not after:
             raise ChangeError(422, "after: any of goal_value, effort")
         missing = [k for k in ESTIMATES if k not in given]

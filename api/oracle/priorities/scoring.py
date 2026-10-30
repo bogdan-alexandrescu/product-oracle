@@ -242,9 +242,9 @@ def goal_value(f: FeatureInput) -> tuple[float, list[dict[str, Any]]]:
 
 
 def estimated_goal_value(f: FeatureInput) -> float | None:
-    """A person's estimate of the feature's goal value (attrs ``goal_value`` > 0, S6)."""
+    """A person's estimate of the feature's goal value (attrs ``goal_value`` >= 0, S6)."""
     v = _number(f.attrs.get("goal_value"))
-    return v if v is not None and v > 0 else None
+    return v if v is not None and v >= 0 else None
 
 
 def _input(f: FeatureInput, *names: str) -> tuple[float | None, str | None]:

@@ -227,6 +227,7 @@ async def _proposals(
             after=c.after,
             waiting_for=[names.get(p, "someone") for p in v.route(c)],
             can_decide=v.may_decide(c),
+            can_withdraw=c.by == getattr(principal, "user_id", None),
             flow=by_change.get(c.id) or by_item.get(e.row.id),
         )  # fmt: skip
         for c, e in shown
@@ -481,6 +482,7 @@ async def build(
                 goal_value=_value(f, "goal_value"),
                 effort=_value(f, "effort"),
                 score=f.score,
+                confidence=round(f.explanation.confidence.value, 2),
                 value_estimated=bool(isinstance(gv, dict) and gv.get("estimated")),
                 depends_on=[code_of[d] for d in f.depends_on if d in code_of],
                 override=SimplePriorityOverride(

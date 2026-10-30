@@ -225,7 +225,7 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
             </ul>
           )}
           {s.looks_like.map((m) => (
-            <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}: merged into it`))} />
+            <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}`))} />
           ))}
         </div>
         {(accepts || rejects || s.flow) && (
@@ -276,21 +276,22 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
 }
 
 /**
- * qa-simple-plan-34: a look-alike feature, linked to the list it ranks in, with "Merge into it"
- * for whoever decides (the suggestion is closed as the same as that feature).
+ * qa-simple-plan-34: a look-alike feature, linked to its own row in the Ranked list (marked
+ * there), and for whoever decides "Same as this: close the suggestion" (it is closed as the
+ * same as that feature; nothing is merged).
  */
 function LooksLike({ m, merges, busy, onMerge }: { m: GoalSuggestion["looks_like"][number]; merges: boolean; busy: boolean; onMerge: () => void }) {
   return (
     <p className="mt-1 flex flex-wrap items-center gap-x-2 text-warn" data-testid="suggestion-looks-like">
       <span>
         Looks like{" "}
-        <Link href="/simple/priorities" className="font-semibold underline" data-testid="looks-like-link">
+        <Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold underline" data-testid="looks-like-link">
           {`${m.code} ${m.title}`.trim()}
         </Link>
       </span>
       {merges && (
         <button type="button" disabled={busy} onClick={onMerge} className="font-semibold text-accent-ink underline" data-testid="looks-like-merge">
-          Merge into it
+          Same as this: close the suggestion
         </button>
       )}
     </p>
@@ -419,7 +420,7 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
             From {s.proposed_by_name ?? "someone"} · {zoneDateTime(s.created_at, zone)}
           </p>
           {s.looks_like.map((m) => (
-            <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}: merged into it`))} />
+            <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}`))} />
           ))}
         </div>
         {(accepts || rejects) && (

@@ -325,8 +325,9 @@ async def test_estimate_commenter_proposes_until_accepted(client):
 async def test_estimate_stale_and_malformed(client):
     """protects=an estimate whose ``before`` no longer matches the attrs answers 409 with the
     current values and writes nothing; a missing ``before``, an empty ``after``, a
-    negative goal value, a non-positive effort and an item without a feature answer 422; fails_when=a stale or malformed
-    estimate lands; no_claim=who changed the attrs outside Simple."""
+    negative goal value, a non-positive effort and an item without a feature answer 422;
+    fails_when=a stale or malformed estimate lands; no_claim=who changed the attrs outside
+    Simple."""
     ctx = await make_people()
     w = await World(ctx).build()
     r = await w.change(client, "owner", "estimate_feature", "pay-1",
@@ -504,7 +505,9 @@ async def test_rows_carry_the_confidence(client):
     assert scored
     for r in scored:
         assert 0 <= r["confidence"] <= 1, r
-        assert r["score"] == pytest.approx(r["goal_value"] * r["confidence"] / r["effort"], abs=1e-3)
+        assert r["score"] == pytest.approx(
+            r["goal_value"] * r["confidence"] / r["effort"], abs=1e-3
+        )
 
 
 async def test_proposer_withdraws_a_proposal(client):

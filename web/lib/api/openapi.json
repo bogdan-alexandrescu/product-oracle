@@ -42818,6 +42818,73 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/changes/{change_id}/withdraw": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Withdraw Simple Change",
+        "description": "Withdraw one of the caller's own proposals while it waits for a decision: nothing\nchanges; it is closed as declined (\"Withdrawn\").",
+        "operationId": "withdraw_simple_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleChangeResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale: nothing written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/SimpleChangeConflict"
+                  },
+                  "title": "Response 409 Withdraw Simple Change"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/simple/drafts": {
       "get": {
         "tags": [
@@ -116933,6 +117000,11 @@
             "title": "Can Decide",
             "default": false
           },
+          "can_withdraw": {
+            "type": "boolean",
+            "title": "Can Withdraw",
+            "default": false
+          },
           "flow": {
             "anyOf": [
               {
@@ -117073,6 +117145,17 @@
               }
             ],
             "title": "Score"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
           },
           "value_estimated": {
             "type": "boolean",

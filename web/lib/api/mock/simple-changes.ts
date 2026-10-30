@@ -725,8 +725,16 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     return json(200, rows.map((c) => view(db, ctx, c)));
   }
   const c = (db.changes ?? []).find((x) => x.id === p[3]);
-  if (m !== "POST" || !["undo", "accept", "decline"].includes(p[4] ?? "")) return null;
+  if (m !== "POST" || !["undo", "accept", "decline", "withdraw"].includes(p[4] ?? "")) return null;
   if (!c) return json(404, { detail: "No such change" });
+  // qa-simple-plan-30: the proposer takes it back (changes.py `withdraw`): closed as declined.
+  if (p[4] === "withdraw") {
+    if (c.by !== ctx.id) return json(403, { detail: "Only the person who proposed it withdraws it" });
+    if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
+    if (c.op === "add_item") return json(409, { detail: "This kind of proposal is not withdrawn here" });
+    Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: "Withdrawn by the person who proposed it" });
+    return json(200, { change: view(db, ctx, c), flags: [] });
+  }
   if (p[4] === "undo") {
     if (c.status !== "applied") return json(409, { detail: `Only an applied change undoes; this one is ${c.status}` });
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who made a change undoes it" });
