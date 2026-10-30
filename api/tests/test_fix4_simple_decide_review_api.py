@@ -48,8 +48,9 @@ async def test_old_comment_decisions_become_comments(client):
     out = await get(client, w, m["id"])
     assert [d["title"] for d in out["meeting_decisions"]] == ["Ship the beta"]
     comments = [n for n in out["notes"] if n["kind"] == "comment"]
+    # Who commented: the approver (the world's users go by their email).
     assert [(n["text"], n["by_name"]) for n in comments] == [
-        ("Keep the beta", w.ctx.users["approver"].name)
+        ("Keep the beta", "approver@example.com")
     ]
     async with tenant_session(w.ctx.tenant_id) as s:
         assert (await s.get(Decision, old)).status == "withdrawn"

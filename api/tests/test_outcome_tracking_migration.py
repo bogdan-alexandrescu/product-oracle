@@ -75,7 +75,7 @@ def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0039_company_timezone chains on it; one head.
-    assert script.get_heads() == ["0092_bet_flow_line_key"]
+    assert script.get_heads() == ["0093_meeting_comments_as_notes"]
     assert script.get_revision("0039_company_timezone").down_revision == REVISION
 
 

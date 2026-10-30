@@ -1373,6 +1373,12 @@ def _grounded(c: Ctx, said: str) -> bool:
     return any(len(n) >= 3 and n.lower() in t for n in names)
 
 
+def _unread(skipped: Any) -> list[str]:
+    """The reader's ``skipped`` parts of the line, said back (at most three, each clipped)."""
+    parts = [" ".join(str(x).split())[:120] for x in skipped or [] if str(x).strip()]
+    return [f"I did not understand: “{p}”." for p in parts[:3]] if isinstance(skipped, list) else []
+
+
 def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
     """The reader's answer, validated: every action through ChatOp.build (an unknown op, a
     bad arg or an item the caller cannot read is a plain refusal, never a card); a clarify
@@ -1404,15 +1410,22 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
                 refused.append(r.body if r.kind == "note" else f"I can't do that: {r.body}")
                 continue
             cards += r.cards
+        # qa-simple-decide-24: nothing is dropped without a word: every refusal, the parts the
+        # reader could not read, the changes past the fifth.
+        said = _unread(answer.get("skipped"))
+        if len(actions) > 5:
+            said.append("I read the first five changes; say the rest again.")
         if not cards:
-            return Reply("note", refused[0])
+            return Reply("note", " ".join([refused[0], *refused[1:], *said]))
         if refused:
-            # The valid cards stay; the line says which one it cannot do.
-            why = (
-                refused[0].removeprefix("I can't do that here: ").removeprefix("I can't do that: ")
+            # The valid cards stay; the line says which ones it cannot do.
+            whys = " ".join(
+                r.removeprefix("I can't do that here: ").removeprefix("I can't do that: ")
+                for r in refused
             )
-            return Reply("cards", f"One I can't do: {why} {_count(len(cards))}", cards)
-        return Reply("cards", _count(len(cards)), cards)
+            n = {1: "One", 2: "Two", 3: "Three"}.get(len(refused), str(len(refused)))
+            said.insert(0, f"{n} I can't do: {whys}")
+        return Reply("cards", " ".join([*said, _count(len(cards))]), cards)
     if isinstance(clarify, dict) and clarify.get("choices"):
         if viewer_in_meeting:
             return Reply("note", VIEWER_NOTE)

@@ -41,6 +41,7 @@ that module is absent or has drawn none: "No flow yet").
 Visibility: a meeting is seen by whoever reads its PRD (oracle.docs.visibility).
 """
 
+import json
 import logging
 import re
 import uuid
@@ -648,6 +649,34 @@ async def comment(
     m.notes = [*(m.notes or []), note]
     await db.flush()
     return note["id"]
+
+
+COMMENT_PREFIX = "Comment: "
+
+
+def comment_decisions_to_notes(conn: Any) -> int:
+    """A comment made before qa-simple-decide-1 was a meeting decision titled
+    "Comment: ...": each becomes its meeting's comment note (its words, who, when), leaves
+    the meeting's decisions and is withdrawn. Sync, on a Connection (the data migration
+    0093_meeting_comments_as_notes runs it); a second run finds nothing. How many moved."""
+    rows = conn.execute(text(
+        "SELECT l.meeting_id, d.id, d.title, d.approver_id, coalesce(d.decided_at, d.created_at)"
+        " FROM simple_meeting_decisions l JOIN decisions d ON d.id = l.decision_id"
+        " WHERE d.origin = 'meeting' AND d.title LIKE :p ORDER BY 5"
+    ), {"p": COMMENT_PREFIX + "%"}).all()  # fmt: skip
+    for meeting_id, decision_id, title, by, at in rows:
+        note = {"id": str(uuid.uuid4()), "kind": "comment",
+                "text": title.removeprefix(COMMENT_PREFIX).strip()[:1000],
+                "by": str(by) if by else None, "at": at.isoformat(), "card_id": None}  # fmt: skip
+        conn.execute(
+            text("UPDATE simple_meetings SET notes = notes || CAST(:n AS jsonb) WHERE id = :m"),
+            {"n": json.dumps([note]), "m": meeting_id},
+        )
+        conn.execute(text("DELETE FROM simple_meeting_decisions WHERE decision_id = :d"),
+                     {"d": decision_id})  # fmt: skip
+        conn.execute(text("UPDATE decisions SET status = 'withdrawn' WHERE id = :d"),
+                     {"d": decision_id})  # fmt: skip
+    return len(rows)
 
 
 def published_words(d: Any, names: dict[uuid.UUID, str]) -> str:
