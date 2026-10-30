@@ -461,10 +461,11 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     rect?.setAttribute("stroke", breaks.length ? "var(--crit)" : "var(--accent-ink)");
     if (live.current) {
       live.current.hidden = false;
-      live.current.textContent = `${shortDay(s)} – ${shortDay(e)}${breaks.length ? ` · ${breaks[0]}` : " · no broken links"}`;
+      const words = `${shortDay(s)} – ${shortDay(e)}${breaks.length ? ` · ${breaks[0]}` : " · no broken links"}`;
+      if (live.current.textContent !== words) live.current.textContent = words;
       live.current.dataset.state = breaks.length ? "broken" : "ok";
-      live.current.style.left = `${Math.min(x, sc.width - 280)}px`;
-      live.current.style.top = `${(l.y.get(d.id) ?? 0) - 24}px`;
+      // On its own layer, moved by a transform: no layout of the chart's box per frame.
+      live.current.style.transform = `translate(${Math.min(x, sc.width - 280)}px, ${(l.y.get(d.id) ?? 0) - 24}px)`;
     }
     window.__poDragWork?.push(performance.now() - t0);
   };
@@ -872,7 +873,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               )}
             </g>
           </svg>
-          <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
+          <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute top-0 left-0 z-20 will-change-transform rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
           {view &&
             l.rows.map((r) => {
               if (r.kind !== "item") return null;
