@@ -29,6 +29,7 @@ import {
   type Scale,
   type Slice,
 } from "./_lib";
+import { CALL_H, RH } from "./_pitch";
 import { PreviewGhost, useAppliedFlash, type Layout } from "./_timeline";
 
 /*
@@ -52,11 +53,8 @@ const MONTH_H = 22;
 const WEEK_H = 22;
 const FLAG_H = 24;
 const MARK_ROW = 20;
-/** A lane's row pitch and its pills' height (B2: 28 and 20); a lane is its rows plus 8 px. */
-const RH = 28;
+/** A lane's pills' height (B2: 20); its row pitch and callout line are in _pitch. */
 const BAR_H = 20;
-/** The line a broken link's callout takes under its row (the callout with its fix buttons, and a gap to the next row's pills). */
-const CALL_H = 34;
 /** QA2 finding 11: a slice or bar is never drawn narrower than this, so a short run of work
  * still reads as a pill, not an unreadable blob, at a coarse scale. */
 const MIN_PILL_W = 28;
