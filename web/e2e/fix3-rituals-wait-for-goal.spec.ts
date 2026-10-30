@@ -48,13 +48,19 @@ for (const phone of [false, true]) {
     await expect(checkin).toContainText("Paused");
     await expect(checkin.getByTestId("ritual-waits")).toHaveText(WHY);
     await expect(checkin).not.toContainText("Next");
+    // No pre-read prepared for it, ahead or past.
+    await expect(checkin.getByTestId("next-pre-read")).toHaveCount(0);
+    await expect(checkin.getByTestId("last-pre-read")).toHaveCount(0);
     // Off by default: paused, with no reason about goals.
     const investor = ritualRow(page, "Investor update");
     await expect(investor).toContainText("Paused");
     await expect(investor.getByTestId("ritual-waits")).toHaveCount(0);
-    // Nothing of it in the Inbox while it waits.
+    // Nothing of it in the Inbox while it waits: no ritual row, no pre-read to open.
     await page.goto("/inbox");
+    await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
     await expect(page.getByText("Weekly goals check-in")).toHaveCount(0);
+    await expect(page.getByTestId("ritual-need")).toHaveCount(0);
+    await expect(page.locator('a[href^="/company/rituals/"]')).toHaveCount(0);
 
     await confirmAGoal(page);
     await page.goto("/company/rituals");
