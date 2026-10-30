@@ -33,9 +33,12 @@ const STEPS: Record<string, Copy> = {
     label: "Pick sources",
     href: "/settings/sources?from=setup",
     // qa-onboarding-3: the step counts the sources with something read; Sources lists them
-    // all. Both say the same number: a source with nothing read yet is said as such.
+    // all. Both say the same number: a source with nothing read yet is said as such. Home
+    // lists the sources only while the step is open (its call budget); a done step says how
+    // many are read, which never contradicts a longer list on Sources.
     status: (s, mine) => {
       const read = s.count ?? 0;
+      if (s.done) return `${sourcesText(read)} read`;
       const all = Math.max(mine.sources ?? read, read);
       if (all === 0) return "None";
       if (read === 0) return `${sourcesText(all)} · nothing read yet`;

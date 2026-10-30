@@ -35,7 +35,8 @@ async function targetsOnHomeAndPlan(page: Page) {
   await page.goto("/home");
   // qa-company-10: Home's goal names are links to the goal; the inspector's goals keep chips.
   await expectTargets(page.getByTestId("goal-open"), "/home goal link");
-  await expectTargets(page.getByTestId("code-chip"), "/home goal chip");
+  // On a phone the inspector is a sheet, so Home shows no chip until one is opened.
+  if ((page.viewportSize()?.width ?? 0) > 640) await expectTargets(page.getByTestId("code-chip"), "/home goal chip");
   await expectTargets(page.getByTestId("info-tip"), "/home (i)");
   await page.goto("/plan");
   await expectTargets(page.getByTestId("info-tip"), "/plan (i)");

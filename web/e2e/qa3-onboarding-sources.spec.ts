@@ -89,6 +89,6 @@ test("Pick sources: a Slack source added and synced from Set up is counted on Ho
   await expect(page.getByRole("list", { name: "My sources" }).getByRole("listitem")).toHaveCount(2);
   await backToHome(page);
   await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
-  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("2 sources · 1 read");
+  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("1 source read");
   await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
 });

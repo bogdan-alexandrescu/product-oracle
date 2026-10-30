@@ -106,6 +106,8 @@ test.describe("desktop", () => {
     await login(page);
     await page.goto("/company/decisions?state=all");
     await expect(row(page, CAPS)).toBeVisible();
+    // The owner's rights are in (Needs me shows) before typing, so nothing redraws under it.
+    await expect(page.getByTestId("decision-state")).toContainText("Needs me");
     const search = page.getByLabel("Search decisions");
     await search.pressSequentially("zzzz");
     await expect(search).toBeFocused();
