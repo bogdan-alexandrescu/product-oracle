@@ -598,6 +598,19 @@ async def describe(db: AsyncSession, c: SimpleChange) -> tuple[str, list[dict]]:
             subjects.append(
                 {"kind": "section", "id": str(doc.id), "ref": f"line:{t.get('line_id')}"}
             )
+    elif c.op == "cut_with_dependents":
+        # Review minor: every item the one change cut, the item first, each a subject.
+        titles = [str(x) for x in t.get("titles") or []] or ([name] if name else [])
+        name = titles[0] if len(titles) == 1 else f"{', '.join(titles[:-1])} and {titles[-1]}"
+        for key in list(c.after or {}):
+            if key == str(item_id):
+                continue
+            try:
+                row = await db.get(RoadmapItem, uuid.UUID(str(key)))
+            except ValueError:
+                row = None
+            if row is not None:
+                subjects.append({"kind": "roadmap_item", "id": str(row.id), "ref": row.item_key})
     elif not name:
         name = str((c.after or {}).get("title") or t.get("title") or "")
     words = drafts.OP_WORDS.get(c.op) or c.op.replace("_", " ").capitalize()

@@ -58672,6 +58672,26 @@
               }
             ],
             "title": "Values"
+          },
+          "with_dependents": {
+            "type": "boolean",
+            "title": "With Dependents",
+            "default": false
+          },
+          "dependents": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependents"
           }
         },
         "type": "object",
@@ -58771,7 +58791,8 @@
                   "set_owner",
                   "set_decider",
                   "decide_question",
-                  "name_decider"
+                  "name_decider",
+                  "cut_with_dependents"
                 ]
               },
               {
@@ -58982,6 +59003,38 @@
               }
             ],
             "title": "Correct"
+          },
+          "dependents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dependents",
+            "default": []
+          },
+          "dependent_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Dependent Ids",
+            "default": []
+          },
+          "may_with_dependents": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "apply",
+                  "propose"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "May With Dependents"
           }
         },
         "type": "object",
@@ -59085,7 +59138,8 @@
               "set_owner",
               "set_decider",
               "decide_question",
-              "name_decider"
+              "name_decider",
+              "cut_with_dependents"
             ],
             "title": "Op"
           },
@@ -79963,7 +80017,8 @@
               "set_owner",
               "set_decider",
               "decide_question",
-              "name_decider"
+              "name_decider",
+              "cut_with_dependents"
             ],
             "title": "Op"
           },
@@ -112897,7 +112952,8 @@
               "set_owner",
               "set_decider",
               "decide_question",
-              "name_decider"
+              "name_decider",
+              "cut_with_dependents"
             ],
             "title": "Op"
           },
@@ -113014,7 +113070,8 @@
               "set_owner",
               "set_decider",
               "decide_question",
-              "name_decider"
+              "name_decider",
+              "cut_with_dependents"
             ],
             "title": "Op"
           },
@@ -113698,6 +113755,14 @@
           "in_meeting": {
             "type": "boolean",
             "title": "In Meeting"
+          },
+          "titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Titles",
+            "default": []
           }
         },
         "type": "object",

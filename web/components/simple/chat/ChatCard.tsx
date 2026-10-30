@@ -138,10 +138,10 @@ export function ChatCard({
     }
   }
 
-  const apply = (fix: number | null = null) =>
+  const apply = (fix: number | null = null, withDependents = false) =>
     run(async () => {
       stopPreview();
-      const r = await applyCard(card.id, fix, fix == null && fields ? corrected(fields) : undefined);
+      const r = await applyCard(card.id, fix, fix == null && !withDependents && fields ? corrected(fields) : undefined, withDependents && (card.dependent_ids ?? []));
       setFields(null);
       if (r.card.status === "applied" && r.card.item_id) sendApplied(r.card.item_id);
       if (r.result && r.result.change.status === "proposed" && r.result.change.routed_to.length) {
@@ -159,16 +159,18 @@ export function ChatCard({
   const shown = correct ? CORRECT_FIELDS.filter((f) => correct.fields.includes(f)) : [];
   const startCorrect = () => setFields(fields ? null : Object.fromEntries(shown.map((f) => [f, correct?.values[f] ?? ""])));
   const red = actionsOnly ? [] : card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red").map((x) => ({ item: f.item_id, ...x })));
-  // fix4 qa-simple-roadmap-24: moving a dependency makes no sense once the item is cut. The
-  // mock and the API have no "cut the dependents too" change, so a cut offers no fixes: its
-  // Apply says the dependents stay (their red reasons stay shown above it).
+  // fix4 qa-simple-roadmap-24: moving a dependency makes no sense once the item is cut, so a
+  // cut offers no fixes: its Apply says the dependents stay (their red reasons stay shown
+  // above it). fix5-cut-dependents: beside it, "Cut it and its dependents" (only when items
+  // wait on it: the card's dependents) cuts them with it as one change.
   const cutting = card.op === "cut";
+  const cutsDependents = cutting && open && (card.dependents ?? []).length > 0;
   const fixes = cutting ? [] : card.fixes;
   // The walk: Apply when no fix makes the card's own change, named by what it does.
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const applyShown = !actionsOnly || !card.fixes.some((f) => f.op === card.op && same(f.target, card.target));
   const applyLabel =
-    cutting && red.length > 0
+    cutting && (red.length > 0 || cutsDependents)
       ? card.may === "propose"
         ? "Propose: cut it, keep the dependents"
         : "Cut it, keep the dependents"
@@ -260,7 +262,9 @@ export function ChatCard({
         // Discard, Correct); a plain wrap leaves the last one alone on its own row, so narrow
         // widths lay them out as a balanced 2-column grid, wide widths keep the flex row.
         // fix4 qa-simple-roadmap-25: wider, one row that never wraps one button alone.
-        <div ref={actions} className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-nowrap [&>button]:min-w-0">
+        // fix5-cut-dependents: a cut's two buttons (and Preview, Reject) are a 2-column grid
+        // at every width, so neither long label is cut short.
+        <div ref={actions} className={`grid grid-cols-2 items-center gap-2 [&>button]:min-w-0 ${cutsDependents ? "" : "sm:flex sm:flex-nowrap"}`}>
           {action ? (
             <button type="button" className="simple-button" aria-pressed={described} aria-expanded={described} disabled={busy} onClick={() => setDescribed((d) => !d)}>
               {described ? "Hide preview" : "Preview"}
@@ -283,8 +287,14 @@ export function ChatCard({
             )
           )}
           {applyShown && (
-            <button type="button" className="simple-button simple-button-primary" disabled={busy || !card.may} onClick={() => void apply()} title={card.why_not ?? undefined}>
+            <button type="button" className={`simple-button simple-button-primary${cutsDependents ? " simple-button-wrap" : ""}`} disabled={busy || !card.may} onClick={() => void apply()} title={card.why_not ?? undefined}>
               {applyLabel}
+            </button>
+          )}
+          {cutsDependents && (
+            // Review major: it applies only when the reader decides every item it cuts.
+            <button type="button" className="simple-button simple-button-wrap" disabled={busy || !card.may_with_dependents} onClick={() => void apply(null, true)} title={card.why_not ?? undefined}>
+              {card.may_with_dependents === "propose" ? "Propose: cut it and its dependents" : "Cut it and its dependents"}
             </button>
           )}
           {!actionsOnly && (

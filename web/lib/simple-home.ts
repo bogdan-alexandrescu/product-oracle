@@ -324,6 +324,7 @@ export const OP_WORDS: Record<string, string> = {
   change_horizon: "Move to another horizon",
   reorder: "Reorder",
   cut: "Cut",
+  cut_with_dependents: "Cut it and its dependents",
   restore: "Restore",
   edit_title: "Retitle",
   edit_outcome: "Change the outcome",
@@ -359,6 +360,7 @@ const DONE_WORDS: Record<string, string> = {
   change_horizon: "Horizon changed for",
   reorder: "Reordered",
   cut: "Cut",
+  cut_with_dependents: "Cut with its dependents:",
   restore: "Restored",
   edit_title: "Retitled",
   edit_outcome: "Outcome changed for",
@@ -402,7 +404,13 @@ export function changeWords(c: Pick<Schemas["SimpleChangeOut"], "op" | "after" |
     lead = value && effort ? "Value and effort estimated for" : value ? "Value estimated for" : "Effort estimated for";
   }
   const named = typeof after.title === "string" ? after.title : typeof after.name === "string" ? after.name : null;
-  const subject = item ? `${item.code ? `${item.code} ` : ""}${item.title}` : named;
+  let subject = item ? `${item.code ? `${item.code} ` : ""}${item.title}` : named;
+  // Review minor: a cut with its dependents names every item it cut, the item first.
+  const titles = c.op === "cut_with_dependents" && Array.isArray(c.target?.titles) ? (c.target.titles as unknown[]).slice(1).map(String) : [];
+  if (titles.length) {
+    const all = [subject ?? "an item", ...titles];
+    subject = `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}`;
+  }
   return subject ? `${lead} ${subject}` : lead.replace(/ (for|to|on|after|beside its look-alike):?$|:$/, "");
 }
 

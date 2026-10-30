@@ -90,6 +90,28 @@ const FIELDS: Record<string, string[]> = {
   confirm_item: ["draft"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
+/** fix5-cut-dependents: the item and everything waiting on it, cut as one change (changes.py CUT_ALL). */
+export const CUT_ALL = "cut_with_dependents";
+/** The ops that key before/after by item id (changes.py KEYED). */
+const KEYED = [...FIXES, CUT_ALL];
+
+/** changes.dependents: every item waiting on `id`, transitively (breadth first), but those cut or merged already. */
+export function cutDependents(items: Schemas["SimpleRoadmapItem"][], id: string): Schemas["SimpleRoadmapItem"][] {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const seen = new Set([id]);
+  const out: Schemas["SimpleRoadmapItem"][] = [];
+  const queue = [id];
+  while (queue.length) {
+    for (const n of byId.get(queue.shift()!)?.needed_by ?? []) {
+      const next = byId.get(n);
+      if (!next || seen.has(n) || next.status === "cut" || next.status === "merged") continue;
+      seen.add(n);
+      out.push(next);
+      queue.push(n);
+    }
+  }
+  return out;
+}
 /** S3b: non-versioned ops (api/oracle/simple/targets.py) and the target id each creates. */
 const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   add_item_task: { id: "task_id", adds: true },
@@ -148,7 +170,9 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
  * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to">>): boolean {
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
+  // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
+  if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   if (KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
@@ -164,10 +188,22 @@ function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c:
     const decider = db.deciders?.[slugOf(c.target.roadmap_id) ?? ""];
     return decider ? [decider] : ctx.owners;
   }
+  if (c.op === CUT_ALL) return cutRoute(db, ctx, Object.keys(c.after));
   const key = c.target.item_id ? keyOf(db, c.target.item_id) : undefined;
   if (!key) return ctx.owners;
   const ids = deciderIds(db, seed(db, key), ctx.roles);
   return ids.length ? ids : ctx.owners;
+}
+
+/** changes.cut_route: the deciders every item of a cut with its dependents shares, else the company's owners. */
+function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
+  let common: string[] | null = null;
+  for (const id of itemIds) {
+    const key = keyOf(db, id);
+    const ids = key ? deciderIds(db, seed(db, key), ctx.roles) : [];
+    common = common === null ? ids : common.filter((i) => ids.includes(i));
+  }
+  return common?.length ? common : ctx.owners;
 }
 
 /** The stored values of one item's fields (the API's changes.read). */
@@ -211,7 +247,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
 }
 
 function touched(c: Pick<Change, "op" | "target" | "after" | "before">): string[] {
-  return FIXES.includes(c.op) ? [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])] : [String(c.target.item_id)];
+  return KEYED.includes(c.op) ? [...new Set([...Object.keys(c.after), ...Object.keys(c.before)])] : [String(c.target.item_id)];
 }
 
 function idle(s: Session): boolean {
@@ -316,7 +352,8 @@ function changeLog(db: SimpleDb, id: string): Schemas["SimpleDraftChange"][] {
     .sort((a, b) => (a.at < b.at ? -1 : 1))
     .map((c) => {
       const kind = (db.sessions ?? []).find((x) => x.id === c.session_id)?.kind ?? null;
-      return { id: c.id, op: c.op, item_id: (c.target.item_id as string) ?? null, by: c.by, by_name: c.by_name, at: c.at, session_kind: kind, in_meeting: kind === "meeting" };
+      const titles = c.op === CUT_ALL ? ((c.target.titles as string[] | undefined) ?? []) : [];
+      return { id: c.id, op: c.op, item_id: (c.target.item_id as string) ?? null, by: c.by, by_name: c.by_name, at: c.at, session_kind: kind, in_meeting: kind === "meeting", titles };
     });
 }
 
@@ -431,7 +468,7 @@ function fixPlan(db: SimpleDb, op: string, itemId: string, depId: string): Recor
 }
 
 function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
-  if (FIXES.includes(c.op)) for (const [id, v] of Object.entries(values)) write(db, keyOf(db, id)!, v as Values, c.target);
+  if (KEYED.includes(c.op)) for (const [id, v] of Object.entries(values)) write(db, keyOf(db, id)!, v as Values, c.target);
   else write(db, keyOf(db, c.target.item_id)!, values, c.target);
   if (c.op === "accept_date_suggestion") {
     const s = db.suggestions.find((x) => x.id === c.target.suggestion_id);
@@ -446,7 +483,7 @@ function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
 }
 
 function current(db: SimpleDb, c: Change, like: Values): Values {
-  if (FIXES.includes(c.op)) return Object.fromEntries(Object.entries(like).map(([id, v]) => [id, read(db, keyOf(db, id)!, Object.keys(v as Values), c.target)]));
+  if (KEYED.includes(c.op)) return Object.fromEntries(Object.entries(like).map(([id, v]) => [id, read(db, keyOf(db, id)!, Object.keys(v as Values), c.target)]));
   return read(db, keyOf(db, c.target.item_id)!, Object.keys(like), c.target);
 }
 
@@ -537,7 +574,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const target: Values = { ...body.target };
   const key = TARGETS[body.op] ? "" : keyOf(db, target.item_id);
   if (key === undefined) return json(404, { detail: "No such roadmap item" });
-  const applies = decides(db, ctx, target.item_id);
+  // Review major (changes.create): a cut with its dependents applies when the caller decides every item it cuts.
+  const cutAll = body.op === CUT_ALL && key ? [String(target.item_id), ...cutDependents(roadmapOut(readerDb(db, ctx), "owner", new URLSearchParams())!.items, String(target.item_id)).map((i) => i.id)] : null;
+  const applies = cutAll ? cutAll.every((id) => decides(db, ctx, id)) : decides(db, ctx, target.item_id);
   let session: Session | undefined;
   if (body.session_id) {
     session = (db.sessions ?? []).find((s) => s.id === body.session_id && s.started_by === ctx.id);
@@ -570,6 +609,22 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     const moves = fixPlan(seen, body.op, String(target.item_id), dep);
     before = Object.fromEntries(Object.keys(moves).map((id) => [id, read(seen, keyOf(db, id)!, ["start_date", "end_date", "date_source"], target)]));
     after = Object.fromEntries(Object.entries(moves).map(([id, [s, e]]) => [id, { start_date: s, end_date: e, date_source: "typed" }]));
+  } else if (body.op === CUT_ALL) {
+    // As a cut: before is the item's own {cut} as seen; keyed by item id, the item and its dependents.
+    if (!("cut" in body.before)) return json(422, { detail: "before: cut as you saw it" });
+    const now_ = read(seen, key, ["cut"], target);
+    if (!same(normal(["cut"], body.before), now_)) return conflict(db, ctx, now_, [String(target.item_id)], "Changed since you saw it");
+    const items = roadmapOut(seen, "owner", new URLSearchParams())!.items;
+    const deps = cutDependents(items, String(target.item_id));
+    if (!deps.length) return json(422, { detail: "No item depends on this one: cut it alone" });
+    // Review minor: the dependents the caller saw; others waiting on it now are refused.
+    const saw = body.before.dependents;
+    const now_ids = deps.map((i) => i.id);
+    if (Array.isArray(saw) && [...saw].map(String).sort().join() !== [...now_ids].sort().join()) return conflict(db, ctx, { dependents: now_ids }, now_ids, "Changed since you saw it");
+    const cut = [items.find((i) => i.id === target.item_id)!, ...deps];
+    target.titles = cut.map((i) => i.title);
+    before = Object.fromEntries(cut.map((i) => [i.id, read(seen, keyOf(db, i.id)!, ["cut"], target)]));
+    after = Object.fromEntries(cut.map((i) => [i.id, { cut: true }]));
   } else {
     const fields = FIELDS[body.op];
     const missing = fields.filter((f) => !(f in body.before));

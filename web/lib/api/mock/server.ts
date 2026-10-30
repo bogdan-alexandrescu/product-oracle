@@ -2821,14 +2821,21 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "roadmap-talk"
+              : scenario === "simple-chat" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
                     // chat-reader: the two "Delivery …" items its rules talk about.
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
-                    if (scenario === "roadmap-talk" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    if (scenario !== "simple-chat" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    // fix5-cut-dependents review: approver@example.com is Alert rules engine's own
+                    // decider; the company's owners decide the items that wait on it.
+                    if (scenario === "roadmap-talk-own-decider" && db.simple_roadmap) {
+                      const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                      const r = db.simple_roadmap;
+                      r.targets = { ...r.targets, [r.ids["alert-rules"]]: { ...r.targets?.[r.ids["alert-rules"]], decider_id: approver.id } };
+                    }
                     return db;
                   }
               : scenario === "simple-500"

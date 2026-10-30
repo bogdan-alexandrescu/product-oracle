@@ -133,6 +133,8 @@ test.describe("desktop, dark", () => {
     const card = ask.getByTestId("chat-card").filter({ hasText: "Cut Alert history export" });
     // fix4 qa-simple-roadmap-24: a cut whose dependents stay red names that on its button.
     await expect(card.getByRole("button", { name: "Cut it, keep the dependents" })).toBeDisabled();
+    // fix5-cut-dependents: so is its second button, cutting the dependents too.
+    await expect(card.getByRole("button", { name: "Cut it and its dependents" })).toBeDisabled();
     await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
     await page.goto("/home");
     // The panel's open state carries over from Simple; open it only if it is closed.

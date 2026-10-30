@@ -20,7 +20,8 @@ import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, stableUuid } from "./ids";
-import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
+import { changePhrase } from "./simple-change-words";
+import { CUT_ALL, cutDependents, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
@@ -1237,7 +1238,14 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   void _flag;
   void _thread;
   void _meeting;
-  return { change_words: null, correct: null, ...rest, ...mayOf(db, chat, c, ctx), flags: check.flags };
+  // fix5-cut-dependents: what "Cut it and its dependents" cuts with the item (chat.cards_out).
+  const items = c.status === "open" && c.op === "cut" && c.item_id ? itemsFor(db, ctx) : [];
+  const waiting = c.item_id && items.length ? cutDependents(items, c.item_id) : [];
+  const may = mayOf(db, chat, c, ctx);
+  // Review major (chat.cards_out): "Cut it and its dependents" applies only when the reader decides every item it cuts.
+  const allMine = [c.item_id, ...waiting.map((i) => i.id)].every((id) => !!items.find((i) => i.id === id)?.can_decide);
+  const may_with_dependents = waiting.length && may.may ? (allMine ? "apply" : "propose") : null;
+  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -1340,8 +1348,9 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 }
 
 /** One card through the change engine (or its fix n): the card out and the result, or the engine's refusal. */
-async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
-  const use = n == null ? c : c.fixes[n];
+async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings, withDependents: boolean | string[] = false): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
+  // fix5-cut-dependents: a cut card applies as cut_with_dependents (one change), and then names every item it cut.
+  const use = withDependents ? { op: CUT_ALL, target: c.target, before: withDependents === true ? c.before : { ...c.before, dependents: withDependents }, after: {} } : n == null ? c : c.fixes[n];
   if (c.op === "suggest_feature") {
     // Filed as the person's own suggestion (origin "person"): it lands under People.
     const goal = Object.keys(GOALS).find((k) => goalId(k) === c.target.goal_id) ?? "";
@@ -1370,6 +1379,11 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   if (!res.ok) return res;
   const result = (await res.json()) as Schemas["SimpleChangeResult"];
   afterApplied(db, c, result);
+  if (withDependents) {
+    const t = result.change.target as Record<string, unknown>;
+    const said = changePhrase(CUT_ALL, t, {}, {}, ((t.titles as string[] | undefined) ?? [])[0] ?? null);
+    c.summary = said.slice(0, 1).toUpperCase() + said.slice(1);
+  }
   Object.assign(c, {
     status: result.change.status === "applied" ? "applied" : "proposed", change_id: result.change.id,
     decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: now(),
@@ -1720,6 +1734,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const b = await body();
       const n = b.fix == null ? null : Number(b.fix);
       if (n != null && !c.fixes[n]) return json(422, { detail: "fix: one of the card's fixes" });
+      const withDependents = b.with_dependents === true;
+      if (withDependents && (c.op !== "cut" || n != null || b.values)) return json(422, { detail: "Only a cut card cuts its dependents too" });
       // roadmap-talk: Correct's values rebuild the card (summary, after) before it applies.
       if (n == null && b.values && typeof b.values === "object") {
         if (!c.correct) return json(422, { detail: "This change has nothing to correct" });
@@ -1730,7 +1746,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
         if (said && said.card_ids.length === 1 && said.body.startsWith("I understood: ")) said.body = `I understood: ${c.summary.replace(/^./, (x) => x.toLowerCase())}.`;
         c.fixes = asIf(db, c).fixes;
       }
-      const out = await applyOne(db, chat, c, ctx, n, s8);
+      const out = await applyOne(db, chat, c, ctx, n, s8, withDependents && Array.isArray(b.dependents) ? b.dependents.map(String) : withDependents);
       return out instanceof Response ? out : json(200, out);
     }
   }

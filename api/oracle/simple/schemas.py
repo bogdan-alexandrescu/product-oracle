@@ -475,6 +475,9 @@ ChangeOp = Literal[
     # (oracle.simple.questions).
     "decide_question",
     "name_decider",
+    # fix5-cut-dependents: an item cut with every item that waits on it (transitively), as
+    # one change keyed by item id (oracle.simple.changes).
+    "cut_with_dependents",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -626,6 +629,9 @@ class SimpleDraftChange(BaseModel):
     at: dt.datetime
     session_kind: Literal["editing", "meeting"] | None
     in_meeting: bool
+    # fix5-cut-dependents: the titles of every item a cut_with_dependents cut (the item
+    # first); empty for every other op.
+    titles: list[str] = []
 
 
 class SimpleDraftOut(BaseModel):
@@ -1319,6 +1325,14 @@ class ChatCardOut(BaseModel):
     # opens ({fields, values}: Oracle's reading, prefilled); None off the roadmap.
     change_words: dict[str, str | None] | None = None
     correct: dict[str, Any] | None = None
+    # fix5-cut-dependents: an open cut's dependents, the titles of every item that waits on
+    # it (transitively) and is not cut: what "Cut it and its dependents" cuts with it.
+    dependents: list[str] = []
+    # Their ids, in the same order: the apply sends them back (``ChatApplyIn.dependents``).
+    dependent_ids: list[uuid.UUID] = []
+    # Review major: what "Cut it and its dependents" does for the reader: "apply" when they
+    # decide every item it cuts, "propose" when not, None when they may not (``why_not``).
+    may_with_dependents: Literal["apply", "propose"] | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1418,6 +1432,12 @@ class ChatApplyIn(BaseModel):
     # roadmap-talk's Correct: the card's fields as the person corrected them (its
     # ``correct.fields``: title, goal, milestone, start_date, end_date, owner).
     values: dict[str, str | None] | None = None
+    # fix5-cut-dependents: a cut card applies as cut_with_dependents (the card's dependents
+    # cut with it, one change).
+    with_dependents: bool = False
+    # With it, the ids of the dependents the card listed (``ChatCardOut.dependent_ids``): a
+    # roadmap that has changed since is 409, so nothing unseen is cut.
+    dependents: list[uuid.UUID] | None = None
 
 
 class ChatApplyOut(BaseModel):
