@@ -1013,6 +1013,25 @@ class OnePagerLine(BaseModel):
     flow: "OnePagerFlow | None" = None
     # S8: the decisions that changed this line (newest first; the Decisions page).
     decisions: list[SimpleOpenDecision] = []
+    # Reads clearly (2026-10-30, oracle.simple.one_pager_checks): an outcome's measure (what
+    # is counted) and its source (where), from the PRD; null when the PRD does not say.
+    measure: str | None = None
+    measure_source: str | None = None
+    # The notes of the footnote marks the line keeps ("† Sent once ..."); a mark with no
+    # note in the PRD is dropped from the line.
+    footnotes: list[str] = []
+    # A bet with no flow yet that the caller may ask Oracle to draw ("Draw the flow").
+    can_draw_flow: bool = False
+
+
+class OnePagerLook(BaseModel):
+    """One "Needs a look" item for the PRD's owners (numbers that disagree, a code with no
+    name): what to look at, and the sections it is in. Shared by the one-pager's checks."""
+
+    kind: str
+    text: str
+    where: list[str] = []
+    source_keys: list[str] = []
 
 
 class OnePagerItem(BaseModel):
@@ -1033,6 +1052,9 @@ class OnePagerBlock(BaseModel):
     rules: str
     kind: Literal["text", "lines", "metrics", "timeline"]
     lines: list[OnePagerLine] = []
+    # The problem block: who has it, from the PRD's users or personas section; null when
+    # the PRD has none ("Who has it is not in the PRD yet").
+    who: str | None = None
 
 
 class OnePagerSectionPatch(BaseModel):
@@ -1171,6 +1193,9 @@ class OnePagerOut(BaseModel):
     can_propose: bool
     # Start review: the start API's own rule (meetings.may_start: an owner or the decider).
     can_start: bool
+    # "Needs a look" (2026-10-30): the PRD's numbers that disagree and its codes with no
+    # name, for the PRD's owners only (empty for everyone else).
+    needs_look: list[OnePagerLook] = []
 
 
 # --------------------------------------------------------------------------- S7

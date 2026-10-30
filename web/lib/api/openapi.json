@@ -91220,6 +91220,17 @@
             "type": "array",
             "title": "Lines",
             "default": []
+          },
+          "who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Who"
           }
         },
         "type": "object",
@@ -91516,6 +91527,41 @@
             "type": "array",
             "title": "Decisions",
             "default": []
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "measure_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure Source"
+          },
+          "footnotes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Footnotes",
+            "default": []
+          },
+          "can_draw_flow": {
+            "type": "boolean",
+            "title": "Can Draw Flow",
+            "default": false
           }
         },
         "type": "object",
@@ -91525,6 +91571,41 @@
           "source_keys"
         ],
         "title": "OnePagerLine"
+      },
+      "OnePagerLook": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "where": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Where",
+            "default": []
+          },
+          "source_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Keys",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "OnePagerLook",
+        "description": "One \"Needs a look\" item for the PRD's owners (numbers that disagree, a code with no\nname): what to look at, and the sections it is in. Shared by the one-pager's checks."
       },
       "OnePagerMetric": {
         "properties": {
@@ -91796,6 +91877,14 @@
           "can_start": {
             "type": "boolean",
             "title": "Can Start"
+          },
+          "needs_look": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerLook"
+            },
+            "type": "array",
+            "title": "Needs Look",
+            "default": []
           }
         },
         "type": "object",

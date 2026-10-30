@@ -51,6 +51,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack
 from oracle.simple import drafts, plan_strip
+from oracle.simple import one_pager_checks as checks
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
 from oracle.simple.models import SimpleChange, SimpleDraft, SimpleOnePager, SimpleSession
@@ -59,6 +60,7 @@ from oracle.simple.schemas import (
     OnePagerDraft,
     OnePagerItem,
     OnePagerLine,
+    OnePagerLook,
     OnePagerMetric,
     OnePagerNote,
     OnePagerOut,
@@ -747,10 +749,21 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
             for sp in specs
         ],
     }
-    answer = await ask("one_pager", payload)
-    blocks = clean_answer(answer, specs, mapped)
-    if blocks is None:
-        return {"built": False, "reason": "the answer missed a block's lines or section keys"}
+    # Who has it (2026-10-30): from the PRD's users or personas section; a problem that
+    # names no one of them fails the quality check and is asked for again, once.
+    payload["who"] = checks.who_has_it(await _sections(s, v))
+    blocks, why = None, None
+    for _ in range(2):
+        answer = await ask("one_pager", dict(payload))
+        blocks = clean_answer(answer, specs, mapped)
+        if blocks is None:
+            return {"built": False, "reason": "the answer missed a block's lines or section keys"}
+        why = checks.problem_check(blocks, await _sections(s, v))
+        if why is None:
+            break
+        payload["retry"] = why
+    if why is not None or blocks is None:
+        return {"built": False, "reason": why}
     if await _lines_in_use(s, document):
         # Line ids are positions: replacing the lines under an open draft or proposal would
         # move its edit onto another line. The next version (a new hash) gets the answer.
@@ -918,6 +931,15 @@ def may_remind(principal: Any, w: Who) -> bool:
     """Remind: the PRD's owners (a company owner, its track owners) and its decider."""
     me = _me(principal)
     return me is not None and (decides(principal, w) or me in w.track_owners)
+
+
+def owns(principal: Any, w: Who, owner_id: uuid.UUID | None) -> bool:
+    """The PRD's owners (its "Needs a look" note): a company owner, its track owners and
+    its document owner."""
+    me = _me(principal)
+    return me is not None and (
+        has_role(principal.role, "owner") or me in w.track_owners or me == owner_id
+    )
 
 
 def due_reminders(d: SimpleDraft, now: datetime) -> list[uuid.UUID]:
@@ -1221,6 +1243,9 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                 key=spec.key, title=spec.title, rules=spec.rules, kind=spec.kind, lines=lines
             )
         )  # type: ignore[arg-type]
+    # Reads clearly (2026-10-30): who has it, measures, codes with names, footnotes; the
+    # "Needs a look" items for the PRD's owners.
+    looks = checks.annotate(blocks, b.sections)
     # S10: each bet ("What we will build") carries its visual.
     bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
     keys = {x["id"]: visuals.bet_key(x) for blk in b.row.blocks for x in blk["lines"]}
@@ -1236,8 +1261,10 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     }
     for sid, flow in (await visuals.flows_for(db, "one_pager_line", list(by_words))).items():
         by_words[sid].flow_subject, line_flows[sid] = sid, flow
+    draws = decides(principal, w)  # visuals.may_revise of a bet: who changes the PRD
     for x in bets:
         x.flow = visuals.one_pager_flow(line_flows.get(x.flow_subject))
+        x.can_draw_flow = x.flow is None and draws
     slice_ = await service.build(db, principal, prd=str(document.id))
     items = [
         OnePagerItem(
@@ -1310,6 +1337,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         and _me(principal) is not None
         and has_role(principal.role, "commenter"),
         can_start=starts(principal, w),
+        needs_look=[OnePagerLook(**vars(x)) for x in looks] if owns(principal, w, owner_id) else [],
     )
 
 

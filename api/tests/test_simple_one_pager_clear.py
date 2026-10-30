@@ -28,6 +28,7 @@ Test cards (protects / fails_when / no_claim):
 - test_pure_checks: protects=the module's rules on their own; fails_when=a rule drifts.
 """
 
+# ruff: noqa: E501 - the fixture PRDs keep their long lines
 from sqlalchemy import select
 
 from oracle.docs.models import Section
@@ -144,7 +145,9 @@ async def test_who_measures_codes_and_marks(client):
     assert bets[0] == "F-26 Bulk invite for teams of any size"
     assert bets[1] == "A guided first project (P0 top priority)"
     assert bets[2] == "A reminder email for unanswered invites†"
-    assert block(view, "bets")["lines"][2]["footnotes"] == ["† Sent once, two days after the invite."]
+    assert block(view, "bets")["lines"][2]["footnotes"] == [
+        "† Sent once, two days after the invite."
+    ]
     outcomes = block(view, "outcomes")["lines"]
     first, second, third = outcomes
     assert first["measure"] == "workspaces with two active members by day 7"
@@ -270,4 +273,6 @@ def test_pure_checks():
     m = checks.measure_for("Export time from 40s to 10s", "Export time", checks.measures([table]))
     assert m is not None and (m.measure, m.source) == ("p95 seconds per export", "the job log")
     head = _sec("later", "Later · 3 items", "- a\n- b")
-    assert [x.text for x in checks.numbers([head])] == ["“Later · 3 items” says 3 items, but it lists 2."]
+    assert [x.text for x in checks.numbers([head])] == [
+        "“Later · 3 items” says 3 items, but it lists 2."
+    ]
