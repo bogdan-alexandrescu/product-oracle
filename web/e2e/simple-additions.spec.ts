@@ -116,7 +116,7 @@ for (const scheme of ["light", "dark"] as const) {
       const card = page.getByTestId("floating-card");
       await expect(card.getByTestId("draft-tag")).toHaveText("Draft");
       await expect(card.getByTestId("item-drafting")).toHaveText("Oracle is drafting…");
-      await expect(card.getByTestId("item-flow-none")).toHaveText("No flow yet");
+      await expect(card.getByTestId("item-flow-none")).toHaveText("No flow yet. Once the draft is confirmed, Oracle can draw one.");
       await expect(card.getByTestId("item-drafting")).toHaveCount(0, { timeout: 10_000 });
       await expect(card.getByTestId("card-outcome")).toContainText("Teams get quiet hours setting");
       await expect(page.locator('[data-testid="suggestion-outline"][data-item="quiet-hours-setting"]')).toBeAttached();
