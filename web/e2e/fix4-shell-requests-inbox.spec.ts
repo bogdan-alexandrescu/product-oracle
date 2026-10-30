@@ -75,9 +75,13 @@ test.describe("on a phone", () => {
     await expect(page.getByTestId("requests-more")).toHaveAttribute("aria-haspopup", "true");
     await page.getByTestId("requests-more").click();
     const panel = page.getByTestId("requests-more-panel");
-    await expect(panel.getByRole("switch", { name: /^Auto-sort new requests daily/ })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Sort now", exact: true })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Sort incoming requests automatically" })).toBeVisible();
+    // Requests' own lane keeps its one Auto-sort control under More; it opens the switch and Sort now.
+    await panel.getByRole("button", { name: "Auto-sort: Off" }).click();
+    const sorting = page.getByRole("group", { name: "Auto-sort new requests" });
+    await expect(sorting.getByRole("switch", { name: /^Auto-sort new requests daily/ })).toBeVisible();
+    await expect(sorting.getByRole("button", { name: "Sort now", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sorting).toHaveCount(0);
     // The panel stays on the screen.
     const box = (await panel.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
