@@ -4,7 +4,7 @@ Methods (O3):
 
 - ``goal_weighted`` (default): sum over confirmed goals of goal weight x the
   ``supports`` contribution (0-3), times confidence, divided by effort. A person's
-  estimate of the goal value (attrs ``goal_value`` > 0, Simple S6's ``estimate_feature``)
+  estimate of the goal value (attrs ``goal_value`` >= 0, Simple S6's ``estimate_feature``)
   replaces the sum; the explanation keeps the goals' terms and says what they give.
 - ``rice``: reach x impact x confidence / effort.
 - ``moscow``: must > should > could > won't; ties broken by goal value.
