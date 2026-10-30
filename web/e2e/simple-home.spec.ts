@@ -84,7 +84,9 @@ for (const phone of [false, true]) {
           await expect(page.getByTestId("hop-drawer")).toBeVisible();
         }
 
-        await expect(page.getByTestId("home-sentence")).toContainText("3 proposals");
+        // fix4 review (qa-simple-home-15): the sentence names what waits; the count is the tile's alone.
+        await expect(page.getByTestId("home-sentence")).toContainText("proposals");
+        await expect(page.getByTestId("home-summary-proposals").locator(".simple-number")).toHaveText("3");
         const goals = page.getByTestId("home-goal");
         await expect(goals).toHaveCount(3);
         const retention = goals.filter({ hasText: "Grow retention" });

@@ -82,8 +82,8 @@ test("qa-onboarding-6: an invited commenter lands in Simple and is welcomed as a
 });
 
 test("qa-onboarding-6: an invited viewer lands in Simple, is welcomed as a viewer, and dismissing it there dismisses it in Detailed", async ({ page }) => {
-  // fails_when: the viewer gets no welcome in Simple, the wrong steps or links, or the welcome
-  // dismissed in Simple comes back after a reload or in Detailed
+  // fails_when: the viewer gets no welcome in Simple, the wrong steps or links, the card goes before
+  // its dismissal is saved, or the welcome dismissed in Simple comes back after a reload or in Detailed
   await newCompany(page);
   await invite(page, "sam.example@example.com", "viewer");
   await signIn(page, "sam.example@example.com");
@@ -96,8 +96,16 @@ test("qa-onboarding-6: an invited viewer lands in Simple, is welcomed as a viewe
   await expect(steps.nth(2).getByRole("link")).toHaveAttribute("href", "/simple/roadmap");
   await expect(simple(page)).not.toContainText("build the baseline it plans from");
 
+  // fix4 review: the card stays, its button busy, until the dismissal is saved, so a reload
+  // right after it is gone cannot bring it back (the save answers late here).
+  await page.evaluate(() => {
+    localStorage.setItem("po-mock-slow", "PATCH /v1/me/preferences");
+    localStorage.setItem("po-mock-slow-ms", "1500");
+  });
   await welcome(page).getByRole("button", { name: "Dismiss" }).click();
+  await expect(welcome(page).getByRole("button", { name: "Dismissing…" })).toBeDisabled();
   await expect(welcome(page)).toHaveCount(0);
+  await page.evaluate(() => localStorage.removeItem("po-mock-slow"));
   await page.reload();
   await expect(simple(page).getByTestId("home-sentence")).toBeVisible();
   await expect(welcome(page)).toHaveCount(0);

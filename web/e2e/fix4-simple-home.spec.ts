@@ -58,9 +58,9 @@ test.describe("desktop", () => {
       expect(t).toMatch(/^[A-Z]/);
     }
     const problem = digest.getByTestId("home-broken").filter({ hasText: "which it depends on" }).first();
-    await expect(problem.getByTestId("home-broken-moves")).toHaveText(/^Move the dependents moves Weekly alert digest( and .+)? after \S.+\.$/);
+    await expect(problem.getByTestId("home-broken-moves")).toHaveText(/^Moving the dependents starts Weekly alert digest( and .+)? after \S.+ ends\.$/);
     const move = problem.getByRole("button", { name: "Move the dependents", exact: true });
-    await expect(move).toHaveAccessibleDescription(/moves Weekly alert digest/);
+    await expect(move).toHaveAccessibleDescription(/starts Weekly alert digest/);
     await move.click();
     await expect(page.getByText(/^Dependents moved in your working draft: Weekly alert digest now \w{3} \d+ – \w{3} \d+/)).toBeVisible();
   });

@@ -45,9 +45,9 @@ test("qa-simple-home-3: Home's sentence and its list count every broken link the
   const n = await brokenTile(page);
   expect(n).toBeGreaterThan(0);
   await expect(page.getByTestId("home-broken")).toHaveCount(n);
-  const sentence = (await page.getByTestId("home-sentence").textContent()) ?? "";
-  const said = [...sentence.matchAll(/(\d+) broken links?/g)].reduce((t, m) => t + Number(m[1]), 0);
-  expect(said).toBe(n);
+  // fix4 review (qa-simple-home-15): the sentence names the broken links; their count is the tile's alone.
+  await expect(page.getByTestId("home-sentence")).toContainText("broken link");
+  await expect(page.getByTestId("home-sentence")).not.toContainText(/\d/);
   await expect(page.getByTestId("home-broken-links").getByTestId("home-more")).toHaveCount(0);
 });
 
@@ -58,7 +58,7 @@ test("qa-simple-home-4: a commenter's greeting names the broken links they can p
   expect(n).toBeGreaterThan(0);
   const sentence = page.getByTestId("home-sentence");
   await expect(sentence).not.toHaveText("Nothing waits on you today.");
-  await expect(sentence).toContainText(`${n} ${n === 1 ? "broken link" : "broken links"} you can propose fixes for.`);
+  await expect(sentence).toContainText(`propose fixes for ${n === 1 ? "a broken link" : "broken links"}.`);
 });
 
 test("qa-simple-home-5: after proposing a fix the broken-link row says so and offers no second Propose", async ({ page }) => {
