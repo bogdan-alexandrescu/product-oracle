@@ -81,17 +81,28 @@ for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 84
       await open(page, width, height);
       const list = await listed(page);
       const split = list.findIndex((r) => !r.above);
-      const [moving, last] = [list[split - 2], list[split - 1]];
+      const moving = list[split - 2];
+      // BGD (train AD): a drop onto the last row above the line asks for the last rank still
+      // above it, as many as rows make the line (#15 here), not that row's own rank (#26).
+      const lastAboveRank = list.filter((r) => r.above).length;
+      // At that rank it lands under the row above the line that comes just before it by rank.
+      const byRank = list.filter((r) => r !== moving).sort((a, b) => a.rank - b.rank);
+      byRank.splice(lastAboveRank - 1, 0, moving);
+      const aboveByRank = byRank.filter((r) => r.above);
+      const under = aboveByRank[aboveByRank.indexOf(moving) - 1];
       await drag(page, split - 2, split + 1);
       const dialog = moveDialog(page);
-      await expect(dialog.getByRole("heading")).toHaveText(new RegExp(`to rank ${last.rank}$`));
-      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${named(last)}, above the line.`);
+      await expect(dialog.getByRole("heading")).toHaveText(new RegExp(`to rank ${lastAboveRank}$`));
+      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${named(under)}, above the line.`);
       await dialog.getByLabel("Reason").fill("Ship it with the plan");
       await dialog.getByRole("button", { name: /^Move/ }).click();
       await expect(dialog).toBeHidden();
-      await expect(rows(page).nth(split - 1).getByTestId("prio-title")).toHaveText(moving.title);
+      await expect(rows(page).filter({ hasText: moving.title }).getByTestId("prio-rank")).toHaveText(String(lastAboveRank));
       const after = await listed(page);
-      expect(after[split - 1]).toEqual({ rank: last.rank, above: true, title: moving.title, code: moving.code });
+      const at = after.findIndex((r) => r.title === moving.title);
+      expect(after[at]).toEqual({ rank: lastAboveRank, above: true, title: moving.title, code: moving.code });
+      expect(after[at - 1].title).toBe(under.title);
+      expect(at).toBeLessThan(after.findIndex((r) => !r.above));
     });
 
     // fix3-minors review: the clamp holds for any dated plan, also one whose rows are already in
