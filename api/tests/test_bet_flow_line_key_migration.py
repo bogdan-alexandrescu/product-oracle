@@ -70,11 +70,33 @@ def key(doc: uuid.UUID, line_id: str) -> uuid.UUID:
     return uuid.uuid5(doc, "one_pager_line_id:" + line_id)
 
 
-def _blocks(*bets: str) -> str:
+def _blocks(*bets: str, keys: dict[str, str] | None = None) -> str:
     lines = [
         {"id": f"bets-{i}", "text": b, "source_keys": ["build"]} for i, b in enumerate(bets, 1)
     ]
+    for x in lines:
+        if (keys or {}).get(x["id"]):
+            x["flow_key"] = keys[x["id"]]
     return json.dumps([{"key": "bets", "lines": lines}])
+
+
+def _flow(t: uuid.UUID, d: uuid.UUID, subject: uuid.UUID, brief: str) -> None:
+    vid = uuid.uuid4()
+    _run(
+        "INSERT INTO simple_visuals (id, tenant_id, subject_kind, subject_id, document_id, "
+        "brief) VALUES (:id, :t, 'one_pager_line', :s, :d, :b)",
+        id=vid, t=t, s=subject, d=d, b=brief,
+    )  # fmt: skip
+    _run(
+        "INSERT INTO simple_visual_versions (id, tenant_id, visual_id, number, title, steps, "
+        "flow_svg) VALUES (gen_random_uuid(), :t, :v, 1, :title, '[]', '<svg/>')",
+        t=t, v=vid, title=f"Flow of {brief}",
+    )  # fmt: skip
+    _run(
+        "INSERT INTO simple_visual_comments (id, tenant_id, visual_id, version_number, body, "
+        "author_id) VALUES (gen_random_uuid(), :t, :v, 1, :b, :u)",
+        t=t, v=vid, b=f"About {brief}", u=uuid.uuid4(),
+    )  # fmt: skip
 
 
 def _world() -> tuple[uuid.UUID, uuid.UUID]:
@@ -171,8 +193,63 @@ def test_flows_move_to_the_line_and_back(scratch_db):
     assert _flows() == moved
     command.downgrade(cfg, PREVIOUS)
     back = _flows()
-    # Back to words; the copy stays on its line (its words are taken).
-    assert back == {**before, key(d, "bets-3"): flow("Invites")}
+    # Back to words; the copy goes (its words hold the flow): a clean round trip.
+    assert back == before
     # Up again: the same as the first time.
     command.upgrade(cfg, REVISION)
     assert _flows() == moved
+
+
+def test_the_published_page_its_keys_and_the_draft(scratch_db):
+    """The published page is read, not the newest build (a later version not approved);
+    a line's carried key is moved back on the way down; the words an open working draft
+    gives a bet keep its flow both ways."""
+    cfg = _cfg()
+    command.upgrade(cfg, PREVIOUS)
+    t, d, u = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
+    _run(
+        "INSERT INTO documents (id, tenant_id, slug, title, status) "
+        "VALUES (:d, :t, 'setup', 'Guided setup', 'draft')",
+        d=d, t=t,
+    )  # fmt: skip
+    pages = (
+        (1, datetime(2026, 10, 1, 10, tzinfo=UTC), datetime(2026, 10, 1, 10, tzinfo=UTC),
+         _blocks("Invites", "Checklist", "A guide", keys={"bets-3": "carried"})),
+        (2, None, datetime(2026, 10, 20, 10, tzinfo=UTC), _blocks("Checklist", "Invites")),
+    )  # fmt: skip
+    for n, approved, when, blocks in pages:
+        v = uuid.uuid4()
+        _run(
+            "INSERT INTO document_versions (id, tenant_id, document_id, number, markdown, "
+            "content_hash, approved_at) VALUES (:v, :t, :d, :n, 'x', :h, :a)",
+            v=v, t=t, d=d, n=n, h=f"h{n}", a=approved,
+        )  # fmt: skip
+        _run(
+            "INSERT INTO simple_one_pagers (id, tenant_id, document_id, version_id, "
+            "sections_hash, blocks, built_by, built_at) VALUES (gen_random_uuid(), :t, :d, :v, "
+            "'s', CAST(:b AS jsonb), 'oracle', :w)",
+            t=t, d=d, v=v, b=blocks, w=when,
+        )  # fmt: skip
+    _run(
+        "INSERT INTO simple_drafts (id, tenant_id, document_id, status, overlay, created_by) "
+        "VALUES (gen_random_uuid(), :t, :d, 'working', CAST(:o AS jsonb), :u)",
+        t=t, d=d, u=u, o=json.dumps({"lines": {"bets-1": "Invites for teams"}}),
+    )  # fmt: skip
+    # Old flows: one by a published bet's words, one by the words the draft gave a bet.
+    _flow(t, d, words(d, "Checklist"), "Checklist")
+    _flow(t, d, words(d, "Invites for teams"), "Invites")
+    command.upgrade(cfg, REVISION)
+    moved = {key(d, "bets-2"): flow("Checklist"), key(d, "bets-1"): flow("Invites")}
+    assert _flows() == moved
+    # A bet whose key was carried over from an earlier build.
+    _flow(t, d, key(d, "carried"), "A guide")
+    command.downgrade(cfg, PREVIOUS)
+    assert _flows() == {
+        words(d, "Checklist"): flow("Checklist"),
+        words(d, "Invites"): flow("Invites"),
+        words(d, "Invites for teams"): flow("Invites"),
+        words(d, "A guide"): flow("A guide"),
+    }
+    command.upgrade(cfg, REVISION)
+    assert _flows() == {**moved, key(d, "carried"): flow("A guide")}
