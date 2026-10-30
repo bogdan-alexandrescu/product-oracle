@@ -781,7 +781,8 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     if checks:
         row.held, row.checks = blocks, checks
         await s.flush()
-        return {"built": True, "sections_hash": h, "checks": quality.said(checks)}
+        # Held for owners, not built: the shown page and its visuals stay the last good.
+        return {"built": False, "held": True, "sections_hash": h, "checks": quality.said(checks)}
     row.blocks, row.built_by, row.held, row.checks = blocks, "oracle", None, None
     await s.flush()
     # S10: Oracle drafts each bet's visual with the page (once per bet: a bet keeps its flow

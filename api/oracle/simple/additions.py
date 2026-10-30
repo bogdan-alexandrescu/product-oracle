@@ -734,7 +734,7 @@ def _checked(answer: Any, goal: Entity, read_: service.Read, features: list[Enti
     for a in raw:
         if isinstance(a, dict) and " ".join(str(a.get("title") or "").split()):
             out.append((a, quality.suggestion(a, goal, read_.entries, features)))
-    return out[:MAX_SUGGESTIONS]
+    return out
 
 
 async def run_goal_suggestions(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:

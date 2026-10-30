@@ -29983,6 +29983,11 @@ export interface components {
             can_propose: boolean;
             /** Can Start */
             can_start: boolean;
+            /**
+             * Needs Look
+             * @default []
+             */
+            needs_look: string[];
         };
         /**
          * OnePagerRemindOut
@@ -38028,6 +38033,11 @@ export interface components {
             can_reject: boolean;
             /** Proposed By Name */
             proposed_by_name?: string | null;
+            /**
+             * Needs Look
+             * @default []
+             */
+            needs_look: string[];
         };
         /** SimpleGoalSuggestionGoal */
         SimpleGoalSuggestionGoal: {

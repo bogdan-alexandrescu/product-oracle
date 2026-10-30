@@ -215,7 +215,7 @@ async def test_one_pager_fails_twice(client):
     ctx = await world(client)
     quick = await get(client, ctx)
     out, asked = await _run(ctx, [bad(), bad()])
-    assert len(asked) == 2 and out["built"] is True
+    assert len(asked) == 2 and out["built"] is False and out["held"] is True
     assert "2 bets; a one-pager has 3 to 5" in out["checks"]
     owner = await get(client, ctx, "owner")
     assert "2 bets; a one-pager has 3 to 5" in owner["needs_look"]

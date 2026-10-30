@@ -103,7 +103,8 @@ def one_pager(answer: Any, specs: tuple[Any, ...], mapped: dict[str, list[Any]])
             _add(out, "empty_block", f"{title} is empty and not marked “{NOT_IN_PRD}”")
             continue
         if spec.key == "bets" and not BETS[0] <= len(lines) <= BETS[1]:
-            _add(out, "bets", f"{len(lines)} bets; a one-pager has 3 to 5")
+            n = len(lines)
+            _add(out, "bets", f"{n} {'bet' if n == 1 else 'bets'}; a one-pager has 3 to 5")
         secs = {s.section_key: s for s in mapped.get(spec.key, [])}
         for raw in lines:
             text = str(raw.get("text") or "")
