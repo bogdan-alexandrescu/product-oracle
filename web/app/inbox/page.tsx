@@ -228,6 +228,7 @@ function InboxTabs({
   // come back (its effects run again then): a tab picked on the earlier visit does not hold New
   // open once it has emptied into Seen.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the effect marks the page being shown again
     setPicked(false);
   }, []);
   const tab: InboxState = !picked && chosen === "new" && count("new") === 0 && count("open") > 0 ? "open" : chosen;
