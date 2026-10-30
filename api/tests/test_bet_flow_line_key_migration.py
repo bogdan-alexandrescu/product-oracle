@@ -14,6 +14,7 @@ Sync on purpose (Alembic runs its own event loop); its own scratch database."""
 import asyncio
 import json
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from alembic import command
@@ -70,7 +71,9 @@ def key(doc: uuid.UUID, line_id: str) -> uuid.UUID:
 
 
 def _blocks(*bets: str) -> str:
-    lines = [{"id": f"bets-{i}", "text": b, "source_keys": ["build"]} for i, b in enumerate(bets, 1)]
+    lines = [
+        {"id": f"bets-{i}", "text": b, "source_keys": ["build"]} for i, b in enumerate(bets, 1)
+    ]
     return json.dumps([{"key": "bets", "lines": lines}])
 
 
@@ -84,8 +87,11 @@ def _world() -> tuple[uuid.UUID, uuid.UUID]:
     )  # fmt: skip
     for n, (when, blocks) in enumerate(
         (
-            ("2026-10-01T10:00:00Z", _blocks("Sample project", "Checklist")),
-            ("2026-10-20T10:00:00Z", _blocks("Checklist", "Invites", "  invites ", "A guide")),
+            (datetime(2026, 10, 1, 10, tzinfo=UTC), _blocks("Sample project", "Checklist")),
+            (
+                datetime(2026, 10, 20, 10, tzinfo=UTC),
+                _blocks("Checklist", "Invites", "  invites ", "A guide"),
+            ),
         ),
         1,
     ):
@@ -98,7 +104,7 @@ def _world() -> tuple[uuid.UUID, uuid.UUID]:
         _run(
             "INSERT INTO simple_one_pagers (id, tenant_id, document_id, version_id, "
             "sections_hash, blocks, built_by, built_at) VALUES (gen_random_uuid(), :t, :d, :v, "
-            "'s', CAST(:b AS jsonb), 'oracle', CAST(:w AS timestamptz))",
+            "'s', CAST(:b AS jsonb), 'oracle', :w)",
             t=t, d=d, v=v, b=blocks, w=when,
         )  # fmt: skip
     # Old flows keyed by words: two current bets, a renamed bet's ("A tour" is now "A
