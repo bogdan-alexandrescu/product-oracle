@@ -21,6 +21,7 @@ specs at 1440x900. `(phone)` / `(desktop)` is the test's own suffix or its descr
 | Action | Role | Desktop | Phone |
 |---|---|---|---|
 | Approve, Move, Cut, a line edit: each a row with who and when; a comment with who and when | owner | dod-meet-meeting › desktop › approve, move and cut in a meeting are decisions with who and when; a comment too (desktop) | dod-meet-meeting › phone › same test (phone) |
+| Cut on a draft item reads Cut with Restore | owner | dod-meet-meeting › desktop › a draft item cut in the meeting reads Cut with Restore (desktop) | dod-meet-meeting › phone › same test (phone) |
 | Accept a pending proposal; comment is the meeting's comment | owner | simple-meeting-screen › desktop › changes, an accepted proposal and a comment become the meeting's decisions | simple-meeting-screen › phone › same test |
 | Cut asks first, Restore | owner | qa2-simple-meetings › desktop · the live meeting › one main, one rules control, … End asks first | qa3-simple-meetings-review › phone › phone: the meeting's buttons and chips are 44 px tall |
 | No Approve, End, presence or change-mode control | commenter | simple-meeting-screen › desktop › approve with an absent reviewer waits on them; a commenter has no controls | simple-meeting-screen › phone › same test |
@@ -80,6 +81,13 @@ specs at 1440x900. `(phone)` / `(desktop)` is the test's own suffix or its descr
 - The Inbox never drew a meeting's minutes: the API (and the mock) send `simple_minutes`, the
   Inbox page had no row for them. Fixed: a "Meeting minutes" row (shown, not counted), Open
   goes to the Decisions page by that meeting.
-- A Cut in the meeting on a draft roadmap item (the mock's "Team invite nudges") is recorded
-  as a decision but the meeting's roadmap slice still shows the item in its horizon with Cut.
-  See pr-body.md for what this lane did with it.
+- A Cut on a draft roadmap item (the mock's "Team invite nudges", not confirmed yet) was
+  recorded as a decision, but the item still read "draft" (the API's and the mock's status
+  put the draft before the cut), so the meeting kept it in its horizon with Cut. Fixed: a cut
+  draft reads cut, with Restore; Undo makes it a draft again (API:
+  test_simple_additions_api.py › test_a_cut_draft_item_reads_cut; UI: dod-meet-meeting › a
+  draft item cut in the meeting reads Cut with Restore, desktop and phone).
+
+No cell is MISSING. Two cells say why they are as they are: the viewer's Ask card on a phone
+(the same card and reason, the phone's sheet proven for the other roles) and the Board (it
+holds questions, not minutes, as designed).
