@@ -970,9 +970,10 @@ function medianSplit(rows: Row[], key: (r: Row) => number, high: boolean): { med
 type Box = [number, number, number, number];
 
 /**
- * Each mark's centre on a w x h plot: off the middle lines (22 px into the quadrant it counts
- * in), then nudged apart where two marks or a mark and a quadrant's name overlap (a phone's
- * narrow plot), kept inside the plot.
+ * Each mark's centre on a w x h plot: at its real spot (qa-simple-plan-13: on a middle line too;
+ * the legend says how it counts), else, where that spot is taken by a mark placed before it or a
+ * quadrant's name (a phone's crowded plot), the nearest free spot around it (qa-simple-plan-11:
+ * no two marks ever overlap), kept inside the plot. Marks are placed in rank order.
  */
 function markSpots(
   rows: Row[],
@@ -981,50 +982,37 @@ function markSpots(
   o: { at: (r: Row) => [number, number]; avoid: Box[] },
 ): Map<string, [number, number]> {
   const R = 18;
-  // qa-simple-plan-13: each mark starts at its real spot, on a middle line too (the legend says how it counts).
-  const pts = rows.map((r) => {
-    const [x, y] = o.at(r);
-    return { id: r.feature_id, x, y };
-  });
-  if (!w || !h) return new Map(pts.map((p) => [p.id, [p.x, p.y]]));
-  const clamp = (p: { x: number; y: number }) => {
-    p.x = Math.min(w - R, Math.max(R, p.x));
-    p.y = Math.min(h - R, Math.max(R, p.y));
-  };
-  // qa-simple-plan-11: until no two marks overlap at all (a phone's plot is crowded).
-  for (let round = 0; round < 300; round++) {
-    let moved = false;
-    for (let i = 0; i < pts.length; i++) {
-      for (let j = i + 1; j < pts.length; j++) {
-        const a = pts[i];
-        const b = pts[j];
-        const ox = 2 * R - Math.abs(a.x - b.x);
-        const oy = 2 * R - Math.abs(a.y - b.y);
-        if (ox <= 0 || oy <= 0) continue;
-        moved = true;
-        // Apart along the shorter way out, half each.
-        if (ox < oy) {
-          const d = (ox / 2 + 1) * (a.x <= b.x ? 1 : -1);
-          a.x -= d;
-          b.x += d;
-        } else {
-          const d = (oy / 2 + 1) * (a.y <= b.y ? 1 : -1);
-          a.y -= d;
-          b.y += d;
+  if (!w || !h) return new Map(rows.map((r) => [r.feature_id, o.at(r)]));
+  const placed: [number, number][] = [];
+  const inside = (x: number, y: number) => x >= R && x <= w - R && y >= R && y <= h - R;
+  const free = (x: number, y: number) =>
+    inside(x, y) &&
+    placed.every(([px, py]) => Math.abs(px - x) >= 2 * R || Math.abs(py - y) >= 2 * R) &&
+    o.avoid.every((q) => x + R - 2 <= q[0] || x - R + 2 >= q[2] || y + R - 2 <= q[1] || y - R + 2 >= q[3]);
+  const out = new Map<string, [number, number]>();
+  for (const r of rows) {
+    const [x0, y0] = o.at(r);
+    const cx = Math.min(w - R, Math.max(R, x0));
+    const cy = Math.min(h - R, Math.max(R, y0));
+    let spot: [number, number] = [cx, cy];
+    if (!free(cx, cy)) {
+      search: for (let rad = 3; rad < Math.max(w, h); rad += 3) {
+        const n = Math.max(12, Math.round(rad / 2));
+        for (let k = 0; k < n; k++) {
+          const t = (k / n) * 2 * Math.PI;
+          const x = cx + rad * Math.cos(t);
+          const y = cy + rad * Math.sin(t);
+          if (free(x, y)) {
+            spot = [x, y];
+            break search;
+          }
         }
       }
-      const p = pts[i];
-      for (const q of o.avoid) {
-        if (p.x + R - 4 <= q[0] || p.x - R + 4 >= q[2] || p.y + R - 4 <= q[1] || p.y - R + 4 >= q[3]) continue;
-        moved = true;
-        // A quadrant's name is at the top or the foot: the mark steps clear of it inwards.
-        p.y = q[1] < h / 2 ? q[3] + R - 3 : q[1] - R + 3;
-      }
-      clamp(p);
     }
-    if (!moved) break;
+    placed.push(spot);
+    out.set(r.feature_id, spot);
   }
-  return new Map(pts.map((p) => [p.id, [p.x, p.y]]));
+  return out;
 }
 
 function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; shapes: Map<string, Shape>; mayChange: boolean; changed: Changed; moved: Moved | null }) {

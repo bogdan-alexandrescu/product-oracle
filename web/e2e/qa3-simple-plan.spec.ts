@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
+import { ADMIN, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -33,7 +33,6 @@ async function open(page: Page, query = ""): Promise<void> {
   await expect(page.getByText("Loading priorities…")).toHaveCount(0);
 }
 
-const row = (page: Page, code: string): Locator => page.locator(`[data-testid="prio-row"][data-code="${code}"]`);
 const rowByTitle = (page: Page, title: string): Locator => page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-title").getByText(title, { exact: true }) });
 const toast = (page: Page, text: string | RegExp): Locator => page.getByRole("status").filter({ hasText: text });
 type Box = { x: number; y: number; width: number; height: number };
@@ -207,7 +206,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
    * cannot move keeps the column and says why; Confirm reads "Propose adding" and is off while
    * pending; a rank proposal has no "No flow yet" chip; the owner reads "waiting for you".
    */
-  test("a commenter proposes in plain words and the owner reads 'waiting for you'", async ({ page, browser }) => {
+  test("a commenter proposes in plain words and the owner reads 'waiting for you'", async ({ page }) => {
     await setUp(page, { email: COMMENTER });
     await open(page);
     const locked = page.getByTestId("prio-locked");
@@ -233,10 +232,11 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
     await draft.getByRole("button", { name: "Propose adding" }).click();
     await expect(draft.getByRole("button", { name: "Propose adding" })).toBeDisabled();
 
-    const owner = await (await browser.newContext()).newPage();
-    await setUp(owner);
-    await open(owner);
-    await expect(rowByTitle(owner, "Setup checklist").getByTestId("prio-proposal-words")).toContainText("waiting for you");
+    // The owner, in the same browser (the mock's data is the browser's).
+    await signOut(page);
+    await login(page, ADMIN.email);
+    await open(page);
+    await expect(rowByTitle(page, "Setup checklist").getByTestId("prio-proposal-words")).toContainText("waiting for you");
   });
 });
 
