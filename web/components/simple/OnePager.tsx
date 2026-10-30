@@ -102,8 +102,10 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd: doc } } })).catch(() => null),
   );
   const reloadPlan = planQ.reload;
-  // qa-simple-prd-p3-16: the PRD's status chip reads the same summary as the One-pagers list.
-  const listQ = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
+  // qa-simple-prd-p3-16: the PRD's status chip reads the same summary as the One-pagers list
+  // (the document's own, written by the same code), not the whole list of PRDs.
+  const docQ = useQuery(`simple-prd-doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })).catch(() => null));
+  const reloadDoc = docQ.reload;
   // qa-simple-prd-p3-4: a plan-led page shows the PRD's lines (and their Edit) on asking.
   const [linesShown, setLinesShown] = useState(false);
   const [planNow, setPlanNow] = useState<Schemas["SimplePlanOut"] | null>(null);
@@ -114,7 +116,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     // A newly approved version's plan shows at once, not only after moving away and back.
     setPlanNow(null);
     void reloadPlan();
-  }, [refresh, reloadPage, reloadPlan]);
+    void reloadDoc();
+  }, [refresh, reloadPage, reloadPlan, reloadDoc]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -154,8 +157,9 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   useEffect(() => {
     if (!presenting) return;
     const on = (e: KeyboardEvent) => {
-      // qa-simple-prd-p3-18: Tab goes round the presented page.
-      if (e.key === "Tab" && root.current) {
+      // qa-simple-prd-p3-18: Tab goes round the presented page; a dialog over it (a flow, portalled
+      // outside the page) keeps its own Tab.
+      if (e.key === "Tab" && root.current && !(document.activeElement as HTMLElement | null)?.closest('[role="dialog"], [role="alertdialog"], [aria-modal="true"]')) {
         const all = Array.from(root.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])')).filter((x) => x.offsetParent !== null);
         const at = all.indexOf(document.activeElement as HTMLElement);
         if (all.length && (e.shiftKey ? at <= 0 : at === all.length - 1 || at < 0)) {
@@ -164,7 +168,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
         }
         return;
       }
-      if (e.key === "Escape" && !document.querySelector('[role="dialog"], dialog[open]')) {
+      // A dialog over the page (the editor's "Discard your changes?" too) takes its own Escape.
+      if (e.key === "Escape" && !document.querySelector('[role="dialog"], [role="alertdialog"], dialog[open]')) {
         setPresenting(false);
         if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
       }
@@ -304,7 +309,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const notesFor = (id: string) => v.notes.filter((n) => n.line_id === id);
   const plan = planNow ?? planQ.data ?? null;
   const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0;
-  const summary = listQ.data?.find((d) => d.id === v.document.id || d.slug === v.document.slug) ?? null;
+  const summary = docQ.data ?? null;
   // qa-simple-prd-18: a draft whose changes were all undone shows no banner.
   const draftShown = !!v.draft && (v.draft.changes > 0 || v.draft.status === "submitted");
   // qa-simple-prd-10: who may start a review is the start API's rule (can_start: an owner or the
@@ -501,12 +506,13 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                                     : "absolute top-0 right-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                                 }`}
                                 // A touch on it while hidden only shows it (as a tap on its line does).
+                                // A touch that scrolls (no click) leaves nothing behind; a keyboard's Enter (no pointer) is never a tap.
                                 onPointerDown={(e) => { hiddenTap.current = e.pointerType !== "mouse" && tapped !== l.id; }}
-                                onClick={() => {
-                                  if (hiddenTap.current) {
-                                    hiddenTap.current = false;
-                                    return;
-                                  }
+                                onPointerCancel={() => { hiddenTap.current = false; }}
+                                onClick={(e) => {
+                                  const tap = hiddenTap.current;
+                                  hiddenTap.current = false;
+                                  if (tap && e.detail > 0) return;
                                   setDiscarding(false);
                                   setEditing(l.id);
                                   setDraftText(l.full ?? l.text);

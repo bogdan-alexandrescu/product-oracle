@@ -283,6 +283,7 @@ export function FlowPanel({
   onOpenChange,
   code,
   name,
+  backLabel,
   showHint,
 }: {
   subject: FlowSubject;
@@ -300,6 +301,8 @@ export function FlowPanel({
   /** The subject's code and name for the opened views' titles ("F-06 Loop and blast-radius guards · flow"). */
   code?: string | null;
   name?: string;
+  /** The Roadmap card's viewer: a back link to it ("Roadmap"); unset, none (the one-pager's, qa-simple-prd-p3-22). */
+  backLabel?: string;
   /** With no flow yet, the hint under "No flow yet" ("Oracle draws the steps..."). Unset: it
    * shows on the first row of a list only; false: never; true: on this row (bar the CSS rule). */
   showHint?: boolean;
@@ -694,8 +697,22 @@ export function FlowPanel({
             </button>
           </div>
         ) : (
-          // qa-simple-prd-p3-22: one way out (Exit full screen, as Escape), not a back link beside it.
+          // qa-simple-prd-p3-22: one way out (Exit full screen, as Escape), not a back link beside it,
+          // bar the Roadmap card's own "Roadmap" back.
           <div className="flex flex-none items-center gap-3 border-b border-line px-7 py-3.5">
+            {backLabel && (
+              <button
+                type="button"
+                className={BTN_GHOST}
+                onClick={() => {
+                  exitFull();
+                  setView(null);
+                }}
+              >
+                <Icon d={ICONS.back} />
+                {backLabel}
+              </button>
+            )}
             <h2 className="min-w-0 flex-1 text-[21px] leading-7 font-[650] break-words">{title(f, "flow")}</h2>
             <span className={META}>
               {flowDrawn(f, zone)}

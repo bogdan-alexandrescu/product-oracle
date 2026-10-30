@@ -173,7 +173,9 @@ async def undo_simple_change(
     still holds its ``after``: writes an ``undone`` row (history is kept)."""
     async with _one_commit(db):
         out = await _run(db, changes.undo(db, principal, change_id))
-        await _in_meeting(db, principal, out, out.change.session_id, "Undone")
+        # A proposal's undo is its author withdrawing it (one_pager._withdraw): said so.
+        verb = "Withdrawn" if out.change.status == "declined" else "Undone"
+        await _in_meeting(db, principal, out, out.change.session_id, verb)
     return out
 
 

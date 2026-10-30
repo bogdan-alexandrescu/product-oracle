@@ -662,7 +662,8 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
                     {l.pieces.map((p) => {
                       const c = hue(plan, p.milestone);
                       const x0 = X(p.start);
-                      const room = Math.max(XE(p.end) - x0, textWidth(p.slices[0].code, 12, 650) + 22);
+                      // A bar too short for its name still shows its first four letters ("Sett…"), never "Se…".
+                      const room = Math.max(XE(p.end) - x0, textWidth(`${p.slices[0].name.slice(0, 4)}…`, 12, 650) + 22);
                       const mile = plan.milestones.find((x) => x.code === p.milestone);
                       return (
                         <button

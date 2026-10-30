@@ -684,6 +684,7 @@ export function FloatingCard({
         openLabel="Open the item's flow"
         code={item.code}
         name={item.title}
+        backLabel="Roadmap"
         onOpenChange={setFlowOpen}
       />
     </Part>
