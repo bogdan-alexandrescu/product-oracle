@@ -15,6 +15,11 @@ Test cards (protects / fails_when / no_claim):
   with a reason naming who changed it, stays open, and is offered again on the new state
   (its before is the item's current value), so a second Apply lands the card's change;
   fails_when=the stale card lands, is lost, or keeps failing; no_claim=the card's words.
+- test_stale_relative_chat_card_moves_from_the_new_dates: protects=a card that moves an
+  item by a span ("push it out a quarter") offered again after someone moved the item
+  moves it by that span from where it is now (its after, preview and summary say the new
+  dates), while a card naming a day keeps that day; fails_when=the re-offered relative
+  card lands its old target; no_claim=the web's card (dod-data-stale-card.spec.ts).
 - test_apply_all_stops_in_words_and_reoffers: protects=Apply all stops at a card whose
   item changed under an earlier card, says why in words (no ids, no raw dates), and offers
   that card again on the new state, so its own Apply then lands; fails_when=the reason is
@@ -110,11 +115,49 @@ async def test_stale_chat_card(client):
     # Offered again on the new state: still open, before is what the item has now.
     [again] = (await last(client, ctx, "owner"))["cards"]
     assert again["status"] == "open" and again["before"] == moved
-    assert again["after"] == card["after"]
     r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     item = await w.item("Ledger v2")
-    assert str(item.start_date) == card["after"]["start_date"]
+    assert str(item.start_date) == again["after"]["start_date"]
+
+
+async def test_stale_relative_chat_card_moves_from_the_new_dates(client):
+    ctx = await chat_people()
+    w = await ChatWorld(ctx).build()
+    ledger = w.ids["Ledger v2"]
+    await post(client, ctx, "owner", "push Ledger v2 out a quarter")
+    await read(ctx, actions(act("move_dates", item=ledger, shift="1 quarter")))
+    [card] = (await last(client, ctx, "owner"))["cards"]
+    assert card["after"] == {"start_date": "2027-01-01", "end_date": "2027-02-15"}
+    await post(client, ctx, "owner", "move Ledger v2 to March 3")
+    await read(ctx, actions(act("move_dates", item=ledger, when="March 3")))
+    [day] = (await last(client, ctx, "owner"))["cards"]
+    moved = {"start_date": "2026-10-10", "end_date": "2026-11-20"}
+    r = await client.post(CHANGES, json={"op": "move_dates", "target": {"item_id": ledger},
+                          "before": card["before"], "after": moved},
+                          headers=ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    for c in (card, day):
+        r = await client.post(f"{CARDS}/{c['id']}/apply", headers=ctx.as_("owner"))
+        assert r.status_code == 409, r.text
+    cards = {c["id"]: c for m in (await thread(client, ctx)) for c in m["cards"]}
+    again, kept = cards[card["id"]], cards[day["id"]]
+    # A quarter on from where the item is now, and its words say so.
+    assert again["after"] == {"start_date": "2027-01-10", "end_date": "2027-02-20"}
+    assert again["preview"]["start_date"] == "2027-01-10"
+    assert "Jan 10" in again["summary"] and "Jan 1 " not in again["summary"]
+    # A named day stays that day.
+    assert kept["before"] == moved and kept["after"] == day["after"]
+    r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    item = await w.item("Ledger v2")
+    assert (item.start_date, item.end_date) == (date(2027, 1, 10), date(2027, 2, 20))
+
+
+async def thread(client, ctx) -> list[dict]:
+    r = await client.get("/v1/simple/chat", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    return r.json()["messages"]
 
 
 async def test_two_proposals_on_one_field(client):
