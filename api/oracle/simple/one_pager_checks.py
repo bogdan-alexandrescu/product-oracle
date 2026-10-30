@@ -90,6 +90,18 @@ def _terms(text: str) -> set[str]:
 # --------------------------------------------------------------------------- who has it
 
 
+def _guidanceless(body: str) -> str:
+    """A template's guidance is never who has it (one_pager.template_only): its comments,
+    and lines that are only placeholders or arrows."""
+    body = re.sub(r"<!--.*?(?:-->|\Z)", "", body, flags=re.S)
+    keep = [
+        x
+        for x in body.splitlines()
+        if re.search(r"[^\W_]", _BULLET.sub(r"\1", re.sub(r"<[^<>\n]*>", "", x)))
+    ]
+    return "\n".join(keep)
+
+
 def who_has_it(sections: list[Section]) -> str | None:
     """Who has the problem, from the PRD's users or personas section: each bullet's lead
     ("New admins: ..." -> "New admins"), else its first sentence. None when the PRD has
@@ -98,7 +110,7 @@ def who_has_it(sections: list[Section]) -> str | None:
         head = sec.heading or ""
         if not _WHO_HEAD.search(head) or re.search(r"problem", head, re.I):
             continue
-        bullets, rows, prose = _rows(sec.body_md or "")
+        bullets, rows, prose = _rows(_guidanceless(sec.body_md or ""))
         named = [re.split(r"\s*(?::|—|–| - )\s*", b, maxsplit=1)[0] for b in bullets]
         named += [r[0] for r in rows if r and r[0]]
         if not named and prose:

@@ -39,10 +39,14 @@ function rows(body: string): { bullets: string[]; cells: string[][]; prose: stri
 const terms = (t: string) => new Set((t.match(/[A-Za-z][A-Za-z'-]{3,}/g) ?? []).filter((w) => !STOP.has(w.toLowerCase())).map((w) => w.toLowerCase().replace(/s+$/, "")));
 const overlap = (a: Set<string>, b: Set<string>) => [...a].filter((x) => b.has(x)).length;
 
+/** A template's guidance is never who has it (one_pager.template_only): comments, placeholder-only lines, arrows. */
+const guidanceless = (body: string) =>
+  body.replace(/<!--[\s\S]*?(?:-->|$)/g, "").split("\n").filter((l) => /[^\W_]/.test(l.replace(/<[^<>\n]*>/g, "").replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ""))).join("\n");
+
 export function whoHasIt(secs: Sec[]): string | null {
   for (const s of secs) {
     if (!/\b(?:users?|personas?|who\b|audiences?|customers?)/i.test(s.heading) || /problem/i.test(s.heading)) continue;
-    const { bullets, cells, prose } = rows(s.body);
+    const { bullets, cells, prose } = rows(guidanceless(s.body));
     let named = [...bullets.map((b) => b.split(/\s*(?::|—|–| - )\s*/)[0]), ...cells.map((r) => r[0]).filter(Boolean)];
     if (!named.length && prose.length) named = [sentences(prose.join(" "))[0].replace(/\.$/, "")];
     named = named.filter((n) => n.trim()).map((n) => n.split(/\s+/).slice(0, 12).join(" "));

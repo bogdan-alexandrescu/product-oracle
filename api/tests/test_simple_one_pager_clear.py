@@ -260,6 +260,9 @@ def test_pure_checks():
     users = _sec("users", "Who has it", "Admins of new teams with fewer than ten people.")
     assert checks.who_has_it([users]) == "Admins of new teams with fewer than ten people"
     assert checks.who_has_it([_sec("problem", "Problem and who has it", "Admins stall.")]) is None
+    # A template's guidance names no one.
+    skeleton = _sec("users", "Users", "<!-- Brief: who -->\n- <Milestone>: <Feature>\n- →")
+    assert checks.who_has_it([skeleton]) is None
     assert checks.names_who("Admins stall in setup", "Admins of new teams")
     assert not checks.names_who("Setup stalls", "Admins of new teams")
     names = checks.glossary([_sec("g", "Glossary", "- F-12: Spend alerts\n- F-13 (Usage digest)")])

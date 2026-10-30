@@ -81,9 +81,9 @@ for (const phone of [false, true]) {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
         const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
-        await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
-        await tap(wide.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
+        // 2026-10-30: no "No flow yet" row; the bet's line ends with a small "Draw the flow".
+        await expect(wide).toHaveCount(0);
+        await tap(page.getByRole("button", { name: "Draw the flow for “Invite suggestions from the admin's" }));
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
         await expect(wide.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" })).toBeVisible();
         await expect(wide).not.toContainText("No flow yet");
