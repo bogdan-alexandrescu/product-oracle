@@ -17,6 +17,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { opWords } from "../../roadmap/_card";
 import { usePhone } from "../../priorities/priorities";
+import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
 
@@ -776,8 +777,9 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 <ul className="space-y-1">
                   <li>Decisions page · posted</li>
                   <li>Each attendee&apos;s Inbox · posted</li>
-                  <li>Email · {d.email ? deliveryWords(d.email_status ?? "queued") : "not sent (not picked)"}</li>
-                  <li>Slack · {d.slack ? `${deliveryWords(d.slack_status ?? "queued")}${d.slack_channel ? ` to ${d.slack_channel}` : ""}` : "not posted (not picked)"}</li>
+                  {/* dod-delivery: each attendee's email and the Slack post, with Retry when one failed. */}
+                  <li>{d.email ? <DeliveryLine meetingId={m.id} what="email" words={emailWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-email" /> : "Email · not sent (not picked)"}</li>
+                  <li>{d.slack ? <DeliveryLine meetingId={m.id} what="slack" words={slackWords(d)} canRetry={!!m.can.retry_delivery} reload={reload} testId="delivery-slack" /> : "Slack · not posted (not picked)"}</li>
                 </ul>
                 <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>Open the Decisions page</Link>
               </div>
@@ -808,11 +810,6 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
       </div>
     </div>
   );
-}
-
-/** qa-simple-decide-47: a delivery's state in plain words. */
-function deliveryWords(status: string): string {
-  return ({ queued: "on its way", sent: "sent", delivered: "sent", posted: "posted", failed: "could not be sent", not_sent: "not sent: no sender is set up" } as Record<string, string>)[status] ?? "not known yet";
 }
 
 /** The agenda shows this many questions before "N more: <codes>". */

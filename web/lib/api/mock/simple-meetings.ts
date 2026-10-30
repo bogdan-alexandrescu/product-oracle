@@ -13,7 +13,13 @@
  * (the "simple-deciders" scenario); its required reviewer is the approver.
  *
  * Delivery: email is available unless localStorage MOCK_MEETINGS_KEY holds "no-email";
- * Slack is connected (to #product-reviews) when it holds "slack".
+ * Slack is connected (to #product-reviews) when it holds "slack". dod-delivery (as
+ * meetings.deliver): each attendee's email and the Slack post are tried when read on or after
+ * their next try, again 5 then 10 minutes (mock clock) after a failure, then failed; with
+ * "delivery-fails" every try fails; with "delivery-failed" the past meeting's minutes went to
+ * all but the approver and its Slack post failed ("delivery-legacy-failed": its email failed
+ * as stored before each attendee carried a status). Retry (whoever ended it or an owner)
+ * requeues what failed, and the next read sends it.
  *
  * The minutes job (production walk): ending a meeting answers at once unless the key holds
  * "minutes-failed" (the job fails: "failed", Draft again requeues it, which then answers) or
@@ -53,7 +59,9 @@ export const MINUTES_LATER_MS = 20_000;
 type Role = Schemas["Me"]["role"];
 type Ref = Schemas["SimplePersonRef"];
 type Minutes = Schemas["SimpleMinutes"];
-type Delivery = Schemas["SimpleDelivery"];
+/** As meetings.py stores it: each attendee's email and the Slack post with their tries and next try (ms). */
+type Try = { status: "queued" | "sent" | "retrying" | "failed"; tries: number; next_at: number | null };
+type Delivery = Omit<Schemas["SimpleDelivery"], "emails" | "email_sent"> & { email_to?: Record<string, Try>; slack_try?: Try; email_sent?: number };
 type Change = Schemas["SimpleChangeOut"];
 
 export interface MeetingsCtx {
@@ -243,7 +251,7 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
         waits: [{ what: "Usage alerts: the working draft is not approved yet", on: [] }],
         written_by: "oracle",
       },
-      minutes_state: "sent", delivery: { decisions: true, inbox: true, email: true, email_status: "sent", slack: false, slack_status: null, slack_channel: null },
+      minutes_state: "sent", delivery: seededDelivery(people, approver),
       sent_at: iso(Date.parse(startedAt) + 55 * 60_000), approved: null,
     }],
     inbox_seen: {},
@@ -272,6 +280,71 @@ function mayChange(m: Meeting, id: string): boolean {
   if (m.change_mode === "everyone") return m.attendee_ids.includes(id);
   if (m.change_mode === "named") return m.change_people.includes(id);
   return false;
+}
+
+/** The past meeting's delivery: all sent, or ("delivery-failed") the approver's email and the Slack post failed. */
+function seededDelivery(people: string[], approver: string | undefined): Delivery {
+  // As stored before each attendee carried a status (no email_to): its email failed.
+  if (flags().includes("delivery-legacy-failed")) return { decisions: true, inbox: true, email: true, email_status: "failed", email_sent: 0, slack: false, slack_status: null, slack_channel: null };
+  const failed = flags().includes("delivery-failed");
+  const sent: Try = { status: "sent", tries: 1, next_at: null };
+  const bad: Try = { status: "failed", tries: TRIES, next_at: null };
+  return {
+    decisions: true, inbox: true, email: true, email_status: failed ? "failed" : "sent",
+    email_to: Object.fromEntries(people.map((i) => [i, failed && i === approver ? { ...bad } : { ...sent }])),
+    slack: failed, slack_status: failed ? "failed" : null, slack_channel: failed ? "#product-reviews" : null,
+    ...(failed ? { slack_try: { ...bad } } : {}),
+  };
+}
+
+/** dod-delivery (meetings.RETRY_AFTER_MINUTES): a failed try waits 5, then 10 minutes; the third is the last. */
+const RETRY_AFTER_MS = [5 * 60_000, 10 * 60_000];
+const TRIES = RETRY_AFTER_MS.length + 1;
+
+function tryOnce(t: Try, now: number): Try {
+  if (!flags().includes("delivery-fails")) return { status: "sent", tries: t.tries + 1, next_at: null };
+  const tries = t.tries + 1;
+  return tries >= TRIES ? { status: "failed", tries, next_at: null } : { status: "retrying", tries, next_at: now + RETRY_AFTER_MS[tries - 1] };
+}
+
+// Strictly after its time: Retry answers "queued" (as the API, whose tick tries it later); a later read tries it.
+const pending = (t: Try | undefined, now: number) => !!t && (t.status === "queued" || t.status === "retrying") && (t.next_at ?? 0) < now;
+
+function emailStatus(to: Record<string, Try>): string {
+  const states = new Set(Object.values(to).map((t) => t.status));
+  return (["retrying", "queued", "failed"] as const).find((x) => states.has(x)) ?? "sent";
+}
+
+/** meetings.deliver on the tick: each due email and the Slack post tried once. */
+function deliverDue(m: Meeting): void {
+  const d = m.delivery;
+  if (!d) return;
+  const now = mockNowMs();
+  if (d.email_to && (d.email_status === "queued" || d.email_status === "retrying")) {
+    for (const [k, t] of Object.entries(d.email_to)) if (pending(t, now)) d.email_to[k] = tryOnce(t, now);
+    d.email_status = emailStatus(d.email_to);
+  }
+  // Queued before the post carried its tries: the old outbox posted it.
+  if (!d.slack_try && (d.slack_status === "queued" || d.slack_status === "retrying")) d.slack_status = "sent";
+  if (d.slack && pending(d.slack_try, now)) {
+    d.slack_try = tryOnce(d.slack_try!, now);
+    d.slack_status = d.slack_try.status;
+  }
+}
+
+/** meetings.delivery_out: each attendee's email named, with how many went. */
+function deliveryOut(ctx: MeetingsCtx, m: Meeting): Schemas["SimpleDelivery"] | null {
+  deliverDue(m);
+  if (!m.delivery) return null;
+  const { email_to, slack_try: _slack, ...rest } = m.delivery;
+  void _slack;
+  const emails = Object.entries(email_to ?? {}).map(([id, t]) => ({ person: ref(ctx, id), status: t.status }));
+  return { ...rest, emails, email_sent: email_to ? emails.filter((e) => e.status === "sent").length : (rest.email_sent ?? 0) };
+}
+
+/** meetings.may_retry: whoever ended the meeting or an owner. */
+function mayRetry(ctx: MeetingsCtx, m: Meeting): boolean {
+  return m.minutes_state === "sent" && (ctx.me.id === m.ended_by || ctx.me.role === "owner");
 }
 
 function presenterOrDecider(ctx: MeetingsCtx, m: Meeting, p: Prd): boolean {
@@ -390,7 +463,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
     minutes: m.minutes,
     minutes_job: m.status === "ended" && m.minutes_state === "drafting" ? (m.minutes_job ?? "drafting") : null,
-    delivery: m.delivery,
+    delivery: deliveryOut(ctx, m),
     slack: slackState(),
     email_available: emailAvailable(),
     can: {
@@ -399,6 +472,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       approve: m.status === "live" && deciderOrOwner,
       end: presenterOrDecider(ctx, m, p) && m.minutes_state !== "sent" && RANK[ctx.me.role] >= RANK.commenter,
       redraft: m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed" && presenterOrDecider(ctx, m, p),
+      retry_delivery: mayRetry(ctx, m),
     },
     not_approved: [],
     notes: m.notes ?? [],
@@ -780,7 +854,10 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const out: Schemas["SimpleDecisionsOut"] = {
     meetings: shown.map((m) => {
       const whole = !!prd && !goal && m.prd === prd.slug;
-      return { meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)) };
+      return {
+        meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)),
+        delivery: m.minutes_state === "sent" ? deliveryOut(ctx, m) : null, can_retry_delivery: mayRetry(ctx, m),
+      };
     }),
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
@@ -980,6 +1057,24 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.minutes_job = null;
     return ok();
   }
+  if (p[4] === "delivery" && p[5] === "retry" && method === "POST") {
+    // meetings.retry_delivery: requeue the failed emails or the Slack post for the tick.
+    if (!mayRetry(ctx, m)) return json(403, { detail: "Only whoever ended the meeting or an owner retries it" });
+    const b = (await body(req)) as Partial<Schemas["SimpleRetryDeliveryIn"]>;
+    const d = m.delivery!;
+    const fresh = (): Try => ({ status: "queued", tries: 0, next_at: mockNowMs() });
+    if (b.what === "email") {
+      const failed = Object.entries(d.email_to ?? {}).filter(([, t]) => t.status === "failed");
+      if (d.email_status !== "failed" || !failed.length) return json(409, { detail: "No email is left to retry" });
+      for (const [k] of failed) d.email_to![k] = fresh();
+      d.email_status = emailStatus(d.email_to!);
+    } else {
+      if (d.slack_status !== "failed") return json(409, { detail: "The Slack post is not left to retry" });
+      d.slack_try = fresh();
+      d.slack_status = "queued";
+    }
+    return json(200, one(ctx, db, m));
+  }
   if (p[4] === "send" && method === "POST") {
     if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner sends them" });
     if (m.status !== "ended") return json(409, { detail: "End the meeting first" });
@@ -988,9 +1083,13 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const slack = slackState();
     if (b.slack && !(slack.connected && slack.channel)) return json(422, { detail: slack.connected ? "No Slack channel is set in Settings › Notifications" : "Slack is not connected" });
     m.minutes ??= extract(ctx, db, m);
+    const fresh = (): Try => ({ status: "queued", tries: 0, next_at: mockNowMs() });
+    const emailing = !!b.email && emailAvailable();
     m.delivery = {
-      decisions: true, inbox: true, email: !!b.email, email_status: b.email ? (emailAvailable() ? "queued" : "unavailable") : null,
+      decisions: true, inbox: true, email: !!b.email, email_status: b.email ? (emailing ? "queued" : "unavailable") : null,
+      ...(emailing ? { email_to: Object.fromEntries(m.attendee_ids.map((i) => [i, fresh()])) } : {}),
       slack: !!b.slack, slack_status: b.slack ? "queued" : null, slack_channel: b.slack ? slack.channel : null,
+      ...(b.slack ? { slack_try: fresh() } : {}),
     };
     m.minutes_state = "sent";
     m.minutes_job = null;

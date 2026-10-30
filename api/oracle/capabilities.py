@@ -277,6 +277,7 @@ PER_ITEM: dict[str, Role | None] = {
     "retry_lookup_run": "owner",
     "retry_run": "owner",
     "retry_simple_chat_read": None,
+    "retry_simple_meeting_delivery": "owner",
     "review_decision": None,
     "review_design_artifact": "owner",
     "revise_simple_visual": "owner",

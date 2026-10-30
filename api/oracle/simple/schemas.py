@@ -1577,13 +1577,29 @@ class SimpleMinutesIn(BaseModel):
     action_items: list[SimpleActionItemIn] = Field(default_factory=list, max_length=30)
 
 
+DeliveryStatus = Literal["queued", "sent", "retrying", "failed"]
+
+
+class SimpleEmailDelivery(BaseModel):
+    """One attendee's minutes email: queued, sent, retrying (a try failed, another is due
+    on the tick) or failed (three tries failed; Retry requeues it)."""
+
+    person: SimplePersonRef
+    status: DeliveryStatus
+
+
 class SimpleDelivery(BaseModel):
     decisions: bool = True
     inbox: bool = True
-    # chosen by whoever ended the meeting; status: queued, sent, failed, unavailable.
+    # chosen by whoever ended the meeting; email_status: queued, sent, retrying (some
+    # attendee's is tried again), failed (some attendee's did not go) or unavailable.
     email: bool = False
     email_status: str | None = None
+    # Each attendee's email, and how many went.
+    emails: list[SimpleEmailDelivery] = []
+    email_sent: int = 0
     slack: bool = False
+    # queued, sent, retrying or failed.
     slack_status: str | None = None
     slack_channel: str | None = None
 
@@ -1623,6 +1639,8 @@ class SimpleMeetingCan(BaseModel):
     end: bool
     # The same people requeue a failed minutes job ("Draft again").
     redraft: bool = False
+    # Whoever ended the meeting or an owner retries a failed email or Slack post.
+    retry_delivery: bool = False
 
 
 class SimpleMeetingNote(BaseModel):
@@ -1751,6 +1769,10 @@ class SimpleSendIn(BaseModel):
     slack: bool = False
 
 
+class SimpleRetryDeliveryIn(BaseModel):
+    what: Literal["email", "slack"]
+
+
 class SimpleDecisionRow(BaseModel):
     id: uuid.UUID
     number: int
@@ -1772,6 +1794,9 @@ class SimpleMeetingGroup(BaseModel):
     meeting: SimpleMeetingBrief
     minutes: SimpleMinutes | None
     decisions: list[SimpleDecisionRow]
+    # How the sent minutes went out (email, Slack), and whether the caller may Retry.
+    delivery: SimpleDelivery | None = None
+    can_retry_delivery: bool = False
 
 
 class SimpleFilterOption(BaseModel):

@@ -13178,6 +13178,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/meetings/{meeting_id}/delivery/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Simple Meeting Delivery
+         * @description Retry: whoever ended the meeting or an owner requeues the minutes' failed emails or
+         *     Slack post (403 for others, 409 when nothing failed); the minute tick tries them.
+         */
+        post: operations["retry_simple_meeting_delivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/decisions": {
         parameters: {
             query?: never;
@@ -37669,6 +37690,16 @@ export interface components {
             /** Email Status */
             email_status?: string | null;
             /**
+             * Emails
+             * @default []
+             */
+            emails: components["schemas"]["SimpleEmailDelivery"][];
+            /**
+             * Email Sent
+             * @default 0
+             */
+            email_sent: number;
+            /**
              * Slack
              * @default false
              */
@@ -37813,6 +37844,19 @@ export interface components {
              * @default false
              */
             can_withdraw: boolean;
+        };
+        /**
+         * SimpleEmailDelivery
+         * @description One attendee's minutes email: queued, sent, retrying (a try failed, another is due
+         *     on the tick) or failed (three tries failed; Retry requeues it).
+         */
+        SimpleEmailDelivery: {
+            person: components["schemas"]["SimplePersonRef"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "sent" | "retrying" | "failed";
         };
         /** SimpleEvidence */
         SimpleEvidence: {
@@ -38312,6 +38356,11 @@ export interface components {
              * @default false
              */
             redraft: boolean;
+            /**
+             * Retry Delivery
+             * @default false
+             */
+            retry_delivery: boolean;
         };
         /** SimpleMeetingCommentIn */
         SimpleMeetingCommentIn: {
@@ -38362,6 +38411,12 @@ export interface components {
             minutes: components["schemas"]["SimpleMinutes"] | null;
             /** Decisions */
             decisions: components["schemas"]["SimpleDecisionRow"][];
+            delivery?: components["schemas"]["SimpleDelivery"] | null;
+            /**
+             * Can Retry Delivery
+             * @default false
+             */
+            can_retry_delivery: boolean;
         };
         /** SimpleMeetingIn */
         SimpleMeetingIn: {
@@ -39360,6 +39415,14 @@ export interface components {
         SimpleResumeOut: {
             session: components["schemas"]["SimpleSessionOut"];
             draft: components["schemas"]["SimpleDraftOut"];
+        };
+        /** SimpleRetryDeliveryIn */
+        SimpleRetryDeliveryIn: {
+            /**
+             * What
+             * @enum {string}
+             */
+            what: "email" | "slack";
         };
         /** SimpleRoadmapItem */
         SimpleRoadmapItem: {
@@ -70503,6 +70566,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SimpleSendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_simple_meeting_delivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleRetryDeliveryIn"];
             };
         };
         responses: {
