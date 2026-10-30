@@ -50,7 +50,9 @@ async function endOne(page: Page) {
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "3 Decisions" }).click();
   await page.getByRole("textbox", { name: "Comment" }).fill("Ship the checklist first");
   await page.getByRole("button", { name: "Add comment" }).click();
-  await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Comment: Ship the checklist first");
+  // qa-simple-decide-1/2: a comment shows under its box, not among the decisions.
+  await expect(page.getByTestId("meeting-comment")).toContainText("Ship the checklist first");
+  await expect(page.getByRole("region", { name: "All decisions" })).not.toContainText("Ship the checklist first");
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
   await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
@@ -67,7 +69,7 @@ for (const phone of [false, true]) {
       test("the minutes are edited and sent to the Decisions page and the Inbox only", async ({ page }) => {
         await endOne(page);
         const minutes = page.getByRole("region", { name: "Minutes" });
-        await expect(minutes.getByLabel("Summary")).toHaveValue("Comment: Ship the checklist first; Moved Setup checklist.");
+        await expect(minutes.getByLabel("Summary")).toHaveValue("1 decision taken.");
         await expect(minutes.getByLabel("Decisions taken")).toContainText("Moved Setup checklist");
         await expect(page.getByRole("region", { name: "What still waits" })).toContainText("Guided setup: the working draft is not approved yet");
         await minutes.getByLabel("Summary").fill("We moved the checklist to Next and keep it first.");
@@ -115,7 +117,7 @@ for (const phone of [false, true]) {
         await delivery(page).getByRole("button", { name: "Send" }).click();
         await expect(page.getByRole("status", { name: "Sent" })).toContainText("Email · on its way");
         await page.goto("/simple/meetings");
-        await expect(page.getByRole("region", { name: "Past" })).toContainText("Comment: Ship the checklist first; Moved Setup checklist.");
+        await expect(page.getByRole("region", { name: "Past" })).toContainText("1 decision taken.");
         await switchTo(page, "approver@example.com");
         await page.goto("/simple/decisions");
         await expect(page.getByRole("region", { name: "Review: Guided setup" })).toContainText("Moved Setup checklist");

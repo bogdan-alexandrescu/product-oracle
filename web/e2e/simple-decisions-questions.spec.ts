@@ -274,7 +274,7 @@ for (const phone of [false, true]) {
           expect(swBox.x).toBeGreaterThan(prdBox.x + 600);
         }
         const mine = region(page, "Waiting for you");
-        await expect(mine.getByTestId("questions-source")).toHaveText("From Guided setup draft 3 · read Oct 21");
+        await expect(mine.getByTestId("questions-source")).toHaveText("Questions from the Guided setup PRD (draft 3), checked Oct 21");
         await waiting(page, 9);
         const first = mine.getByTestId("question-row").first();
         const title = (await first.getByText("Reminder default time").boundingBox())!;
