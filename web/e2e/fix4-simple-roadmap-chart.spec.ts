@@ -124,18 +124,19 @@ test.describe("desktop", () => {
     for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1], "ticks keep a month's room apart").toBeGreaterThan(60);
   });
 
-  // fix4 review: a move far past every item's dates (Q4 2028), so the chart's own span would not
-  // reach it: without the preview's days in the span the ghost was drawn off the chart.
-  test("qa-10: the Ask panel's Preview ghosts the bar where it lands (Q4 2028), inside the Timeline", async ({ page }) => {
+  // fix4 review: a move years past the scenario's last date (Q4 2031; its span already ran to
+  // late 2028), so only the preview's own days bring it in: without them the ghost was drawn
+  // off the chart's right edge (x 1753 past a chart ending at 1015).
+  test("qa-10: the Ask panel's Preview ghosts the bar where it lands (Q4 2031), inside the Timeline", async ({ page }) => {
     await open(page, "light", "simple-chat");
     await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
     const ask = page.getByTestId("ask-chat").filter({ visible: true });
-    await ask.getByLabel("Message Oracle").fill("move Weekly alert digest to Q4 2028");
+    await ask.getByLabel("Message Oracle").fill("move Weekly alert digest to Q4 2031");
     await ask.getByRole("button", { name: "Send" }).click();
     const card = ask.getByTestId("chat-card").filter({ hasText: /Move Weekly alert digest to 1 Oct/ });
     await card.getByRole("button", { name: "Preview" }).click();
     const ghost = page.getByTestId("preview-ghost");
-    await expect(ghost).toHaveAttribute("data-start", "2028-10-01");
+    await expect(ghost).toHaveAttribute("data-start", "2031-10-01");
     const gb = (await ghost.boundingBox())!;
     const svg = (await page.getByTestId("chart-svg").boundingBox())!;
     expect(gb.width).toBeGreaterThan(10);
