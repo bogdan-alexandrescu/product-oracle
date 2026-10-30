@@ -90,44 +90,37 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00
 
 /**
  * What "Move the dependents" moves (qa-simple-home-1), as the change engine moves it
- * (oracle.simple.changes, shift_dependents): the item starts the day after its dependency
- * ends, keeping its length; its own dependents that would then overlap move the same way.
+ * (oracle.simple.changes._fix_plan, shift_dependents): every dependent of the dependency that
+ * starts too early (a sibling whose order was accepted as a risk stays) starts the day after it
+ * ends, keeping its length; then their own dependents that would overlap move the same way.
  */
 function shiftMoves(b: BrokenLink, items: Schemas["SimpleRoadmapItem"][]): Schemas["SimpleRoadmapItem"][] {
-  if (!b.dependency) return [b.item];
+  const dep = b.dependency;
+  if (!dep) return [b.item];
   const byId = new Map(items.map((i) => [i.id, i]));
   const ends = new Map<string, string>();
   const moved: Schemas["SimpleRoadmapItem"][] = [];
   const move = (i: Schemas["SimpleRoadmapItem"], start: string) => {
-    if (ends.has(i.id)) return;
-    const end = new Date(Date.parse(`${start}T00:00:00Z`) + daysBetween(i.start.date, i.end.date) * 86_400_000).toISOString().slice(0, 10);
-    ends.set(i.id, end);
+    ends.set(i.id, new Date(Date.parse(`${start}T00:00:00Z`) + daysBetween(i.start.date, i.end.date) * 86_400_000).toISOString().slice(0, 10));
     moved.push(i);
-    for (const id of i.needed_by) {
-      const next = byId.get(id);
-      if (next && next.status !== "cut" && next.start.date <= end) move(next, dayAfter(end));
-    }
   };
-  move(b.item, dayAfter(b.dependency.end.date));
-  return moved;
+  for (const id of dep.needed_by) {
+    const next = byId.get(id);
+    if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
+    if (id !== b.item.id && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === dep.id)) continue;
+    move(next, dayAfter(dep.end.date));
+  }
+  for (let k = 0; k < moved.length; k++) {
+    const end = ends.get(moved[k].id)!;
+    for (const id of moved[k].needed_by) {
+      const next = byId.get(id);
+      if (next && !ends.has(id) && next.status !== "cut" && next.start.date <= end) move(next, dayAfter(end));
+    }
+  }
+  // The clicked item first.
+  return [...moved.filter((m) => m.id === b.item.id), ...moved.filter((m) => m.id !== b.item.id)];
 }
 
-const STATUS_TONE: Record<GoalTile["status"], string> = {
-  "At risk": "simple-status-risk",
-  "Not measured yet": "simple-status-quiet",
-  "Not counted yet": "simple-status-quiet",
-  Planned: "simple-status-ok",
-};
-
-/**
- * Simple's Home (#723 S1, the owner's pick "Brief as cards"): the greeting, the goal band, the
- * summary card and one card per section (decisions waiting for me, proposals on my items, the
- * next review meeting, the plan this quarter, since my last visit), each loading and failing on
- * its own. Every action goes through the API with the caller's permissions: decisions through
- * H1's decide, proposals and the broken-link fixes through the change engine (owners and the
- * decider apply with Undo, others propose, viewers read). Roles only through can() and the
- * rows' own can_* fields.
- */
 export default function SimpleHome() {
   const { me, can, capsReady } = useMe();
   const zone = useCompanyZone();
@@ -725,7 +718,7 @@ export default function SimpleHome() {
                   {/* qa-simple-home-9: who decides the fixes I may only propose, said once. */}
                   {!reads && brokenDeciders.length > 0 && (
                     <p data-testid="home-broken-deciders" className="simple-small">
-                      You propose these fixes; {joinAnd(brokenDeciders)} {brokenDeciders.length > 1 ? "decide" : "decides"}.
+                      {joinAnd(brokenDeciders)} {brokenDeciders.length > 1 ? "decide" : "decides"} the fixes you propose here.
                     </p>
                   )}
                   {/* Every broken link the summary counts, never only the first three; one heading per item (qa-simple-home-11). */}
@@ -905,11 +898,12 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
         </span>
       }
       title={owner ? "Welcome: set up Oracle" : "Set up your own tools"}
-      extra={<span className="flex items-center gap-3 max-[600px]:hidden">{count}</span>}
+      extra={
+        <span data-testid="home-setup-count" className="flex items-center gap-3 max-[600px]:basis-full max-[600px]:pl-12">
+          {count}
+        </span>
+      }
     >
-      <div data-testid="home-setup-count-phone" className="hidden items-center gap-3 max-[600px]:flex">
-        {count}
-      </div>
       <p className="simple-small">
         {owner
           ? "A few steps make Oracle yours: connect your tools, pick the sources it reads, then build the baseline it plans from. Each step opens where it is done."

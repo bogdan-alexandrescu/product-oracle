@@ -149,11 +149,7 @@ test("qa-onboarding-4: a commenter sees their own two steps", async ({ page }) =
   await scenario(page, "empty");
   await login(page, "commenter@example.com");
   await page.goto("/simple");
-  // fix4 (qa-onboarding-6): the role welcome first, never the owner's setup card; dismissed, their own two steps.
-  const welcome = page.getByTestId("simple-page").getByTestId("home-welcome");
-  await expect(welcome).toBeVisible();
-  await expect(setupCard(page)).toHaveCount(0);
-  await welcome.getByRole("button", { name: "Dismiss" }).click();
+  // fix4: their own steps in their words, not the owner's welcome.
   await expect(setupCard(page).getByRole("heading", { name: "Set up your own tools" })).toBeVisible();
   await expect(progress(page)).toHaveText("0 of 2 done");
   await expect(setupCard(page).getByTestId("home-setup-step")).toHaveText([/^Connect tools/, /^Pick sources/]);

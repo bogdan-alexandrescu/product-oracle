@@ -88,7 +88,7 @@ for (const phone of [false, true]) {
         const goals = page.getByTestId("home-goal");
         await expect(goals).toHaveCount(3);
         const retention = goals.filter({ hasText: "Grow retention" });
-        await expect(retention).toContainText("G-R");
+        await expect(retention.getByTestId("home-goal-link")).toHaveAttribute("title", /^G-R · /);
         await expect(retention.getByTestId("home-goal-weight")).toHaveText(/^Counts for \d+% of each feature's score$/);
         await expect(retention.getByTestId("home-goal-path")).toHaveText("From 50 teams · now 100 teams · target 200 teams with weekly alerts on");
         await expect(retention.getByTestId("home-goal-status")).toHaveText("At risk");
@@ -167,7 +167,7 @@ for (const phone of [false, true]) {
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(3);
         await expect(page.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
         const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-        await expect(broken).toContainText("Admin decides");
+        await expect(card(page, "plan").getByTestId("home-broken-deciders")).toContainText(/Admin decides?/);
         await broken.getByRole("button", { name: "Propose: move the dependents" }).click();
         await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
         // A long list: the top three, the rest behind "more".

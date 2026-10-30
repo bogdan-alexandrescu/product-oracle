@@ -199,7 +199,9 @@ for (const phone of [false, true]) {
         await login(page);
         await page.goto("/simple");
         const card = page.getByTestId("home-decisions");
-        const count = card.getByTestId("home-decisions-count");
+        // fix4 (qa-simple-home-15): the count is the summary tile's alone, not repeated in the header.
+        await expect(card.getByTestId("home-decisions-count")).toHaveCount(0);
+        const count = page.getByTestId("home-summary-decisions").locator(".simple-number");
         await expect(count).toHaveText(/^\d+$/);
         const n = Number(await count.textContent());
         expect(n).toBeGreaterThanOrEqual(9);

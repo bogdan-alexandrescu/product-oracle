@@ -41,7 +41,8 @@ export function HomeCard({
 }) {
   return (
     <section id={id} aria-label={title} data-testid={`home-${id}`} className="simple-card scroll-mt-6">
-      <header className="flex items-center gap-3">
+      {/* flex-wrap: an extra that asks for a line of its own on a phone (Set up's count and Hide) takes one. */}
+      <header className="flex flex-wrap items-center gap-3">
         {badge ?? (
           <span aria-hidden className="grid size-9 flex-none place-items-center rounded-full bg-accent-soft text-accent-ink">
             <Icon name={icon} size={20} />

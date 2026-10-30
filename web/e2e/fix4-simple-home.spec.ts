@@ -89,7 +89,7 @@ test.describe("desktop", () => {
   test("qa-simple-home-9, -16: a commenter's fixes sit in one even row, who decides said once; nothing waiting is one line", async ({ page }) => {
     // fails_when: "<name> decides" repeats on every row, the buttons stack in a ragged column, or two empty cards and 0 tiles lead the page
     await signIn(page, COMMENTER, "simple-home");
-    await expect(home(page).getByTestId("home-broken-deciders")).toHaveText(/^You propose these fixes; .+ (decide|decides)\.$/);
+    await expect(home(page).getByTestId("home-broken-deciders")).toHaveText(/^.+ (decide|decides) the fixes you propose here\.$/);
     await expect(home(page).getByTestId("home-broken").filter({ hasText: /\bdecides?\b/ })).toHaveCount(0);
     for (const row of await home(page).getByTestId("home-broken").getByTestId("home-row-actions").all()) {
       const boxes = await row.getByRole("button").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ y: Math.round(r.top), h: Math.round(r.height) })));
@@ -182,7 +182,7 @@ test.describe("a new company", () => {
     await expect(title).toBeVisible();
     const lines = await title.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
     expect(lines).toBeLessThanOrEqual(2);
-    const under = card.getByTestId("home-setup-count-phone");
+    const under = card.getByTestId("home-setup-count");
     await expect(under.getByTestId("home-setup-progress")).toBeVisible();
     await expect(under.getByRole("button", { name: "Hide" })).toBeVisible();
     expect((await under.boundingBox())!.y).toBeGreaterThan((await title.boundingBox())!.y);
