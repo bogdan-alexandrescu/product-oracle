@@ -1321,6 +1321,11 @@ class ChatCardOut(BaseModel):
     # fix5-cut-dependents: an open cut's dependents, the titles of every item that waits on
     # it (transitively) and is not cut: what "Cut it and its dependents" cuts with it.
     dependents: list[str] = []
+    # Their ids, in the same order: the apply sends them back (``ChatApplyIn.dependents``).
+    dependent_ids: list[uuid.UUID] = []
+    # Review major: what "Cut it and its dependents" does for the reader: "apply" when they
+    # decide every item it cuts, "propose" when not, None when they may not (``why_not``).
+    may_with_dependents: Literal["apply", "propose"] | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1423,6 +1428,9 @@ class ChatApplyIn(BaseModel):
     # fix5-cut-dependents: a cut card applies as cut_with_dependents (the card's dependents
     # cut with it, one change).
     with_dependents: bool = False
+    # With it, the ids of the dependents the card listed (``ChatCardOut.dependent_ids``): a
+    # roadmap that has changed since is 409, so nothing unseen is cut.
+    dependents: list[uuid.UUID] | None = None
 
 
 class ChatApplyOut(BaseModel):

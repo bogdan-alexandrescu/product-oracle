@@ -58,8 +58,11 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``keep_both`` (S7): kept_both; the draft's look-alikes are no longer offered.
 - ``cut_with_dependents`` (fix5-cut-dependents): the item and every item that waits on it,
   transitively (``dependents``), cut as one change, undone as one; ``before`` is the
-  item's own ``{"cut"}`` as seen; keyed by item id like the fixes; ``target.titles`` names
-  every item it cut, the item first.
+  item's own ``{"cut"}`` as seen, and optionally ``"dependents"``, the ids of the
+  dependents the caller saw (409 when the cut would take others); keyed by item id like
+  the fixes; ``target.titles`` names every item it cut, the item first. It applies only
+  when the caller decides every item it cuts (:func:`decides_all`); else it is proposed to
+  the people who decide them all (:func:`cut_route`), else the company's owners.
 """
 
 import uuid
@@ -351,6 +354,35 @@ async def routed_to(db: AsyncSession, entry: service.Entry, read_: service.Read)
     return service.decider_ids(entry, read_.deciders) or await _company_owners(db)
 
 
+def decides_all(principal: Any, entries: list[service.Entry], deciders: dict) -> bool:
+    """Review major: a cut with its dependents is the caller's to apply (or accept) only when
+    they decide every item it cuts (service.can_decide, item by item)."""
+    return bool(entries) and all(service.can_decide(principal, e, deciders) for e in entries)
+
+
+def cut_route(entries: list[service.Entry], deciders: dict) -> list[uuid.UUID]:
+    """Who decides every item of a cut with its dependents: the deciders all its items share
+    (service.decider_ids), else [] (the company's owners)."""
+    common: list[uuid.UUID] | None = None
+    for e in entries:
+        ids = service.decider_ids(e, deciders)
+        common = ids if common is None else [i for i in common if i in ids]
+    return common or []
+
+
+def cut_entries(c: SimpleChange, by_id: dict[uuid.UUID, service.Entry]) -> list[service.Entry]:
+    """The items a cut_with_dependents change cuts (its ``after``'s keys), as read."""
+    out = []
+    for key in c.after or {}:
+        try:
+            e = by_id.get(uuid.UUID(str(key)))
+        except ValueError:
+            e = None
+        if e is not None:
+            out.append(e)
+    return out
+
+
 def current_route(
     c: SimpleChange, by_id: dict[uuid.UUID, service.Entry], deciders: dict, owners: list
 ) -> list[uuid.UUID]:
@@ -358,6 +390,9 @@ def current_route(
     was made); its stored route when its item is not read."""
     if c.status != "proposed" or c.op == "edit_line" or c.op in KEY_DATE_OPS:
         return list(c.routed_to or [])
+    if c.op == CUT_ALL:
+        cut = cut_entries(c, by_id)
+        return (cut_route(cut, deciders) or list(owners)) if cut else list(c.routed_to or [])
     item_id = c.target.get("item_id")
     if not item_id:
         return list(owners)
@@ -557,6 +592,13 @@ async def _plan(
         cut = [entry, *dependents(entry, by_id)]
         if len(cut) == 1:
             raise ChangeError(422, "No item depends on this one: cut it alone")
+        seen_ids = body.before.get("dependents")
+        now_ids = [str(e.row.id) for e in cut[1:]]
+        if seen_ids is not None and sorted(map(str, seen_ids)) != sorted(now_ids):
+            # Review minor: never cut a dependent the caller was not shown.
+            raise await _conflict(
+                db, {"dependents": now_ids}, set(now_ids), "Changed since you saw it"
+            )
         target["titles"] = [e.row.title for e in cut]
         before = {str(e.row.id): read(e.row, ("cut",), target) for e in cut}
         after = {str(e.row.id): {"cut": True} for e in cut}
@@ -893,7 +935,12 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     entry = read_.by_id().get(ids[0])
     if entry is None:
         raise ChangeError(404, "No such roadmap item")
-    applies = service.can_decide(principal, entry, read_.deciders)
+    cut = [entry, *dependents(entry, read_.by_id())] if body.op == CUT_ALL else None
+    applies = (
+        decides_all(principal, cut, read_.deciders)
+        if cut is not None
+        else service.can_decide(principal, entry, read_.deciders)
+    )
     session = await _session_for_change(db, me, body.session_id, applies, now)
     entry, target, before, after = await _plan(db, principal, body, read_)
     c = SimpleChange(
@@ -907,7 +954,11 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
         by=me,
         at=now,
         reason=body.reason,
-        routed_to=[] if applies else await routed_to(db, entry, read_),
+        routed_to=[]
+        if applies
+        else (cut_route(cut, read_.deciders) or await _company_owners(db))
+        if cut is not None
+        else await routed_to(db, entry, read_),
     )
     if applies:
         await _apply(db, c, after, principal, session)  # type: ignore[arg-type]
@@ -960,7 +1011,12 @@ async def decide(
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
         raise ChangeError(404, "No such change")
-    if not service.can_decide(principal, entry, read_.deciders):
+    by_id = read_.by_id()
+    if not (
+        decides_all(principal, cut_entries(c, by_id), read_.deciders)
+        if c.op == CUT_ALL
+        else service.can_decide(principal, entry, read_.deciders)
+    ):
         raise ChangeError(
             403,
             "Only an owner or the roadmap's decider (with no decider, its owner) decides proposals",
@@ -1094,6 +1150,8 @@ class _View:
             return targets.may_decide(self.principal, c, self)
         if c.op in one_pager.OPS:
             return one_pager.may_decide(self.principal, c)
+        if c.op == CUT_ALL:
+            return decides_all(self.principal, cut_entries(c, self.by_id), self.deciders)
         e = self.entry(c)
         return e is not None and service.can_decide(self.principal, e, self.deciders)
 

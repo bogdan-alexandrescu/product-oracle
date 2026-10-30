@@ -150,6 +150,7 @@ async def apply_simple_chat_card(
                 body.fix if body is not None else None,
                 body.values if body is not None else None,
                 body.with_dependents if body is not None else False,
+                body.dependents if body is not None else None,
             ),
         )
     return ChatApplyOut(card=card, result=result)
