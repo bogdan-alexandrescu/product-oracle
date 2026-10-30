@@ -38,12 +38,12 @@ async function meetings(page: Page) {
   await expect(page.getByRole("region", { name: "Upcoming" })).toBeVisible();
 }
 
-async function startReview(page: Page) {
+async function startReview(page: Page, also: string[] = ["Commenter"]) {
   await meetings(page);
   await tap(page.getByRole("button", { name: "Start review" }).first());
   const s = sheet(page);
   await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await s.getByRole("checkbox", { name: "Commenter" }).check();
+  for (const who of also) await s.getByRole("checkbox", { name: who, exact: true }).check();
   await tap(s.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 }
@@ -220,7 +220,7 @@ test.describe("desktop", () => {
   });
 
   test("a viewer in a meeting: the chat and the notes hint say what a viewer can do", async ({ page }) => {
-    await startReview(page);
+    await startReview(page, ["Commenter", "Viewer"]);
     const at = new URL(page.url()).pathname;
     await page.goto("/simple/meetings");
     await signOut(page);

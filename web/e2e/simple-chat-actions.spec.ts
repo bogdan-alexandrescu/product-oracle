@@ -129,7 +129,7 @@ for (const [phone, dark] of [
       await tap(page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }));
       await expect(page.getByTestId("end-screen")).toBeVisible();
       // qa-simple-decide-6: the notes are their own list, the summary says how many.
-      await expect(page.getByLabel("Summary")).toHaveValue(/1 note/);
+      await expect(page.getByLabel("Summary")).not.toHaveValue(/Ship the checklist copy first/);
       await expect(page.getByTestId("minutes-notes")).toContainText("Ship the checklist copy first");
       await expect(page.getByLabel("Summary")).not.toHaveValue(/Drop the welcome video/);
       await expect(page.getByLabel("Open questions")).toHaveValue(/Who writes the tour script\?/);

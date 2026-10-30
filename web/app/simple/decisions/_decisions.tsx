@@ -290,7 +290,7 @@ function Filter({ label, value, options, onChange, all }: { label: string; value
     <label className="flex flex-col gap-1 max-[600px]:min-w-[160px] max-[600px]:flex-1">
       <span className="simple-meta">{label}</span>
       <span className="relative flex">
-        <select className="simple-select max-[600px]:w-full max-[600px]:min-w-0" value={value} onChange={(e) => onChange(e.target.value)}>
+        <select className="simple-select max-[600px]:w-full max-[600px]:min-w-0 min-[601px]:max-w-[280px]" value={value} onChange={(e) => onChange(e.target.value)}>
           <option value="">{all}</option>
           {options.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
         </select>
