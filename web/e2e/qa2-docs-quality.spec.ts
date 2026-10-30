@@ -58,7 +58,7 @@ test.describe("desktop", () => {
     await expect(gapHeads.first()).toContainText("no links or citations");
 
     const note = page.getByTestId("evidence-coverage").locator("p").last();
-    await expect(note).toContainText("A red column is a section with no links or citations.");
+    await expect(note).toContainText("A red column is a section with no links or citations, in it or in its subsections");
     await expect(note).not.toContainText(/nor has any section|rejected and superseded|Rendered pages|Per section:/);
     // Two sentences, then when the sources were read.
     const sentences = (await note.innerText()).split(/(?<=\.)\s+/).filter(Boolean);
@@ -164,8 +164,9 @@ test.describe("desktop", () => {
     await expect(keys).toContainText("Slides");
     await expect(keys).toContainText("S");
     await expect(keys).toContainText("Notes");
-    await expect(keys).toContainText("Full screen");
-    await expect(keys.locator("kbd")).toHaveText(["←", "→", "S", "F"]);
+    // qa-docs-63: F is the Full screen button's tooltip, not a second "Full screen" here.
+    await expect(keys).not.toContainText("Full screen");
+    await expect(keys.locator("kbd")).toHaveText(["←", "→", "S"]);
     const mono = await keys.locator("kbd").evaluateAll((els) => els.filter((el) => /mono/i.test(getComputedStyle(el).fontFamily)).length);
     expect(mono).toBe(0);
   });

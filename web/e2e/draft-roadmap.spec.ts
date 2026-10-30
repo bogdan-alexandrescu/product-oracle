@@ -130,15 +130,15 @@ test("Derive and the owner switch by role; unticking the switch persists across 
   await page.goto(URL);
   await expect(status(page).getByRole("button", { name: "Build again" })).toBeVisible();
   const auto = visible(page, "draft-roadmap-auto");
-  const box = auto.getByRole("checkbox", { name: "Update the draft roadmap with each new draft" });
+  const box = auto.getByRole("checkbox", { name: "Refresh this roadmap whenever a new PRD version is drafted" });
   await expect(box).toBeChecked();
-  await auto.getByRole("button", { name: "About updating with each new draft" }).click();
+  await auto.getByRole("button", { name: "About refreshing with each new version" }).click();
   await expect(page.getByText("About $5.50 per draft at standard depth. Runs in the background.").filter({ visible: true })).toBeVisible();
   await box.uncheck();
   await expect(box).not.toBeChecked();
   await expect(box).toBeEnabled();
   await page.reload();
-  await expect(visible(page, "draft-roadmap-auto").getByRole("checkbox", { name: "Update the draft roadmap with each new draft" })).not.toBeChecked();
+  await expect(visible(page, "draft-roadmap-auto").getByRole("checkbox", { name: "Refresh this roadmap whenever a new PRD version is drafted" })).not.toBeChecked();
 });
 
 // Card open-section: protects = a row's "Open PRD section" opens the Document tab of the

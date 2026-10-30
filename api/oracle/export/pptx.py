@@ -311,7 +311,7 @@ def deck_to_pptx(deck: Deck) -> bytes:
             kicker = _textbox(slide, MARGIN, Inches(2.2), width, Inches(0.5))
             _write_runs(
                 kicker.paragraphs[0],
-                [Run("BRIEF", bold=True)],
+                [Run(deck.kicker.upper(), bold=True)],
                 16,
                 heading_font,
                 style["mono"],

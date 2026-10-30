@@ -277,7 +277,14 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
             <span className="font-semibold text-text">Resolution:</span> {item.resolution_note}
           </p>
         )}
-        {item.suggestion && <SuggestionCard suggestion={item.suggestion} canDecide={ctx.canDecide} editing={d?.mode === "edit"} />}
+        {item.suggestion && (
+          <SuggestionCard
+            suggestion={item.suggestion}
+            canDecide={ctx.canDecide}
+            editing={d?.mode === "edit"}
+            heading={ctx.headings.get(item.suggestion.section_key ?? item.section_key ?? "")}
+          />
+        )}
         <p className="tnum mt-1.5 text-[13px] text-text2">
           raised on v{item.raised_on_version}
           {item.addressed_in_version != null && ` · addressed in v${item.addressed_in_version}`}
@@ -306,6 +313,9 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
  * resolved item leaves the Open list at once. Discussions (G1) are the fourth kind, behind
  * their own chip: the document's discussions, never counted as open feedback.
  */
+/** qa-docs-72: the filters show from this many feedback items on. */
+const FILTER_FROM = 3;
+
 export function FeedbackList({
   entries,
   scopeKeys,
@@ -350,7 +360,10 @@ export function FeedbackList({
   const stateCount = (st: FeedbackState) => entries.filter((e) => e.state === st && ofKind(e) && inScope(e)).length;
   const scopeCount = (sc: "section" | "all" | "general") =>
     entries.filter((e) => e.state === filters.state && ofKind(e) && scoped(e, sc)).length;
-  const shown = entries.filter((e) => ofKind(e) && inScope(e) && (e.state === filters.state || kept.has(e.item.id)));
+  // qa-docs-72: with fewer than three items there is nothing worth filtering: no chips, every
+  // item listed (each card says its state).
+  const few = entries.length < FILTER_FROM;
+  const shown = few ? entries : entries.filter((e) => ofKind(e) && inScope(e) && (e.state === filters.state || kept.has(e.item.id)));
 
   const listRef = useRef<HTMLOListElement>(null);
   // Arriving at the open feedback: the first item at the top of the panel, its actions in view.
@@ -407,8 +420,10 @@ export function FeedbackList({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* qa-docs-49: no filters until there is feedback (or a discussion) to filter. */}
-      {nothing ? null : (
+      {/* qa-docs-49: no filters until there is feedback (or a discussion) to filter; qa-docs-72:
+          nor for one or two items (a discussion keeps its own chip). */}
+      {few && !nothing && discussions?.rows?.length ? <div className="flex">{discussionChip}</div> : null}
+      {nothing || few ? null : (
       <div className="flex flex-col gap-2">
         <FilterChips<FeedbackState>
           label="Feedback state"
@@ -430,11 +445,14 @@ export function FeedbackList({
             ]}
           />
           {discussionChip}
-          <KindSelect filters={filters} setFilters={setFilters} />
+          {/* qa-docs-72: a kind filter only when there are kinds to tell apart. */}
+          {(filters.kind !== "all" || new Set(entries.map((e) => e.kind)).size > 1) && (
+            <KindSelect filters={filters} setFilters={setFilters} />
+          )}
         </div>
       </div>
       )}
-      {nothing ? (
+      {nothing || entries.length === 0 ? (
         <Empty testId="feedback-empty">No feedback yet</Empty>
       ) : shown.length === 0 ? (
         <Empty testId="feedback-empty">

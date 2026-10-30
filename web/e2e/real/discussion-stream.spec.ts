@@ -80,7 +80,7 @@ test("Oracle's reply streams onto the page through Next's proxy before it is don
   await page.goto(`/documents/${DOC}/v/1`);
   const problem = await openSection(page, "problem");
   await problem.getByRole("button", { name: /^Actions for .*Problem$/ }).click();
-  await problem.getByRole("menuitem", { name: "Discuss this section" }).click();
+  await problem.getByRole("menuitem", { name: "Start a discussion" }).click();
   await page.getByTestId("start-discussion").filter({ visible: true }).getByRole("button", { name: "Start discussion" }).click();
   const thread = page.getByTestId("discussion-thread").filter({ visible: true });
   await expect(thread).toBeVisible();

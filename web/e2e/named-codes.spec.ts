@@ -206,7 +206,7 @@ test("Before drafting's Goals draws each goal with its chip, never a place code"
   // The goals load after the form draws (Loading meanwhile): all() lists only what is drawn (#520).
   await expect(door.first()).toBeVisible();
   for (const box of await door.all()) await box.check();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
   const goals = page.getByTestId("intake-goals");

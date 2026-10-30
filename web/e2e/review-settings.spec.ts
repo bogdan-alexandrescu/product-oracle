@@ -84,7 +84,7 @@ test("an approver sets a section's owner, reviewers and due date in place", asyn
   await expect(panel.locator('[data-section-key="problem"]')).toContainText("Due Nov 2");
 });
 
-test("an approver asks for feedback, then closes and reopens the campaign", async ({ page }) => {
+test("an approver asks for feedback, then ends and reopens the campaign (qa-docs-30)", async ({ page }) => {
   await asRole(page, "approver");
   await login(page);
   await page.goto(DOC);
@@ -99,7 +99,7 @@ test("an approver asks for feedback, then closes and reopens the campaign", asyn
   await expect(row).toContainText("Open");
   await expect(row).toContainText("v2");
 
-  await row.getByRole("button", { name: "Close Pilot clinic read-through" }).click();
+  await row.getByRole("button", { name: "End campaign Pilot clinic read-through" }).click();
   await expect(row).toContainText("Closed");
   await row.getByRole("button", { name: "Reopen Pilot clinic read-through" }).click();
   await expect(row).toContainText("Open");
@@ -130,7 +130,7 @@ test("a viewer reads the review setup with no controls they can never use (#370 
   await expect(campaigns).toContainText("Company-wide feedback");
   await expect(campaigns.getByTestId("review-reason")).toHaveCount(0);
   await expect(campaigns.getByRole("button", { name: "Ask for feedback" })).toHaveCount(0);
-  await expect(campaigns.getByRole("button", { name: /^(Close|Reopen) / })).toHaveCount(0);
+  await expect(campaigns.getByRole("button", { name: /^(End campaign|Reopen) / })).toHaveCount(0);
 });
 
 test("an approver can assign sections and run campaigns, and sees the review settings without edit controls", async ({ page }) => {
@@ -274,7 +274,7 @@ test("a double click on Close closes the campaign once, with no conflict", async
   const panel = page.getByTestId("campaigns");
   const row = panel.getByRole("listitem").filter({ hasText: "Company-wide feedback" });
   await expect(row).toContainText("Open");
-  const close = row.getByRole("button", { name: "Close Company-wide feedback" });
+  const close = row.getByRole("button", { name: "End campaign Company-wide feedback" });
   // The button's disabled state is short-lived: note whether it was ever disabled.
   await close.evaluate((el) => {
     const w = window as unknown as { wasDisabled?: boolean };

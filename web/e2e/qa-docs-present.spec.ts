@@ -56,15 +56,16 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("qa-docs-6: the slide scales to the screen's width, its title and footer in full", async ({ page }) => {
+  test("qa-docs-6: the slide fills the screen's width, its title and footer in full", async ({ page }) => {
     await login(page);
     await page.goto("/documents/saved-carts/v/2/present");
     await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
     const slide = (await page.getByTestId("audience-view").locator(".current-slide").boundingBox())!;
     expect(slide.x).toBeGreaterThanOrEqual(0);
     expect(slide.x + slide.width).toBeLessThanOrEqual(390);
-    // 16:9, letterboxed: the whole slide shows.
-    expect(Math.abs(slide.width / slide.height - 16 / 9)).toBeLessThan(0.05);
+    // qa-docs-10: portrait, as wide as the screen (no small letterboxed 16:9 box).
+    expect(slide.width).toBeGreaterThan(360);
+    expect(slide.height).toBeGreaterThan(slide.width);
     for (const part of [page.getByTestId("audience-view").locator(".slide-title").first(), banner(page)]) {
       const box = (await part.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);

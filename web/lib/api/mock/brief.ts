@@ -138,6 +138,8 @@ type DeckInput = {
   document_id: string;
   slug: string;
   title: string;
+  /** The document's kind: the title slide's kicker (export/deck.py KICKER, qa-docs-63). */
+  kind?: string;
   number: number;
   latest: number;
   status: string;
@@ -152,6 +154,16 @@ type DeckInput = {
    * sections in no group keep a slide each, after the groups.
    */
   slides?: string[][];
+};
+
+const KICKER: Record<string, string> = {
+  prd: "PRD",
+  roadmap: "Roadmap",
+  spec: "Spec",
+  vision: "Vision",
+  strategy: "Strategy",
+  update: "Update",
+  pricing: "Pricing memo",
 };
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -202,7 +214,7 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
       kind: "title",
       heading: d.title,
       expand: [],
-      inner: `<p class="slide-kicker">Brief</p><h1 class="slide-title">${esc(d.title)}</h1><p class="slide-subtitle">Version ${d.number} · ${esc(capitalise(d.status.replace("_", " ")))}</p>${sourceLabel ? `<p class="slide-source">${esc(sourceLabel)}</p>` : ""}`,
+      inner: `<p class="slide-kicker">${esc(KICKER[d.kind ?? ""] ?? "Brief")}</p><h1 class="slide-title">${esc(d.title)}</h1><p class="slide-subtitle">Version ${d.number} · ${esc(capitalise(d.status.replace("_", " ")))}</p>${sourceLabel ? `<p class="slide-source">${esc(sourceLabel)}</p>` : ""}`,
     },
   ];
   const grouped = new Set<string>();

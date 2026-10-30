@@ -188,9 +188,12 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
           {report.affected.length === 0 ? (
             <Panel>
               <Empty icon="check" testId="impact-empty">
-                {source.kind === "version"
-                  ? `No outputs depend on what v${source.n} changed. Nothing to regenerate. When a roadmap, spec or other output is built from this version, Impact shows what a new version would change for it.`
-                  : "No outputs depend on this. Nothing to regenerate."}
+                {/* qa-docs-54: a readable measure, not one line across the page. */}
+                <span data-testid="impact-empty-text" className="mx-auto block max-w-[70ch]">
+                  {source.kind === "version"
+                    ? `No outputs depend on what v${source.n} changed. Nothing to regenerate. When a roadmap, spec or other output is built from this version, Impact shows what a new version would change for it.`
+                    : "No outputs depend on this. Nothing to regenerate."}
+                </span>
               </Empty>
             </Panel>
           ) : view === "lineage" ? (

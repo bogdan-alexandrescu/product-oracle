@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 
 import { Button, Chip, Icon, Panel, Sheet } from "@/components/ds";
 import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicker";
@@ -141,7 +141,8 @@ export function ReviewSettingsButton({ doc, sections, onSaved }: { doc: string; 
       <Button icon="settings" onClick={() => setOpen(true)}>
         Review settings
       </Button>
-      <Sheet open={open} title="Review settings" onClose={() => setOpen(false)} testId="sheet-review-settings">
+      {/* qa-docs-28: a side panel on a wide screen, the bottom sheet on a phone. */}
+      <Sheet open={open} title="Review settings" onClose={() => setOpen(false)} testId="sheet-review-settings" side>
         {open && (
           <PolicyForm
             doc={doc}
@@ -518,8 +519,9 @@ export function Campaigns({ doc }: { doc: string }) {
       count={rows.length}
       testId="campaigns"
       tools={
-        canEdit && (
-          <Button icon="comment" onClick={() => setAsking((x) => !x)} aria-expanded={asking}>
+        // qa-docs-26: while the form is open, its own Send and Cancel are the way out.
+        canEdit && !asking && (
+          <Button icon="comment" onClick={() => setAsking(true)}>
             Ask for feedback
           </Button>
         )
@@ -549,8 +551,9 @@ export function Campaigns({ doc }: { doc: string }) {
             </span>
             <span className="flex-1" />
             {canEdit && (
-              <Button variant="ghost" aria-label={`${c.status === "open" ? "Close" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => toggle(c)}>
-                {c.status === "open" ? "Close" : "Reopen"}
+              // qa-docs-30: what the action does to the campaign, not a bare Close.
+              <Button variant="ghost" aria-label={`${c.status === "open" ? "End campaign" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => toggle(c)}>
+                {c.status === "open" ? "End campaign" : "Reopen"}
               </Button>
             )}
           </li>
@@ -560,7 +563,11 @@ export function Campaigns({ doc }: { doc: string }) {
   );
 }
 
+/** Why a campaign's Send waits (qa-docs-5). */
+const NO_TITLE = "Add a title to send";
+
 function CampaignForm({ doc, onDone, onCancel }: { doc: string; onDone: () => Promise<void>; onCancel: () => void }) {
+  const hintId = useId();
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [due, setDue] = useState("");
@@ -602,19 +609,27 @@ function CampaignForm({ doc, onDone, onCancel }: { doc: string; onDone: () => Pr
         <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
       </label>
       {error && <InlineError>{error}</InlineError>}
-      <div className="flex items-center gap-2">
-        <Button type="submit" variant="solid" icon="check" disabled={saving || !title.trim()}>
+      <div className="flex flex-wrap items-center gap-2">
+        {/* qa-docs-5, qa-docs-26: a disabled Send says what it waits for, right beside it and
+            tied to it (its description), so the reason reads as Send's own hint. */}
+        <Button
+          type="submit"
+          variant="solid"
+          icon="check"
+          disabled={saving || !title.trim()}
+          aria-describedby={!title.trim() ? hintId : undefined}
+          title={!title.trim() ? NO_TITLE : undefined}
+        >
           {saving ? "Sending…" : "Send"}
         </Button>
-        <Button variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-        {/* qa-docs-5: a disabled Send says what it waits for. */}
         {!title.trim() && (
-          <span data-testid="campaign-send-hint" className="text-[13px] text-text2">
-            Add a title to send
+          <span id={hintId} data-testid="campaign-send-hint" className="text-[13px] text-text2">
+            {NO_TITLE}
           </span>
         )}
+        <Button variant="ghost" className="ml-auto" onClick={onCancel}>
+          Cancel
+        </Button>
       </div>
     </form>
   );

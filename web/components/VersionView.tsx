@@ -1,5 +1,6 @@
 "use client";
 
+import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
@@ -9,7 +10,7 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { PricingDecide } from "@/components/PricingDecide";
-import { Button, Chip, Empty, Icon, InfoTip, LinkButton, NotFoundPanel, Page, PageHeader, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
+import { Button, Chip, Empty, Icon, InfoTip, LinkButton, NotFoundPanel, Page, PageHeader, SegmentedControl, Sheet } from "@/components/ds";
 import { DocumentNotFound } from "@/components/DocumentNotFound";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
@@ -846,6 +847,13 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     highlights: highlights.get(s.section_key) ?? NO_HIGHLIGHTS,
     activeCommentId: activeId,
     readOnly: readOnly || !canVerdict,
+    // qa-docs-77: who may review, beside the state (an approved version's banner says why it is closed).
+    readOnlyNote:
+      readOnly || canVerdict || !capsReady
+        ? undefined
+        : canDecide
+          ? "Owners review an update's sections."
+          : "Approvers review sections.",
     // H8: an update's Asks section is the owner's to write; highlighted until it is.
     placeholder: isUpdate && s.section_key === "asks" && /^\s*Owner to fill/m.test(s.body_md),
     changedLock: changedLocks.has(s.section_key),
@@ -1104,11 +1112,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           Quality
         </LinkButton>
       )}
-      {document_.kind === "prd" && n === latest && !canDecide && (
-        <LinkButton icon="check" href={`/documents/${doc}/publish`}>
-          Check readiness
-        </LinkButton>
-      )}
+      {/* qa-docs-64: the toolbar is the same for every role; publishing (and its readiness
+          check) is the header's Publish, shown to whoever may approve (can()). */}
       {document_.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
     </>
   );
@@ -1145,6 +1150,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         <PageHeader
           testId="doc-header"
           phoneTitle
+          phoneActionStart
           back={<DocCrumb doc={document_} withTitle={false} />}
           title={
             titleMarks.length ? (
@@ -1173,7 +1179,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </Chip>
               )}
               {/* #370: someone who can do nothing on the version reads it with View only. */}
-              {capsReady && !canComment && !canDecide && !canApprove && <ViewOnly />}
+              {capsReady && <RoleBadge />}
             </>
           }
           action={
@@ -1310,6 +1316,18 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </InfoTip>
               </>
             )}
+          </p>
+        )}
+        {/* qa-docs-72: Brief / Full and Present need a brief layer, which a version written
+            without one (an older import) has not: say so, rather than the tools just missing. */}
+        {onDocument && !hasBrief && document_?.kind === "prd" && version && sections.length > 0 && (
+          <p data-testid="view-note" className="mb-3 flex flex-wrap items-center gap-1.5 text-sm text-text2">
+            <span className="tnum whitespace-nowrap">
+              <b className="font-semibold text-text">Full document</b>: all {sections.length} sections
+            </span>
+            <InfoTip label="no brief" side="bottom">
+              This version was written without a brief, so it has no Brief view and no Present.
+            </InfoTip>
           </p>
         )}
 

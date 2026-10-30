@@ -123,7 +123,7 @@ async function draftSheet(page: Page, title: string) {
   await page.goto("/documents/new?kind=prd");
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Teams pay through a slow manual invoice. Billing should be self-serve.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });

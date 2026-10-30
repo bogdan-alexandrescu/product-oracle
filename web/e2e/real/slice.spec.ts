@@ -51,7 +51,7 @@ test("the slice: a brief becomes a published PRD and a roadmap", async ({ page }
   await page.getByRole("link", { name: "New PRD" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill(TITLE);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   const intakeId = page.url().split("/intakes/")[1];
   await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();

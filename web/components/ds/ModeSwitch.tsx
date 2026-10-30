@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useLayoutEffect } from "react";
 
 import { DETAILED_HOME, modeOf, SIMPLE_HOME, saveMode, switchTarget, type Mode } from "@/lib/experience";
+import { leave } from "@/lib/leave-guard";
 import { useMe } from "@/lib/me";
 
 import { onRadioKeys, radioTabIndex } from "./radio-keys";
@@ -63,8 +64,11 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
   // the person lands next time), so a slow save never makes the click look dead.
   function choose(mode: Mode) {
     if (mode === current) return;
-    void saveMode(mode);
-    router.push(switchTarget(pathname, mode, documentHome));
+    // Typed work on the page (New PRD) asks first (lib/leave-guard).
+    leave(() => {
+      void saveMode(mode);
+      router.push(switchTarget(pathname, mode, documentHome));
+    });
   }
 
   const rail = placement !== "sheet";

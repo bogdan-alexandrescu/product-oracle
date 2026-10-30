@@ -45,7 +45,7 @@ test("owner: thirteen criteria with rules, model, people and agreement side by s
   await expect(scope.getByTestId("model-cell")).toHaveText("Critical");
   await expect(scope.getByTestId("people-cell")).toContainText("1 critical");
   await expect(scope.getByTestId("people-cell")).toContainText("1 warning");
-  await expect(scope.getByTestId("agreement-cell")).toHaveText("Model agrees · 1/2");
+  await expect(scope.getByTestId("agreement-cell")).toHaveText(/^Model agrees\s*People 1\/2$/);
   await expect(row(page, "blocker_feasibility").getByTestId("agreement-cell")).toHaveText("Model disagrees");
   await expect(row(page, "alternatives_tradeoffs").getByTestId("model-cell")).toHaveText("Skipped");
   await expect(row(page, "security_policy").getByTestId("model-cell")).toHaveText("Rules only");
@@ -200,7 +200,7 @@ test("approver: no model review yet, queue one, the job runs and the model colum
   await expect(page.getByTestId("no-model-review")).toHaveText(/No model review for v2 yet\./);
   await expect(row(page, "problem_clarity").getByTestId("model-cell")).toHaveText("No model review");
   await row(page, "problem_clarity").click();
-  await expect(inspector(page).getByTestId("stat-people-agree")).toContainText("—");
+  await expect(inspector(page).getByTestId("stat-people-agree")).toContainText("Rate it below");
   await expect(inspector(page)).toContainText("No human ratings yet");
 
   await page.getByTestId("page-queue-review").click();
@@ -298,14 +298,13 @@ test("loading: the criteria table draws placeholder rows first", async ({ page }
 });
 
 test("reached from the version page and from Publish", async ({ page }) => {
-  // A commenter sees "Check readiness" beside the Quality link.
+  // qa-docs-64: a commenter's toolbar is the owner's: Quality, and no extra "Check readiness".
   await page.addInitScript(([k]) => localStorage.setItem(k, "commenter"), [MOCK_ROLE_KEY] as const);
   await login(page);
   await page.goto("/documents/team-workspaces/v/2");
-  // The Quality link does not wear the "Check readiness" link's icon.
   const quality = page.getByRole("link", { name: "Quality" });
-  const readinessIcon = await page.getByRole("link", { name: "Check readiness" }).locator("svg").innerHTML();
-  expect(await quality.locator("svg").innerHTML()).not.toBe(readinessIcon);
+  await expect(quality).toBeVisible();
+  await expect(page.getByRole("link", { name: "Check readiness" })).toHaveCount(0);
   await quality.click();
   await expect(page).toHaveURL(/\/documents\/team-workspaces\/v\/2\/quality$/);
   await expect(page.getByTestId("criterion-row")).toHaveCount(13);

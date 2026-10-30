@@ -57,7 +57,7 @@ test("qa-onboarding-5: a new company with no approved baseline is offered only B
   await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses at checkout");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Returning buyers retype their address at every checkout.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });

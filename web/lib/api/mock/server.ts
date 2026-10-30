@@ -654,8 +654,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     warnings: [],
     notes: [],
     imported_by: (seed.by ?? AGENT_TRACK).id,
-    // As the API names a token's import: "API token agent-track".
-    imported_by_name: seed.by ? seed.by.name : `API token ${AGENT_TRACK.name}`,
+    // As the API names a token's import (qa-docs-23): an integration, never the token's name.
+    imported_by_name: seed.by ? seed.by.name : "An integration",
     approved_at: null,
     approval_lapses: [],
     created_at: seed.created_at,
@@ -5130,7 +5130,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     findVersion: (ref, n) => {
       const doc = findDocument(db, ref);
       const v = doc && findVersion(db, doc, n);
-      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id } : null;
+      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id, authorId: v.imported_by ?? null } : null;
     },
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
     queueReview: (documentId, n) => queueQualityReview(llm, documentId, n),
@@ -6041,6 +6041,7 @@ function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | unde
         document_id: doc.id,
         slug: doc.slug,
         title: doc.title,
+        kind: doc.kind,
         number: v.number,
         latest: versions[versions.length - 1].number,
         status: v.approved_at ? "approved" : doc.status,

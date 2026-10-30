@@ -42,7 +42,7 @@ for (const [name, viewport] of [
     await page
       .getByRole("textbox", { name: "What problem does it solve?" })
       .fill("Returning buyers retype their address at every checkout.");
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("button", { name: "Continue" }).first().click();
     await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
     await page.goto("/documents");

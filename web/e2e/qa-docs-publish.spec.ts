@@ -51,7 +51,7 @@ for (const viewport of [
       // since lost its schedule basis.
       await open(page, "usage-alerts-roadmap", "owner", "approved-plan");
       await expect(page.getByTestId("published-chip")).toHaveText("Published v1");
-      await expect(page.getByTestId("blocks-chip")).toHaveText("0 blocks");
+      await expect(page.getByTestId("blocks-chip")).toHaveText("Not blocked");
       await expect(page.getByTestId("block-row")).toHaveCount(0);
     });
 
@@ -59,7 +59,7 @@ for (const viewport of [
       page,
     }) => {
       await open(page, "saved-carts");
-      await expect(page.getByTestId("blocks-chip")).toHaveText("0 blocks");
+      await expect(page.getByTestId("blocks-chip")).toHaveText("Not blocked");
       const headline = page.getByTestId("publish-ready");
       await expect(headline).toHaveText(
         /^Publishable, but (\d+) sections are not reviewed and 1 advisory check is critical$/,

@@ -1,5 +1,6 @@
 "use client";
 
+import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -27,7 +28,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { ORACLE_WORK } from "@/components/JobsPanel";
-import { RequestSpecDialog, SPEC_STATE, specHref, useSpecs } from "@/components/RequestSpec";
+import { RequestSpecDialog, SPEC_STATE, specHref, useSpecs, type SpecSummary } from "@/components/RequestSpec";
 import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/components/ReviewSetup";
 import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -36,7 +37,7 @@ import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
-import { useQuery } from "@/lib/use-query";
+import { useQuery, type Query } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
 /** A template or theme beside the title, by its name: a small hairline pill. */
@@ -113,7 +114,9 @@ function versionColumns(doc: string, kind: string | null | undefined, latest: nu
       phone: "action",
       cell: (v) =>
         v.number > 1 ? (
-          <Link href={`/documents/${doc}/diff?from=${v.number - 1}&to=${v.number}`} className="text-accent-ink hover:underline">
+          // qa-docs-25: the link colour (accent), which reads as a link in dark mode too, where
+          // accent-ink is a near-white tint.
+          <Link href={`/documents/${doc}/diff?from=${v.number - 1}&to=${v.number}`} className="text-accent hover:underline">
             Diff from v{v.number - 1}
           </Link>
         ) : (
@@ -206,20 +209,71 @@ function VersionInspector({
   );
 }
 
-/** The PRD's tech briefs, one per feature (F5-1), each opening its brief page. Hidden until there is one; a failed load shows its error. */
-function TechBriefs({ doc }: { doc: string }) {
+type LatestOf = (slug: string | null | undefined) => number | null;
+
+/** A spec document's latest version, by its slug (qa-docs-66): only fetched when a spec has one. */
+function useSpecLatest(specs: SpecSummary[]): LatestOf {
+  const needDocs = specs.some((s) => s.document_slug);
+  const specDocs = useQuery(`documents|spec|${needDocs}`, () =>
+    needDocs ? unwrap(api.GET("/v1/documents", { params: { query: { kind: "spec" } } })) : Promise.resolve(null),
+  );
+  return (slug: string | null | undefined) => specDocs.data?.find((x) => x.slug === slug)?.latest_version ?? null;
+}
+
+/** A requested spec's row: its title, depth, state, freshness and Open spec. */
+function SpecRow({ s, latestOf }: { s: SpecSummary; latestOf: LatestOf }) {
+  const state = SPEC_STATE[s.state];
+  const fresh = s.freshness && s.freshness !== "fresh" && s.state !== "stale" ? FRESHNESS[s.freshness as keyof typeof FRESHNESS] : null;
+  // qa-docs-66: a spec opens on its document's latest version (an edit after the run adds one
+  // the spec's own record does not count).
+  const latest = latestOf(s.document_slug);
+  return (
+    <li data-testid="engineering-spec" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+      <span className="min-w-0 font-semibold break-words">{s.request.title}</span>
+      <span className="text-sm text-text2">{s.depth === "full" ? "Full engineering spec" : "Tech brief"}</span>
+      <span className="flex-1" />
+      <Chip kind={state.kind} dot>
+        {state.label}
+      </Chip>
+      {fresh && <Chip kind={fresh.kind}>{fresh.label}</Chip>}
+      <Link
+        href={latest != null ? `/documents/${s.document_slug}/v/${latest}` : specHref(s)}
+        aria-label={`Open ${s.request.title}`}
+        className="text-sm font-medium text-accent-ink hover:underline"
+      >
+        Open spec
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * The PRD's tech briefs (F5-1, one per feature, each opening its brief page), and the specs
+ * requested at the Tech brief depth (qa-docs-29: a technical brief is listed with the tech
+ * briefs, not under Engineering specs). Hidden until there is one; a failed load shows its error.
+ */
+function TechBriefs({ doc, specs, latestOf }: { doc: string; specs: SpecSummary[]; latestOf: LatestOf }) {
   const q = useQuery(`tech-briefs|${doc}`, () => unwrap(api.GET("/v1/tech-briefs", { params: { query: { prd: doc } } })));
   const briefs = q.data ?? [];
   if (q.error) {
     return (
-      <Panel title="Tech briefs" testId="tech-briefs" bodyClassName="p-4">
-        <ErrorNote>{q.error}</ErrorNote>
+      <Panel title="Tech briefs" testId="tech-briefs">
+        <div className="p-4">
+          <ErrorNote>{q.error}</ErrorNote>
+        </div>
+        {specs.length > 0 && (
+          <ul className="divide-y divide-line border-t border-line">
+            {specs.map((s) => (
+              <SpecRow key={s.request.id} s={s} latestOf={latestOf} />
+            ))}
+          </ul>
+        )}
       </Panel>
     );
   }
-  if (briefs.length === 0) return null;
+  if (briefs.length + specs.length === 0) return null;
   return (
-    <Panel title="Tech briefs" count={briefs.length} testId="tech-briefs">
+    <Panel title="Tech briefs" count={briefs.length + specs.length} testId="tech-briefs">
       <ul className="divide-y divide-line">
         {briefs.map((b) => (
           <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
@@ -233,33 +287,30 @@ function TechBriefs({ doc }: { doc: string }) {
             </Chip>
           </li>
         ))}
+        {specs.map((s) => (
+          <SpecRow key={s.request.id} s={s} latestOf={latestOf} />
+        ))}
       </ul>
     </Panel>
   );
 }
 
 /**
- * F5 lane 3: the PRD's engineering specs, newest first, each with its state, freshness and
+ * F5 lane 3: the PRD's full engineering specs, newest first, each with its state, freshness and
  * Open; Request spec (approvers and owners, once a version is approved) picks one of the
- * PRD's approved roadmap items and opens the Request spec dialog.
+ * PRD's approved roadmap items and opens the Request spec dialog. A spec requested at the
+ * Tech brief depth is listed under Tech briefs (qa-docs-29).
  */
-function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean }) {
+function EngineeringSpecs({ doc, approved, q, latestOf }: { doc: string; approved: boolean; q: Query<SpecSummary[]>; latestOf: LatestOf }) {
   const { can } = useMe();
-  const q = useSpecs(doc);
   const [open, setOpen] = useState(false);
   const may = approved && can("create_spec_request");
   const plan = useQuery(`plan|approved|specs|${doc}|${open}`, () =>
     open ? unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })) : Promise.resolve(null),
   );
   const items = (plan.data?.items ?? []).filter((i) => i.prd?.slug === doc && i.origin === "approved");
-  const specs = q.data ?? [];
-  // qa-docs-66: a spec opens on its document's latest version (an edit after the run adds one
-  // the spec's own record does not count). Only fetched when the list shows a spec document.
-  const needDocs = specs.some((s) => s.document_slug);
-  const specDocs = useQuery(`documents|spec|${needDocs}`, () =>
-    needDocs ? unwrap(api.GET("/v1/documents", { params: { query: { kind: "spec" } } })) : Promise.resolve(null),
-  );
-  const latestOf = (slug: string | null | undefined) => specDocs.data?.find((x) => x.slug === slug)?.latest_version ?? null;
+  const specs = (q.data ?? []).filter((s) => s.depth === "full");
+  const briefs = (q.data ?? []).length - specs.length;
   return (
     <Panel
       title="Engineering specs"
@@ -278,38 +329,21 @@ function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean })
       ) : specs.length === 0 ? (
         // qa-docs-17: what unlocks a spec, and who asks for one.
         <p data-testid="engineering-specs-empty" className="px-4 py-3 text-text2">
-          {!approved
-            ? can("publish_version")
-              ? "No engineering spec yet. Approve a version to request a spec."
-              : "No engineering spec yet. A spec can be requested once a version is approved."
-            : may
-              ? "No engineering spec yet. Request one for an approved roadmap item."
-              : "No engineering spec yet. An approver or owner can request one."}
+          {briefs > 0
+            ? `No full engineering spec yet. ${briefs === 1 ? "The tech brief requested is" : "The tech briefs requested are"} under Tech briefs.`
+            : !approved
+              ? can("publish_version")
+                ? "No engineering spec yet. Approve a version to request a spec."
+                : "No engineering spec yet. A spec can be requested once a version is approved."
+              : may
+                ? "No engineering spec yet. Request one for an approved roadmap item."
+                : "No engineering spec yet. An approver or owner can request one."}
         </p>
       ) : (
         <ul className="divide-y divide-line">
-          {specs.map((s) => {
-            const state = SPEC_STATE[s.state];
-            const fresh = s.freshness && s.freshness !== "fresh" && s.state !== "stale" ? FRESHNESS[s.freshness as keyof typeof FRESHNESS] : null;
-            return (
-              <li key={s.request.id} data-testid="engineering-spec" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-                <span className="min-w-0 font-semibold break-words">{s.request.title}</span>
-                <span className="text-sm text-text2">{s.depth === "full" ? "Full engineering spec" : "Tech brief"}</span>
-                <span className="flex-1" />
-                <Chip kind={state.kind} dot>
-                  {state.label}
-                </Chip>
-                {fresh && <Chip kind={fresh.kind}>{fresh.label}</Chip>}
-                <Link
-                  href={latestOf(s.document_slug) != null ? `/documents/${s.document_slug}/v/${latestOf(s.document_slug)}` : specHref(s)}
-                  aria-label={`Open ${s.request.title}`}
-                  className="text-sm font-medium text-accent-ink hover:underline"
-                >
-                  Open spec
-                </Link>
-              </li>
-            );
-          })}
+          {specs.map((s) => (
+            <SpecRow key={s.request.id} s={s} latestOf={latestOf} />
+          ))}
         </ul>
       )}
       {open && plan.data && <RequestSpecDialog prd={doc} items={items} onClose={() => setOpen(false)} />}
@@ -339,6 +373,9 @@ export function DocumentOverview({ doc }: { doc: string }) {
   );
   const states = assignableSections(statesQ.data?.sections ?? [], d?.title ?? "");
   const names = useTemplateNames();
+  // F5 lane 3: the PRD's requested specs, split by depth between Tech briefs and Engineering specs (qa-docs-29).
+  const specsQ = useSpecs(d?.kind === "prd" ? doc : null);
+  const specLatest = useSpecLatest(specsQ.data ?? []);
   const templateOnly = isTemplateOnly(d?.kind, d?.versions ?? []);
   // G7 3.3: the panel is about this document (its latest version).
   useScreenSubject(d && versions[0] ? { kind: "document", subject: { document_id: d.id, version: versions[0].number } } : null, d?.title);
@@ -346,7 +383,9 @@ export function DocumentOverview({ doc }: { doc: string }) {
   if (q.error === DOC_MISSING) return <DocumentNotFound />;
   return (
     <div>
-      <DocToolbar doc={d} />
+      {/* qa-docs-24: the title and its status show once, in the header below; the crumb leads back.
+          qa-docs-27: the header's Open latest is the one Open, so the ⋯ menu repeats none. */}
+      <DocToolbar doc={d} withTitle={false} openItem={false} />
       <Page>
         {q.error && <ErrorNote>{q.error}</ErrorNote>}
         {!d && !q.error && <PageSkeleton bare />}
@@ -359,6 +398,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               status={
                 <>
                   <DocStatusChip status={d.status} />
+                  <RoleBadge />
                   {d.template && (
                     <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>
                       Template: {names.template(d.template)}
@@ -411,8 +451,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
                   empty="No versions yet"
                 />
               </Panel>
-              {d.kind === "prd" && <TechBriefs doc={doc} />}
-              {d.kind === "prd" && <EngineeringSpecs doc={doc} approved={d.versions.some((v) => v.approved_at)} />}
+              {d.kind === "prd" && <TechBriefs doc={doc} specs={(specsQ.data ?? []).filter((s) => s.depth !== "full")} latestOf={specLatest} />}
+              {d.kind === "prd" && <EngineeringSpecs doc={doc} approved={d.versions.some((v) => v.approved_at)} q={specsQ} latestOf={specLatest} />}
               {statesQ.error && <ErrorNote>{statesQ.error}</ErrorNote>}
               {statesQ.data && <SectionAssignments doc={doc} states={states} onSaved={statesQ.reload} />}
               {latest != null && <Campaigns doc={doc} />}

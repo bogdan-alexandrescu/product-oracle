@@ -44,7 +44,7 @@ test("suggestion cards: classification, duplicates, edit and accept, and a pushb
   const demand = feedbackItem(page, "how many teams asked");
   const card = demand.getByTestId("suggestion");
   await expect(card).toContainText("Change request");
-  await expect(card).toContainText("Proposed text for #problem");
+  await expect(card).toContainText("Proposed text for 1. Problem");
   await expect(card.getByTestId("suggestion-text")).toContainText("Seven in ten sales calls");
   // O1c: the proposed body carries no citation markers.
   await expect(card.getByTestId("suggestion-text")).not.toContainText("[c:");
@@ -105,7 +105,7 @@ test("an accepted suggestion goes into the next draft: one build, diff preview, 
 
   // Refine section no longer picks accepted suggestions: they wait for Build draft (C1e).
   const problem = await openSection(page, "problem");
-  await sectionAction(problem, "1. Problem", "Refine section 1. Problem");
+  await sectionAction(problem, "1. Problem", "Ask Oracle to rewrite");
   await expect(problem.getByTestId("refine-panel").getByTestId("refine-staged")).toContainText("1 staged");
   await problem.getByTestId("refine-panel").getByRole("button", { name: "Close" }).click();
 
@@ -140,7 +140,7 @@ test("refine from an approver's instruction alone, editing before accepting", as
   await login(page, "approver@example.com");
   await page.goto("/documents/checkout-redesign/v/2");
   const users = await openSection(page, "users");
-  await sectionAction(users, "3. Users and jobs", /^Refine section/);
+  await sectionAction(users, "3. Users and jobs", /^Ask Oracle to rewrite/);
   const refine = users.getByTestId("refine-panel");
   await expect(refine.getByTestId("refine-staged")).toHaveCount(0);
   await refine.getByLabel("Instruction").fill("Name the first-time buyer segment explicitly.");
@@ -157,15 +157,15 @@ test("locked sections offer no refinement", async ({ page }) => {
   await page.goto("/documents/team-workspaces/v/2");
   const scope = await openSection(page, "scope");
   await scope.getByRole("button", { name: "Actions for 3. Scope" }).click();
-  await expect(scope.getByRole("menuitem", { name: /^Refine section/ })).toBeVisible();
+  await expect(scope.getByRole("menuitem", { name: /^Ask Oracle to rewrite/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await scope.getByRole("group", { name: "Verdict for 3. Scope" }).getByRole("button", { name: "Approve" }).click();
-  await scope.getByRole("button", { name: /Save: Approved/ }).click();
+  await scope.getByTestId("verdict-submit").click();
   await expect(scope.getByTestId("verdict-state")).toContainText("Locked");
   // A locked section offers nothing to refine; a commenter-or-above still adds evidence.
   await scope.getByRole("button", { name: "Actions for 3. Scope" }).click();
   await expect(scope.getByRole("menuitem", { name: /^Add evidence link/ })).toBeVisible();
-  await expect(scope.getByRole("menuitem", { name: /^Refine section/ })).toHaveCount(0);
+  await expect(scope.getByRole("menuitem", { name: /^Ask Oracle to rewrite/ })).toHaveCount(0);
 });
 
 test("reports on a version: write, read both tabs, export", async ({ page }) => {
@@ -199,14 +199,14 @@ for (const email of ["viewer@example.com", "commenter@example.com"]) {
     if (email.startsWith("commenter")) {
       await actions.click();
       await expect(page.getByRole("menuitem", { name: /^Add evidence link/ })).toBeVisible();
-      await expect(page.getByRole("menuitem", { name: /^Refine section/ })).toHaveCount(0);
+      await expect(page.getByRole("menuitem", { name: /^Ask Oracle to rewrite/ })).toHaveCount(0);
       await page.keyboard.press("Escape");
     } else {
       await expect(actions).toHaveCount(0);
     }
     await openTab(page, "Feedback");
     const card = feedbackItem(page, "how many teams asked").getByTestId("suggestion");
-    await expect(card).toContainText("Proposed text for #problem");
+    await expect(card).toContainText("Proposed text for 1. Problem");
     await expect(card.getByRole("button")).toHaveCount(0);
     await openTab(page, "History");
     const jobs = page.getByTestId("jobs-panel").filter({ visible: true });
@@ -271,7 +271,7 @@ test("a new comment queues review comments, and Oracle's suggestion appears on i
 
   await openTab(page, "Feedback");
   const card = feedbackItem(page, "Split the invoice by project").getByTestId("suggestion");
-  await expect(card).toContainText("Proposed text for #scope");
+  await expect(card).toContainText("Proposed text for 3. Scope");
   await openTab(page, "History");
   await expect(
     page.getByTestId("jobs-panel").filter({ visible: true }).getByTestId("llm-job").first(),

@@ -65,7 +65,7 @@ test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first requ
   await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill(TITLE);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(WHY);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
   // Draft with Oracle: a new company has no baseline, so Oracle builds it first.

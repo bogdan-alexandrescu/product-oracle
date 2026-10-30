@@ -25,7 +25,7 @@ const count = (page: Page) => buildButton(page).getByTestId("build-draft-count")
 /** Starts a discussion on the Problem section, asks Oracle, and stages its edit of Problem. */
 async function stageFromDiscussion(page: Page) {
   const s = await openSection(page, "problem");
-  await sectionAction(s, "Problem", "Discuss this section");
+  await sectionAction(s, "Problem", "Start a discussion");
   await page.getByTestId("start-discussion").filter({ visible: true }).getByRole("button", { name: "Start discussion" }).click();
   await expect(thread(page)).toBeVisible();
   await thread(page).getByRole("textbox", { name: "Message" }).fill("Does detection have to ship first?");

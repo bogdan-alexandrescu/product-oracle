@@ -67,7 +67,7 @@ test("reuse: the baseline's approval day is the Company day in the sheet and on 
   await page.getByRole("link", { name: "New PRD" }).click();
   await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for late shoppers");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
 

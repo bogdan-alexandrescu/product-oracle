@@ -21,7 +21,7 @@ test("goals in Draft with Oracle: the brief's goals are picked, and a change sti
   await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses for teams");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(PROBLEM);
   await page.getByRole("group", { name: "Which goals does it serve?" }).getByRole("checkbox", { name: /Raise activation/ }).check();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
 
   const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });

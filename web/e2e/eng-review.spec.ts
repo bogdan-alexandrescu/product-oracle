@@ -54,7 +54,7 @@ async function briefToSheet(page: Page, title: string) {
   await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Buyers drop off when the total shows up late in checkout.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await page.getByRole("button", { name: "Draft with Oracle" }).click();
   await expect(sheet(page)).toBeVisible();

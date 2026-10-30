@@ -323,10 +323,14 @@ async def list_versions(db: AsyncSession, document: Document) -> list[VersionSum
     ]
 
 
+# Who imported a version through an API token (qa-docs-23): not the token's own name.
+INTEGRATION = "An integration"
+
+
 async def importer_names(db: AsyncSession, versions: list[DocumentVersion]) -> dict[uuid.UUID, str]:
     """Who imported each version, by name, keyed by version id (#256): "Oracle" for a
     run's draft (its import's audit event names the run; ``imported_by`` is the person
-    the run acted for), else the member's display name or "API token <its name>"."""
+    the run acted for), else the member's display name or "An integration" for an API token."""
     ids = {v.imported_by for v in versions if v.imported_by}
     people: dict[uuid.UUID, str] = {
         uid: display_name(email)
@@ -334,13 +338,11 @@ async def importer_names(db: AsyncSession, versions: list[DocumentVersion]) -> d
             await db.execute(select(User.id, User.email).where(User.id.in_(ids)))
         ).all()
     }
-    # An API token says what it is, not only its name (qa-docs-26): "API token release-bot".
+    # An API token is an integration, in plain words (qa-docs-23): never its credential name.
     tokens: dict[uuid.UUID, str] = {
-        tid: f"API token {name}"
-        for tid, name in (
-            await db.execute(
-                select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(ids - set(people)))
-            )
+        tid: INTEGRATION
+        for (tid,) in (
+            await db.execute(select(ApiToken.id).where(ApiToken.id.in_(ids - set(people))))
         ).all()
     }
     by_run = set(
@@ -397,9 +399,11 @@ async def imported_again(
             await db.execute(select(User.id, User.email, User.name).where(User.id.in_(ids)))
         ).all()
     }
-    tokens = dict(
-        (await db.execute(select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(ids)))).all()
-    )
+    # qa-docs-23: an API token reads as an integration, not by its credential name.
+    tokens = {
+        tid: INTEGRATION.lower()
+        for (tid,) in (await db.execute(select(ApiToken.id).where(ApiToken.id.in_(ids)))).all()
+    }
     zone = await company_time_zone(db)
     out: dict[uuid.UUID, str] = {}
     for e in events:

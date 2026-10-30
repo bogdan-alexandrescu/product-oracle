@@ -29,6 +29,7 @@ export function PageHeader({
   info,
   testId,
   phoneTitle = false,
+  phoneActionStart = false,
 }: {
   title: ReactNode;
   /** Right after the title, small: "v3". */
@@ -48,6 +49,8 @@ export function PageHeader({
   testId?: string;
   /** The H1 shows on a phone too, wrapping (a long document title the phone header cuts, qa-docs-68). */
   phoneTitle?: boolean;
+  /** On a phone the action lines up with the page's left edge when it drops to a line of its own (qa-docs-65). */
+  phoneActionStart?: boolean;
 }) {
   // One flat wrapping row. The status chips take their full width (flex-auto, not a 0 basis)
   // so they drop to a line of their own when the title and the actions leave no room for
@@ -81,7 +84,14 @@ export function PageHeader({
       >
         {status}
       </div>
-      {action && <div className="ml-auto flex max-w-full flex-none flex-wrap items-center justify-end gap-2">{action}</div>}
+      {action && (
+        <div
+          data-page-action
+          className={`ml-auto flex max-w-full flex-none flex-wrap items-center justify-end gap-2 ${phoneActionStart ? "max-[600px]:ml-0 max-[600px]:justify-start" : ""}`}
+        >
+          {action}
+        </div>
+      )}
       <PageTabs />
     </header>
   );

@@ -31,7 +31,7 @@ const thread = (page: Page) => page.getByTestId("discussion-thread").filter({ vi
 async function discussProblem(page: Page, opts: { private?: string[]; first?: string } = {}) {
   await page.goto(DOC);
   const s = await openSection(page, "problem");
-  await sectionAction(s, "2. Problem", "Discuss this section");
+  await sectionAction(s, "2. Problem", "Start a discussion");
   const form = page.getByTestId("start-discussion").filter({ visible: true });
   await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue("Checkout redesign PRD · 2. Problem");
   if (opts.private) {
@@ -195,7 +195,7 @@ test("at 390 px the thread opens in the review sheet with the composer and no si
   const s = section(page, "problem");
   await page.evaluate(() => (window.location.hash = "problem"));
   await expect(s).toBeVisible();
-  await sectionAction(s, "2. Problem", "Discuss this section");
+  await sectionAction(s, "2. Problem", "Start a discussion");
   const sheet = page.getByTestId("sheet-review");
   await expect(sheet).toBeVisible();
   await sheet.getByTestId("start-discussion").getByRole("button", { name: "Start discussion" }).click();

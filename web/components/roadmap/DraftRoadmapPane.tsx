@@ -406,7 +406,7 @@ function StatusRow({
       act = action(`Build for v${n} anyway`);
       break;
     case "off":
-      copy = "Updating the draft roadmap with each new draft is turned off for this PRD.";
+      copy = "Refreshing this roadmap for each new PRD version is turned off.";
       act = action("Build draft roadmap now");
       break;
     case "skipped":
@@ -414,7 +414,8 @@ function StatusRow({
       act = action("Build anyway");
       break;
     default:
-      copy = "No roadmap items for this version yet.";
+      // qa-docs-64: someone who cannot build it is told who can.
+      copy = canDerive ? "No roadmap items for this version yet." : "No roadmap items for this version yet. Approvers and owners can build them.";
       act = action("Build draft roadmap now");
   }
   return (
@@ -422,17 +423,18 @@ function StatusRow({
       role="status"
       data-testid="draft-roadmap-status"
       data-status={data.status}
-      className={`flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 rounded-button px-3 py-2 text-sm ${
+      // qa-docs-65: on a phone the words sit above the button, not squeezed beside it.
+      className={`flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2 rounded-button px-3 py-2 text-sm max-[600px]:flex-col max-[600px]:items-start ${
         data.status === "failed" ? "bg-warn-bg text-warn" : "border border-line bg-surface text-text2"
       }`}
     >
-      <span className="min-w-0 flex-1">{copy}</span>
+      <span className="min-w-0 flex-1 max-[600px]:flex-none">{copy}</span>
       {act}
     </div>
   );
 }
 
-/** Owners: "Update the draft roadmap with each new draft" on this PRD (saved at once). */
+/** Owners: "Refresh this roadmap whenever a new PRD version is drafted" on this PRD (saved at once). */
 function AutoSwitch({ doc, initial }: { doc: string; initial: boolean }) {
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -455,9 +457,9 @@ function AutoSwitch({ doc, initial }: { doc: string; initial: boolean }) {
     <div data-testid="draft-roadmap-auto" className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-text">
         <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
-        Update the draft roadmap with each new draft
+        Refresh this roadmap whenever a new PRD version is drafted
       </label>
-      <InfoTip label="updating with each new draft" side="bottom" align="start">
+      <InfoTip label="refreshing with each new version" side="bottom" align="start">
         About $5.50 per draft at standard depth. Runs in the background.
       </InfoTip>
       {error && <ErrorNote>{error}</ErrorNote>}

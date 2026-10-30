@@ -79,6 +79,11 @@ def _gap_owner(gaps: list) -> uuid.UUID | None:
     return next((g.owner_id for g in gaps if g.owner_id), None)
 
 
+def pieces_of_evidence(n: int) -> str:
+    """'1 piece of evidence', '2 pieces of evidence' (qa-docs-55): never '2 evidence'."""
+    return "1 piece of evidence" if n == 1 else f"{n} pieces of evidence"
+
+
 def _missing(q: QualityInputs) -> CheckOutcome | None:
     if q.document is None or q.version is None:
         return _outcome("not_applicable", ["The document or version was not found"])
@@ -127,9 +132,9 @@ def problem_clarity(q: QualityInputs) -> CheckOutcome:
             "The pain has no evidence: no linked evidence, citation or answered question"
         )
     if status == "pass":
+        backing = pieces_of_evidence(len(evidence)) if evidence else "cited evidence"
         reasons.append(
-            f"The problem ({words} words) names its users and its pain is backed by "
-            f"{len(evidence) or 'cited'} evidence"
+            f"The problem ({words} words) names its users and its pain is backed by {backing}"
         )
     return _outcome(
         status,
@@ -248,7 +253,9 @@ def evidence_provenance(q: QualityInputs) -> CheckOutcome:
     stale = [ev for ev in evidence if _stale(ev, q)]
     if stale:
         status = _worst(status, "warning")
-        reasons.append(f"{len(stale)} piece(s) of evidence are stale")
+        reasons.append(
+            f"{pieces_of_evidence(len(stale))} {'is' if len(stale) == 1 else 'are'} stale"
+        )
         ids += [ev.id for ev in stale]
     uncertain = [
         g

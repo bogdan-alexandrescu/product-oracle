@@ -58,18 +58,18 @@ for (const scheme of ["light", "dark"] as const) {
 
     // qa-docs-5: a disabled Save on the review bar (a surface2 panel) still reads as a button,
     // and says what it waits for.
-    test("qa-docs-5: Save: Rejected with no note is an outlined button with a hint", async ({ page }) => {
+    test("qa-docs-5: Reject with no note is an outlined button with a hint", async ({ page }) => {
       await login(page);
       await page.goto(CARTS);
       await expect(page.getByTestId("document-sections")).toBeVisible();
       const bar = visible(page, "review-bar").first();
       await bar.getByRole("button", { name: "Reject", exact: true }).click();
-      const save = bar.getByRole("button", { name: /^Save: Rejected/ });
+      const save = bar.getByTestId("verdict-submit");
       await expect(save).toBeDisabled();
       const o = await outline(save);
       expect(o.width).toBeGreaterThanOrEqual(1);
       expect(o.differs).toBe(true);
-      await expect(bar.getByTestId("verdict-save-hint")).toHaveText("Write a note first");
+      await expect(bar.getByTestId("verdict-save-hint")).toHaveText("Write a note first: the writer sees it");
       await bar.getByRole("textbox").fill("The cart limit is not decided.");
       await expect(save).toBeEnabled();
       await expect(bar.getByTestId("verdict-save-hint")).toHaveCount(0);
@@ -128,14 +128,14 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     // qa-docs-13: after a failed report job, one way to write again.
-    test("qa-docs-13: a failed report offers Retry only, not Write again beside it", async ({ page }) => {
+    test("qa-docs-13: a failed report offers Try again only, not Write again beside it", async ({ page }) => {
       await login(page);
       await page.goto(CARTS);
       await openTab(page, "History");
       const reports = visible(page, "history-reports").getByTestId("reports-panel");
-      await expect(reports.getByRole("alert").getByRole("button", { name: "Retry" })).toBeVisible();
+      await expect(reports.getByRole("alert").getByRole("button", { name: "Try again" })).toBeVisible();
       await expect(reports.getByRole("button", { name: /^Write/ })).toHaveCount(0);
-      await expect(reports.getByRole("button", { name: /^(Retry|Write)/ })).toHaveCount(1);
+      await expect(reports.getByRole("button", { name: /^(Try again|Write)/ })).toHaveCount(1);
     });
 
     // qa-docs-12: no internal grouping key on a suggestion card.

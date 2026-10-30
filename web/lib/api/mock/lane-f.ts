@@ -821,7 +821,7 @@ const TEMPLATE_SEEDS: TemplateSeed[] = [
     key: "oracle-default",
     kind: "prd",
     name: "Goal-traced PRD",
-    description: "Goal trace, problem alignment, prioritized solution, requirements with ids, launch, recap",
+    description: "Oracle's standard: the goal it serves, the problem, the solution in priority order, numbered requirements, the launch and a look back",
     suggest_when: "Default for any cross-functional feature or product version",
     theme: "clean-document",
     sections: [
@@ -919,7 +919,7 @@ const TEMPLATE_SEEDS: TemplateSeed[] = [
     key: "now-next-later",
     kind: "roadmap",
     name: "Now / Next / Later",
-    description: "Direction by confidence horizon. Dated milestones only in Now. Goal tag on every card.",
+    description: "What happens now, next and later. Only Now has dates; every card names the goal it serves.",
     suggest_when: "Always the default, especially early stage or when dates beyond the quarter are not credible",
     theme: "roadmap-board",
     sections: [
@@ -932,7 +932,7 @@ const TEMPLATE_SEEDS: TemplateSeed[] = [
     key: "outcome-roadmap",
     kind: "roadmap",
     name: "Outcome roadmap",
-    description: "Rows = confirmed goals, columns = horizons. Flags items that serve no goal.",
+    description: "One row per confirmed goal, with what it gets now, next and later. Shows the work that serves no goal.",
     suggest_when: "Board or leadership audience; a goal-setting season",
     theme: "roadmap-board",
     sections: [
@@ -945,7 +945,7 @@ const TEMPLATE_SEEDS: TemplateSeed[] = [
     key: "quarterly-timeline",
     kind: "roadmap",
     name: "Quarterly timeline",
-    description: "Quarter axis, swimlanes by team, dated bars in Now, fuzzy bars beyond.",
+    description: "Work laid out by quarter, one lane per team. Firm dates this quarter, rough ranges after it.",
     suggest_when: "External dates exist, or several teams with cross-dependencies",
     theme: "roadmap-board",
     sections: [
@@ -958,7 +958,7 @@ const TEMPLATE_SEEDS: TemplateSeed[] = [
     key: "release-plan",
     kind: "roadmap",
     name: "Release plan",
-    description: "Releases with target dates, scoped items, readiness and estimate drift.",
+    description: "Each release with its target date, what is in it, what is left, and whether it is still on schedule.",
     suggest_when: "Engineering audience; versioned releases; tracker connected",
     theme: "roadmap-board",
     sections: [
@@ -970,7 +970,7 @@ const TEMPLATE_SEEDS: TemplateSeed[] = [
     key: "cycle-bets",
     kind: "roadmap",
     name: "Cycle bets (Shape Up)",
-    description: "Current cycle bets with appetite and hill position, next-cycle pitches, cool-down.",
+    description: "What the team committed to this cycle and how far along each piece is, ideas for the next cycle, and the break between cycles.",
     suggest_when: "The team works in fixed cycles; horizon of one cycle",
     theme: "roadmap-board",
     sections: [
@@ -1651,7 +1651,7 @@ export function recommendRoadmap(a: RoadmapAnswers, confirmed: number) {
   if (a.horizon === "one_cycle" || a.planning_style === "cycles") {
     [key, reason] = ["cycle-bets", "The team plans in fixed cycles: show this cycle's bets, the next betting table and raw ideas."];
   } else if (a.audience === "engineering") {
-    [key, reason] = ["release-plan", "Engineering reads it first: releases with target dates, scope, readiness and estimate drift."];
+    [key, reason] = ["release-plan", "Engineering reads it first: each release with its target date, what is in it, what is left and whether it is on schedule."];
   } else if (a.external_dates) {
     [key, reason] = ["quarterly-timeline", "Real external dates exist: a quarterly timeline shows them, with dates only on committed work."];
   } else if (a.audience === "board") {

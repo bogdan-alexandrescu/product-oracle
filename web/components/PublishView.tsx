@@ -22,6 +22,7 @@ import {
 } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { blockedLabel } from "@/lib/blocked";
 import { addDays, todayIn, useCompanyZone, zoneInstant } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { OWNER_APPROVES } from "@/lib/owner-kinds";
@@ -615,7 +616,7 @@ export function PublishView({ doc }: { doc: string }) {
   const blocksChip = !checking && (
     <span id="publish-blocks" className="inline-flex">
       <Chip kind={blocks.length ? "crit" : "pass"} data-testid="blocks-chip">
-        {blocks.length} block{blocks.length === 1 ? "" : "s"}
+        {blockedLabel(blocks.length > 0, blocks.length)}
       </Chip>
     </span>
   );

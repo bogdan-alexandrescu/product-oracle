@@ -122,7 +122,12 @@ function Ops({ ops }: { ops: Op[] }) {
     <>
       {ops.map((w, i) =>
         w.op === "insert" ? (
-          <ins key={i} className="rounded-sm bg-pass-bg px-0.5 text-pass no-underline">
+          // qa-docs-50: a deeper green than the Added chip's, 4.5:1 or more on its tint (light and dark).
+          <ins
+            key={i}
+            data-testid="diff-ins"
+            className="rounded-sm bg-pass-bg px-0.5 text-[color:color-mix(in_srgb,var(--pass)_70%,var(--text))] no-underline"
+          >
             {w.text}
           </ins>
         ) : w.op === "delete" ? (
@@ -416,11 +421,27 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
       <DocToolbar doc={docQ.data}>
         {ready && versions.length > 0 && (
           <>
-            <VersionSwitcher doc={doc} versions={versions} current={fromN} label="From" hrefFor={(f) => href(f, toN)} />
-            <span aria-hidden className="text-text2">
-              →
-            </span>
-            <VersionSwitcher doc={doc} versions={versions} current={toN} label="To" hrefFor={(t) => href(fromN, t)} />
+            {/* qa-docs-51: on a phone the two pickers stack, each with its word, and no arrow. */}
+            <div
+              data-testid="diff-pickers"
+              className="flex items-center gap-2 max-sm:w-full max-sm:flex-col max-sm:items-stretch max-sm:[&_label]:flex-1 max-sm:[&_select]:w-full"
+            >
+              <div className="flex items-center gap-2">
+                <span aria-hidden className="w-10 flex-none text-sm font-semibold text-text2 sm:hidden">
+                  From
+                </span>
+                <VersionSwitcher doc={doc} versions={versions} current={fromN} label="From" hrefFor={(f) => href(f, toN)} />
+              </div>
+              <span aria-hidden className="text-text2 max-sm:hidden">
+                →
+              </span>
+              <div className="flex items-center gap-2">
+                <span aria-hidden className="w-10 flex-none text-sm font-semibold text-text2 sm:hidden">
+                  To
+                </span>
+                <VersionSwitcher doc={doc} versions={versions} current={toN} label="To" hrefFor={(t) => href(fromN, t)} />
+              </div>
+            </div>
           </>
         )}
       </DocToolbar>

@@ -252,7 +252,7 @@ test("a late answer's lines in a version's reports and their export are withheld
   await open.getByRole("button", { name: "Accept edited text" }).click();
   await expect(open).toContainText(`Resolution: Answered: ${ACCEPTED}`);
   const users = await openSection(page, "users");
-  await sectionAction(users, "3. Users and jobs", /^Refine section/);
+  await sectionAction(users, "3. Users and jobs", /^Ask Oracle to rewrite/);
   const refine = users.getByTestId("refine-panel");
   await refine.getByLabel("Instruction").fill("Name the first-time buyer segment explicitly.");
   await refine.getByRole("button", { name: "Refine", exact: true }).click();
