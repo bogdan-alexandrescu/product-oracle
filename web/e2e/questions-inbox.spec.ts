@@ -110,7 +110,8 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   await form.getByLabel("Find a person").fill("appr");
   await form.getByRole("option", { name: /Approver/ }).click();
   await expect(questionRow(page, TIERS)).toContainText("Asked Approver ✓");
-  await expect(badge(page)).toHaveText("10");
+  // The "I don't know" question still counts in Needs you (owner 2026-10-29): open until a real answer.
+  await expect(badge(page)).toHaveText("11");
 
   // Neither under New nor under Open any more: all three are Done.
   for (const name of ["New", "Seen"]) {

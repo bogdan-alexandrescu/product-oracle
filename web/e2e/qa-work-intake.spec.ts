@@ -41,7 +41,7 @@ test("qa-work-11: the header has one overflow menu, Delete in it", async ({ page
   }
 });
 
-test("qa-work-21: a question answered I don't know counts as answered, as unknown, in plain words", async ({ page }) => {
+test("qa-work-21: a question answered I don't know stays open (owner 2026-10-29), in plain words", async ({ page }) => {
   await openIntake(page);
   const gate = inspector(page).getByTestId("ready-to-draft");
   // Decide the blocker so the critical questions still open are listed.
@@ -59,8 +59,9 @@ test("qa-work-21: a question answered I don't know counts as answered, as unknow
   await mine.getByRole("button", { name: "Answer", exact: true }).click();
   await mine.getByTestId("answer-question").getByRole("button", { name: /^I don't know/ }).click();
   await expect(mine.getByTestId("answer")).toBeVisible();
-  await expect(inspector(page).getByTestId("answered-unknown")).toContainText("1 answered “I don't know”");
-  await expect(answered).toContainText("3");
+  // Owner 2026-10-29: an "I don't know" leaves the question open; Answered stays.
+  await expect(inspector(page).getByTestId("answered-unknown")).toContainText("1 still open after “I don't know”");
+  await expect(answered).toContainText("2");
   await expect(gate.getByTestId("missing-gap").filter({ hasText: "answered “I don't know”" })).toHaveCount(1);
 });
 
