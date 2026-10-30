@@ -137,10 +137,30 @@ async def test_line_ask_working_draft(client):
     assert len(await jobs(ctx)) == before + 1
     async with tenant_session(ctx.tenant_id) as s:
         v = await s.scalar(select(SimpleVisual).where(SimpleVisual.subject_id == uuid.UUID(sid)))
-        assert v.brief == "A checklist that invites a teammate"
+        # Drawn from the published words: who reads only the published page reads it too.
+        assert v.brief == published["text"]
     # Twice is once.
     assert (await ask(client, ctx, "owner", sid, doc_id)).status_code == 202
     assert len(await jobs(ctx)) == before + 1
+
+
+async def test_draft_words_never_reach_who_reads_the_published_page(client):
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    doc_id = view["document"]["id"]
+    words = "A checklist that invites a teammate"
+    r = await edit(client, ctx, "decider", view, "bets-1", words)
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    sid = line(await get(client, ctx, "decider"), "bets-1")["flow_subject"]
+    assert (await ask(client, ctx, "decider", sid, doc_id)).status_code == 202
+    await run_visual_jobs(ctx)
+    out = await panel(client, ctx, "viewer", sid, doc_id)
+    assert out["flow"] is not None
+    assert words.lower() not in str(out).lower()
+    async with tenant_session(ctx.tenant_id) as s:
+        payloads = [j.input for j in await s.scalars(select(LlmJob).where(
+            LlmJob.kind == "simple_visual"))]  # fmt: skip
+    assert payloads and words.lower() not in str(payloads).lower()
 
 
 async def test_editing_a_bet_keeps_its_flow(client):
@@ -248,6 +268,42 @@ async def test_one_pager_job_queues_bet_visuals_only_when_built(client):
         assert {v.subject_id for v in rows} == {
             visuals.line_subject(doc.id, f"bets-{i}") for i in (1, 2, 3)
         }
+
+
+async def test_reordered_bets_keep_their_flows(client):
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")  # a writer's read queues the one_pager job
+    doc_id = view["document"]["id"]
+    texts = [line(view, f"bets-{i}")["text"] for i in (1, 2, 3)]
+    sid = line(view, "bets-2")["flow_subject"]
+    assert (await ask(client, ctx, "decider", sid, doc_id)).status_code == 202
+    await run_visual_jobs(ctx)
+    # Oracle's answer puts the bets in another order: the second bet is now the third.
+    answer = {"blocks": [
+        {"key": "bets", "lines": [{"text": t, "source_keys": ["build"]}
+                                  for t in (texts[2], texts[0], texts[1])]}
+        if b["key"] == "bets" else b for b in GOOD["blocks"]
+    ]}  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
+
+        async def built(kind, payload):
+            return answer
+
+        assert (await one_pager.run_job(s, job, built))["built"] is True
+        await s.commit()
+    for who in ("decider", "viewer"):
+        page = await get(client, ctx, who)
+        moved = line(page, "bets-3")
+        assert moved["text"] == texts[1], who
+        assert moved["flow_subject"] == sid and moved["flow"] is not None, who
+        assert line(page, "bets-2")["flow_subject"] != sid, who
+        assert line(page, "bets-1")["flow_subject"] != sid, who
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = list(await s.scalars(select(SimpleVisual)))
+    # The moved bet is not drawn again; the two others are asked for once each.
+    assert sorted(v.brief for v in rows) == sorted(texts)
+    assert len({v.subject_id for v in rows}) == 3
 
 
 async def test_words_keyed_flow_still_found(client):
