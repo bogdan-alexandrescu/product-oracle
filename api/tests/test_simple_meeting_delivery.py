@@ -191,3 +191,109 @@ async def test_retry_rights_and_requeue(client, monkeypatch, clock):  # noqa: F8
     assert r.status_code == 200 and r.json()["delivery"]["slack_status"] == "queued"
     await _tick(w, clock)
     assert (await get(client, w, m["id"]))["delivery"]["slack_status"] == "sent"
+
+
+async def _set_delivery(w, meeting_id: str, delivery: dict) -> None:
+    import uuid
+
+    from oracle.simple.models import SimpleMeeting
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        m = await s.get(SimpleMeeting, uuid.UUID(meeting_id))
+        m.delivery = delivery
+        await s.commit()
+
+
+async def test_legacy_queued_slack_is_never_posted_again(client, monkeypatch, clock):  # noqa: F811
+    # Card (dod-delivery review):
+    #   protects: a meeting sent before each Slack post carried its tries (stored
+    #   slack_status "queued", no slack_tries: the old outbox already posted it) reads as
+    #   sent and the tick never posts its minutes again.
+    #   fails_when: the first tick after deploy posts every past meeting's minutes again.
+    #   no_claim: emails of such meetings (tested above).
+    w = await world()
+    m, fake, slack = await _sent(client, w, monkeypatch, bad=set(), slack_fails=0)
+    await _set_delivery(w, m["id"], {"email": False, "slack": True, "slack_status": "queued",
+                                     "slack_channel": "#product"})  # fmt: skip
+    slack.posts.clear()
+    await _tick(w, clock)
+    await _tick(w, clock, 60)
+    assert slack.posts == []
+    d = (await get(client, w, m["id"]))["delivery"]
+    assert d["slack_status"] == "sent"
+
+
+async def test_legacy_email_count_is_kept(client, monkeypatch, clock):  # noqa: F811
+    # Card (dod-delivery review):
+    #   protects: a delivery stored before each attendee carried a status keeps its stored
+    #   count of emails sent.
+    #   fails_when: such a meeting reads 0 emails sent.
+    #   no_claim: the words people read (web/e2e/simple-meeting-delivery.spec.ts).
+    w = await world()
+    m, fake, slack = await _sent(client, w, monkeypatch, bad=set(), slack_fails=0)
+    await _set_delivery(w, m["id"], {"email": True, "email_status": "sent", "email_sent": 3,
+                                     "slack": False})  # fmt: skip
+    d = (await get(client, w, m["id"]))["delivery"]
+    assert d["email_sent"] == 3 and d["emails"] == []
+
+
+async def test_meeting_is_not_locked_while_sending(client, monkeypatch, clock):  # noqa: F811
+    # Card (dod-delivery review):
+    #   protects: the meeting row is not held FOR UPDATE through each email and the Slack
+    #   call (a slow mailer or Slack must not block edits to the meeting); a claimed send
+    #   still goes once.
+    #   fails_when: another session cannot lock the meeting while an email or the post is
+    #   on its way.
+    #   no_claim: Slack's API and the mailer's HTTP.
+    import uuid
+
+    from sqlalchemy import text
+
+    w = await world()
+    m, fake, slack = await _sent(client, w, monkeypatch, bad=set(), slack_fails=0)
+    # Queued again, as right after Send (Send's own first try already went).
+    queued = {"status": "queued", "tries": 0}
+    ids = [str(u.id) for u in w.ctx.users.values()]
+    out = (await get(client, w, m["id"]))["delivery"]
+    to = {e["person"]["id"]: dict(queued) for e in out["emails"]}
+    assert len(to) == 3 and set(to) <= set(ids)
+    await _set_delivery(w, m["id"], {"email": True, "email_status": "queued", "email_to": to,
+                                     "slack": True, "slack_status": "queued", "slack_tries": 0,
+                                     "slack_channel": "#product"})  # fmt: skip
+    fake.sent.clear()
+    slack.posts.clear()
+    free: list[bool] = []
+
+    async def probe() -> None:
+        async with tenant_session(w.ctx.tenant_id) as s:
+            try:
+                await s.execute(text("SELECT id FROM simple_meetings WHERE id = :i FOR UPDATE NOWAIT"),
+                                {"i": uuid.UUID(m["id"])})  # fmt: skip
+                free.append(True)
+            except Exception:  # noqa: BLE001 - locked
+                free.append(False)
+
+    send, post = fake.send, slack.__call__
+
+    async def send_probing(http, message) -> None:
+        await probe()
+        await send(http, message)
+
+    async def post_probing(db, text_: str) -> None:
+        await probe()
+        await post(db, text_)
+
+    monkeypatch.setattr(fake, "send", send_probing)
+    monkeypatch.setattr(meetings, "_post_slack", post_probing)
+    await _tick(w, clock)
+    await _tick(w, clock, 60)
+    assert free and all(free), free
+    d = (await get(client, w, m["id"]))["delivery"]
+    assert d["email_status"] == "sent" and d["slack_status"] == "sent"
+    assert len(fake.sent) == 3 and len(slack.posts) == 1
+
+
+def test_the_old_alias_is_gone():
+    # Card (dod-delivery review): protects: the tick has one name (deliver_due);
+    # fails_when: the unused send_queued_emails alias is back; no_claim: behaviour.
+    assert not hasattr(meetings, "send_queued_emails")

@@ -68,3 +68,22 @@ for (const phone of [false, true]) {
     });
   });
 }
+
+/**
+ * Card delivery-legacy-failed (dod-delivery review): protects = a meeting whose email failed
+ * before each attendee carried a status ("delivery-legacy-failed": no attendee named) reads
+ * "Couldn't email the attendees" with no Retry (nothing named is left to retry); fails_when =
+ * it reads "Emailing the attendees…" as if still on its way; no_claim = the API's stored
+ * count (api/tests/test_simple_meeting_delivery.py).
+ */
+for (const phone of [false, true]) {
+  test(`an old failed email reads as failed (${phone ? "phone" : "desktop"})`, async ({ context, page }) => {
+    await flags(context, "delivery-legacy-failed");
+    await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    await login(page);
+    await page.goto("/simple/decisions");
+    const g = group(page);
+    await expect(g.getByTestId("delivery-email")).toHaveText("Couldn't email the attendees");
+    await expect(g.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  });
+}
