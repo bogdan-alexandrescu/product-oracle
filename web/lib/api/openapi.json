@@ -73697,6 +73697,18 @@
               }
             ],
             "title": "Intake Answer Id"
+          },
+          "discussion_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discussion Id"
           }
         },
         "type": "object",

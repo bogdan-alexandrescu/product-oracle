@@ -23090,6 +23090,8 @@ export interface components {
             intake_question_id?: string | null;
             /** Intake Answer Id */
             intake_answer_id?: string | null;
+            /** Discussion Id */
+            discussion_id?: string | null;
         };
         /**
          * FeedbackPackage

@@ -137,6 +137,8 @@ class FeedbackItemOut(ORM):
     intake_id: uuid.UUID | None = None
     intake_question_id: uuid.UUID | None = None
     intake_answer_id: uuid.UUID | None = None
+    # qa-docs-33: whole-draft feedback made in Discuss; its thread. Null on every other item.
+    discussion_id: uuid.UUID | None = None
 
 
 class FeedbackPatch(BaseModel):

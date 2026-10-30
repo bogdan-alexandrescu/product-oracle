@@ -100,7 +100,7 @@ async def create_discussion(
     the discussion still starts, without a reply."""
     d, first = await _call(service.start(db, principal, body))
     # qa-docs-33: during a review a Discuss thread on the version is whole-draft feedback.
-    item = await service.review_feedback(db, principal, d, first)
+    item = await _call(service.review_feedback(db, principal, d, first))
     if item is not None:
         await jobs_service.on_feedback(db, item.document_id, item.raised_on_version)
     reply = None

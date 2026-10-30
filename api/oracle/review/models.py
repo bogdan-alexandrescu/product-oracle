@@ -124,6 +124,11 @@ class FeedbackItem(TenantScoped, Base):
     # #636 re-review (0058): a kept late-answer item withholds its quote while its finding
     # is not shared in full; its suggestions' text, edited text and rationale are left out.
     withheld_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 0092: a General item made from a Discuss thread (qa-docs-33); its first message is
+    # the summary. One item per thread.
+    discussion_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussions.id", ondelete="SET NULL"), unique=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

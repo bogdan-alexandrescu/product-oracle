@@ -27,6 +27,7 @@ from oracle.discussions.models import (
     MAX_TITLE,
     Discussion,
     DiscussionChange,
+    DiscussionInboxItem,
     DiscussionMessage,
     DiscussionParticipant,
 )
@@ -1090,6 +1091,13 @@ async def start(
     return d, first
 
 
+#: Whole-draft feedback's cap (oracle.review.schemas.GENERAL_FEEDBACK_MAX), worded.
+FEEDBACK_TOO_LONG = (
+    "During the review, the first message is feedback on the whole draft, which can be at "
+    "most 4,000 characters. Shorten it, or say the rest in a reply."
+)
+
+
 async def review_feedback(
     db: AsyncSession, principal: "Principal", d: Discussion, first: DiscussionMessage | None
 ):
@@ -1099,7 +1107,11 @@ async def review_feedback(
     starter, its summary the first message. Every count that read that comment reads it (the
     feedback list, the reviewer's and approver's counts, the Inbox, the review-comments job).
     A private thread, one about a section, or one with no first message stays a discussion.
-    The item, or None."""
+
+    The item is linked to the thread (fix3-discuss review): editing the first message edits
+    it, deleting that message or making the thread private withdraws it, resolving it closes
+    the thread. A discussion does not start a draft's review, and an approver it mentions
+    hears of the remark once, through the item. The item, or None."""
     if d.subject_kind != "document" or d.origin != "discuss" or d.visibility != "open":
         return None
     if first is None:
@@ -1108,10 +1120,76 @@ async def review_feedback(
     if version.approved_at is not None:
         return None
     from oracle.review import service as review
+    from oracle.review.schemas import GENERAL_FEEDBACK_MAX
 
-    return await review.create_general_feedback(
-        db, principal, str(doc.id), version.number, first.body
+    if len(first.body) > GENERAL_FEEDBACK_MAX:
+        raise DiscussionError(422, FEEDBACK_TOO_LONG)
+    item = await review.create_general_feedback(
+        db, principal, str(doc.id), version.number, first.body, discussion_id=d.id
     )
+    # Approvers see the item in their Inbox; the thread's own row would say it twice.
+    rows = (
+        await db.scalars(
+            select(DiscussionInboxItem).where(DiscussionInboxItem.discussion_id == d.id)
+        )
+    ).all()
+    people = await users_by_id(db, {r.user_id for r in rows})
+    for row in rows:
+        u = people.get(row.user_id)
+        if u is not None and has_role(u.role, "approver"):
+            await db.delete(row)
+    await db.flush()
+    return item
+
+
+async def _feedback_item(db: AsyncSession, d: Discussion):
+    from oracle.review.models import FeedbackItem
+
+    return await db.scalar(
+        select(FeedbackItem).where(FeedbackItem.discussion_id == d.id).with_for_update()
+    )
+
+
+async def _is_first(db: AsyncSession, d: Discussion, message: DiscussionMessage) -> bool:
+    first = await db.scalar(
+        select(DiscussionMessage.id)
+        .where(DiscussionMessage.discussion_id == d.id, DiscussionMessage.author_kind == "person")
+        .order_by(DiscussionMessage.created_at, DiscussionMessage.id)
+        .limit(1)
+    )
+    return first == message.id
+
+
+async def _withdraw_feedback(db: AsyncSession, principal: "Principal", d: Discussion) -> None:
+    """The thread's first message is gone, or only the people picked read it now: the
+    whole-draft feedback it was is withdrawn (fix3-discuss review)."""
+    item = await _feedback_item(db, d)
+    if item is None:
+        return
+    await audit.record(
+        db, principal, "feedback.withdraw", "feedback_item", item.id,
+        {"discussion_id": str(d.id), "status": item.status},
+    )  # fmt: skip
+    await db.delete(item)
+    await db.flush()
+
+
+async def close_for_feedback(
+    db: AsyncSession, principal: "Principal", discussion_id: uuid.UUID
+) -> None:
+    """The approver resolved (or declined) the whole-draft feedback a Discuss thread is:
+    the thread closes with it, as the starter's Close would."""
+    d = await db.get(Discussion, discussion_id, with_for_update=True)
+    if d is None or d.status == "closed":
+        return
+    d.status = "closed"
+    d.closed_by = principal.user_id
+    d.closed_at = datetime.now(UTC)
+    await _record(db, principal, "close", d)
+    from oracle.discussions import summary
+
+    await summary.queue(db, d)
+    await db.flush()
 
 
 async def share(
@@ -1196,6 +1274,12 @@ async def edit_message(
     d, message = await _own_message(db, principal, discussion_id, message_id)
     message.body = _check_body(body)
     message.edited_at = datetime.now(UTC)
+    if await _is_first(db, d, message) and (item := await _feedback_item(db, d)) is not None:
+        from oracle.review.schemas import GENERAL_FEEDBACK_MAX
+
+        if len(body) > GENERAL_FEEDBACK_MAX:
+            raise DiscussionError(422, FEEDBACK_TOO_LONG)
+        item.summary = body
     await _record(db, principal, "message_edit", d, message_id=str(message.id), length=len(body))
     await db.flush()
     return message
@@ -1205,6 +1289,8 @@ async def delete_message(
     db: AsyncSession, principal: "Principal", discussion_id: uuid.UUID, message_id: uuid.UUID
 ) -> None:
     d, message = await _own_message(db, principal, discussion_id, message_id)
+    if await _is_first(db, d, message):
+        await _withdraw_feedback(db, principal, d)
     message.body = ""
     message.deleted_at = datetime.now(UTC)
     await _record(db, principal, "message_delete", d, message_id=str(message.id))
@@ -1341,6 +1427,7 @@ async def _make_private(
     messages, people = await exposure(db, d)
     d.visibility = "private"
     d.summary_shared = False
+    await _withdraw_feedback(db, principal, d)
     from oracle.slack import bridge  # G8; it builds on this module
 
     # A mirrored discussion stops mirroring: the closing line, without the link.
