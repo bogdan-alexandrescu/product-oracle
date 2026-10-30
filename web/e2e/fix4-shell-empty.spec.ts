@@ -56,7 +56,7 @@ test("qa-shell-9, 10, 30: the owner of a new company walks every empty page and 
   await expect(page.getByTestId("kpi-traced")).toContainText("No features yet");
   await expect(page.locator('dl[aria-label="Counts"]')).not.toContainText("0/0");
   await expect(page.getByTestId("confirmed-chip")).toHaveCount(0);
-  await expect(page.getByTestId("table-empty")).toHaveText("No goals yet. Add one, or draft them from your sources with Build baseline.");
+  await expect(page.getByTestId("table-empty").filter({ visible: true })).toHaveText("No goals yet. Add one, or draft them from your sources with Build baseline.");
   await expect(page.getByTestId("features-empty")).toHaveText("No features yet. Add one, or draft them from your sources with Build baseline.");
   await expect(page.getByRole("button", { name: "Build baseline" })).toBeVisible();
 
@@ -71,8 +71,8 @@ test("qa-shell-9, 10, 30: the owner of a new company walks every empty page and 
   await page.goto("/home");
   await open(page, "nav-requests", "Requests");
   await expect(page.getByTestId("requests-empty")).toHaveText("No requests yet. Add one with New request.");
-  await expect(page.getByRole("button", { name: "New request" })).toHaveCount(1);
-  await page.getByRole("button", { name: "New request" }).click();
+  await expect(page.getByRole("button", { name: "New request", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "New request", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "New request" });
   await dialog.getByLabel("Title").fill("Export invoices as CSV");
   await dialog.getByLabel("What it is and why").fill("Finance retypes every invoice into the ledger each month.");
@@ -96,12 +96,12 @@ test("qa-shell-9: a viewer's empty pages offer nothing they cannot do", async ({
 
   await open(page, "nav-baseline", "Baseline");
   await expect(page.getByTestId("kpi-goals")).toContainText("No goals yet");
-  await expect(page.getByTestId("table-empty")).toHaveText("No goals yet. They appear here once someone adds one.");
+  await expect(page.getByTestId("table-empty").filter({ visible: true })).toHaveText("No goals yet. They appear here once someone adds one.");
   await expect(page.getByTestId("features-empty")).toHaveText("No features yet. They appear here once someone adds one.");
 
   await open(page, "nav-requests", "Requests");
   await expect(page.getByTestId("requests-empty")).toHaveText("No requests yet. They appear here once someone files one.");
-  await expect(page.getByRole("button", { name: "New request" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New request", exact: true })).toHaveCount(0);
 });
 
 test("qa-shell-30: on a phone the Baseline's counts say No goals yet in full", async ({ page }) => {

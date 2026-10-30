@@ -17,7 +17,12 @@ const PHONE = { width: 390, height: 844 };
 
 /** From the rail, as a person gets there. */
 async function openRequests(page: Page) {
-  await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
+  const nav = page.getByTestId("nav-requests").filter({ visible: true });
+  if (await nav.count()) await nav.first().click();
+  else {
+    await page.getByTestId("tab-more").click();
+    await page.getByRole("dialog", { name: "More" }).getByRole("link", { name: "Requests" }).click();
+  }
   await expect(page).toHaveURL(/\/requests$/);
   await expect(page.getByTestId("request-row").first()).toBeVisible();
 }
@@ -46,7 +51,7 @@ test("qa-shell-26: on a desktop the sorting control says what it does", async ({
   await openRequests(page);
   await expect(actions(page).getByRole("button", { name: "Sort new requests automatically: Off" })).toBeVisible();
   await expect(actions(page).getByRole("button", { name: "Interview a customer" })).toBeVisible();
-  await expect(actions(page).getByRole("button", { name: "New request" })).toBeVisible();
+  await expect(actions(page).getByRole("button", { name: "New request", exact: true })).toBeVisible();
   await expect(page.getByTestId("requests-more")).toHaveCount(0);
 });
 
@@ -58,7 +63,7 @@ test.describe("on a phone", () => {
     await openRequests(page);
     // Two buttons on one line, not three stacked.
     await expect(actions(page).getByRole("button")).toHaveCount(2);
-    const add = (await actions(page).getByRole("button", { name: "New request" }).boundingBox())!;
+    const add = (await actions(page).getByRole("button", { name: "New request", exact: true }).boundingBox())!;
     const more = (await page.getByTestId("requests-more").boundingBox())!;
     expect(Math.abs(add.y - more.y)).toBeLessThan(1);
     await expect(page.getByRole("button", { name: "Interview a customer" })).toHaveCount(0);
