@@ -29,6 +29,7 @@ import {
   type Scale,
   type Slice,
 } from "./_lib";
+import { CALL_H, RH } from "./_pitch";
 import { PreviewGhost, useAppliedFlash, type Layout } from "./_timeline";
 
 /*
@@ -52,8 +53,7 @@ const MONTH_H = 22;
 const WEEK_H = 22;
 const FLAG_H = 24;
 const MARK_ROW = 20;
-/** A lane's row pitch and its pills' height (B2: 28 and 20); a lane is its rows plus 8 px. */
-const RH = 28;
+/** A lane's pills' height (B2: 20); its row pitch and callout line are in _pitch. */
 const BAR_H = 20;
 /** QA2 finding 11: a slice or bar is never drawn narrower than this, so a short run of work
  * still reads as a pill, not an unreadable blob, at a coarse scale. */
@@ -110,7 +110,8 @@ function useFontsReady(): number {
 /** A piece of work in a lane: one dated slice of a planned feature, or an item's own span. */
 export type Piece = { key: string; code: string | null; name: string; start: string; end: string; milestone: string | null; pm: boolean; slice: Slice | null };
 type Unit = { item: Item; pieces: Piece[]; row: number };
-export type LaneModel = { key: string; title: string; kind: "group" | "pm" | "below"; units: Unit[]; rows: number; count: number };
+/** `line`: each row's top in the lane and `h` the rows' height, in px (a row with a callout takes a callout line more, under it). */
+export type LaneModel = { key: string; title: string; kind: "group" | "pm" | "below"; units: Unit[]; rows: number; count: number; h: number; line: number[]; callouts: Set<number> };
 
 const datedSlices = (i: Item): Slice[] => i.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : a.start_date! > b.start_date! ? 1 : 0));
 const pmSlice = (x: Slice) => x.pm_owned || x.effort_weeks == null;
@@ -132,26 +133,29 @@ function piecesOf(item: Item, span?: [string, string]): Piece[] {
 /**
  * Decision lane-stacking: a piece takes the lane's first row where it neither overlaps another
  * piece nor starts less than a week from one's start; a feature's slices share one row. Units
- * go in start order, the longer first. A broken item keeps the rest of its row clear for its
- * callout (the reason and its fixes sit right of the pill).
+ * go in start order, the longer first. A broken item's callout goes on a line of its own under
+ * its row (qa-simple-roadmap-4, "Under the lane"), so a row holds at most one broken item.
  */
-function pack(items: Item[], moved: Record<string, [string, string]>, reserve: (i: Item) => boolean): { units: Unit[]; rows: number } {
+function pack(items: Item[], moved: Record<string, [string, string]>, callout: (i: Item) => boolean): { units: Unit[]; rows: number; callouts: Set<number> } {
   const units: Unit[] = items.map((item) => ({ item, pieces: piecesOf(item, moved[item.id]), row: 0 }));
   const len = (p: Piece) => ms(p.end) - ms(p.start);
   units.sort((a, b) => ms(a.pieces[0].start) - ms(b.pieces[0].start) || len(b.pieces[0]) - len(a.pieces[0]) || (a.pieces[0].code ?? a.item.title).localeCompare(b.pieces[0].code ?? b.item.title));
   const clash = (a: [number, number], b: [number, number]) => (a[0] <= b[1] && b[0] <= a[1]) || Math.abs(a[0] - b[0]) < WEEK;
   const rows: [number, number][][] = [];
+  const callouts = new Set<number>();
   for (const u of units) {
-    const occ: [number, number][] = reserve(u.item) ? [[ms(u.pieces[0].start), Infinity]] : u.pieces.map((p) => [ms(p.start), ms(p.end)]);
-    let r = rows.findIndex((row) => occ.every((o) => row.every((x) => !clash(o, x))));
+    const occ: [number, number][] = u.pieces.map((p) => [ms(p.start), ms(p.end)]);
+    const call = callout(u.item);
+    let r = rows.findIndex((row, n) => !(call && callouts.has(n)) && occ.every((o) => row.every((x) => !clash(o, x))));
     if (r < 0) {
       r = rows.length;
       rows.push([]);
     }
     rows[r].push(...occ);
+    if (call) callouts.add(r);
     u.row = r;
   }
-  return { units, rows: Math.max(1, rows.length) };
+  return { units, rows: Math.max(1, rows.length), callouts };
 }
 
 /** An item's unit as last drawn, kept while its row and pieces stay (memo(Pill): a key press redraws only the pressed pill). */
@@ -188,7 +192,13 @@ function laneModels(data: Roadmap, lane: Lane, moved: Record<string, [string, st
   if (below.length) groups.push({ key: "below-the-line", title: "Below the line", kind: "below", items: below });
   const lanes = groups.map((g) => {
     const p = pack(g.items, moved, (i) => g.kind !== "below" && broken(i).some((f) => f.kind === "dependency_order"));
-    return { key: g.key, title: g.title, kind: g.kind, units: p.units.map(kept), rows: p.rows, count: g.items.length };
+    const line: number[] = [];
+    let h = 0;
+    for (let r = 0; r < p.rows; r++) {
+      line.push(h);
+      h += RH + (p.callouts.has(r) ? CALL_H : 0);
+    }
+    return { key: g.key, title: g.title, kind: g.kind, units: p.units.map(kept), rows: p.rows, count: g.items.length, h, line, callouts: p.callouts };
   });
   return { lanes, places: new Map(below.map((i, n) => [i.id, n + 1])) };
 }
@@ -550,16 +560,24 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     const out: { top: number; height: number }[] = [];
     for (const l of lanes) {
       const prev = out[out.length - 1];
-      out.push({ top: prev ? prev.top + prev.height : top, height: l.rows * RH + 8 });
+      out.push({ top: prev ? prev.top + prev.height : top, height: l.h + 8 });
     }
     return out;
   }, [lanes, top]);
   const height = geo.length ? geo[geo.length - 1].top + geo[geo.length - 1].height : top + 36;
-  // Each item's row box (its pill sits 4 px into it), as the callouts and the chat's ghost read it.
+  // Each item's row box (its pill sits 4 px into it), as the callouts and the chat's ghost read it;
+  // a broken item's callout line, under its row.
   const layout: Layout = useMemo(() => {
     const y = new Map<string, number>();
-    lanes.forEach((l, n) => l.units.forEach((u) => y.set(u.item.id, geo[n].top + 4 + u.row * RH)));
-    return { rows: [], rowH: RH, labelW: LABEL_W, top, height, y };
+    const under = new Map<string, number>();
+    lanes.forEach((l, n) =>
+      l.units.forEach((u) => {
+        y.set(u.item.id, geo[n].top + 4 + l.line[u.row]);
+        // The callout (drawn 3 px into its box) 2 px under the pill.
+        if (l.callouts.has(u.row)) under.set(u.item.id, geo[n].top + 4 + l.line[u.row] + 4 + BAR_H + 2 - 3);
+      }),
+    );
+    return { rows: [], rowH: RH, labelW: LABEL_W, top, height, y, under };
   }, [lanes, geo, top, height]);
   const items = useMemo(() => new Map(data.items.map((i) => [i.id, i])), [data]);
   const units = useMemo(() => new Map(lanes.flatMap((l) => l.units.map((u) => [u.item.id, u] as const))), [lanes]);
@@ -809,7 +827,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
                     unit={u}
                     item={u.item}
                     lane={l.key}
-                    y={geo[n].top + 4 + u.row * RH + 4}
+                    y={geo[n].top + 4 + l.line[u.row] + 4}
                     sc={sc}
                     width={W}
                     span={moved[u.item.id]}
