@@ -261,7 +261,7 @@ function landsUnder(rows: Row[], row: Row, position: number): string {
   const side = order.filter((x) => x.above_line === row.above_line);
   const under = side[side.indexOf(row) - 1];
   const where = row.above_line ? "above the line" : "below the line";
-  if (under) return `It lands just under ${under.title}, ${where}.`;
+  if (under) return `It lands just under ${nameOf(under)}, ${where}.`;
   return row.above_line ? "It lands at the top." : "It lands first below the line.";
 }
 

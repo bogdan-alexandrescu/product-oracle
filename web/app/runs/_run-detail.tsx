@@ -86,6 +86,8 @@ const POLL_MS = 5000;
 const DRAFT_POLL_MS = 10_000;
 // The note to the agents is saved this long after the last keystroke.
 const NOTE_SAVE_MS = 800;
+/** The decision row's other buttons beside its filled primary: the primary's height, so the row is one height. */
+const DECIDE_ROW = "h-10!";
 
 type CheckpointReview = Schemas["CheckpointReview"];
 type WaitInfo = Schemas["WaitInfo"];
@@ -2253,9 +2255,10 @@ function CheckpointRow({
           </>
         ) : (
           <>
+            {/* Confirming Oracle's console answer is then the page's one filled primary (fix3-minors review). */}
             {answer?.needs === "confirm" && (
               <Button
-                variant="solid"
+                variant="primary"
                 icon="check"
                 disabled={busy || (answer.verdict === "MERGE" && !!confirmBlocked)}
                 title={answer.verdict === "MERGE" ? (confirmBlocked ?? undefined) : undefined}
@@ -2270,11 +2273,13 @@ function CheckpointRow({
               icon={answer?.needs === "confirm" ? undefined : "check"}
               disabled={busy || !!approveBlocked}
               title={approveBlocked ?? undefined}
+              className={answer?.needs === "confirm" ? DECIDE_ROW : ""}
               onClick={() => decideWith("approved")}
             >
               {withEdits ? label : "Approve and continue"}
             </Button>
             <Button
+              className={DECIDE_ROW}
               disabled={busy || (!note.trim() && !staged)}
               title={!note.trim() && !staged ? "Stage a change, ask a question, or write a note to send back." : undefined}
               onClick={() => decideWith("changes_requested")}
@@ -2282,13 +2287,13 @@ function CheckpointRow({
               Request changes
             </Button>
             {(answer?.needs === "unreadable" || answer?.needs === "unread") && (
-              <Button disabled={busy || redoBlocked} onClick={() => decideWith("redo")}>
+              <Button className={DECIDE_ROW} disabled={busy || redoBlocked} onClick={() => decideWith("redo")}>
                 Redo from {answer.redo_segment} (+{usd(answer.redo_cost_usd)})
               </Button>
             )}
           </>
         )}
-        <Button variant="ghost" icon="comment" onClick={() => setDiscussing(true)}>
+        <Button variant="ghost" icon="comment" className={redoOrContinue ? "" : DECIDE_ROW} onClick={() => setDiscussing(true)}>
           Discuss
         </Button>
       </div>
