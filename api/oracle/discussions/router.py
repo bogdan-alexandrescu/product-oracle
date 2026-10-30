@@ -59,6 +59,7 @@ from oracle.discussions.schemas import (
     Status,
     SummaryAsk,
 )
+from oracle.jobs import service as jobs_service
 from oracle.priorities.schemas import PushbackOut
 from oracle.slack import bridge
 
@@ -98,6 +99,10 @@ async def create_discussion(
     reply; ``wait`` runs it here, as there. When Oracle has answered a lot in a short time
     the discussion still starts, without a reply."""
     d, first = await _call(service.start(db, principal, body))
+    # qa-docs-33: during a review a Discuss thread on the version is whole-draft feedback.
+    item = await service.review_feedback(db, principal, d, first)
+    if item is not None:
+        await jobs_service.on_feedback(db, item.document_id, item.raised_on_version)
     reply = None
     if first is not None and await replies.wants_reply(db, d, first):
         with contextlib.suppress(replies.ReplyLimited):

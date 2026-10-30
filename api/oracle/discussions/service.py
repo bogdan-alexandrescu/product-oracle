@@ -1090,6 +1090,30 @@ async def start(
     return d, first
 
 
+async def review_feedback(
+    db: AsyncSession, principal: "Principal", d: Discussion, first: DiscussionMessage | None
+):
+    """qa-docs-33 "Merge into Discuss": during a review (the version is not approved), an open
+    Discuss thread on the whole version is also the whole-draft review feedback the panel's
+    old "Comment on the whole draft" left: a ``general`` item raised on the version by the
+    starter, its summary the first message. Every count that read that comment reads it (the
+    feedback list, the reviewer's and approver's counts, the Inbox, the review-comments job).
+    A private thread, one about a section, or one with no first message stays a discussion.
+    The item, or None."""
+    if d.subject_kind != "document" or d.origin != "discuss" or d.visibility != "open":
+        return None
+    if first is None:
+        return None
+    doc, version = await _document_version(db, d.subject)
+    if version.approved_at is not None:
+        return None
+    from oracle.review import service as review
+
+    return await review.create_general_feedback(
+        db, principal, str(doc.id), version.number, first.body
+    )
+
+
 async def share(
     db: AsyncSession, principal: "Principal", discussion_id: uuid.UUID, body: DiscussionShareIn
 ) -> Discussion:

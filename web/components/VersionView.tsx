@@ -175,10 +175,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<PanelTab>("feedback");
   const [filters, setFilters] = useState<FeedbackFilters>(DEFAULT_FILTERS);
-  // D13: "Comment on the whole draft" is open in the Feedback tab.
-  const [generalOpen, setGeneralOpen] = useState(false);
   // G1: a discussion open in the Feedback tab (its thread), or one being started.
-  const [discussion, setDiscussion] = useState<{ id: string; changes?: boolean } | { start: DiscussionSubject } | null>(null);
+  // qa-docs-33: `feedback`, a thread just started that is also the review's whole-draft feedback.
+  const [discussion, setDiscussion] = useState<{ id: string; changes?: boolean; feedback?: boolean } | { start: DiscussionSubject } | null>(null);
   const [discussionsKey, setDiscussionsKey] = useState(0);
   // A link with ?feedback=open (the Inbox's): the Feedback tab on every section's open items,
   // the first one brought into view, once (ffb19 lane).
@@ -616,13 +615,6 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     docQ.reload();
   }
 
-  /** Feedback on the whole draft (D13): a General item, shown under General. */
-  async function submitGeneral(body: string) {
-    await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/feedback", { params: { path: { doc, n } }, body: { body } }));
-    await feedbackQ.reload();
-    docQ.reload();
-  }
-
   async function reply(id: string, body: string) {
     await unwrap(api.POST("/v1/comments/{comment_id}/replies", { params: { path: { comment_id: id } }, body: { body } }));
     await commentsQ.reload();
@@ -792,9 +784,15 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         : undefined,
     [canComment, document_, n, discuss],
   );
+  // qa-docs-33: the whole draft's Discuss; during a review (not approved) its thread is also
+  // the review's whole-draft feedback (the API raises the General item).
+  const discussDraft = () =>
+    document_ && discuss({ kind: "document", subject: { document_id: document_.id, version: n }, label: document_.title, review: !readOnly });
   const closeDiscussion = () => {
+    const feedback = !!discussion && "id" in discussion && discussion.feedback;
     setDiscussion(null);
-    setFilters((f) => ({ ...f, kind: "discussion" }));
+    // qa-docs-33: back from whole-draft feedback, on General, where the old comment went.
+    setFilters((f) => (feedback ? { ...f, kind: "all", state: "open", scope: "general" } : { ...f, kind: "discussion" }));
     setDiscussionsKey((k) => k + 1);
   };
   const discussionPane =
@@ -809,9 +807,15 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         <StartDiscussion
           key={JSON.stringify(discussion.start.subject)}
           subject={discussion.start}
-          onStarted={(id) => {
-            setDiscussion({ id });
+          onStarted={(id, visibility) => {
+            const feedback = !!discussion.start.review && visibility === "open";
+            setDiscussion({ id, feedback });
             setDiscussionsKey((k) => k + 1);
+            // qa-docs-33: the thread is the review's whole-draft feedback: every count shows it.
+            if (feedback) {
+              void feedbackQ.reload();
+              docQ.reload();
+            }
           }}
           onCancel={closeDiscussion}
         />
@@ -1044,9 +1048,6 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         },
         onReply: reply,
         onResolve: resolve,
-        generalOpen,
-        setGeneralOpen,
-        onGeneral: canComment && !readOnly ? submitGeneral : undefined,
         discussions: { rows: discussionsQ.data ?? null, onOpen: (id) => setDiscussion({ id }) },
         // A decision on an item: its counts, and the comment it may have resolved.
         onChanged: () => {
@@ -1058,10 +1059,15 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   );
 
   // The version's other actions: in the toolbar on a wide screen, in the More sheet on a phone.
-  // qa-docs-47: each action once: the whole-draft comment is the Feedback tab's, and Brief /
-  // Full is the switch above.
+  // qa-docs-47: each action once: Brief / Full is the switch above. qa-docs-33: a phone's
+  // header has no Discuss (but on Items), so More has it: whole-draft feedback on a phone.
   const moreActions = document_ && (
     <>
+      {phone && pane !== "items" && canComment && !readOnly && (
+        <Button icon="comment" onClick={discussDraft}>
+          Discuss
+        </Button>
+      )}
       {n > 1 && (
         <LinkButton variant="ghost" href={`/documents/${doc}/diff?from=${n - 1}&to=${n}`}>
           Compare with v{n - 1}
@@ -1173,7 +1179,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                   // Items tab (no sections, so no section menus) a phone keeps Discuss too.
                   className={`${approveBlocked ? "self-start" : ""} ${pane === "items" ? "" : "max-[639px]:hidden"}`}
                   data-testid="doc-discuss"
-                  onClick={() => discuss({ kind: "document", subject: { document_id: document_.id, version: n }, label: document_.title })}
+                  onClick={discussDraft}
                 >
                   Discuss
                 </Button>

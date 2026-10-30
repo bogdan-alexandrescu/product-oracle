@@ -3126,6 +3126,43 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }
 
+/** D13: a "general" item on the whole draft, raised on `v` by `authorId` (as create_general_feedback). */
+function addGeneralFeedback(db: Db, llm: LlmContext, doc: DocumentRow, v: VersionRow, authorId: string, body: string, severity: FeedbackRow["severity"]): FeedbackRow {
+  const at = now();
+  const f: FeedbackRow = {
+    id: uuid(),
+    document_id: doc.id,
+    raised_on_version: v.number,
+    kind: "general",
+    comment_id: null,
+    section_review_id: null,
+    section_key: null,
+    summary: body,
+    author_id: authorId,
+    anchor: null,
+    verdict: null,
+    status: "open",
+    addressed_in_version: null,
+    resolution_note: null,
+    severity,
+    created_at: at,
+    updated_at: at,
+  };
+  db.feedback.push(f);
+  touch(db, doc.id);
+  onFeedback(llm, doc.id, v.number);
+  return f;
+}
+
+/** qa-docs-33 (as oracle.discussions.service.review_feedback): an open Discuss thread on a version under review is its whole-draft feedback. */
+function discussionReviewFeedback(db: Db, me: { id: string; role: Role }, d: DiscussionRow, body: string) {
+  if (d.subject_kind !== "document" || d.origin !== "discuss" || d.visibility !== "open") return;
+  const doc = findDocument(db, String(d.subject.document_id));
+  const v = doc && findVersion(db, doc, Number(d.subject.version));
+  if (!doc || !v || v.approved_at) return;
+  addGeneralFeedback(db, llmContext(db, me.id, me.role), doc, v, me.id, body, null);
+}
+
 /** An active member of this Oracle (a goal's owner must be one). */
 function activeMember(db: Db, userId: string): boolean {
   return db.members.some((m) => m.id === userId && m.status !== "disabled");
@@ -4774,6 +4811,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       members: db.members,
       me: { id: me.id, role: me.role },
       resolve: (kind, subject) => discussionSubject(db, kind, subject),
+      reviewFeedback: (d, body) => discussionReviewFeedback(db, me, d, body),
       uuid,
       now,
       refusal: () => poolRefusal(localStorage.getItem(MOCK_SCENARIO_KEY)),
@@ -5753,29 +5791,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const input = await body<Schemas["GeneralFeedbackCreate"]>();
     const text = (input.body ?? "").trim();
     if (!text || input.body.length > 4000) return json(422, { detail: "Feedback needs 1 to 4,000 characters" });
-    const at = now();
-    const f: FeedbackRow = {
-      id: uuid(),
-      document_id: doc.id,
-      raised_on_version: v.number,
-      kind: "general",
-      comment_id: null,
-      section_review_id: null,
-      section_key: null,
-      summary: input.body,
-      author_id: me.id,
-      anchor: null,
-      verdict: null,
-      status: "open",
-      addressed_in_version: null,
-      resolution_note: null,
-      severity: input.severity ?? null,
-      created_at: at,
-      updated_at: at,
-    };
-    db.feedback.push(f);
-    touch(db, doc.id);
-    onFeedback(llm, doc.id, v.number);
+    const f = addGeneralFeedback(db, llm, doc, v, me.id, input.body, input.severity ?? null);
     return json(201, withSuggestion(db.llm, f));
   }
   if (sub === "sections" && p[7] === "review" && m === "PUT") {

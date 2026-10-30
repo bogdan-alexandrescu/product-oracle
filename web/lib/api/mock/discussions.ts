@@ -148,6 +148,8 @@ export type DiscussionsContext = {
   me: { id: string; role: Role };
   /** The subject's key, label and link; a string is the refusal (status, detail). */
   resolve: (kind: Kind, subject: Record<string, unknown>) => SubjectInfo | { status: number; detail: string };
+  /** qa-docs-33: a started discussion's first message, for the review's whole-draft feedback (server.ts). */
+  reviewFeedback?: (d: DiscussionRow, body: string) => void;
   uuid: () => string;
   now: () => string;
   /** Writes after the response (a streaming reply): applied to the saved state in turn. */
@@ -1394,6 +1396,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         const res = await postWithReply(d, input.message);
         if (!res.ok) return res;
         reply = ((await res.json()) as Schemas["DiscussionMessagePosted"]).reply ?? null;
+        ctx.reviewFeedback?.(d, input.message.body);
       }
       return json(201, { ...out(d), reply });
     }
