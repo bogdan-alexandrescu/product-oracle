@@ -95,9 +95,11 @@ const DOC_ID = stableUuid("simple-one-pager-doc");
 export function seedOnePager(ownerless = false): OnePagerDb {
   const sections: Sec[] = [
     { key: "problem", heading: "Problem", body: "New workspace admins stall during setup and never invite a teammate in the first week." },
+    // ad-onepager review: stories before who has it are never who has it.
+    { key: "stories", heading: "User stories", body: "- As a new admin, I want a checklist so I know the next step" },
     { key: "who", heading: "Who has it", body: "Admins of new teams with fewer than ten people." },
     { key: "build", heading: "What we will build", body: "- A setup checklist that shows the next step\n- Invite suggestions from the admin's calendar\n- A sample project created on day one" },
-    { key: "outcomes", heading: "Outcomes", body: "- Teammate invited in week one from 48% to 65%\n- Setup finished in a day from 30% to 50%" },
+    { key: "outcomes", heading: "Outcomes", body: "- Teammate invited in week one from 48% to 65%\n- Setup finished in a day from 30% to 50%*" },
     { key: "not-doing", heading: "Not doing", body: "- Single sign-on setup\n- A mobile setup flow" },
     { key: "risks", heading: "Risks and open decisions", body: "- Calendar access may scare admins away\n- Decide whether the sample project can be deleted\n- F-26 may slip past M1†" },
     // Reads clearly (2026-10-30): a measure, the codes' names and numbers that disagree.
@@ -121,7 +123,7 @@ export function seedOnePager(ownerless = false): OnePagerDb {
       ] },
       { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", lines: [
         { id: "outcomes-1", text: "Teammate invited in week one from 48% to 65%", keys: ["outcomes"], metric: { name: "Teammate invited in week one", from: "48%", to: "65%" } },
-        { id: "outcomes-2", text: "Setup finished in a day from 30% to 50%", keys: ["outcomes"], metric: { name: "Setup finished in a day", from: "30%", to: "50%" } },
+        { id: "outcomes-2", text: "Setup finished in a day from 30% to 50%*", keys: ["outcomes"], metric: { name: "Setup finished in a day", from: "30%", to: "50%*" } },
       ] },
       { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", lines: [
         { id: "not_doing-1", text: "Single sign-on setup", keys: ["not-doing"] },

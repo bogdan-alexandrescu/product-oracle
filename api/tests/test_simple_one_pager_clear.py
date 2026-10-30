@@ -26,6 +26,19 @@ Test cards (protects / fails_when / no_claim):
   names them, refused when it still does not; fails_when=a problem with no one in it is
   built; no_claim=the prompt.
 - test_pure_checks: protects=the module's rules on their own; fails_when=a rule drifts.
+- test_review_who_marks_codes: protects=who has it comes from a section naming the people
+  (personas, users), never from "User stories" or "Customer quotes" before it; a trailing
+  "*" is a mark kept only with its "* note" or "\\* note"; a standard name (ISO-8601,
+  RFC-3339) is not a code with no name; fails_when=a story is shown as who has it, a bare
+  "*" stays, or a standard asks for a name; no_claim=the web's words.
+- test_words_keyed_flow_on_a_bet_with_a_code: protects=a flow keyed by a bet's words is
+  found when its line gets a code's name (the read and the flow's panel);
+  fails_when=the bet loses its flow and offers "Draw the flow"; no_claim=the drawing.
+- test_edit_starts_from_the_prds_words: protects=a line whose code got a name or whose mark
+  was dropped carries the PRD's words (``words``) for the Edit box; fails_when=the box
+  starts from the shown words; no_claim=the web's box (the Playwright spec).
+- test_draw_the_flow_agrees_with_the_request: protects=whoever is offered "Draw the flow"
+  may ask for it and no one else; fails_when=the link returns 403; no_claim=the drawing.
 """
 
 # ruff: noqa: E501 - the fixture PRDs keep their long lines
@@ -241,13 +254,14 @@ async def test_problem_naming_no_one_is_asked_again(client):
     view = await get(client, ctx, "owner", "team-invites")
     assert texts(view, "problem") == ["New admins stall in week one."]
 
-    # Twice naming no one: the quick read stays.
+    # Twice naming no one ("Administrators" is not "admins" to names_who).
     asked.clear()
-    answers[1] = answers[0]
+    answers[1] = _answer("Administrators cannot onboard teams.")
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
         out = await one_pager.run_job(s, job, ask)
-    assert out["built"] is False and "names no one" in out["reason"]
+    # Twice naming no one: built anyway (the page shows who has it beside the problem).
+    assert out["built"] is True
     assert len(asked) == 2
 
 
@@ -279,3 +293,89 @@ def test_pure_checks():
     assert [x.text for x in checks.numbers([head])] == [
         "“Later · 3 items” says 3 items, but it lists 2."
     ]
+
+
+def test_review_who_marks_codes():
+    stories = _sec(
+        "stories",
+        "User stories",
+        "- As a team admin, I want to invite people in bulk so\n- As a new member, I want a reminder",
+    )
+    quotes = _sec("quotes", "Customer quotes", "- \u201cSetup took us a week\u201d")
+    personas = _sec(
+        "personas", "Personas", "- Workspace admins: set up alone\n- Team leads: invite later"
+    )
+    assert checks.who_has_it([stories, quotes, personas]) == "Workspace admins; Team leads"
+    users = _sec("users", "Users", "- New admins: alone")
+    assert checks.who_has_it([quotes, users]) == "New admins"
+    # A personas section wins over a "customers" heading that comes first.
+    customers = _sec("customers", "Customers", "- Small agencies")
+    assert checks.who_has_it([customers, personas]) == "Workspace admins; Team leads"
+    assert checks.who_has_it([stories]) is None
+    # A trailing "*" is a mark: kept only with its note.
+    assert checks.marked("Activation 40%*", {}) == ("Activation 40%", [])
+    notes = checks.footnote_notes(
+        [_sec("o", "Outcomes", "- Activation from 20% to 40%*\n\n\\* Counted weekly.")]
+    )
+    assert notes == {"*": "Counted weekly."}
+    assert checks.marked("Activation 40%*", notes) == ("Activation 40%*", ["* Counted weekly."])
+    lone = checks.footnote_notes([_sec("o", "Outcomes", "Activation 40%*\n\n* Counted weekly.")])
+    assert lone == {"*": "Counted weekly."}
+    # A list of "*" bullets is not a note.
+    assert checks.footnote_notes([_sec("b", "Build", "* One\n* Two")]) == {}
+    # Emphasis is not a mark.
+    assert (
+        checks.marked("An *easy* setup and **bold** words", {})[0]
+        == "An *easy* setup and **bold** words"
+    )
+    # A standard's name is not a code to name.
+    assert checks.with_names("Dates in ISO-8601 and RFC-3339; F-9 too", {}) == (
+        "Dates in ISO-8601 and RFC-3339; F-9 too", ["F-9"])  # fmt: skip
+
+
+async def test_words_keyed_flow_on_a_bet_with_a_code(client):
+    import uuid
+
+    from oracle.simple import visuals
+    from tests.test_simple_visuals_api import run_visual_jobs
+
+    ctx = await clear_world(client)
+    view = await get(client, ctx, "owner", "team-invites")
+    doc_id = uuid.UUID(view["document"]["id"])
+    said = "F-26 for teams of any size"  # the bet's words before the code got its name
+    old = visuals.words_subject(doc_id, said)
+    async with tenant_session(ctx.tenant_id) as s:
+        await visuals.request_visual(s, None, "one_pager_line", old, said, document_id=doc_id)
+        await s.commit()
+    await run_visual_jobs(ctx)
+    for who in ("owner", "viewer"):
+        bet = block(await get(client, ctx, who, "team-invites"), "bets")["lines"][0]
+        assert bet["text"] == "F-26 Bulk invite for teams of any size", who
+        assert bet["flow_subject"] == str(old) and bet["flow"] is not None, who
+        assert bet["can_draw_flow"] is False, who
+    r = await client.get(f"/v1/simple/visuals/one_pager_line/{old}",
+                         params={"document_id": str(doc_id)}, headers=ctx.as_("viewer"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["flow"]["version"] == 1
+
+
+async def test_edit_starts_from_the_prds_words(client):
+    ctx = await clear_world(client)
+    view = await get(client, ctx, "owner", "team-invites")
+    bets = block(view, "bets")["lines"]
+    assert bets[0]["words"] == "F-26 for teams of any size"
+    assert bets[1]["words"] == "A guided first project (P0)"
+    outcomes = block(view, "outcomes")["lines"]
+    assert outcomes[2]["words"] == "Weekly active teams from 1,000 to 1,500\u2021"
+    # A line annotate leaves as it is has no other words.
+    assert block(view, "bets")["lines"][2]["words"] is None
+
+
+async def test_draw_the_flow_agrees_with_the_request(client):
+    ctx = await clear_world(client)
+    for who in ("owner", "approver", "commenter", "viewer"):
+        view = await get(client, ctx, who, "faster-export")
+        bet = block(view, "bets")["lines"][0]
+        r = await client.post(f"/v1/simple/visuals/one_pager_line/{bet['flow_subject']}/request",
+                              json={"document_id": view["document"]["id"]}, headers=ctx.as_(who))  # fmt: skip
+        assert (r.status_code < 400) is bet["can_draw_flow"], (who, r.status_code, r.text)

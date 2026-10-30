@@ -14,6 +14,10 @@ import { expect, test, type Page } from "./test";
  * - protects=a bet with no flow says nothing to a viewer or a commenter, and offers an owner
  *   a small "Draw the flow" link at the end of its line, which draws it; fails_when="No flow
  *   yet · Ask Oracle to draw it" shows under a bet; no_claim=the flow's own panel.
+ * - protects (ad-onepager review)=who has it never comes from "User stories" before it; a
+ *   trailing "*" with no note is gone; an owner's Edit box starts from the PRD's words, not
+ *   the code's name; fails_when=a story shows as who has it, a bare "*" stays, or the box
+ *   holds "F-26 Calendar invites"; no_claim=the API's checks (pytest).
  */
 const URL = "/simple/prds/guided-setup";
 const LOOK_COUNT = "“Eight features wait for next” says 8, but “Not this quarter” shows 6 items.";
@@ -27,6 +31,8 @@ async function readsClearly(page: Page) {
     "counted as: admins whose first invite is accepted within 7 days · from the product events table",
   );
   await expect(outcomes.locator('[data-line="outcomes-2"]').getByTestId("outcome-measure")).toHaveText("How it is measured is not in the PRD yet");
+  await expect(outcomes.locator('[data-line="outcomes-2"]')).toContainText("30% → 50%");
+  await expect(outcomes.locator('[data-line="outcomes-2"]')).not.toContainText("*");
   const risks = page.getByRole("region", { name: "Risks and open decisions" });
   await expect(risks.locator('[data-line="risks-3"]')).toContainText("F-26 Calendar invites may slip past M1");
   await expect(page.getByRole("article", { name: "One-pager" })).not.toContainText("†");
@@ -64,6 +70,16 @@ for (const phone of [false, true]) {
       const flow = page.getByRole("group", { name: /^User flow of “Invite suggestions/ });
       await expect(flow.getByTestId("flow-drawn")).toContainText("Version 1");
       await expect(bet.getByRole("button", { name: /^Draw the flow/ })).toHaveCount(0);
+    });
+
+    test("an owner's Edit box starts from the PRD's words", async ({ page }) => {
+      await login(page);
+      await page.goto(URL);
+      const risk = page.locator('[data-line="risks-3"]');
+      await expect(risk).toContainText("F-26 Calendar invites may slip past M1");
+      await risk.hover();
+      await risk.locator('[data-edit-for="risks-3"]').click();
+      await expect(page.locator("#edit-risks-3")).toHaveValue("F-26 may slip past M1†");
     });
 
     for (const who of ["viewer@example.com", "commenter@example.com"]) {
