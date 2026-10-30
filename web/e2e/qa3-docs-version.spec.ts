@@ -68,9 +68,12 @@ test.describe("desktop", () => {
     // Saved carts has no feedback: one whole-draft comment is listed with no filter rows.
     await page.goto(CARTS);
     await expect(page.getByTestId("document-sections")).toBeVisible();
-    await panel(page).getByRole("button", { name: "Comment on the whole draft" }).click();
-    await panel(page).getByRole("textbox", { name: "Comment on the whole draft" }).fill("Say who owns the reminder email.");
-    await panel(page).getByRole("button", { name: "Add", exact: true }).click();
+    // Whole-draft feedback goes through the header's Discuss (fix3-discuss, on main since train AC).
+    await page.getByTestId("doc-discuss").click();
+    const start = page.getByTestId("start-discussion").filter({ visible: true });
+    await start.getByRole("textbox", { name: "First message" }).fill("Say who owns the reminder email.");
+    await start.getByRole("button", { name: "Start discussion" }).click();
+    await page.getByTestId("discussion-thread").filter({ visible: true }).getByRole("button", { name: "All feedback" }).click();
     await expect(panel(page).getByTestId("feedback-item").filter({ hasText: "Say who owns the reminder email." })).toBeVisible();
     await expect(panel(page).getByTestId("feedback-state")).toHaveCount(0);
     await expect(panel(page).getByTestId("inspector-scope")).toHaveCount(0);

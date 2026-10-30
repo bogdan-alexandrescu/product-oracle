@@ -216,8 +216,9 @@ test("an approver sees Regenerate but no Delete, and no Trash", async ({ page })
   const menu = page.getByRole("menu", { name: `Actions for ${ROADMAP}` });
   await expect(menu.getByRole("menuitem")).toHaveText(["Regenerate…"]);
   await page.keyboard.press("Escape");
-  // The header's Open latest opens the latest version, where the section editors are (qa-docs-27).
-  await page.getByRole("link", { name: "Open latest (v1)" }).click();
+  // A roadmap's header has no Open latest (qa-docs-68, the roadmap page's own lane); its version
+  // inspector opens the latest version, where the section editors are (qa-docs-27).
+  await page.getByTestId("version-inspector").getByRole("link", { name: "Open v1" }).click();
   await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap\/v\/1/);
 
   await page.goto("/settings/members");

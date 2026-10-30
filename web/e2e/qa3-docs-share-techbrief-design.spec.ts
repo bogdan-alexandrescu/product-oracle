@@ -170,7 +170,7 @@ test.describe("phone", () => {
     // Opening a verdict's note brings its Save clear of the bars too (without the fix it opens
     // under them).
     await bar.getByRole("button", { name: "Request changes" }).click();
-    const save = bar.getByRole("button", { name: /^Save/ });
+    const save = bar.getByTestId("verdict-submit");
     await expect(save).toBeVisible();
     await expect
       .poll(async () => {

@@ -125,7 +125,7 @@ test("qa-onboarding-22, 23, qa-work-3, 31: a new company's first brief, from New
   await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses at checkout");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Returning buyers retype their address at every checkout.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1, name: "Saved addresses at checkout" })).toBeAttached();
 

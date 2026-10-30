@@ -47,9 +47,10 @@ test("qa-shell-19: a viewer's Inbox has no source to fix; the owner's has it wit
 });
 
 test("qa-shell-26: on a desktop the sorting control says what it does", async ({ page }) => {
+  // Requests' own lane names it "Auto-sort" (train AD: the page's lane wins).
   await login(page);
   await openRequests(page);
-  await expect(actions(page).getByRole("button", { name: "Sort incoming requests automatically: Off" })).toBeVisible();
+  await expect(actions(page).getByRole("button", { name: "Auto-sort: Off" })).toBeVisible();
   await expect(actions(page).getByRole("button", { name: "Interview a customer" })).toBeVisible();
   await expect(actions(page).getByRole("button", { name: "New request", exact: true })).toBeVisible();
   await expect(page.getByTestId("requests-more")).toHaveCount(0);
@@ -67,7 +68,7 @@ test.describe("on a phone", () => {
     const more = (await page.getByTestId("requests-more").boundingBox())!;
     expect(Math.abs(add.y - more.y)).toBeLessThan(1);
     await expect(page.getByRole("button", { name: "Interview a customer" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Sort incoming requests automatically/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Auto-sort:/ })).toHaveCount(0);
 
     // Everything the desktop offers is under More.
     // review minor: More says it opens a panel, for a screen reader.

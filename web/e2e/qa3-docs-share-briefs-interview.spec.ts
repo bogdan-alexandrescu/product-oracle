@@ -73,7 +73,7 @@ test.describe("desktop", () => {
     await expect(question.getByRole("article").getByRole("button", { name: "Answer", exact: true })).toBeVisible();
 
     const read = page.getByTestId("intake-read");
-    await expect(read.getByTestId("intake-read-count")).toHaveText("3 of 3 analyses left today");
+    await expect(read.getByTestId("intake-read-count")).toHaveText("3 analyses left today");
     const help = page.getByTestId("intake-oracle-help");
     await expect(help).toBeVisible();
     await expect(help).toContainText("Read the brief again: Oracle reads the brief and its sources");
@@ -110,22 +110,19 @@ test.describe("desktop", () => {
     await openInterview(page);
     await expect(page.getByTestId("interview-about")).toContainText("Dana Reyes");
 
+    // The interview's page has one way back, "← Interviews" (qa-work-44), and no tabs.
     const header = page.locator("[data-page-header]");
-    const back = header.getByRole("link", { name: "All interviews" });
-    await expect(back).toBeVisible();
-    await expect(back).not.toContainText("←");
-    await expect(back.locator("svg")).toHaveCount(1);
-
-    // The tabs keep the page's 16 px from the title row, not 8.
-    const title = await header.getByRole("heading", { level: 1 }).boundingBox();
-    const action = await header.getByRole("button", { name: "Withdraw link" }).boundingBox();
-    const tabs = await page.getByTestId("requests-nav").filter({ visible: true }).boundingBox();
-    expect(title && action && tabs).toBeTruthy();
-    const rowBottom = Math.max(title!.y + title!.height, action!.y + action!.height);
-    expect(tabs!.y - rowBottom).toBeGreaterThanOrEqual(14);
+    const back = header.getByTestId("interview-back");
+    await expect(back).toHaveText("← Interviews");
+    await expect(page.getByTestId("requests-nav")).toHaveCount(0);
 
     await back.click();
     await expect(page).toHaveURL(/\/requests\/interviews$/);
+    // On the Interviews tab the tabs keep the page's 16 px from the title row, not 8.
+    const title = await header.getByRole("heading", { level: 1 }).boundingBox();
+    const tabs = await page.getByTestId("requests-nav").filter({ visible: true }).boundingBox();
+    expect(title && tabs).toBeTruthy();
+    expect(tabs!.y - (title!.y + title!.height)).toBeGreaterThanOrEqual(14);
   });
 });
 

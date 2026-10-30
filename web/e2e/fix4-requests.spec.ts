@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
-import { login, signOut } from "./helpers";
+import { login, pickZone, signOut } from "./helpers";
 
 /*
  * Fix 4 QA findings on Requests (qa-work-8, qa-work-35 … qa-work-44, qa-onboarding-26,
@@ -39,7 +39,7 @@ const inspector = (page: Page) => page.getByTestId("request-inspector");
 /** Sets the Company time zone on Settings › Company, as an owner does. */
 async function setZone(page: Page, zone: string) {
   await page.goto("/settings/company");
-  await page.getByLabel("Company time zone").selectOption(zone);
+  await pickZone(page, zone);
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await page.goto("/home");
