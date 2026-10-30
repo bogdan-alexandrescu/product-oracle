@@ -142,7 +142,7 @@ for (const scheme of ["light", "dark"] as const) {
       await bet.getByRole("button", { name: "Propose wording for “Invite suggestions from the admin's" }).click();
       await page.getByLabel("New wording for").fill("Invite suggestions from shared contacts");
       await page.getByRole("button", { name: "Propose", exact: true }).click();
-      const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "proposes new wording" });
+      const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "You propose new wording" });
       await expect(note.getByTestId("proposal-words")).toHaveText("“Invite suggestions from shared contacts”");
     });
 

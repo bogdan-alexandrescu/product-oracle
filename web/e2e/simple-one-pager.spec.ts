@@ -131,7 +131,7 @@ for (const phone of [false, true]) {
         await page.getByLabel("New wording for").fill("Invite suggestions from shared contacts");
         await page.getByRole("button", { name: "Propose", exact: true }).click();
         await expect(page.locator('[data-line="bets-2"]')).toHaveAttribute("data-state", "proposal");
-        const mine = notes(page).filter({ hasText: "proposes new wording for “Invite suggestions" }).filter({ visible: true });
+        const mine = notes(page).filter({ hasText: "You propose new wording for “Invite suggestions" }).filter({ visible: true });
         await expect(mine).toBeVisible();
         await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
         // The account menu lives in the desktop rail: switch people there, then back to
