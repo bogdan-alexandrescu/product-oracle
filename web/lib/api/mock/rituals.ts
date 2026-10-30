@@ -24,7 +24,7 @@ type Member = { id: string; email: string; role: Role; status?: string };
 
 /** A stored ritual: the API's record without what is derived on the way out. */
 /** `attendees_edited_at`: when an owner last edited the attendees (the API's column; not on the way out). */
-type Ritual = Omit<RitualOut, "last_pre_read" | "schedule"> & { schedule: Schedule; created_at: string; attendees_edited_at?: string | null };
+type Ritual = Omit<RitualOut, "last_pre_read" | "schedule" | "waits_for_goal"> & { schedule: Schedule; created_at: string; attendees_edited_at?: string | null; waits_for_goal?: boolean };
 /** A stored occurrence; the summary run finishes on its owner's `summary_reads`-th read. */
 type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions" | "summary_offered"> & {
   summary_reads?: number;
