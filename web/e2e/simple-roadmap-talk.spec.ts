@@ -194,6 +194,28 @@ for (const [phone, dark] of [
     });
 
     /**
+     * Card roadmap-talk-move-months (dod-data-2 review minor): protects = "move it two months
+     * later" in the item's talk is read as the API reads it (roadmap_talk._move_kw: a shift
+     * of two months, not weeks): "I understood: move Adaptive pacing two months later, to
+     * Jan 16 – Jan 27." and Apply moves the item there; fails_when = the mock does not
+     * understand months (no card) or moves by another span; no_claim = quarters and days
+     * (the same rule, not driven here).
+     */
+    test(`a move by months is restated and applied from the card's talk (${where})`, async ({ page }) => {
+      await signIn(page, EMAILS.owner, "/simple/roadmap");
+      const { card: floating, talk } = await openTalk(page, "adaptive-pacing", phone);
+      await say(talk, "move it two months later");
+      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move Adaptive pacing two months later, to Jan 16 – Jan 27.");
+      const c = talk.getByTestId("chat-card");
+      await expect(c).toHaveCount(1);
+      await expect(c.getByTestId("chat-card-change")).toHaveText("Before: Nov 16 – Nov 27 → After: Jan 16 – Jan 27");
+      await tap(c.getByRole("button", { name: "Apply" }));
+      await expect(c).toHaveAttribute("data-status", "applied");
+      if (phone) await tap(floating.getByRole("tab", { name: "Details" }));
+      await expect(floating.getByTestId("card-dates")).toContainText("Jan 16");
+    });
+
+    /**
      * Card roadmap-talk-two-actions: protects = on the roadmap's Ask panel, "push the
      * reliability work after the sign-up work and add a dashboard item to M2 under Growth"
      * is read as two cards ("I understood two changes:" with Apply all); Correct opens the

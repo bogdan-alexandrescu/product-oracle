@@ -44,6 +44,11 @@ Test cards (protects / fails_when / no_claim):
   fails_when=a proposer or a viewer changes the decider, a proposal is routed to the
   owners instead of the question's decider, or a stranger reaches the question;
   no_claim=an accept-time outdated check (name_decider has none by design).
+- test_open_question_proposal_follows_a_renamed_decider: protects=a decide_question
+  proposal made before the owner names another decider waits in the new decider's Inbox
+  (not the old one's) and the new decider accepts it; fails_when=it stays in the old
+  decider's Inbox, whose accept is refused, so nobody who can decide it sees it;
+  no_claim=the mock (web/e2e/simple-question-route-mock.spec.ts pins it).
 - test_add_key_date_accept_never_overwrites: protects=an add_key_date proposal names a
   fresh key date id, so it can never be "changed since"; accepted while the roadmap's
   draft is in review it is refused 409 writing nothing; accepted later beside an
@@ -274,6 +279,36 @@ async def test_name_decider_role_matrix(client):
     assert sorted(r.status for r in rows) == [
         "applied", "applied", "proposed", "proposed", "undone", "undone",
     ]  # fmt: skip
+
+
+async def test_open_question_proposal_follows_a_renamed_decider(client):
+    ctx = await make_ctx()
+    await q_tests.seed(ctx)
+    q = next(x for x in (await q_tests.page(client, ctx))["questions"] if x["code"] == "Q3")
+    r = await client.post(CHANGES, headers=ctx.as_("commenter"), json={
+        "op": "decide_question", "target": {"decision_id": q["id"]},
+        "before": {"status": "proposed"}, "after": {"option": "recommended"}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    prop = r.json()["change"]
+    assert prop["routed_to"] == [str(ctx.users["decider"].id)]
+    r = await client.post(CHANGES, headers=ctx.as_("owner"), json={
+        "op": "name_decider", "target": {"decision_id": q["id"]}, "before": {},
+        "after": {"decider_id": str(ctx.users["approver"].id)}})  # fmt: skip
+    assert r.status_code == 201, r.text
+
+    async def inbox(role: str) -> list[str]:
+        got = (await client.get("/v1/inbox", headers=ctx.as_(role))).json()
+        return [p["id"] for p in got["simple_proposals"]]
+
+    assert await inbox("decider") == []
+    assert await inbox("approver") == [prop["id"]]
+    listed = await client.get(CHANGES, params={"status": "proposed"}, headers=ctx.as_("approver"))
+    mine = next(c for c in listed.json() if c["id"] == prop["id"])
+    assert mine["routed_to"] == [str(ctx.users["approver"].id)] and mine["can_decide"] is True
+    r = await client.post(f"{CHANGES}/{prop['id']}/accept", json={}, headers=ctx.as_("approver"))
+    assert r.status_code == 200, r.text
+    after = {x["code"]: x for x in (await q_tests.page(client, ctx))["questions"]}["Q3"]
+    assert after["status"] == "decided"
 
 
 # --------------------------------------------------------------------------- add_key_date
