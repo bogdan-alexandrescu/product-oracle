@@ -103,3 +103,29 @@ test.describe("phone", () => {
     await expect(general(page)).toHaveText(/^General\s*1$/);
   });
 });
+
+// fix3-discuss review: the General item leads to its thread, and resolving it closes the thread.
+test("the approver opens a General item's thread, and resolving the item closes it", async ({ page }) => {
+  await login(page, "commenter@example.com");
+  await page.goto(DOC);
+  await openSection(page, "problem");
+  await page.getByTestId("doc-discuss").click();
+  await startThread(page);
+  await signOut(page);
+
+  await login(page, "approver@example.com");
+  await page.goto(DOC);
+  await openSection(page, "problem");
+  await general(page).click();
+  const mine = items(page).filter({ hasText: REMARK });
+  await mine.getByRole("button", { name: "Open the thread" }).click();
+  await expect(thread(page)).toBeVisible();
+  await expect(thread(page)).toContainText(REMARK);
+  await thread(page).getByRole("button", { name: "All feedback" }).click();
+
+  await general(page).click();
+  await items(page).filter({ hasText: REMARK }).getByRole("button", { name: "Resolve" }).click();
+  await panel(page).getByRole("button", { name: /^Done/ }).click();
+  await items(page).filter({ hasText: REMARK }).getByRole("button", { name: "Open the thread" }).click();
+  await expect(thread(page)).toContainText("Closed");
+});

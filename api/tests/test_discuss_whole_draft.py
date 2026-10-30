@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from oracle.docs.models import Document
 from oracle.review.models import FeedbackItem
+from oracle.review.schemas import GENERAL_FEEDBACK_MAX
 from oracle.tenancy import tenant_session
 from tests.test_general_feedback import SLUG, two_versions, user_id
 from tests.test_runs import as_user
@@ -104,3 +105,126 @@ async def test_a_discussion_stays_a_discussion_outside_a_review(client):
     body = discuss(document_id, 2)
     assert (await client.post("/v1/discussions", json=body, headers=reviewer)).status_code == 201
     assert await items(tenant_id) == []
+
+
+# --- fix3-discuss review: the item follows its thread --------------------------------------
+
+
+async def started(client, headers, document_id, n=2, **extra) -> dict:
+    resp = await client.post(
+        "/v1/discussions", json=discuss(document_id, n, **extra), headers=headers
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+async def first_message(client, headers, d: str) -> str:
+    resp = await client.get(f"/v1/discussions/{d}/messages", headers=headers)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    rows = body["items"] if isinstance(body, dict) else body
+    return next(m["id"] for m in rows if m["author_kind"] == "person")
+
+
+async def test_editing_the_first_message_updates_the_item(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
+    mid = await first_message(client, reviewer, d)
+
+    edited = {"body": "The goals don't match the problem, and the metrics are missing."}
+    resp = await client.patch(f"/v1/discussions/{d}/messages/{mid}", json=edited, headers=reviewer)
+    assert resp.status_code == 200, resp.text
+
+    [item] = await items(tenant_id)
+    assert item.summary == edited["body"] and item.status == "open"
+
+
+async def test_deleting_the_first_message_withdraws_the_item(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver")
+    d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
+    mid = await first_message(client, reviewer, d)
+
+    resp = await client.delete(f"/v1/discussions/{d}/messages/{mid}", headers=reviewer)
+    assert resp.status_code == 204, resp.text
+
+    assert await items(tenant_id) == []
+    listed = (await client.get(f"/v1/documents/{SLUG}/feedback", headers=approver)).json()
+    assert listed == []
+    inbox = (await client.get("/v1/inbox", headers=approver)).json()
+    assert [i for i in inbox["items"] if i["kind"] == "general"] == []
+
+
+async def test_making_the_thread_private_withdraws_the_item(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    out = await started(client, reviewer, await doc_id(tenant_id))
+
+    patch = {"visibility": "private", "lock_version": out["lock_version"]}
+    resp = await client.patch(f"/v1/discussions/{out['id']}", json=patch, headers=reviewer)
+    assert resp.status_code == 200, resp.text
+
+    assert await items(tenant_id) == []
+
+
+async def test_the_item_leads_to_its_thread_and_resolving_it_closes_the_thread(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver")
+    d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
+
+    [listed] = (await client.get(f"/v1/documents/{SLUG}/feedback", headers=approver)).json()
+    assert listed["discussion_id"] == d
+
+    resolve = {"status": "addressed", "resolution_note": "Goals rewritten."}
+    resp = await client.patch(f"/v1/feedback/{listed['id']}", json=resolve, headers=approver)
+    assert resp.status_code == 200, resp.text
+
+    thread = (await client.get(f"/v1/discussions/{d}", headers=reviewer)).json()
+    assert thread["status"] == "closed"
+
+
+async def test_a_first_message_too_long_for_whole_draft_feedback_is_refused(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    body = discuss(await doc_id(tenant_id), 2, message="x" * (GENERAL_FEEDBACK_MAX + 1))
+
+    resp = await client.post("/v1/discussions", json=body, headers=reviewer)
+
+    assert resp.status_code == 422, resp.text
+    assert "4,000" in resp.text
+    assert await items(tenant_id) == []
+    listed = (await client.get("/v1/discussions", headers=reviewer)).json()
+    rows = listed["items"] if isinstance(listed, dict) else listed
+    assert rows == []
+
+
+async def test_a_discussion_on_a_draft_does_not_start_its_review(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == SLUG))
+        assert doc.status == "draft"
+
+    await started(client, reviewer, doc.id)
+
+    async with tenant_session(tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == SLUG))
+        assert doc.status == "draft"
+    assert len(await items(tenant_id)) == 1
+
+
+async def test_a_mentioned_approver_hears_of_the_remark_once(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver", "approver@example.com")
+    approver_id = await user_id(tenant_id, "approver@example.com")
+    d = (await started(client, reviewer, await doc_id(tenant_id), participants=[str(approver_id)]))[
+        "id"
+    ]
+
+    inbox = (await client.get("/v1/inbox", headers=approver)).json()
+    assert [i["kind"] for i in inbox["items"]] == ["general"]
+    assert [r for r in inbox["discussions"] if r["discussion_id"] == d] == []
