@@ -228,3 +228,52 @@ async def test_a_mentioned_approver_hears_of_the_remark_once(client):
     inbox = (await client.get("/v1/inbox", headers=approver)).json()
     assert [i["kind"] for i in inbox["items"]] == ["general"]
     assert [r for r in inbox["discussions"] if r["discussion_id"] == d] == []
+
+
+async def oracle_suggests(tenant_id: uuid.UUID, kind: str) -> str:
+    from oracle.jobs.models import LlmSuggestion
+
+    [item] = await items(tenant_id)
+    async with tenant_session(tenant_id) as s:
+        row = LlmSuggestion(
+            document_id=item.document_id,
+            feedback_item_id=item.id,
+            version_number=2,
+            classification="other",
+            kind=kind,
+            rationale="Nothing in the draft to change.",
+        )
+        s.add(row)
+        await s.commit()
+        return str(row.id)
+
+
+async def test_a_decision_on_oracles_suggestion_that_closes_the_item_closes_the_thread(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver")
+    d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
+    sid = await oracle_suggests(tenant_id, "none")
+
+    resp = await client.post(f"/v1/suggestions/{sid}/accept", json={}, headers=approver)
+    assert resp.status_code == 200, resp.text
+
+    [item] = await items(tenant_id)
+    assert item.status == "addressed"
+    thread = (await client.get(f"/v1/discussions/{d}", headers=reviewer)).json()
+    assert thread["status"] == "closed"
+
+
+async def test_declining_the_item_with_oracles_suggestion_closes_the_thread(client):
+    tenant_id, _auth = await two_versions(client)
+    reviewer = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver")
+    d = (await started(client, reviewer, await doc_id(tenant_id)))["id"]
+    sid = await oracle_suggests(tenant_id, "none")
+
+    body = {"reason": "Out of scope.", "decline": True}
+    resp = await client.post(f"/v1/suggestions/{sid}/dismiss", json=body, headers=approver)
+    assert resp.status_code == 200, resp.text
+
+    thread = (await client.get(f"/v1/discussions/{d}", headers=reviewer)).json()
+    assert thread["status"] == "closed"
