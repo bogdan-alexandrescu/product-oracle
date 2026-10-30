@@ -253,7 +253,7 @@ function Select({ label, value, options, onChange, all = "All", testId }: { labe
 }
 
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; titleOf: (id: string | null) => string | undefined }) {
   const [open, setOpen] = useState(false);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
@@ -290,7 +290,7 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit }: { drafts: Dra
         <ol className="mt-2 space-y-1 text-sm text-text" data-testid="draft-changes">
           {log.map((c) => (
             <li key={c.id}>
-              {changeRowWords(c)} · {c.by_name} · {time(c.at)}
+              {changeRowWords(c, titleOf(c.item_id))} · {c.by_name} · {time(c.at)}
               {c.in_meeting && " · in a meeting"}
             </li>
           ))}
@@ -683,6 +683,7 @@ export function SimpleRoadmap() {
     });
   }
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
+  const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
@@ -1093,6 +1094,7 @@ export function SimpleRoadmap() {
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
+      titleOf={titleOf}
       inReview={data.changes_in_review ?? 0}
       meId={me?.user_id ?? null}
       onUndo={(id) =>
