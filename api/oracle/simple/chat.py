@@ -487,6 +487,9 @@ def _b_move(c: Ctx, a: dict[str, Any]) -> Built:
                {"start_date": s, "end_date": en},
                {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
                 "end_date": en})  # fmt: skip
+    if by is not None:
+        # A move by a span: offered again on newer dates, it moves from those (rebase).
+        card["preview"]["shift"] = list(by)
     if period is not None and start < c.today:
         # "this quarter" / "this month" / the current Qn start on their first day.
         return Reply("cards", f"Here is the change. That period began {start:%b} {start.day}, "
@@ -1922,6 +1925,18 @@ async def rebase(db: AsyncSession, card_id: uuid.UUID, detail: Any) -> None:
     if card is None or card.status != "open" or not set(current) <= set(card.before or {}):
         return
     card.before = {**card.before, **current}
+    shift = (card.preview or {}).get("shift")
+    if card.op == "move_dates" and shift and current.get("start_date") and current.get("end_date"):
+        # A move by a span ("out a quarter") lands that span from where the item is now.
+        start, end = (_add_months(date.fromisoformat(current[k]), shift[0])
+                      + timedelta(days=shift[1]) for k in ("start_date", "end_date"))  # fmt: skip
+        old = card.after
+        s, en = start.isoformat(), end.isoformat()
+        card.after = {"start_date": s, "end_date": en}
+        card.preview = {**card.preview, "start_date": s, "end_date": en}
+        was = f"{_day_words(date.fromisoformat(old['start_date']))} – " \
+              f"{_day_words(date.fromisoformat(old['end_date']), True)}"  # fmt: skip
+        card.summary = card.summary.replace(was, f"{_day_words(start)} – {_day_words(end, True)}")
     await db.commit()
 
 
