@@ -1171,11 +1171,14 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                 )
                 for k, p in (c.after.get("sections") or {}).items()
             ],
-            can_undo=kind == "change"
-            and c.by == me
-            and s is not None
-            and s.closed_at is None
-            and (s.last_change_at or s.started_at) > now - IDLE,
+            can_undo=(kind == "proposal" and c.by == me)
+            or (
+                kind == "change"
+                and c.by == me
+                and s is not None
+                and s.closed_at is None
+                and (s.last_change_at or s.started_at) > now - IDLE
+            ),
             can_decide=kind == "proposal" and may_decide(principal, c),
             adds_feature=line_id.startswith("bets-"),
             flow=visuals.one_pager_flow(note_flows.get(c.id)),
@@ -1575,10 +1578,39 @@ async def decide(db, principal, c: SimpleChange, action: str, reason: str | None
     return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
 
 
+async def _withdraw(db, principal, c: SimpleChange, me, now):
+    """A proposal withdrawn by its author (qa-simple-prd-p3-17): declined by them, the PRD
+    untouched; its note leaves the margin."""
+    from oracle.simple import changes
+
+    if c.by != me:
+        raise ChangeError(403, "Only the person who proposed it withdraws it")
+    # Lock the row so a decider's accept and this withdraw never both win.
+    await db.refresh(c, with_for_update=True)
+    if c.status != "proposed":
+        raise ChangeError(409, f"This change is {c.status} already")
+    c.status = "declined"
+    c.decided_by, c.decided_at = me, now
+    c.decision_reason = "Withdrawn by its author"
+    await db.flush()
+    await audit.record(
+        db,
+        principal,
+        "simple_change.withdrawn",
+        "simple_change",
+        c.id,
+        data={"op": c.op, "target": c.target},
+    )
+    await db.commit()
+    return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
+
+
 async def undo(db, principal, c: SimpleChange):
     from oracle.simple import changes
 
     me, now = changes._me(principal), company_time.now()
+    if c.status == "proposed":
+        return await _withdraw(db, principal, c, me, now)
     if c.status != "applied":
         raise ChangeError(409, f"Only an applied change undoes; this one is {c.status}")
     if c.by != me:

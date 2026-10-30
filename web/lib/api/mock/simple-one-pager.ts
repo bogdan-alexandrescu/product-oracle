@@ -375,7 +375,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     return {
       change_id: c.id, line_id: lineId, kind, by: c.by, by_name: c.by_name, at: c.at, in_meeting: c.in_meeting,
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
-      can_undo: kind === "change" && c.by === ctx.id && c.session_open,
+      can_undo: kind === "proposal" ? c.by === ctx.id : c.by === ctx.id && c.session_open,
       can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
       adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)), meeting_title: c.meeting_title ?? null,
     };
@@ -534,6 +534,15 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     return json(200, { change: out(db, ctx, c), flags: [] });
   }
   if (p[4] === "undo") {
+    // qa-simple-prd-p3-17: a proposal is withdrawn by its author (declined, the PRD untouched).
+    if (c.status === "proposed") {
+      if (c.by !== ctx.id) return json(403, { detail: "Only the person who proposed it withdraws it" });
+      c.status = "declined";
+      c.decided_by = ctx.id;
+      c.decided_at = new Date(mockNowMs()).toISOString();
+      c.decision_reason = "Withdrawn by its author";
+      return json(201, { change: out(db, ctx, c), flags: [] });
+    }
     if (c.status !== "applied") return json(409, { detail: `Only an applied change undoes; this one is ${c.status}` });
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who made a change undoes it" });
     if (db.changes.some((u) => u.undoes_id === c.id)) return json(409, { detail: "This change is undone already" });

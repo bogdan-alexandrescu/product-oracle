@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { HopPanel } from "@/components/hop/HopPanel";
-import { SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
+import { personLine, SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
 import { closeTransientPanel, setPanelOpen, takeAskFocus, useAskDraft, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { homeOf, modeOf } from "@/lib/experience";
@@ -212,7 +212,7 @@ const THEMES: { value: ThemeChoice; label: string; icon: IconName }[] = [
  * focus moves to the checked theme; Escape closes it and returns focus to the avatar
  * (qa-shell-12, qa-shell-18). The avatar is marked current on /account (qa-shell-15).
  */
-function UserMenu({ placement }: { placement: "rail" | "header" }) {
+function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "header"; emailBeside?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const { me, clear } = useMe();
@@ -225,6 +225,9 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
   // qa-simple-roadmap-46: the panel truncates this line; the full address (and the name,
   // when there is one) still reads on hover/focus.
   const name = me && me.kind === "user" ? (me.name ?? null) : null;
+  // qa-simple-prd-p3-31: Simple's rail writes the email beside the avatar when there is no
+  // name; the avatar's hidden line then leaves it out, so the block says it once.
+  const emailShown = emailBeside && !!email && personLine(me) === email;
 
   useEffect(() => {
     if (!open) return;
@@ -390,7 +393,7 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
         }`}
       >
         {initials}
-        {rail && (
+        {rail && !emailShown && (
           <span className="sr-only" data-testid="signed-in-as">
             {email}
           </span>
@@ -454,7 +457,7 @@ function Navs() {
   if (!shown) return null;
   // #723: Simple's pages have Simple's own rail, nothing of Detailed's.
   // qa-shell-27: on a phone the header's avatar is the one account control, never the More sheet.
-  if (modeOf(pathname) === "simple") return <SimpleNavs account={(placement) => (placement === "rail" ? <UserMenu placement="rail" /> : null)} />;
+  if (modeOf(pathname) === "simple") return <SimpleNavs account={(placement) => (placement === "rail" ? <UserMenu placement="rail" emailBeside /> : null)} />;
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);
   const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];

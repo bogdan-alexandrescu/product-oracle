@@ -28,7 +28,7 @@ const rowName = (r: PlanStrip["rows"][number]) => (r.milestone && /^M\d{1,2}$/i.
  * the card round it. qa-simple-prd-39/40: the month axis has no label (the page names the
  * PRD), and the commitments past the edge name the rows they are in, as plain text.
  */
-export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanStrip; prd: { slug: string; title: string }; testId?: string }) {
+export function PlanByMonth({ plan, prd, testId = "plan-strip", legend = false }: { plan: PlanStrip; prd: { slug: string; title: string }; testId?: string; legend?: boolean }) {
   const from = ms(plan.start);
   const span = ms(plan.end) + DAY - from;
   const pct = (day: string) => Math.max(0, Math.min(100, ((ms(day) - from) / span) * 100));
@@ -68,7 +68,8 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
         {shown.map((r) => {
           const left = pct(r.start);
           const width = Math.max(1.5, pct(r.end) - left);
-          const n = `${r.items} ${r.items === 1 ? "item" : "items"}`;
+          // qa-simple-prd-p3-15: the one-pager names what the items are.
+          const n = `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
           const label = `${rowName(r)} · ${n}`;
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
           return (
@@ -108,6 +109,29 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
           );
         })}
       </ul>
+      {/* qa-simple-prd-p3-15: the one-pager's strip says what its marks are, as the plan timeline's legend does. */}
+      {legend && (
+        <p data-testid={`${testId}-legend`} className="simple-small flex flex-wrap gap-x-4 gap-y-1">
+          {plan.today && (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />
+              Today {calendarDay(plan.today, { day: "numeric", month: "short" }, "en-GB")}
+            </span>
+          )}
+          {plan.rows.some((r) => r.estimated) && (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-sm border border-dashed border-accent" style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 9px)" }} />
+              hatched = not confirmed
+            </span>
+          )}
+          {plan.rows.some((r) => r.date) && (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <i aria-hidden className="inline-block size-2.5 flex-none rotate-45 bg-accent-ink" />
+              milestone end
+            </span>
+          )}
+        </p>
+      )}
       {(more > 0 || plan.past_edge > 0) && (
         <p className="simple-small flex flex-wrap justify-between gap-2">
           {more > 0 ? (

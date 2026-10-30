@@ -2,42 +2,33 @@
 
 import Link from "next/link";
 
-import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Chip } from "@/components/ds";
+import { PrdStatus } from "@/components/simple/PrdStatus";
 import { dmy } from "@/components/simple/PrdTimeline";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
 import { Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone, dayIn } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
-
-/**
- * qa-simple-prd-9: a PRD's status as its one-pager heads it: the approved version, and when a
- * newer draft is in progress, both ("Approved v3 · draft in progress").
- */
-function PrdStatus({ d }: { d: Schemas["DocumentSummary"] }) {
-  if (d.approved_version && d.status !== "approved")
-    return (
-      <Chip kind="pass" dot data-status="approved">
-        Approved v{d.approved_version} · {d.status === "in_review" ? "changes in review" : "draft in progress"}
-      </Chip>
-    );
-  return <DocStatusChip status={d.status} dot />;
-}
 
 /** One-pagers (#723 S1): the PRDs I may read (the API lists only those), each opening its one-pager. */
 export default function OnePagers() {
   const q = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const zone = useCompanyZone();
+  // qa-simple-prd-p3-30: newest first, by when each last changed (and the list says so).
+  const rows = q.data ? [...q.data].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)) : null;
   return (
     // qa-simple-prd-11: a PRD with a plan leads with its plan, so the lead names both.
     <SimplePage title="One-pagers" lead="Every PRD on one page: its plan and timeline, or its problem, bets, outcomes, what we will not do and risks.">
-      <SimpleSection title="PRDs" testId="simple-one-pagers">
+      <SimpleSection
+        title="PRDs"
+        testId="simple-one-pagers"
+        action={rows && rows.length > 1 ? <span className="simple-small" data-testid="one-pagers-order">Newest first</span> : undefined}
+      >
         {q.error ? (
           <p className="simple-small">{q.error}</p>
-        ) : !q.data ? (
+        ) : !rows ? (
           <Loading />
-        ) : q.data.length === 0 ? (
+        ) : rows.length === 0 ? (
           // qa-simple-prd-41: what a one-pager comes from, and where to start one.
           <SimpleEmpty testId="simple-one-pagers-empty">
             No PRDs yet. A one-pager is made from a PRD: start one in{" "}
@@ -45,10 +36,12 @@ export default function OnePagers() {
           </SimpleEmpty>
         ) : (
           // qa-simple-prd-42: the status sits beside its title, rows are ruled, each says when it changed.
+          // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
+          // link stretches over the row (one link still, its name the title).
           <ul className="flex flex-col">
-            {q.data.map((d) => (
-              <li key={d.id} data-testid="one-pager-row" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-3 last:border-b-0 hover:bg-bg/50">
-                <Link href={`/simple/one-pagers/${d.slug}`} className="min-w-0 font-semibold break-words hover:underline">
+            {rows.map((d) => (
+              <li key={d.id} data-testid="one-pager-row" className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-3 last:border-b-0 hover:bg-bg/50">
+                <Link href={`/simple/one-pagers/${d.slug}`} className="min-w-0 font-semibold break-words after:absolute after:inset-0 after:content-[''] hover:underline">
                   {d.title}
                 </Link>
                 <PrdStatus d={d} />
