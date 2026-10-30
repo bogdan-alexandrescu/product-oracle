@@ -1,3 +1,4 @@
+import { MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -11,6 +12,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * Test card: protects=the edited bet still shows its drawn flow (row, opened view,
  * storyboard), the note about the old words is gone; fails_when=the edit leaves the bet with
  * "No flow yet", or the note is shown; no_claim=the API's carry (test_simple_line_visuals_api).
+ * And: a bet with no flow, reworded in the working draft, then asked for, is drawn from its
+ * published words (who reads only the published page reads the drawing too, never the draft's
+ * words); fails_when=the drawing is named after the draft's words; no_claim=the viewer's read
+ * (test_draft_words_never_reach_who_reads_the_published_page).
  */
 
 const NEW_WORDS = "A setup checklist that shows the next step and how long it takes";
@@ -38,6 +43,27 @@ async function editBet(page: Page, phone: boolean) {
   await expect(bet.getByTestId("one-pager-line-text")).toContainText("and how long it takes");
 }
 
+const DRAFT_WORDS = "Invite suggestions from a shared team calendar link";
+
+async function askForRewordedBet(page: Page, phone: boolean) {
+  await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, "1500"] as const);
+  await login(page);
+  await page.goto("/simple/one-pagers/guided-setup");
+  await expect(page.getByTestId("one-pager")).toBeVisible();
+  const bet = page.locator('[data-line="bets-2"]');
+  if (phone) await bet.getByTestId("one-pager-line-text").tap();
+  else await bet.hover();
+  await tap(bet.getByRole("button", { name: "Edit “Invite suggestions from" }));
+  await page.getByLabel("New wording for").fill(DRAFT_WORDS);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(bet).toHaveAttribute("data-state", "edited");
+  const row = bet.getByTestId("flow-row");
+  await expect(row.getByTestId("flow-empty")).toContainText("No flow yet");
+  await tap(row.getByRole("button", { name: "Ask Oracle to draw it" }));
+  await expect(row.getByTestId("flow-drawn")).toContainText("Version 1 · drawn", { timeout: 15000 });
+  return row;
+}
+
 for (const [where, viewport, phone] of [
   ["desktop", { width: 1366, height: 820 }, false],
   ["phone", { width: 390, height: 844 }, true],
@@ -62,6 +88,12 @@ for (const [where, viewport, phone] of [
       const board = page.getByTestId("flow-storyboard");
       await expect(board).toHaveAccessibleName("Finish setup from the checklist · storyboard");
       await expect(board).toContainText("Sign in as a new admin");
+    });
+
+    test(`a bet reworded in the draft is drawn from its published words (${where})`, async ({ page }) => {
+      const row = await askForRewordedBet(page, phone);
+      await expect(row.getByTestId("flow-row-drawn")).toContainText("Invite suggestions from the admin's calendar");
+      await expect(row.getByTestId("flow-row-drawn")).not.toContainText("shared team calendar");
     });
   });
 }
