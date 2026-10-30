@@ -260,7 +260,7 @@ function QuestionBubble({
             {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
           {/* qa-docs-86: an open question's actions sit in its card, not below it. */}
-          {open && !waiting && actions("mt-2.5")}
+          {open && !standing && !waiting && actions("mt-2.5")}
         </article>
       </div>
       {transcript.map((m) =>
@@ -275,8 +275,8 @@ function QuestionBubble({
       {card.answers.map((a) => (
         <AnswerBubble key={a.id} answer={a} people={people} me={me} />
       ))}
-      {/* qa-work-28: an "I don't know" offers Change answer after its answers. */}
-      {unsure && !waiting && <div className="ml-10 max-[600px]:ml-4">{actions()}</div>}
+      {/* qa-work-28: an answered question (an "I don't know" too) offers Change answer after its answers. */}
+      {(open || unsure) && standing && !waiting && <div className="ml-10 max-[600px]:ml-4">{actions()}</div>}
       {thinking && (
         <p data-testid="oracle-typing" role="status" className="ml-10 text-sm text-text2 max-[600px]:ml-4">
           Oracle is thinking…
