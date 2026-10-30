@@ -28,6 +28,7 @@ import json
 import re
 import uuid
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -249,15 +250,16 @@ def _old_reasons(detail: str, hidden: Any) -> list[str]:
     if hidden is None:
         return parts
     cut = [False] * len(parts)
-    for i in range(len(parts)):
-        if hidden.names(parts[i]):
-            continue  # hidden on its own (for_reader)
-        for j in range(i + 1, len(parts)):
-            if hidden.names("; ".join(parts[i : j + 1])):
-                # Only the fewest parts that name it: not a reason before the title.
-                if not hidden.names("; ".join(parts[i + 1 : j + 1])):
-                    cut[i : j + 1] = [True] * (j + 1 - i)
-                break
+    # Only a title can hold "; " (an id, a slug or "D-7" cannot): each is found on its own,
+    # as the fewest parts that name it, so a reason beside it is never taken for it.
+    for word in (w for w in hidden.words if "; " in w):
+        title = replace(hidden, ids=frozenset(), numbers=frozenset(), words=frozenset({word}))
+        for i in range(len(parts)):
+            for j in range(i + 1, len(parts)):
+                if title.names("; ".join(parts[i : j + 1])):
+                    if not title.names("; ".join(parts[i + 1 : j + 1])):
+                        cut[i : j + 1] = [True] * (j + 1 - i)
+                    break
     return [HIDDEN_REASON if c else p for p, c in zip(parts, cut, strict=True)]
 
 

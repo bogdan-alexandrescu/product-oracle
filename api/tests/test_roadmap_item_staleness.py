@@ -345,6 +345,12 @@ def test_an_old_alert_line_cut_on_a_hidden_title_keeps_its_other_reasons():
     old = f"requirement:x changed; {title} changed; feature:y moved"
     detail = staleness.detail_for_reader(old, hidden)
     assert detail == f"A requirement changed; {staleness.HIDDEN_REASON}; the feature moved", detail
+    # A hidden title that ends another hidden title: neither title's parts are shown.
+    both = Hidden(decision_ids=frozenset(), document_ids=frozenset(), ids=frozenset(),
+                  numbers=frozenset(), words=frozenset(_words_of(
+                      "Pricing; enterprise; tier", "enterprise; tier")))  # fmt: skip
+    detail = staleness.detail_for_reader(old, both)
+    assert detail == f"A requirement changed; {staleness.HIDDEN_REASON}; the feature moved", detail
     # Who may see it reads the line split on "; " as before.
     assert staleness.detail_for_reader(old, None) == (
         "A requirement changed; Pricing; enterprise; tier changed; the feature moved"
