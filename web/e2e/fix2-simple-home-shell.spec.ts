@@ -189,8 +189,12 @@ test("qa-simple-home-31: the rail's, the More sheet's and the account menu's swi
   await page.getByTestId("simple-tab-more").click();
   const sheet = page.getByTestId("mode-switch-sheet");
   await expect(sheet).toBeVisible();
-  expect(await look(sheet.locator('[aria-checked="true"]'))).toBe(railOn);
-  expect(await look(sheet.locator('[aria-checked="false"]'))).toBe(railOff);
+  // fix4 (qa-simple-home-19): the More sheet is the ds Sheet, whose controls are 44 px touch
+  // targets; the rest of the look is the rail's.
+  const noHeight = (s: string) => s.split(" | ").filter((_, i) => i !== 6).join(" | ");
+  expect(noHeight(await look(sheet.locator('[aria-checked="true"]')))).toBe(noHeight(railOn));
+  expect(noHeight(await look(sheet.locator('[aria-checked="false"]')))).toBe(noHeight(railOff));
+  expect((await sheet.locator('[aria-checked="true"]').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await track(sheet)).toBe(railTrack);
 });
 

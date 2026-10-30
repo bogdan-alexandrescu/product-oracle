@@ -208,10 +208,12 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("home-summary-decisions")).toContainText(String(n));
         if (!phone) await expect(page.getByTestId("simple-nav-decisions-count")).toHaveText(String(n));
         const q5 = card.getByTestId("home-question").first();
-        await expect(q5).toContainText("Q5 Reminder default time");
+        // fix4 (qa-simple-home-13): Home names the question and what it blocks in words, no codes.
+        await expect(q5).toContainText("Reminder default time");
+        await expect(q5).not.toContainText("Q5");
         await expect(q5.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
         await expect(q5.getByTestId("question-due")).toHaveAttribute("data-late", "true");
-        await expect(q5).toContainText("Blocks M1: F-03 Health log");
+        await expect(q5).toContainText("Blocks Health log, first milestone");
         await expect(q5.getByRole("button", { name: "Another answer" })).toBeVisible();
         await expect(q5.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
         await q5.getByRole("button", { name: "Decide as recommended" }).click();

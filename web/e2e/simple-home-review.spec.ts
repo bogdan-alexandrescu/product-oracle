@@ -30,7 +30,7 @@ async function signIn(page: Page, scenario: string, email: string) {
   await expect(page.getByTestId("home-greeting")).toBeVisible();
 }
 
-const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
+const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
 
 test("an approver who decides the item applies its fixes", async ({ page }) => {
   await signIn(page, "simple-home-deciders", "avery.lane@example.com");
@@ -43,7 +43,7 @@ test("an approver who decides the item applies its fixes", async ({ page }) => {
 
 test("a commenter's fix row and toast name who decides", async ({ page }) => {
   await signIn(page, "simple-home-deciders", "commenter@example.com");
-  await expect(page.getByTestId("simple-page").getByTestId("home-broken-deciders")).toContainText(/Avery Lane decides?/);
+  await expect(page.getByTestId("simple-page").getByTestId("home-broken-deciders")).toContainText(/Avery Lane\b.*decides? the fixes you propose here/);
   await digest(page).getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText("Proposed: Avery Lane decides", { exact: true })).toBeVisible();
 });
@@ -53,7 +53,7 @@ test("a decider with proposals on their items still sees their own proposals wai
   const onMine = page.getByTestId("home-proposals");
   await expect(page.getByRole("heading", { name: "Proposals on your items" })).toBeVisible();
   await expect(onMine.getByTestId("home-proposal").filter({ hasText: "New plan tiers" }).getByRole("button", { name: "Accept" })).toBeVisible();
-  await expect(page.getByTestId("simple-page").getByTestId("home-broken-deciders")).toContainText(/Avery Lane decides?/);
+  await expect(page.getByTestId("simple-page").getByTestId("home-broken-deciders")).toContainText(/Avery Lane\b.*decides? the fixes you propose here/);
   await digest(page).getByRole("button", { name: "Propose: move the dependents" }).click();
   await expect(page.getByText("Proposed: Avery Lane decides", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your proposals waiting" })).toBeVisible();
