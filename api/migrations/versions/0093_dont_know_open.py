@@ -7,7 +7,8 @@ Data only, no schema change. A question whose latest answer is "I don't know" wa
 ``retired`` as the brief's other open questions are (0033). Idempotent: a second run
 matches no row.
 
-The downgrade marks them answered again, as an old image counts them.
+The downgrade marks them answered again, as an old image counts them, the retired ones
+too (an old image never retires an answered question).
 
 Revision ID: 0093_dont_know_open
 Revises: 0092_bet_flow_line_key
@@ -43,7 +44,7 @@ CLOSE = f"""
 UPDATE stakeholder_questions q SET status = 'answered', updated_at = now()
 FROM ({LATEST}) latest
 WHERE latest.question_id = q.id AND latest.kind = 'dont_know'
-  AND q.intake_id IS NOT NULL AND q.status IN ('asked', 'delegated')
+  AND q.intake_id IS NOT NULL AND q.status IN ('asked', 'delegated', 'retired')
 """
 
 

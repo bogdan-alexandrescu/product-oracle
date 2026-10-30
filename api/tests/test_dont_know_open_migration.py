@@ -3,10 +3,10 @@ is open again (owner 2026-10-29, qa-work-2).
 
 Card: protects=such a question answered before reads asked, or delegated when it was
 delegated first, or retired on an archived brief; one with a real answer after its "I don't
-know" stays answered; the downgrade marks the reopened ones answered again, the retired ones too (an old image
-never retires an answered question); up twice
-changes nothing more; chained on 0092_bet_flow_line_key as the single head; fails_when=an
-"I don't know" question stays answered, a real answer is reopened, or the delegate is lost;
+know" stays answered; the downgrade marks the reopened ones answered again, the retired
+ones too (an old image never retires an answered question); up twice changes nothing
+more; chained on 0092_bet_flow_line_key as the single head; fails_when=an "I don't know"
+question stays answered, a real answer is reopened, or the delegate is lost;
 no_claim=new answers (test_intake_idk_open).
 
 Sync on purpose (Alembic runs its own event loop); its own scratch database."""

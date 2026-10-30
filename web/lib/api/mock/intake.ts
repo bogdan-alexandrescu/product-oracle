@@ -455,7 +455,7 @@ function blockingGapIds(db: V2Db, intake: Intake): string[] {
   return summary(db, intake, intake.author_id ?? "").readiness.blocking_gap_ids;
 }
 
-function batchView(db: V2Db, intake: Intake, n: number | null): Schemas["QuestionBatch"] {
+function batchView(db: V2Db, intake: Intake, n: number | null, userId: string): Schemas["QuestionBatch"] {
   const questions = db.questions.filter((q) => q.intake_id === intake.id);
   const batch = n ?? (Math.max(0, ...questions.map((q) => q.batch ?? 0)) || null);
   return {
@@ -464,6 +464,7 @@ function batchView(db: V2Db, intake: Intake, n: number | null): Schemas["Questio
     questions: cards(
       db,
       questions.filter((q) => batch != null && q.batch === batch).sort((a, b) => a.priority - b.priority),
+      userId,
     ),
     remaining: questions.filter((q) => q.status === "draft").length,
   };
@@ -569,13 +570,20 @@ function personFor(db: V2Db, ctx: IntakeContext, intake: Intake, q: Question, as
   return [q.asked_to, g?.owner_id, intake.author_id, asker ? ctx.userId : null].find(able) ?? approver ?? intake.author_id ?? null;
 }
 
-/** A batch's cards (GET .../question-batch, .../next-batch). */
-function cards(db: V2Db, questions: Question[]): Schemas["QuestionCard"][] {
+/** As the API (questions.said_dont_know): the latest answer is the person's own "I don't
+ * know", so they say it once; after anyone's answer they may again. */
+function saidDontKnow(db: V2Db, questionId: string, userId: string): boolean {
+  const last = db.answers.filter((a) => a.question_id === questionId).at(-1);
+  return last?.kind === "dont_know" && last.answered_by === userId;
+}
+
+/** A batch's cards (GET .../question-batch, .../next-batch), as `userId` reads them. */
+function cards(db: V2Db, questions: Question[], userId: string): Schemas["QuestionCard"][] {
   return questions.map((q) => ({
     question: q,
     gap: db.gaps.find((g) => g.id === q.gap_id) ?? null,
     evidence: [],
-    answer_paths: PATHS,
+    answer_paths: PATHS.filter((x) => x !== "dont_know" || !saidDontKnow(db, q.id, userId)),
     answers: db.answers.filter((a) => a.question_id === q.id),
   }));
 }
@@ -692,7 +700,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     }
     if (leaf === "question-batch" && m === "GET") {
       const n = q.get("batch");
-      return json(200, batchView(db, intake, n ? Number(n) : null));
+      return json(200, batchView(db, intake, n ? Number(n) : null, ctx.userId));
     }
     if (leaf === "next-batch" && m === "GET") {
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver sees the next batch");
@@ -705,7 +713,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       // Copies: the stored question keeps its person until the batch is asked. At Draft each
       // keeps its own named person, never the reader.
       const shown = chooseDrafts(questions, size).map((x) => ({ ...x, asked_to: personFor(db, ctx, intake, x, level !== "draft") }));
-      return json(200, { questions: cards(db, shown), remaining, held: null } satisfies Schemas["NextBatch"]);
+      return json(200, { questions: cards(db, shown, ctx.userId), remaining, held: null } satisfies Schemas["NextBatch"]);
     }
     if (leaf === "composition-inputs" && m === "GET") {
       const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
@@ -778,7 +786,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       }
       const asked = askBatch(db, ctx, intake, Number(input?.size ?? q.get("size") ?? 5), assign);
       if (!asked.length) return fail(409, "No questions left to ask");
-      return json(200, batchView(db, intake, asked[0].batch ?? null));
+      return json(200, batchView(db, intake, asked[0].batch ?? null, ctx.userId));
     }
     if (leaf === "questions" && p[4] === "withdraw" && m === "POST") {
       // The Undo of a batch Oracle asked on its own: still-waiting questions are withdrawn.
@@ -1013,6 +1021,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (question.status === "answered" && !(atLeast(ctx.role, "approver") && input?.kind === "answer")) return fail(409, "This question is answered; it is not asked again");
     if (question.status === "withdrawn" || question.status === "retired") return fail(409, `A ${question.status} question cannot be answered`);
     if (question.asked_to && question.asked_to !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "This question was asked of someone else");
+    if (input.kind === "dont_know" && saidDontKnow(db, question.id, ctx.userId)) return fail(409, "You said you don't know; it waits for someone who does");
     if (input.kind === "answer" && !input.body?.trim()) return fail(422, "An answer needs a body");
     if (input.kind === "research" && !(question.intake_id && question.gap_id)) return fail(422, "Only a question about an intake's gap can be researched");
     if (input.kind === "delegate" && (!input.delegated_to || (ctx.people && !canAnswer(ctx, input.delegated_to)))) return fail(422, "Delegate to a person of this company who can answer");
@@ -1130,7 +1139,7 @@ function inboxQuestions(db: V2Db, ctx: IntakeContext): Schemas["InboxQuestion"][
         asked_by: q.gap_id || !q.asked_by ? { kind: "oracle" as const } : { kind: "person" as const, id: q.asked_by, name: asker ? displayName(asker.email) : "Someone" },
         subject: subjectOf(db, ctx, q),
         gap: db.gaps.find((g) => g.id === q.gap_id) ?? null,
-        answer_paths: PATHS.filter((x) => x !== "research" || (q.intake_id && q.gap_id)),
+        answer_paths: PATHS.filter((x) => (x !== "research" || (q.intake_id && q.gap_id)) && (x !== "dont_know" || !saidDontKnow(db, q.id, ctx.userId))),
       };
     });
 }

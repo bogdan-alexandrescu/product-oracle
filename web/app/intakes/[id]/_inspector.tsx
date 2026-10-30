@@ -209,7 +209,7 @@ export function IntakeInspector({
     >
       <InspectorSection testId="ready-to-draft">
         {note && (
-          <p data-testid="answered-unknown" className="mb-2 text-[13px] text-text2">
+          <p data-testid="open-unknown" className="mb-2 text-[13px] text-text2">
             {note}
           </p>
         )}

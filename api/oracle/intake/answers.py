@@ -225,6 +225,11 @@ async def answer(
         raise IntakeError(409, f"A {question.status} question cannot be answered")
     if question.asked_to is not None and question.asked_to != principal.id and not approver:
         raise IntakeError(403, "This question was asked of someone else")
+    if body.kind == "dont_know":
+        from oracle.intake.questions import SAID_DONT_KNOW, said_dont_know
+
+        if question.id in await said_dont_know(db, [question.id], principal.id):
+            raise IntakeError(409, SAID_DONT_KNOW)
     if body.kind == "answer" and not (body.body or "").strip():
         raise IntakeError(422, "An answer needs a body")
     if body.kind == "research" and gap is None:

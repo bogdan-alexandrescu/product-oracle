@@ -713,6 +713,9 @@ async def _cards(
     pin = await pinned(db, intake)
     ids = {i for q in chosen if q.gap_id in gaps for i in gaps[q.gap_id].evidence_ids}
     refs = await view.refs(db, ids, pin)
+    from oracle.intake.questions import said_dont_know
+
+    unsure = await said_dont_know(db, [q.id for q in chosen], principal.id if principal else None)
     cards = []
     for q in chosen:
         gap = gaps.get(q.gap_id) if q.gap_id else None
@@ -721,7 +724,7 @@ async def _cards(
                 question=StakeholderQuestionOut.model_validate(q),
                 gap=KnowledgeGapOut.model_validate(gap) if gap else None,
                 evidence=[refs[i] for i in (gap.evidence_ids if gap else []) if i in refs],
-                answer_paths=list(ANSWER_PATHS),
+                answer_paths=[p for p in ANSWER_PATHS if p != "dont_know" or q.id not in unsure],
                 answers=[StakeholderAnswerOut.model_validate(a) for a in answers.get(q.id, [])],
             )
         )

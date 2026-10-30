@@ -55,7 +55,12 @@ from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
 from oracle.runs.models import Checkpoint
-from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
+from oracle.v2.models import (
+    KnowledgeGap,
+    ProductIntake,
+    StakeholderAnswer,
+    StakeholderQuestion,
+)
 from oracle.v2.schemas import KnowledgeGapOut, StakeholderQuestionOut
 
 CANNOT_ANSWER = "Ask someone who can answer"
@@ -342,6 +347,29 @@ async def discussion_title(
     return d.title
 
 
+SAID_DONT_KNOW = "You said you don't know; it waits for someone who does"
+
+
+async def said_dont_know(
+    db: AsyncSession, question_ids: list[uuid.UUID], user_id: uuid.UUID | None
+) -> set[uuid.UUID]:
+    """The questions whose latest answer is ``user_id``'s own "I don't know": they say it
+    once (a repeat would only add a ledger row); after anyone's answer they may again."""
+    if user_id is None or not question_ids:
+        return set()
+    rows = await db.execute(
+        select(StakeholderAnswer.question_id, StakeholderAnswer.kind, StakeholderAnswer.answered_by)
+        .where(StakeholderAnswer.question_id.in_(question_ids))
+        .distinct(StakeholderAnswer.question_id)
+        .order_by(
+            StakeholderAnswer.question_id,
+            StakeholderAnswer.created_at.desc(),
+            StakeholderAnswer.id.desc(),
+        )
+    )
+    return {q for q, kind, by in rows if kind == "dont_know" and by == user_id}
+
+
 async def inbox(db: AsyncSession, principal: Principal) -> list[InboxQuestion]:
     """The questions asked of the caller and still open, oldest first, as they may see
     them (a hidden one never appears)."""
@@ -357,6 +385,7 @@ async def inbox(db: AsyncSession, principal: Principal) -> list[InboxQuestion]:
     ).all()
     readers = views.Readers(db, principal)
     names: dict[uuid.UUID, str] = {}
+    unsure = await said_dont_know(db, [q.id for q in rows], me)
     out = []
     for q in rows:
         shown = await readers.question(q)
@@ -374,7 +403,12 @@ async def inbox(db: AsyncSession, principal: Principal) -> list[InboxQuestion]:
                 email = await db.scalar(select(User.email).where(User.id == q.asked_by))
                 names[q.asked_by] = display_name(email) if email else "Someone"
             asked_by = PersonAsker(id=q.asked_by, name=names[q.asked_by])
-        paths = [p for p in ANSWER_PATHS if p != "research" or (q.intake_id and q.gap_id)]
+        paths = [
+            p
+            for p in ANSWER_PATHS
+            if (p != "research" or (q.intake_id and q.gap_id))
+            and (p != "dont_know" or q.id not in unsure)
+        ]
         out_q = StakeholderQuestionOut.model_validate(shown)
         if q.discussion_id is not None:
             out_q.discussion_title = await discussion_title(db, principal, q.discussion_id)
