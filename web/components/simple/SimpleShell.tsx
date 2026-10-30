@@ -140,6 +140,16 @@ export function SimplePageSkeleton() {
 }
 
 /**
+ * The rail's person line (qa-simple-prd-p3-31): the member's name, or their email once when they
+ * have no name of their own (none, or the email again); the avatar beside it then leaves the email
+ * out (AppShell's UserMenu `emailBeside`), so the block never says it twice.
+ */
+export function personLine(me: { name?: string | null; email?: string | null } | null | undefined): string {
+  const name = me?.name?.trim();
+  return name && name !== me?.email ? name : me?.email || "";
+}
+
+/**
  * Whether Simple's page and rail may draw (#725 review): once the capabilities say Simple is
  * on, never while they load or say it is off (the page then opens its Detailed match). Signed
  * out or unreadable, the page draws so its own calls send the person to sign in or say why.
@@ -281,16 +291,16 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         <div data-testid="simple-person" className="flex items-center gap-3 border-t border-line pt-3">
           {account("rail")}
           <span className="flex min-w-0 flex-col pt-2 leading-5">
-            {/* qa-simple-home-25, 21: the name (or email) in full, never cut to "viewer@example.c…"; qa-shell-18: an
-                email breaks only before its "@" ("viewer" / "@example.com"), never mid-word. With no name the avatar
-                already says the email to a screen reader. */}
+            {/* qa-simple-home-25, 21, qa-simple-prd-p3-31: the name in full, or the email once when the member has no name of their own
+                (personLine); the email breaks only before its "@" (qa-shell-18), never mid-word. With no name the avatar says the
+                email to a screen reader (its "Account <email>" name), so this line is hidden from it. */}
             <span
               data-testid="simple-person-name"
               title={me?.email || me?.name || undefined}
-              aria-hidden={!me?.name && !!me?.email ? true : undefined}
+              aria-hidden={!!me?.email && personLine(me) === me.email ? true : undefined}
               className="text-[15px] font-semibold [overflow-wrap:break-word] text-rail-active-text"
             >
-              {me?.name || breakAtSign(me?.email ?? "")}
+              {me?.email && personLine(me) === me.email ? breakAtSign(me.email) : personLine(me)}
             </span>
             <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>
           </span>

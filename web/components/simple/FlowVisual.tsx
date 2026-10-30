@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { dayIn, formatInZone, todayIn, useCompanyZone, zoneDateTime } from "@/lib/dates";
+import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
 import { Code, FlowDiagram, FlowScreen, FlowStepList, Icon, ICONS, ScreenCard, stepsOf, StoryCard, Tabs, usePhone } from "./FlowViews";
@@ -23,10 +23,17 @@ const RUN_SCREEN_MS = 15000;
 /** A drawing made this recently carries "New" (the row need not have watched it land). */
 const NEW_MS = 15 * 60 * 1000;
 
-/** "7:04 PM PDT" today, else "Oct 19, 8:00 AM PDT": a time in the company's zone with its short
- * name, and its day when not today, as every other time in Simple reads (qa-simple-prd-20). */
-export const clock = (iso: string, zone: string): string =>
-  dayIn(iso, zone) === todayIn(zone) ? formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" }) : zoneDateTime(iso, zone);
+/** "PDT"/"PST" read as "PT" (as the daily run's time does); other zones keep their short name ("CET"). */
+const friendlyZone = (time: string): string => time.replace(/\b(P|M|C|E|AK)[SD]T$/, "$1T");
+
+/** "26 Oct, 8:00 AM PT": a time in the company's zone, always with its day, day first, and the
+ * zone's friendly name (qa-simple-prd-20; qa-simple-prd-p3-14: never "Oct 26, 8:00 AM PDT", never
+ * a time with no day). */
+export const clock = (iso: string, zone: string): string => {
+  const time = formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" });
+  if (time === iso) return iso;
+  return `${formatInZone(iso, zone, { day: "numeric", month: "short" }, "en-GB")}, ${friendlyZone(time)}`;
+};
 
 /** A flow: three steps joined left to right (qa-simple-prd-33: not the Roadmap's icon). */
 const FLOW_ICON = "r,2,9,5,6,1.5|r,9.5,9,5,6,1.5|r,17,9,5,6,1.5|M7 12h2.5M14.5 12h2.5";
@@ -37,12 +44,12 @@ export function flowSize(flow: Flow): string {
   return `${n} step${n === 1 ? "" : "s"} · ${flow.touches_screen ? "1 screen" : "no screen"}`;
 }
 
-/** "Version 1 · drawn 7:04 PM PDT" (the time in the company's zone; its day when not today). */
+/** "Version 1 · drawn 26 Oct, 7:04 PM PT" (the time in the company's zone, with its day). */
 export function flowDrawn(flow: Flow, zone: string): string {
   return `Version ${flow.version}${flow.made_at ? ` · drawn ${clock(flow.made_at, zone)}` : ""}`;
 }
 
-/** "6 steps · 1 screen · version 1 · drawn 7:04 PM" (the time in the company's zone). */
+/** "6 steps · 1 screen · version 1 · drawn 26 Oct, 7:04 PM PT" (the time in the company's zone). */
 export function flowMeta(flow: Flow, zone: string): string {
   return `${flowSize(flow)} · ${flowDrawn(flow, zone).replace(/^V/, "v")}`;
 }
@@ -149,7 +156,8 @@ function NoDrawing({ v, busy, onAsk, showHint }: { v: Visual; busy: boolean; onA
   return (
     <div data-testid="flow-empty" data-state="none">
       <div className="mt-2 flex flex-wrap items-start gap-3">
-        <span aria-hidden className="grid h-[72px] w-[min(164px,35%)] flex-none place-items-center rounded-lg border border-dashed border-line text-text-faint">
+        {/* qa-simple-prd-p3-24: the stronger line, so the dashed box reads in dark as in light. */}
+        <span aria-hidden className="grid h-[72px] w-[min(164px,35%)] flex-none place-items-center rounded-lg border border-dashed border-line-strong text-text-faint">
           <Icon d={FLOW_ICON} size={22} width={1.7} />
         </span>
         <div className="min-w-[180px] flex-1">
@@ -247,12 +255,13 @@ function Layer({ children }: { children: ReactNode }) {
  * component for the roadmap item card, a PRD line and a proposal.
  *
  * - The row (A, `row`): the flow's real shapes as a live thumbnail with its name, "New", "6 steps ·
- *   1 screen" and "Version 1 · drawn 7:04 PM"; "Open the flow" and "Open the storyboard". Its
+ *   1 screen" and "Version 1 · drawn 26 Oct, 7:04 PM PT"; "Open the flow" and "Open the storyboard". Its
  *   states: no flow yet (Ask Oracle to draw it), drawing (stages, a bar, when it started; it swaps
  *   itself in), failed (Retry). `line`: the card's compact line beside its talk (a small picture
  *   and the flow's name).
  * - Opened (A): across the page, the whole diagram, then every step in full words beside the screen
- *   it touches; Full screen and Close. On a phone: a full-height sheet, the diagram top to bottom.
+ *   it touches; Full screen, Comment (the comments, opened full screen) and Close. On a phone: a
+ *   full-height sheet, the diagram top to bottom.
  * - Full screen (C): the diagram top to bottom on the left, the steps boxed on the right, the screen
  *   below; Comment (the comments, notes, versions and Revise) and Exit full screen; on a phone one
  *   tab each for Diagram, Steps and Screen.
@@ -274,7 +283,7 @@ export function FlowPanel({
   onOpenChange,
   code,
   name,
-  backLabel = "Back",
+  backLabel,
   showHint,
 }: {
   subject: FlowSubject;
@@ -292,7 +301,7 @@ export function FlowPanel({
   /** The subject's code and name for the opened views' titles ("F-06 Loop and blast-radius guards · flow"). */
   code?: string | null;
   name?: string;
-  /** Where the viewer's back link goes ("Roadmap"). */
+  /** The Roadmap card's viewer: a back link to it ("Roadmap"); unset, none (the one-pager's, qa-simple-prd-p3-22). */
   backLabel?: string;
   /** With no flow yet, the hint under "No flow yet" ("Oracle draws the steps..."). Unset: it
    * shows on the first row of a list only; false: never; true: on this row (bar the CSS rule). */
@@ -373,6 +382,17 @@ export function FlowPanel({
     if (commenting) setCommenting(false);
     else setFull(false);
   });
+  // qa-simple-prd-p3-22: full screen has one scroller, its own: the page behind it stops
+  // scrolling, so no second scrollbar stands beside the viewer's at the right edge.
+  useEffect(() => {
+    if (!full) return;
+    const html = document.documentElement;
+    const was = html.style.overflow;
+    html.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = was;
+    };
+  }, [full]);
 
   async function post(run: () => Promise<{ data?: Visual; error?: unknown; response: Response }>, after?: () => void) {
     setBusy(true);
@@ -570,6 +590,25 @@ export function FlowPanel({
     </>
   );
 
+  // qa-simple-prd-p3-22: the opened view offers the viewer's Comment too (the comments, notes,
+  // versions and Revise), so the two views carry the same actions; it opens them full screen.
+  const commentButton = (
+    <button
+      type="button"
+      className={BTN}
+      onClick={() => {
+        setCommenting(true);
+        setFull(true);
+      }}
+    >
+      Comment
+    </button>
+  );
+  const exitFull = () => {
+    setCommenting(false);
+    setFull(false);
+  };
+
   /** A phone's opened view (A): a full-height sheet, the diagram top to bottom, then the steps. */
   const phoneOpened = (f: Flow) => (
     <div ref={openedRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · flow`} data-testid="flow-detail" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
@@ -585,10 +624,13 @@ export function FlowPanel({
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        <p className={META} data-testid="flow-drawn">
-          {phoneMeta(f)}
-          {older}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className={`min-w-0 flex-1 ${META}`} data-testid="flow-drawn">
+            {phoneMeta(f)}
+            {older}
+          </p>
+          {commentButton}
+        </div>
         <div className="mt-2">
           <FlowDiagram flow={f} layout="down" width={352} testId="flow-svg" />
         </div>
@@ -622,6 +664,7 @@ export function FlowPanel({
           <Icon d={ICONS.expand} />
           Full screen
         </button>
+        {commentButton}
         <button type="button" className={BTN} onClick={() => setView(null)}>
           Close
         </button>
@@ -649,23 +692,27 @@ export function FlowPanel({
             <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
               Comment
             </button>
-            <button type="button" className={BTN_SOLID} data-first aria-label="Exit full screen" onClick={() => setFull(false)}>
+            <button type="button" className={BTN_SOLID} data-first aria-label="Exit full screen" onClick={exitFull}>
               Exit
             </button>
           </div>
         ) : (
+          // qa-simple-prd-p3-22: one way out (Exit full screen, as Escape), not a back link beside it,
+          // bar the Roadmap card's own "Roadmap" back.
           <div className="flex flex-none items-center gap-3 border-b border-line px-7 py-3.5">
-            <button
-              type="button"
-              className={BTN_GHOST}
-              onClick={() => {
-                setFull(false);
-                setView(null);
-              }}
-            >
-              <Icon d={ICONS.back} />
-              {backLabel}
-            </button>
+            {backLabel && (
+              <button
+                type="button"
+                className={BTN_GHOST}
+                onClick={() => {
+                  exitFull();
+                  setView(null);
+                }}
+              >
+                <Icon d={ICONS.back} />
+                {backLabel}
+              </button>
+            )}
             <h2 className="min-w-0 flex-1 text-[21px] leading-7 font-[650] break-words">{title(f, "flow")}</h2>
             <span className={META}>
               {flowDrawn(f, zone)}
@@ -674,7 +721,7 @@ export function FlowPanel({
             <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
               Comment
             </button>
-            <button type="button" className={BTN_SOLID} data-first onClick={() => setFull(false)}>
+            <button type="button" className={BTN_SOLID} data-first onClick={exitFull}>
               Exit full screen
             </button>
           </div>

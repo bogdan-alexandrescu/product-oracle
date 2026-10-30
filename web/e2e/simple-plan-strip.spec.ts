@@ -58,7 +58,7 @@ for (const phone of [false, true]) {
           await expect(page.getByTestId("one-pager-meta")).not.toContainText("someone");
           const strip = page.getByLabel("Timeline strip");
           await expect(strip.getByTestId("plan-strip-month")).toHaveText(["Oct", "Nov", "Dec", "Jan"]);
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Milestone M1 · 12 items", "Milestone M2 · 5 items", "Milestone M3 · 3 items", "No milestone · 2 items"]);
+          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Milestone M1 · 12 roadmap items", "Milestone M2 · 5 roadmap items", "Milestone M3 · 3 roadmap items", "No milestone · 2 roadmap items"]);
           await expect(strip.getByTestId("plan-strip-row").first()).toContainText("Nov 20");
           await expect(strip.getByTestId("plan-strip-today")).toHaveCount(1);
           await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 commitment with no milestone ends after Jan");
@@ -67,7 +67,7 @@ for (const phone of [false, true]) {
           await expect(strip.getByTestId("plan-strip-more")).toHaveCount(0);
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-          await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · 12 items" }).click();
+          await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · 12 roadmap items" }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap\?prd=guided-setup$/);
           // qa-shell-24: a phone's pickers sit behind the Filters button.
           if (phone) await page.getByTestId("filters-toggle").click();

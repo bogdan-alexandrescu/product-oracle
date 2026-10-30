@@ -214,7 +214,7 @@ export function FlowDiagram({
       }
       y += h;
       if (steps[i + 1]) {
-        body.push(<g key={`${s.id}-to`}>{arrow(`M${CX} ${y + 2} L${CX} ${y + 24}`)}{dec && s.no ? yesNo(CX + 6, y + 17, "Yes") : null}</g>);
+        body.push(<g key={`${s.id}-to`}>{arrow(`M${CX} ${y + 2} L${CX} ${y + 24}`)}{dec && s.no ? yesNo(CX + 10, y + 14, "Yes") : null}</g>);
         y += 26;
       }
     });
@@ -295,7 +295,8 @@ export function FlowDiagram({
         body.push(
           <g key={`${s.id}-to`}>
             {arrow(`M${x + W + 2} ${cy} L${x + W + GAP - 2} ${cy}`)}
-            {dec && s.no ? yesNo(x + W + GAP / 2, cy - 8, "Yes", "middle") : null}
+            {/* qa-simple-prd-p3-23: "Yes" stands clear above the arrow, by the decision, off its head and the next box, as "No" does. */}
+            {dec && s.no ? yesNo(x + W + 4, cy - 13, "Yes") : null}
           </g>,
         );
       } else {

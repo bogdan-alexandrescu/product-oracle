@@ -168,6 +168,8 @@ for (const phone of [false, true]) {
           await tap(viewer.getByRole("tab", { name: "Screen" }));
           await expect(viewer.getByTestId("flow-regions")).toContainText("Progress meter");
         } else {
+          // The Roadmap card's viewer keeps its "Roadmap" back (the one-pager's has none: qa-simple-prd-p3-22).
+          await expect(viewer.getByRole("button", { name: "Exit full screen" })).toBeVisible();
           await expect(viewer.getByRole("button", { name: "Roadmap" })).toBeVisible();
           await expect(viewer.getByRole("heading", { level: 2 })).toHaveText("Alert history export · flow");
           await expect(viewer.getByText("User flow", { exact: true })).toBeVisible();

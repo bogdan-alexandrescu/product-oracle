@@ -47,7 +47,7 @@ for (const phone of [false, true]) {
           await expect(page.getByRole("region", { name: title })).toBeVisible();
         }
         await expect(page.getByRole("region", { name: "Outcomes and how we measure them" })).toContainText("48% → 65%");
-        await expect(page.getByLabel("Timeline strip")).toContainText("M1 · 12 items");
+        await expect(page.getByLabel("Timeline strip")).toContainText("M1 · 12 roadmap items");
         await expect(page.getByRole("button", { name: /^Edit “|Propose wording/ })).toHaveCount(0);
         await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
         const sources = page.getByRole("region", { name: "Sources of “A setup checklist that shows" });
@@ -131,7 +131,7 @@ for (const phone of [false, true]) {
         await page.getByLabel("New wording for").fill("Invite suggestions from shared contacts");
         await page.getByRole("button", { name: "Propose", exact: true }).click();
         await expect(page.locator('[data-line="bets-2"]')).toHaveAttribute("data-state", "proposal");
-        const mine = notes(page).filter({ hasText: "proposes new wording for “Invite suggestions" }).filter({ visible: true });
+        const mine = notes(page).filter({ hasText: "You propose new wording for “Invite suggestions" }).filter({ visible: true });
         await expect(mine).toBeVisible();
         await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
         // The account menu lives in the desktop rail: switch people there, then back to

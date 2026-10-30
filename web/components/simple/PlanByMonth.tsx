@@ -33,12 +33,15 @@ export function PlanByMonth({
   prd,
   testId = "plan-strip",
   named = false,
+  legend = false,
 }: {
   plan: PlanStrip;
   prd: { slug: string; title: string };
   testId?: string;
   /** Home (qa-simple-home-17): the rows name their document ("Guided setup · no milestone · 4 items"). */
   named?: boolean;
+  /** The one-pager (qa-simple-prd-p3-15): the counts say what the items are ("4 roadmap items"). */
+  legend?: boolean;
 }) {
   const from = ms(plan.start);
   const span = ms(plan.end) + DAY - from;
@@ -79,7 +82,8 @@ export function PlanByMonth({
         {shown.map((r) => {
           const left = pct(r.start);
           const width = Math.max(1.5, pct(r.end) - left);
-          const n = `${r.items} ${r.items === 1 ? "item" : "items"}`;
+          // qa-simple-prd-p3-15: the one-pager names what the items are.
+          const n = `${r.items} ${legend ? "roadmap " : ""}${r.items === 1 ? "item" : "items"}`;
           const label = named ? `${prd.title} · ${r.milestone ? rowName(r) : "no milestone"} · ${n}` : `${rowName(r)} · ${n}`;
           const when = r.date ? calendarDay(r.date, { month: "short", day: "numeric" }) : null;
           return (
@@ -119,6 +123,29 @@ export function PlanByMonth({
           );
         })}
       </ul>
+      {/* qa-simple-prd-p3-15: the one-pager's strip says what its marks are, as the plan timeline's legend does. */}
+      {legend && (
+        <p data-testid={`${testId}-legend`} className="simple-small flex flex-wrap gap-x-4 gap-y-1">
+          {plan.today && (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />
+              Today {calendarDay(plan.today, { day: "numeric", month: "short" }, "en-GB")}
+            </span>
+          )}
+          {plan.rows.some((r) => r.estimated) && (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-sm border border-dashed border-accent" style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--accent) 0 4px, transparent 4px 9px)" }} />
+              hatched = not confirmed
+            </span>
+          )}
+          {plan.rows.some((r) => r.date) && (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <i aria-hidden className="inline-block size-2.5 flex-none rotate-45 bg-accent-ink" />
+              milestone end
+            </span>
+          )}
+        </p>
+      )}
       {(more > 0 || plan.past_edge > 0) && (
         <p className="simple-small flex flex-wrap justify-between gap-2">
           {more > 0 ? (
