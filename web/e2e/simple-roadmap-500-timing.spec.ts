@@ -18,7 +18,7 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * Card simple-roadmap-500-drag: protects = dragging an item on the timeline, Gantt,
  * waterfall and board keeps frames coming at 60 fps: the requestAnimationFrame deltas'
- * p95 is at or under 16.7 ms on desktop (a phone's drag is measured and reported, with no
+ * p95 is at or under 16.7 ms on desktop (17 on the mock clock's whole milliseconds) (a phone's drag is measured and reported, with no
  * missed run of frames: p95 under 2 frames); fails_when = the drag re-renders the chart or
  * reads layout per pointer move; no_claim = a real phone's GPU.
  */
@@ -135,7 +135,8 @@ for (const [where, use] of [
 ] as const) {
   const phone = where === "phone";
   test.describe(`500 items, ${where} @timing`, () => {
-    test.use(use);
+    // No trace: its recorder snapshots the whole page on every mouse move, which is what it would time.
+    test.use({ ...use, trace: "off" });
     test.beforeEach(async ({ context, page }) => {
       await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
       await login(page);
@@ -171,7 +172,9 @@ for (const [where, use] of [
         await end();
         expect(r.n).toBeGreaterThan(10);
         if (phone) expect(r.p95).toBeLessThan(2 * FRAME);
-        else expect(r.p95).toBeLessThanOrEqual(16.7);
+        // The mock clock (e2e/test.ts) runs requestAnimationFrame on its own timers, in whole
+        // milliseconds: a 60 fps frame reads 16 or 17 ms, so 16.7 ms is 17 on its grain.
+        else expect(r.p95).toBeLessThanOrEqual(Math.ceil(16.7));
       });
     }
   });

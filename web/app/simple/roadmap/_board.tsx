@@ -98,6 +98,9 @@ type Drag = {
   x: number;
   y: number;
   scroll: number | null;
+  /** dod-perf: the columns' boxes on the page (scroll added), read once as the drag starts, so
+   * no move reads layout after writing the card's transform. */
+  cols?: { key: Horizon; left: number; right: number; top: number; bottom: number }[];
 };
 
 export interface BoardProps {
@@ -172,6 +175,15 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el.dataset.horizonColumn as Horizon;
     }
     return null;
+  };
+  const boxes = (): NonNullable<Drag["cols"]> =>
+    [...(root.current?.querySelectorAll<HTMLElement>("[data-horizon-column]") ?? [])].map((el) => {
+      const r = el.getBoundingClientRect();
+      return { key: el.dataset.horizonColumn as Horizon, left: r.left, right: r.right, top: r.top + window.scrollY, bottom: r.bottom + window.scrollY };
+    });
+  const columnIn = (cols: NonNullable<Drag["cols"]>, x: number, y: number): Horizon | null => {
+    const py = y + window.scrollY;
+    return cols.find((c) => x >= c.left && x <= c.right && py >= c.top && py <= c.bottom)?.key ?? null;
   };
   const mark = (over: Horizon | null) => {
     for (const el of root.current?.querySelectorAll<HTMLElement>("[data-horizon-column]") ?? []) {
@@ -252,10 +264,13 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
 
   /** The card under the pointer (the page may have scrolled since the drag began) and the column it is over. */
   const follow = (d: Drag) => {
+    d.cols ??= boxes();
     d.el.style.transform = `translate(${d.x - d.x0}px, ${d.y - d.y0 + window.scrollY - d.sy0}px)`;
     d.el.style.zIndex = "30";
-    d.over = columnAt(d.x, d.y);
-    mark(d.over);
+    const over = columnIn(d.cols, d.x, d.y);
+    // Marked once per column change, not per move.
+    if (over !== d.over) mark(over);
+    d.over = over;
   };
   const edgeStep = (y: number): number => (y < EDGE ? -EDGE_STEP : y > window.innerHeight - EDGE ? EDGE_STEP : 0);
   const edgeScroll = (d: Drag) => {

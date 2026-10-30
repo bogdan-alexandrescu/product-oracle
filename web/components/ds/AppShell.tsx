@@ -657,7 +657,19 @@ function usePageTitle(pathname: string): { title: string; plain: string; drawn?:
       setRead((r) => (r?.title === title && r.plain === plain && r.drawn === drawn ? r : title ? { title, plain: plain || title, drawn } : null));
     };
     update();
-    const watch = new MutationObserver(update);
+    // dod-perf: only a change that can touch the H1 reads it again (checkVisibility lays the
+    // page out): not a chart's drag writing its pills' styles and live text every frame.
+    const hasH1 = (n: Node) => n instanceof Element && (n.matches("h1") || !!n.querySelector("h1"));
+    const touches = (r: MutationRecord): boolean => {
+      const el = r.target instanceof Element ? r.target : r.target.parentElement;
+      if (!el || el.closest("h1, [data-page-header]")) return true;
+      if (r.type === "attributes") return hasH1(el);
+      if (r.type === "childList") return [...r.addedNodes, ...r.removedNodes].some(hasH1);
+      return false;
+    };
+    const watch = new MutationObserver((records) => {
+      if (records.some(touches)) update();
+    });
     watch.observe(main, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "aria-current"] });
     return () => watch.disconnect();
   }, [pathname]);
