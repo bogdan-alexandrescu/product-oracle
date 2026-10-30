@@ -121,8 +121,13 @@ test("qa-simple-home-21: a member with no name shows their email once, broken on
   const name = page.getByTestId("simple-person-name");
   await expect(name).toHaveText(VIEWER);
   // Said once: the avatar says it; the line beside it is not read a second time.
-  const said = await person.ariaSnapshot();
-  expect(said.split(VIEWER).length - 1).toBe(1);
+  // Shown once on screen (the avatar's own copy is for screen readers only).
+  const shown = await person.evaluate((el) =>
+    [...el.querySelectorAll("*")].filter((e) => !e.closest(".sr-only") && [...e.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? "").includes("@"))).length,
+  );
+  expect(shown).toBe(1);
+  // The name line is not read a second time (the avatar button is named "Account <email>").
+  await expect(name).toHaveAttribute("aria-hidden", "true");
   // "example.com" stays on one line (never "viewer@example.co" / "m").
   const lines = await name.evaluate((el) => {
     const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);

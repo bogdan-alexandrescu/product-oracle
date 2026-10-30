@@ -124,6 +124,6 @@ test("qa-onboarding-34: a setup step opened from Simple's Home returns to Simple
 
   await page.getByTestId("nav-back-home").click();
   await expect(page).toHaveURL(/\/simple$/);
-  await expect(zoneStep).toContainText("Done");
+  await expect(zoneStep.getByRole("img", { name: "Done" })).toBeVisible();
   await expect(zoneStep.getByRole("link")).toHaveCount(0);
 });
