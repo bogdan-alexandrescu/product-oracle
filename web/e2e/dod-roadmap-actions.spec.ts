@@ -52,7 +52,8 @@ async function dragBar(page: Page, key: string, dx: number) {
   }
   const ev = { pointerId: 7, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1, clientY: y };
   await bar(page, key).dispatchEvent("pointerdown", { ...ev, clientX: x });
-  await page.waitForTimeout(650);
+  // Wait for the pick-up itself, not the hold's length, so the spec does not depend on the threshold.
+  await expect(bar(page, key)).toHaveAttribute("data-picked", "true");
   const svg = page.getByTestId("chart-svg");
   for (let n = 1; n <= 8; n++) await svg.dispatchEvent("pointermove", { ...ev, clientX: x + (dx * n) / 8 });
   await svg.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x + dx });

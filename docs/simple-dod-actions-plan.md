@@ -14,6 +14,7 @@ Notes on scope:
 - On a phone the timeline format draws thin goal lanes (design B3: no bars, a lane opens a list
   of its rows), so the "compact timeline" a finger long-press drags is the compact chart of the
   Gantt and waterfall formats.
+  This is this plan's reading of the task; the owner is asked to confirm it (questions.json).
 
 - The Detailed PRD editor is not checked after a one-pager edit: the mock serves the one-pager's
   PRD from its own store (web/lib/api/mock/simple-one-pager.ts), so the section change is proven
@@ -43,7 +44,7 @@ No cell is MISSING.
 | Cut it, keep the dependents | owner | dod-roadmap-actions.spec.ts :: cut it, keep the dependents: the item alone is cut, with Undo (desktop) | dod-roadmap-actions.spec.ts :: cut it, keep the dependents: the item alone is cut, with Undo (phone) |
 | Cut | commenter | fix5-cut-dependents.spec.ts :: a commenter proposes it (desktop) | a commenter proposes it (phone) |
 | Cut | approver (decides the item only) | fix5-cut-dependents.spec.ts :: deciding the item but not its dependents, the cut with them is a proposal (desktop) | same (phone) |
-| Add: a title dropped on a quarter, Oracle drafts | owner | simple-additions.spec.ts :: an owner drags a quick add onto a quarter, sees Oracle draft it, and undoes it | simple-additions.spec.ts :: an owner adds from the sheet and opens the drafted flow full height |
+| Add: a title dropped on a quarter, Oracle drafts | owner | simple-additions.spec.ts :: an owner drags a quick add onto a quarter, sees Oracle draft it, and undoes it | simple-additions.spec.ts :: an owner adds from the sheet and opens the drafted flow full height (a sheet add, not a drop: a phone has no quarter to drop on; the sheet asks for the quarter) |
 | Add: a title dropped on a goal | owner | simple-additions.spec.ts :: an owner drops a quick add on a goal header | n/a: a phone has no drag target; the sheet asks for the goal (row above) |
 | Add | approver | simple-additions.spec.ts :: an approver proposes a quick add the owner accepts in the tray | dod-roadmap-actions.spec.ts :: an approver adds from the sheet on a phone: a proposal |
 | Add | commenter | dod-roadmap-actions.spec.ts :: a commenter drops a title on a quarter: a proposed addition | simple-additions.spec.ts :: a commenter proposes from the sheet and reads a goal's suggestions |

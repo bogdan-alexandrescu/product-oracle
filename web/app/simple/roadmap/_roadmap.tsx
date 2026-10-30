@@ -683,6 +683,7 @@ export function SimpleRoadmap() {
     });
   }
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
+  const titleOf = useCallback((id: string | null) => (id ? byId.get(id)?.title : undefined), [byId]);
   const canChange = can("create_simple_change");
   // The items as last loaded, for a burst sent after the render that started it.
   const latest = useRef(byId);
@@ -1093,7 +1094,7 @@ export function SimpleRoadmap() {
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
-      titleOf={(id) => (id ? byId.get(id)?.title : undefined)}
+      titleOf={titleOf}
       inReview={data.changes_in_review ?? 0}
       meId={me?.user_id ?? null}
       onUndo={(id) =>
