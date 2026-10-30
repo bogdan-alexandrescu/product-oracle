@@ -94,7 +94,7 @@ import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
 import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
 import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
-import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
+import { ensureReports, inboxReports, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
@@ -134,7 +134,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -2950,6 +2950,7 @@ function load(): Db {
     for (const m of db.discussions.messages) if (m.status === "failed") m.error = SPENT;
   }
   if (scenario === KEY_RENEWED_SCENARIO) seedKeyRenewedRun(db.runs!, runsContext(db));
+  if (scenario === REPORT_PRD_MOVED_SCENARIO) addApprovedPrdV2(db);
   if (scenario === VERSION_WARNINGS_SCENARIO) {
     const prd = db.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -2960,6 +2961,18 @@ function load(): Db {
   // The caller owns this object now (see `cached`).
   cached = null;
   return db;
+}
+
+/** fix4 "report-prd-moved": the Usage alerts PRD's v2 approved after the roadmap was built from v1. */
+function addApprovedPrdV2(db: Db) {
+  const prd = db.documents.find((d) => d.slug === "usage-alerts");
+  const p1 = prd && db.versions.find((v) => v.document_id === prd.id && v.number === 1);
+  if (!prd || !p1) return;
+  const p2 = structuredClone(p1);
+  Object.assign(p2, { id: uuid(), number: 2, created_at: "2026-10-21T09:00:00Z", approved_at: "2026-10-22T09:00:00Z" });
+  p2.sections = p2.sections.map((x) => ({ ...x, id: uuid() }));
+  db.versions.push(p2);
+  prd.updated_at = p2.created_at;
 }
 
 /** E3 "roadmap-diff": usage-alerts-roadmap v1 approved, then v2, a draft (./roadmap.ts gives each its items). */
@@ -3045,6 +3058,15 @@ function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
 }
 
 /** The roadmap routes' context (CR-11, F3 Date bases) for the signed-in member. */
+/** fix4 qa-plan-1: an alignment report's tracks, read off the roadmap mock's track overviews (the Plan's). */
+function reportLive(db: Db, me: { id: string; role: Role; email: string }): LiveTracks {
+  return (calm) => {
+    const ctx = roadmapContext(db, me);
+    db.roadmap = ensureRoadmap(db, ctx);
+    return reportTracks(ctx, db.roadmap, calm);
+  };
+}
+
 function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): RoadmapContext {
   return {
     userId: me.id,
@@ -4943,7 +4965,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       // #710: Oracle reads the asker's Fireflies live in a private chat (./live.ts).
       liveReply: (asked, alone) => liveReply(asked.body, alone),
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
-      slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
+      slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id, reportLive(db, me)).integration }, r),
       documentText: (d) => discussionDocument(db, d),
       // G4: an approver's Stage of a section change writes its next_draft_changes row, as the API's.
       stageNextDraft: (d, c, reason) => {
@@ -5124,13 +5146,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
   if (pool) return pool;
   // G8: the Slack install's status (every member) and its channels (commenters and up).
-  const slack = slackRoute(ensureReports(db, db.user_id).integration, me, req, p);
+  const slack = slackRoute(ensureReports(db, db.user_id, reportLive(db, me)).integration, me, req, p);
   if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
   // H5: metrics, their variances and the analytics connection check roles themselves (./metrics.ts).
   const metricsOut = await routeMetrics(metricsContext(db, me), ensureMetrics(db, me), req, p, q);
   if (metricsOut) return metricsOut;
-  const reports = await reportsRoute(db, db.user_id, me, req, p, q);
+  const reports = await reportsRoute(db, db.user_id, me, req, p, q, reportLive(db, me));
   if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
@@ -5758,7 +5780,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     // Owners also get the weekly alignment reports and the posts Slack refused (F6), and
     // one strategy drift row however many findings are open (H4). Those Oracle told: what
     // it did on its own (H11); unopened rows count.
-    const reported = inboxReports(ensureReports(db, db.user_id), me);
+    const reported = inboxReports(ensureReports(db, db.user_id, reportLive(db, me)), me);
     const strategy = inboxStrategy(db.strategy, me.role);
     const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
     const open = did.filter((a) => a.counts).length;

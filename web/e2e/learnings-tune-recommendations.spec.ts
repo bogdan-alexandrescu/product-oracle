@@ -40,9 +40,9 @@ async function addLearning(page: Page, key = "effort_cost", text = LEARNT) {
   await page.getByTestId("learnings-panel").getByRole("button", { name: "Add learning" }).click();
   const form = page.getByTestId("learning-form");
   await form.getByLabel("Learning").fill(text);
-  await form.getByLabel("Applies to").selectOption("question_category");
-  await form.getByLabel("Which topic").selectOption(key);
-  await form.getByLabel("Direction").selectOption("recommend_more");
+  await form.getByLabel("What it is about").selectOption("question_category");
+  await form.getByLabel("Which kind of question").selectOption(key);
+  await form.getByLabel("What Oracle should do").selectOption("recommend_more");
   await form.getByRole("button", { name: "Add learning" }).click();
   await expect(form).toHaveCount(0);
   return page.getByTestId("learning-row").filter({ hasText: text });
@@ -73,7 +73,7 @@ test("a kept learning moves its question into the next ones and says why", async
   await expect(nextPrompts(page).nth(4)).toHaveText(DIFFERENTIATION);
   await expect(next(page)).not.toContainText(EFFORT);
 
-  await expect(await addLearning(page)).toContainText("Question topic · Effort and cost");
+  await expect(await addLearning(page)).toContainText("A kind of interview question · Effort and cost");
   await openIntake(page);
   await reanalyse(page);
   await expect(nextPrompts(page).nth(4)).toHaveText(EFFORT);

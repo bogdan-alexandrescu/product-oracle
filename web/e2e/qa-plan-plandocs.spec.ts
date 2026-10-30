@@ -135,19 +135,19 @@ test("qa-plan-35: the learning form uses plain words and named choices", async (
   await openTab(page, "outcomes");
   const panel = page.getByTestId("learnings-panel");
   // The seeded learning names its topic, not its key.
-  await expect(panel.getByTestId("learning-row").first()).toContainText("Question topic · Success metric and baseline");
+  await expect(panel.getByTestId("learning-row").first()).toContainText("A kind of interview question · Success metric and baseline");
   await expect(panel).not.toContainText("success_metric");
   await panel.getByRole("button", { name: "Add learning" }).click();
   const form = page.getByTestId("learning-form");
-  await expect(form.getByLabel("Applies to").locator("option")).toHaveText(["Module", "Question topic", "Quality check"]);
+  await expect(form.getByLabel("What it is about").locator("option")).toHaveText(["A part of Oracle", "A kind of interview question", "A quality check"]);
   await expect(form.getByLabel("Key")).toHaveCount(0);
   await expect(form.locator('[placeholder="success_metric"]')).toHaveCount(0);
-  await expect(form.getByLabel("Which topic").locator("option", { hasText: "Team ownership" })).toHaveCount(1);
+  await expect(form.getByLabel("Which kind of question").locator("option", { hasText: "Team ownership" })).toHaveCount(1);
   await form.getByLabel("Learning").fill("Ask who owns the rollout early");
-  await form.getByLabel("Which topic").selectOption({ label: "Team ownership" });
+  await form.getByLabel("Which kind of question").selectOption({ label: "Team ownership" });
   await form.getByRole("button", { name: "Add learning" }).click();
   await expect(panel.getByTestId("learning-row").filter({ hasText: "Ask who owns the rollout early" })).toContainText(
-    "Question topic · Team ownership",
+    "A kind of interview question · Team ownership",
   );
 });
 

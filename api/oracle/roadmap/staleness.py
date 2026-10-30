@@ -255,12 +255,30 @@ def _old_reasons(detail: str, hidden: Any) -> list[str]:
     for word in (w for w in hidden.words if "; " in w):
         title = replace(hidden, ids=frozenset(), numbers=frozenset(), words=frozenset({word}))
         for i in range(len(parts)):
+            if title.names(parts[i]):
+                continue  # a part naming it whole is hidden as itself (for_reader)
             for j in range(i + 1, len(parts)):
                 if title.names("; ".join(parts[i : j + 1])):
-                    if not title.names("; ".join(parts[i + 1 : j + 1])):
+                    if _starts_in(title, parts, i, j):
                         cut[i : j + 1] = [True] * (j + 1 - i)
                     break
     return [HIDDEN_REASON if c else p for p, c in zip(parts, cut, strict=True)]
+
+
+def _starts_in(title: Any, parts: list[str], i: int, j: int) -> bool:
+    """Whether a naming of ``title`` across ``parts[i..j]`` starts in part ``i``: read
+    with part ``j`` growing a character at a time, the parts from ``i`` name it before
+    the parts after ``i`` do. Not whether the parts after ``i`` name it at all: a later
+    part can hold the title whole in other characters (a fullwidth semicolon folds to
+    ";", cld-8) while the naming that starts in part ``i`` is still cut on "; "."""
+    head = "; ".join(parts[i:j]) + "; "
+    rest = "".join(f"{p}; " for p in parts[i + 1 : j])
+    for end in range(1, len(parts[j]) + 1):
+        if title.names(rest + parts[j][:end]):
+            return False
+        if title.names(head + parts[j][:end]):
+            return True
+    return False
 
 
 def detail_for_reader(detail: str | None, hidden: Any) -> str | None:

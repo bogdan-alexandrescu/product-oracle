@@ -1313,7 +1313,10 @@ async def test_report_names_items_as_the_plan_and_the_newer_prd_version(client, 
     assert all(n["title"] == names[n["item_key"]] for n in t["needs_attention"])
     assert t["prd_moved"] is True and t["prd_moved_to"] == 2
     md = report["markdown"]
-    assert f"- v2 of the PRD is approved · [Update the roadmap](/plan?item={PRD})" in md
+    link = f"[Build the roadmap from it](/plan/documents?prd={PRD})"
+    assert f"- v2 of the PRD is approved · {link}" in md
+    # fix4 qa-plan-3: the link lands on the PRD's Build roadmap, not the Plan's top.
+    assert "[Update the roadmap]" not in md
     assert "The PRD has a newer approved version." not in md
 
 
@@ -1323,5 +1326,27 @@ def test_markdown_for_a_moved_prd_without_its_version():
     content = _content(1)
     content["tracks"][0]["prd_moved"] = True
     md = alignment.markdown(content)
-    assert "- A newer version of the PRD is approved · [Update the roadmap](/plan?item=prd-0)" in md
+    link = "[Build the roadmap from it](/plan/documents?prd=prd-0)"
+    assert f"- A newer version of the PRD is approved · {link}" in md
     assert "vNone" not in md
+
+
+def test_markdown_lists_an_item_with_two_reasons_once():
+    """fix4. protects=an item at risk for two reasons is one Needs attention line with both,
+    slipping first; fails_when=it is listed twice; no_claim=the stored rows (one per reason)."""
+    content = _content(1)
+    SLIP = "ENG-405 targets Dec 9, after the milestone date Nov 30."  # noqa: N806
+    base = {
+        "item_key": "item-x",
+        "title": "Item X",
+        "horizon": "now",
+        "alert_id": None,
+        "link": "/plan?item=prd-0:item-x",
+    }
+    content["tracks"][0]["needs_attention"] = [
+        {**base, "kind": "stale", "detail": "Its PRD section changed."},
+        {**base, "kind": "slipping", "detail": SLIP},
+    ]
+    md = alignment.markdown(content)
+    assert md.count("(/plan?item=prd-0:item-x)") == 1
+    assert f"- [Item X](/plan?item=prd-0:item-x) · Now: {SLIP} Its PRD section changed." in md

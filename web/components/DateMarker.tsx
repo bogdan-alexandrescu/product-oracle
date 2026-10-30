@@ -128,12 +128,12 @@ export function DateMarker({ mark }: { mark: DateMarkOut }) {
                       withdrawn.basis.withdrawn_reason ? `: ${withdrawn.basis.withdrawn_reason}` : ""
                     }.`
                   : `${mark.bases.join(", ")} was withdrawn.`
-                : "No verified basis supports this date."}
+                : "No date source backs this date yet."}
             </span>
             <span className="mt-2 block">
               {mayRecord ? (
                 <Button variant="solid" onClick={() => setRecording(true)}>
-                  {mark.status === "withdrawn" ? "Record a new basis" : "Record basis"}
+                  {mark.status === "withdrawn" ? "Add a new date source" : "Add a date source"}
                 </Button>
               ) : (
                 <span className="text-text2">The engineering lead verifies dates</span>

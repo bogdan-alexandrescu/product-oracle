@@ -143,6 +143,18 @@ function Figures({ report }: { report: Report }) {
   );
 }
 
+type Need = ReportTrack["needs_attention"][number];
+/** As oracle.reports.alignment.needs_by_item: one entry per item, its reasons slipping first, then blocked, then stale. */
+const REASON_ORDER: Record<string, number> = { slipping: 0, blocked: 1, stale: 2 };
+function needsByItem(needs: Need[]): [Need, Need[]][] {
+  const out = new Map<string, Need[]>();
+  for (const n of needs) out.set(n.item_key, [...(out.get(n.item_key) ?? []), n]);
+  return [...out.values()].map((rs) => {
+    const sorted = [...rs].sort((a, b) => (REASON_ORDER[a.kind] ?? 9) - (REASON_ORDER[b.kind] ?? 9));
+    return [rs[0]!, sorted];
+  });
+}
+
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-x-3 gap-y-1 max-[600px]:grid-cols-1">
@@ -175,12 +187,13 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
             {a.aligned} aligned · {a.drift} drift · {a.untracked} untracked · {a.done} done
           </span>
         </Row>
-        {/* qa-plan-43: which version is approved, and where to update the roadmap from it. */}
+        {/* qa-plan-43: which version is approved; fix4 qa-plan-3: the link lands on the PRD's
+            Build roadmap (Plan > Roadmap documents, the PRD picked), as the markdown's does. */}
         {t.prd_moved && (
           <Notice tone="warn" testId="report-prd-moved">
             {t.prd_moved_to ? `v${t.prd_moved_to} of the PRD is approved` : "A newer version of the PRD is approved"} ·{" "}
-            <Link href={t.link} prefetch={false} className="font-semibold text-accent-ink hover:underline">
-              Update the roadmap
+            <Link href={`/plan/documents?prd=${encodeURIComponent(t.prd.slug)}`} prefetch={false} className="font-semibold text-accent-ink hover:underline">
+              Build the roadmap from it
             </Link>
           </Notice>
         )}
@@ -194,13 +207,20 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
                 </InfoTip>
               )}
             </h3>
+            {/* An item is listed once, with all its reasons (slipping first), as the markdown does. */}
             <ul className="space-y-1.5">
-              {t.needs_attention.map((n, i) => (
-                <li key={`${n.item_key}-${i}`} className="text-[15px]">
+              {needsByItem(t.needs_attention).map(([n, reasons]) => (
+                <li key={n.item_key} data-testid="needs-attention-item" className="text-[15px]">
                   <Link href={n.link} prefetch={false} className="font-semibold text-accent-ink hover:underline">
                     {n.title}
                   </Link>{" "}
-                  <span className="text-text2">· {HORIZON_LABEL[n.horizon] ?? n.horizon}</span>: {n.detail}
+                  <span className="text-text2">· {HORIZON_LABEL[n.horizon] ?? n.horizon}</span>:{" "}
+                  {reasons.map((r, i) => (
+                    <span key={`${r.kind}-${i}`}>
+                      {i > 0 ? " " : ""}
+                      <span>{r.detail}</span>
+                    </span>
+                  ))}
                 </li>
               ))}
             </ul>

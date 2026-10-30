@@ -70,13 +70,28 @@ const BASIS_KIND: Record<"estimate" | "capacity" | "commitment", string> = {
   commitment: "Commitment",
 };
 
-/** What a monitor check found changed (the API's field names), in words. */
-const CHANGED_LABEL: Record<string, string> = {
-  health: "health",
-  at_risk: "the at-risk items",
-  next_milestone: "the next milestone",
-  prd_moved: "the PRD's approved version",
-};
+/**
+ * qa-plan-28: what a check found, as the result itself ("Now on track; 1 item at risk"), read
+ * from the overview the check returned for each field it says changed; "Nothing changed".
+ */
+export function checkResult(changed: string[], o: Track): string {
+  if (changed.length === 0) return "Nothing changed since the last check.";
+  const parts: string[] = [];
+  for (const c of changed) {
+    if (c === "health") parts.push(`now ${trackHealth(o.health).label.toLowerCase()}`);
+    else if (c === "at_risk") parts.push(o.at_risk.length ? `${plural(o.at_risk.length, "item")} at risk` : "no items at risk");
+    else if (c === "next_milestone")
+      parts.push(
+        o.next_milestone
+          ? `next milestone ${o.next_milestone.name}${o.next_milestone.target_date ? `, ${day(o.next_milestone.target_date)}` : ""}`
+          : "no next milestone",
+      );
+    else if (c === "prd_moved") parts.push(o.prd_moved ? "the PRD has a newer approved version" : "the roadmap is on the PRD's latest approved version");
+  }
+  if (parts.length === 0) return "Checked.";
+  const text = parts.join("; ");
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
 
 /**
  * What closing a track does (qa-plan-31), as the API does it: a closed track is no longer
@@ -176,6 +191,8 @@ export function TrackPanel({
   );
   const pushOff = connector.data && !connector.data.writes_allowed ? connector.data.reason : null;
   const pushWhy = useId();
+  const checkWhy = useId();
+  const paused = track.status === "paused";
   const health = trackHealth(track.health);
   const off = busy;
   const actions = may.check || may.draftRoadmap || may.push;
@@ -392,7 +409,10 @@ export function TrackPanel({
                   >
                     {milestoneTitle(track, m.id)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate" title={m.name}>{m.name}</span>
+                  {/* qa-plan-8: the whole name, wrapping (under the dates on a phone), never "F…". */}
+                  <span data-testid="milestone-name-line" className="min-w-0 flex-1 break-words max-[600px]:basis-full">
+                    {m.name}
+                  </span>
                   <span className="flex-none text-sm text-text2">
                     {HORIZON_LABEL[m.horizon]} · {plural(m.item_keys.length, "item")}
                   </span>
@@ -412,18 +432,28 @@ export function TrackPanel({
         <div className="flex flex-col gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
           {actions && (
             <div className="flex flex-wrap gap-2">
-              {may.check && (
+              {/* qa-plan-61: a paused track is not checked (its health stays Paused), so Check now
+                  waits for Active and says so. */}
+              {may.check && paused && (
+                <span className="flex basis-full flex-wrap items-center gap-2">
+                  <Button disabled aria-describedby={checkWhy} data-testid="track-check">
+                    Check now
+                  </Button>
+                  <span id={checkWhy} className="text-sm text-text2">
+                    Paused tracks are not checked. Set it Active to check it.
+                  </span>
+                </span>
+              )}
+              {may.check && !paused && (
                 <Button
+                  data-testid="track-check"
                   disabled={off}
                   onClick={() =>
                     void act(
                       () => unwrap(api.POST("/v1/tracks/{track_id}/monitor", path)),
                       (out) => {
                         onChange(out.overview);
-                        setResult({
-                          tone: "pass",
-                          text: `Checked: ${out.changed.length ? `changed ${out.changed.map((c) => CHANGED_LABEL[c] ?? c.replaceAll("_", " ")).join(", ")}` : "nothing changed"}.`,
-                        });
+                        setResult({ tone: "pass", text: checkResult(out.changed, out.overview) });
                       },
                     )
                   }
@@ -520,7 +550,7 @@ function MilestoneView({ track, m }: { track: Track; m: Milestone }) {
   const st = MILESTONE_STATUS[m.status];
   return (
     <Inspector
-      eyebrow="Milestone · selected"
+      eyebrow="Milestone"
       title={milestoneTitle(track, m.id)}
       label={`Milestone ${m.name}`}
       testId="plan-milestone"
@@ -637,7 +667,7 @@ function MilestoneForm({
 
   return (
     <Inspector
-      eyebrow={m ? "Milestone · selected" : "New milestone"}
+      eyebrow={m ? "Milestone" : "New milestone"}
       title={m ? milestoneTitle(track, m.id) : undefined}
       label={m ? `Milestone ${m.name}` : "New milestone"}
       testId="plan-milestone"

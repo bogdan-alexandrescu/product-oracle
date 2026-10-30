@@ -96,7 +96,8 @@ test("milestones are added and edited in the inspector, with dated titles", asyn
 
   await m1.click();
   const e = editor(page);
-  await expect(e).toContainText("Milestone · selected");
+  await expect(e).toContainText("Milestone");
+  await expect(e).not.toContainText("· selected");
   await expect(e.getByLabel("Name")).toHaveValue("First release");
   // A date with no verified basis that supports it is refused, with the reason.
   await e.getByLabel("Date").fill("2026-12-01");
@@ -145,7 +146,7 @@ test("check now, push to tracker and draft a roadmap from the track", async ({
   await openPlan(page);
   const t = track(page);
   await t.getByRole("button", { name: "Check now" }).click();
-  await expect(t.getByTestId("track-result")).toContainText("Checked");
+  await expect(t.getByTestId("track-result")).toContainText("Now at risk");
   // qa-plan-8: with two-way sync off, Push to tracker is disabled and says why.
   await expect(t.getByRole("button", { name: "Push to tracker" })).toBeDisabled();
   await expect(

@@ -24,9 +24,9 @@ from oracle.runs.schemas import Gate, GateLeft
 
 BLOCKING = "blocking"
 # O4 Roadmap shape: a date shows only on a verified basis, so a date is never waived (its
-# fixes are Remove date or Record basis).
+# fixes are Remove date or Add a date source).
 DATE_CODES = frozenset({"unverified_date", "date_outside_now", "undated_source", "invalid_date"})
-DATE_NOT_WAIVED = "a date is never waived: remove it or record a verified basis"
+DATE_NOT_WAIVED = "a date is never waived: remove it or add a date source"
 FILE_NOT_WAIVED = "a problem of the whole file is never waived: send it back to the agents"
 # C6 Feature set and PRD scope: a key the baseline does not know is fixed, never waived.
 UNKNOWN_CODES = frozenset(

@@ -117,8 +117,20 @@ export function gapLabel(check: Schemas["GoalCheck"] | null | undefined): "No ow
   return missing.length > 0 && missing.every((k) => k === "owner") ? "No owner" : "Not measurable";
 }
 
-/** The Not measurable chip's tooltip: "Missing: target, owner". */
-export const missingTip = (check: Schemas["GoalCheck"] | null | undefined) => `Missing: ${(check?.missing ?? []).join(", ")}`;
+/** The fields a person reads as one: a target is its value, unit and comparison. */
+const MISSING_GROUP: Record<string, string> = { metric: "Metric", unit: "Target", comparison: "Target", target: "Target", horizon: "Horizon", owner: "Owner" };
+
+/**
+ * What a goal lacks, as people name it (qa-plan-36): "Target", "Horizon", "Owner". The one
+ * list the goal's chip, its drawer and its interview's Missing strip all read.
+ */
+export const missingFields = (missing: readonly string[] | null | undefined): string[] => [
+  ...new Set((missing ?? []).map((k) => MISSING_GROUP[k] ?? k)),
+];
+
+/** The Not measurable chip's tooltip and the drawer's line: "Missing: target, horizon, owner". */
+export const missingTip = (check: Schemas["GoalCheck"] | null | undefined) =>
+  `Missing: ${missingFields(check?.missing).map((f) => f.toLowerCase()).join(", ")}`;
 
 /** Goals with a `*_text` value whose typed field is absent: what Fill from text reads. */
 export function fillable(goals: EntityOut[]): number {

@@ -215,7 +215,7 @@ test("Build roadmap reuses the approved version's draft items, unless asked to d
   await dialog.getByRole("checkbox", { name: "Derive the items again" }).check();
   // The estimate was for the other choice: estimate again.
   await expect(dialog.getByTestId("estimate")).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Re-estimate" }).click();
+  await dialog.getByRole("button", { name: "Estimate cost again" }).click();
   await expect(items).toHaveText(/^Roadmap items\s*\$5\.50$/);
   await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
 });
@@ -271,6 +271,6 @@ test("Start after the draft items changed since the estimate asks to estimate ag
   await dialog.getByRole("button", { name: "Start run" }).click();
   await expect(dialog).toContainText("changed since the estimate");
   await expect(page).toHaveURL(/\/documents\/usage-alerts\/v\/1\/roadmap$/);
-  await dialog.getByRole("button", { name: "Re-estimate" }).click();
+  await dialog.getByRole("button", { name: "Estimate cost again" }).click();
   await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
 });

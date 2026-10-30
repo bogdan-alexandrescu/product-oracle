@@ -54,26 +54,33 @@ test("impact: a recorded change highlights the rail by what it is about, not alw
   const table = page.getByRole("grid", { name: "Affected outputs" });
   const nav = page.getByRole("navigation", { name: "Oracle" });
 
-  // A change on a deleted baseline item (a requirement) belongs with Baseline, never PRDs.
+  // A change on a deleted baseline item (a requirement) belongs with Baseline, never PRDs,
+  // when it is opened on its own (qa-plan-12: opened from a PRD's Impact, it stays with PRDs).
   await table.getByText("Acceptance tests").first().click();
   await page.getByRole("complementary", { name: /Acceptance tests/ }).getByRole("link", { name: "Recorded change" }).click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement R-90 deleted");
+  await page.goto(new URL(page.url()).pathname);
+  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Requirement “Guest checkout keeps the cart” deleted");
   await expect(nav.getByTestId("nav-baseline")).toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
 
   // A change on a source's permission belongs with neither PRDs nor Baseline: the rail stays quiet.
   await page.goBack();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
   await table.getByText("Early shipping cost brief").first().click();
   await page.getByRole("complementary", { name: /Early shipping cost brief/ }).getByRole("link", { name: "Recorded change" }).click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
+  await page.goto(new URL(page.url()).pathname);
   await expect(page.getByText(/^Impact:/).filter({ visible: true })).toBeVisible();
   await expect(nav.getByTestId("nav-prds")).not.toHaveAttribute("aria-current", "page");
   await expect(nav.getByTestId("nav-baseline")).not.toHaveAttribute("aria-current", "page");
 
   // A change on a PRD section still belongs with PRDs, as before.
   await page.goBack();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2\/impact$/);
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Table" }).click();
   await table.getByText("Saved addresses tech brief").first().click();
   await page.getByRole("complementary", { name: /Saved addresses tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
@@ -113,8 +120,11 @@ const FEATURES: [string, string][] = [
   ["F-8", "Scheduled exports"],
 ];
 
-/** The Score column's number style (scoreText: two decimals), worked out here from the shown figures. */
-const scoreStyle = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** The Score column's number style (scoreText: whole for RICE and MoSCoW, else two decimals), worked out here from the shown figures. */
+const scoreStyle = (n: number, method: string) => {
+  const places = method === "RICE" || method === "MoSCoW" ? 0 : 2;
+  return n.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places });
+};
 /** A step's shown arithmetic, as a person would key it into a calculator: "6,000 × 1 × 90% ÷ 1". */
 const worked = (expr: string) => {
   const js = expr.replace(/,/g, "").replace(/(\d+(?:\.\d+)?)%/g, "($1/100)").replace(/×/g, "*").replace(/÷/g, "/");
@@ -148,7 +158,7 @@ async function stepsAddUp(page: Page) {
         const s = step.trim();
         const sum = s.match(/^Score = (.+) = (\S+)$/);
         if (sum) {
-          expect(scoreStyle(worked(sum[1]!)), `${method} ${key}: "${s}"`).toBe(sum[2]);
+          expect(scoreStyle(worked(sum[1]!), method), `${method} ${key}: "${s}"`).toBe(sum[2]);
           expect(sum[2], `${method} ${key}: the step states the Score column's score`).toBe(score);
         }
         const conf = s.match(/^Confidence = (\S+) × track record (\S+) = (\S+)$/);
@@ -169,8 +179,8 @@ test("priorities: a score step's arithmetic is true, confidence a percent in eve
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
 
   const f2 = (m: string) => pickMethod(page, m).then(() => stepsOf(page, "F-2", "Shipping cost shown in the cart"));
-  expect(await f2("RICE")).toEqual(["Score = 6,000 × 1 × 90% ÷ 1 = 5,400.00"]);
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400.00");
+  expect(await f2("RICE")).toEqual(["Score = 6,000 × 1 × 90% ÷ 1 = 5,400"]);
+  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
   expect(await f2("Goal-weighted")).toEqual([
     "Goal value = 3×3 (Raise activation) = 9",
     "Score = 9 × 90% ÷ 1 = 8.10",
@@ -194,7 +204,7 @@ test("priorities: with a track record, the confidence step and the formula read 
   await pickMethod(page, "RICE");
   expect(await stepsOf(page, "F-1", "Saved addresses at checkout")).toEqual([
     "Confidence = 75% × track record 0.77 = 57.8%",
-    "Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312.00",
+    "Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312",
   ]);
 
   await stepsAddUp(page);

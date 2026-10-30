@@ -24,8 +24,22 @@ async function startFromSetup(page: Page) {
   // One baseline action before the build: the row's Open; the Goals card points at it.
   await expect(goals(page).getByTestId("goals-build-in-setup")).toHaveText("Build it from Set up, above");
   await expect(goals(page).getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
+  // Start waits for a source with items (qa-onboarding-2): Pick sources first, a file in an upload source.
+  await page.getByTestId("setup-row-sources").getByRole("link", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
+  const form = page.getByRole("form", { name: "Add a source" });
+  await form.getByLabel("Kind").selectOption("upload");
+  await form.getByLabel("Name").fill("Research notes");
+  await form.getByRole("button", { name: "Add source" }).click();
+  const notes = page.getByRole("listitem", { name: "Research notes" });
+  await notes.getByLabel("Upload files to Research notes").setInputFiles([
+    { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
+  ]);
+  await expect(notes.getByTestId("source-items")).toHaveText("1 item");
+  await page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Back to Home" }).click();
+  await expect(page).toHaveURL(/\/home$/);
   await row.getByRole("link", { name: "Open" }).click();
-  await expect(page).toHaveURL(/\/baseline\?build=1$/);
+  await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
   const sheet = page.getByRole("dialog", { name: "Build the baseline" });
   await sheet.getByRole("button", { name: "Start" }).click();
   await expect(sheet).toHaveCount(0);

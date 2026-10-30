@@ -19,7 +19,7 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { WaiveForm } from "../company/strategy/_components/DriftList";
 import { assess, type GoalView, type Point } from "../home/_goals";
-import { dateBasis, HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanDrift, type PlanItem } from "./_lib";
+import { dateBasis, HORIZON_LABEL, nextSentence, roadmapHref, stateChip, type PlanDrift, type PlanItem } from "./_lib";
 
 function History({ item }: { item: PlanItem }) {
   const q = useQuery(`plan|history|${item.roadmap.slug}|${item.key}`, () =>
@@ -153,6 +153,20 @@ function DateLine({ item, onChanged }: { item: PlanItem; onChanged?: () => void 
   );
 }
 
+/**
+ * qa-plan-5: which date the table shows. The row's "Nov 20 ✓" is the item's verified date when it
+ * has one, not a tracker due date; say so when the tracker has none or a different one.
+ */
+function planDateNote(item: PlanItem): string | null {
+  const { date, date_status, records } = item.engineering;
+  if (!date || records.length === 0) return null;
+  if (records.some((r) => r.target_date === date)) return null;
+  const day = formatDay(date);
+  if (date_status === "verified") return `The roadmap shows ${day} ✓, the verified date (see Date), not a tracker due date.`;
+  if (date_status === "withdrawn") return `The roadmap's date ${day} was withdrawn (see Date); it is not a tracker due date.`;
+  return `The roadmap shows ${day}, not yet verified (see Date); it is not a tracker due date.`;
+}
+
 const RECORD_STATE: Record<PlanItem["engineering"]["records"][number]["state"], string> = {
   todo: "Open",
   in_progress: "In progress",
@@ -173,6 +187,7 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const records = item.engineering.records;
+  const planDay = planDateNote(item);
   async function unlink(id: string) {
     setBusy(id);
     setError(null);
@@ -192,7 +207,7 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
         <ul className="flex flex-col gap-1.5">
           {records.map((r) => (
             <li key={`${r.tracker}|${r.external_ref}`} data-testid="plan-record" className="flex min-w-0 items-center gap-2 text-[15px]">
-              <span className="tnum min-w-0 flex-1 truncate">
+              <span className="tnum min-w-0 flex-1 break-words">
                 {r.url ? (
                   <a href={r.url} target="_blank" rel="noopener noreferrer" className="font-semibold underline-offset-2 hover:underline">
                     {r.external_ref}
@@ -201,7 +216,8 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
                   <b className="font-semibold">{r.external_ref}</b>
                 )}
                 <span className="text-text2">
-                  {` · ${RECORD_STATE[r.state]} · ${r.target_date ? formatDay(r.target_date) : "no date"}`}
+                  {/* qa-plan-5: the tracker's own due date, named as such; the plan's date is said below. */}
+                  {` · ${RECORD_STATE[r.state]} · ${r.target_date ? `due ${formatDay(r.target_date)} in the tracker` : "no due date in the tracker"}`}
                 </span>
               </span>
               {links && r.tracker === "github" && r.id && (
@@ -212,6 +228,11 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
             </li>
           ))}
         </ul>
+      )}
+      {planDay && (
+        <span data-testid="plan-record-date" className="text-sm text-text2">
+          {planDay}
+        </span>
       )}
       {links && item.prd && (
         <Button variant="ghost" className="self-start" onClick={() => links.onLink(item)}>
@@ -566,8 +587,11 @@ export function PlanInspector({
   me,
   onChanged,
   links,
+  inSheet = false,
 }: {
   item: PlanItem;
+  /** qa-plan-32: in the phone sheet, whose head already says "Item", the eyebrow is not repeated; the title reads in full. */
+  inSheet?: boolean;
   goals: Map<string, GoalView>;
   history: Map<string, Point[]>;
   me: string | null | undefined;
@@ -579,11 +603,10 @@ export function PlanInspector({
   const state = stateChip(item);
   const served = item.goal_ids.map((id) => goals.get(id)).filter((g): g is GoalView => !!g);
   const record = item.engineering.records[0];
-  const who = whoLabel(item.next.who, me);
   const version = item.prd?.version;
   return (
     <Inspector
-      eyebrow="Item · selected"
+      eyebrow={inSheet ? null : "Item"}
       title={item.title}
       label={`Item ${item.title}`}
       testId="plan-inspector"
@@ -608,9 +631,9 @@ export function PlanInspector({
             </div>
           ))}
           {item.next.action ? (
-            <p className="text-[15px]">
-              <b className="font-semibold">{item.next.label}</b>
-              {who && <span className="text-text2"> · {who}</span>}
+            // qa-plan-29: who takes the decision, in one sentence ("Owners decide on the slip").
+            <p data-testid="plan-why-next" className="text-[15px] font-semibold">
+              {nextSentence(item.next, me)}
             </p>
           ) : (
             item.reasons.length === 0 && <p className="text-[15px] text-text2">Nothing to decide</p>

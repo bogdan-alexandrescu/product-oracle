@@ -108,7 +108,16 @@ function underWay(message: string): string | null {
  * The start sheet (B1): depth, Stop for my review, the estimate, Start. Opening it makes
  * the draft run the estimate is for; a change of depth or review re-estimates it.
  */
-export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void; onStarted: (runId: string) => void }) {
+export function BuildBaselineSheet({
+  onClose,
+  onStarted,
+  fromSetup = false,
+}: {
+  onClose: () => void;
+  onStarted: (runId: string) => void;
+  /** Opened from Home's Set up (?from=setup): the no-sources link keeps it, for Back to Home (qa-onboarding-17). */
+  fromSetup?: boolean;
+}) {
   const id = useId();
   const [depth, setDepth] = useState<Depth>("standard");
   const [review, setReview] = useState(true);
@@ -122,6 +131,7 @@ export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void
   // (qa-onboarding-11). A failed list says nothing.
   const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
   const nothingToRead = !!sources.data && sources.data.every((s) => s.item_count === 0);
+  const sourcesHref = fromSetup ? "/settings/sources?from=setup" : "/settings/sources";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -222,7 +232,7 @@ export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void
             <Notice tone="warn" testId="build-no-items">
               {sources.data!.length === 0 ? "You have no sources yet" : "Your sources have no items yet"}, so the build has
               nothing to read.{" "}
-              <Link href="/settings/sources" className="font-semibold underline underline-offset-2">
+              <Link href={sourcesHref} className="font-semibold underline underline-offset-2">
                 Add files or sync a source
               </Link>{" "}
               first.
@@ -247,10 +257,21 @@ export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void
             ))}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:sticky max-[600px]:bottom-0 max-[600px]:bg-surface max-[600px]:px-4">
+          {/* qa-onboarding-2: a build with nothing to read spends money on nothing; Start waits for a source with items. */}
+          {nothingToRead && (
+            <span id={`${id}-why`} className="mr-auto min-w-0 text-sm text-text2" data-testid="build-start-reason">
+              Start once a source has items
+            </span>
+          )}
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={start} disabled={busy || !estimate || !!first}>
+          <Button
+            variant="primary"
+            onClick={start}
+            disabled={busy || !estimate || !!first || nothingToRead || (!sources.data && !sources.error)}
+            aria-describedby={nothingToRead ? `${id}-why` : undefined}
+          >
             {estimate?.needs_approval ? "Ask an owner to approve" : "Start"}
           </Button>
         </div>

@@ -100,7 +100,7 @@ test.describe("desktop", () => {
     await expect(inspector).not.toContainText(/\bF-\d/);
   });
 
-  test("qa-plan-18: every score has two decimals, right-aligned", async ({ page }) => {
+  test("qa-plan-18: every score has one precision per method, right-aligned", async ({ page }) => {
     await open(page);
     const methods = page.getByRole("radiogroup", { name: "Ranking method" });
     for (const method of ["Goal-weighted", "RICE", "WSJF"]) {
@@ -108,7 +108,9 @@ test.describe("desktop", () => {
       await expect(methods.getByRole("radio", { name: method })).toHaveAttribute("aria-checked", "true");
       await expect(rows(page)).toHaveCount(8);
       const scores = rows(page).getByTestId("score");
-      for (const t of await scores.allInnerTexts()) expect(t.trim(), method).toMatch(/^(—|\d{1,3}(,\d{3})*\.\d\d)$/);
+      // fix4 qa-plan-50: RICE scores are whole numbers; the others keep two decimals.
+      const shape = method === "RICE" ? /^(—|\d{1,3}(,\d{3})*)$/ : /^(—|\d{1,3}(,\d{3})*\.\d\d)$/;
+      for (const t of await scores.allInnerTexts()) expect(t.trim(), method).toMatch(shape);
       const rights = await scores.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().right)));
       expect(Math.max(...rights) - Math.min(...rights), `${method}: scores share a right edge`).toBeLessThanOrEqual(1);
     }

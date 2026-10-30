@@ -42,9 +42,11 @@ test("qa-plan-48: with no launch, Launches shows only the empty state and its Ne
   await expect(page.getByTestId("launch-filters")).toHaveCount(0);
   await expect(page.getByTestId("launches-table")).toHaveCount(0);
   await expect(page.getByRole("columnheader")).toHaveCount(0);
-  // The empty state's action opens New launch.
-  await empty.getByTestId("launches-empty-new").click();
-  await expect(page.getByRole("dialog", { name: "New launch" })).toBeVisible();
+  // The empty state's action is its New launch (the header has none while empty, fix4 qa-plan-15),
+  // disabled with its reason until a roadmap is approved (fix4 qa-plan-13).
+  await expect(empty.getByTestId("launches-empty-new")).toBeDisabled();
+  await expect(empty.getByTestId("new-launch-blocked")).toBeVisible();
+  await expect(page.getByTestId("new-launch")).toHaveCount(0);
 });
 
 test("qa-plan-39: the launches card is named after its filter, not Launches again", async ({ page }) => {

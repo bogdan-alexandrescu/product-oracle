@@ -85,10 +85,10 @@ test("phone: Make measurable and Add subgoal do not overlap", async ({ page }) =
 // protects=qa-plan-43: Progress says what its number is; fails_when=it reads "50% own";
 // no_claim=the roll-up maths (subgoals.spec, pytest).
 // qa-plan-2: and what it is measured from (its start, 31%), so it squares with Plan's 38% of 45%.
-test("goals table: progress reads '50% of the way from 31%'", async ({ page }) => {
+test("goals table: progress reads '50% of the way from 31% to ≥ 45%'", async ({ page }) => {
   await openBaseline(page);
   const progress = page.getByTestId("goal-g.activation").locator('[data-attr="progress"]');
-  await expect(progress).toHaveText("50% of the way from 31%");
+  await expect(progress).toHaveText("50% of the way from 31% to ≥ 45%");
   await expect(progress).not.toContainText("own");
 });
 
@@ -96,16 +96,16 @@ test("goals table: progress reads '50% of the way from 31%'", async ({ page }) =
 // Back changes nothing; fails_when=the click writes at once; no_claim=the parse rules.
 test("Fill goals from text asks first, naming the goal, and Back changes nothing", async ({ page }) => {
   await openBaseline(page);
-  await page.getByRole("button", { name: "Fill goals from text (1 goal)" }).click();
-  const ask = page.getByRole("alertdialog", { name: "Fill 1 goal from text" });
+  await page.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
+  const ask = page.getByRole("alertdialog", { name: "Read targets from 1 goal's text" });
   await expect(ask).toContainText("Cut early churn");
   await ask.getByRole("button", { name: "Back" }).click();
   await expect(ask).toHaveCount(0);
   const churn = page.getByTestId("goal-g.early-churn");
   await expect(churn.locator('[data-attr="target"]')).toHaveAttribute("data-text", "true");
 
-  await page.getByRole("button", { name: "Fill goals from text (1 goal)" }).click();
-  await ask.getByRole("button", { name: "Fill 1 goal from text" }).click();
+  await page.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
+  await ask.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
   await expect(page.getByRole("status")).toContainText("1 goal filled.");
   await expect(churn.locator('[data-attr="target"]')).toHaveText("< 8%");
 });
@@ -186,7 +186,7 @@ test("entity drawer: attribute labels in words, Confidence label whole", async (
 // no_claim=Oracle's turns.
 test("interview: owner-only gap asks who owns it; the stepper has no separators", async ({ page }) => {
   await openBaseline(page);
-  await page.getByRole("button", { name: "Interview vague goals (2)" }).click();
+  await page.getByRole("button", { name: "Ask Oracle to sharpen 2 goals" }).click();
   const discuss = page.getByTestId("goal-discuss");
   await expect(discuss.getByRole("heading", { name: "Who should own “Grow paid conversion”?" })).toBeVisible();
   const stepper = discuss.getByTestId("interview-stepper");

@@ -166,7 +166,7 @@ test("the owner's Set up lists Build baseline last, and Open lands on the sheet"
   await expect(row).toContainText("Build baseline");
   await expect(row.getByTestId("setup-status")).toHaveText("Not built");
   await row.getByRole("link", { name: "Open" }).click();
-  await expect(page).toHaveURL(/\/baseline\?build=1$/);
+  await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
   await expect(sheet(page)).toBeVisible();
 });
 

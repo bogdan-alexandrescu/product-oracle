@@ -39,6 +39,7 @@ export function Dialog({
   onSubmit,
   size = "md",
   phoneSheet = false,
+  scrollBody = false,
   children,
 }: {
   title: string;
@@ -59,6 +60,12 @@ export function Dialog({
   size?: keyof typeof SIZE;
   /** On a phone the dialog fills the screen (a full-height sheet, #329 rule 5). */
   phoneSheet?: boolean;
+  /**
+   * fix4 qa-plan-24: the dialog is at most the window's height, its head and footer pinned and
+   * the body scrolling between them (a tall form whose actions must stay in view). Opt-in: a
+   * scrolling body clips popovers opened inside it.
+   */
+  scrollBody?: boolean;
   children: ReactNode;
 }) {
   const id = useId();
@@ -114,7 +121,7 @@ export function Dialog({
   const titleId = `${id}-title`;
   const footer =
     actions !== undefined ? (
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4" data-testid="dialog-footer">
+      <div className={`flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4 ${scrollBody ? "flex-none" : ""}`} data-testid="dialog-footer">
         <Button variant="secondary" onClick={askOnCancel ? requestClose : onClose} disabled={busy}>
           {cancelLabel}
         </Button>
@@ -122,7 +129,7 @@ export function Dialog({
       </div>
     ) : null;
   const body = (
-    <div data-dialog-body className="space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4">
+    <div data-dialog-body className={`space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4 ${scrollBody ? "min-h-0 flex-1 overflow-y-auto" : ""}`}>
       {children}
     </div>
   );
@@ -149,9 +156,11 @@ export function Dialog({
         aria-labelledby={titleId}
         tabIndex={-1}
         data-testid={testId}
-        className={`w-full ${SIZE[size]} min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none ${phoneSheet ? "max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0" : ""}`}
+        className={`w-full ${SIZE[size]} min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none ${phoneSheet ? "max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0" : ""} ${
+          scrollBody ? `flex max-h-[calc(100dvh-5rem)] flex-col ${phoneSheet ? "max-[600px]:max-h-dvh" : "max-[600px]:max-h-[calc(100dvh-2rem)]"}` : ""
+        }`}
       >
-        <div className="flex min-h-14 items-start gap-3 border-b border-line py-3 pr-3 pl-5 max-[600px]:pl-4">
+        <div className="flex min-h-14 flex-none items-start gap-3 border-b border-line py-3 pr-3 pl-5 max-[600px]:pl-4">
           <div className="min-w-0 flex-1 self-center">
             <h2 id={titleId} className="font-display text-xl font-bold tracking-heading">
               {title}
@@ -186,6 +195,7 @@ export function Dialog({
         {onSubmit ? (
           <form
             noValidate
+            className={scrollBody ? "flex min-h-0 flex-1 flex-col" : undefined}
             onSubmit={(e: FormEvent) => {
               e.preventDefault();
               onSubmit();

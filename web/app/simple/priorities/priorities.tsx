@@ -48,6 +48,7 @@ export function usePhone(): boolean {
 }
 
 const fmt = (n: number | null | undefined, digits = 1): string => (n == null ? "–" : Number(n.toFixed(digits)).toString());
+/** A score, always to two places (1.60 · 1.25 · 1.00), so a list of them reads one way (qa-plan-53). */
 
 /** A feature as people read it: its title and its short code ("Sample data import (F-12)"), never its key. */
 const nameOf = (r: { title: string; short_code?: string | null }): string => (r.short_code ? `${r.title} (${r.short_code})` : r.title);
@@ -477,7 +478,8 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
               {mayChange && r.can_reorder && (
                 <button
                   aria-label={`Drag ${nameOf(r)} to reorder`}
-                  title="Drag to reorder (or use the arrow keys)"
+                  // A role whose move is a proposal is told so (qa-plan-14): the row's own `applies`.
+                  title={r.applies ? "Drag to reorder (or use the arrow keys)" : "Drag to propose a new rank (or use the arrow keys): the decider decides"}
                   data-handle={r.feature_id}
                   className="-my-3 flex min-h-11 min-w-11 cursor-grab touch-none items-center justify-center rounded-md px-1 text-[length:var(--simple-h2)] leading-none text-text2 hover:bg-surface2 sm:my-0 sm:min-h-0 sm:min-w-[22px]"
                   onPointerDown={(e) => start(e, i)}
@@ -872,9 +874,10 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
               <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
               {mayChange && (
                 <span className="flex gap-2">
+                  {/* qa-plan-14: who only proposes (the draft's own `applies`) is offered Propose, not Confirm. */}
                   <Button
                     disabled={pending.length > 0}
-                    title={pending.length ? "A proposal for it is waiting for a decision" : undefined}
+                    title={pending.length ? "A proposal for it is waiting for a decision" : d.applies ? undefined : "Propose confirming it: the decider decides"}
                     onClick={async () =>
                       changed(
                         await send({ op: "confirm_item", target: { item_id: d.item_id }, before: { draft: true }, after: { draft: false } }),

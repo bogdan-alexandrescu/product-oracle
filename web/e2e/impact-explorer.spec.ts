@@ -98,12 +98,12 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await inspector.getByRole("link", { name: "Recorded change" }).first().click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });
-  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("R-90");
+  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Deleted" })).toContainText("Guest checkout keeps the cart");
   await page.getByRole("button", { name: "Table" }).click();
   await page.getByRole("grid", { name: "Affected outputs" }).getByText("Acceptance tests").first().click();
   const tests = page.getByRole("complementary", { name: /Acceptance tests/ });
-  await expect(tests.getByTestId("dependency").filter({ hasText: "R-90" })).toContainText("Deleted");
-  await expect(tests.getByText("Requirement R-90 was deleted")).toBeVisible();
+  await expect(tests.getByTestId("dependency").filter({ hasText: "Guest checkout keeps the cart" })).toContainText("Deleted");
+  await expect(tests.getByText("Guest checkout keeps the cart was deleted")).toBeVisible();
   await page.goBack();
   await page.getByRole("button", { name: "Table" }).click();
 
@@ -211,7 +211,7 @@ test("impact: a review row (a source's permission changed) offers only Mark revi
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   await page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-output").filter({ hasText: "Early shipping cost brief" }).click();
   const r = row(page, "Early shipping cost brief");
-  await expect(r.getByText("Review", { exact: true })).toBeVisible();
+  await expect(r.getByTestId("plan-action")).toHaveText("Plan: review");
   await expect(r.getByTestId("plan-how")).toContainText("Check the claims that relied on the changed source");
   await expect(r.getByRole("button", { name: /Accept regeneration|Reconcile/ })).toHaveCount(0);
   await r.getByRole("button", { name: "Mark reviewed" }).click();

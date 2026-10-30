@@ -66,7 +66,7 @@ const STEPS: Record<string, Copy> = {
   // B1: done once a Build the baseline run succeeded; detail is when the last one finished.
   build_baseline: {
     label: "Build baseline",
-    href: "/baseline?build=1",
+    href: "/baseline?build=1&from=setup",
     // qa-onboarding-10: a build under way says so (its row opens the run, see stepAction).
     status: (s) => (s.run_id ? "Building…" : !s.done ? "Not built" : s.detail ? `Built ${formatDay(s.detail)}` : "Built"),
     // Built: the row reviews the baseline, never starts a second build from Home.

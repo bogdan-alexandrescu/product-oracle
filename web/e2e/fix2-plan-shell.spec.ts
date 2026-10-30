@@ -59,11 +59,11 @@ test.describe("desktop", () => {
       expect(Math.abs(t.y - first.title.y), `${id}: title moved`).toBeLessThanOrEqual(1);
       expect(Math.abs(s.y - first.strip.y), `${id}: strip moved`).toBeLessThanOrEqual(1);
       // Alignment report, Launches and Changelog: the same three, in the same place.
-      await expect(links(page).getByRole("link"), id).toHaveText(["Alignment report", "Launches", "Changelog"]);
+      await expect(links(page).getByRole("link"), id).toHaveText(["Latest report", "Launches", "Changelog"]);
       const l = await box(links(page));
       expect(Math.abs(l.x - first.links.x) + Math.abs(l.y - first.links.y), `${id}: links moved`).toBeLessThanOrEqual(2);
       // Not repeated as header buttons on some tabs only.
-      await expect(header(page).getByRole("link", { name: "Alignment report" }), id).toHaveCount(1);
+      await expect(header(page).getByRole("link", { name: "Latest report" }), id).toHaveCount(1);
       await expect(header(page).getByRole("link", { name: "Launches", exact: true }), id).toHaveCount(1);
       // The (i) by the title on every tab.
       await expect(header(page).getByRole("button", { name: /^About / }), id).toHaveCount(1);
@@ -121,13 +121,9 @@ test.describe("desktop", () => {
     // One line: no "ENG-402 · Nov" then "20 ✓".
     expect((await box(eng)).height).toBeLessThanOrEqual(24);
     const next = row(page, "Daily alert digest email").getByTestId("plan-next");
-    await expect(next).toHaveText("Decide on slip · owners");
-    const decision = await box(next.getByText("Decide on slip", { exact: true }));
-    expect(decision.height, "Decide on slip on one line").toBeLessThanOrEqual(24);
-    const who = await box(next.getByText("owners"));
-    expect(who.y, "owners on the line below").toBeGreaterThanOrEqual(decision.y + decision.height - 1);
-    expect(Math.abs(who.x - decision.x), "owners starts the second line").toBeLessThanOrEqual(1);
-    const review = row(page, "One-page checkout").getByTestId("plan-next").getByRole("link", { name: "PRD review" });
+    // fix4 qa-plan-29: who decides reads in one sentence.
+    await expect(next).toHaveText("Owners decide on the slip");
+    const review = row(page, "One-page checkout").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" });
     expect((await box(review)).height).toBeLessThanOrEqual(30);
   });
 
@@ -173,24 +169,17 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: PHONE });
 
-  test("qa-plan-4: all five Plan tabs are on screen, no scrolling and no arrows over them", async ({ page }) => {
+  // fix4 qa-plan-18 supersedes qa-plan-4's wrapping: the five tabs are one row (it scrolls
+  // sideways when they do not fit), never a second row holding one tab.
+  test("qa-plan-4, qa-plan-18: the five Plan tabs sit on one row, none cut, the last one a tap away", async ({ page }) => {
     await openPlan(page);
-    await expect(strip(page).getByTestId("strip-more-right")).toHaveCount(0);
-    await expect(strip(page).getByTestId("strip-more-left")).toHaveCount(0);
-    const boxes = [];
+    const first = await box(strip(page).getByTestId(TABS[0][0]));
     for (const [id] of TABS) {
-      const b = await box(strip(page).getByTestId(id));
-      expect(b.x, `${id} starts on screen`).toBeGreaterThanOrEqual(0);
-      expect(b.x + b.width, `${id} ends on screen`).toBeLessThanOrEqual(PHONE.width);
-      boxes.push(b);
+      const tab = strip(page).getByTestId(id);
+      await tab.scrollIntoViewIfNeeded();
+      const b = await box(tab);
+      expect(Math.abs(b.y - first.y), `${id} on the first row`).toBeLessThanOrEqual(1);
     }
-    // No two tabs overlap.
-    for (let i = 0; i < boxes.length; i++)
-      for (let j = i + 1; j < boxes.length; j++) {
-        const [a, b] = [boxes[i], boxes[j]];
-        const apart = a.x + a.width <= b.x + 0.5 || b.x + b.width <= a.x + 0.5 || a.y + a.height <= b.y + 0.5 || b.y + b.height <= a.y + 0.5;
-        expect(apart, `${TABS[i][0]} and ${TABS[j][0]} overlap`).toBe(true);
-      }
     // The last tab works with one tap.
     await strip(page).getByTestId("plan-tab-reports").click();
     await expect(page).toHaveURL(/\/plan\/reports$/);
@@ -222,7 +211,7 @@ test.describe("phone", () => {
 
   test("qa-plan-12: the page-wide links show on a phone too, under the tabs", async ({ page }) => {
     await openPlan(page);
-    await expect(links(page).getByRole("link")).toHaveText(["Alignment report", "Launches", "Changelog"]);
+    await expect(links(page).getByRole("link")).toHaveText(["Latest report", "Launches", "Changelog"]);
     for (const l of await links(page).getByRole("link").all()) {
       const b = await box(l);
       expect(b.height).toBeGreaterThanOrEqual(24);

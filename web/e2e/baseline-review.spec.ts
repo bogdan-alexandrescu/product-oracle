@@ -59,7 +59,7 @@ test("the Inbox's Review opens the run's rows, and Approve baseline waits until 
   await expect(page.getByTestId("from-run-row")).toHaveCount(4);
   await expect(row(page, "Activate new stores in their first week").getByTestId("reason-chip")).toHaveText(["Not decided"]);
   await expect(row(page, "Bring buyers back").getByTestId("reason-chip")).toHaveText(["Not decided", "Not measurable"]);
-  await expect(row(page, "Bring buyers back").getByTestId("reason-chip").nth(1)).toHaveAttribute("title", "Missing: unit, comparison, target, owner");
+  await expect(row(page, "Bring buyers back").getByTestId("reason-chip").nth(1)).toHaveAttribute("title", "Missing: target, owner");
   await expect(row(page, "Gift notes").getByTestId("reason-chip")).toHaveText(["Low confidence 32", "No evidence", "Serves no goal"]);
   await expect(row(page, "Guided setup").getByTestId("reason-chip")).toHaveText(["Changes a locked item"]);
   await page.getByRole("button", { name: /All from this run/ }).click();

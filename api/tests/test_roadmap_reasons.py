@@ -659,3 +659,16 @@ def test_dependency_problems_do_not_rescan_the_items_for_each_problem():
     out = reasons_for(counted, problems, None)
     assert codes(out).count("unknown_dependency") == 120
     assert _CountingItems.passes < 10, _CountingItems.passes
+
+
+def test_date_fixes_name_a_date_source_not_a_basis():
+    # protects=qa-plan-21: the date reasons' fixes and the gate's refusal say "Add a date source",
+    # the words of the button that does it; fails_when=either still says "Record basis" or
+    # "record a verified basis"; no_claim=the fixes' buttons (data, tested above).
+    from oracle.runs import gate
+
+    for code in ("unverified_date", "undated_source"):
+        fixes = reasons_mod.CATALOGUE[code].fixes
+        assert "basis" not in fixes.lower()
+        assert "Add a date source" in fixes
+    assert "basis" not in gate.DATE_NOT_WAIVED

@@ -65,7 +65,8 @@ test("report page: the headline, a panel per track, needs attention linking to t
   await page.goto("/plan/reports");
   await page.getByRole("link", { name: /week of Oct 12/ }).first().click();
   await expect(page.getByTestId("report-headline").filter({ visible: true })).toHaveText(
-    "1 of 2 tracks at risk; 1 date slipping as of now; 2 Now items have no issue.",
+    // fix4 qa-plan-1: read off the tracks the Plan reads (Usage dashboard is its one Now item with no issue).
+    "1 of 2 tracks at risk; 1 date slipping as of now; 1 Now item has no issue.",
   );
   const tracks = page.getByTestId("report-track").filter({ visible: true });
   await expect(tracks).toHaveCount(2);
@@ -79,7 +80,8 @@ test("report page: the headline, a panel per track, needs attention linking to t
   await expect(link).toHaveAttribute("href", "/plan?item=usage-alerts:alert-digest");
   await expect(first).toContainText("ENG-413");
   await expect(first).toContainText("The team re-estimated");
-  await expect(tracks.nth(1).getByTestId("track-health")).toHaveText("On track");
+  // Checkout redesign has a track and no approved roadmap yet, as on the Plan.
+  await expect(tracks.nth(1).getByTestId("track-health")).toHaveText("No roadmap");
   await expect(page.getByTestId("report-slack").filter({ visible: true })).toContainText("Posted to #plan on Oct 19");
 
   // Previous and Next report.
@@ -103,7 +105,7 @@ test("the Plan header's Alignment report opens the latest report", async ({ page
   await withReports(page);
   await login(page);
   await page.goto("/roadmap");
-  await page.getByRole("link", { name: "Alignment report" }).click();
+  await page.getByRole("link", { name: "Latest report" }).click();
   await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
 });
@@ -115,7 +117,7 @@ test("the Plan header's Alignment report opens the latest report when clicked be
   await page.addInitScript(([key, path]) => localStorage.setItem(key, path), [MOCK_SLOW_KEY, "/v1/alignment-reports"]);
   await login(page);
   await page.goto("/roadmap");
-  await page.getByRole("link", { name: "Alignment report" }).click();
+  await page.getByRole("link", { name: "Latest report" }).click();
   await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
 });

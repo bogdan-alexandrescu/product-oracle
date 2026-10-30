@@ -15,7 +15,10 @@ export function FilterChips<V extends string>({
   value,
   onChange,
   testId,
+  oneRow = false,
 }: {
+  /** fix4 qa-plan-19: one row that scrolls sideways on a narrow screen, never wrapping one chip alone. */
+  oneRow?: boolean;
   label: string;
   items: FilterChip<V>[];
   value: V;
@@ -23,7 +26,7 @@ export function FilterChips<V extends string>({
   testId?: string;
 }) {
   return (
-    <div role="group" aria-label={label} data-testid={testId} className="flex min-w-0 flex-wrap gap-1">
+    <div role="group" aria-label={label} data-testid={testId} className={`flex min-w-0 gap-1 ${oneRow ? "overflow-x-auto [scrollbar-width:none]" : "flex-wrap"}`}>
       {items.map((it) => {
         const on = it.value === value;
         return (
@@ -34,7 +37,7 @@ export function FilterChips<V extends string>({
             data-testid={it.testId}
             disabled={it.disabled && !on}
             onClick={() => onChange(it.value)}
-            className={`flex h-8 items-center gap-1.5 rounded-full border px-2 text-sm font-medium whitespace-nowrap max-[639px]:h-11 max-[639px]:px-3.5 ${
+            className={`flex h-8 flex-none items-center gap-1.5 rounded-full border px-2 text-sm font-medium whitespace-nowrap max-[639px]:h-11 max-[639px]:px-3.5 ${
               on ? "border-accent bg-accent text-on-accent" : "border-line-strong bg-surface text-text hover:bg-surface2"
             } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface`}
           >

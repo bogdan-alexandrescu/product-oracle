@@ -256,7 +256,7 @@ async def build(db: AsyncSession, run_id: uuid.UUID, actions: list[ReviewAction]
                     reasons.append(_reason(
                         e, "goal_not_measurable", CONFIRM, "Not measurable",
                         "The goal is not measurable yet: it may be confirmed and stays flagged.",
-                        detail=f"Missing: {', '.join(missing)}",
+                        detail=f"Missing: {goals.missing_words(missing)}",
                     ))  # fmt: skip
             if e.confidence is not None and float(e.confidence) < low:
                 score = round(float(e.confidence) * 100)
