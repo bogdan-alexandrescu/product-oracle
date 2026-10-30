@@ -462,7 +462,10 @@ export default function DocumentsPage() {
                       <Button onClick={() => setView("ideas")}>Open Ideas</Button>
                     </span>
                   ) : (
-                    "No PRDs yet"
+                    // qa-shell-9: the next step, only for someone who can take it.
+                    <span data-testid="prds-empty" className="inline-block max-w-prose whitespace-normal">
+                      {canPropose ? "No PRDs yet. Start one with New PRD." : "No PRDs yet. They appear here once someone starts one."}
+                    </span>
                   )
                 }
                 rowProps={() => ({ "data-testid": "document-row" })}

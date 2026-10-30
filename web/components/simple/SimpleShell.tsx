@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 
 import { Mark } from "@/components/ds/Brand";
 import { Icon, type IconName } from "@/components/ds/Icon";
-import { ModeSwitch } from "@/components/ds/ModeSwitch";
+import { ModeSwitch, SEGMENTED } from "@/components/ds/ModeSwitch";
 import { TAB_BAR } from "@/components/ds/rail";
+import { Sheet } from "@/components/ds/Sheet";
 import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
@@ -92,6 +93,45 @@ function countWords(label: string, n: number): string {
   return `${n} waiting on you`;
 }
 
+/** An email with a line break allowed before its "@" (qa-shell-18): "viewer" / "@example.com". */
+function breakAtSign(email: string): ReactNode {
+  const at = email.indexOf("@");
+  if (at <= 0) return email;
+  return (
+    <Fragment>
+      {email.slice(0, at)}
+      <wbr />
+      {email.slice(at)}
+    </Fragment>
+  );
+}
+
+/**
+ * A Simple page's place while the person's permissions load (qa-shell-20): the page frame, a
+ * title and two cards as placeholders, so the page is never blank beside the rail's skeleton.
+ */
+export function SimplePageSkeleton() {
+  return (
+    <div className="simple-page" data-testid="simple-page-skeleton" role="status" aria-label="Loading" aria-busy="true">
+      <header aria-hidden className="flex flex-col gap-2 max-[600px]:hidden">
+        <span className="simple-h1">
+          <span className="inline-block h-[1em] w-56 max-w-full animate-pulse rounded bg-surface2 align-middle" />
+        </span>
+      </header>
+      {[3, 5].map((rows) => (
+        <section key={rows} aria-hidden className="simple-card">
+          <span className="simple-h2">
+            <span className="inline-block h-[1em] w-48 max-w-full animate-pulse rounded bg-surface2 align-middle" />
+          </span>
+          {Array.from({ length: rows }, (_, i) => (
+            <span key={i} className="block h-5 w-full animate-pulse rounded bg-surface2" />
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Whether Simple's page and rail may draw (#725 review): once the capabilities say Simple is
  * on, never while they load or say it is off (the page then opens its Detailed match). Signed
@@ -128,31 +168,6 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
     setLastAsk(askOpen);
     if (askOpen) setMore(false);
   }
-  const moreButton = useRef<HTMLButtonElement>(null);
-  const sheetRef = useRef<HTMLDivElement>(null);
-  // qa-simple-home-2: Escape closes the sheet and returns focus to More; a tap or focus
-  // outside it (the page, the header's Ask) closes it too.
-  useEffect(() => {
-    if (!more) return;
-    const inside = (t: EventTarget | null) => t instanceof Node && (!!sheetRef.current?.contains(t) || !!moreButton.current?.contains(t));
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      setMore(false);
-      moreButton.current?.focus();
-    };
-    const onOutside = (e: Event) => {
-      if (!inside(e.target)) setMore(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onOutside);
-    document.addEventListener("focusin", onOutside);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onOutside);
-      document.removeEventListener("focusin", onOutside);
-    };
-  }, [more]);
   const off = !!me && capsReady && !simpleMode;
   useEffect(() => {
     if (off) router.replace(switchTarget(pathname, "detailed"));
@@ -172,6 +187,11 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
           <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">Product Oracle</span>
+        </span>
+        {/* qa-shell-20: the switch's place, so the destinations never move down when it shows. */}
+        <span aria-hidden data-testid="simple-nav-skeleton-switch" className={`mb-4 grid w-full flex-none grid-cols-2 ${SEGMENTED.track}`}>
+          <span className={`${SEGMENTED.option} animate-pulse bg-surface`} />
+          <span className={SEGMENTED.option} />
         </span>
         {SIMPLE_DESTINATIONS.map((d) => (
           <span key={d.href} aria-hidden className="flex h-12 items-center gap-3 px-3">
@@ -246,9 +266,10 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         <div data-testid="simple-person" className="flex items-center gap-3 border-t border-line pt-3">
           {account("rail")}
           <span className="flex min-w-0 flex-col pt-2 leading-5">
-            {/* qa-simple-home-25: the name (or email) in full, wrapped, never cut to "viewer@example.c…". */}
+            {/* qa-simple-home-25: the name (or email) in full, wrapped, never cut to "viewer@example.c…";
+                qa-shell-18: an email wraps before its "@", not mid-word ("viewer@example.co / m"). */}
             <span data-testid="simple-person-name" title={me?.email || me?.name || undefined} className="text-[15px] font-semibold [overflow-wrap:anywhere] text-rail-active-text">
-              {me?.name || me?.email || ""}
+              {me?.name || breakAtSign(me?.email ?? "")}
             </span>
             <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>
           </span>
@@ -283,7 +304,6 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           );
         })}
         <button
-          ref={moreButton}
           type="button"
           aria-label="More"
           aria-describedby={moreCount > 0 ? "simple-tab-more-count" : undefined}
@@ -300,15 +320,9 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`)}
         </button>
       </nav>
-      {more && (
-        <div
-          ref={sheetRef}
-          id="simple-more-sheet"
-          data-testid="simple-more-sheet"
-          role="dialog"
-          aria-label="More"
-          className="fixed inset-x-0 bottom-[var(--phone-tab-bar)] z-40 hidden rounded-t-inspector border-t border-line bg-surface p-3 shadow-tip max-[600px]:block"
-        >
+      {/* qa-shell-17: Detailed's More sheet (a backdrop, a handle, the title and a close button); Escape, a tap outside or a swipe down closes it. */}
+      <Sheet open={more} title="More" onClose={() => setMore(false)} testId="simple-more-sheet" id="simple-more-sheet" above>
+        <div className="p-3">
           <ModeSwitch placement="sheet" />
           <ul className="mb-2 grid grid-cols-3 gap-1">
             {moreDests.map((d) => {
@@ -333,7 +347,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           </ul>
           {account("sheet")}
         </div>
-      )}
+      </Sheet>
     </>
   );
 }

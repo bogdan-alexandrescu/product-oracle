@@ -12,6 +12,7 @@ const SECTIONS = [
   { prefix: "/plan", href: "/plan", label: "Plan" },
   { prefix: "/documents", href: "/documents", label: "PRDs" },
   { prefix: "/runs", href: "/runs", label: "Runs" },
+  { prefix: "/requests", href: "/requests", label: "Requests" },
 ] as const;
 
 const noop = () => () => {};

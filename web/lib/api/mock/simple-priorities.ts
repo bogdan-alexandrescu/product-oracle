@@ -10,9 +10,8 @@
  * dependency. `estimate_feature` writes a person's goal value or effort, which the score uses.
  */
 import type { Schemas } from "@/lib/api/client";
-import { mockNowMs } from "./clock";
 import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
-import { closed, roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { closed, companyToday, roadmapOut, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 
 type Row = Schemas["SimplePriorityRow"];
@@ -213,7 +212,7 @@ export function prioritiesOut(
   decides: (itemId: string) => boolean,
   lineKey: string | null = null,
 ): Schemas["SimplePrioritiesOut"] {
-  const today = new Date(mockNowMs()).toISOString().slice(0, 10);
+  const today = companyToday();
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
   const lines = linesOf(read);
   const line = pickLine(lineKey, lines);

@@ -591,10 +591,13 @@ function Composer({
         <Button type="submit" variant="solid" disabled={sending || !text.trim() || anyBlocked}>
           Send
         </Button>
-        <label className="inline-flex items-center gap-1.5 text-sm text-text">
-          <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
-          Ask Oracle
-        </label>
+        {/* qa-shell-14: just you and Oracle in a private chat, Oracle always replies: no box to tick. */}
+        {!(solo && d.visibility === "private") && (
+          <label className="inline-flex items-center gap-1.5 text-sm text-text">
+            <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
+            Ask Oracle
+          </label>
+        )}
         <span className="text-[13px] text-text2" data-testid="oracle-rule">
           {solo || askOracle ? "Oracle will reply" : "Oracle replies when you @mention it"}
         </span>

@@ -88,7 +88,8 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
             </Button>
           )}
           {href && (
-            <LinkButton variant="ghost" href={href} aria-label={`Open ${q.subject.title}`}>
+            // qa-shell-23: bordered, as every other row's Open; a ghost one read as disabled.
+            <LinkButton href={href} aria-label={`Open ${q.subject.title}`}>
               Open
             </LinkButton>
           )}

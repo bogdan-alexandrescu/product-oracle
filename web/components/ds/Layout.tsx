@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { LinkButton } from "./Button";
 import { Icon, type IconName } from "./Icon";
 import { PageInfo } from "./page-info";
 import { PageTabs, SectionTitle } from "./PageTabs";
@@ -170,7 +171,9 @@ export function Panel({
 /**
  * qa-shell-8: the one not-found (and failed-page) pattern: the page's title as its H1, an
  * icon, one sentence and the ways on (Back to PRDs, Go to Home) close under it. A wrong URL,
- * a missing document, version or run, and the error page all draw it.
+ * a missing document, version, run or design, and the error page all draw it. Go to Home
+ * (the bare URL: the person's own home, Simple's or Detailed's) always follows the page's
+ * own ways on (qa-shell-11); `home={false}` only where the page draws it itself.
  */
 export function NotFoundPanel({
   title,
@@ -179,6 +182,7 @@ export function NotFoundPanel({
   back,
   children,
   actions,
+  home = true,
 }: {
   title: string;
   icon?: IconName;
@@ -188,6 +192,7 @@ export function NotFoundPanel({
   children: ReactNode;
   /** The ways on: links or buttons. */
   actions?: ReactNode;
+  home?: boolean;
 }) {
   return (
     <Page>
@@ -199,7 +204,16 @@ export function NotFoundPanel({
         <div data-testid="not-found-text" className="flex max-w-prose flex-col gap-1 text-[15px] text-text2">
           {children}
         </div>
-        {actions && <div className="mt-1 flex flex-wrap justify-center gap-2">{actions}</div>}
+        {(actions || home) && (
+          <div className="mt-1 flex flex-wrap justify-center gap-2">
+            {actions}
+            {home && (
+              <LinkButton href="/" variant={actions ? "secondary" : "primary"} icon="home" className="h-10">
+                Go to Home
+              </LinkButton>
+            )}
+          </div>
+        )}
       </Panel>
     </Page>
   );

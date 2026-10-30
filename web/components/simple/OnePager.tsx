@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, LinkButton } from "@/components/ds";
 import { clock, FlowPanel } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { dmy, ew, PrdPlan, usePhone } from "@/components/simple/PrdTimeline";
@@ -162,13 +162,28 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {
-    // A missing PRD's address says so in words, under the page's title.
+    // A missing PRD's address is the app's not-found pattern (qa-shell-11): its title, one
+    // sentence, Back to One-pagers and Go to Home (the bare URL: the person's own home).
     const missing = !q.error || /not found|no such/i.test(q.error);
     return (
       <div className="mx-auto flex max-w-[1180px] flex-col items-start gap-3 px-12 pt-[26px] pb-12 max-[767px]:px-4 max-[767px]:pt-3.5">
-        <BackLink />
-        <h1 className="simple-h1">One-pager</h1>
-        <ErrorNote>{missing ? "No PRD at this address. It may have been deleted, or the link is old." : q.error}</ErrorNote>
+        {!missing && <BackLink />}
+        <h1 className="simple-h1">{missing ? "One-pager not found" : "One-pager"}</h1>
+        {missing ? (
+          <div data-testid="one-pager-missing" className="flex flex-col items-start gap-3">
+            <p className="text-[15px] text-text2">This one-pager doesn&apos;t exist or was deleted.</p>
+            <div className="flex flex-wrap gap-2">
+              <LinkButton href="/simple/one-pagers" variant="primary" icon="back" className="h-10">
+                Back to One-pagers
+              </LinkButton>
+              <LinkButton href="/" variant="secondary" icon="home" className="h-10">
+                Go to Home
+              </LinkButton>
+            </div>
+          </div>
+        ) : (
+          <ErrorNote>{q.error}</ErrorNote>
+        )}
       </div>
     );
   }

@@ -3096,6 +3096,23 @@ function discussionDocument(db: Db, d: DiscussionRow): DocumentSection[] {
   }));
 }
 
+/** A `screen` subject's page name, never its route (oracle.discussions.context.page_name): "Home", "Settings · Members", "General" for /. */
+const SCREEN_PAGES: Record<string, string> = { home: "Home", requests: "Requests", baseline: "Baseline", documents: "PRDs", priorities: "Priorities", plan: "Plan", roadmap: "Plan", runs: "Runs", inbox: "Inbox", company: "Company", sources: "Sources", settings: "Settings" };
+const SCREEN_SIMPLE_PAGES: Record<string, string> = { "": "Home", roadmap: "Roadmap", priorities: "Priorities", decisions: "Decisions", meetings: "Meetings", prds: "One-pager", "one-pagers": "One-pager" };
+function screenPageName(path: string): string {
+  const parts = path.split("?")[0].split("/").filter(Boolean);
+  if (parts.length === 0) return "General";
+  const simple = parts[0] === "simple" ? SCREEN_SIMPLE_PAGES[parts[1] ?? ""] : undefined;
+  if (simple) return simple === "One-pager" && parts.length < 3 ? "One-pagers" : simple;
+  const name = SCREEN_PAGES[parts[0]];
+  if (!name) return path;
+  if ((parts[0] === "settings" || parts[0] === "company") && parts[1]) {
+    const tab = parts[1].replace(/-/g, " ");
+    return `${name} · ${tab[0].toUpperCase()}${tab.slice(1)}`;
+  }
+  return name;
+}
+
 /** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
 function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): SubjectInfo | { status: number; detail: string } {
   if (kind === "document" || kind === "section" || kind === "roadmap_item") {
@@ -3121,7 +3138,7 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
     return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
   if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
-  if (kind === "screen") return { key: `screen:${s.path}`, label: String(s.path), url: String(s.path) };
+  if (kind === "screen") return { key: `screen:${s.path}`, label: screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }

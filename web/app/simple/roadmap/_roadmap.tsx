@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
@@ -454,6 +455,8 @@ export function SimpleRoadmap() {
   const [tray, setTray] = useState(() => params.get("review") === "1");
   const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // qa-shell-24: a phone's pickers sit behind one Filters button.
+  const [pickersOpen, setPickersOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   // D3: on a phone, the milestone whose end the weeks hide to the right ("Swipe sideways for M3").
   const [offscreen, setOffscreen] = useState<string | null>(null);
@@ -738,6 +741,12 @@ export function SimpleRoadmap() {
   const waiting =
     data.items.filter((i) => i.can_decide && broken(i).length).length + data.items.filter((i) => i.suggestion?.can_decide).length + allProposals.filter((c) => c.can_decide).length;
   const qList = quarters(data.windows.now.start, data.windows.later.end);
+  // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
+  // no filter narrowing it): one line on what shows here and the next step, no empty chart and
+  // no review or export of nothing.
+  const blank =
+    !data.items.length && !data.milestones.length && !data.key_dates?.length && !f.prd && !f.goal && !f.track && !f.from && !f.to && !data.roadmap;
+  const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
 
   // S7 quick add: where an item may go, and whether the caller's add applies there (an item
   // of that roadmap the caller decides) or is proposed.
@@ -804,8 +813,8 @@ export function SimpleRoadmap() {
   // roadmap-milestones D: the header's actions (D1: on the header's right, wrapping under the switch).
   const actions = (
     <div className={`flex flex-wrap items-center gap-2 ${phone ? "" : "ml-auto justify-end"}`} data-testid="roadmap-actions">
-      {phone && canChange && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
-      {decides && (
+      {phone && canChange && addable.length > 0 && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
+      {decides && !blank && (
         // #37: this counts broken links, suggestions and proposals on THIS roadmap view,
         // not the same things the side menu's Decisions (product decisions waiting on you,
         // everywhere) or Roadmap (proposals and drafts in your inbox) badges count; the
@@ -830,28 +839,34 @@ export function SimpleRoadmap() {
       >
         Key dates · {data.key_dates?.length ?? 0}
       </Button>
-      <Button
-        disabled={!mayStartReview}
-        // Busy until the start options say who may start (an owner's answer needs no wait).
-        aria-busy={!startOptions.data && !startOptions.error && !can("start_simple_meeting") ? true : undefined}
-        title={mayStartReview ? undefined : START_REVIEW_REASON}
-        aria-describedby={mayStartReview ? undefined : "start-review-reason"}
-        onClick={() => setStarting(true)}
-      >
-        Start review
-      </Button>
+      {!blank && (
+        <Button
+          disabled={!mayStartReview}
+          // Busy until the start options say who may start (an owner's answer needs no wait).
+          aria-busy={!startOptions.data && !startOptions.error && !can("start_simple_meeting") ? true : undefined}
+          title={mayStartReview ? undefined : START_REVIEW_REASON}
+          aria-describedby={mayStartReview ? undefined : "start-review-reason"}
+          onClick={() => setStarting(true)}
+        >
+          Start review
+        </Button>
+      )}
       {/* #13: the reason is on screen, not only a hover title (touch and keyboard read it too). */}
-      {!mayStartReview && (
+      {!mayStartReview && !blank && (
         <span id="start-review-reason" data-testid="start-review-reason" className="self-center text-sm text-text2">
           {START_REVIEW_REASON}
         </span>
       )}
-      <Button disabled={exporting} onClick={() => void doExport("png")}>
-        Export PNG
-      </Button>
-      <Button disabled={exporting} onClick={() => void doExport("pdf")}>
-        Export PDF
-      </Button>
+      {!blank && (
+        <>
+          <Button disabled={exporting} onClick={() => void doExport("png")}>
+            Export PNG
+          </Button>
+          <Button disabled={exporting} onClick={() => void doExport("pdf")}>
+            Export PDF
+          </Button>
+        </>
+      )}
     </div>
   );
   const scaleSwitch = (
@@ -867,8 +882,8 @@ export function SimpleRoadmap() {
     />
   );
   // D1: PRD, Goal, Track, From, To, Group by and the Gantt's scale on one line (each select as wide as its choice).
-  const filters = (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
+  const pickers = (
+    <>
       {readable.length > 1 && (
         <Select label="Roadmap" all="All roadmaps" testId="filter-roadmap" value={data.roadmap?.id ?? ""} options={readable.map((r) => [r.roadmap.id, r.roadmap.title])} onChange={pickRoadmap} />
       )}
@@ -877,6 +892,24 @@ export function SimpleRoadmap() {
       <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
       <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
       <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
+    </>
+  );
+  // How many pickers narrow the view, on a phone's Filters button.
+  const narrowed = [data.roadmap ? "roadmap" : "", f.prd, f.goal, f.track, f.from, f.to].filter(Boolean).length;
+  const filters = (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
+      {phone ? (
+        <Button data-testid="filters-toggle" aria-expanded={pickersOpen} aria-controls="roadmap-pickers" onClick={() => setPickersOpen(!pickersOpen)}>
+          {narrowed ? `Filters · ${narrowed}` : "Filters"}
+        </Button>
+      ) : (
+        pickers
+      )}
+      {phone && pickersOpen && (
+        <div id="roadmap-pickers" data-testid="filter-pickers" className="order-last flex w-full flex-col items-start gap-2">
+          {pickers}
+        </div>
+      )}
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
         Group by
         <SegmentedControl<Lane>
@@ -993,14 +1026,29 @@ export function SimpleRoadmap() {
             })()}
         </div>
       )}
-      {!phone && canChange && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
+      {!phone && canChange && addable.length > 0 && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {!phone && goalCounters}
       <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" />
       {draftBanner}
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
        * the legend and goal cards at the page's foot. */}
-      {filters}
-      <div ref={wrap} className="relative">
+      {!blank && filters}
+      {blank && (
+        <p className="text-[15px] text-text2" data-testid="roadmap-empty">
+          {hasGoals ? (
+            <>No features yet: accept one Oracle suggests under a goal, and it shows here on its dates.</>
+          ) : (
+            <>
+              No features yet: confirm your company&rsquo;s goals in{" "}
+              <Link href="/baseline" className="font-semibold text-accent-ink underline">
+                Detailed › Baseline
+              </Link>{" "}
+              and Oracle suggests the features for them here.
+            </>
+          )}
+        </p>
+      )}
+      <div ref={wrap} className={blank ? "hidden" : "relative"}>
         {format === "board" ? (
           <Board
             data={data}
@@ -1132,7 +1180,7 @@ export function SimpleRoadmap() {
           />
         )}
       </div>
-      {format === "waterfall" ? (
+      {blank ? null : format === "waterfall" ? (
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2" data-testid="legend">
           {/* #23: only the phases a bar actually draws get a key (no Discover key when
            * nothing is in discovery), and the wording after them is plain, not jargon. */}

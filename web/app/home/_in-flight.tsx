@@ -183,7 +183,7 @@ function GoalsSection({ goals }: { goals: RowGoal[] | undefined }) {
   );
 }
 
-/** The selected PRD: journey, blockers, sections reviewed, open items, its sections and blockers. */
+/** The selected PRD: journey, blockers, sections reviewed, open feedback, its sections and blockers. */
 function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: "prd" }>; openItems: number | undefined; goalIndex: GoalIndex }) {
   const d = f.doc;
   const n = d.latest_version;
@@ -243,7 +243,9 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
         },
         // qa-company-26: a label that fits the stat's room ("Sections approved" was cut).
         { label: "Approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
-        { label: "Open items", value: openItems ?? 0, testId: "stat-open" },
+        // qa-shell-22: the PRD's open review feedback (the Inbox's count), as the review panel names it;
+        // the Sections legend below counts sections not yet reviewed, another thing.
+        { label: "Open feedback", value: openItems ?? 0, testId: "stat-open" },
       ]}
     >
       <InspectorSection testId="inspector-journey" label={`Journey: step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}, ${JOURNEY_STEPS[REVIEW_STEP - 1]}`}>
@@ -257,7 +259,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
             <span className="flex flex-wrap items-center gap-2.5 font-medium text-text">
               <Legend cls="bg-pass" label="Approved" n={approved} />
               <Legend cls="bg-warn" label="Changes" n={count("changes_requested") + count("rejected")} />
-              <Legend cls="bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]" label="Open" n={count(null)} />
+              <Legend cls="bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]" label="Not reviewed" n={count(null)} />
             </span>
           }
         >
@@ -299,7 +301,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
 function Legend({ cls, label, n }: { cls: string; label: string; n: number }) {
   if (n === 0) return null;
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <i aria-hidden className={`size-2.5 rounded-[3px] ${cls}`} />
       {label} <b className="tnum">{n}</b>
     </span>

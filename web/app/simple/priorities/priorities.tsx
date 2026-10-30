@@ -153,6 +153,10 @@ export function Priorities() {
   }
 
   const shapes = goalShapes(data?.rows ?? []);
+  // qa-shell-8: a new company has no feature to rank: one line on what shows here and the next
+  // step, with no line or comparison to pick over nothing.
+  const blank = !!data && !data.rows.length && !data.drafts.length && !data.proposals.length;
+  const hasGoals = (suggestions.data?.goals.length ?? 0) > 0;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text" data-testid="simple-priorities">
@@ -184,8 +188,8 @@ export function Priorities() {
             </button>
           ))}
         </div>
-        {data && tab !== "buckets" && <LinePicker data={data} onPick={pickLine} />}
-        {tab === "ranked" && (
+        {data && !blank && tab !== "buckets" && <LinePicker data={data} onPick={pickLine} />}
+        {tab === "ranked" && !blank && (
           <label className="flex cursor-pointer items-center gap-2 text-[length:var(--simple-small)]">
             <button
               role="switch"
@@ -203,11 +207,32 @@ export function Priorities() {
 
       {q.error && !data && <p role="alert" className="text-crit">{q.error}</p>}
       {!data && !q.error && <p className="text-text2">Loading priorities…</p>}
-      {data && tab === "ranked" && (
+      {blank && (
+        <p className="text-text2" data-testid="priorities-empty">
+          {hasGoals ? (
+            <>
+              No features yet: they rank here once the roadmap has some, so add one or accept one Oracle suggests on the{" "}
+              <Link href="/simple/roadmap" className="font-medium text-accent-ink underline">
+                Roadmap
+              </Link>
+              .
+            </>
+          ) : (
+            <>
+              No features yet: confirm your company&rsquo;s goals in{" "}
+              <Link href="/baseline" className="font-medium text-accent-ink underline">
+                Detailed › Baseline
+              </Link>{" "}
+              and the features Oracle suggests for them rank here.
+            </>
+          )}
+        </p>
+      )}
+      {data && !blank && tab === "ranked" && (
         <Ranked data={data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} />
       )}
-      {data && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
-      {data && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
+      {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
+      {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
     </div>
   );
 }

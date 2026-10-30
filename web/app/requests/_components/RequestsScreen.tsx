@@ -12,7 +12,6 @@ import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { FoundInSources } from "./FoundInSources";
-import { NewRequestButton } from "./NewRequest";
 import { RequestInspector } from "./RequestInspector";
 import { RequestList, STATE } from "./RequestList";
 import { RequestsHeader } from "./RequestsHeader";
@@ -225,10 +224,10 @@ function Requests({ view }: { view: RequestsView }) {
                       view === "new" && loaded.length > 0 ? (
                         <Empty testId="requests-empty">Every request has been decided</Empty>
                       ) : (
-                        <div data-testid="requests-empty" className="flex flex-col items-center pb-10">
-                          <Empty icon="requests">Nothing yet</Empty>
-                          <NewRequestButton onFiled={filed} variant="secondary" />
-                        </div>
+                        // qa-shell-10: the header's New request is the one button; this says to use it.
+                        <Empty icon="requests" testId="requests-empty">
+                          {can("create_request", true) ? "No requests yet. Add one with New request." : "No requests yet. They appear here once someone files one."}
+                        </Empty>
                       )
                     }
                   />

@@ -69,8 +69,8 @@ const P_MARK_ROW = 18;
 const P_BAR_ROW = 16;
 const P_BAR_H = 14;
 
-/** "27 Nov" (the mock-up's day words). */
-const dm = (day: string) => calendarDay(day, { day: "numeric", month: "short" }, "en-GB");
+/** "Nov 27": a day written as everywhere else in the app (qa-shell-21). */
+const dm = (day: string) => calendarDay(day);
 
 // ---------------------------------------------------------------- text widths
 
@@ -245,7 +245,7 @@ function calendar(t0: string, t1: string) {
   for (let d = new Date(ms(t0)); d.getTime() < ms(t1); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
     const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0, 10);
     const day = first < t0 ? t0 : first;
-    const name = calendarDay(first, { month: "short" }, "en-GB");
+    const name = calendarDay(first, { month: "short" });
     // A span of more than a year names each January's year.
     months.push({ day, label: long && d.getUTCMonth() === 0 ? `${name} ${d.getUTCFullYear()}` : name, start: first >= t0 });
   }
@@ -538,7 +538,7 @@ function Grid({ months, mondays, sc, top, height, weeks, noWork }: { months: { d
   );
 }
 
-/** "Holidays 24 Dec – 1 Jan" (the legend's words for the no-work weeks). */
+/** "Holidays Dec 24 – Jan 1" (the legend's words for the no-work weeks). */
 const holidayWords = (noWork: { start: string; end: string }[]) => noWork.map((h) => `${dm(h.start)} – ${dm(h.end)}`).join(", ");
 
 // ---------------------------------------------------------------- B2: the desktop
@@ -1329,6 +1329,8 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                   data-open={on ? "true" : undefined}
                   role="button"
                   tabIndex={0}
+                  // qa-shell-25: the lane is named as it reads ("Grow retention, 4 items").
+                  aria-label={`${l.title}, ${count}`}
                   aria-expanded={on}
                   aria-controls="lane-list"
                   className="cursor-pointer outline-none focus-visible:[filter:drop-shadow(0_0_2px_var(--accent))]"

@@ -28,10 +28,10 @@ type Risk = Schemas["SimplePlanRisk"];
 const DAY = 86_400_000;
 const PM_LANE = "Product manager's work";
 const ms = (day: string) => Date.parse(`${day.slice(0, 10)}T00:00:00Z`);
-/** "27 Nov". */
-const dm = (day: string) => calendarDay(day, { day: "numeric", month: "short" }, "en-GB");
-/** "27 Nov 2026". */
-export const dmy = (day: string) => calendarDay(day, { day: "numeric", month: "short", year: "numeric" }, "en-GB");
+/** "Nov 27": a day written as everywhere else in the app (qa-shell-21). */
+const dm = (day: string) => calendarDay(day);
+/** "Nov 27, 2026". */
+export const dmy = (day: string) => calendarDay(day, { month: "short", day: "numeric", year: "numeric" });
 /** "56", "2.5": a number of weeks with no pointless ".0". */
 const weeks = (n: number) => String(Math.round(n * 10) / 10);
 /** "56 engineer-weeks", "2.5 engineer-weeks", "1 engineer-week". */
@@ -181,7 +181,7 @@ function ewWords(m: Milestone): string | null {
   return ew(cap);
 }
 
-/** "2 Nov → 27 Nov 2026"; across a year end "28 Dec 2026 → 12 Feb 2027". */
+/** "Nov 2 → Nov 27, 2026"; across a year end "Dec 28, 2026 → Feb 12, 2027". */
 function spanWords(start: string, end: string): string {
   return start.slice(0, 4) === end.slice(0, 4) ? `${dm(start)} → ${dmy(end)}` : `${dmy(start)} → ${dmy(end)}`;
 }
@@ -511,7 +511,7 @@ function Strip({ plan, lanes, today, onPick }: { plan: Plan; lanes: Lane[]; toda
   const months: { label: string; x: number; at: number }[] = [];
   for (let d = new Date(T0); d.getTime() < T1; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
     const at = Math.max(T0, Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-    months.push({ label: calendarDay(new Date(at).toISOString().slice(0, 10), { month: "short" }, "en-GB"), x: ((at - T0) / (T1 - T0)) * W, at });
+    months.push({ label: calendarDay(new Date(at).toISOString().slice(0, 10), { month: "short" }), x: ((at - T0) / (T1 - T0)) * W, at });
   }
   // The first month's label gives way when the next one starts within a label's width; a
   // label the Today pill would cover moves just past the pill.

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { HopPanel } from "@/components/hop/HopPanel";
 import { SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
@@ -426,8 +427,12 @@ function bare(pathname: string): boolean {
   return pathname.startsWith("/login") || pathname.startsWith("/access") || pathname.startsWith("/oauth") || pathname.startsWith("/i/") || pathname.startsWith("/s/");
 }
 
-/** Rail and tab bar; reads the pathname, so it renders inside its own Suspense boundary. */
-function Navs() {
+/**
+ * Rail and tab bar; reads the pathname, so it renders inside its own Suspense boundary.
+ * qa-shell-31: the phone's tab bar (and its More sheet) is drawn into `phoneSlot`, after the page,
+ * so Tab reaches it last, as it sits at the bottom; the rail stays before the page.
+ */
+function Navs({ phoneSlot }: { phoneSlot: HTMLElement | null }) {
   const pathname = usePathname();
   const { me, loading } = useMe();
   // While /v1/me loads, keep the rail so a signed-in page never jumps.
@@ -460,27 +465,8 @@ function Navs() {
   const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];
   const moreActive = moreDests.some((d) => isActive(pathname, d, home));
 
-  return (
+  const phone = (
     <>
-      <nav
-        aria-label="Oracle"
-        data-testid="app-nav"
-        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto overscroll-contain bg-rail py-3.5 [scrollbar-width:none] [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
-      >
-        <Link href="/home" aria-label="Product Oracle" data-testid="nav-brand" className="mb-3 flex-none rounded-xl">
-          <Mark size={44} tone="sky" className="block" />
-        </Link>
-        <ModeSwitch placement="rail" documentHome={home} />
-        {/* qa-shell-2: a short window scrolls the rail, so Settings and the account menu stay reachable. */}
-        {DESTINATIONS.map((d) => (
-          <RailLink key={d.href} d={d} pathname={pathname} home={home} badge={d.label === "Inbox" ? inbox : undefined} />
-        ))}
-        <span className="flex-1" />
-        <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
-        {settings && <RailLink d={settings} pathname={pathname} home={home} />}
-        <UserMenu placement="rail" />
-      </nav>
-
       <nav
         aria-label="Oracle"
         data-testid="tab-bar"
@@ -541,6 +527,30 @@ function Navs() {
       </Sheet>
     </>
   );
+
+  return (
+    <>
+      <nav
+        aria-label="Oracle"
+        data-testid="app-nav"
+        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto overscroll-contain bg-rail py-3.5 [scrollbar-width:none] [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
+      >
+        <Link href="/home" aria-label="Product Oracle" data-testid="nav-brand" className="mb-3 flex-none rounded-xl">
+          <Mark size={44} tone="sky" className="block" />
+        </Link>
+        <ModeSwitch placement="rail" documentHome={home} />
+        {/* qa-shell-2: a short window scrolls the rail, so Settings and the account menu stay reachable. */}
+        {DESTINATIONS.map((d) => (
+          <RailLink key={d.href} d={d} pathname={pathname} home={home} badge={d.label === "Inbox" ? inbox : undefined} />
+        ))}
+        <span className="flex-1" />
+        <span aria-hidden className="mb-1.5 h-px w-10 flex-none bg-rail-sep" />
+        {settings && <RailLink d={settings} pathname={pathname} home={home} />}
+        <UserMenu placement="rail" />
+      </nav>
+      {phoneSlot && createPortal(phone, phoneSlot)}
+    </>
+  );
 }
 
 /** Titles of the screens outside the rail's destinations, for when the page draws no H1 yet. */
@@ -586,12 +596,33 @@ function h1Text(h1: Element | undefined, plain: boolean): string {
     .replace(/\s+/g, " ");
 }
 
-/** The section's open tab, from its strip under the H1 (the link marked current), before the H1's words. */
-function withTab(main: Element, words: string): string {
-  if (!words) return words;
-  const tab = Array.from(main.querySelectorAll('[data-page-header] nav a[aria-current="page"]')).find((a) => a.checkVisibility());
-  const label = tab?.textContent?.trim();
-  return label && label !== words ? `${label} · ${words}` : words;
+/**
+ * A tab's name: its full name when its label shortens it (Plan's "Documents" is "Roadmap
+ * documents"), without a count beside it (Requests' "Themes 3").
+ */
+function tabName(a: Element): string {
+  const full = a.getAttribute("aria-label")?.trim();
+  if (full) return full;
+  return Array.from(a.childNodes, (n) => (n instanceof Element && /^\s*\d+\s*$/.test(n.textContent ?? "") ? "" : (n.textContent ?? "")))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * qa-shell-16: the page, then its section's open tab: "Dates · Plan" where the H1 is the
+ * section's name (Plan, Company, Requests), "New template · Templates" where the H1 names a page
+ * inside a tab. The tab is read from the shown H1's own header, whether its strip shows there or
+ * not (a phone draws Requests' tabs above the header and Settings' as a select), so a page has
+ * one name on every device.
+ */
+function withTab(h1: Element | undefined, words: string, pathname: string): string {
+  if (!h1 || !words) return words;
+  const tab = h1.closest("[data-page-header]")?.querySelector('nav a[aria-current="page"]');
+  const label = tab ? tabName(tab) : "";
+  if (!label || label === words) return words;
+  const section = [...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d))?.label;
+  return words === section ? `${label} · ${words}` : `${words} · ${label}`;
 }
 
 /**
@@ -613,7 +644,7 @@ function usePageTitle(pathname: string): { title: string; plain: string } {
       const title = h1Text(h1, false);
       // qa-shell-3: a section's tab (Plan, Company, Settings) is headed by the section's name;
       // the browser tab names the open tab too ("Dates · Plan"), so no two pages share one.
-      const plain = withTab(main, h1Text(h1, true));
+      const plain = withTab(h1, h1Text(h1, true), pathname);
       setRead((r) => (r?.title === title && r.plain === plain ? r : title ? { title, plain: plain || title } : null));
     };
     update();
@@ -751,8 +782,10 @@ export function panelHidden(pathname: string): boolean {
  * The head-of-product panel's place (G7 "Panel place", owner 2026-10-21): a 44 px "Ask" strip
  * on the right edge of every screen; a click or ⌘J / Ctrl+J opens the 400 px panel, docked
  * from 1600 px (the page's grid gives up the width; qa-shell-8: below, docking squeezed the
- * page) and an overlay drawer below. Esc or the strip closes it. Opening focuses the question
- * box; closing returns focus to the strip (qa-shell-19). Phones get the header's Ask button
+ * page) and an overlay drawer below, over a dimmed page (qa-shell-13). Esc, the panel's close
+ * button or a click on the dimmed page closes it; the strip only opens it (open, the drawer lies
+ * over it, so the panel's close is the one control). Opening focuses the question box; closing
+ * returns focus to the strip (qa-shell-19). Phones get the header's Ask button
  * instead. On Simple's pages no strip: Simple's rail has its own Ask Oracle, which opens the
  * same panel (qa-shell-16). Nothing loads until it opens.
  */
@@ -818,7 +851,9 @@ function HopDock() {
   // qa-simple-decide-10: on Simple's pages the open panel pushes the page aside from 1240 px, where
   // about 600 px of page is left beside it (never over a row's buttons); narrower, it is a drawer
   // over the page with a backdrop that closes it (docked there, it squeezed the page to a column
-  // of single words). Elsewhere it overlays below 1600 px, beside its strip.
+  // of single words). Elsewhere it overlays below 1600 px, over its strip, with the same backdrop
+  // (qa-shell-13: a page's inspector under it was covered with nothing to say so); the dock keeps
+  // the strip's 45 px, so the page keeps its width.
   const width = simple ? "w-0 min-[1240px]:w-[400px] min-[1240px]:border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
   return (
     <aside
@@ -833,17 +868,22 @@ function HopDock() {
           type="button"
           data-testid="hop-strip"
           aria-expanded={open}
-          aria-label={open ? "Close Ask Oracle" : "Ask Oracle"}
+          aria-label="Ask Oracle"
           title="Ask Oracle (⌘J)"
-          onClick={() => setPanelOpen(!open)}
-          className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? "min-[1600px]:hidden" : ""}`}
+          onClick={() => setPanelOpen(true)}
+          className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? "invisible min-[1600px]:hidden" : ""}`}
         >
           <Mark size={24} tone="current" className="block flex-none text-accent" />
           <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
         </button>
       )}
-      {open && simple && (
-        <div aria-hidden data-testid="hop-backdrop" className="fixed inset-0 z-40 bg-hero/30 min-[1240px]:hidden" onClick={() => setPanelOpen(false)} />
+      {open && (
+        <div
+          aria-hidden
+          data-testid="hop-backdrop"
+          className={`fixed inset-0 z-40 bg-hero/30 ${simple ? "min-[1240px]:hidden" : "min-[1600px]:hidden"}`}
+          onClick={() => setPanelOpen(false)}
+        />
       )}
       {open && (
         <div
@@ -852,7 +892,7 @@ function HopDock() {
           className={
             simple
               ? "fixed inset-y-0 right-0 z-40 w-[400px] max-w-[100vw] border-l border-line bg-surface shadow-tip min-[1240px]:static min-[1240px]:h-full min-[1240px]:w-full min-[1240px]:max-w-none min-[1240px]:border-l-0 min-[1240px]:shadow-none"
-              : "fixed inset-y-0 right-11 z-40 w-[400px] max-w-[calc(100vw-44px)] border-l border-line shadow-tip min-[1600px]:static min-[1600px]:h-full min-[1600px]:w-full min-[1600px]:max-w-none min-[1600px]:border-l-0 min-[1600px]:shadow-none"
+              : "fixed inset-y-0 right-0 z-40 w-[400px] max-w-[100vw] border-l border-line shadow-tip min-[1600px]:static min-[1600px]:h-full min-[1600px]:w-full min-[1600px]:max-w-none min-[1600px]:border-l-0 min-[1600px]:shadow-none"
           }
         >
           <HopPanel onClose={() => setPanelOpen(false)} />
@@ -893,6 +933,8 @@ export function CapsError() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // qa-shell-31: where the phone's tab bar is drawn, after the page (Navs).
+  const [phoneSlot, setPhoneSlot] = useState<HTMLDivElement | null>(null);
   return (
     <ScreenSubjectProvider>
       {/* qa-plan-63, qa-shell-17: the first stop of Tab. */}
@@ -907,17 +949,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         <ModeRoot />
         <DocumentTitle />
       </Suspense>
-      <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)_auto]">
+      {/* qa-shell-31: the phone header comes before the page and outside it, so focus meets the
+          top bar, the page, then the tab bar, and Skip to content lands past the header. Sticky
+          in the body, it stays on top as the page scrolls; desktop never shows it. */}
+      <Suspense fallback={null}>
+        <PhoneHeader />
+      </Suspense>
+      <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)_auto] max-[600px]:min-h-[calc(100dvh-var(--phone-top-bar))]">
         <Suspense fallback={null}>
-          <Navs />
+          <Navs phoneSlot={phoneSlot} />
         </Suspense>
         <main id="main" tabIndex={-1} className="col-start-2 row-start-1 min-w-0 outline-none">
-          <Suspense fallback={null}>
-            <PhoneHeader />
-          </Suspense>
           <CapsError />
           {children}
         </main>
+        <div ref={setPhoneSlot} className="contents" />
         <Suspense fallback={null}>
           <HopDock />
         </Suspense>
