@@ -22,7 +22,7 @@ import { errorMessage } from "@/lib/use-query";
 export function SimpleWelcome({ show, onDismissed }: { show: boolean; onDismissed: () => void }) {
   const { capsReady } = useMe();
   const copy = useWelcomeCopy("simple");
-  // Gone at once on Dismiss; back with the reason when the preference could not be saved.
+  // Gone once Dismiss is saved (a reload before that would bring it back); kept with the reason when it could not be.
   const [gone, setGone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,12 +31,11 @@ export function SimpleWelcome({ show, onDismissed }: { show: boolean; onDismisse
   async function dismiss() {
     setBusy(true);
     setError(null);
-    setGone(true);
     try {
       await dismissWelcome();
+      setGone(true);
       onDismissed();
     } catch (e) {
-      setGone(false);
       setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -50,7 +49,7 @@ export function SimpleWelcome({ show, onDismissed }: { show: boolean; onDismisse
       title="Welcome to Oracle"
       extra={
         <button type="button" className="simple-button simple-button-quiet" onClick={() => void dismiss()} disabled={busy}>
-          Dismiss
+          {busy ? "Dismissing…" : "Dismiss"}
         </button>
       }
     >

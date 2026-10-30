@@ -263,14 +263,14 @@ export default function SimpleHome() {
     [proposalRows === toDecide ? toDecide.length : 0, "proposal", "proposals"],
     [brokenMine, "broken link", "broken links"],
   ]);
-  const proposable = `${brokenOthers} ${brokenOthers === 1 ? "broken link" : "broken links"} you can propose fixes for.`;
+  const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
   const sentence = reads
     ? "Here is where the plan stands."
     : brokenOthers === 0
       ? waits
       : brokenMine + decisionCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
-        ? proposable
-        : `${waits} Also ${proposable}`;
+        ? `You can propose fixes for ${brokenWords}.`
+        : `${waits} You can also propose fixes for ${brokenWords}.`;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
   const counted = [waiting, changes, roadmap, meeting].every((q) => q.data !== undefined || !!q.error);
   const nothingToWalk = counted && decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
@@ -486,7 +486,7 @@ export default function SimpleHome() {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         {g.guardrail && <span className="simple-tag">guardrail</span>}
                         {share(g.weight) != null && (
-                          <span data-testid="home-goal-weight" className="simple-small ml-auto tnum">
+                          <span data-testid="home-goal-weight" className="simple-small tnum">
                             Counts for {share(g.weight)}% of each feature&apos;s score
                           </span>
                         )}
@@ -1070,7 +1070,7 @@ function BrokenRow({
       )}
       {showFixes && b.flag.fixes.includes("shift_dependents") && b.dependency && moves.length > 0 && (
         <span id={moveId} data-testid="home-broken-moves" className="simple-small">
-          {FIX_WORDS.shift_dependents} moves {joinAnd(moves.map((m) => m.title))} after {b.dependency.title}.
+          Moving the dependents starts {joinAnd(moves.map((m) => m.title))} after {b.dependency.title} ends.
         </span>
       )}
       {showFixes && (

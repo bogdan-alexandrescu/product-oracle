@@ -254,12 +254,16 @@ type Mode = "list" | "needs_input" | "recommended" | "decided" | "due";
  */
 const ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
 
-/** "Blocks M1: F-03 Health log" in plain words: "Blocks Health log, first milestone" (qa-simple-home-13). */
-export function plainBlocks(label: string): string {
-  const m = /^Blocks M(\d{1,2})[^:]*:\s*(?:[A-Z]{1,3}-\d+\s+)?(.+)$/.exec(label);
-  if (!m) return label.replace(/\b[A-Z]{1,3}-\d{1,4}\s+/g, "");
-  const n = Number(m[1]);
-  return `Blocks ${m[2]}, ${ORDINALS[n - 1] ? `${ORDINALS[n - 1]} milestone` : `milestone ${n}`}`;
+/**
+ * "Blocks M1: F-03 Health log" in plain words: "Blocks Health log, first milestone" (qa-simple-home-13),
+ * from the blocks' own fields (the features' titles, the milestone's number), so no code shows,
+ * whatever form the label's codes take.
+ */
+export function plainBlocks(blocks: Schemas["SimpleQuestion"]["blocks"] & object): string {
+  const n = Number(/^M(\d{1,2})$/.exec(blocks.milestone ?? "")?.[1]);
+  const milestone = n ? (ORDINALS[n - 1] ? `${ORDINALS[n - 1]} milestone` : `milestone ${n}`) : (blocks.milestone_name ?? null);
+  const what = [(blocks.features ?? []).map((f) => f.title).join(", "), milestone].filter(Boolean).join(", ");
+  return what ? `Blocks ${what}` : "Blocks a milestone";
 }
 
 export function QuestionRow({
@@ -388,7 +392,7 @@ export function QuestionRow({
             <span className="simple-meta">
               <DueLabel q={q} />
               {q.due_label && q.blocks ? " · " : ""}
-              {plain && q.blocks ? plainBlocks(q.blocks.label) : q.blocks?.label}
+              {plain && q.blocks ? plainBlocks(q.blocks) : q.blocks?.label}
             </span>
           )
         )}

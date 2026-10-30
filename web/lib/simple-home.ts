@@ -306,13 +306,16 @@ export function greeting(hour: number): string {
   return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 }
 
-/** One sentence on what waits: "2 decisions and 1 proposal wait on you." */
+/**
+ * One sentence on what waits, by name: "Decisions and a broken link wait on you." The counts
+ * are the summary tiles' alone (qa-simple-home-15), so the sentence does not repeat them.
+ */
 export function waitSentence(parts: [number, string, string][]): string {
-  const shown = parts.filter(([n]) => n > 0).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+  const shown = parts.filter(([n]) => n > 0).map(([n, one, many]) => (n === 1 ? `a ${one}` : many));
   if (shown.length === 0) return "Nothing waits on you today.";
   const list = shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}`;
   const total = parts.reduce((s, [n]) => s + n, 0);
-  return `${list} ${total === 1 ? "waits" : "wait"} on you.`;
+  return `${list[0].toUpperCase()}${list.slice(1)} ${total === 1 ? "waits" : "wait"} on you.`;
 }
 
 /** What a Simple change does, in Simple's words ("Move dates", "Retitle"). */
