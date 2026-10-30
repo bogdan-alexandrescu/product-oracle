@@ -327,12 +327,29 @@ const MANY_TRACKS: Record<string, string> = { "web-core": "Web core track", "mob
 const MANY_WORDS = ["Faster", "Simpler", "Shared", "Bulk", "Scheduled", "Smarter", "Offline", "Guided"];
 const MANY_THINGS = ["invoices", "filters", "exports", "invites", "alerts", "reports", "settings", "search", "roles", "dashboards", "imports", "comments", "webhooks"];
 const manySlug = (n: number): string => `${MANY_PRDS[n].toLowerCase().replace(/ /g, "-")}-roadmap`;
-/** The 500-item scenario's roadmaps, goals and tracks, known once its items are seeded or reloaded (as knowTalkGoals). */
+/**
+ * The 500-item scenario's roadmaps, goals and tracks, known once its items are seeded or reloaded
+ * (as knowTalkGoals). dod-perf review: once the roadmap holds them no longer (another scenario's
+ * data), the ones it added are taken out again.
+ */
+let manyAdded: { roadmaps: string[]; goals: string[]; tracks: string[] } | null = null;
 export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } | undefined): void {
-  if (!db?.items.some((x) => x.roadmap === manySlug(0))) return;
-  MANY_PRDS.forEach((prd, n) => (ROADMAPS[manySlug(n)] ??= { title: `${prd} roadmap`, visibility: "company", prd, draft: 1 + (n % 4) }));
-  Object.assign(GOALS, MANY_GOALS);
-  Object.assign(TRACKS, MANY_TRACKS);
+  const many = !!db?.items.some((x) => x.roadmap === manySlug(0));
+  if (many && !manyAdded) {
+    manyAdded = {
+      roadmaps: MANY_PRDS.map((_, n) => manySlug(n)).filter((k) => !(k in ROADMAPS)),
+      goals: Object.keys(MANY_GOALS).filter((k) => !(k in GOALS)),
+      tracks: Object.keys(MANY_TRACKS).filter((k) => !(k in TRACKS)),
+    };
+    MANY_PRDS.forEach((prd, n) => (ROADMAPS[manySlug(n)] ??= { title: `${prd} roadmap`, visibility: "company", prd, draft: 1 + (n % 4) }));
+    for (const k of manyAdded.goals) GOALS[k] = MANY_GOALS[k];
+    for (const k of manyAdded.tracks) TRACKS[k] = MANY_TRACKS[k];
+  } else if (!many && manyAdded) {
+    for (const k of manyAdded.roadmaps) delete ROADMAPS[k];
+    for (const k of manyAdded.goals) delete GOALS[k];
+    for (const k of manyAdded.tracks) delete TRACKS[k];
+    manyAdded = null;
+  }
 }
 
 export function seedSimpleMany(n = 500): SimpleDb {

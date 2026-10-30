@@ -2851,6 +2851,8 @@ function load(): Db {
                     ? seedNoStrategyScenario
                     : seed,
   );
+  // The 500-item scenario's plans, known only while its items are the roadmap's.
+  knowManyPlans(db.simple_roadmap);
   // Revokes a disable could not make: none, unless a spec asks for them.
   db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
   db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
