@@ -977,9 +977,6 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
               const b = all[n];
               const c = look(p, item, cut);
               const words = fit(p.code ? [`${p.code} ${p.name}`, p.code] : [p.name], b.w - 16);
-              // qa-plan-55: a pill too short for its code has it beside it, up to the next pill.
-              const nextX = n + 1 < all.length ? all[n + 1].x : after;
-              const beside = words ? "" : fit([p.code ?? p.name], nextX - (b.x + b.w) - 10);
               return (
                 <g
                   key={p.key}
@@ -1010,17 +1007,12 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
                       {words}
                     </text>
                   )}
-                  {beside && (
-                    <text data-testid="slice-label" data-beside="true" x={b.x + b.w + 5} y={y + BAR_H / 2} dominantBaseline="central" fontSize={12} fontWeight={650} fill="var(--text2)" pointerEvents="none">
-                      {beside}
-                    </text>
-                  )}
                 </g>
               );
             })}
           </>
         ) : (
-          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} after={after} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} stroke={strokeOf} strokeW={strokeW} />
+          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} after={after} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} stroke={strokeOf} strokeW={strokeW} layer="pill" />
         )}
         {item.milestone?.date && !sliced && (
           <rect
@@ -1037,6 +1029,21 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
           </rect>
         )}
       </g>
+      {/* qa-plan-55: a pill too short for its label has it beside it, up to the next pill on its
+       * row; drawn outside the bar so the bar's own bounds (what a click or a drag reads) stay the pill's. */}
+      {sliced
+        ? pieces.map((p, n) => {
+            const b = all[n];
+            if (fit(p.code ? [`${p.code} ${p.name}`, p.code] : [p.name], b.w - 16)) return null;
+            const nextX = n + 1 < all.length ? all[n + 1].x : after;
+            const beside = fit([p.code ?? p.name], nextX - (b.x + b.w) - 10);
+            return beside ? (
+              <text key={p.key} data-testid="slice-label" data-beside="true" x={b.x + b.w + 5} y={y + BAR_H / 2} dominantBaseline="central" fontSize={12} fontWeight={650} fill="var(--text2)" pointerEvents="none">
+                {beside}
+              </text>
+            ) : null;
+          })
+        : <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} after={after} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} stroke={strokeOf} strokeW={strokeW} layer="beside" />}
       {s && (
         <g>
           {/* QA2 finding 49: clamped to the chart's own width, belt-and-braces alongside
@@ -1098,7 +1105,7 @@ function roomAfter(list: Unit[], u: Unit, sc: Scale, width: number): number {
 }
 
 /** An item with no plan as one pill: its code and title where they fit; a draft says so, a cut item is struck through with its place in the return queue. */
-function PlainPiece({ item, piece, b, y, cut, place, after, stop, stroke, strokeW }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; after: number; stop?: number; stroke: (base: string) => string; strokeW: number }) {
+function PlainPiece({ item, piece, b, y, cut, place, after, stop, stroke, strokeW, layer }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; after: number; stop?: number; stroke: (base: string) => string; strokeW: number; layer: "pill" | "beside" }) {
   const c = look(piece, item, cut);
   const draft = item.draft && !cut;
   const name = piece.code ? `${piece.code} ${piece.name}` : piece.name;
@@ -1109,6 +1116,13 @@ function PlainPiece({ item, piece, b, y, cut, place, after, stop, stroke, stroke
   const words = fit(variants, room);
   // Too short for any of it: the code (or name) beside the pill, up to the next pill on its row.
   const beside = words ? "" : fit(piece.code ? [piece.code] : [name], after - (b.x + b.w) - 10);
+  // The label beside is drawn outside the bar (layer "beside"), so the bar's bounds stay the pill's.
+  if (layer === "beside")
+    return beside ? (
+      <text data-testid="bar-label" data-beside="true" x={b.x + b.w + 5} y={y + BAR_H / 2} dominantBaseline="central" fontSize={12} fontWeight={650} fill="var(--text2)" pointerEvents="none" textDecoration={cut ? "line-through" : undefined}>
+        {beside}
+      </text>
+    ) : null;
   const w = words ? textWidth(words, 12, 650) : 0;
   const tag = draft && words.startsWith("Draft");
   return (
@@ -1129,11 +1143,6 @@ function PlainPiece({ item, piece, b, y, cut, place, after, stop, stroke, stroke
           ) : (
             words
           )}
-        </text>
-      )}
-      {beside && (
-        <text data-testid="bar-label" data-beside="true" x={b.x + b.w + 5} y={y + BAR_H / 2} dominantBaseline="central" fontSize={12} fontWeight={650} fill="var(--text2)" pointerEvents="none" textDecoration={cut ? "line-through" : undefined}>
-          {beside}
         </text>
       )}
       {draft && !tag && <title>Draft</title>}
