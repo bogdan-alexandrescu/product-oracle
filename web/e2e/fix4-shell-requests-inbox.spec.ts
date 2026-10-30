@@ -47,9 +47,10 @@ test("qa-shell-19: a viewer's Inbox has no source to fix; the owner's has it wit
 });
 
 test("qa-shell-26: on a desktop the sorting control says what it does", async ({ page }) => {
+  // Requests' own lane names it "Auto-sort" (train AD: the page's lane wins).
   await login(page);
   await openRequests(page);
-  await expect(actions(page).getByRole("button", { name: "Sort incoming requests automatically: Off" })).toBeVisible();
+  await expect(actions(page).getByRole("button", { name: "Auto-sort: Off" })).toBeVisible();
   await expect(actions(page).getByRole("button", { name: "Interview a customer" })).toBeVisible();
   await expect(actions(page).getByRole("button", { name: "New request", exact: true })).toBeVisible();
   await expect(page.getByTestId("requests-more")).toHaveCount(0);
@@ -67,16 +68,20 @@ test.describe("on a phone", () => {
     const more = (await page.getByTestId("requests-more").boundingBox())!;
     expect(Math.abs(add.y - more.y)).toBeLessThan(1);
     await expect(page.getByRole("button", { name: "Interview a customer" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Sort incoming requests automatically/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Auto-sort:/ })).toHaveCount(0);
 
     // Everything the desktop offers is under More.
     // review minor: More says it opens a panel, for a screen reader.
     await expect(page.getByTestId("requests-more")).toHaveAttribute("aria-haspopup", "true");
     await page.getByTestId("requests-more").click();
     const panel = page.getByTestId("requests-more-panel");
-    await expect(panel.getByRole("switch", { name: /^Auto-sort new requests daily/ })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Sort now", exact: true })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Sort incoming requests automatically" })).toBeVisible();
+    // Requests' own lane keeps its one Auto-sort control under More; it opens the switch and Sort now.
+    await panel.getByRole("button", { name: "Auto-sort: Off" }).click();
+    const sorting = page.getByRole("group", { name: "Auto-sort new requests" });
+    await expect(sorting.getByRole("switch", { name: /^Auto-sort new requests daily/ })).toBeVisible();
+    await expect(sorting.getByRole("button", { name: "Sort now", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sorting).toHaveCount(0);
     // The panel stays on the screen.
     const box = (await panel.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);

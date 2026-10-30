@@ -100,9 +100,10 @@ test.describe("desktop", () => {
     const scope = page.getByTestId("plan-scope-bar").filter({ visible: true });
     await expect(scope.getByRole("group", { name: "Plan scope" })).toBeVisible();
     // In the same head as Group by, above the table.
-    const groupBy = await box(page.getByRole("group", { name: "Group by" }).filter({ visible: true }));
+    // The head's other parts (the roadmaps' names) arrive with their own query: wait for it to settle.
+    const groupByGroup = page.getByRole("group", { name: "Group by" }).filter({ visible: true });
+    await expect.poll(async () => Math.abs((await box(scope)).y - (await box(groupByGroup)).y)).toBeLessThanOrEqual(40);
     const s = await box(scope);
-    expect(Math.abs(s.y - groupBy.y)).toBeLessThanOrEqual(40);
     const table = await box(page.getByTestId("plan-table"));
     expect(s.y).toBeLessThan(table.y);
     const goals = await box(page.getByTestId("plan-goals").filter({ visible: true }));

@@ -1950,6 +1950,10 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
   const base = {
     documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now,
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    noGoal: (v: { id: string }) => {
+      const version = db.versions.find((x) => x.id === v.id);
+      return new Set(version ? boardItems(db, version).filter((i) => i.no_goal).map((i) => i.key) : []);
+    },
   };
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   db.shares ??= scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO

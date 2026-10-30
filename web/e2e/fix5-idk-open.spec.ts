@@ -28,7 +28,7 @@ async function newBrief(page: Page) {
   await page.goto("/documents/new?kind=prd");
   await page.getByRole("textbox", { name: "Title" }).fill("Saved addresses at checkout");
   await page.getByRole("textbox", { name: "What problem does it solve?" }).fill("Returning buyers retype their address at every checkout.");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).first().click();
   await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
   const thread = page.getByTestId("intake-thread");
   await expect(thread.getByTestId("question").first()).toBeVisible();

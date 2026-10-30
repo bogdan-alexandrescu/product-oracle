@@ -79,7 +79,6 @@ const COLUMNS: [Stage, string][] = [
   ["exploring", "Exploring"],
 ];
 const EXPIRY: Record<string, number> = { "24h": 1, "7d": 7, "14d": 14, "30d": 30, "90d": 90 };
-const NO_GOAL = "serves no confirmed goal";
 const PASSCODE_TRIES = 5;
 const LOCK_MS = 15 * 60_000;
 const INBOX_REASONS = ["creator removed", "creator's role changed", "document moved to Trash", "document limited to owners and approvers"];
@@ -147,6 +146,8 @@ export interface SharesContext {
   observesOutside?: () => boolean;
   /** Queues the public_text job for `v` (./llm-jobs.ts queueJob): the job, or why it was refused. */
   queueDraft?: (doc: DocLike, v: VersionLike) => Schemas["LlmJobOut"] | string;
+  /** The keys of `v`'s items that serve no confirmed goal, by their feature in the baseline. */
+  noGoal?: (v: VersionLike) => ReadonlySet<string>;
 }
 
 export const emptyShares = (): SharesDb => ({ links: [], views: [], texts: [], checks: [], pages: {}, opened: {} });
@@ -176,13 +177,18 @@ function state(link: LinkRow, at: string): "active" | "expired" | "revoked" {
   return link.expires_at <= at ? "expired" : "active";
 }
 
-/** The version's roadmap items: each level-3 section under Now, Next or Later. */
-function items(v: VersionLike) {
+/**
+ * The version's roadmap items: each level-3 section under Now, Next or Later. One serves no
+ * confirmed goal by its feature in the baseline (`ctx.noGoal`, as the API's public check),
+ * never by its card's words.
+ */
+function items(v: VersionLike, ctx: { noGoal?: (v: VersionLike) => ReadonlySet<string> }) {
+  const noGoal = ctx.noGoal?.(v) ?? new Set<string>();
   let horizon: string | null = null;
   const out: { key: string; title: string; horizon: string; serves: boolean; body: string }[] = [];
   for (const s of v.sections) {
     if (s.level <= 2) horizon = ["now", "next", "later"].includes(s.section_key) ? s.section_key : null;
-    if (s.level === 3 && horizon) out.push({ key: s.section_key, title: s.heading, horizon, serves: !s.body_md.toLowerCase().includes(NO_GOAL), body: s.body_md });
+    if (s.level === 3 && horizon) out.push({ key: s.section_key, title: s.heading, horizon, serves: !noGoal.has(s.section_key), body: s.body_md });
   }
   return out;
 }
@@ -255,7 +261,7 @@ type Review = {
 function review(ctx: SharesContext, doc: DocLike, v: VersionLike): Review {
   const texts = new Map(ctx.db.texts.filter((t) => t.document_id === doc.id).map((t) => [t.item_key, t]));
   const cards: Review["cards"] = { shipped: [], in_progress: [], planned: [], exploring: [] };
-  const rows = items(v).map((item): Schemas["PublicRowOut"] => {
+  const rows = items(v, ctx).map((item): Schemas["PublicRowOut"] => {
     const t = texts.get(item.key);
     const state = !t ? "missing" : t.state === "excluded" ? "excluded" : t.source_hash !== sourceHash(item.title) ? "changed" : t.state;
     const text = t ? textOut(ctx, t, item.title) : null;
@@ -337,7 +343,7 @@ export function draftPublicTexts(ctx: Omit<SharesContext, "me" | "renderAudience
   if (!v) return { drafted: 0, item_keys: [] };
   const have = new Set(ctx.db.texts.filter((t) => t.document_id === documentId).map((t) => t.item_key));
   const drafted: string[] = [];
-  for (const item of items(v)) {
+  for (const item of items(v, ctx)) {
     if (!item.serves || have.has(item.key)) continue;
     ctx.db.texts.push({
       document_id: documentId, item_key: item.key, title: item.title.slice(0, 80), description: "", stage: HORIZON_STAGE[item.horizon] ?? "exploring",
@@ -377,7 +383,7 @@ export function seedShares(ctx: Omit<SharesContext, "db" | "me" | "renderAudienc
   }
   if (!texts) return db;
   const v = ctx.versions.find((x) => x.id === pub.version_id)!;
-  const titleOf = (key: string) => items(v).find((i) => i.key === key)!.title;
+  const titleOf = (key: string) => items(v, ctx).find((i) => i.key === key)!.title;
   const text = (item_key: string, over: Partial<TextRow>): TextRow => ({
     document_id: doc.id, item_key, title: "", description: "", stage: "planned", announced_quarter: null, changelog_url: null, state: "draft",
     drafted_by: "oracle", approved_by: null, approved_at: null, checked_warnings: [], updated_at: iso(-2), source_hash: sourceHash(titleOf(item_key)), ...over,
@@ -527,7 +533,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
     }
     if (p[3] === "public-texts" && p[4] && m === "PUT") {
       const v = pick(q.get("version") ? Number(q.get("version")) : null)!;
-      const item = items(v).find((i) => i.key === p[4]);
+      const item = items(v, ctx).find((i) => i.key === p[4]);
       if (!item) return json(404, { detail: `item '${p[4]}' is not in version ${v.number}` });
       const input = await body<Schemas["PublicTextIn"]>();
       if (!input.title || input.title.length > 80) return json(422, { detail: "A public title is 1 to 80 characters" });

@@ -172,7 +172,9 @@ test.describe("phone", () => {
     page,
   }) => {
     await sharing(page);
-    await page.goto(`${UNPUBLISHED}/public`);
+    // The published roadmap: Usage alerts' items serve no confirmed goal (read from the baseline,
+    // as the API's public check), so they are left out and leave nothing to approve.
+    await page.goto("/documents/example-labs-roadmap/public");
     await expect(page.getByTestId("public-check")).toHaveText(
       "Nobody has checked this public page yet. A public link needs the check.",
     );

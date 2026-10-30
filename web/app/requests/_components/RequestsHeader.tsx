@@ -56,6 +56,7 @@ function MoreMenu({ children }: { children: ReactNode }) {
         data-testid="requests-more"
         variant="secondary"
         className="h-11"
+        aria-haspopup="true"
         aria-expanded={open}
         aria-controls="requests-more-panel"
         onClick={() => setOpen((o) => !o)}

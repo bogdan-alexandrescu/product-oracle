@@ -232,9 +232,12 @@ test.describe("phone", () => {
       });
     await expect.poll(gap).toBeLessThan(64);
     const onPhone = await tall();
-    // The phone turned into a desktop window: the page wraps less, the frame follows it.
+    // The phone turned into a desktop window: the frame follows its page and never keeps a
+    // blank gap. The link holder's page is now cards and tables (qa-docs-26) that are as tall
+    // on a desktop as on a phone, so it does not shrink; it grows by no more than the page's
+    // own 1.5rem margin.
     await page.setViewportSize({ width: 1440, height: 900 });
-    await expect.poll(tall).toBeLessThan(onPhone);
     await expect.poll(gap).toBeLessThan(64);
+    expect(await tall()).toBeLessThanOrEqual(onPhone + 24);
   });
 });

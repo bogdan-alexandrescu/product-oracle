@@ -209,14 +209,20 @@ const UNKNOWN: Partial<Record<Kind | "folder", [string, string]>> = {
 
 /**
  * Picks in words: their saved names, those without one counted as unknown (never their raw
- * ids, qa-settings-23), and a title naming everything, the unnamed ones by id.
+ * ids, qa-settings-23), and a title naming everything, the unnamed ones by id. With `shown`,
+ * a long list reads its first names "and N more", as picksSummary does.
  */
-function pickWords(picks: { id: string; name?: string }[], unknown?: [string, string]): { text: string; title: string } {
+function pickWords(
+  picks: { id: string; name?: string }[],
+  unknown?: [string, string],
+  shown?: number,
+): { text: string; title: string } {
   const named = picks.flatMap((p) => (p.name ? [p.name] : unknown ? [] : [p.id]));
   const unnamed = unknown ? picks.filter((p) => !p.name).map((p) => p.id) : [];
   const rest = unnamed.length === 0 ? [] : unnamed.length === 1 ? [unknown![0]] : [`${unnamed.length} ${unknown![1]}`];
+  const more = shown !== undefined && named.length > shown ? named.length - shown + unnamed.length : 0;
   return {
-    text: [...named, ...rest].join(", "),
+    text: more ? `${named.slice(0, shown).join(", ")} and ${more} more` : [...named, ...rest].join(", "),
     title: [named.join(", "), unnamed.length ? `No name saved for ${unnamed.join(", ")}` : ""].filter(Boolean).join(". "),
   };
 }
@@ -589,7 +595,16 @@ function SourceRow({
       ? pickIds.filter((id) => names[id]).map((id) => names[id])
       : pickIds.map((id) => names[id] ?? id);
   const unnamed = opaqueIds ? pickIds.length - items.length : 0;
-  const picks = allowlist ? picksSummary(items, unnamed, allowlist.noun) : { text: "", title: "" };
+  // A Drive file saved without a name reads as unknown, its id only in the title (qa-settings-23).
+  const picks = drive
+    ? pickWords(
+        picked.filter((f) => f.kind === "doc").map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined })),
+        UNKNOWN.google_docs,
+        PICKS_SHOWN,
+      )
+    : allowlist
+      ? picksSummary(items, unnamed, allowlist.noun)
+      : { text: "", title: "" };
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";

@@ -44,12 +44,15 @@ for (const [name, viewport] of [
       await expect(runOpen).toBeVisible();
       expect(await askOpen.getAttribute("class")).toBe(await runOpen.getAttribute("class"));
 
-      const more = lines(page).filter({ has: page.getByTestId("home-needs-more") });
-      const label = (await more.getByText("More", { exact: true }).boundingBox())!;
+      // Home's own lane draws the rest as a footer under the table, its icon before the link (qa-company-12).
+      const more = page.getByTestId("home-needs-footer");
+      const label = (await more.locator("svg").first().boundingBox())!;
       const link = (await more.getByTestId("home-needs-more").boundingBox())!;
-      // One line, the label first, as on a desktop.
+      // One line, the icon first, as on a desktop.
       expect(label.x + label.width).toBeLessThanOrEqual(link.x);
-      expect(Math.abs(label.y + label.height / 2 - (link.y + link.height / 2))).toBeLessThan(12);
+      // On one line as Home's own spec reads it (qa3-company-home): the icon beside the link's text.
+      expect(label.y).toBeLessThan(link.y + link.height);
+      expect(label.y + label.height).toBeGreaterThan(link.y);
     });
   });
 }
