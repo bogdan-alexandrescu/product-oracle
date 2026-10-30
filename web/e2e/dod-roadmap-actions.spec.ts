@@ -95,9 +95,12 @@ async function expectCut(page: Page, key: string, cut: boolean) {
     else await expect(bar(page, key)).not.toHaveAttribute("data-kind", "cut");
     return;
   }
-  const lane = page.locator(`[data-testid="phone-lane"][data-items~="${key}"]`);
-  if ((await lane.getAttribute("data-open")) !== "true") await lane.click();
+  // The lane that holds it, opened (a cut moves it to "Below the line"): its row in the lane's list.
   const name = page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().locator("span.min-w-0");
+  await expect(async () => {
+    if (!(await name.count())) await page.locator(`[data-testid="phone-lane"][data-items~="${key}"]`).click();
+    await expect(name).toBeVisible({ timeout: 1000 });
+  }).toPass();
   if (cut) await expect(name).toHaveClass(/line-through/);
   else await expect(name).not.toHaveClass(/line-through/);
 }
