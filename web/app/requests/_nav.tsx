@@ -28,6 +28,8 @@ export function RequestsNav({ where }: { where: "header" | "top" }) {
   const pathname = usePathname();
   // The Themes tab counts the themes in use (not archived), as the queue's Themes tab did.
   const themes = useRequestsState().themes.data?.filter((t) => !t.archived).length || null;
+  // qa-work-44: an interview's own page has one way back, its "← Interviews", not the tabs too.
+  if (/^\/requests\/interviews\/[^/]+/.test(pathname ?? "")) return null;
   return (
     <nav
       aria-label="Requests"

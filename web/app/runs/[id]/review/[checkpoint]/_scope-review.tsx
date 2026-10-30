@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button, Chip, FilterChips, Page, PageHeader, Ring, SegmentedControl, Sheet, Split } from "@/components/ds";
 import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
+import { RunBackLink } from "@/components/review/parts";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -38,7 +38,8 @@ const REASON_CHIP: Record<string, string> = {
 };
 const FILE_PROBLEMS = ["unreadable_yaml", "missing_file", "wrong_version", "wrong_document", "no_features"];
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-const COLS = "grid-cols-[28px_28px_minmax(130px,1.5fr)_minmax(90px,1fr)_44px_48px_minmax(120px,1fr)_minmax(170px,1.6fr)]";
+// qa-work-16: Confidence and Requirements are written out, so their columns fit the words.
+const COLS = "grid-cols-[28px_28px_minmax(130px,1.5fr)_minmax(90px,1fr)_76px_92px_minmax(120px,1fr)_minmax(170px,1.6fr)]";
 
 function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
@@ -66,6 +67,15 @@ function changedChips(f: Feature, scope: Scope): string[] {
 }
 
 const openReasons = (f: Feature): Reason[] => f.reasons.filter((r) => !r.answered);
+
+/** A reason's chip on a row; a left-out dependency is named (qa-work-12: the fix's button stays short). */
+function reasonChip(r: Reason, f: Feature, scope: Scope): string {
+  if (r.code === "depends_on_excluded") {
+    const dep = f.depends_on.map((d) => scope.features.find((x) => x.key === d)).find((d) => d && d.decision !== "include");
+    if (dep) return `Depends on ${dep.title}, left out`;
+  }
+  return REASON_CHIP[r.code] ?? r.label;
+}
 
 /**
  * C7 Scope review: the feature set as rows a person decides. Approvers fix, leave out, edit,
@@ -201,8 +211,9 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           ? goalTitle(f.goals[0].key)
           : "No goal"
         : (() => {
-            const r = openReasons(f)[0];
-            return r ? (REASON_CHIP[r.code] ?? r.label) : "Nothing open";
+            // qa-work-13: a row a person handled stays under its reason's heading, its ✓ on the row.
+            const r = openReasons(f)[0] ?? f.reasons[0];
+            return r ? (REASON_CHIP[r.code] ?? r.label) : "Nothing to check";
           })();
     const g = groups.find((x) => x.label === label);
     if (g) g.rows.push(f);
@@ -221,16 +232,44 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       else if (q.edited) chips.push({ key: q.id, label: `${q.title.slice(0, 32)}: ${q.decision === "cut" ? "cut" : "edited"}`, onRemove: () => ops.patch(q, { revert: true }) });
     }
   }
+  const accepted = new Set<string>();
   for (const it of review?.items ?? []) {
     for (const a of it.actions) {
       if (a.state !== "staged" || (a.kind !== "accept" && a.kind !== "waive")) continue;
-      chips.push({ key: a.id, label: `${title(it.key)}: ${a.kind === "waive" ? "waived" : "kept"}`, onRemove: () => ops.removeAction(a.id) });
+      if (a.kind === "accept") accepted.add(a.id);
+      chips.push({ key: a.id, label: `${title(it.key)}: ${a.kind === "waive" ? "waived" : "included"}`, onRemove: () => ops.removeAction(a.id) });
     }
   }
   const s = scope.summary;
   // Features with a blocking reason open, as the bar's gate line counts them (s.blocking counts reasons).
   const blocking = scope.features.filter((f) => openReasons(f).some((r) => r.severity === "blocking")).length;
-  const tally = `${s.handled} of ${s.features} handled · ${blockingLeftText(blocking)} · ${plural(s.suggestions_open, "suggestion")} waiting`;
+  const tallyLine = `${s.handled} of ${s.features} handled · ${blockingLeftText(blocking)} · ${plural(s.suggestions_open, "suggestion")} waiting`;
+  // qa-work-14: a feature a person brought back into the set that now needs a decision says why
+  // (the Needs you count rose and the handled count fell because of it).
+  const broughtBack = scope.features.filter((f) => {
+    const was = (f.history.original as { decision?: string }).decision;
+    return f.edited && f.decision === "include" && was !== undefined && was !== "include" && openReasons(f).length > 0;
+  });
+  const tally = broughtBack.length ? (
+    <>
+      {tallyLine}
+      {broughtBack.map((f) => (
+        <span key={f.key} className="block font-normal text-text2" data-testid="tally-brought-back">
+          {f.title} is included now and needs you: {openReasons(f).map((r) => reasonChip(r, f, scope).toLowerCase()).join(", ")}.
+        </span>
+      ))}
+    </>
+  ) : (
+    tallyLine
+  );
+  // qa-work-1: Send back says what goes to the agents, and what a new attempt does not carry.
+  // A Keep (an accepted to-confirm reason) answers this attempt's check only; the rest is sent.
+  const goes = chips.filter((c) => !accepted.has(c.key));
+  const answered = chips.filter((c) => accepted.has(c.key));
+  const sendBackSummary = [
+    goes.length ? `The agents get ${plural(goes.length, "change")}: ${goes.map((c) => c.label).join("; ")}.` : "No row changes go to the agents.",
+    answered.length ? ` Not sent: ${answered.map((c) => c.label).join("; ")}; the agents' next attempt is checked again, so you decide it there.` : "",
+  ].join("");
   const fileProblems = (scope.check.problems ?? []).filter((p) => FILE_PROBLEMS.includes(p.code));
   const selectedFeature = scope.features.find((f) => f.key === selected) ?? scope.features.find((f) => f.needs_you) ?? scope.features[0] ?? null;
   // rirs-2/24: the PRD by its name ("Saved addresses PRD"), never its slug.
@@ -258,17 +297,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   return (
     <Page>
       <PageHeader
-        back={
-          <span>
-            <Link href="/runs" className="hover:underline">
-              Runs
-            </Link>{" "}
-            /{" "}
-            <Link href={`/runs/${run.id}`} className="break-words hover:underline" data-testid="run-name">
-              {runDocName(run) ? `${runDocName(run)} · ${run.flow_title}` : run.flow_title}
-            </Link>
-          </span>
-        }
+        back={<RunBackLink run={run} />}
         title="Feature set"
         status={
           <>
@@ -323,16 +352,8 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               <span role="columnheader">Feature</span>
               <span role="columnheader">Goal</span>
               {/* rirs-12: the narrow columns keep a short head; the full word is its name and tooltip. */}
-              <span role="columnheader" aria-label="Confidence">
-                <abbr title="Confidence" className="no-underline">
-                  Conf.
-                </abbr>
-              </span>
-              <span role="columnheader" aria-label="Requirements kept">
-                <abbr title="Requirements kept" className="no-underline">
-                  Reqs
-                </abbr>
-              </span>
+              <span role="columnheader">Confidence</span>
+              <span role="columnheader">Requirements</span>
               <span role="columnheader">{needsWord} because</span>
               <span role="columnheader">Your call</span>
             </div>
@@ -388,7 +409,9 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               tally={tally}
               chips={chips}
               changes={chips.length}
-              edits={s.edits}
+              // qa-work-14: Approve with N edits counts what the staged list shows.
+              edits={chips.length}
+              sendBackSummary={sendBackSummary}
               gate={review.gate ?? null}
               console={cp.console ?? null}
               revision={review.revision}
@@ -503,10 +526,16 @@ function FeatureRow({
         <span role="cell" className="flex min-w-0 flex-wrap gap-1">
           {f.goals.length ? (
             f.goals.map((g) => (
-              <Chip key={g.key} kind="line" title={goalTitle(g.key)} className="max-w-full truncate">
-                {goalTitle(g.key)}
+              // qa-work-11: a long goal name ends in an ellipsis, the full name on hover.
+              <Chip key={g.key} kind="line" title={goalTitle(g.key)} className="min-w-0" data-testid="goal-chip">
+                <span className="min-w-0 truncate">{goalTitle(g.key)}</span>
               </Chip>
             ))
+          ) : open.some((r) => r.code === "serves_no_goal") ? (
+            // qa-work-15: the reason's chip already says it (No confirmed goal); one chip, not two.
+            <span className="text-sm text-text2" aria-label="No goal">
+              —
+            </span>
           ) : (
             <Chip kind="warn">No goal</Chip>
           )}
@@ -520,7 +549,7 @@ function FeatureRow({
         <span role="cell" className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
           {open.map((r) => (
             <Chip key={r.code} kind={r.severity === "blocking" ? "crit" : "warn"} title={reasonText(r, scope)} wrap>
-              {REASON_CHIP[r.code] ?? r.label}
+              {reasonChip(r, f, scope)}
             </Chip>
           ))}
         </span>
@@ -577,7 +606,7 @@ function YourCall({ f, scope, review, mode, ops, ui }: { f: Feature; scope: Scop
   const open = openReasons(f);
   if (open.length) return <FixButtons fixes={fixesFor(open[0], f, scope, mode, ops, ui)} />;
   const answer = actionsOn(review, f.key).find((a) => a.state === "staged" && (a.kind === "accept" || a.kind === "waive"));
-  if (answer) return done(answer.kind === "waive" ? "Waived" : "Kept", () => ops.removeAction(answer.id));
+  if (answer) return done(answer.kind === "waive" ? "Waived" : "Included", () => ops.removeAction(answer.id));
   // Fixed elsewhere (a dependency included again): Undo puts that row back.
   const fixedBy = scope.features.filter((d) => f.depends_on.includes(d.key) && d.edited);
   if (fixedBy.length) return done("Fixed", () => Promise.all(fixedBy.map((d) => ops.patch(d, { revert: true }))).then(() => undefined));

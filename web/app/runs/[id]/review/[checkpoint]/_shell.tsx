@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, type ComponentType } from "react";
 
-import { Page } from "@/components/ds";
+import Link from "next/link";
+
+import { Icon, LinkButton, NotFoundPanel, Page } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
 import { beginDraft } from "./_draft";
@@ -31,9 +33,16 @@ const VIEWS: Partial<Record<CheckpointOut["kind"], ComponentType<ReviewViewProps
   eng_dates: EngReviewView,
 };
 
+/** qa-work-6: a missing run, said as the run page says it (never with its id). */
+const RUN_MISSING = "This run doesn't exist or was deleted.";
+
 export function ReviewShell({ runId, checkpointId, item }: { runId: string; checkpointId: string; item: string | null }) {
   const router = useRouter();
-  const q = useQuery(`run|${runId}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: runId } } })));
+  const q = useQuery(`run|${runId}`, () =>
+    unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: runId } } })).catch((e) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, RUN_MISSING) : e;
+    }),
+  );
   const cp = q.data?.checkpoints.find((c) => c.id === checkpointId) ?? null;
   const View = cp ? VIEWS[cp.kind] : undefined;
   const elsewhere = !!q.data && !View;
@@ -42,6 +51,29 @@ export function ReviewShell({ runId, checkpointId, item }: { runId: string; chec
   useEffect(() => {
     if (elsewhere) router.replace(`/runs/${runId}#decide`);
   }, [elsewhere, router, runId]);
+  // qa-work-6: the run page's "Run not found" state (./_run-detail.tsx), not the API's line.
+  if (!q.data && q.error === RUN_MISSING) {
+    return (
+      <NotFoundPanel
+        title="Run not found"
+        icon="search"
+        testId="run-not-found"
+        back={
+          <Link href="/runs" className="inline-flex min-h-6 items-center gap-1 hover:text-text hover:underline">
+            <Icon name="back" size={16} />
+            Runs
+          </Link>
+        }
+        actions={
+          <LinkButton href="/runs" variant="primary" icon="back">
+            Back to Runs
+          </LinkButton>
+        }
+      >
+        <p>{RUN_MISSING}</p>
+      </NotFoundPanel>
+    );
+  }
   if (q.error) return <Page className="py-6"><ErrorNote>{q.error}</ErrorNote></Page>;
   if (!q.data || !cp || !View) return <div className="px-6 py-8"><Loading /></div>;
   return <View run={q.data} cp={cp} item={item} reloadRun={q.reload} />;

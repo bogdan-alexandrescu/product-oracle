@@ -38,6 +38,12 @@ export const GAP_STATUS: Record<RankedGap["status"], { label: string; kind: Chip
 const ADD_REASON = "A commenter adds gaps";
 const TRIAGE_REASON = "An approver triages gaps";
 
+/** A section key as a person reads it: "success_metrics" is "Success metrics". */
+function sectionWords(key: string): string {
+  const words = key.replace(/[-_.]+/g, " ").trim();
+  return words ? words[0]!.toUpperCase() + words.slice(1) : key;
+}
+
 /** "a.b, c.d" → ["a.b", "c.d"]. */
 const keysOf = (text: string) => [...new Set(text.split(",").map((k) => k.trim()).filter(Boolean))];
 
@@ -255,7 +261,12 @@ function GapRow({
       </div>
       <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[13px] text-text2">
         {categoryNote(gap) && <span>{categoryNote(gap)}</span>}
-        {gap.section_keys.length > 0 && <span className="font-mono break-all">{gap.section_keys.join(", ")}</span>}
+        {/* qa-work-30: the PRD sections it touches in words ("Metrics"), not raw keys. */}
+        {gap.section_keys.length > 0 && (
+          <span className="break-words" data-testid="gap-sections">
+            {gap.section_keys.length === 1 ? "Section" : "Sections"}: {gap.section_keys.map(sectionWords).join(", ")}
+          </span>
+        )}
         {owner && <span>Owner: {owner.name}</span>}
         {researching && <span className="font-semibold text-accent-ink">Research proposed</span>}
       </div>

@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { Button, Chip, Icon, StatusMark, type ChipKind, type MarkState } from "@/components/ds";
 import type { FeedbackStatus, LlmJob, Verdict } from "@/lib/api/client";
 import { formatDateTime, JOB_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
+import { runLabel } from "@/lib/labels";
 
 /*
  * Small parts of the version / review view built on the ds kit. Candidates for the kit:
@@ -236,5 +238,18 @@ export function Menu({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * qa-work-17: a review's way back, in the run page's style ("← Runs" there): an arrow and the
+ * run's name ("← Saved addresses PRD · Baseline to PRD"), back to the run.
+ */
+export function RunBackLink({ run }: { run: Parameters<typeof runLabel>[0] & { id: string } }) {
+  return (
+    <Link href={`/runs/${run.id}`} className="inline-flex min-h-6 max-w-full items-center gap-1 break-words hover:text-text hover:underline" data-testid="run-name">
+      <Icon name="back" size={16} />
+      <span className="min-w-0 break-words">{runLabel(run)}</span>
+    </Link>
   );
 }

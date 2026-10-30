@@ -34,7 +34,18 @@ import {
   CountsOnlyTip,
   type CompanyRow,
 } from "./_components/company-coverage";
-import { ConfidenceBadge, confidenceFactors, ITEM_KINDS, itemKind, itemKinds, KIND_LABEL, pct } from "./_components/confidence";
+import {
+  ConfidenceBadge,
+  confidenceFactors,
+  confidenceLevel,
+  factorLevel,
+  ITEM_KINDS,
+  itemKind,
+  itemKinds,
+  KIND_LABEL,
+  matchLevel,
+  pct,
+} from "./_components/confidence";
 import { CoverageInspector, CoverageTable, CoverageTabs, NoSources, type CoverageTab } from "./_components/coverage";
 
 type Results = Schemas["SearchResults"];
@@ -62,7 +73,20 @@ function Snippet({ text, className = "", full = false }: { text: string; classNa
 }
 
 /** The selected hit: confidence, rank, the full match and its factors. */
-function HitInspector({ hit, rank, of, sourceName }: { hit: Hit; rank: number; of: number; sourceName: string }) {
+function HitInspector({
+  hit,
+  rank,
+  of,
+  best,
+  sourceName,
+}: {
+  hit: Hit;
+  rank: number;
+  of: number;
+  /** The best text relevance in this search: a hit's match reads against it. */
+  best: number;
+  sourceName: string;
+}) {
   const { item } = hit;
   return (
     <Inspector
@@ -84,11 +108,19 @@ function HitInspector({ hit, rank, of, sourceName }: { hit: Hit; rank: number; o
         ) : undefined
       }
       stats={[
-        { label: "Confidence", value: pct(item.confidence.value) },
+        // qa-work-33: plain words, not raw scores; the Ranking section says how they relate.
+        { label: "Confidence", value: confidenceLevel(item.confidence).label },
+        { label: "Match", value: matchLevel(hit.relevance, best) },
         { label: "Rank", value: rank, of },
-        { label: "Relevance", value: hit.relevance.toFixed(2) },
       ]}
     >
+      <InspectorSection label="Ranking" testId="hit-ranking">
+        <p className="text-sm text-text2">
+          Ranked {rank} of {of}: results are ordered by how well their words match your search, then raised or lowered by
+          how much Oracle trusts the item ({confidenceLevel(item.confidence).label.toLowerCase()} confidence,{" "}
+          {pct(item.confidence.value)}).
+        </p>
+      </InspectorSection>
       <InspectorSection label="Match">
         <Snippet text={hit.snippet} className="leading-[22px] break-words" />
       </InspectorSection>
@@ -97,8 +129,8 @@ function HitInspector({ hit, rank, of, sourceName }: { hit: Hit; rank: number; o
           <>
             Factors
             <InfoTip label="Confidence" align="start">
-              Confidence is the weighted mean of these factors; it sets how much this item counts in search ranking
-              and outputs.
+              Confidence blends these factors; the share beside each is how much it counts. It sets how much this
+              item counts in search ranking and outputs.
             </InfoTip>
           </>
         }
@@ -108,7 +140,7 @@ function HitInspector({ hit, rank, of, sourceName }: { hit: Hit; rank: number; o
             key={f.key}
             value={
               <>
-                {f.value.toFixed(2)} <span className="ml-1 font-normal text-text2">{pct(f.share)}</span>
+                {factorLevel(f.value)} <span className="ml-1 font-normal text-text2">counts {pct(f.share)}</span>
               </>
             }
           >
@@ -291,6 +323,7 @@ function SourcesSearchPage() {
         hit={selected}
         rank={selIndex + 1}
         of={hits.length}
+        best={Math.max(0, ...hits.map((h) => h.relevance))}
         sourceName={names.get(selected.item.source_id) ?? "source"}
       />
     );
@@ -319,8 +352,10 @@ function SourcesSearchPage() {
       <PageHeader
         title="Sources"
         info={
-          <InfoTip label="Ranking" align="start" side="bottom">
-            Search what your sources pulled in. Results are ranked by relevance weighted by confidence.
+          // qa-work-32: the tip is about the page; the ranking tip sits by Search.
+          <InfoTip label="Sources" align="start" side="bottom">
+            What your sources pulled in: each source&apos;s items, how fresh they are, what was not read and where they are
+            used. Search finds words across them.
           </InfoTip>
         }
         status={
@@ -375,6 +410,12 @@ function SourcesSearchPage() {
           <Button type="submit" variant="primary" icon="search" disabled={busy || !q.trim()}>
             Search
           </Button>
+          <span className="flex h-10 items-center">
+            <InfoTip label="Ranking" side="bottom">
+              Results are ordered by how well their words match, then raised or lowered by how much Oracle trusts each
+              item (its confidence).
+            </InfoTip>
+          </span>
         </form>
 
         {error && <Notice tone="error">{error}</Notice>}

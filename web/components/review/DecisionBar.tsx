@@ -258,7 +258,12 @@ export function DecisionBar({
           <Button
             disabled={busy || !canSend}
             title={canSend ? undefined : "Change a row or write a note to send back"}
-            onClick={() => (sendBackSummary ? setConfirming(true) : void decide("changes_requested"))}
+            onClick={() => {
+              // On a phone the decide sheet closes first: the confirmation is the one sheet open.
+              if (!sendBackSummary) return void decide("changes_requested");
+              setOpen(false);
+              setConfirming(true);
+            }}
           >
             Send back to agents
           </Button>
@@ -287,7 +292,10 @@ export function DecisionBar({
     <Sheet open={confirming} title="Send back to agents" onClose={() => setConfirming(false)} testId="sheet-send-back">
       <div className="flex flex-col gap-3 px-4 py-3">
         <p className="text-sm">{sendBackSummary}</p>
-        {note.trim() && <p className="text-sm text-text2">With your note to the agents.</p>}
+        {/* qa-work-1: whether a note goes with it, said before it is sent. */}
+        <p className="text-sm text-text2" data-testid="send-back-note">
+          {note.trim() ? "With your note to the agents." : "No note to the agents: write one in the bar to say what to change."}
+        </p>
         <span className="flex gap-2">
           <Button variant="solid" disabled={busy} onClick={() => void decide("changes_requested")}>
             Send back

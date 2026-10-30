@@ -183,6 +183,23 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
   );
 }
 
+/** Picks shown on a row: at most this many names, then "and N more". */
+const PICKS_SHOWN = 5;
+
+/**
+ * A row's picks in words (qa-work-46): "#product, #design, #eng and 40 more"; picks saved
+ * before names were kept are counted ("120 channels"), never listed by id.
+ */
+function picksSummary(names: string[], unnamed: number, noun: string): { text: string; title: string } {
+  const one = noun.endsWith("ies") ? `${noun.slice(0, -3)}y` : noun.replace(/s$/, "");
+  const unnamedNote = unnamed ? `${count(unnamed, one, noun)} saved before names were kept: edit and save to name them` : "";
+  const title = [names.join(", "), unnamedNote].filter(Boolean).join(". ");
+  if (!names.length) return { text: unnamed ? count(unnamed, one, noun) : "", title };
+  const rest = names.length - Math.min(names.length, PICKS_SHOWN) + unnamed;
+  const shown = names.slice(0, PICKS_SHOWN).join(", ");
+  return { text: rest ? `${shown} and ${rest} more` : shown, title };
+}
+
 function entries(config: Record<string, unknown>, key: string): string[] {
   if (key === "roots") return notionRoots(config);
   const value = config[key];
@@ -527,11 +544,16 @@ function SourceRow({
   // Picks by name where the source saved one (labels), else by id (a source saved before
   // names were kept shows ids until it is next saved).
   const names = labelsOf(source.config);
+  const pickIds = drive || !allowlist ? [] : entries(source.config, allowlist.key);
+  // qa-work-46: Slack and Notion picks are opaque ids; one with no saved name is counted, not shown by id.
+  const opaqueIds = source.kind === "slack" || source.kind === "notion";
   const items = drive
     ? picked.filter((f) => f.kind === "doc").map((f) => f.name)
-    : allowlist
-      ? entries(source.config, allowlist.key).map((id) => names[id] ?? id)
-      : [];
+    : opaqueIds
+      ? pickIds.filter((id) => names[id]).map((id) => names[id])
+      : pickIds.map((id) => names[id] ?? id);
+  const unnamed = opaqueIds ? pickIds.length - items.length : 0;
+  const picks = allowlist ? picksSummary(items, unnamed, allowlist.noun) : { text: "", title: "" };
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";
@@ -647,11 +669,11 @@ function SourceRow({
             </span>
           </span>
         )}
-        {allowlist && (items.length > 0 || folders.length === 0) && !(source.kind === "github" && items.length > 0) && (
+        {allowlist && (items.length + unnamed > 0 || folders.length === 0) && !(source.kind === "github" && items.length > 0) && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
-            <span className="min-w-0 truncate text-text" title={items.join(", ")} data-testid="source-picks">
-              {items.length ? items.join(", ") : "none yet"}
+            <span className="min-w-0 truncate text-text" title={picks.title} data-testid="source-picks">
+              {picks.text || "none yet"}
             </span>
           </span>
         )}
@@ -678,7 +700,8 @@ function SourceRow({
       {!drive && unavailable.length > 0 && (
         <ul aria-label={`Unreadable files of ${source.name}`} className="mt-2 flex flex-col gap-1">
           {unavailable.map((u) => {
-            const name = picked.find((f) => f.id === u.external_id)?.name ?? u.external_id;
+            // qa-work-46: by the name the sync or the picker saved ("#partner-launch"), not its id.
+            const name = u.name ?? picked.find((f) => f.id === u.external_id)?.name ?? names[u.external_id] ?? "Unnamed item";
             return (
               <li key={u.external_id} className="flex min-w-0 items-center gap-2 text-sm">
                 <Chip kind="warn" title={u.reason}>

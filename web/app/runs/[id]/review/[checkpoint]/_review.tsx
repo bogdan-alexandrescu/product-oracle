@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback } from "react";
 
 import { Empty, LinkButton, Page, PageHeader } from "@/components/ds";
+import { RunBackLink } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { runLabel } from "@/lib/labels";
 import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
@@ -34,11 +33,7 @@ export function CheckpointReviewScreen({ runId, checkpointId }: { runId: string;
 
   const r = run.data;
   const cp = r?.checkpoints.find((c) => c.id === checkpointId);
-  const back = r && (
-    <Link href={`/runs/${r.id}`} className="hover:underline">
-      {runLabel(r)}
-    </Link>
-  );
+  const back = r && <RunBackLink run={r} />;
   if (run.error || draft.error) {
     return (
       <Page>

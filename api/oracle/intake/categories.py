@@ -191,6 +191,13 @@ LOWER = {"critical": "critical", "high": "medium", "medium": "low", "low": "low"
 # A category nothing public speaks to: the same words whoever reads (S6).
 UNKNOWN_REASON = "Nothing in the pinned sources or the baseline answers it."
 
+# qa-onboarding-22: the goal question when the company has no goal to choose from yet
+# (the rule-made goal_alignment gap links no goal): never "which confirmed goal".
+NO_GOAL_PROMPT = (
+    "Your company has no confirmed goal yet. What outcome for the business should this "
+    "move, and should it go ahead before goals are set?"
+)
+
 # §5 step 5: how much each area weighs when ranking a missing answer.
 IMPACT_WEIGHTS: dict[str, float] = {
     "goals": 3.0,

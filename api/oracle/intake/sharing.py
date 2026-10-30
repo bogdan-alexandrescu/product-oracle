@@ -528,10 +528,12 @@ def gap_views(
 
 
 def question_prompt(gap: Any, rule: bool | None = None) -> str:
-    """The question a gap asks: its category's prompt for a rule-made gap, else the
-    gap's own words."""
+    """The question a gap asks: its category's prompt for a rule-made gap (the goal
+    question's no-goal wording when it links no goal), else the gap's own words."""
     cat = cats.BY_KEY[gap.category]
     if rule_made(gap) if rule is None else rule:
+        if gap.category == "goal_alignment" and not gap.entity_ids:
+            return cats.NO_GOAL_PROMPT
         return cat.prompt
     return gap.statement if gap.statement.endswith("?") else f"{gap.statement} {cat.prompt}"
 

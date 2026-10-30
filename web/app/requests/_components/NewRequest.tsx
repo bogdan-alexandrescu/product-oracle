@@ -7,10 +7,11 @@ import { Button, Dialog } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { formatAge } from "@/lib/format";
 import { displayName } from "@/lib/names";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CHANNEL_LABEL } from "./RequestList";
+import { CHANNEL_LABEL, STATE } from "./RequestList";
 
 type Request = Schemas["RequestOut"];
 
@@ -55,6 +56,10 @@ export function NewRequestButton({
             close();
             onFiled(request);
           }}
+          onOpenExisting={(id) => {
+            setOpen(false);
+            router.push(`/requests?request=${encodeURIComponent(id)}`);
+          }}
         />
       )}
     </>
@@ -71,7 +76,32 @@ const CHANNELS = (Object.keys(CHANNEL_LABEL) as Request["channel"][]).filter((c)
  * and the requester (in the In app channel the signed-in member, whom only an owner can change;
  * in another channel whoever asked). The ds Dialog: typed words ask before they are thrown away.
  */
-function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: (request: Request) => void }) {
+/** Two titles that read the same: case, spaces and end punctuation aside (qa-work-37). */
+const sameTitle = (a: string, b: string) => {
+  const norm = (t: string) => t.toLowerCase().replace(/[\s]+/g, " ").replace(/[.!?]+$/, "").trim();
+  return norm(a) === norm(b);
+};
+
+/** "just now", "5m ago". */
+function filedAgo(at: string): string {
+  const age = formatAge(at);
+  return !age || age === "now" || age.startsWith("in ") ? "just now" : `${age} ago`;
+}
+
+/**
+ * qa-work-37: before filing, a request already in the queue under the same title (not merged
+ * away) is shown, with Open it (to merge or add to it there) or File anyway.
+ */
+function NewRequestDialog({
+  onClose,
+  onFiled,
+  onOpenExisting,
+}: {
+  onClose: () => void;
+  onFiled: (request: Request) => void;
+  /** Opens a request already filed under this title, instead of filing a second. */
+  onOpenExisting: (id: string) => void;
+}) {
   const { me, can } = useMe();
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -97,6 +127,8 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
   // qa-onboarding-1: typed words ask "Discard your changes?" before Escape, the X or Cancel throws them away.
   const [renamed, setRenamed] = useState(false);
   const dirty = !!title.trim() || !!body.trim() || goalIds.length > 0 || channel !== "in_app" || renamed;
+  /** The request already filed under this title, once asked; the title it was found for. */
+  const [twin, setTwin] = useState<{ request: Request; title: string } | null>(null);
 
   async function submit() {
     if (!title.trim()) {
@@ -113,6 +145,15 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
     setBusy(true);
     setError(null);
     try {
+      // Asked once per title: File anyway files it.
+      if (!twin || !sameTitle(twin.title, title)) {
+        const found = await unwrap(api.GET("/v1/requests", { params: { query: { q: title.trim(), limit: 50 } } }));
+        const same = found.items.find((r) => r.state !== "merged" && sameTitle(r.title, title));
+        if (same) {
+          setTwin({ request: same, title });
+          return;
+        }
+      }
       const request = await unwrap(
         api.POST("/v1/requests", {
           body: {
@@ -151,7 +192,7 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
       onSubmit={() => void submit()}
       actions={
         <Button variant="primary" type="submit" disabled={busy}>
-          File request
+          {twin && sameTitle(twin.title, title) ? "File anyway" : "File request"}
         </Button>
       }
     >
@@ -242,6 +283,20 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
             </select>
           </label>
         </div>
+        {twin && sameTitle(twin.title, title) && (
+          <div role="alert" data-testid="new-request-duplicate" className="flex flex-col gap-2 rounded-panel border border-warn bg-warn-bg px-3 py-2.5 text-sm text-text">
+            <span>
+              <span className="font-semibold">This looks like a request already filed: </span>
+              &ldquo;{twin.request.title}&rdquo; ({STATE[twin.request.state].label}, filed {filedAgo(twin.request.created_at)}
+              {twin.request.requester_name ? ` by ${twin.request.requester_name}` : ""}). Open it to add to it or merge into it, or file this one anyway.
+            </span>
+            <span>
+              <Button variant="secondary" className="max-[600px]:h-11" onClick={() => onOpenExisting(twin.request.id)}>
+                Open it
+              </Button>
+            </span>
+          </div>
+        )}
         {error && <ErrorNote>{error}</ErrorNote>}
       </div>
     </Dialog>
