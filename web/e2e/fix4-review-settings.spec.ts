@@ -55,7 +55,7 @@ test("API tokens: the link names My account's section as it is titled there", as
   const where = page.getByTestId("tokens-made-where");
   await where.getByRole("link", { name: "My account › Personal API tokens" }).click();
   await expect(page).toHaveURL(/\/account$/);
-  await expect(page.getByText("Personal API tokens").first()).toBeVisible();
+  await expect(page.getByTestId("tokens-panel")).toContainText("Personal API tokens");
 });
 
 test("Sources: editing a Slack source with no channel left says why Save waits", async ({ page }) => {
