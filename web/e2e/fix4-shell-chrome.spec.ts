@@ -142,3 +142,18 @@ for (const width of [1440, 1512]) {
     await expect(backdrop).toHaveCount(0);
   });
 }
+
+test.describe("qa-shell-31 on a phone, drawn after the page", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("qa-shell-31: the tab bar stays under a page's own sheet, whose buttons can be pressed", async ({ page }) => {
+    await login(page);
+    await page.goto("/baseline");
+    await page.getByRole("button", { name: "Add item" }).click();
+    const form = page.getByRole("dialog", { name: "Add an item" });
+    await form.getByLabel("Kind").selectOption("assumption");
+    await form.getByLabel("Title").fill("Shops sell mostly on phones");
+    await form.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(form).toBeHidden();
+  });
+});

@@ -465,12 +465,14 @@ function Navs({ phoneSlot }: { phoneSlot: HTMLElement | null }) {
   const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];
   const moreActive = moreDests.some((d) => isActive(pathname, d, home));
 
+  // z-[39]: drawn after the page now, one under the page's own z-40 sheets and panels, which
+  // still lie over it as they did when it came first.
   const phone = (
     <>
       <nav
         aria-label="Oracle"
         data-testid="tab-bar"
-        className="fixed inset-x-0 bottom-0 z-40 hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] pt-1.5 pb-2 max-[600px]:grid"
+        className="fixed inset-x-0 bottom-0 z-[39] hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] pt-1.5 pb-2 max-[600px]:grid"
       >
         {tabDests.map((d) => {
           const active = isActive(pathname, d, home) && !more;
