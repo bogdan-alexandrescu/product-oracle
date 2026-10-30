@@ -173,8 +173,9 @@ test("the slice: a brief becomes a published PRD and a roadmap", async ({ page }
   expect((await decided).status()).toBe(200);
   await page.goto(roadmapRun);
   await tickUntil(page, "roadmap_draft", /Imported|Waiting|Succeeded|Done/);
-  await expect(page.getByTestId("segment-roadmap_draft")).toContainText(`Imported as ${DOC}-roadmap v1`);
-  await page.getByTestId("segment-roadmap_draft").getByRole("link", { name: `${DOC}-roadmap v1` }).click();
+  // The version reads by its document's title, never its slug (qa-work-18): the fake writer's roadmap title.
+  await expect(page.getByTestId("segment-roadmap_draft")).toContainText("Imported as Example product roadmap v1");
+  await page.getByTestId("segment-roadmap_draft").getByRole("link", { name: "Example product roadmap v1" }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}-roadmap/v/1`));
   // The roadmap draft waits for its review, in its version, like the PRD did.
   await expect(page.getByTestId("run-review-bar")).toBeVisible();
