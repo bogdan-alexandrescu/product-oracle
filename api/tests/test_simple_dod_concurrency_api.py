@@ -47,14 +47,14 @@ async def test_two_sessions_on_one_item(client):
     # Both saw the item as seeded. The decider edits its title, the owner its dates.
     r = await w.post(client, "decider", "edit_title")
     assert r.status_code == 201, r.text
+    theirs = r.json()["change"]
     r = await client.post(CHANGES, json={"op": "move_dates", "target": {"item_id": a},
                           "before": dates, "after": {"start_date": "2026-10-05",
                           "end_date": "2026-11-20"}}, headers=w.ctx.as_("owner"))  # fmt: skip
     assert r.status_code == 201, r.text
     item = await w.item("edit_title-a")
     assert item.title == "Ledger v2" and item.start_date == date(2026, 10, 5)
-    assert r.json()["change"]["session_id"] != (await client.get(
-        CHANGES, headers=w.ctx.as_("decider"))).json()[0]["session_id"]  # fmt: skip
+    assert r.json()["change"]["session_id"] != theirs["session_id"]
     # The owner, on the title they saw, retitles too: a conflict, nothing written.
     n = len((await client.get(CHANGES, headers=w.ctx.as_("owner"))).json())
     r = await w.post(client, "owner", "edit_title", after={"title": "Ledger v3"})

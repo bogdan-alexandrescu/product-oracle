@@ -1905,6 +1905,21 @@ async def apply(
     return await one(db, principal, card, rules), result
 
 
+async def rebase(db: AsyncSession, card_id: uuid.UUID, detail: Any) -> None:
+    """dod-data: a card refused because its item changed since it was made (409 with the
+    current values, after the failed apply is rolled back) stays open and is offered again
+    on the new state: its ``before`` is what the item has now, so a second Apply is the
+    person's choice on what they see. The caller has checked the card is theirs to apply."""
+    current = detail.get("current") if isinstance(detail, dict) else None
+    if not isinstance(current, dict) or not current:
+        return
+    card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
+    if card is None or card.status != "open" or not set(current) <= set(card.before or {}):
+        return
+    card.before = {**card.before, **current}
+    await db.commit()
+
+
 async def _apply_direct(
     db: AsyncSession, principal: Any, card_id: uuid.UUID, rules: Any, fix: int | None
 ) -> tuple[ChatCardOut, SimpleChangeResult | None]:
