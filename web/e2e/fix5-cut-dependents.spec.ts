@@ -47,8 +47,14 @@ async function openTalk(page: Page, key: string): Promise<Locator> {
   } else await openRoadmapItem(page, key);
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
-  await card.getByRole("button", { name: "Talk to Oracle" }).click();
-  await expect(card).toHaveAttribute("data-talk", "true");
+  if (phone(page)) {
+    // A phone's sheet: the Talk to Oracle tab.
+    await card.getByRole("tab", { name: "Talk to Oracle" }).click();
+    await expect(card.getByRole("tab", { name: "Talk to Oracle" })).toHaveAttribute("aria-selected", "true");
+  } else {
+    await card.getByRole("button", { name: "Talk to Oracle" }).click();
+    await expect(card).toHaveAttribute("data-talk", "true");
+  }
   return card.getByTestId("item-talk");
 }
 
@@ -74,14 +80,19 @@ for (const [where, use] of [
       await expect(cut.getByRole("button", { name: KEEP })).toBeEnabled();
       const both = cut.getByRole("button", { name: BOTH, exact: true });
       await expect(both).toBeEnabled();
+      // Neither long label is cut short (the row is a 2-column grid with them).
+      for (const b of [both, cut.getByRole("button", { name: KEEP })]) expect(await b.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       await both.click();
       await expect(cut).toHaveAttribute("data-status", "applied");
       await expect(cut.getByTestId("chat-card-summary")).toContainText("Weekly alert digest");
       await expect(cut.getByTestId("chat-card-summary")).toContainText("Mobile alert push");
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("floating-card")).toHaveCount(0);
-      for (const key of ["alert-rules", "alert-digest", "alert-mobile"]) await expect(kind(page, key)).toHaveAttribute("data-kind", "cut");
-      await expect(kind(page, "alert-export")).not.toHaveAttribute("data-kind", "cut");
+      // The chart's bars (a phone lists its lanes instead: the change list below says it).
+      if (!phone(page)) {
+        for (const key of ["alert-rules", "alert-digest", "alert-mobile"]) await expect(kind(page, key)).toHaveAttribute("data-kind", "cut");
+        await expect(kind(page, "alert-export")).not.toHaveAttribute("data-kind", "cut");
+      }
 
       const banner = page.getByTestId("draft-banner");
       await expect(banner.getByTestId("draft-count")).toHaveText("1");
@@ -93,7 +104,8 @@ for (const [where, use] of [
       await expect(rows.first()).toContainText("Mobile alert push");
 
       await banner.getByRole("button", { name: "Undo" }).click();
-      for (const key of ["alert-rules", "alert-digest", "alert-mobile"]) await expect(kind(page, key)).not.toHaveAttribute("data-kind", "cut");
+      await expect(page.getByTestId("draft-changes").getByText("Cut Alert rules engine and its dependents")).toHaveCount(0);
+      if (!phone(page)) for (const key of ["alert-rules", "alert-digest", "alert-mobile"]) await expect(kind(page, key)).not.toHaveAttribute("data-kind", "cut");
     });
 
     test(`an item no one depends on has only its Apply (${where})`, async ({ page }) => {
@@ -114,7 +126,9 @@ for (const [where, use] of [
       await cut.getByRole("button", { name: `Propose: ${BOTH.toLowerCase()}` }).click();
       await expect(cut).toHaveAttribute("data-status", "proposed");
       await page.keyboard.press("Escape");
-      await expect(kind(page, "alert-digest")).not.toHaveAttribute("data-kind", "cut");
+      // A proposal writes nothing: no working draft, no cut bar.
+      await expect(page.getByTestId("draft-banner")).toHaveCount(0);
+      if (!phone(page)) await expect(kind(page, "alert-digest")).not.toHaveAttribute("data-kind", "cut");
     });
   });
 }

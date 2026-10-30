@@ -262,7 +262,9 @@ export function ChatCard({
         // Discard, Correct); a plain wrap leaves the last one alone on its own row, so narrow
         // widths lay them out as a balanced 2-column grid, wide widths keep the flex row.
         // fix4 qa-simple-roadmap-25: wider, one row that never wraps one button alone.
-        <div ref={actions} className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-nowrap [&>button]:min-w-0">
+        // fix5-cut-dependents: a cut's two buttons (and Preview, Reject) are a 2-column grid
+        // at every width, so neither long label is cut short.
+        <div ref={actions} className={`grid grid-cols-2 items-center gap-2 [&>button]:min-w-0 ${cutsDependents ? "" : "sm:flex sm:flex-nowrap"}`}>
           {action ? (
             <button type="button" className="simple-button" aria-pressed={described} aria-expanded={described} disabled={busy} onClick={() => setDescribed((d) => !d)}>
               {described ? "Hide preview" : "Preview"}
@@ -285,7 +287,7 @@ export function ChatCard({
             )
           )}
           {applyShown && (
-            <button type="button" className="simple-button simple-button-primary" disabled={busy || !card.may} onClick={() => void apply()} title={card.why_not ?? undefined}>
+            <button type="button" className={`simple-button simple-button-primary${cutsDependents ? " simple-button-wrap" : ""}`} disabled={busy || !card.may} onClick={() => void apply()} title={card.why_not ?? undefined}>
               {applyLabel}
             </button>
           )}
