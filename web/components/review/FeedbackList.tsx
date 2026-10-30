@@ -61,6 +61,8 @@ type Ctx = {
   onChanged: (id: string) => void;
   /** Resolve / Reopen: the item leaves a list it no longer belongs to. */
   onTriaged?: () => void;
+  /** fix3-discuss review: whole-draft feedback made in Discuss opens its thread. */
+  onOpenThread?: (id: string) => void;
 };
 
 function ReplyForm({ onReply, onClose }: { onReply: (body: string) => Promise<void>; onClose: () => void }) {
@@ -255,6 +257,11 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
               </p>
               <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">{item.summary}</p>
               <p className="tnum mt-1 text-[13px] text-text2">{formatDateTime(item.created_at)}</p>
+              {item.discussion_id && ctx.onOpenThread && (
+                <Button variant="ghost" icon="comment" className="mt-1" onClick={() => ctx.onOpenThread!(item.discussion_id!)}>
+                  Open the thread
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -460,6 +467,7 @@ export function FeedbackList({
                   ctx.onChanged(id);
                 },
                 onTriaged: () => ctx.onChanged(e.item.id),
+                onOpenThread: discussions?.onOpen,
               }}
             />
           ))}

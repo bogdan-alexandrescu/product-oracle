@@ -150,6 +150,12 @@ export type DiscussionsContext = {
   resolve: (kind: Kind, subject: Record<string, unknown>) => SubjectInfo | { status: number; detail: string };
   /** qa-docs-33: a started discussion's first message, for the review's whole-draft feedback (server.ts). */
   reviewFeedback?: (d: DiscussionRow, body: string) => void;
+  /** fix3-discuss review: the refusal when the first message is too long to be that feedback; null: fine. */
+  reviewFeedbackRefusal?: (d: DiscussionRow, body: string) => string | null;
+  /** The thread's first message was edited: its item's summary follows; a refusal when too long. */
+  feedbackEdited?: (d: DiscussionRow, body: string) => string | null;
+  /** The first message is gone or the thread is private: its item is withdrawn. */
+  feedbackWithdrawn?: (d: DiscussionRow) => void;
   uuid: () => string;
   now: () => string;
   /** Writes after the response (a streaming reply): applied to the saved state in turn. */
@@ -1388,6 +1394,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
         created_at: at,
         updated_at: at,
       };
+      const tooLong = input.message ? ctx.reviewFeedbackRefusal?.(d, input.message.body) : null;
+      if (tooLong) return refuse(422, tooLong);
       db.discussions.push(d);
       add(d, me.id, "started");
       for (const id of picked) add(d, id, visibility === "private" ? "added" : "mention");
@@ -1443,6 +1451,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       for (const x of active(d)) if (x.added_via === "followed" && !writers.has(x.user_id)) x.left_at = ctx.now();
       d.visibility = "private";
       d.summary_shared = false;
+      ctx.feedbackWithdrawn?.(d);
       // G8: a private discussion never mirrors; the thread gets its closing line, without the link.
       d.slack = null;
     }
@@ -1533,13 +1542,20 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     const refused = writer();
     if (refused) return refused;
     if (row.author_kind !== "person" || row.author_id !== me.id) return refuse(403, "Only its author can change a message");
+    // As the API's _is_first: the thread's first person's message (its whole-draft feedback).
+    const isFirst = (x: MessageRow) => db.messages.find((y) => y.discussion_id === d.id && y.author_kind === "person")?.id === x.id;
     if (m === "PATCH") {
       const { body: text } = await body<Schemas["DiscussionMessageEdit"]>();
       if (text.length > 8000) return refuse(422, "A message can be at most 8,000 characters");
+      if (isFirst(row)) {
+        const tooLong = ctx.feedbackEdited?.(d, text);
+        if (tooLong) return refuse(422, tooLong);
+      }
       Object.assign(row, { body: text, edited_at: ctx.now() });
       return json(200, messageOut(row));
     }
     if (m === "DELETE") {
+      if (isFirst(row)) ctx.feedbackWithdrawn?.(d);
       Object.assign(row, { body: "", deleted_at: ctx.now() });
       return json(204, null);
     }
