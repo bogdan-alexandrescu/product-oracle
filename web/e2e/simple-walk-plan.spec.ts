@@ -85,7 +85,7 @@ for (const phone of [false, true]) {
           await setUp(page, scheme, EMAILS[role]);
           await page.goto("/simple/prds/guided-setup");
           const strip = page.getByLabel("Timeline strip");
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · Measure it, make it safe · 3 items", "M2 · Ship to beta · 2 items", "Beta launch · 3 items", "No milestone · 1 item"]);
+          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · Measure it, make it safe · 3 roadmap items", "M2 · Ship to beta · 2 roadmap items", "Beta launch · 3 roadmap items", "No milestone · 1 roadmap item"]);
           await expect(strip).not.toContainText("dry run");
 
           const problem = page.getByRole("region", { name: "Problem and who has it" });
@@ -106,7 +106,7 @@ for (const phone of [false, true]) {
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
-          await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 items" }).click();
+          await strip.getByTestId("plan-strip-row").filter({ hasText: "M1 · Measure it, make it safe · 3 roadmap items" }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap\?prd=guided-setup$/);
         });
 

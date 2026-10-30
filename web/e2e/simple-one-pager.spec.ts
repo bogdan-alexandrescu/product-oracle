@@ -47,7 +47,7 @@ for (const phone of [false, true]) {
           await expect(page.getByRole("region", { name: title })).toBeVisible();
         }
         await expect(page.getByRole("region", { name: "Outcomes and how we measure them" })).toContainText("48% → 65%");
-        await expect(page.getByLabel("Timeline strip")).toContainText("M1 · 12 items");
+        await expect(page.getByLabel("Timeline strip")).toContainText("M1 · 12 roadmap items");
         await expect(page.getByRole("button", { name: /^Edit “|Propose wording/ })).toHaveCount(0);
         await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
         const sources = page.getByRole("region", { name: "Sources of “A setup checklist that shows" });

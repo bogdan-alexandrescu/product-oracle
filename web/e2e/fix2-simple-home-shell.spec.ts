@@ -272,7 +272,7 @@ for (const phone of [false, true]) {
     }
     // Every label in full (wrapped on a phone, never "No milestone…").
     const label = strip.getByTestId("plan-strip-label").filter({ hasText: /^No milestone/ });
-    await expect(label).toHaveText(/^No milestone · \d+ items?$/);
+    await expect(label).toHaveText(/^No milestone · \d+ roadmap items?$/);
     for (const l of await strip.getByTestId("plan-strip-label").all())
       expect(await l.evaluate((el) => el.scrollWidth <= el.clientWidth && getComputedStyle(el).textOverflow !== "ellipsis")).toBe(true);
     // A solid bar stands out from its card in dark (contrast at least 1.5:1).

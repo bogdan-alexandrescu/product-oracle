@@ -218,7 +218,7 @@ for (const phone of [false, true]) {
           // A compact summary: the milestone's part (Done when, targets) follows the timeline once.
           await expect(m1.getByTestId("part-done-when")).toHaveCount(0);
           await expect(m1.getByRole("link", { name: "6 features, 2 flows · 1 decision ›" })).toBeVisible();
-          await expect(down.getByTestId("timeline-decision")).toHaveText([/Q3 Which sample data to ship\s*was due 20 Oct/, /Q8 The bulk import row limit\s*at the M1 review/, /Q7 Legal input on invite emails\s*before M2 starts/]);
+          await expect(down.getByTestId("timeline-decision")).toHaveText([/Q3 Which sample data to ship\s*was due 20 Oct/, /Q8 The bulk import row limit\s*M2 decision, taken at the M1 review/, /Q7 Legal input on invite emails\s*before M2 starts/]);
           const order = await down.locator(':scope > [data-testid], :scope > div').allTextContents();
           const at = (words: string) => order.findIndex((t) => t.includes(words));
           expect(at("Q3 Which")).toBeLessThan(at("Today"));
@@ -238,7 +238,7 @@ for (const phone of [false, true]) {
           await expect(summary.first().locator("b")).toHaveText("Goal: setup in a day.");
           await expect(tl.getByRole("heading", { name: "When", exact: true })).toBeVisible();
           const decisions = tl.getByTestId("timeline-decision");
-          await expect(decisions).toHaveText([/Q3 Which sample data to ship\s*was due 20 Oct/, /Q8 The bulk import row limit\s*at the M1 review, 27 Nov/, /Q7 Legal input on invite emails\s*before M2 starts, 30 Nov/]);
+          await expect(decisions).toHaveText([/Q3 Which sample data to ship\s*was due 20 Oct/, /Q8 The bulk import row limit\s*M2 decision, taken at the M1 review, 27 Nov/, /Q7 Legal input on invite emails\s*before M2 starts, 30 Nov/]);
           await expect(tl).toContainText("1 more decision has no date yet; it is listed under its milestone.");
           const legend = tl.getByTestId("timeline-legend");
           for (const w of ["M1", "M2", "M3", "Product manager's work, no engineering", "Today 22 Oct", "Holidays 28 Dec – 1 Jan", "milestone end"]) await expect(legend).toContainText(w);

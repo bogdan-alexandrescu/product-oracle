@@ -197,7 +197,7 @@ test.describe("phone", () => {
     const labels = strip.getByTestId("plan-strip-label");
     await expect(labels.first()).toBeVisible();
     // Every label ends with its item count, in view.
-    for (const t of await labels.allTextContents()) expect(t).toMatch(/· \d+ items?$/);
+    for (const t of await labels.allTextContents()) expect(t).toMatch(/· \d+ roadmap items?$/);
     const cut = await labels.evaluateAll((els) =>
       els
         .filter((el) => {

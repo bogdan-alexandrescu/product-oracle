@@ -26,7 +26,7 @@ import { expect, test, type Locator, type Page } from "./test";
  *   the roadmap, 16 px from the page's edges, the card out of the way; a phone: a full-height
  *   sheet with Back): the diagram with its decision diamond and its No branch, every step in full
  *   words with a decision's "If no:", the screen's numbered regions; Full screen opens the viewer
- *   (C: "Roadmap" back, Comment, Exit full screen, the diagram top to bottom beside the boxed
+ *   (C: Comment, Exit full screen, the diagram top to bottom beside the boxed
  *   steps, the screen below; a phone: Diagram | Steps | Screen); Comment opens the comments;
  *   Escape closes the comments, then the viewer, and Close the opened view; fails_when=a part is
  *   missing, a layer does not open or does not close, or the card shows through; no_claim=pixels.
@@ -168,7 +168,9 @@ for (const phone of [false, true]) {
           await tap(viewer.getByRole("tab", { name: "Screen" }));
           await expect(viewer.getByTestId("flow-regions")).toContainText("Progress meter");
         } else {
-          await expect(viewer.getByRole("button", { name: "Roadmap" })).toBeVisible();
+          // qa-simple-prd-p3-22: one way out, Exit full screen (no "Roadmap" back beside it).
+          await expect(viewer.getByRole("button", { name: "Exit full screen" })).toBeVisible();
+          await expect(viewer.getByRole("button", { name: "Roadmap" })).toHaveCount(0);
           await expect(viewer.getByRole("heading", { level: 2 })).toHaveText("Alert history export · flow");
           await expect(viewer.getByText("User flow", { exact: true })).toBeVisible();
           await expect(viewer.getByTestId("flow-svg")).toBeVisible();
