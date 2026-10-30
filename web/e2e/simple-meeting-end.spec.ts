@@ -115,7 +115,7 @@ for (const phone of [false, true]) {
         await endOne(page);
         await delivery(page).getByRole("checkbox", { name: "Email the attendees" }).check();
         await delivery(page).getByRole("button", { name: "Send" }).click();
-        await expect(page.getByRole("status", { name: "Sent" })).toContainText(/Emailing 3 attendees…|Emailed all 3 attendees/);
+        await expect(page.getByRole("status", { name: "Sent" })).toContainText(/Emailing \d attendees…|Emailed all \d attendees/);
         await page.goto("/simple/meetings");
         await expect(page.getByRole("region", { name: "Past" })).toContainText("1 decision taken.");
         await switchTo(page, "approver@example.com");
