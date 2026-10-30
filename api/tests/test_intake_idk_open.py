@@ -38,16 +38,18 @@ async def test_dont_know_leaves_the_question_open_until_a_real_answer(client):
     or a later real answer is refused; no_claim=the web tally (the Playwright spec)."""
     ctx = await company()
     intake_id, ids = await _brief(client, ctx)
-    out = await answer(
-        client, ctx, ids[0], "commenter", kind="dont_know", body="Not measured yet"
-    )
+    out = await answer(client, ctx, ids[0], "commenter", kind="dont_know", body="Not measured yet")
     assert out["question"]["status"] == "asked"
     assert out["answer"]["kind"] == "dont_know" and out["answer"]["body"] == "Not measured yet"
     assert out["gap"]["status"] == "unknown"
     counts = (await summary(client, ctx, intake_id))["batch"]
     assert (counts["asked"], counts["answered"]) == (3, 0)
     assert ids[0] in {r["question"]["id"] for r in await inbox(client, ctx, "commenter")}
-    [card] = [c for c in (await batch(client, ctx, intake_id))["questions"] if c["question"]["id"] == ids[0]]
+    [card] = [
+        c
+        for c in (await batch(client, ctx, intake_id))["questions"]
+        if c["question"]["id"] == ids[0]
+    ]
     assert [(a["kind"], a["body"]) for a in card["answers"]] == [("dont_know", "Not measured yet")]
 
     # Someone gives a real answer: now it is answered, the "I don't know" kept before it.
@@ -56,7 +58,11 @@ async def test_dont_know_leaves_the_question_open_until_a_real_answer(client):
     assert out["gap"]["status"] in ("answered", "answered_pending_review")
     counts = (await summary(client, ctx, intake_id))["batch"]
     assert (counts["asked"], counts["answered"]) == (2, 1)
-    [card] = [c for c in (await batch(client, ctx, intake_id))["questions"] if c["question"]["id"] == ids[0]]
+    [card] = [
+        c
+        for c in (await batch(client, ctx, intake_id))["questions"]
+        if c["question"]["id"] == ids[0]
+    ]
     assert [a["kind"] for a in card["answers"]] == ["dont_know", "answer"]
 
 

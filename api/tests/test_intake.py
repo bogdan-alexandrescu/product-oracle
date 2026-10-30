@@ -291,7 +291,8 @@ async def test_dont_know_on_a_critical_blocker_offers_research_and_a_decision(cl
 
     await ask_of(client, ctx, q["id"], "commenter")
     result = await answer(client, ctx, q["id"], kind="dont_know")
-    assert result["question"]["status"] == "answered"
+    # Still open until a real answer (owner 2026-10-29, qa-work-2).
+    assert result["question"]["status"] == "asked"
     assert result["gap"]["status"] == "unknown"
     assert result["gap"]["knowledge_state"] == "unknown"
     kinds = {a["kind"] for a in result["next_actions"]}
