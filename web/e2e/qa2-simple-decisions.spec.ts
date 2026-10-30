@@ -120,8 +120,10 @@ test.describe("desktop · Decisions", () => {
   test("filters: Clear filters when nothing matches; a filtered meeting says so", async ({ page }) => {
     await decisions(page, "meetings");
     await page.getByRole("combobox", { name: "Goal" }).selectOption({ index: 1 });
-    const group = page.getByTestId("meeting-group").first();
-    if (await group.count()) await expect(group.getByTestId("meeting-group-filtered")).toContainText(/of this meeting match(es)?\./);
+    // Wait for the filter to settle: a filtered meeting says so, or nothing matches (no count read mid-render).
+    const filtered = page.getByTestId("meeting-group").first().getByTestId("meeting-group-filtered");
+    await expect(filtered.or(page.getByTestId("decisions-empty"))).toBeVisible();
+    if (await filtered.count()) await expect(filtered).toContainText(/of this meeting match(es)?\./);
     await page.getByRole("combobox", { name: "Goal" }).selectOption({ index: 0 });
     await page.getByRole("combobox", { name: "PRD" }).selectOption({ label: "Guided setup" });
     await page.getByRole("combobox", { name: "Meeting" }).selectOption({ index: 1 });

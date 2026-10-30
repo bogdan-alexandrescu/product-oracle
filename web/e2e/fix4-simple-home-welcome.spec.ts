@@ -129,7 +129,8 @@ test("qa-onboarding-34: a setup step opened from Simple's Home returns to Simple
   // Settings' own lane wins: the zone is one searchable picker (qa-settings-12), not a select.
   await pickZone(page, "America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
+  // Settings' own Saved note offers the way back too, when opened from a setup step.
+  await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText(/^Saved/);
 
   await page.getByTestId("nav-back-home").click();
   await expect(page).toHaveURL(/\/simple$/);
