@@ -198,6 +198,8 @@ function picksSummary(names: string[], unnamed: number, noun: string): { text: s
   const rest = names.length - Math.min(names.length, PICKS_SHOWN) + unnamed;
   const shown = names.slice(0, PICKS_SHOWN).join(", ");
   return { text: rest ? `${shown} and ${rest} more` : shown, title };
+}
+
 /** What a pick without a saved name reads as: "Unknown channel", "3 unknown channels". */
 const UNKNOWN: Partial<Record<Kind | "folder", [string, string]>> = {
   slack: ["Unknown channel", "unknown channels"],

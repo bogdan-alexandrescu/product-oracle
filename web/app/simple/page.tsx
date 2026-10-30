@@ -925,7 +925,7 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
                   copy.label
                 )
               }
-              meta={copy.status(st)}
+              meta={copy.status(st, {})}
             />
           );
         })}

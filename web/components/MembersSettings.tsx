@@ -19,6 +19,7 @@ import {
   DataTable,
   InfoTip,
   Inspector,
+  InspectorRow,
   InspectorSection,
   Notice,
   PageHeader,
@@ -44,7 +45,6 @@ const INVITE_FORM = "invite-form";
 const LEAD_TIP =
   "Engineering lead: decides both engineering stops (the check after the feature set and the dates after the PRD draft) and verifies dates. Any commenter or above can carry it.";
 /** The Roles list's line for the engineering lead, as each role has one (qa-shell-27). */
-const LEAD_CAN = "Decides both engineering stops and verifies dates. Any commenter or above can carry it.";
 const VIEWER_NOT_LEAD = "Viewers can't be the engineering lead";
 /** On a phone the box is 24 px, inside a 44 px tall label (qa-onboarding-31). */
 const CHECKBOX = "size-4 accent-[var(--accent)] disabled:opacity-50 max-[600px]:size-6";
@@ -235,7 +235,7 @@ function RoleNote() {
 }
 
 /** The four roles and the engineering lead flag, what each can do in words, and how many active people hold each. */
-function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?: string | null }) {
+function RolesSection({ members }: { members?: Member[] }) {
   const leads = members?.filter((m) => m.engineering_lead && m.status !== "disabled").length;
   return (
     <>

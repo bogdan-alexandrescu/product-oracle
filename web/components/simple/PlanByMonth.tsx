@@ -129,7 +129,7 @@ export function PlanByMonth({
           {plan.today && (
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
               <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />
-              Today {calendarDay(plan.today, { day: "numeric", month: "short" }, "en-GB")}
+              Today {calendarDay(plan.today, { month: "short", day: "numeric" })}
             </span>
           )}
           {plan.rows.some((r) => r.estimated) && (

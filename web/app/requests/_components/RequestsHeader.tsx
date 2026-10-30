@@ -9,7 +9,7 @@ import type { Query } from "@/lib/use-query";
 
 import { InterviewDialog } from "./InterviewDialog";
 import { NewRequestButton } from "./NewRequest";
-import { ClassifyNow, DailyTriageSwitch, TriageMenu, TriageStatusLine } from "./Triage";
+import { TriageMenu, TriageStatusLine } from "./Triage";
 
 /** On a phone the actions take the screen's width (the Page's 10 px sides off it): New request, then More (qa-work-41). */
 const ACTIONS = "flex flex-wrap items-center justify-end gap-2 max-[600px]:w-[calc(100vw-1.25rem)] max-[600px]:flex-nowrap";
