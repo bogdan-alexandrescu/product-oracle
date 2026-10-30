@@ -271,7 +271,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
         </button>
       )}
       {!sessionId && !v.can_start && <span id="start-review-why" className="text-[14px] text-text2">{startWhy}</span>}
-      <Link className={`font-semibold whitespace-nowrap text-accent underline underline-offset-[3px] ${phone ? "text-[14px]" : "text-[15px]"}`} href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
+      <Link className={`font-semibold whitespace-nowrap text-accent underline underline-offset-[3px] ${phone ? "text-[14px]" : "text-[15px]"}`} href={`/documents/${v.document.slug}`} {...(sessionId ? { target: "_blank", rel: "noopener" } : {})}>Open the detailed view{sessionId ? " (new tab)" : ""}</Link>
     </>
   );
   const toast = saved && (
@@ -319,6 +319,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       {planShown ? (
         <div className="mx-auto flex max-w-[1180px] flex-col gap-5 px-12 pt-[26px] pb-12 max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5">
           <PrdHeader
+            inMeeting={!!sessionId}
             v={v}
             plan={plan!}
             phone={phone}
@@ -334,7 +335,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
         <>
           {/* qa-simple-prd-14/44: the same header row and toolbar as a PRD with a plan. */}
           <div className="simple-noprint mx-auto flex max-w-[1180px] flex-wrap items-center gap-2.5 px-12 pt-[26px] max-[767px]:px-4 max-[767px]:pt-3.5">
-            {!phone && !presenting && <BackLink />}
+            {/* qa-simple-decide-27: in a meeting the stage has no way back to the One-pagers list. */}
+            {!phone && !presenting && !sessionId && <BackLink />}
             <span className="flex-1" />
             {actions}
           </div>
@@ -500,7 +502,7 @@ function Glyph({ d }: { d: string }) {
  * A phone (D2) keeps the title, the facts and the actions, smaller; its header bar names
  * the page (One-pagers), so the title there is a level-1 heading that is not an H1.
  */
-function PrdHeader({ v, plan, phone, presenting, draft, actions }: { v: View; plan: Schemas["SimplePlanOut"]; phone: boolean; presenting: boolean; draft: boolean; actions: ReactNode }) {
+function PrdHeader({ v, plan, phone, presenting, draft, actions, inMeeting = false }: { v: View; plan: Schemas["SimplePlanOut"]; phone: boolean; presenting: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean }) {
   // qa-simple-prd-3: the plan's own span only; with no dated milestone the header says so.
   const span = plan.span ? { start: plan.span.start, end: plan.span.end } : null;
   const caps = plan.milestones.map((m) => m.effort_weeks).filter((x): x is number => x != null);
@@ -512,7 +514,7 @@ function PrdHeader({ v, plan, phone, presenting, draft, actions }: { v: View; pl
     <div className="flex flex-col gap-2.5">
       {!phone && (
         <div className="flex items-center gap-2.5">
-          {!presenting && <BackLink />}
+          {!presenting && !inMeeting && <BackLink />}
           <span className="flex-1" />
           {actions}
         </div>

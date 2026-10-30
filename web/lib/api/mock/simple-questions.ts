@@ -147,7 +147,7 @@ function out(ctx: QuestionsCtx, q: Q): Question {
     decided_by: q.decided_by ? ref(ctx, q.decided_by) : null,
     // qa-simple-decide-7: decided_at is a real moment (unlike a due day), so its day reads
     // the company's zone (America/Los_Angeles), not UTC, as the API's company_time.day does.
-    decided_label: decided(q) && q.decided_at ? `Decided ${q.in_prd ? "in the PRD on " : ""}${companyDateInWords(q.decided_at)} by ${nameOf(ctx, q.decided_by)}` : null,
+    decided_label: decided(q) && q.decided_at ? `Decided ${q.in_prd ? "in the PRD " : ""}on ${companyDateInWords(q.decided_at)} by ${nameOf(ctx, q.decided_by)}` : null,
     waiting_for_me: !decided(q) && !!q.decider && q.decider === ctx.me.id && RANK[ctx.me.role] >= RANK.approver,
     pending: q.pending ? { change_id: q.pending.change_id, by: ref(ctx, q.pending.by), answer: q.pending.answer } : null,
     can: canOf(ctx, q),

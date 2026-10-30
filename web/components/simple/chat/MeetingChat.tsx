@@ -10,7 +10,8 @@ import { ChatThreadView, usePendingPoll } from "./ChatThread";
 
 const POLL_MS = 2000;
 // qa-simple-decide-7: the same words as the start sheet and the meeting's header.
-const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter plus one or two people" };
+// qa-simple-decide-25: viewers only ask, whatever the mode.
+const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone except viewers", presenter: "Only the presenter", named: "Presenter plus one or two people" };
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 
 function rulesLine(r: ChatRules): string {
@@ -89,10 +90,11 @@ export function MeetingChat({
       )}
       {rules && (
         <div className="flex flex-col gap-2 border-b border-line pb-3">
-          <p className="simple-small" data-testid="chat-rules">
+          {/* qa-simple-decide-10: the presenter's control states the setting; everyone else reads the line. */}
+          {!(rulesControl && rules.is_presenter && !rules.ended) && <p className="simple-small" data-testid="chat-rules">
             Who changes things: <strong>{rulesLine(rules)}</strong>
             {rules.ended && " · The meeting has ended"}
-          </p>
+          </p>}
           {rulesControl && rules.is_presenter && !rules.ended && <ModeControl meetingId={meetingId} rules={rules} onSaved={(r) => setThread((t) => (t ? { ...t, rules: r } : t))} />}
         </div>
       )}
@@ -101,8 +103,8 @@ export function MeetingChat({
           testId="meeting-chat-thread"
           thread={thread}
           // qa-simple-decide-3: this chat makes changes and notes; questions go to Ask Oracle.
-          placeholder={rules?.ask_only ? "Type “note: …” or “open question: …”" : "Ask for a change, or type “note: …”"}
-          hint={rules?.ask_only ? "Viewers don't change the plan. For a question, use Ask Oracle." : "For a question about the plan, use Ask Oracle."}
+          placeholder={rules?.ask_only ? "Ask a question about what is on screen" : "Ask for a change, or type “note: …”"}
+          hint={rules?.ask_only ? "Viewers ask questions here; the presenter makes changes and notes." : "For a question about the plan, use Ask Oracle."}
           scroll={scroll ? "max-h-[50vh]" : undefined}
           send={async (text) => setThread(await meetingSay(meetingId, text))}
           onCardChanged={() => {

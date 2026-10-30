@@ -346,11 +346,12 @@ export function ChatLine({
       data-author={m.author_kind}
       className={`flex flex-col gap-2 ${mine ? "items-end" : "items-start"}`}
     >
+      {/* qa-simple-decide-23: your own lines in body text on the tint, never the link colour. */}
       <div
         className={
           ask
-            ? `max-w-[94%] rounded-[14px] px-3 py-2 text-[15px] leading-[22px] ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
-            : `max-w-[95%] rounded-xl px-3 py-2 ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
+            ? `max-w-[94%] rounded-[14px] px-3 py-2 text-[15px] leading-[22px] ${mine ? "bg-accent-soft text-text" : "bg-surface2 text-text"}`
+            : `max-w-[95%] rounded-xl px-3 py-2 ${mine ? "bg-accent-soft text-text" : "bg-surface2 text-text"}`
         }
       >
         {ask ? <Who name={you ? "You" : m.author_name} at={m.at} zone={zone} mine={mine} /> : <p className="simple-small font-semibold">{m.author_name}</p>}
