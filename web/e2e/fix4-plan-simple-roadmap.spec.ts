@@ -83,12 +83,17 @@ test.describe("desktop", () => {
     await expect(btn).not.toHaveAttribute("aria-busy", "true");
     await expect(btn).toBeDisabled();
     await expect(page.getByTestId("start-review-reason")).toHaveText("Only an owner or the PRD's decider can start a review");
-    const [off, on] = await Promise.all([
-      btn.evaluate((e) => Number(getComputedStyle(e).opacity)),
-      page.getByTestId("key-dates-open").evaluate((e) => Number(getComputedStyle(e).opacity)),
-    ]);
-    expect(off).toBeLessThan(0.7);
-    expect(on).toBe(1);
+    // Off reads as off by the Button's own disabled look (muted fill, grey text), not by being
+    // dimmed: its words keep their contrast (only a ghost dims).
+    const look = (e: Element) => {
+      const cs = getComputedStyle(e);
+      return { opacity: Number(cs.opacity), bg: cs.backgroundColor, color: cs.color };
+    };
+    const [off, on] = await Promise.all([btn.evaluate(look), page.getByTestId("key-dates-open").evaluate(look)]);
+    expect(off.opacity).toBe(1);
+    expect(on.opacity).toBe(1);
+    expect(off.bg).not.toBe(on.bg);
+    expect(off.color).not.toBe(on.color);
   });
 
   test("qa-plan-56: an owner's Start review is on", async ({ page }) => {

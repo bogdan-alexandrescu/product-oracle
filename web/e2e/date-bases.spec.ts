@@ -112,7 +112,9 @@ test("an unverified marker opens the popover; Add a date source is pre-filled an
   await expect(mark).toHaveText("unverified");
   await mark.click();
   const popover = page.getByTestId("date-mark-popover");
-  await expect(popover).toContainText("No verified basis supports this date.");
+  // qa-plan-21: the popover says what the button beside it says: a date source, not a "basis".
+  await expect(popover).toContainText("No date source backs this date yet.");
+  await expect(popover).not.toContainText("basis");
   await popover.getByRole("button", { name: "Add a date source" }).click();
   const dialog = page.getByTestId("date-basis-dialog");
   await expect(dialog.getByLabel("Date it supports")).toHaveValue("2026-12-15");

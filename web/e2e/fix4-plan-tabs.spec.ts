@@ -59,9 +59,10 @@ test.describe("phone", () => {
   test("qa-plan-18: the Plan tabs are one row that scrolls, Reports never alone on a second row", async ({ page }) => {
     await start(page);
     await page.goto("/plan");
-    const plan = (await strip(page).getByTestId("plan-tab-plan").boundingBox())!;
     const reports = strip(page).getByTestId("plan-tab-reports");
     await reports.scrollIntoViewIfNeeded();
+    // Both measured after the scroll, so a page that scrolled to bring Reports in moves both alike.
+    const plan = (await strip(page).getByTestId("plan-tab-plan").boundingBox())!;
     const r = (await reports.boundingBox())!;
     expect(Math.abs(r.y - plan.y)).toBeLessThanOrEqual(1);
     await reports.click();
