@@ -422,19 +422,26 @@ async def seed_many(ctx: Ctx, n: int = 500, per: int = 50) -> None:
 
 
 @pytest.mark.timing
-async def test_500_items_answer_under_500_ms_with_the_default_view(client):
+async def test_500_items_answer_under_300_ms_and_grouped_by_goal_under_500_ms(client):
+    # dod-perf review: the default view keeps its guard (best of 3 under 300 ms); the goal lanes
+    # (group=goal) are timed beside it, under 500 ms.
     ctx = await make_ctx()
     await seed_many(ctx)
     headers = ctx.as_("owner")
-    times = []
-    for _ in range(4):
-        t0 = time.perf_counter()
-        r = await client.get(URL, params={"group": "goal"}, headers=headers)
-        times.append(time.perf_counter() - t0)
-        assert r.status_code == 200 and len(r.json()["items"]) == 500
-    assert sum(1 for i in r.json()["items"] if i["suggestion"]) > 100
-    print(f"500 items (group=goal): {', '.join(f'{t * 1000:.0f}' for t in times)} ms")
-    assert min(times[1:]) < 0.5, times
+    best = {}
+    for params in ({}, {"group": "goal"}):
+        times = []
+        for _ in range(4):
+            t0 = time.perf_counter()
+            r = await client.get(URL, params=params, headers=headers)
+            times.append(time.perf_counter() - t0)
+            assert r.status_code == 200 and len(r.json()["items"]) == 500
+        assert sum(1 for i in r.json()["items"] if i["suggestion"]) > 100
+        ms = ", ".join(f"{t * 1000:.0f}" for t in times)
+        print(f"500 items ({params or 'default view'}): {ms} ms")
+        best[params.get("group", "default")] = min(times[1:])
+    assert best["default"] < 0.3, best
+    assert best["goal"] < 0.5, best
 
 
 async def statements_of(client, headers, **params) -> int:
