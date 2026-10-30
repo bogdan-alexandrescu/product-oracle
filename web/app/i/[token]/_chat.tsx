@@ -239,23 +239,31 @@ export function InterviewChat({ token }: { token: string }) {
       <div className="flex flex-col gap-3 py-4">
         {disclosure}
         <ol aria-label="Conversation" className="flex flex-col gap-3">
-          {messages.map((m, i) => (
-            <li
-              key={`${m.at}-${i}`}
-              data-testid={m.role === "oracle" ? "msg-oracle" : "msg-customer"}
-              className={`flex max-w-[85%] min-w-0 flex-col gap-0.5 ${m.role === "customer" ? "self-end items-end" : "self-start"}`}
-            >
-              <span className="text-[13px] font-semibold text-text2">{m.role === "oracle" ? "Assistant" : "You"}</span>
-              <p
-                data-testid="msg-body"
-                className={`rounded-panel px-3.5 py-2.5 text-[16px] leading-6 break-words whitespace-pre-wrap ${
-                  m.role === "customer" ? "bg-accent text-on-accent" : "border border-line bg-surface text-text"
-                }`}
+          {messages.map((m, i) => {
+            // qa-docs-87: a run of messages from one side is one group, named once.
+            const run = i > 0 && messages[i - 1].role === m.role;
+            return (
+              <li
+                key={`${m.at}-${i}`}
+                data-testid={m.role === "oracle" ? "msg-oracle" : "msg-customer"}
+                className={`flex max-w-[85%] min-w-0 flex-col gap-0.5 ${m.role === "customer" ? "self-end items-end" : "self-start"} ${run ? "-mt-2" : ""}`}
               >
-                {m.body}
-              </p>
-            </li>
-          ))}
+                {!run && (
+                  <span data-testid="msg-sender" className="text-[13px] font-semibold text-text2">
+                    {m.role === "oracle" ? "Assistant" : "You"}
+                  </span>
+                )}
+                <p
+                  data-testid="msg-body"
+                  className={`rounded-panel px-3.5 py-2.5 text-[16px] leading-6 break-words whitespace-pre-wrap ${
+                    m.role === "customer" ? "bg-accent text-on-accent" : "border border-line bg-surface text-text"
+                  }`}
+                >
+                  {m.body}
+                </p>
+              </li>
+            );
+          })}
         </ol>
         {waiting && (
           <p role="status" data-testid="interview-typing" className="self-start text-sm text-text2">

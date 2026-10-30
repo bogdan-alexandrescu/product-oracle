@@ -326,9 +326,11 @@ function BlockInspector({
   );
 }
 
-function ReadyInspector({ n }: { n: number }) {
+function ReadyInspector({ n, published }: { n: number; published: boolean }) {
+  // qa-docs-62: once published, the panel says what publishing did, in the past.
+  const label = published ? "When it was published" : "On publish";
   return (
-    <Inspector testId="publish-inspector" label="On publish" eyebrow="On publish">
+    <Inspector testId="publish-inspector" label={label} eyebrow={label}>
       <InspectorSection>
         <OnPublish n={n} />
       </InspectorSection>
@@ -395,7 +397,8 @@ function HardRow({ item }: { item: Item }) {
       data-key={item.key}
       data-status={item.status}
       title={item.rationale}
-      className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_170px_96px] items-center gap-x-2 border-t border-line px-4 max-[600px]:grid-cols-[22px_minmax(0,1fr)_auto_auto] max-[600px]:px-3"
+      // qa-docs-61: the status pill at the row's right end, as on the advisory rows.
+      className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-line px-4 max-[600px]:px-3"
     >
       {item.status === "not_applicable" ? (
         <span aria-hidden="true" data-testid="hard-na" className="text-center text-text2">
@@ -405,11 +408,11 @@ function HardRow({ item }: { item: Item }) {
         <Icon name={fail ? "x" : "check"} size={16} className={fail ? "text-crit" : item.status === "pass" ? "text-pass" : "text-text2"} />
       )}
       <span className="min-w-0 py-2 font-medium break-words">{item.title}</span>
-      <span>
-        <Chip kind={chip.kind}>{chip.label}</Chip>
-      </span>
-      <span className="tnum text-right" data-testid="hard-count">
+      <span className="tnum text-right text-text2" data-testid="hard-count">
         {count}
+      </span>
+      <span className="justify-self-end" data-testid="hard-status">
+        <Chip kind={chip.kind}>{chip.label}</Chip>
       </span>
     </li>
   );
@@ -433,6 +436,38 @@ function AdvisoryRow({ item, index }: { item: Item; index: number }) {
       </Chip>
     </li>
   );
+}
+
+/**
+ * qa-docs-4: the section review, apart from the checks: how many of the version's sections
+ * are reviewed. The headline and the confirm dialog say the same count (`unreviewedText`).
+ */
+function ReviewRow({ reviewed, total, href }: { reviewed: number; total: number; href: string }) {
+  const all = reviewed === total;
+  return (
+    <div
+      data-testid="review-row"
+      className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-x-2 border-t border-line px-4 max-[600px]:px-3"
+    >
+      <Icon name={all ? "check" : "alert"} size={16} className={all ? "text-pass" : "text-warn"} />
+      <span className="min-w-0 py-2 break-words">
+        <span className="font-medium">Sections reviewed</span>{" "}
+        <Link href={href} className="text-sm font-medium whitespace-nowrap text-accent-ink hover:underline">
+          Review sections
+        </Link>
+      </span>
+      <span className="justify-self-end" data-testid="review-count">
+        <Chip kind={all ? "pass" : "warn"}>
+          {reviewed} of {total}
+        </Chip>
+      </span>
+    </div>
+  );
+}
+
+/** "20 of 20 sections are not reviewed": the one count the headline, the checklist and the dialog use. */
+export function unreviewedText(unreviewed: number, total: number): string {
+  return `${unreviewed} of ${plural(total, "section")} ${unreviewed === 1 ? "is" : "are"} not reviewed`;
 }
 
 /** Publish (B1): blocks, hard checks and advisory on the left, the selected block right. */
@@ -549,8 +584,10 @@ export function PublishView({ doc }: { doc: string }) {
       }
       await unwrap(Promise.resolve(res));
       closeConfirm();
-      setNotice(`Published v${n}.`);
+      // qa-docs-62: the header's "Published v2" chip confirms it; no notice repeats it.
+      setNotice(null);
       void docQ.reload();
+      void versionQ.reload();
     } catch (e) {
       if (!onAuth(e)) setRefusal({ detail: errorMessage(e), blocking: [] });
     } finally {
@@ -574,13 +611,18 @@ export function PublishView({ doc }: { doc: string }) {
   // qa-docs-3: publishable, but say what is still open (the confirm dialog says the same).
   const critical = tally("critical");
   const caveats = [
-    unreviewed > 0 ? `${plural(unreviewed, "section")} ${unreviewed === 1 ? "is" : "are"} not reviewed` : null,
+    // qa-docs-4: the same count as the dialog and the Section review row.
+    unreviewed > 0 ? unreviewedText(unreviewed, sections.length) : null,
     critical > 0 ? `${plural(critical, "advisory check")} ${critical === 1 ? "is" : "are"} critical` : null,
   ].filter((x): x is string => !!x);
   // qa-docs-23: who may publish, from can(): a vision, strategy or update is an owner's.
   const whoPublishes = d && OWNER_APPROVES[d.kind] ? "Only an owner can publish" : "Only an approver or owner can publish";
+  // qa-docs-62: the header's chip says "Published v2"; the headline says when, not that again.
+  const approvedAt = versionQ.data?.approved_at;
   const headline = published
-    ? `Published v${n}`
+    ? approvedAt
+      ? `Published on ${formatDate(approvedAt)}`
+      : "Published"
     : !canPublish
       ? `${whoPublishes} v${n}`
       : caveats.length > 0
@@ -625,7 +667,7 @@ export function PublishView({ doc }: { doc: string }) {
     n == null || !readiness ? undefined : selected ? (
       <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} onChanged={changed} />
     ) : (
-      <ReadyInspector n={n} />
+      <ReadyInspector n={n} published={published} />
     );
 
   return (
@@ -678,6 +720,15 @@ export function PublishView({ doc }: { doc: string }) {
                 />
                 <span className="min-w-0">{headline}</span>
               </p>
+            )}
+
+            {sections.length > 0 && (
+              <section aria-label="Section review">
+                <SubHead title="Section review" count={`${sections.length - unreviewed}/${sections.length}`}>
+                  <span className="text-sm text-text2">Sections, not checks: publishing does not wait for them</span>
+                </SubHead>
+                <ReviewRow reviewed={sections.length - unreviewed} total={sections.length} href={`/documents/${doc}/v/${n}`} />
+              </section>
             )}
 
             <section aria-label="Hard checks">
@@ -735,7 +786,7 @@ export function PublishView({ doc }: { doc: string }) {
             <div className="px-5 py-3.5 max-[600px]:px-4">
               {unreviewed > 0 && (
                 <p data-testid="unreviewed-sections" className="mb-2 font-semibold text-warn">
-                  {unreviewed} of {sections.length} sections {unreviewed === 1 ? "is" : "are"} not reviewed
+                  {unreviewedText(unreviewed, sections.length)}
                 </p>
               )}
               <OnPublish n={n} />

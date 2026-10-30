@@ -152,7 +152,8 @@ function VersionInspector({
       }
       action={
         // qa-docs-46: the header's Open latest opens the latest; an earlier version opens here.
-        v.number !== latest && (
+        // qa-docs-68: a roadmap's header has no Open latest (its page shows the latest), so here.
+        (v.number !== latest || kind === "roadmap") && (
           <LinkButton variant="hero" href={versionHref(doc, kind, v.number)}>
             {`Open v${v.number}`}
           </LinkButton>
@@ -402,9 +403,11 @@ export function DocumentOverview({ doc }: { doc: string }) {
                   {d.template && (
                     <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>
                       Template: {names.template(d.template)}
+                      {/* qa-docs-68: a roadmap's header is busier (sharing below it): its theme shares the template's pill. */}
+                      {d.kind === "roadmap" && d.theme && ` · Theme: ${names.theme(d.theme)}`}
                     </span>
                   )}
-                  {d.theme && (
+                  {d.theme && !(d.kind === "roadmap" && d.template) && (
                     <span className={META} data-testid="doc-theme" title="Theme">
                       Theme: {names.theme(d.theme)}
                     </span>
@@ -423,7 +426,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
                   {d.kind === "pricing" && <PricingDecide slug={d.slug} />}
                   {statesQ.data && <ReviewSettingsButton doc={doc} sections={states} onSaved={statesQ.reload} />}
                   {templateOnly && <DraftWithOracleButton slug={d.slug} />}
-                  {d.latest_version != null && (
+                  {/* qa-docs-68: a roadmap's page already shows its latest version (the audience view). */}
+                  {d.latest_version != null && d.kind !== "roadmap" && (
                     <LinkButton variant={templateOnly ? "secondary" : "primary"} href={versionHref(doc, d.kind, d.latest_version)}>
                       Open latest (v{d.latest_version})
                     </LinkButton>

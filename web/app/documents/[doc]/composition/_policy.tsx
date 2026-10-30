@@ -19,7 +19,7 @@ type Lane = "required" | "optional" | "disabled" | "pack";
 const MAX_PACKS = 10;
 
 const LANES: { lane: Lane; title: string; hint: string }[] = [
-  { lane: "required", title: "Required", hint: "Mandatory in every PRD; overrides packs and templates." },
+  { lane: "required", title: "Required", hint: "Required in every PRD; overrides packs and templates." },
   { lane: "optional", title: "Optional", hint: "Never mandatory, even if a pack requires it." },
   { lane: "disabled", title: "Disabled", hint: "Cannot be added to any PRD." },
   { lane: "pack", title: "Follows pack", hint: "No company policy: pack or template decides." },
@@ -65,7 +65,12 @@ export function PolicyTab({ phone, onSaved, prdModules, prdTitle }: { phone: boo
   const policy: Settings = edit ?? saved;
   const catalog = catalogQ.data;
   const packs = packsQ.data;
-  const dirty = edit !== null && JSON.stringify(edit) !== JSON.stringify({ required: saved.required, optional: saved.optional, disabled: saved.disabled, default_packs: saved.default_packs });
+  // qa-docs-45: changed only when a list differs from the saved one (moving a module back, or
+  // turning a pack off again, leaves nothing to save).
+  const same = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join("\n") === [...b].sort().join("\n");
+  const dirty =
+    edit !== null &&
+    !(same(edit.required, saved.required) && same(edit.optional, saved.optional) && same(edit.disabled, saved.disabled) && same(edit.default_packs, saved.default_packs));
   const selected = catalog.find((e) => e.key === picked) ?? null;
   const inPrd = (key: string) => prdModules.find((m) => m.key === key);
 
@@ -211,7 +216,7 @@ export function PolicyTab({ phone, onSaved, prdModules, prdTitle }: { phone: boo
       >
         <p className="text-sm text-text2">
           {saved.is_default ? "No company policy yet. Packs and templates decide every module." : saved.updated_at ? `Updated ${formatDate(saved.updated_at)}.` : null}{" "}
-          Saving changes no composition in force; each PRD applies it when someone confirms a new revision.
+          Saving the policy does not change any PRD&apos;s modules right away. Each PRD follows it from its next confirmed revision.
         </p>
         {result && (
           <Notice tone="pass" testId="policy-result">
@@ -230,7 +235,8 @@ export function PolicyTab({ phone, onSaved, prdModules, prdTitle }: { phone: boo
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <h3 className="font-display text-lg font-bold">Default packs</h3>
             <span className="tnum text-sm text-text2">
-              {policy.default_packs.length} of {MAX_PACKS} · used when a request chooses none
+              {/* qa-docs-45: counted against the packs shown, not the limit. */}
+              {policy.default_packs.length} of {packs.length} chosen · used when a request chooses none
             </span>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -35,7 +35,7 @@ test("qa-docs-35: the design page names sections, documents and requirements in 
   await expect(panel.getByTestId("annotation").first()).toContainText("Show shipping cost on the cart");
   await expect(panel.getByTestId("version-meta")).toContainText("From PRD");
   await expect(panel.getByTestId("version-meta")).toContainText("Checkout redesign PRD v1");
-  await expect(panel.getByTestId("version-meta")).toContainText("Oracle, in a run");
+  await expect(panel.getByTestId("version-meta")).toContainText("Oracle · See how it was made");
 
   // No ids, keys, slugs, hashes or media types on screen.
   for (const raw of ["s-5-2", "checkout-redesign", "req-shipping-cost", "cost-early", "c3000000", "sha256", "image/svg+xml", "prd_to_spec", "claude-code", "→"]) {
@@ -48,10 +48,9 @@ test("qa-docs-35: the design page names sections, documents and requirements in 
   await file.getByText("Details").click();
   await expect(file).toContainText("checkout-flow.svg");
   await expect(file).toContainText("Drawing (SVG)");
-  const tech = panel.getByTestId("version-details");
-  await tech.getByText("Technical details").click();
-  await expect(tech).toContainText("prd_to_spec/1");
-  await expect(tech).toContainText("claude-code");
+  // qa-docs-79: no sizes, fingerprints, prompts or runners, even behind a click.
+  await expect(file).not.toContainText("Fingerprint");
+  await expect(panel.getByTestId("version-meta")).not.toContainText("prd_to_spec/1");
 });
 
 test("qa-docs-67: one tech brief link, one stale message, Approve says why it is off, no dashes", async ({ page }) => {

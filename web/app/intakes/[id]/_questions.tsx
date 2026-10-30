@@ -232,6 +232,18 @@ function QuestionBubble({
             {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
             {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
+          {/* qa-docs-86: Answer sits in the question's card, not below it. */}
+          {open && !waiting && (
+            <div data-testid="question-actions" className="mt-2.5 flex flex-wrap items-center gap-2">
+              {!mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
+              {mayAnswer && mode !== "answer" && (
+                <Button variant={mine ? "solid" : "secondary"} onClick={() => setMode("answer")}>
+                  Answer
+                </Button>
+              )}
+              {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
+            </div>
+          )}
         </article>
       </div>
       {transcript.map((m) =>
@@ -273,17 +285,6 @@ function QuestionBubble({
           />
         )}
         {open && waiting && onTurn && !thinking && <FollowUpReply onTurn={turn} />}
-        {open && !waiting && (
-          <div className="flex flex-wrap items-center gap-2">
-            {!mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
-            {mayAnswer && mode !== "answer" && (
-              <Button variant={mine ? "solid" : "secondary"} onClick={() => setMode("answer")}>
-                Answer
-              </Button>
-            )}
-            {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
-          </div>
-        )}
         {open && !waiting && mode === "answer" && (
           <div className="rounded-panel border border-line bg-surface p-3">
             <AnswerQuestion

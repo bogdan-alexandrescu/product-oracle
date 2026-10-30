@@ -7,7 +7,7 @@ import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { citationHref, formatDate, formatDay } from "@/lib/format";
-import { plainText } from "@/lib/markdown";
+import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
@@ -168,6 +168,7 @@ import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience
 import {
   draftPublicTexts,
   emptyShares,
+  readerSections,
   routePublicShares,
   routeShares,
   seedShares,
@@ -1964,10 +1965,11 @@ function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesCon
       db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
       return queueJob(llmContext(db, me?.id ?? db.user_id, me?.role ?? "owner"), doc.id, "public_text", v.number);
     },
-    renderAudience: (doc, v, audience) => {
+    renderAudience: (doc, v, audience, linkHolder = false) => {
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
-      return exportHtml(row, { ...version, sections: audienceSections(version.sections, audience, boardItems(db, version)) }, db.branding, audienceLabel(audience));
+      const sections = audienceSections(version.sections, audience, boardItems(db, version));
+      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },
   };
 }
@@ -3604,32 +3606,61 @@ function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
   return `${doc.title} · Version ${v.number}${badge} · ${status.charAt(0).toUpperCase()}${status.slice(1)} · ${when}`;
 }
 
-/** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
-/** A GFM table block's rows of cells (outer pipes dropped, `\\|` kept as a pipe), or null for any other block. */
-function tableRows(block: string): string[][] | null {
-  const lines = block.split("\n");
-  if (lines.length < 2 || !lines.every((l) => l.trim().startsWith("|")) || !/^\|[-:| ]+\|\s*$/.test(lines[1].trim())) return null;
-  const cells = (l: string) =>
-    l
-      .trim()
-      .replace(/^\||(?<!\\)\|$/g, "")
-      .split(/(?<!\\)\|/)
-      .map((c) => c.trim().replace(/\\\|/g, "|"));
-  return [cells(lines[0]), ...lines.slice(2).map(cells)];
+/** A body's inline markdown as HTML text: its words only (no citation marker, image or link target). */
+function inlineHtml(nodes: Inline[]): string {
+  return nodes
+    .map((n) =>
+      n.t === "text" || n.t === "code"
+        ? escapeHtml(n.v)
+        : n.t === "cite" || n.t === "img"
+          ? ""
+          : n.t === "strong"
+            ? `<strong>${inlineHtml(n.c)}</strong>`
+            : n.t === "em"
+              ? `<em>${inlineHtml(n.c)}</em>`
+              : inlineHtml(n.c),
+    )
+    .join("");
 }
 
-function bodyHtml(text: string, tables: boolean): string {
-  return text
-    .split(/\n\n+/)
-    .map((p) => {
-      const rows = tables ? tableRows(p) : null;
-      if (!rows) return `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`;
-      const [head, ...body] = rows;
-      const tr = (r: string[], tag: string) => `<tr>${head.map((_, n) => `<${tag}>${escapeHtml(r[n] ?? "")}</${tag}>`).join("")}</tr>`;
-      return `<table><thead>${tr(head, "th")}</thead><tbody>${body.map((r) => tr(r, "td")).join("")}</tbody></table>`;
+/** A section's markdown as the API's export renders it (qa-docs-15): paragraphs, lists and real tables, never pipe text. */
+function bodyHtml(md: string): string {
+  return parseBlocks(md.replace(/[ \t]*\[c:[\w.:-]+\]/g, ""))
+    .map((b) => {
+      switch (b.t) {
+        case "p":
+          return `<p>${inlineHtml(b.c).replace(/\n/g, "<br>")}</p>`;
+        case "h":
+          return `<h4>${inlineHtml(b.c)}</h4>`;
+        case "quote":
+          return `<blockquote>${inlineHtml(b.c)}</blockquote>`;
+        case "ul":
+        case "ol":
+          return `<${b.t}>${b.items.map((it) => `<li>${inlineHtml(it)}</li>`).join("")}</${b.t}>`;
+        case "pre":
+          return `<pre>${escapeHtml(b.v)}</pre>`;
+        case "table": {
+          const tr = (r: Inline[][], tag: string) => `<tr>${b.head.map((_, n) => `<${tag}>${inlineHtml(r[n] ?? [])}</${tag}>`).join("")}</tr>`;
+          return `<table><thead>${tr(b.head, "th")}</thead><tbody>${b.rows.map((r) => tr(r, "td")).join("")}</tbody></table>`;
+        }
+      }
     })
     .join("");
 }
+
+/**
+ * The export's own type and tables (as the API's prd.css / themed.css, qa-docs-15): the app's sans stack,
+ * bordered tables, a quiet banner. Every HTML export starts with the company's brand header (O5 lane 4).
+ */
+const EXPORT_CSS = `<style>
+body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #0f172a; line-height: 1.5; margin: 1.5rem; }
+h1, h2, h3, h4 { line-height: 1.25; margin: 1.25rem 0 0.5rem; }
+.banner, .doc-header { color: #475569; font-size: 0.875rem; margin: 0 0 1rem; }
+.banner-audience { display: inline-block; color: #475569; font-size: 0.875rem; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; }
+th, td { border: 1px solid #d0d5dd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+th { background: #f8fafc; font-weight: 600; }
+</style>`;
 
 // As the API's themed export with the roadmap-board theme (a roadmap's default): the sections under a
 // horizon laid out as a three-column board of cards; a goal group (section-wide: Board's table, Team's
@@ -3642,13 +3673,17 @@ table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #d0d5dd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
 </style>`;
 
-function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null): string {
+/**
+ * `linkHolder`: a share link holder's page (as the API's oracle.shares.render, link_holder): the header names the
+ * company, the title and the day it is as of; no version, status, audience or citations.
+ */
+function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null, linkHolder = false): string {
   // A roadmap rendered for an audience: the theme's card board, and its markdown tables as tables.
   const board = doc.kind === "roadmap" && !!audience;
   const section = (s: VersionRow["sections"][number]) => {
     const tag = `h${Math.min(s.level, 3)}`;
     const attrs = board ? ` class="prd-section level-${s.level}${spansRow(s.section_key) ? " section-wide" : ""}" data-section-key="${s.section_key}"` : "";
-    return `<section id="${s.section_key}"${attrs}><${tag}>${escapeHtml(s.heading)}</${tag}>${bodyHtml(s.body_text, board)}</section>`;
+    return `<section id="${s.section_key}"${attrs}><${tag}>${escapeHtml(s.heading)}</${tag}>${bodyHtml(s.body_md ?? s.body_text)}</section>`;
   };
   const groups: { head: VersionRow["sections"][number]; children: VersionRow["sections"] }[] = [];
   for (const s of v.sections) {
@@ -3674,7 +3709,10 @@ function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBr
           : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}${board ? BOARD_THEME_CSS : ""}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v, audience))} · mock export</p>${audience ? `<span class="banner-audience">Audience ${escapeHtml(audience)}</span>` : ""}${sections}<ol class="citations">${notes}</ol></body></html>`;
+  const head = linkHolder
+    ? `<p class="doc-header"><span class="banner-doc">${escapeHtml(doc.title)}</span> · <span class="banner-asof">As of ${escapeHtml(formatDate(v.approved_at ?? v.created_at))}</span></p>`
+    : `<p class="banner">${escapeHtml(banner(doc, v, audience))}</p>${audience ? `<span class="banner-audience">Audience ${escapeHtml(audience)}</span>` : ""}`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(doc.title)}${linkHolder ? "" : ` v${v.number}`}</title>${EXPORT_CSS}${brandStyleHtml(brand)}${board ? BOARD_THEME_CSS : ""}</head><body>${brandHeaderHtml(brand)}${head}${sections}${linkHolder ? "" : `<ol class="citations">${notes}</ol>`}</body></html>`;
 }
 
 /** A tiny single-page PDF (Helvetica, ASCII only) so the download flow can be exercised. */
@@ -4498,6 +4536,7 @@ function interviewsContext(db: Db, userId: string, role: Role): InterviewsContex
     role,
     company: MOCK_COMPANY,
     memberEmail: (id) => db.members.find((m) => m.id === id)?.email ?? null,
+    memberName: (id) => specActorName(db, id),
     intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
     themeTitle: (id) => ensureRequests(db).themes.find((t) => t.id === id && !t.archived_at)?.title ?? null,
     fileRequest: (input) => addInterviewRequest(ensureRequests(db), input),

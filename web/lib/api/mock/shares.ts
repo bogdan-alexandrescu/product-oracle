@@ -13,6 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { formatInZone } from "@/lib/dates";
 import { displayName as personName } from "@/lib/names";
 
+import { NO_GOAL_FLAG } from "./audience";
 import type { SectionSeed } from "./fixtures";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -55,7 +56,7 @@ export const SHARING_SECTIONS: SectionSeed[] = [
   { key: "item-ledger", level: 3, heading: "Billing ledger v2", body: "Owner: Admin. Serves G1. Depends on Falcon alerts rework." },
   { key: "item-partner", level: 3, heading: "Partner API beta", body: "Owner: Approver. Serves G2." },
   { key: "later", level: 2, heading: "Later", body: "Ideas we keep." },
-  { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Admin. This item serves no confirmed goal." },
+  { key: "item-ops", level: 3, heading: "Ops console cleanup", body: "Owner: Admin. Kept for the support team." },
   {
     key: "dependencies",
     level: 2,
@@ -138,7 +139,8 @@ export interface SharesContext {
   uuid: () => string;
   now: () => string;
   /** The export's HTML of `v` rendered for `audience` (./audience.ts), as the export route. */
-  renderAudience: (doc: DocLike, v: VersionLike, audience: Audience) => string;
+  /** `linkHolder`: the link holder's page (as the API's render_share): see `readerSections`, and no version, status, audience or citations. */
+  renderAudience: (doc: DocLike, v: VersionLike, audience: Audience, linkHolder?: boolean) => string;
   /** The Company time zone (Settings › Company), as the API's company_time. */
   zone?: () => string;
   /** Whether Oracle only observes "Words for people outside" (H11 external_messages). */
@@ -320,7 +322,8 @@ function renderPublic(r: Review, footer: string): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(r.title)}</title><style>body{font-family:system-ui,sans-serif;margin:0;color:#0f172a}header,main,footer{max-width:72rem;margin:0 auto;padding:1rem 1.5rem}.columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:1rem}.card{border:1px solid #e2e8f0;border-radius:.5rem;padding:.75rem;margin-bottom:.75rem}.card h3{margin:0 0 .25rem;font-size:.95rem}.disclaimer,footer{font-size:.8rem;color:#475569}</style></head><body><header><p class="company">${esc(r.company)}</p><h1>${esc(r.title)}</h1><span class="badge">Public</span>${r.intro ? `<p class="intro">${esc(r.intro)}</p>` : ""}</header><main><div class="columns">${columns}</div><p class="disclaimer">${esc(DISCLAIMER)}</p></main><footer><p>${esc(footer)}</p><p>${ORACLE_MARK}</p></footer></body></html>`;
 }
 
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+/** qa-docs-14: a day as the link holder's header reads it ("Nov 12, 2026"), in the Company time zone (as the API's render.day_with_year). */
+const day = (iso: string, zone: string) => formatInZone(iso, zone, { month: "short", day: "numeric", year: "numeric" });
 
 const HORIZON_STAGE: Record<string, Stage> = { now: "in_progress", next: "planned", later: "exploring" };
 
@@ -730,7 +733,75 @@ function publicChecked(ctx: SharesContext, doc: DocLike, pub: PubLike): boolean 
 // --------------------------------------------------------------------------- a link holder's routes
 
 const page = (title: string, body: string) =>
-  `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title></head><body>${body}</body></html>`;
+  `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>:root{color-scheme:light dark}body{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;color:#1f2937}@media (prefers-color-scheme:dark){body{background:#0f172a;color:#e2e8f0}}</style></head><body>${body}</body></html>`;
+
+/** The left-out line an audience rendering opens with: for the company, not a link holder (as the API's render._LEFT_OUT). */
+const LEFT_OUT = /^\d+ items? serves? no confirmed goal and (?:is|are) left out\.$/;
+const GROUP_KEY = /^(now|next|later)-group-\d+$/;
+const splitRow = (line: string) =>
+  line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/(?<!\\)\|$/, "")
+    .split(/(?<!\\)\|/)
+    .map((c) => c.trim());
+const joinRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
+
+/**
+ * A section's text as a link holder reads it (qa-docs-12, qa-docs-13; as the API's render.reader_body): no
+ * left-out line nor an item's no-goal flag, and in each table no column every row leaves empty and, under a goal group's heading, no Goal
+ * column (it repeats the heading). The first column always stays.
+ */
+export function readerBody(md: string, sectionKey: string): string {
+  const group = GROUP_KEY.test(sectionKey);
+  const lines = (md ?? "").split("\n").filter((l) => !LEFT_OUT.test(l.trim()) && l.trim() !== NO_GOAL_FLAG);
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    const head = lines[i].trim().startsWith("|") ? splitRow(lines[i]) : null;
+    const delim = lines[i + 1]?.trim() ?? "";
+    if (!head || !/^\|?[\s:|-]+\|?$/.test(delim) || !delim.includes("-") || splitRow(delim).length !== head.length) {
+      out.push(lines[i]);
+      i += 1;
+      continue;
+    }
+    let end = i + 2;
+    while (end < lines.length && lines[end].trim().startsWith("|")) end += 1;
+    const rows = lines.slice(i + 2, end).map((l) => [...splitRow(l), ...head.map(() => "")]);
+    const keep = head
+      .map((name, n) => ({ name: name.replace(/^[*\s]+|[*\s]+$/g, "").toLowerCase(), n }))
+      .filter(({ name, n }) => n === 0 || (!(group && (name === "goal" || name === "goals")) && rows.some((r) => r[n].trim())))
+      .map(({ n }) => n);
+    out.push(joinRow(keep.map((n) => head[n])), "|" + "---|".repeat(keep.length), ...rows.map((r) => joinRow(keep.map((n) => r[n]))));
+    i = end;
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
+}
+
+/** An audience rendering's sections as a link holder reads them (`readerBody`). */
+export function readerSections<S extends { section_key: string; body_md: string; body_text: string }>(sections: S[]): S[] {
+  return sections.map((s) => {
+    const body = readerBody(s.body_md, s.section_key);
+    return body === s.body_md ? s : { ...s, body_md: body, body_text: body };
+  });
+}
+
+/**
+ * qa-docs-11, qa-docs-13, qa-docs-70 (as the API's render.READER_CSS): the link holder's page reads like the app
+ * (its sans type, its dark theme when the reader prefers dark) and its tables fit a phone; last in the page's head.
+ */
+const READER_CSS =
+  ":root{color-scheme:light dark}" +
+  'body,body :not(code):not(pre):not(kbd){font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif!important}' +
+  "body{line-height:1.5}" +
+  "table{border-collapse:collapse;width:100%}" +
+  "th,td{word-break:normal;overflow-wrap:normal;hyphens:manual}" +
+  "th:first-child,td:first-child{min-width:8rem}" +
+  "@media (max-width:640px){body{margin:0;padding:0}table{display:block;overflow-x:auto;max-width:100%}}" +
+  "@media (prefers-color-scheme:dark){html,body{background:#0f172a!important;color:#e2e8f0!important}" +
+  "body *{color:inherit!important;background-color:transparent!important;border-color:#334155!important}" +
+  "body a{color:#93c5fd!important}body th{background-color:#1e293b!important}}";
+
+const forReader = (html: string) => (html.includes("</head>") ? html.replace("</head>", `<style>${READER_CSS}</style></head>`) : `<style>${READER_CSS}</style>${html}`);
 
 /** /v1/public/shares/{token}[/pdf|/status]: no member credential, only the token and the "cookie". */
 export async function routePublicShares(ctx: SharesContext, req: Request, p: string[]): Promise<Response | null> {
@@ -780,7 +851,7 @@ export async function routePublicShares(ctx: SharesContext, req: Request, p: str
       shared_by: ctx.company.trim() || null,
       shared_by_name: creator ? personName(creator.email, creator.name) : null,
       expires_at: link!.expires_at,
-      expires_on: formatInZone(link!.expires_at, zone, { month: "short", day: "numeric", year: "numeric" }),
+      expires_on: day(link!.expires_at, zone),
     });
   }
   if (!open) return p[4] === "pdf" ? json(404, { reason: "not_found" }) : html(401, page("Enter the passcode", "<h1>Enter the passcode</h1>"));
@@ -808,13 +879,16 @@ function showPage(ctx: SharesContext, link: LinkRow, kind: "page"): Response {
   const pub = ctx.publications.find((x) => x.id === link.publication_id);
   const v = pub && ctx.versions.find((x) => x.id === pub.version_id);
   if (!doc || !v) return html(410, page("Link ended", `<p>${esc(ENDED)}</p>`));
-  const footer = `Shared with you by ${ctx.company} on ${day(link.created_at)} · link expires ${day(link.expires_at)}`;
+  // qa-docs-14: the same day as the header's (the status's expires_on), in its words; "by" only with a company name.
+  const zone = ctx.zone?.() ?? "America/Los_Angeles";
+  const by = ctx.company.trim() ? ` by ${ctx.company.trim()}` : "";
+  const footer = `Shared with you${by} on ${day(link.created_at, zone)} · link expires ${day(link.expires_at, zone)}`;
   let content: string;
   if (link.audience === "public") {
     if (!publicChecked(ctx, doc, pub!)) content = page(UPDATING, `<p>${UPDATING}.</p>`);
-    else content = renderPublic(review(ctx, doc, v), `Shared ${day(link.created_at)} · expires ${day(link.expires_at)}`);
+    else content = forReader(renderPublic(review(ctx, doc, v), `Shared ${day(link.created_at, zone)} · expires ${day(link.expires_at, zone)}`));
   } else {
-    content = ctx.renderAudience(doc, v, link.audience).replace("</body>", `<footer class="share-footer">${esc(footer)}</footer></body>`);
+    content = forReader(ctx.renderAudience(doc, v, link.audience, true).replace("</body>", `<footer class="share-footer">${esc(footer)}</footer></body>`));
   }
   record(ctx, link, kind);
   return html(200, content, { "x-robots-tag": "noindex, nofollow", "referrer-policy": "no-referrer" });

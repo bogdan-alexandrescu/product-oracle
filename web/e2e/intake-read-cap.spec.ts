@@ -11,7 +11,7 @@ import { login } from "./helpers";
  *
  * Test card:
  * - "read again until the cap": protects=three reads the author starts in a Company day,
- *   counted beside Read the brief again ("1 of 3 left today"), then the button disabled with the
+ *   counted beside Read the brief again ("1 of 3 analyses left today"), then the button disabled with the
  *   owner's sentence; fails_when=a fourth read can be started, the count is missing, or
  *   the button gives no reason; no_claim=the API's own count (api/tests/test_intake_read_cap.py).
  */
@@ -35,12 +35,12 @@ test("read again until the cap: the fourth read waits for tomorrow, and says so"
   // The read on create finished; it is not one of today's three.
   await expect(readLine(page)).toContainText("Oracle assumed");
   await expect(readAgain(page)).toBeEnabled();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("3 of 3 left today");
+  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("3 of 3 analyses left today");
 
   await readAgain(page).click();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 of 3 left today");
+  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 of 3 analyses left today");
   await readAgain(page).click();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("1 of 3 left today");
+  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("1 of 3 analyses left today");
   await expect(readAgain(page)).toBeEnabled();
   await expect(readLine(page)).not.toContainText(CAPPED);
 

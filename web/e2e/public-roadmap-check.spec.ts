@@ -21,12 +21,12 @@ async function sharing(page: Page, email?: string) {
 test("check the Public version, then share it with a passcode", async ({ page }) => {
   await sharing(page);
   await page.goto(DOC);
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
   await sheet.getByLabel("Audience").selectOption("public");
   await expect(sheet.getByTestId("public-check-state")).toHaveText("Not checked yet");
   await expect(sheet.getByRole("button", { name: "Create link" })).toBeDisabled();
-  await sheet.getByRole("link", { name: "Check public version" }).click();
+  await sheet.getByRole("link", { name: "Check public text" }).click();
 
   await expect(page).toHaveURL(/\/documents\/example-labs-roadmap\/public$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Public version");
@@ -36,8 +36,8 @@ test("check the Public version, then share it with a passcode", async ({ page })
   await expect(summary).toContainText("1 excluded");
   await expect(summary).toContainText("1 not tied to a confirmed company goal");
   const removed = page.getByRole("region", { name: "What is removed" });
-  await expect(removed).toContainText("owners");
-  await expect(removed).toContainText("tracker links");
+  await expect(removed).toContainText("Owners");
+  await expect(removed).toContainText("Links to the issue tracker");
 
   const preview = page.frameLocator('iframe[title="Public page preview"]');
   await expect(preview.getByRole("heading", { name: "Example Co roadmap" })).toBeVisible();
@@ -71,7 +71,7 @@ test("check the Public version, then share it with a passcode", async ({ page })
 
   // Back on the document: the Public link needs the owner and the check, both there now.
   await page.getByRole("link", { name: "Back to the roadmap" }).click();
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share a link", exact: true }).click();
   await sheet.getByLabel("Audience").selectOption("public");
   await expect(sheet.getByTestId("public-check-state")).toHaveText(/Checked/);
   await sheet.getByLabel("Label").fill("Customers, autumn");

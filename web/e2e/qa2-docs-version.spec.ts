@@ -52,7 +52,7 @@ for (const scheme of ["light", "dark"] as const) {
       await login(page);
       await page.goto(ITEMS);
       await expect(visible(page, "approve-blocked")).toContainText("1 date is not backed by a confirmed schedule");
-      await expect(visible(page, "approve-blocked")).toContainText("Record a basis or import a draft without it.");
+      await expect(visible(page, "approve-blocked")).toContainText("Confirm a schedule for it, or take it out in a new draft.");
       await expect(page.getByTestId("approve-blocked-note")).toHaveCount(0);
     });
 

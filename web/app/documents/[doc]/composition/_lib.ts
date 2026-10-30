@@ -11,9 +11,10 @@ export const NO_CHANGES: Changes = { add: [], remove: [], order: null };
 
 export type Filter = "all" | "mandatory" | "suggested" | "optional" | "excluded" | "problems";
 
+// qa-docs-44: the Catalog's words ("Required"), not "Mandatory".
 export const FILTER_LABEL: Record<Filter, string> = {
   all: "All",
-  mandatory: "Mandatory",
+  mandatory: "Required",
   suggested: "Suggested",
   optional: "Optional",
   excluded: "Excluded",
@@ -21,10 +22,17 @@ export const FILTER_LABEL: Record<Filter, string> = {
 };
 
 export const SELECTION_LABEL: Record<Module["selection"], string> = {
-  mandatory: "Mandatory",
+  mandatory: "Required",
   suggested: "Suggested",
   optional: "Optional",
 };
+
+/** A module's selection as the Catalog says it: a conditional module not suggested is
+ * "When it applies" (qa-docs-44), as its pack policy reads on the Catalog tab. */
+export function selectionInWords(m: Pick<Module, "selection" | "policy">): string {
+  if (m.selection === "optional" && m.policy === "conditional") return "When it applies";
+  return SELECTION_LABEL[m.selection];
+}
 
 const SELECTION_ORDER: Module["selection"][] = ["mandatory", "suggested", "optional"];
 
@@ -56,6 +64,9 @@ const POLICY_BY: Record<Module["policy_source"], string> = {
 
 /** Why a module is where it is, in one plain phrase ("Required by your company pack"). */
 export function decidedByInWords(m: Module): string {
+  // qa-docs-41: a condition decides both ways; a module it left out is not "needed".
+  if (!m.included && m.decided_by === "condition") return "This document doesn't need it";
+  if (!m.included && m.decided_by === "user") return "A person left it out";
   if (m.decided_by !== "policy") return DECIDED_BY[m.decided_by];
   const how = m.selection === "mandatory" ? "Required" : m.selection === "suggested" ? "Suggested" : "Left optional";
   return `${how} by ${POLICY_BY[m.policy_source]}`;
@@ -283,6 +294,8 @@ function joined(parts: string[]): string {
  * evaluator's terms ("Suggested: scope.capabilities contains 'tool_use' (actual: …)"); it is
  * said from the module's basis instead ("Applies when the scope's capabilities include Tool use."). */
 export function reasonInWords(m: Pick<Module, "reason" | "basis">): string {
+  // qa-docs-44: "Required", as the Catalog says it, not the API's "Mandatory".
+  if (m.reason.startsWith("Mandatory ")) return `Required ${m.reason.slice("Mandatory ".length)}`;
   if (!m.basis.length) return m.reason;
   if (m.reason.startsWith("Suggested: ")) {
     const held = m.basis.filter((b) => b.holds);

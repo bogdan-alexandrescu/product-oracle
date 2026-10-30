@@ -33,7 +33,7 @@ test("an approver adds a module and confirms rev 2 with the diff, the Brief/Full
   // reason or base revision.
   await openComposition(page, "approver");
   await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 1 in force");
-  await expect(modules(page).getByText("Mandatory", { exact: true }).first()).toBeVisible();
+  await expect(modules(page).getByText("Required", { exact: true }).first()).toBeVisible();
   await expect(row(page, "decision.executive")).toContainText("Executive decision");
 
   await row(page, "platform.tenant-isolation").click();
@@ -117,7 +117,7 @@ test("a mandatory module offers no Remove, and says why", async ({ page }) => {
   await openComposition(page, "approver");
   await row(page, "risks.register").click();
   await expect(inspector(page).getByRole("button", { name: "Remove from draft" })).toHaveCount(0);
-  await expect(inspector(page).getByTestId("module-mandatory")).toContainText("Mandatory: it stays in the PRD.");
+  await expect(inspector(page).getByTestId("module-mandatory")).toContainText("Required: it stays in the PRD.");
 });
 
 test("an approver moves a module up and confirms a reorder that is not material", async ({ page }) => {
@@ -173,7 +173,7 @@ for (const who of ["viewer", "commenter"] as const) {
     // protects=read + preview only: no Confirm, Publish or draft actions, the read-only notice;
     // fails_when=a ${who} is offered a write the API refuses.
     await openComposition(page, who);
-    await expect(page.getByTestId("read-only")).toContainText("Read only. Preview writes nothing; confirming and publishing need an approver.");
+    await expect(page.getByTestId("read-only")).toContainText("You can look at this composition and preview a recommendation. Only an approver can change or publish it.");
     await expect(page.getByRole("button", { name: /^Confirm rev/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Publish rev/ })).toHaveCount(0);
     await row(page, "economics.value").click();

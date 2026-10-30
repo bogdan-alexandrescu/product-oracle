@@ -271,28 +271,18 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   useEffect(() => {
     const el = phoneBar;
     if (!el) return;
-    const root = document.documentElement;
-    const before = root.style.scrollPaddingBottom;
-    // What this bar set, so a hidden view (Next keeps visited routes mounted) only undoes its own.
-    let mine: string | null = null;
-    const release = () => {
-      if (mine !== null && root.style.scrollPaddingBottom === mine) root.style.scrollPaddingBottom = before;
-      mine = null;
-    };
-    const fit = () => {
-      const r = el.getBoundingClientRect();
-      if (r.height === 0) return release();
-      mine = `${Math.ceil(window.innerHeight - r.top)}px`;
-      root.style.scrollPaddingBottom = mine;
-    };
-    fit();
-    const watch = new ResizeObserver(fit);
+    // qa-docs-9: every mounted view's bar is counted, so the hidden one Next keeps of the
+    // version left (v2 -> v1) never clears the padding the shown one set.
+    PHONE_BARS.add(el);
+    fitPhoneBars();
+    const watch = new ResizeObserver(fitPhoneBars);
     watch.observe(el);
-    window.addEventListener("resize", fit);
+    window.addEventListener("resize", fitPhoneBars);
     return () => {
       watch.disconnect();
-      window.removeEventListener("resize", fit);
-      release();
+      window.removeEventListener("resize", fitPhoneBars);
+      PHONE_BARS.delete(el);
+      fitPhoneBars();
     };
   }, [phoneBar]);
   const panelRef = useRef<HTMLElement>(null);
@@ -741,15 +731,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           onChanged: () => void verQ.reload(),
         }
       : null;
+  const datedWords = (m: DateMarkOut) => `${formatDate(m.date)}${m.status === "withdrawn" ? " (its schedule was withdrawn)" : ""}`;
   const approveBlocked =
     flaggedDates.length > 0 && isUpdate
       ? // H8: an update's Approve names what is left to resolve.
         `Resolve ${flaggedDates.length} unverified date${flaggedDates.length === 1 ? "" : "s"}`
       : flaggedDates.length > 0
-      ? // qa-docs-34: plain words and a readable date.
+      ? // qa-docs-34, qa-docs-66: plain words, a readable date, and the fix (a link after it).
         `${flaggedDates.length} date${flaggedDates.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${flaggedDates
-          .map((m) => `${formatDate(m.date)} (${m.label})`)
-          .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
+          .map(datedWords)
+          .join(", ")}. Confirm a schedule for ${flaggedDates.length === 1 ? "it" : "them"}, or take ${flaggedDates.length === 1 ? "it" : "them"} out in a new draft.`
       : undefined;
   // Review of qa-docs-3: a reviewer who cannot approve reads why, not the approver's next step.
   const approveBlockedNote =
@@ -757,7 +748,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " is" : "s are"} not verified yet, so this update cannot be approved.`
       : flaggedDates.length > 0
       ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${flaggedDates
-          .map((m) => `${formatDate(m.date)} (${m.label})`)
+          .map(datedWords)
           .join(", ")}. The version cannot be approved until ${flaggedDates.length === 1 ? "it is" : "they are"} resolved.`
       : undefined;
   // H4: a vision or a product strategy is an owner's to approve; approvers still set
@@ -1018,12 +1009,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       version={version}
       doc={doc}
       n={n}
-      // qa-docs-13: the head counts every section; with a brief it says so, as the outline
-      // (which counts the sections shown) says "brief sections".
+      // qa-docs-13, qa-docs-5: the head counts the sections shown, as the outline does; with a
+      // brief it says which ("brief sections" in Brief, "all sections" in Full).
       stats={{
-        reviewed: reviewedCount,
-        total: sections.length,
-        reviewedLabel: hasBrief ? "Reviewed, all sections" : undefined,
+        reviewed: reviewedShown,
+        total: shownSections.length,
+        reviewedLabel: hasBrief ? (view === "brief" ? "Reviewed, brief sections" : "Reviewed, all sections") : undefined,
         locked: lockedCount,
         lockedLabel: version?.approved_at ? "Locked" : "Approved",
         openFeedback,
@@ -1224,6 +1215,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                     approvedAt={version.approved_at}
                     isLatest={n === latest}
                     blockedReason={approveBlocked}
+                    blockedFix={approveBlocked && !isUpdate ? { href: "/plan/dates", label: "Open Plan › Dates" } : undefined}
                     unreviewed={{ count: sections.length - reviewedCount, total: sections.length }}
                     onApproved={() => {
                       verQ.reload();
@@ -1336,6 +1328,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             {latest != null && n !== latest && (
               <p role="status" className="flex flex-wrap items-center gap-x-2 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
                 You are viewing an earlier version.
+                {/* qa-docs-78: an Approve offered here says what it approves. */}
+                {canApprove && !version.approved_at && document_?.kind !== "prd" && (
+                  <span data-testid="earlier-approve-note">
+                    Approving here approves v{n}, not v{latest}.
+                  </span>
+                )}
                 <Link href={paneHref(latest)} className="font-semibold underline underline-offset-2">
                   Go to v{latest} (latest)
                 </Link>
@@ -1404,7 +1402,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           />
         )}
         {pane === "items" && isRoadmap && (
-          <RoadmapItemsPane doc={doc} n={n} sections={sections} canDecide={canDecide} />
+          <RoadmapItemsPane doc={doc} n={n} sections={sections} canDecide={canDecide} dateMarks={version?.date_marks} />
         )}
         {pane === "roadmap" && document_?.kind === "prd" && (
           <DraftRoadmapPane
@@ -1573,6 +1571,26 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     </div>
     </DateMarkContext.Provider>
   );
+}
+
+/** The phone's Sections / Review bars of the mounted version views (qa-docs-8, qa-docs-9). */
+const PHONE_BARS = new Set<HTMLElement>();
+/** The page's own bottom scroll padding, from before a bar set it. */
+let basePadding: string | null = null;
+/** The page's bottom scroll padding: the room from the shown bar's top to the screen's bottom. */
+function fitPhoneBars() {
+  const root = document.documentElement;
+  const rooms = [...PHONE_BARS]
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.height > 0)
+    .map((r) => Math.ceil(window.innerHeight - r.top));
+  if (rooms.length > 0) {
+    basePadding ??= root.style.scrollPaddingBottom;
+    root.style.scrollPaddingBottom = `${Math.max(...rooms)}px`;
+  } else if (basePadding !== null) {
+    root.style.scrollPaddingBottom = basePadding;
+    basePadding = null;
+  }
 }
 
 const NO_HIGHLIGHTS: Highlight[] = [];

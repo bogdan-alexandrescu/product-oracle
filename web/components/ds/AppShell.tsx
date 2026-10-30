@@ -638,8 +638,8 @@ function withTab(h1: Element | undefined, words: string, pathname: string): stri
  */
 const noSubscribe = () => () => undefined;
 
-function usePageTitle(pathname: string): { title: string; plain: string } {
-  const [read, setRead] = useState<{ title: string; plain: string } | null>(null);
+function usePageTitle(pathname: string): { title: string; plain: string; drawn?: boolean } {
+  const [read, setRead] = useState<{ title: string; plain: string; drawn?: boolean } | null>(null);
   useEffect(() => {
     const main = document.querySelector("main");
     if (!main) return;
@@ -651,7 +651,9 @@ function usePageTitle(pathname: string): { title: string; plain: string } {
       // qa-shell-3: a section's tab (Plan, Company, Settings) is headed by the section's name;
       // the browser tab names the open tab too ("Dates · Plan"), so no two pages share one.
       const plain = withTab(h1, h1Text(h1, true), pathname);
-      setRead((r) => (r?.title === title && r.plain === plain ? r : title ? { title, plain: plain || title } : null));
+      // qa-docs-78: a page that draws its H1 on a phone too (PageHeader phoneTitle).
+      const drawn = !!h1?.hasAttribute("data-phone-title");
+      setRead((r) => (r?.title === title && r.plain === plain && r.drawn === drawn ? r : title ? { title, plain: plain || title, drawn } : null));
     };
     update();
     const watch = new MutationObserver(update);
@@ -703,9 +705,15 @@ function DocumentTitle() {
 function PhoneHeader() {
   const pathname = usePathname();
   const { me } = useMe();
-  const { title } = usePageTitle(pathname);
+  const { title, drawn } = usePageTitle(pathname);
   // The section from the path waits for hydration too (qa-shell-24, see usePageTitle).
   const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  // qa-docs-78: a page whose own H1 shows on a phone (a long document title, wrapped) is not
+  // named a second time, cut, right above it: the bar names where it is, as the rail does.
+  const documentHome = useDocumentHome(pathname);
+  const changeHome = useChangeHome(pathname);
+  const home = documentHome ?? changeHome;
+  const where = drawn ? ([...DESTINATIONS, SETTINGS].find((d) => isActive(pathname, d, home))?.label ?? null) : null;
   const info = usePageInfo();
   const [ask, setAsk] = useState(false);
   // A goal's "Suggest from the chat" opens the Ask sheet with its words typed in.
@@ -747,7 +755,7 @@ function PhoneHeader() {
       </Link>
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <p data-testid="phone-title" className="min-w-0 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
-          {(hydrated && sectionOf(pathname)) || title}
+          {(hydrated && sectionOf(pathname)) || where || title}
         </p>
         {info && (
           <span

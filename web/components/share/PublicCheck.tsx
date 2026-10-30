@@ -35,19 +35,21 @@ const STAGES: [Stage, string][] = [
   ["shipped", "Shipped"],
 ];
 
-/** The removed categories of the "What is removed" panel, in their fixed order. */
+/** The removed categories of the "What is removed" panel, in their fixed order, in plain words (qa-docs-67). */
 const REMOVED: [string, string][] = [
-  ["internal_titles", "internal titles"],
-  ["owners", "owners"],
-  ["goals", "goals"],
-  ["dates_not_announced", "dates not announced"],
-  ["tracker_links", "tracker links"],
-  ["dependencies", "dependencies"],
-  ["economics", "economics"],
-  ["prose_sections", "prose sections"],
+  ["internal_titles", "Internal working titles"],
+  ["owners", "Owners"],
+  ["goals", "Company goals"],
+  ["dates_not_announced", "Dates not said in public"],
+  ["tracker_links", "Links to the issue tracker"],
+  ["dependencies", "What items wait on"],
+  ["economics", "Cost and pricing figures"],
+  ["prose_sections", "Long write-ups"],
 ];
 
 type Filter = "approve" | "findings" | "all";
+/** Kinds whose list is not PRDs (DocToolbar's homes); their rail item is left to their own pages. */
+const OTHER_HOMES = ["vision", "strategy", "update", "pricing"];
 type Pane = "review" | "preview";
 
 /** A row's refusal: blocking findings, unticked warnings, or a plain message. */
@@ -445,7 +447,11 @@ function Summary({ data }: { data: Texts }) {
   );
 }
 
-function CheckState({ doc, data, onChecked }: { doc: string; data: Texts; onChecked: () => void }) {
+/**
+ * qa-docs-17: the check's state, then the one next step in order (approve or exclude every
+ * item's text, publish the version, mark it as checked) with the one control that does it.
+ */
+function CheckState({ doc, data, onChecked, onShow }: { doc: string; data: Texts; onChecked: () => void; onShow: (f: Filter) => void }) {
   const check = data.check.check;
   const pubs = useQuery(`publications|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/publications", { params: { path: { doc } } })));
   const people = useQuery(`people|${check?.checked_by ?? "none"}`, () => peopleByIds([check?.checked_by]));
@@ -453,6 +459,9 @@ function CheckState({ doc, data, onChecked }: { doc: string; data: Texts; onChec
   const [busy, setBusy] = useState(false);
   const pub = (pubs.data ?? []).filter((p) => p.version_number === data.version).sort((a, b) => b.number - a.number)[0];
   const who = check ? (people.data?.get(check.checked_by)?.name ?? "a member") : "";
+  // What still keeps the check back: items' texts, else the page's own title or intro, else an empty page.
+  const left = data.not_ready.filter((x) => x.item_key).length;
+  const pageText = data.not_ready.some((x) => x.reason === "page_findings");
 
   const mark = async () => {
     if (!pub) return;
@@ -468,27 +477,59 @@ function CheckState({ doc, data, onChecked }: { doc: string; data: Texts; onChec
     }
   };
 
+  const next: { step: number; text: string; control: ReactNode } | null =
+    data.check.state === "checked"
+      ? null
+      : left > 0
+        ? {
+            step: 1,
+            text: `Approve or exclude the public text of ${plural(left, "item")} below.`,
+            control: <Button onClick={() => onShow("approve")}>Show {left === 1 ? "it" : "them"}</Button>,
+          }
+        : data.not_ready.length > 0
+          ? {
+              step: 1,
+              text: pageText
+                ? "Fix the page title or intro below: it names something a public reader may not see."
+                : "Approve at least one item's public text below.",
+              control: <Button onClick={() => onShow("all")}>Show {pageText ? "it" : "them"}</Button>,
+            }
+          : !pubs.data
+          ? null
+          : !pub
+            ? {
+                step: 2,
+                text: `Publish v${data.version}. The check is made on a published version.`,
+                control: <LinkButton href={`/documents/${doc}/publish`}>Publish v{data.version}</LinkButton>,
+              }
+            : {
+                step: 3,
+                text: "Read the public page, then mark it as checked.",
+                control: (
+                  <Button variant="solid" disabled={busy} onClick={() => void mark()}>
+                    Mark as checked
+                  </Button>
+                ),
+              };
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <p data-testid="public-check" className="text-sm font-medium">
-          {data.check.state === "none" || !check
-            ? // qa-docs-38: what the check is and what to do.
-              "Nobody has checked this public page yet. Read it, then mark it as checked: a public link needs the check."
-            : data.check.state === "checked"
-              ? `Checked by ${who} on ${formatDateTime(check.checked_at)}`
-              : `Changed since checked (checked by ${who} on ${formatDateTime(check.checked_at)})`}
-        </p>
-        <span className="flex-1" />
-        {pubs.data && !pub ? (
-          <LinkButton href={`/documents/${doc}/publish`}>Publish this version first</LinkButton>
-        ) : (
-          <Button variant="solid" disabled={busy || !pub || data.not_ready.length > 0} onClick={() => void mark()}>
-            Mark as checked
-          </Button>
-        )}
-      </div>
-      {data.not_ready.length > 0 && <p className="text-[13px] text-text2">Approve or exclude every item&apos;s public text first.</p>}
+      <p data-testid="public-check" className="text-sm font-medium">
+        {data.check.state === "none" || !check
+          ? // qa-docs-38: what the check is.
+            "Nobody has checked this public page yet. A public link needs the check."
+          : data.check.state === "checked"
+            ? `Checked by ${who} on ${formatDateTime(check.checked_at)}`
+            : `Changed since checked (checked by ${who} on ${formatDateTime(check.checked_at)})`}
+      </p>
+      {next && (
+        <div data-testid="public-next" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button border border-line bg-surface px-3 py-2">
+          <p className="min-w-0 flex-1 text-sm">
+            <span className="font-semibold">Next, step {next.step} of 3:</span> {next.text}
+          </p>
+          {next.control}
+        </div>
+      )}
       {pubs.error && <ErrorNote>{pubs.error}</ErrorNote>}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
@@ -660,9 +701,13 @@ function PageText({ doc, data, onSaved }: { doc: string; data: Texts; onSaved: (
  */
 export function PublicCheck({ doc }: { doc: string }) {
   const { can, capsReady } = useMe();
-  const allowed = capsReady && can("list_public_texts");
-  // qa-docs-63: a roadmap's page: the rail marks Plan, as on the roadmap's other pages.
-  useDocumentDestination(doc, "/plan");
+  // qa-docs-3: only a roadmap has a public version; the page knows the document's kind first.
+  const docQ = useQuery(`public-doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
+  const kind = docQ.data?.kind;
+  const roadmap = kind === "roadmap";
+  const allowed = capsReady && roadmap && can("list_public_texts");
+  // qa-docs-63: a roadmap's page: the rail marks Plan, as on the roadmap's other pages; a PRD's marks PRDs.
+  useDocumentDestination(doc, !docQ.data ? undefined : roadmap ? "/plan" : OTHER_HOMES.includes(kind ?? "") ? undefined : "/documents");
   const texts = useQuery(
     `public-texts|${doc}|${allowed}`,
     () => (allowed ? unwrap(api.GET("/v1/roadmaps/{doc}/public-texts", { params: { path: { doc } } })) : Promise.resolve(undefined)),
@@ -683,15 +728,42 @@ export function PublicCheck({ doc }: { doc: string }) {
       suffix={texts.data ? `v${texts.data.version}` : undefined}
       back={
         // qa-docs-63: the same back link as the roadmap's own pages.
-        <Link href={`/documents/${doc}`} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
-          <Icon name="back" size={16} />
-          Back to the roadmap
-        </Link>
+        roadmap ? (
+          <Link href={`/documents/${doc}`} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+            <Icon name="back" size={16} />
+            Back to the roadmap
+          </Link>
+        ) : undefined
       }
     />
   );
 
-  if (!capsReady) {
+  if (docQ.error) {
+    return (
+      <Page>
+        {header}
+        <ErrorNote>{docQ.error}</ErrorNote>
+      </Page>
+    );
+  }
+  if (docQ.data && !roadmap) {
+    const what = kind === "prd" || !kind ? "PRD" : "document";
+    return (
+      <Page>
+        {header}
+        <Panel testId="public-check-not-roadmap" bodyClassName="flex flex-col items-center gap-3 px-4 py-12 text-center">
+          <p className="font-display text-lg font-bold tracking-heading text-text">Only a roadmap has a public version</p>
+          <p className="max-w-prose text-[15px] text-text2">
+            A public version is the page anyone with a roadmap&apos;s public link reads. {docQ.data.title} is a {what}, so it has none.
+          </p>
+          <LinkButton href={`/documents/${doc}`} icon="back">
+            Back to the {what}
+          </LinkButton>
+        </Panel>
+      </Page>
+    );
+  }
+  if (!capsReady || !docQ.data) {
     return (
       <Page>
         {header}
@@ -746,13 +818,21 @@ export function PublicCheck({ doc }: { doc: string }) {
       {header}
       <div className="flex flex-col gap-4">
         <Summary data={data} />
-        <CheckState doc={doc} data={data} onChecked={changed} />
+        <CheckState
+          doc={doc}
+          data={data}
+          onChecked={changed}
+          onShow={(f) => {
+            setFilter(f);
+            setPane("review");
+          }}
+        />
         <DraftTexts doc={doc} version={data.version} onDrafted={changed} />
         <Radios<Pane>
           label="Pane"
           className="min-[640px]:hidden"
           items={[
-            { value: "review", label: "Review" },
+            { value: "review", label: "Edit texts" },
             { value: "preview", label: "Preview" },
           ]}
           value={pane}
@@ -762,7 +842,7 @@ export function PublicCheck({ doc }: { doc: string }) {
           <div className={`flex min-w-0 flex-col gap-4 ${pane === "review" ? "" : "max-[639px]:hidden"}`}>
             <PageText doc={doc} data={data} onSaved={changed} />
             <Panel
-              title="Review"
+              title="Each item's public text"
               count={data.rows.length}
               tools={
                 <Radios<Filter>
@@ -788,10 +868,11 @@ export function PublicCheck({ doc }: { doc: string }) {
               )}
             </Panel>
             <Panel title="What is removed" bodyClassName="px-4 py-3">
-              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <p className="mb-2 text-[13px] text-text2">Left out of the public page, wherever the roadmap names them:</p>
+              <ul data-testid="public-removed" className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm max-[639px]:grid-cols-1">
                 {REMOVED.map(([key, label]) => (
                   <li key={key}>
-                    <b className="tnum font-semibold">{removed[key] ?? 0}</b> {label}
+                    {label}: <b className="tnum font-semibold">{removed[key] ? removed[key] : "none"}</b>
                   </li>
                 ))}
               </ul>

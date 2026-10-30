@@ -38,6 +38,10 @@ const EXPIRIES: { key: Expiry; label: string }[] = [
 const STATE_LABEL: Record<Link_["state"], string> = { active: "Active", expired: "Expired", revoked: "Revoked" };
 const SHOWN_ONCE = "This passcode is shown once. Send it apart from the link.";
 const LABEL = "mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
+/** A field's hint, under it (qa-docs-69). */
+const HINT = "mt-1 text-sm text-text2";
+const SHARE_HINT = "Share a link sends a published version to people you choose, shown for one audience.";
+const CHECK_HINT = "Check public text is where you approve what the Public page shows before anyone gets a public link.";
 
 /** The app's modal frame: a scrim, a titled panel, focus kept inside, Escape closes. */
 function Modal({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer: ReactNode }) {
@@ -195,6 +199,7 @@ export function RoadmapSharing({ d }: { d: Doc }) {
   const [sharing, setSharing] = useState<Audience | null>(isAudience(shareParam) ? shareParam : null);
   const [linksKey, setLinksKey] = useState(0);
   const canShare = can("create_share_link", true);
+  const checkPublic = can("list_public_texts");
   const setAudience = (a: Audience) => {
     const next = new URLSearchParams(params.toString());
     next.set("audience", a);
@@ -207,17 +212,23 @@ export function RoadmapSharing({ d }: { d: Doc }) {
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-semibold text-text2">Audience</span>
         <AudienceSwitch value={audience} onChange={setAudience} showPublic={showPublic} />
+        {/* qa-docs-68: two plainly named actions, each with what it does under them. */}
         {canShare && (
-          <Button variant="primary" onClick={() => setSharing(audience)}>
-            Share
+          <Button variant="primary" title={SHARE_HINT} onClick={() => setSharing(audience)}>
+            Share a link
           </Button>
         )}
-        {can("list_public_texts") && (
-          <LinkButton variant="secondary" href={`/documents/${d.slug}/public`}>
-            Public version
+        {checkPublic && (
+          <LinkButton variant="secondary" title={CHECK_HINT} href={`/documents/${d.slug}/public`}>
+            Check public text
           </LinkButton>
         )}
       </div>
+      {(canShare || checkPublic) && (
+        <p data-testid="sharing-hint" className="-mt-2 text-[13px] text-text2">
+          {[canShare && SHARE_HINT, checkPublic && CHECK_HINT].filter(Boolean).join(" ")}
+        </p>
+      )}
       <AudienceView doc={d.slug} n={d.latest_version} audience={audience} />
       {can("list_share_links") && <ShareLinks doc={d.slug} reloadKey={linksKey} />}
       {sharing && (
@@ -265,9 +276,9 @@ function NotPublished({ doc, n, onClose, onPublished }: { doc: string; n: number
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const publishLink = (
-    <Link href={`/documents/${doc}/publish`} onClick={onClose} className="font-semibold text-accent-ink underline">
+    <LinkButton variant="primary" href={`/documents/${doc}/publish`} onClick={onClose}>
       Go to Publish
-    </Link>
+    </LinkButton>
   );
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!q.data) return <Loading />;
@@ -297,13 +308,16 @@ function NotPublished({ doc, n, onClose, onPublished }: { doc: string; n: number
             <li key={b.id}>{b.title}</li>
           ))}
         </ul>
-        <p>
-          Record a schedule basis for each on{" "}
-          <Link href="/plan/dates" onClick={onClose} className="font-semibold text-accent-ink underline">
-            Plan › Dates
-          </Link>{" "}
-          (or ask the engineering lead to), then publish. {publishLink}
-        </p>
+        <p>Record a schedule basis for each date on Plan › Dates, or ask the engineering lead to. Then publish v{n}.</p>
+        {/* qa-docs-16: the way to fix it, as buttons, not only words. */}
+        <div className="mt-2 flex flex-wrap gap-2">
+          <LinkButton variant="primary" href="/plan/dates" onClick={onClose}>
+            Go to Plan › Dates
+          </LinkButton>
+          <LinkButton href={`/documents/${doc}/v/${n}/items`} onClick={onClose}>
+            See v{n}&apos;s items
+          </LinkButton>
+        </div>
       </div>
     );
   }
@@ -338,7 +352,7 @@ function NotPublished({ doc, n, onClose, onPublished }: { doc: string; n: number
           ))}
         </ul>
       )}
-      <p>{publishLink}</p>
+      <div className="mt-2">{publishLink}</div>
     </div>
   );
 }
@@ -365,15 +379,20 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
   const blockedPublic = audience === "public" && (!ownerPublic || checkState !== "checked");
   const ids = { audience: useId(), label: useId(), expires: useId(), download: useId(), passcode: useId(), why: useId() };
   // qa-docs-20: a disabled Create link says why.
-  const why = !label.trim()
-    ? "Add a label first"
+  // qa-docs-69: the reason sits under the field it is about, as a sentence.
+  const why: { field: "audience" | "label" | "passcode"; text: string } | null = !label.trim()
+    ? { field: "label", text: "Add a label first." }
     : blockedPublic
-      ? !ownerPublic
-        ? "Only an owner can share the public version"
-        : "Check the public version first"
+      ? { field: "audience", text: !ownerPublic ? "Only an owner can share the public version." : "Check the public text first." }
       : passcode.length > 0 && passcode.length < 8
-        ? "The passcode needs at least 8 characters"
+        ? { field: "passcode", text: "The passcode needs at least 8 characters." }
         : null;
+  const whyNote = (field: "audience" | "label" | "passcode") =>
+    pub && why?.field === field ? (
+      <p id={ids.why} data-testid="create-why" className="mt-1 text-sm font-medium text-text">
+        {why.text}
+      </p>
+    ) : null;
 
   const create = async () => {
     if (!pub) return;
@@ -413,12 +432,8 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
       onClose={onClose}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          {pub && why && (
-            <span id={ids.why} data-testid="create-why" className="mr-auto self-center text-sm text-text2">
-              {why}
-            </span>
-          )}
+          {/* qa-docs-16: with nothing to create, the sheet only closes. */}
+          <Button onClick={onClose}>{pub ? "Cancel" : "Close"}</Button>
           {pub && (
             <Button variant="primary" disabled={busy || !!why} aria-describedby={why ? ids.why : undefined} onClick={create}>
               Create link
@@ -456,12 +471,13 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
               {checkState !== "checked" && (
                 <div className="mt-1">
                   <Link href={`/documents/${doc}/public`} onClick={onClose} className="font-semibold text-accent-ink underline">
-                    Check public version
+                    Check public text
                   </Link>
                 </div>
               )}
             </div>
           )}
+          {whyNote("audience")}
           <div>
             <label htmlFor={ids.label} className={LABEL}>
               Label <span className="font-normal">(required)</span>
@@ -476,9 +492,10 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
               value={label}
               onChange={(e) => setLabel(e.target.value)}
             />
-            <p id={`${ids.label}-hint`} className="text-sm text-text2">
+            <p id={`${ids.label}-hint`} className={HINT}>
               Who the link is for, for example Board, October meeting. Only you and your team see it.
             </p>
+            {whyNote("label")}
           </div>
           <div>
             <label htmlFor={ids.expires} className={LABEL}>
@@ -497,11 +514,11 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
               <input id={ids.download} type="checkbox" checked={download} onChange={(e) => setDownload(e.target.checked)} />
               Allow PDF download
             </label>
-            <p className="text-sm text-text2">A downloaded PDF can&apos;t be revoked</p>
+            <p className={HINT}>A downloaded PDF can&apos;t be revoked.</p>
           </div>
           <div>
             <label htmlFor={ids.passcode} className={LABEL}>
-              Passcode (optional)
+              Passcode <span className="font-normal">(optional)</span>
             </label>
             <input
               id={ids.passcode}
@@ -512,9 +529,10 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
               onChange={(e) => setPasscode(e.target.value)}
               aria-describedby={`${ids.passcode}-hint`}
             />
-            <p id={`${ids.passcode}-hint`} className="text-sm text-text2">
+            <p id={`${ids.passcode}-hint`} className={HINT}>
               Leave it empty and Oracle makes one. At least 8 characters. Whoever opens the link enters it first.
             </p>
+            {whyNote("passcode")}
           </div>
           {error && <ErrorNote>{error}</ErrorNote>}
         </>

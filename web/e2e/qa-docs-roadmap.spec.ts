@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -17,39 +17,19 @@ const row = (page: Page, key: string) =>
     .locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`)
     .filter({ visible: true });
 
-/** WCAG contrast of an element's text on its own background. */
-async function contrast(el: Locator): Promise<number> {
-  return el.evaluate((node) => {
-    const rgb = (c: string) =>
-      (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
-    const lum = ([r, g, b]: number[]) => {
-      const f = (v: number) => {
-        const s = v / 255;
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-      };
-      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-    };
-    const style = getComputedStyle(node);
-    const a = lum(rgb(style.color));
-    const b = lum(rgb(style.backgroundColor));
-    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-  });
-}
-
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   for (const scheme of ["light", "dark"] as const) {
-    test(`qa-docs-7: the selected 'Previous version' segment is readable (${scheme})`, async ({
+    // qa-docs-66 (pass 3): v1 has nothing to compare with: no selected, disabled segment.
+    test(`qa-docs-7: a first version says it has no earlier version, selecting nothing (${scheme})`, async ({
       page,
     }) => {
       await page.emulateMedia({ colorScheme: scheme });
       await login(page);
       await page.goto(ITEMS);
-      const seg = visible(page, "compare-previous");
-      await expect(seg).toHaveAttribute("aria-pressed", "true");
-      await expect(seg).toBeDisabled();
-      expect(await contrast(seg)).toBeGreaterThanOrEqual(4.5);
+      await expect(visible(page, "compare-none")).toHaveText("No earlier version");
+      await expect(page.getByTestId("compare-previous")).toHaveCount(0);
     });
   }
 

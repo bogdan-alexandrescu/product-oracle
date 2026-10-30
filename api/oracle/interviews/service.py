@@ -37,6 +37,7 @@ from oracle.interviews.schemas import (
     InterviewSummary,
 )
 from oracle.jobs.models import LlmJob
+from oracle.members.names import display_name
 from oracle.requests.models import ProductRequest, RequestTheme
 from oracle.v2.concurrency import expect_version, flush_or_conflict
 from oracle.v2.models import ProductIntake
@@ -175,8 +176,9 @@ def _state(job: LlmJob | None, zone: str) -> InterviewJobState | None:
 async def _names(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
     if not ids:
         return {}
-    rows = await db.execute(select(User.id, User.email).where(User.id.in_(ids)))
-    return {i: e for i, e in rows.all()}
+    # qa-docs-88: the creator's own name (A5), else the email's, never the email itself.
+    rows = await db.execute(select(User.id, User.email, User.name).where(User.id.in_(ids)))
+    return {i: display_name(e, n) for i, e, n in rows.all()}
 
 
 async def out(db: AsyncSession, principal: Principal, row: Interview) -> InterviewOut:

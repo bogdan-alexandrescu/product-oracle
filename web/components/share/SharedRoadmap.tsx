@@ -113,42 +113,47 @@ export function SharedRoadmap({ token }: { token: string }) {
   if (view.kind === "open") {
     const { title, expires_on } = view.about;
     const who = sharedBy(view.about);
-    // qa-docs-70: the shared page is the company's light document, so the bar is light too
-    // (fixed colours, whatever the app's theme), and the frame grows to its content: one scroll.
+    // qa-docs-11: the page follows the reader's light or dark preference, as the page in its
+    // frame does (the API's reader styles), and the frame grows to its content: one scroll.
+    // qa-docs-70: header and page sit in one inset column, so Download PDF never touches the edge.
     return (
-      <main className="flex min-h-dvh flex-col text-[#0f172a]" style={{ colorScheme: "light", backgroundColor: "#ffffff" }} data-testid="shared-page">
-        <header
-          data-testid="shared-header"
-          className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#e2e8f0] px-4 py-3"
-          style={{ backgroundColor: "#ffffff" }}
-        >
-          <div className="min-w-0 flex-1">
-            {title && <h1 className="font-display text-xl font-bold tracking-heading break-words">{title}</h1>}
-            {(who || expires_on) && (
-              <p className="text-sm text-[#475569]" data-testid="shared-about">
-                {[who ? `Shared by ${who}` : null, expires_on ? `Link ends ${expires_on}` : null].filter(Boolean).join(" · ")}
-              </p>
+      <main
+        className="flex min-h-dvh flex-col bg-[#ffffff] text-[#0f172a] dark:bg-[#0f172a] dark:text-[#e2e8f0]"
+        style={{ colorScheme: "light dark" }}
+        data-testid="shared-page"
+      >
+        <header data-testid="shared-header" className="border-b border-[#e2e8f0] bg-[#ffffff] px-6 py-3 dark:border-[#334155] dark:bg-[#0f172a]">
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="min-w-0 flex-1">
+              {title && <h1 className="font-display text-xl font-bold tracking-heading break-words">{title}</h1>}
+              {(who || expires_on) && (
+                <p className="text-sm text-[#475569] dark:text-[#94a3b8]" data-testid="shared-about">
+                  {[who ? `Shared by ${who}` : null, expires_on ? `Link ends ${expires_on}` : null].filter(Boolean).join(" · ")}
+                </p>
+              )}
+            </div>
+            {download && (
+              <span role="status" className="text-sm text-[#475569] dark:text-[#94a3b8]">
+                {download}
+              </span>
+            )}
+            {/* qa-docs-1, qa-docs-11: fixed colours per scheme, as the page in the frame. */}
+            {view.download && (
+              <button
+                type="button"
+                onClick={pdf}
+                className="inline-flex h-10 items-center rounded-button border border-[#cbd5e1] bg-[#ffffff] px-4 font-semibold text-[#0f172a] hover:bg-[#f1f5f9] dark:border-[#475569] dark:bg-[#1e293b] dark:text-[#e2e8f0] dark:hover:bg-[#334155]"
+              >
+                Download PDF
+              </button>
             )}
           </div>
-          {download && (
-            <span role="status" className="text-sm text-[#475569]">
-              {download}
-            </span>
-          )}
-          {/* qa-docs-1: fixed light colours (bg-white follows the app's dark theme). */}
-          {view.download && (
-            <button
-              type="button"
-              onClick={pdf}
-              className="inline-flex h-10 items-center rounded-button border border-[#cbd5e1] bg-[#ffffff] px-4 font-semibold text-[#0f172a] hover:bg-[#f1f5f9]"
-            >
-              Download PDF
-            </button>
-          )}
         </header>
         {/* qa-docs-26: the page keeps the header's side margins; its tables never touch the window's edge. */}
-        <div data-testid="shared-body" className="px-4">
-          <Frame title="Shared roadmap" html={view.html} />
+        <div data-testid="shared-body" className="px-6">
+          <div className="mx-auto w-full max-w-6xl">
+            <Frame title="Shared roadmap" html={view.html} />
+          </div>
         </div>
       </main>
     );
@@ -161,7 +166,8 @@ export function SharedRoadmap({ token }: { token: string }) {
       {view.kind === "locked" && (
         <form onSubmit={unlock} className="space-y-4">
           <h1 className="font-display text-2xl font-bold tracking-heading">Enter the passcode</h1>
-          <p className="text-text2">This page is private. Enter the passcode the person who sent you this link gave you.</p>
+          {/* qa-docs-71: who shared what stays unsaid until the passcode (spec-O5 Q5: nothing before it). */}
+          <p className="text-text2">Someone shared a private roadmap with you. It opens with the passcode they gave you.</p>
           {view.note && (
             <p role="alert" className="font-semibold">
               {view.note.split(". ")[0]}.
@@ -174,9 +180,17 @@ export function SharedRoadmap({ token }: { token: string }) {
             </label>
             <input id={id} type="password" autoComplete="off" required maxLength={128} autoFocus className={INPUT} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
           </div>
-          <Button variant="primary" type="submit" disabled={busy || !passcode}>
-            Open
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="primary" type="submit" disabled={busy || !passcode} aria-describedby={!passcode ? `${id}-why` : undefined}>
+              Open
+            </Button>
+            {/* qa-docs-71: a greyed Open says why. */}
+            {!passcode && (
+              <span id={`${id}-why`} data-testid="passcode-why" className="text-sm text-text2">
+                Enter the passcode first
+              </span>
+            )}
+          </div>
         </form>
       )}
     </main>
@@ -242,7 +256,7 @@ function Frame({ title, html }: { title: string; html: string }) {
       scrolling="no"
       data-testid="shared-frame"
       className="block w-full border-0"
-      style={{ backgroundColor: "#ffffff", ...(height != null ? { height } : { minHeight: "80dvh" }) }}
+      style={{ backgroundColor: "transparent", colorScheme: "light dark", ...(height != null ? { height } : { minHeight: "80dvh" }) }}
     />
   );
 }
