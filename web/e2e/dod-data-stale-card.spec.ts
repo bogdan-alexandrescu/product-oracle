@@ -55,3 +55,30 @@ for (const [label, size] of [
     await expect(line.getByTestId("chat-card-outcome").last()).toContainText("Applied by you");
   });
 }
+
+for (const [label, size] of [
+  ["desktop", { width: 1440, height: 900 }],
+  ["phone", { width: 390, height: 844 }],
+] as const) {
+  test(`a stale card that moves by a span is offered again from the item's new dates (${label})`, async ({ context, page }) => {
+    // protects: "out a quarter" after the first card moved the item to next quarter (Jan 1, 2027) is offered again a quarter on from there: its words say Apr 1, and its Apply lands it
+    // fails_when: the re-offered card still names the quarter from the item's old dates (the API's chat.rebase and the mock's rebaseShift)
+    // no_claim: a card naming a day (it keeps that day; api test: test_stale_relative_chat_card_moves_from_the_new_dates)
+    await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+    await page.setViewportSize(size);
+    const chat = await meeting(page);
+    await chat.getByRole("textbox", { name: "Message Oracle" }).fill("push Delivery pipeline v2 to next quarter and push it out a quarter");
+    await tap(chat.getByRole("button", { name: "Send" }));
+    const line = chat.getByTestId("chat-message").last();
+    await expect(line.getByTestId("chat-message-body")).toHaveText("I understood two changes:");
+    const second = line.getByTestId("chat-card").last();
+    await expect(second.getByTestId("chat-card-summary")).not.toContainText("Apr 1 –");
+    await tap(line.getByRole("button", { name: "Apply all" }));
+    await expect(line.getByRole("status").filter({ hasText: "Applied 1 of 2." })).toContainText("Changed since you saw it");
+    const open = line.locator('[data-testid="chat-card"][data-status="open"]');
+    await expect(open).toHaveCount(1);
+    await expect(open.getByTestId("chat-card-summary")).toContainText("Apr 1 –");
+    await tap(open.getByRole("button", { name: "Apply", exact: true }));
+    await expect(line.locator('[data-testid="chat-card"][data-status="applied"]')).toHaveCount(2);
+  });
+}
