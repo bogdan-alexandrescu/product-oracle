@@ -48,7 +48,7 @@ test("qa-onboarding-33: a Simple owner's setup steps go back to Simple's Home", 
 
   // Time zone: pick Tokyo, Save, Back to Home from the save.
   await simpleCard(page).getByRole("link", { name: "Set the company time zone", exact: true }).click();
-  await expect(page).toHaveURL(/\/settings\/company\?from=setup&home=simple#timezone$/);
+  await expect(page).toHaveURL(/\/settings\/company\?from=simple-setup#timezone$/);
   const zonePanel = page.getByTestId("timezone-panel");
   await pickZone(zonePanel, "Asia/Tokyo");
   await zonePanel.getByRole("button", { name: "Save" }).click();
@@ -59,7 +59,7 @@ test("qa-onboarding-33: a Simple owner's setup steps go back to Simple's Home", 
 
   // Horizons: Save the defaults; the Settings bar's Back to Home also opens Simple's Home.
   await simpleCard(page).getByRole("link", { name: "Check the planning horizons", exact: true }).click();
-  await expect(page).toHaveURL(/\/settings\/company\?from=setup&home=simple#horizons$/);
+  await expect(page).toHaveURL(/\/settings\/company\?from=simple-setup#horizons$/);
   const horizons = page.locator("#horizons");
   await horizons.getByRole("button", { name: "Save" }).click();
   await expect(horizons.getByRole("status")).toHaveText("Saved · Back to Home");
