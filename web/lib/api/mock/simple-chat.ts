@@ -37,7 +37,7 @@ function seenDates(i: Item): { start: string | null; end: string | null } {
 }
 type Role = Schemas["Me"]["role"];
 type Preview =
-  | { kind: "dates"; item_id: string; start_date: string; end_date: string }
+  | { kind: "dates"; item_id: string; start_date: string; end_date: string; shift?: [number, number] }
   | { kind: "horizon"; item_id: string; horizon: string }
   | { kind: "title"; item_id: string; title: string }
   | { kind: "milestone"; item_id: string; name: string; date: string }
@@ -665,13 +665,29 @@ function plusMonths(day: string, n: number): string {
   return isoDay(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, Math.min(d.getUTCDate(), last)));
 }
 
-function moveDraft(db: SimpleDb, i: Item, start: string, end: string): Draft {
+function moveDraft(db: SimpleDb, i: Item, start: string, end: string, shift?: [number, number]): Draft {
   const s = seenDates(i);
   return {
     op: "move_dates", target: { item_id: i.id }, before: { start_date: s.start, end_date: s.end }, after: { start_date: start, end_date: end },
     summary: `Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, item_id: i.id, item_title: i.title,
-    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end }, flow: null, fixes: [],
+    // A move by a span carries it (as the API's chat._b_move): offered again on newer dates, it moves from those.
+    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end, ...(shift ? { shift } : {}) }, flow: null, fixes: [],
   };
+}
+
+/** A move by a span offered again: that span from the item's current dates, in its after, preview and words (the API's chat.rebase). */
+function rebaseShift(c: StoredCard, current: Record<string, unknown>) {
+  const p = c.preview;
+  const [from, to] = [current.start_date, current.end_date];
+  if (c.op !== "move_dates" || p?.kind !== "dates" || !p.shift || typeof from !== "string" || typeof to !== "string") return;
+  const shift = p.shift;
+  const [a, b] = [addDays(plusMonths(from, shift[0]), shift[1]), addDays(plusMonths(to, shift[0]), shift[1])];
+  const [oa, ob] = [String(c.after.start_date), String(c.after.end_date)];
+  c.after = { start_date: a, end_date: b };
+  c.preview = { ...p, start_date: a, end_date: b };
+  c.summary = c.summary.replace(`${dayWords(oa)} – ${dayWords(ob, true)}`, `${dayWords(a)} – ${dayWords(b, true)}`).replace(usSpan(oa, ob), usSpan(a, b));
+  if (c.change_words) c.change_words = { ...c.change_words, after: usSpan(a, b) };
+  if (c.correct) c.correct = { ...c.correct, values: { start_date: a, end_date: b } };
 }
 
 /** A builder's args: `item` is null for an op about no item (a decision, a minutes note). */
@@ -686,7 +702,7 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
       const len = Math.round((msOf(item.end.date) - msOf(item.start.date)) / DAY);
       return { card: moveDraft(db, item, period[0], dated(item) ? addDays(period[0], len) : period[1]) };
     }
-    return { card: moveDraft(db, item, plusMonths(item.start.date, n ?? 3), plusMonths(item.end.date, n ?? 3)) };
+    return { card: moveDraft(db, item, plusMonths(item.start.date, n ?? 3), plusMonths(item.end.date, n ?? 3), [n ?? 3, 0]) };
   },
   cut: ({ item }) =>
     !item
@@ -940,8 +956,8 @@ export function seedTalkItems(db: SimpleDb): void {
 }
 
 /** A move restated ("Move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11, 2026"), its words and Correct. */
-function talkMove(db: SimpleDb, i: Item, start: string, end: string, how = ""): Draft {
-  const d = moveDraft(db, i, start, end);
+function talkMove(db: SimpleDb, i: Item, start: string, end: string, how = "", shift?: [number, number]): Draft {
+  const d = moveDraft(db, i, start, end, shift);
   return {
     ...d,
     summary: `Move ${about(i)}${how ? ` ${how},` : ""} to ${usSpan(start, end)}`,
@@ -997,7 +1013,7 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
   if ((m = new RegExp(`^(?:move|push|shift|slip) ${it}(?: by)? (a|one|two|three|four|five|six|\\d+) weeks? (later|earlier|out|back|sooner)$`, "i").exec(t))) {
     const n = countOf(m[1]) * 7 * (/later|out/i.test(m[2]) ? 1 : -1);
     const words = `${m[1].toLowerCase() === "a" ? "one" : m[1].toLowerCase()} week${countOf(m[1]) === 1 ? "" : "s"} ${n > 0 ? "later" : "earlier"}`;
-    return one(talkMove(db, i, addDays(i.start.date, n), addDays(i.end.date, n), words));
+    return one(talkMove(db, i, addDays(i.start.date, n), addDays(i.end.date, n), words, [0, n]));
   }
   if ((m = new RegExp(`^(?:move|put) ${it} (?:in|into|to|under) (M\\d)\\b.*$`, "i").exec(t))) {
     const ms = milestoneNamed(m[1]);
@@ -1380,7 +1396,10 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     // dod-data: a card refused because its item changed since stays open, offered again on the new state (as the API's chat.rebase).
     if (res.status === 409 && n == null && !withDependents) {
       const current = ((await res.clone().json()) as { detail?: { current?: Record<string, unknown> } }).detail?.current;
-      if (current && Object.keys(current).length && Object.keys(current).every((k) => k in c.before)) c.before = { ...c.before, ...current };
+      if (current && Object.keys(current).length && Object.keys(current).every((k) => k in c.before)) {
+        c.before = { ...c.before, ...current };
+        rebaseShift(c, current);
+      }
     }
     return res;
   }
