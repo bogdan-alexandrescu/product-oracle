@@ -10,7 +10,7 @@ import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { MeetingAgenda, MeetingNote } from "@/lib/api/simple-chat";
-import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
+import { calendarDay, formatInZone, todayIn, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -32,7 +32,8 @@ const MODE_WORDS: Record<Mode, string> = { everyone: "Everyone except viewers", 
 const PHONE_TAP = "max-[600px]:min-h-11";
 const cap = (h: string) => (h ? h[0]!.toUpperCase() + h.slice(1) : h);
 /** qa-simple-decide-17: a calendar day ("2026-11-05") as "Thu Nov 5"; qa-simple-decide-9: with its year when not this one ("Fri Jan 1, 2027"). */
-const dayWords = (day: string) => `${calendarDay(day, { weekday: "short" })} ${calendarDay(day)}${day.slice(0, 4) !== String(new Date().getFullYear()) ? `, ${day.slice(0, 4)}` : ""}`;
+// fix4 review: "this year" is the company's (its zone, the mock's clock), not the browser's.
+const dayWords = (day: string, zone: string) => `${calendarDay(day, { weekday: "short" })} ${calendarDay(day)}${day.slice(0, 4) !== todayIn(zone).slice(0, 4) ? `, ${day.slice(0, 4)}` : ""}`;
 
 function clock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -376,6 +377,7 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
 const HORIZONS = ["now", "next", "later"] as const;
 
 function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
+  const zone = useCompanyZone();
   const q = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
   const { busy, error, act } = useAct(async () => {
     await q.reload();
@@ -400,7 +402,7 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
             <span>
-              <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date)} – {dayWords(i.end.date)}</span>
+              <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (
@@ -712,7 +714,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               <h3 className="font-semibold">Action items</h3>
               {minutes?.action_items.length ? (
                 <ul className="list-disc pl-5">
-                  {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${dayWords(a.due_date)}` : ""}</li>)}
+                  {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${dayWords(a.due_date, zone)}` : ""}</li>)}
                 </ul>
               ) : (
                 <p className="simple-small">None.</p>
@@ -725,6 +727,15 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               <h3 className="font-semibold">Notes</h3>
               <ul className="list-disc pl-5" data-testid="minutes-notes">
                 {(m.notes ?? []).filter((n) => n.kind === "note").map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+              </ul>
+            </>
+          )}
+          {/* fix4 review: the comments made in the meeting stay readable once it ended (still no decisions). */}
+          {(m.notes ?? []).some((n) => n.kind === "comment") && (
+            <>
+              <h3 className="font-semibold">Comments</h3>
+              <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid="minutes-comments">
+                {(m.notes ?? []).filter((n) => n.kind === "comment").map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
               </ul>
             </>
           )}
@@ -816,6 +827,7 @@ const AGENDA_FIRST = 4;
  * lands in its minutes; a question decided here stays on the list with Undo.
  */
 function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
+  const zone = useCompanyZone();
   const actions = useQuestionActions(reload, m.session_id);
   const [all, setAll] = useState(false);
   const due = m.decisions_due ?? [];
@@ -832,7 +844,7 @@ function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown
         <h2 className="simple-h2 min-w-0 flex-1">On the agenda</h2>
         {due.length > 0 && (
           <span className="simple-meta" data-testid="decisions-due-summary">
-            {[by && `Due by ${dayWords(by)}`, `${due.length} ${due.length === 1 ? "decision" : "decisions"}`, source && `from ${source}`].filter(Boolean).join(" · ")}
+            {[by && `Due by ${dayWords(by, zone)}`, `${due.length} ${due.length === 1 ? "decision" : "decisions"}`, source && `from ${source}`].filter(Boolean).join(" · ")}
           </span>
         )}
       </header>

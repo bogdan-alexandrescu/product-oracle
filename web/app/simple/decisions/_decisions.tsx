@@ -243,6 +243,13 @@ const COLUMNS: { key: Question["column"]; title: string; tab: string }[] = [
   { key: "decided", title: "Decided questions", tab: "Decided" },
 ];
 
+/** Two columns (901-1599 px): Needs input over Decided on the left, Recommended down the right (its extra height goes to the second row). */
+const TWO_COLUMN_PLACE: Record<Question["column"], string> = {
+  needs_input: "min-[901px]:max-[1599px]:col-start-1 min-[901px]:max-[1599px]:row-start-1",
+  recommended: "min-[901px]:max-[1599px]:col-start-2 min-[901px]:max-[1599px]:row-span-2 min-[901px]:max-[1599px]:row-start-1",
+  decided: "min-[901px]:max-[1599px]:col-start-1 min-[901px]:max-[1599px]:row-start-2",
+};
+
 /** Board: three columns by `column`, soonest first (the API's order); on a phone, one column at a time behind tabs. */
 function Board({ questions, actions }: { questions: Question[]; actions: Actions }) {
   const [tab, setTab] = useState<Question["column"]>("needs_input");
@@ -253,14 +260,14 @@ function Board({ questions, actions }: { questions: Question[]; actions: Actions
         {/* qa-simple-decide-4: short tab names that fit a 390 px phone (the column's own heading is the long one). */}
         <Seg label="Column" value={tab} onChange={setTab} className="min-w-0 [&>button]:min-w-0 [&>button]:px-1.5" items={COLUMNS.map((c) => ({ value: c.key, label: c.tab, count: of(c.key).length, testId: `board-tab-${c.key}` }))} />
       </div>
-      {/* qa-simple-decide-22: two wider columns below 1600 px, three above; qa-simple-decide-13:
-          with two, Decided questions stacks straight under Needs input (no gap beside Recommended). */}
-      <div className="grid grid-cols-2 items-start gap-4 max-[900px]:grid-cols-1 min-[1600px]:grid-cols-3">
-        {[COLUMNS.filter((c) => c.key !== "recommended"), COLUMNS.filter((c) => c.key === "recommended")].map((stack, si) => (
-          <div key={si} className={`flex min-w-0 flex-col gap-4 min-[1600px]:contents ${si === 1 ? "min-[1600px]:[&>div]:order-2" : "min-[1600px]:[&>div:last-child]:order-3"}`}>
-        {stack.map((c) => (
+      {/* qa-simple-decide-22: two wider columns from 901 px, three from 1600 px; qa-simple-decide-13:
+          with two, Decided questions sits straight under Needs input (no gap beside Recommended);
+          fix4 review: the columns stay in reading order (Needs input, Recommended, Decided), so
+          one column (up to 900 px) and a screen reader read them so too. */}
+      <div className="grid grid-cols-1 items-start gap-4 min-[901px]:grid-cols-2 min-[901px]:max-[1599px]:grid-rows-[auto_1fr] min-[1600px]:grid-cols-3">
+        {COLUMNS.map((c) => (
           // The wrapper hides a column on a phone (.simple-card sets its own display).
-          <div key={c.key} className={`min-w-0 ${tab === c.key ? "" : "max-[600px]:hidden"}`} data-column={c.key}>
+          <div key={c.key} className={`min-w-0 ${TWO_COLUMN_PLACE[c.key]} ${tab === c.key ? "" : "max-[600px]:hidden"}`} data-column={c.key}>
             <section aria-label={c.title} data-testid={`board-${c.key}`} className="simple-card simple-narrow min-w-0">
               {/* qa-simple-decide-33: on a phone the tab above already names the column and its count. */}
               <header className="flex items-center gap-3 max-[600px]:hidden">
@@ -275,8 +282,6 @@ function Board({ questions, actions }: { questions: Question[]; actions: Actions
                 </ul>
               )}
             </section>
-          </div>
-        ))}
           </div>
         ))}
       </div>
@@ -372,12 +377,10 @@ function Rows({ rows }: { rows: Row[] }) {
     <ul>
       {rows.map((r) => {
         const done = r.status === "decided";
-        // qa-simple-decide-19: a question decided in a meeting ("Decided Q5 Reminder default time: 9:00")
-        // shows as one decided outside it: its code, its title, then the answer.
-        const asked = !r.code ? /^Decided (Q\d+) (.+?): (.+)$/.exec(r.title) : null;
-        const code = asked?.[1] ?? r.code ?? `D-${r.number}`;
-        const title = asked?.[2] ?? r.title;
-        const chosen = asked?.[3] ?? r.chosen;
+        // qa-simple-decide-19: a question decided in a meeting shows as one decided outside it:
+        // its code, its title, then the answer, as the API sends them (never read out of the title).
+        const code = r.code ?? `D-${r.number}`;
+        const { title, chosen } = r;
         return (
           <DecidedItem
             key={r.id}

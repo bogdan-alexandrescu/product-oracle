@@ -242,7 +242,7 @@ export async function routeQuestionChanges(
   db: QuestionsDb,
   req: Request,
   p: string[],
-  inMeeting: (sessionId: string, title: string) => string | false | "ended",
+  inMeeting: (sessionId: string, title: string, own?: { code: string; title: string; chosen: string }) => string | false | "ended",
 ): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
   if (p.length === 5 && p[4] === "undo") {
@@ -294,7 +294,9 @@ export async function routeQuestionChanges(
   let meetingId: string | null = null;
   if (change.session_id) {
     const words = b.op === "decide_question" ? `Q${q.n} ${q.title}: ${answer}` : `Q${q.n} ${q.title}: ${nameOf(ctx, String(after.decider_id))} decides`;
-    const ok = inMeeting(change.session_id, applies ? `Decided ${words}` : `Proposed: ${words}`);
+    // As the API, a question decided in the meeting is the question's own decision there: its code, title and answer.
+    const own = applies && b.op === "decide_question" ? { code: `Q${q.n}`, title: q.title, chosen: answer } : undefined;
+    const ok = inMeeting(change.session_id, applies ? `Decided ${words}` : `Proposed: ${words}`, own);
     if (ok === "ended") return json(409, { detail: "This meeting has ended" });
     if (ok) meetingId = ok;
   }

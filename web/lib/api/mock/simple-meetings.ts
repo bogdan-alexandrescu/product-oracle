@@ -115,6 +115,8 @@ interface Decision {
   change_ids: string[];
   /** The roadmap items its changes touched (meetings.decided_flows reads them). */
   item_ids?: string[];
+  /** A PRD's question decided in the meeting: its code, title and answer (the Decisions page's row, as the API's). */
+  question?: { code: string; title: string; chosen: string };
 }
 
 interface Occurrence {
@@ -722,8 +724,9 @@ export function meetingInboxRows(db: MeetingsDb | undefined, me: string, seen: s
 
 function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
   return {
-    id: d.id, number: d.number, title: d.title, origin: d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
+    id: d.id, number: d.number, title: d.question?.title ?? d.title, origin: d.question ? "prd" : d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
     decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
+    code: d.question?.code ?? null, chosen: d.question?.chosen ?? null,
   };
 }
 
@@ -998,12 +1001,13 @@ function qdb(ctx: MeetingsCtx, db: MeetingsDb): QuestionsDb {
  * undo); with a live meeting's session_id the decision lands in that meeting's minutes.
  */
 export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
-  return routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title) => {
+  return routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title, own) => {
     const m = db.meetings.find((x) => x.session_id === sessionId);
     if (!m) return false;
     if (m.status !== "live") return "ended";
     const prd = prds(ctx).find((x) => x.slug === m.prd);
-    record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+    const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+    if (own) d.question = own;
     return m.id;
   });
 }
