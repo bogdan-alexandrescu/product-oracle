@@ -55,7 +55,7 @@ test("qa-onboarding-33: a Simple owner's setup steps go back to Simple's Home", 
   await expect(zonePanel.getByRole("status")).toHaveText("Saved · Back to Home");
   await zonePanel.getByRole("status").getByRole("link", { name: "Back to Home" }).click();
   await expect(page).toHaveURL(/\/simple$/);
-  await expect(simpleCard(page).getByTestId("home-setup-step").filter({ hasText: "Time zone" })).toContainText("Done");
+  await expect(simpleCard(page).getByTestId("home-setup-step").filter({ hasText: "Time zone" }).getByRole("img", { name: "Done" })).toBeVisible();
 
   // Horizons: Save the defaults; the Settings bar's Back to Home also opens Simple's Home.
   await simpleCard(page).getByRole("link", { name: "Horizons", exact: true }).click();
@@ -68,7 +68,7 @@ test("qa-onboarding-33: a Simple owner's setup steps go back to Simple's Home", 
   await expect(bar).toHaveAttribute("href", "/simple");
   await bar.click();
   await expect(page).toHaveURL(/\/simple$/);
-  await expect(simpleCard(page).getByTestId("home-setup-step").filter({ hasText: "Horizons" })).toContainText("Done");
+  await expect(simpleCard(page).getByTestId("home-setup-step").filter({ hasText: "Horizons" }).getByRole("img", { name: "Done" })).toBeVisible();
 
   // Another Simple step keeps the way back to Simple too.
   await simpleCard(page).getByRole("link", { name: "Engineering lead", exact: true }).click();

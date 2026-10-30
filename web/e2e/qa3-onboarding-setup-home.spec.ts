@@ -69,6 +69,22 @@ test("while the first build runs: one Open the build, and its segment under way 
   // run's details say "Next: <segment>" above the same segment marked Running, or In flight's
   // Next repeats the segment under way; no_claim=a run waiting on a person (Next stays).
   await newCompanyOwner(page);
+  // Start waits for a source with items (fix4-plan, qa-onboarding-2): a file in an Uploads source first.
+  await row(page, "sources").getByRole("link", { name: "Open Pick sources" }).click();
+  await expect(page).toHaveURL(/\/settings\/sources\?from=setup$/);
+  await page.getByRole("button", { name: "Add a source" }).click();
+  const form = page.getByRole("form", { name: "Add a source" });
+  await form.getByLabel("Kind").selectOption("upload");
+  await form.getByLabel("Name").fill("Research notes");
+  await form.getByRole("button", { name: "Add source" }).click();
+  const notes = page.getByRole("listitem", { name: "Research notes" });
+  await notes.getByLabel("Upload files to Research notes").setInputFiles([
+    { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
+  ]);
+  await expect(notes.getByTestId("source-items")).toHaveText("1 item");
+  await page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Back to Home" }).click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
   await row(page, "build_baseline").getByRole("link", { name: "Open Build baseline" }).click();
   // From Set up the sheet keeps the way back to Home (fix4-plan, qa-onboarding-17).
   await expect(page).toHaveURL(/\/baseline\?build=1&from=setup$/);
