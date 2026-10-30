@@ -17,6 +17,8 @@ S3b, working drafts (oracle.simple.drafts):
   owner): the draft becomes the next version, in review.
 - ``POST /v1/simple/drafts/{id}/approve``: the decider (held until the required reviewers
   have approved) or a required reviewer.
+- ``POST /v1/simple/changes/{id}/withdraw``: its proposer, while it is proposed: closed as
+  declined ("Withdrawn"), nothing changes.
 - ``POST /v1/simple/drafts/{id}/withdraw``: its author or the decider: a submitted draft
   returns to working (its changes kept); the version is marked withdrawn.
 - ``POST /v1/simple/drafts/{id}/resume``: its author or the decider: a new session on it.
@@ -203,6 +205,17 @@ async def decline_simple_change(
         out = await _run(db, changes.decide(db, principal, change_id, "decline", reason, sid))
         await _in_meeting(db, principal, out, sid, "Declined")
     return out
+
+
+@router.post("/changes/{change_id}/withdraw", response_model=SimpleChangeResult,
+             name="withdraw_simple_change", responses=CONFLICT)  # fmt: skip
+async def withdraw_simple_change(
+    change_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleChangeResult:
+    """Withdraw one of the caller's own proposals while it waits for a decision: nothing
+    changes; it is closed as declined ("Withdrawn")."""
+    async with _one_commit(db):
+        return await _run(db, changes.withdraw(db, principal, change_id))
 
 
 @router.get("/changes", response_model=list[SimpleChangeOut], name="list_simple_changes")

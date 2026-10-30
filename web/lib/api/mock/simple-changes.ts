@@ -395,6 +395,7 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
         : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
   const seen = ranking ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
   if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  if (body.op === "override_priority" && after.override === null && !before.override) return json(409, { detail: "It is at Oracle's rank already" });
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
     draft_ids: [], op: body.op, target, before, after, status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
@@ -706,8 +707,16 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     return json(200, rows.map((c) => view(db, ctx, c)));
   }
   const c = (db.changes ?? []).find((x) => x.id === p[3]);
-  if (m !== "POST" || !["undo", "accept", "decline"].includes(p[4] ?? "")) return null;
+  if (m !== "POST" || !["undo", "accept", "decline", "withdraw"].includes(p[4] ?? "")) return null;
   if (!c) return json(404, { detail: "No such change" });
+  // qa-simple-plan-30: the proposer takes it back (changes.py `withdraw`): closed as declined.
+  if (p[4] === "withdraw") {
+    if (c.by !== ctx.id) return json(403, { detail: "Only the person who proposed it withdraws it" });
+    if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
+    if (c.op === "add_item") return json(409, { detail: "This kind of proposal is not withdrawn here" });
+    Object.assign(c, { status: "declined", decided_by: ctx.id, decided_at: now, decision_reason: "Withdrawn by the person who proposed it" });
+    return json(200, { change: view(db, ctx, c), flags: [] });
+  }
   if (p[4] === "undo") {
     if (c.status !== "applied") return json(409, { detail: `Only an applied change undoes; this one is ${c.status}` });
     if (c.by !== ctx.id) return json(403, { detail: "Only the person who made a change undoes it" });

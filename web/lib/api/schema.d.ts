@@ -12356,6 +12356,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/changes/{change_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Simple Change
+         * @description Withdraw one of the caller's own proposals while it waits for a decision: nothing
+         *     changes; it is closed as declined ("Withdrawn").
+         */
+        post: operations["withdraw_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/drafts": {
         parameters: {
             query?: never;
@@ -39006,6 +39027,11 @@ export interface components {
              * @default false
              */
             can_decide: boolean;
+            /**
+             * Can Withdraw
+             * @default false
+             */
+            can_withdraw: boolean;
             flow?: components["schemas"]["SimpleFlow"] | null;
         };
         /** SimplePriorityRow */
@@ -39038,6 +39064,8 @@ export interface components {
             effort?: number | null;
             /** Score */
             score?: number | null;
+            /** Confidence */
+            confidence?: number | null;
             /**
              * Value Estimated
              * @default false
@@ -69090,6 +69118,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
                 };
             };
             /** @description Validation Error */

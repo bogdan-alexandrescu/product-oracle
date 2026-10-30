@@ -288,6 +288,8 @@ for (const [where, use] of [
         await expect(select).toHaveValue(kd);
         await select.selectOption("pick");
         await page.getByLabel("The line's date").fill("2026-12-31");
+        // qa-simple-plan-1: a typed date applies with Apply (or Enter), never while typing.
+        await page.getByRole("button", { name: "Apply" }).click();
         await expect(page).toHaveURL(/line=date(:|%3A)2026-12-31/);
         await expect(page.getByTestId("line-caption").first()).toContainText("miss Dec 31, 2026");
         await page.getByRole("tab", { name: "Value / effort" }).click();

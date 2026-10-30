@@ -88,6 +88,7 @@ DONE_DAYS = 30
 TITLE_MAX = 200
 OUTCOME_MAX = 1000
 NOTE_MAX = 500
+WITHDRAWN = "Withdrawn by the person who proposed it"
 DATES = ("start_date", "end_date")
 # Each single-item op's key fields: ``before`` must name them all.
 FIELDS: dict[str, tuple[str, ...]] = {
@@ -896,6 +897,29 @@ async def decide(
                        data={"op": c.op, "target": c.target, "reason": reason})  # fmt: skip
     await db.commit()
     return SimpleChangeResult(change=await one_out(db, principal, c), flags=flags)
+
+
+async def withdraw(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
+    """qa-simple-plan-30: the person who proposed a change takes it back while it still waits
+    for a decision; nothing changes and it is closed as declined, "Withdrawn"."""
+    from oracle.simple import additions, one_pager, questions
+
+    me, now = _me(principal), company_time.now()
+    c = await _get(db, change_id)
+    if c.by != me:
+        raise ChangeError(403, "Only the person who proposed it withdraws it")
+    if c.op in additions.OPS or c.op in questions.OPS or c.op in one_pager.OPS:
+        # Their decline does more than close the proposal (a suggestion reopens, ...).
+        raise ChangeError(409, "This kind of proposal is not withdrawn here")
+    if c.status != "proposed":
+        raise ChangeError(409, f"This change is {c.status} already")
+    c.status = "declined"
+    c.decided_by, c.decided_at, c.decision_reason = me, now, WITHDRAWN
+    await db.flush()
+    await audit.record(db, principal, "simple_change.withdrawn", "simple_change", c.id,
+                       data={"op": c.op, "target": c.target})  # fmt: skip
+    await db.commit()
+    return SimpleChangeResult(change=await one_out(db, principal, c), flags=[])
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:

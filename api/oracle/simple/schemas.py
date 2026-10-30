@@ -747,6 +747,8 @@ class SimplePriorityRow(BaseModel):
     # Engineer-weeks.
     effort: float | None = None
     score: float | None = None
+    # qa-simple-plan-3: Oracle's confidence (0 to 1) the score is worked out with.
+    confidence: float | None = None
     # The goal value is a person's estimate (estimate_feature).
     value_estimated: bool = False
     # Codes of the rows it depends on (direct).
@@ -903,6 +905,8 @@ class SimplePriorityProposal(BaseModel):
     # Names of who decides it.
     waiting_for: list[str]
     can_decide: bool = False
+    # qa-simple-plan-30: the caller proposed it and may take it back (POST .../withdraw).
+    can_withdraw: bool = False
     # The design bundle of the item's feature; None until S10 ("No flow yet").
     flow: SimpleFlow | None = None
 

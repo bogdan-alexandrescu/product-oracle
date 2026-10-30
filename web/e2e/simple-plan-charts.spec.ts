@@ -18,7 +18,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card plan-charts-buckets: protects = the header reads "Where each goal's work lands", the
  * plan's capacity, planned and spare weeks in one line, a legend entry per milestone (B: a
  * swatch, the code, its dates "Nov 2 – Nov 27" and how full it is, its name in the title), one
- * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 4",
+ * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 · 4 wk",
  * blank when too narrow) and its total, B's footnote, every total equal to the plan's, goal
  * cards as B (the name, "n features in the plan", a row per feature: code, name, a chip per
  * milestone, its weeks or PM-owned) with "+ Suggest a feature" and "✦ Ask Oracle to suggest"
@@ -71,10 +71,10 @@ async function setUp(page: Page, scheme: "light" | "dark", scenario: string | nu
 }
 
 const GOALS = [
-  { goal: "Reliability", parts: ["M1 4", "M2 3", "M3 4"], total: "11 wk" },
-  { goal: "Growth", parts: ["M1 3", "M2 7", "M3 6"], total: "16 wk" },
-  { goal: "Activation", parts: ["M1 6", "M2 3", "M3 4"], total: "13 wk" },
-  { goal: "Revenue", parts: ["M2 2", "M3 9"], total: "11 wk" },
+  { goal: "Reliability", parts: ["M1 · 4 wk", "M2 · 3 wk", "M3 · 4 wk"], total: "11 wk" },
+  { goal: "Growth", parts: ["M1 · 3 wk", "M2 · 7 wk", "M3 · 6 wk"], total: "16 wk" },
+  { goal: "Activation", parts: ["M1 · 6 wk", "M2 · 3 wk", "M3 · 4 wk"], total: "13 wk" },
+  { goal: "Revenue", parts: ["M2 · 2 wk", "M3 · 9 wk"], total: "11 wk" },
 ];
 
 /** The labels whose text reads under 4.5:1 on their own background (the nearest painted one). */
@@ -246,8 +246,8 @@ for (const v of VIEWS) {
       const xs = await Promise.all([0, 1, 2, 3].map((k) => centreX(ticks.nth(k))));
       expect(xs[1] - xs[0]).toBeCloseTo(xs[2] - xs[1], 0);
       expect(xs[2] - xs[1]).toBeCloseTo(xs[3] - xs[2], 0);
-      // A 2-week mark is the median effort: it sits just off the 2 wk tick, inside the quadrant it counts in (qa-simple-plan-12).
-      expect(Math.abs(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2]) - 22)).toBeLessThan(4);
+      // A 2-week mark is the median effort: QA pass 3 (qa-simple-plan-13) draws it at its real effort, on the 2 wk tick.
+      expect(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2])).toBeLessThan(4);
 
       // The quadrants at the medians, each with its name and count.
       await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 2", "Big bets · 3", "Fill-ins · 3", "Later · 1"]);
@@ -275,8 +275,8 @@ for (const v of VIEWS) {
       await expect(mark(page, "alert-rules")).toHaveAttribute("data-shape", "square");
       const legend = page.getByLabel("Legend");
       await expect(legend.getByTestId("vxe-legend-no-goal")).toHaveText("No goal");
-      await expect(legend).toContainText("Codes stay with the item; ranks are in the list. Hollow: below the line (not this quarter).");
-      await expect(page.getByText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys).")).toBeVisible();
+      await expect(legend).toContainText("Each mark shows the feature's code; its rank is in the list. Hollow: below the line (not this quarter).");
+      await expect(page.getByText("Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)")).toBeVisible();
 
       // B's Ranked rows: one line each (rank, code, the name cut with "…", the score), a row
       // that misses the line carrying a small "Misses" chip (the line in its title).

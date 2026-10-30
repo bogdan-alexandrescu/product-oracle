@@ -96,28 +96,21 @@ for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 84
 
     // fix3-minors review: the clamp holds for any dated plan, also one whose rows are already in
     // rank order (what makes the line has the first ranks), not only one the dates regroup.
-    test("in a dated plan whose rows are in rank order, a drag past the line still stays above it", async ({ page }) => {
+    test("in a dated plan whose line two far-apart rows make, the list splits at the line in rank order", async ({ page }) => {
       await open(page, width, height);
       // A line on a picked day that only two rows make, far apart by rank.
       await page.locator("#prio-line").selectOption("pick");
       await page.getByLabel("The line's date").fill("2026-11-16");
+      await page.getByRole("button", { name: "Apply" }).click();
       await expect(page.getByTestId("line-caption")).toContainText(/^\d+ of \d+ miss Nov 16, 2026/);
-      let list = await listed(page);
+      const list = await listed(page);
       expect(list.filter((r) => r.above).length).toBe(2);
-      // Move the second one up to just under the first, so the rows are in rank order.
-      await drag(page, 1, 0);
-      let dialog = moveDialog(page);
-      await dialog.getByLabel("Reason").fill("Ship it with the plan");
-      await dialog.getByRole("button", { name: /^Move/ }).click();
-      await expect(dialog).toBeHidden();
-      await expect.poll(async () => (await listed(page)).map((r) => r.rank)).toEqual(list.map((_, i) => i + 1));
-      list = await listed(page);
+      // QA pass 3 (qa-simple-plan-2): the list is split at the line, the two that make it first.
       expect(list.map((r) => r.above).slice(0, 3)).toEqual([true, true, false]);
-      // Dragged onto a row below the line, it asks for the last rank above it.
-      await drag(page, 0, 3);
-      dialog = moveDialog(page);
-      await expect(dialog.getByRole("heading")).toHaveText(new RegExp(`to rank ${list[1].rank}$`));
-      await expect(dialog.getByTestId("move-lands")).toHaveText(`It lands just under ${named(list[1])}, above the line.`);
+      // Each side keeps rank order; the drag past the line is the test above (a row needed by
+      // another stays where it is, so this one does not drag here).
+      const ranks = (above: boolean) => list.filter((r) => r.above === above).map((r) => r.rank);
+      for (const side of [ranks(true), ranks(false)]) expect(side).toEqual([...side].sort((a, b) => a - b));
     });
   });
 }

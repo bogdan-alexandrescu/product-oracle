@@ -227,6 +227,7 @@ async def _proposals(
             after=c.after,
             waiting_for=[names.get(p, "someone") for p in v.route(c)],
             can_decide=v.may_decide(c),
+            can_withdraw=c.by == getattr(principal, "user_id", None),
             flow=by_change.get(c.id) or by_item.get(e.row.id),
         )  # fmt: skip
         for c, e in shown
@@ -411,7 +412,12 @@ async def lines(db: AsyncSession, principal: Any, read_: service.Read) -> list[S
         for m in read_.milestones
         if m.target_date is not None and m.track_id in tracks and m.status != "dropped"
     ]
-    return out
+    # Key dates and milestones in date order, one list (Now first).
+    return [out[0], *sorted(out[1:], key=lambda x: x.date or date.max)]
+
+
+# A picked day earlier than this is a half-typed one (year 1, 20, 202), never a line.
+FIRST_LINE_YEAR = 2000
 
 
 def pick_line(key: str | None, offered: list[SimpleLine]) -> SimpleLine:
@@ -420,6 +426,8 @@ def pick_line(key: str | None, offered: list[SimpleLine]) -> SimpleLine:
         try:
             day = date.fromisoformat(key[5:])
         except ValueError:
+            return NOW_LINE
+        if day.year < FIRST_LINE_YEAR:
             return NOW_LINE
         return SimpleLine(key=f"date:{day.isoformat()}", kind="date", label=f"By {_day(day)}",
                           date=day)  # fmt: skip
@@ -474,6 +482,7 @@ async def build(
                 goal_value=_value(f, "goal_value"),
                 effort=_value(f, "effort"),
                 score=f.score,
+                confidence=round(f.explanation.confidence.value, 2),
                 value_estimated=bool(isinstance(gv, dict) and gv.get("estimated")),
                 depends_on=[code_of[d] for d in f.depends_on if d in code_of],
                 override=SimplePriorityOverride(

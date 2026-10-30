@@ -324,9 +324,10 @@ async def test_estimate_commenter_proposes_until_accepted(client):
 
 async def test_estimate_stale_and_malformed(client):
     """protects=an estimate whose ``before`` no longer matches the attrs answers 409 with the
-    current values and writes nothing; a missing ``before``, an empty or non-positive
-    ``after`` and an item without a feature answer 422; fails_when=a stale or malformed
-    estimate lands; no_claim=who changed the attrs outside Simple."""
+    current values and writes nothing; a missing ``before``, an empty ``after``, a
+    negative goal value, a non-positive effort and an item without a feature answer 422;
+    fails_when=a stale or malformed estimate lands; no_claim=who changed the attrs outside
+    Simple."""
     ctx = await make_people()
     w = await World(ctx).build()
     r = await w.change(client, "owner", "estimate_feature", "pay-1",
@@ -335,7 +336,8 @@ async def test_estimate_stale_and_malformed(client):
     assert r.json()["detail"]["current"] == {"goal_value": None, "effort": 1}
     for before, after in (({"effort": 1}, {"goal_value": 5}),
                           ({"goal_value": None, "effort": 1}, {}),
-                          ({"goal_value": None, "effort": 1}, {"goal_value": 0}),
+                          ({"goal_value": None, "effort": 1}, {"goal_value": -1}),
+                          ({"goal_value": None, "effort": 1}, {"effort": 0}),
                           ({"goal_value": None, "effort": 1}, {"effort": -1}),
                           ({"goal_value": None, "effort": 1}, {"effort": "big"})):  # fmt: skip
         r = await w.change(client, "owner", "estimate_feature", "pay-1", before, after)
@@ -475,3 +477,60 @@ async def test_short_codes_a_new_feature_never_renames_an_older_one(client):
         await s.commit()
     out = await w.read(client)
     assert (code(out, "delivery-integrity"), code(out, "data-ingest")) == ("DI", "DI2")
+
+
+async def test_estimate_goal_value_down_to_zero(client):
+    """protects=qa-simple-plan-6: a goal value estimate goes down to 0 (worth nothing to the
+    goals), the row reads value 0 and score 0, and the ranking keeps the 0 rather than falling
+    back to the goals' sum; fails_when=0 is refused or read as no estimate; no_claim=effort,
+    which stays above 0."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    r = await w.change(client, "owner", "estimate_feature", "pay-1",
+                       {"goal_value": None, "effort": 1}, {"goal_value": 0})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await w.attrs("ledger"))["goal_value"] == 0
+    row = rows_by_code(await w.read(client))["pay-1"]
+    assert (row["goal_value"], row["value_estimated"], row["score"]) == (0, True, 0)
+
+
+async def test_rows_carry_the_confidence(client):
+    """protects=qa-simple-plan-3: every scored row carries Oracle's confidence (0 to 1) and its
+    score is goal value x confidence / effort from the row's own numbers; fails_when=a row has
+    no confidence or the numbers shown do not give the score; no_claim=how confidence is
+    worked out."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    scored = [r for r in (await w.read(client))["rows"] if r["score"] is not None]
+    assert scored
+    for r in scored:
+        assert 0 <= r["confidence"] <= 1, r
+        assert r["score"] == pytest.approx(
+            r["goal_value"] * r["confidence"] / r["effort"], abs=1e-3
+        )
+
+
+async def test_proposer_withdraws_a_proposal(client):
+    """protects=qa-simple-plan-30: the proposer reads can_withdraw on their own proposal (the
+    decider does not), withdrawing closes it as declined with nothing changed and it leaves
+    the list; nobody else withdraws it and a closed one is not withdrawn again;
+    fails_when=a proposer cannot take a proposal back or someone else can; no_claim=undo."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    r = await w.change(client, "commenter", "estimate_feature", "pay-1",
+                       {"goal_value": None, "effort": 1}, {"goal_value": 6})  # fmt: skip
+    assert r.status_code == 201, r.text
+    cid = r.json()["change"]["id"]
+    (mine,) = (await w.read(client, "commenter"))["proposals"]
+    assert mine["can_withdraw"] is True
+    (theirs,) = (await w.read(client, "decider"))["proposals"]
+    assert theirs["can_withdraw"] is False
+    r = await client.post(f"{CHANGES}/{cid}/withdraw", headers=ctx.as_("decider"))
+    assert r.status_code == 403, r.text
+    r = await client.post(f"{CHANGES}/{cid}/withdraw", headers=ctx.as_("commenter"))
+    assert r.status_code == 200, r.text
+    assert r.json()["change"]["status"] == "declined"
+    assert (await w.read(client, "commenter"))["proposals"] == []
+    assert "goal_value" not in await w.attrs("ledger")
+    r = await client.post(f"{CHANGES}/{cid}/withdraw", headers=ctx.as_("commenter"))
+    assert r.status_code == 409, r.text
