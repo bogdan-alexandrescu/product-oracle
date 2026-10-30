@@ -29765,6 +29765,11 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["OnePagerLine"][];
+            /**
+             * Missing
+             * @default false
+             */
+            missing: boolean;
         };
         /** OnePagerDraft */
         OnePagerDraft: {

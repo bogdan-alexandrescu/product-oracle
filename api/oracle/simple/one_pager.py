@@ -1248,7 +1248,12 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
             )
         blocks.append(
             OnePagerBlock(
-                key=spec.key, title=spec.title, rules=spec.rules, kind=spec.kind, lines=lines
+                key=spec.key,
+                title=spec.title,
+                rules=spec.rules,
+                kind=spec.kind,
+                lines=lines,
+                missing=bool(raw.get("missing")) and not lines,
             )
         )  # type: ignore[arg-type]
     # S10: each bet ("What we will build") carries its visual.

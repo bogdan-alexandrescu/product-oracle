@@ -66,7 +66,8 @@ export interface OnePagerDb {
   doc: { id: string; slug: string; title: string };
   version: number;
   sections: Sec[];
-  blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[] }[];
+  /** `missing`: Oracle marked the block "Not in the PRD yet" (nothing of the PRD maps to it). */
+  blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean }[];
   draft: null | {
     id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
@@ -209,6 +210,17 @@ export function seedNeedsLookOnePager(): OnePagerDb {
   bets.lines = bets.lines.slice(0, 2);
   blocks.find((b) => b.key === "risks")!.lines = [{ id: "risks-1", text: "Pricing for teams is TBD", keys: ["risks"] }];
   db.held = { blocks, checks: ["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"] };
+  return db;
+}
+
+/**
+ * The "one-pager-not-in-prd" scenario: the PRD has no "Not doing" section, and Oracle marked
+ * that block "Not in the PRD yet" (the API's OnePagerBlock.missing). Invented data.
+ */
+export function seedNotInPrdOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  db.sections = db.sections.filter((x) => x.key !== "not-doing");
+  db.blocks = db.blocks.map((b) => (b.key === "not_doing" ? { ...b, lines: [], missing: true } : b));
   return db;
 }
 
@@ -418,7 +430,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     built_by: "oracle",
     built_at: "2026-10-20T15:05:00Z",
     blocks: (held?.blocks ?? db.blocks).map((b) => ({
-      key: b.key, title: b.title, rules: b.rules, kind: b.kind,
+      key: b.key, title: b.title, rules: b.rules, kind: b.kind, missing: !!b.missing && b.lines.length === 0,
       lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
         const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");

@@ -1033,6 +1033,8 @@ class OnePagerBlock(BaseModel):
     rules: str
     kind: Literal["text", "lines", "metrics", "timeline"]
     lines: list[OnePagerLine] = []
+    # Oracle marked it "Not in the PRD yet": nothing of the PRD maps to it (oracle.simple.quality).
+    missing: bool = False
 
 
 class OnePagerSectionPatch(BaseModel):
