@@ -314,26 +314,44 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
 }
 
 /**
- * The "simple-500" scenario (S4: first paint and drag speed): 500 invented items over the
- * three roadmaps, both goals and the three tracks, dated and undated, with chains of
- * dependencies.
+ * The "simple-500" scenario (S4, dod-perf: first paint and drag speed): a company-wide
+ * roadmap of 500 invented items over 12 roadmaps (each from its own PRD), 8 goals and 6
+ * tracks, two in three dated, with chains of dependencies inside each roadmap.
  */
+const MANY_PRDS = ["Billing portal", "Team spaces", "Audit trail", "Usage reports", "Mobile app", "Search", "Integrations hub", "Data export", "Access control", "Notifications", "Help center", "Partner API"];
+const MANY_GOALS: Record<string, string> = {
+  "grow-retention": "Grow retention", "faster-activation": "Faster activation", "win-teams": "Win larger teams", "cut-churn": "Cut churn",
+  "trust-security": "Earn security trust", "open-platform": "Open the platform", "self-serve": "Self-serve support", "go-mobile": "Work from phones",
+};
+const MANY_TRACKS: Record<string, string> = { "web-core": "Web core track", "mobile": "Mobile track", "platform": "Platform track", "data": "Data track", "growth": "Growth track", "security": "Security track" };
+const MANY_WORDS = ["Faster", "Simpler", "Shared", "Bulk", "Scheduled", "Smarter", "Offline", "Guided"];
+const MANY_THINGS = ["invoices", "filters", "exports", "invites", "alerts", "reports", "settings", "search", "roles", "dashboards", "imports", "comments", "webhooks"];
+const manySlug = (n: number): string => `${MANY_PRDS[n].toLowerCase().replace(/ /g, "-")}-roadmap`;
+/** The 500-item scenario's roadmaps, goals and tracks, known once its items are seeded or reloaded (as knowTalkGoals). */
+export function knowManyPlans(db: { items: { key: string; roadmap: string }[] } | undefined): void {
+  if (!db?.items.some((x) => x.roadmap === manySlug(0))) return;
+  MANY_PRDS.forEach((prd, n) => (ROADMAPS[manySlug(n)] ??= { title: `${prd} roadmap`, visibility: "company", prd, draft: 1 + (n % 4) }));
+  Object.assign(GOALS, MANY_GOALS);
+  Object.assign(TRACKS, MANY_TRACKS);
+}
+
 export function seedSimpleMany(n = 500): SimpleDb {
-  const roadmaps = ["alerts-roadmap", "onboarding-roadmap", "pricing-roadmap"];
-  const goals = ["grow-retention", "faster-activation", undefined];
-  const tracks = Object.keys(TRACKS);
+  const goals = Object.keys(MANY_GOALS);
+  const tracks = Object.keys(MANY_TRACKS);
   const horizons: Horizon[] = ["now", "next", "later"];
   const items: SeedItem[] = Array.from({ length: n }, (_, i) => {
     const dated = i % 3 !== 2;
     const start = (i * 7) % 60;
     return {
-      key: `item-${i}`, title: `Planned item ${i + 1}`, horizon: horizons[i % 3], roadmap: roadmaps[i % 2],
-      goal: goals[i % 3], track: tracks[i % 3], confidence: (["low", "medium", "high"] as const)[i % 3],
+      key: `item-${i}`, title: `${MANY_WORDS[i % 8]} ${MANY_THINGS[i % 13]} ${Math.floor(i / 12) + 1}`, horizon: horizons[i % 3], roadmap: manySlug(i % 12),
+      goal: goals[i % 8], track: tracks[i % 6], confidence: (["low", "medium", "high"] as const)[i % 3],
       ...(dated ? { start, end: start + 20 + (i % 30), source: "typed" as const } : {}),
-      ...(i % 10 === 5 ? { depends: [`item-${i - 1}`] } : {}),
+      ...(i >= 12 && i % 5 === 3 ? { depends: [`item-${i - 12}`] } : {}),
     };
   });
-  return { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };
+  const db: SimpleDb = { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };
+  knowManyPlans(db);
+  return db;
 }
 
 /** The item's stored dates (the API's start_date, end_date, date_source columns): moved or
