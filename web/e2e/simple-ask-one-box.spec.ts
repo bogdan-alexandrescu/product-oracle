@@ -90,7 +90,7 @@ for (const [phone, dark] of [
       // The same chat's one box: a change line gets S9's card there, any other line stays Ask's.
       await expect(panel.getByRole("textbox")).toHaveCount(1);
       await say(panel, "move Alert rules engine to next quarter");
-      await expect(thread.getByTestId("chat-card").filter({ hasText: "Move Alert rules engine to 1 Jan" })).toBeVisible();
+      await expect(thread.getByTestId("chat-card").filter({ hasText: "Move Alert rules engine to Jan 1" })).toBeVisible();
       await say(panel, "And what is missing?");
       await expect(thread.getByTestId("chat-message-body").filter({ hasText: "And what is missing?" })).toHaveCount(1);
       await expect(thread.getByTestId("ask-answer")).toHaveCount(2);
@@ -110,7 +110,7 @@ for (const [phone, dark] of [
       await expect(panel.getByTestId("chat-message").last()).toContainText("That period began Oct 1, so the move starts on a past day.");
       await say(panel, "move Alert rules engine to next quarter");
       await expect(panel.getByTestId("chat-message").last()).not.toContainText("past day");
-      const card = panel.getByTestId("chat-card").filter({ hasText: "Move Alert rules engine to 1 Jan" });
+      const card = panel.getByTestId("chat-card").filter({ hasText: "Move Alert rules engine to Jan 1" });
       await expect(card).toBeVisible();
       const flags = card.getByTestId("chat-card-flag");
       await expect(flags.filter({ hasText: /^'Weekly alert digest' starts .+, but 'Alert rules engine', which it depends on, ends .+$/ })).toHaveCount(1);
@@ -141,7 +141,7 @@ test("a viewer's one box still answers the plan and changes nothing (desktop)", 
   const panel = await openAsk(page, false);
   await expect(panel.getByRole("textbox")).toHaveCount(1);
   await say(panel, "move Weekly alert digest to H1");
-  const card = panel.getByTestId("chat-card").filter({ hasText: "Move Weekly alert digest to 1 Jan" });
+  const card = panel.getByTestId("chat-card").filter({ hasText: "Move Weekly alert digest to Jan 1" });
   await expect(card.getByRole("button", { name: "Apply" })).toBeDisabled();
   await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
   await say(panel, "Summarise this page for me");

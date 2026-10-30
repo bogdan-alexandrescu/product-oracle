@@ -88,7 +88,7 @@ for (const [phone, dark] of [
       await expect(last(chat)).toHaveAttribute("data-kind", "cards");
       await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change:");
       await expect(chat.getByTestId("chat-pending")).toHaveCount(0);
-      const moved = card(chat, "Move Delivery pipeline v2 to 11 Apr");
+      const moved = card(chat, "Move Delivery pipeline v2 to Apr 11");
       await expect(moved).toHaveCount(1);
       await expect(last(chat).getByRole("button", { name: "Apply all" })).toHaveCount(0);
       await tap(moved.getByRole("button", { name: "Apply" }));
@@ -98,7 +98,7 @@ for (const [phone, dark] of [
       await say(chat, "push Delivery integrity and release safety to next quarter and make Commenter own it");
       await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood two changes:");
       await expect(last(chat).getByTestId("chat-card")).toHaveCount(2);
-      await expect(last(chat).getByTestId("chat-card").first()).toContainText("Move Delivery integrity and release safety to 1 Jan");
+      await expect(last(chat).getByTestId("chat-card").first()).toContainText("Move Delivery integrity and release safety to Jan 1");
       await expect(last(chat).getByTestId("chat-card").last()).toContainText("Make Commenter the owner of Delivery integrity and release safety");
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
     });
@@ -140,7 +140,7 @@ for (const [phone, dark] of [
       await expect(choices.getByRole("button")).toHaveText(["Delivery integrity and release safety", "Delivery pipeline v2", "Neither"]);
       await tap(choices.getByRole("button", { name: "Delivery pipeline v2" }));
       await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change:");
-      await expect(last(chat).getByTestId("chat-card")).toContainText("Move Delivery pipeline v2 to 1 Jan");
+      await expect(last(chat).getByTestId("chat-card")).toContainText("Move Delivery pipeline v2 to Jan 1");
       await expect(chat.locator('[data-testid="chat-message"][data-author="person"]').last().getByTestId("chat-message-body")).toHaveText("Delivery pipeline v2");
       for (const b of await choices.getByRole("button").all()) await expect(b).toBeDisabled();
 
@@ -171,7 +171,7 @@ for (const [phone, dark] of [
       await tap(last(chat).getByRole("button", { name: "Retry" }));
       await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change:");
       await expect(last(chat).getByRole("button", { name: "Retry" })).toHaveCount(0);
-      await expect(card(chat, "Move Delivery pipeline v2 to 1 Jan")).toHaveCount(1);
+      await expect(card(chat, "Move Delivery pipeline v2 to Jan 1")).toHaveCount(1);
     });
 
     test(`meeting chat: a viewer's free-form change gets the ask-the-presenter note (${where})`, async ({ page }) => {
@@ -194,7 +194,7 @@ for (const [phone, dark] of [
       const thread = panel.getByTestId("ask-chat-thread");
       await say(panel, "can we push Delivery pipeline v2 out a quarter");
       await expect(last(thread).getByTestId("chat-message-body")).toHaveText("I understood one change:");
-      const moved = card(thread, "Move Delivery pipeline v2 to 11 Apr");
+      const moved = card(thread, "Move Delivery pipeline v2 to Apr 11");
       await expect(moved.getByRole("button", { name: "Propose" })).toBeEnabled();
 
       await say(panel, "push Delivery pipeline v2 to next quarter and cut Delivery integrity and release safety");

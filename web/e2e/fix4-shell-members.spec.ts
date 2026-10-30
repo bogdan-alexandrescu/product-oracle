@@ -5,7 +5,7 @@ import { login } from "./helpers";
 /**
  * QA pass 4 on Settings › Members and My account (fix4-shell): a removed member's status fits
  * its column, role names and emails read whole, the Roles panel has one heading and a line for
- * the engineering lead, your own phone card shows role and status only, and the password form
+ * the engineering lead, your own phone card shows role and status (and its Engineering lead box), and the password form
  * names whose password it is. Mock-backed, driven through the UI as a person would.
  */
 
@@ -111,6 +111,14 @@ test.describe("on a phone", () => {
     const a = (await role.boundingBox())!;
     const b = (await status.boundingBox())!;
     expect(Math.abs(a.y + a.height / 2 - (b.y + b.height / 2))).toBeLessThanOrEqual(2);
+    // review minor: your own card still has the Engineering lead box, and it saves.
+    const lead = own.getByRole("checkbox", { name: "Engineering lead: admin@example.com" });
+    await expect(lead).toBeVisible();
+    const was = await lead.isChecked();
+    await lead.click();
+    await expect(lead).toBeChecked({ checked: !was });
+    await page.reload();
+    await expect(memberRow(page, "admin@example.com").getByRole("checkbox", { name: "Engineering lead: admin@example.com" })).toBeChecked({ checked: !was });
     // Someone else's card keeps its Remove.
     await expect(memberRow(page, "commenter@example.com").getByRole("button", { name: "Remove commenter@example.com" })).toBeVisible();
   });

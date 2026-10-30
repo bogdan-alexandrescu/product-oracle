@@ -70,6 +70,8 @@ test.describe("on a phone", () => {
     await expect(page.getByRole("button", { name: /^Sort incoming requests automatically/ })).toHaveCount(0);
 
     // Everything the desktop offers is under More.
+    // review minor: More says it opens a panel, for a screen reader.
+    await expect(page.getByTestId("requests-more")).toHaveAttribute("aria-haspopup", "true");
     await page.getByTestId("requests-more").click();
     const panel = page.getByTestId("requests-more-panel");
     await expect(panel.getByRole("switch", { name: /^Auto-sort new requests daily/ })).toBeVisible();

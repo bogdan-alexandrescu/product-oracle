@@ -30,7 +30,7 @@ Test cards (protects / fails_when / no_claim):
   commenters propose it, viewers are refused; fails_when=a role applies that may not, or the
   item takes one slice's dates only; no_claim=undo (the engine's own tests).
 - test_quarter_label_from_the_plan: protects=Priorities' quarter is the plan's span
-  ("2 Nov - 12 Feb"), not the calendar quarter; fails_when="Q4 2026"; no_claim=the web.
+  ("Nov 2 - Feb 12"), not the calendar quarter; fails_when="Q4 2026"; no_claim=the web.
 - test_approving_a_version_reads_its_plan (review): protects=approving a PRD version with
   no tables queues the prd_plan job at once, and its answer is what the roadmap shows;
   fails_when=only a call to the plan endpoint reads it; no_claim=the live model.
@@ -38,7 +38,7 @@ Test cards (protects / fails_when / no_claim):
   stores no plan row and queues no job; fails_when=a read writes or spends; no_claim=the
   owner's "Read the plan again".
 - test_dates_to_confirm_show_what_accept_applies (review): protects=the roadmap item's
-  suggestion is the span of its open slices (F-03: 16 Nov - 18 Dec), the dates Accept
+  suggestion is the span of its open slices (F-03: Nov 16 - Dec 18), the dates Accept
   saves; fails_when=it shows the first slice's dates only; no_claim=the web tray.
 - test_this_quarters_weeks_follow_the_plan (review): protects=Priorities' engineer-weeks
   per goal "this quarter" count the items the plan places in its span, whatever their
@@ -147,7 +147,7 @@ async def test_plan_endpoint_per_role(client, role):
     assert body["status"] == "ready" and body["source"] == "prd"
     assert [m["code"] for m in body["milestones"]] == ["M1", "M2", "M3"]
     assert body["milestones"][2]["start_date"] == "2026-12-28"
-    assert body["span"]["label"] == "2 Nov - 12 Feb"
+    assert body["span"]["label"] == "Nov 2 - Feb 12"
     assert {x["code"] for x in body["slices"]} >= {"F-03a", "F-03b"}
     assert {g["name"] for g in body["goals"]} == {"Activation", "Growth"}
     assert {(w["goal"], w["milestone"], w["weeks"]) for w in body["goal_weeks"]} >= {
@@ -169,7 +169,7 @@ async def test_new_approved_version_updates_without_duplicating(client):
         await version(s, prd, 3, FIXTURE.replace("12 Feb 2027", "26 Feb 2027"), approved=False)
         await s.commit()
     body = (await client.get(url("guided-setup"), headers=ctx.as_("viewer"))).json()
-    assert body["version"] == 2 and body["span"]["label"] == "2 Nov - 19 Feb"
+    assert body["version"] == 2 and body["span"]["label"] == "Nov 2 - Feb 19"
     r = await client.post(f"{url('guided-setup')}/read-again", headers=ctx.as_("owner"))
     assert r.status_code == 200 and r.json()["version"] == 2
     async with tenant_session(ctx.tenant_id) as s:
@@ -234,7 +234,7 @@ async def test_roadmap_items_carry_slices_and_dated_milestones(client):
     assert (m["start_date"], m["end_date"], m["effort_weeks"]) == ("2026-11-02", "2026-11-27", 8.0)
     assert m["done_when"] == ["Ten teams finish setup", "the checklist is live"]
     assert {"goal": "Growth", "target": "20 weekly active teams"} in m["targets"]
-    assert body["span"]["label"] == "2 Nov - 12 Feb"
+    assert body["span"]["label"] == "Nov 2 - Feb 12"
 
 
 async def test_dates_to_confirm_follow_the_plan(client):
@@ -260,7 +260,7 @@ async def test_quarter_label_from_the_plan(client):
     r = await client.get("/v1/simple/priorities", headers=ctx.as_("viewer"))
     assert r.status_code == 200, r.text
     q = r.json()["quarter"]
-    assert (q["label"], q["start"], q["end"]) == ("2 Nov - 12 Feb", "2026-11-02", "2027-02-12")
+    assert (q["label"], q["start"], q["end"]) == ("Nov 2 - Feb 12", "2026-11-02", "2027-02-12")
 
 
 @pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
@@ -271,7 +271,7 @@ async def test_priorities_carry_the_plan(client, role):
     assert r.status_code == 200, r.text
     p = r.json()["plan"]
     assert p["prd"]["slug"] == "guided-setup" and p["status"] == "ready"
-    assert p["span"]["label"] == "2 Nov - 12 Feb"
+    assert p["span"]["label"] == "Nov 2 - Feb 12"
     ms = {m["code"]: m for m in p["milestones"]}
     assert [c for c in ms] == ["M1", "M2", "M3"]
     assert (ms["M2"]["start_date"], ms["M2"]["end_date"]) == ("2026-11-30", "2026-12-25")
@@ -405,7 +405,7 @@ async def test_approving_a_version_reads_its_plan(client):
         assert (await plan.run_job(s, job, ask))["read"] is True
         await s.commit()
     body = (await client.get("/v1/simple/roadmap", headers=ctx.as_("viewer"))).json()
-    assert body["span"]["label"] == "9 Nov - 4 Dec"
+    assert body["span"]["label"] == "Nov 9 - Dec 4"
     (item,) = body["items"]
     assert [x["code"] for x in item["slices"]] == ["F-03"]
 

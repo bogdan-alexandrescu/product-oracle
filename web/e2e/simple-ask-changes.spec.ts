@@ -60,7 +60,7 @@ for (const phone of [false, true]) {
       const start = await bar.getAttribute("data-start");
       const ask = await openAsk(page, phone);
       await say(ask, "move Weekly alert digest to Q2");
-      const card = ask.getByTestId("chat-card").filter({ hasText: "Move Weekly alert digest to 1 Apr" });
+      const card = ask.getByTestId("chat-card").filter({ hasText: "Move Weekly alert digest to Apr 1" });
       await expect(card.getByRole("button", { name: "Apply" })).toBeEnabled();
       await tap(card.getByRole("button", { name: "Preview" }));
       if (!phone) {

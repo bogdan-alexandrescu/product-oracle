@@ -12,6 +12,8 @@ import { expect, test, type Page } from "./test";
  * - qa-shell-24: the quick add's placeholder fits its box; a phone's pickers sit behind one
  *   Filters button.
  * - qa-shell-25: a phone's goal lanes are named ("Faster activation, 4 items").
+ * - review minor: a phone's Filters panel closes on Escape (focus back on Filters) and on a
+ *   tap outside it, as the sheets beside it do; a pick inside it keeps it open.
  * no_claim: the API's company day (api/oracle/company_time.py, its own pytest).
  */
 
@@ -115,5 +117,26 @@ test.describe("phone", () => {
     await open(page);
     await page.locator('g[data-testid="phone-lane"]').first().click();
     await expect(page.getByTestId("lane-row").first()).toContainText(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} → (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}/);
+  });
+
+  test("review: the Filters panel closes on Escape and on a tap outside it", async ({ page }) => {
+    await open(page);
+    const toggle = page.getByTestId("filters-toggle");
+    const pickers = page.getByTestId("filter-pickers");
+    await toggle.click();
+    await expect(pickers).toBeVisible();
+    // A pick inside the panel keeps it open.
+    await pickers.getByRole("combobox", { name: "Track", exact: true }).selectOption({ index: 1 });
+    await expect(pickers).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(pickers).toHaveCount(0);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toBeFocused();
+
+    await toggle.click();
+    await expect(pickers).toBeVisible();
+    await page.getByTestId("simple-chart").tap({ position: { x: 5, y: 5 } });
+    await expect(pickers).toHaveCount(0);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 });

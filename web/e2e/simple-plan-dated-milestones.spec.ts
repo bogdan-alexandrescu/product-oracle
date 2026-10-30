@@ -82,7 +82,7 @@ for (const phone of [false, true]) {
           await page.goto("/simple");
           const card = page.getByTestId("home-plan");
           await expect(page.getByRole("heading", { name: "The plan this quarter" })).toBeVisible();
-          await expect(card.getByTestId("home-plan-span")).toHaveText("2 Nov - 12 Feb");
+          await expect(card.getByTestId("home-plan-span")).toHaveText("Nov 2 - Feb 12");
           await expectDatedRows(card, "home-strip");
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
