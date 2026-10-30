@@ -141,7 +141,7 @@ export function ChatCard({
   const apply = (fix: number | null = null, withDependents = false) =>
     run(async () => {
       stopPreview();
-      const r = await applyCard(card.id, fix, fix == null && !withDependents && fields ? corrected(fields) : undefined, withDependents);
+      const r = await applyCard(card.id, fix, fix == null && !withDependents && fields ? corrected(fields) : undefined, withDependents && (card.dependent_ids ?? []));
       setFields(null);
       if (r.card.status === "applied" && r.card.item_id) sendApplied(r.card.item_id);
       if (r.result && r.result.change.status === "proposed" && r.result.change.routed_to.length) {
@@ -292,8 +292,9 @@ export function ChatCard({
             </button>
           )}
           {cutsDependents && (
-            <button type="button" className="simple-button simple-button-wrap" disabled={busy || !card.may} onClick={() => void apply(null, true)} title={card.why_not ?? undefined}>
-              {card.may === "propose" ? "Propose: cut it and its dependents" : "Cut it and its dependents"}
+            // Review major: it applies only when the reader decides every item it cuts.
+            <button type="button" className="simple-button simple-button-wrap" disabled={busy || !card.may_with_dependents} onClick={() => void apply(null, true)} title={card.why_not ?? undefined}>
+              {card.may_with_dependents === "propose" ? "Propose: cut it and its dependents" : "Cut it and its dependents"}
             </button>
           )}
           {!actionsOnly && (

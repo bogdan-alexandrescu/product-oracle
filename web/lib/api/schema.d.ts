@@ -17700,6 +17700,8 @@ export interface components {
              * @default false
              */
             with_dependents: boolean;
+            /** Dependents */
+            dependents?: string[] | null;
         };
         /** ChatApplyOut */
         ChatApplyOut: {
@@ -17782,6 +17784,13 @@ export interface components {
              * @default []
              */
             dependents: string[];
+            /**
+             * Dependent Ids
+             * @default []
+             */
+            dependent_ids: string[];
+            /** May With Dependents */
+            may_with_dependents?: ("apply" | "propose") | null;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {

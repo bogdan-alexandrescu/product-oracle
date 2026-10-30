@@ -58610,6 +58610,21 @@
             "type": "boolean",
             "title": "With Dependents",
             "default": false
+          },
+          "dependents": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependents"
           }
         },
         "type": "object",
@@ -58929,6 +58944,30 @@
             "type": "array",
             "title": "Dependents",
             "default": []
+          },
+          "dependent_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Dependent Ids",
+            "default": []
+          },
+          "may_with_dependents": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "apply",
+                  "propose"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "May With Dependents"
           }
         },
         "type": "object",

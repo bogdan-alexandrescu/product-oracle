@@ -1227,8 +1227,13 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   void _thread;
   void _meeting;
   // fix5-cut-dependents: what "Cut it and its dependents" cuts with the item (chat.cards_out).
-  const dependents = c.status === "open" && c.op === "cut" && c.item_id ? cutDependents(itemsFor(db, ctx), c.item_id).map((i) => i.title) : [];
-  return { change_words: null, correct: null, ...rest, ...mayOf(db, chat, c, ctx), flags: check.flags, dependents };
+  const items = c.status === "open" && c.op === "cut" && c.item_id ? itemsFor(db, ctx) : [];
+  const waiting = c.item_id && items.length ? cutDependents(items, c.item_id) : [];
+  const may = mayOf(db, chat, c, ctx);
+  // Review major (chat.cards_out): "Cut it and its dependents" applies only when the reader decides every item it cuts.
+  const allMine = [c.item_id, ...waiting.map((i) => i.id)].every((id) => !!items.find((i) => i.id === id)?.can_decide);
+  const may_with_dependents = waiting.length && may.may ? (allMine ? "apply" : "propose") : null;
+  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -1331,9 +1336,9 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 }
 
 /** One card through the change engine (or its fix n): the card out and the result, or the engine's refusal. */
-async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings, withDependents = false): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
+async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings, withDependents: boolean | string[] = false): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
   // fix5-cut-dependents: a cut card applies as cut_with_dependents (one change), and then names every item it cut.
-  const use = withDependents ? { op: CUT_ALL, target: c.target, before: c.before, after: {} } : n == null ? c : c.fixes[n];
+  const use = withDependents ? { op: CUT_ALL, target: c.target, before: withDependents === true ? c.before : { ...c.before, dependents: withDependents }, after: {} } : n == null ? c : c.fixes[n];
   if (c.op === "suggest_feature") {
     // Filed as the person's own suggestion (origin "person"): it lands under People.
     const goal = Object.keys(GOALS).find((k) => goalId(k) === c.target.goal_id) ?? "";
@@ -1729,7 +1734,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
         if (said && said.card_ids.length === 1 && said.body.startsWith("I understood: ")) said.body = `I understood: ${c.summary.replace(/^./, (x) => x.toLowerCase())}.`;
         c.fixes = asIf(db, c).fixes;
       }
-      const out = await applyOne(db, chat, c, ctx, n, s8, withDependents);
+      const out = await applyOne(db, chat, c, ctx, n, s8, withDependents && Array.isArray(b.dependents) ? b.dependents.map(String) : withDependents);
       return out instanceof Response ? out : json(200, out);
     }
   }

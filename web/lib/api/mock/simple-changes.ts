@@ -168,7 +168,9 @@ const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => 
 
 /** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
  * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to">>): boolean {
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to" | "after">>): boolean {
+  // Review major (changes.decides_all): a cut with its dependents needs rights on every item it cuts.
+  if (c.op === CUT_ALL && c.after) return Object.keys(c.after).every((id) => decides(db, ctx, id));
   if (KEY_DATE_OPS.includes(c.op)) {
     const rm = roadmapOfDoc(db, c.target.document_id);
     return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
@@ -184,10 +186,22 @@ function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c:
     const decider = db.deciders?.[slugOf(c.target.roadmap_id) ?? ""];
     return decider ? [decider] : ctx.owners;
   }
+  if (c.op === CUT_ALL) return cutRoute(db, ctx, Object.keys(c.after));
   const key = c.target.item_id ? keyOf(db, c.target.item_id) : undefined;
   if (!key) return ctx.owners;
   const ids = deciderIds(db, seed(db, key), ctx.roles);
   return ids.length ? ids : ctx.owners;
+}
+
+/** changes.cut_route: the deciders every item of a cut with its dependents shares, else the company's owners. */
+function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
+  let common: string[] | null = null;
+  for (const id of itemIds) {
+    const key = keyOf(db, id);
+    const ids = key ? deciderIds(db, seed(db, key), ctx.roles) : [];
+    common = common === null ? ids : common.filter((i) => ids.includes(i));
+  }
+  return common?.length ? common : ctx.owners;
 }
 
 /** The stored values of one item's fields (the API's changes.read). */
@@ -583,7 +597,9 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const target: Values = { ...body.target };
   const key = TARGETS[body.op] ? "" : keyOf(db, target.item_id);
   if (key === undefined) return json(404, { detail: "No such roadmap item" });
-  const applies = decides(db, ctx, target.item_id);
+  // Review major (changes.create): a cut with its dependents applies when the caller decides every item it cuts.
+  const cutAll = body.op === CUT_ALL && key ? [String(target.item_id), ...cutDependents(roadmapOut(readerDb(db, ctx), "owner", new URLSearchParams())!.items, String(target.item_id)).map((i) => i.id)] : null;
+  const applies = cutAll ? cutAll.every((id) => decides(db, ctx, id)) : decides(db, ctx, target.item_id);
   let session: Session | undefined;
   if (body.session_id) {
     session = (db.sessions ?? []).find((s) => s.id === body.session_id && s.started_by === ctx.id);
@@ -624,6 +640,10 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     const items = roadmapOut(seen, "owner", new URLSearchParams())!.items;
     const deps = cutDependents(items, String(target.item_id));
     if (!deps.length) return json(422, { detail: "No item depends on this one: cut it alone" });
+    // Review minor: the dependents the caller saw; others waiting on it now are refused.
+    const saw = body.before.dependents;
+    const now_ids = deps.map((i) => i.id);
+    if (Array.isArray(saw) && [...saw].map(String).sort().join() !== [...now_ids].sort().join()) return conflict(db, ctx, { dependents: now_ids }, now_ids, "Changed since you saw it");
     const cut = [items.find((i) => i.id === target.item_id)!, ...deps];
     target.titles = cut.map((i) => i.title);
     before = Object.fromEntries(cut.map((i) => [i.id, read(seen, keyOf(db, i.id)!, ["cut"], target)]));
