@@ -462,8 +462,21 @@ export function reasonLabel(reason: string): string {
  */
 export function spentWhy(a: Account): string {
   const w = a.spent_by ? a.windows[a.spent_by] : undefined;
-  const used = w ? `${formatPercent(w.utilization)} of its ${windowWord(a.spent_by!)} window is used. ` : "";
-  return `${used}Oracle stops giving an account new calls once less than 15% of a window is left, so a job it starts can finish.`;
+  const used = w ? `${formatPercent(w.utilization)} of its ${windowWord(a.spent_by!)} window is used.` : "";
+  // A window used up needs no floor to explain it.
+  if (atLimit(a)) return used;
+  return `${used}${used ? " " : ""}Oracle stops giving an account new calls once less than 15% of a window is left, so a job it starts can finish.`;
+}
+
+/** Whether the window that spends the account is used up, not only near its end. */
+function atLimit(a: Account): boolean {
+  const w = a.spent_by ? a.windows[a.spent_by] : undefined;
+  return !!w && w.utilization >= 1;
+}
+
+/** "Near its weekly limit", or "At its weekly limit" once that window is used up. */
+export function spentLabel(a: Account): string {
+  return `${atLimit(a) ? "At" : "Near"} its ${a.spent_by ? limitWord(a.spent_by) : "limit"}`;
 }
 
 /**
@@ -474,7 +487,7 @@ export function spentWhy(a: Account): string {
 function AcctState({ account, zone, stacked }: { account: Account; zone: string; stacked?: boolean }) {
   const { state } = account;
   if (account.spent_until) {
-    const title = `Near its ${account.spent_by ? limitWord(account.spent_by) : "limit"}: Oracle gives it no new calls until then. ${spentWhy(account)}`;
+    const title = `${spentLabel(account)}: Oracle gives it no new calls until then. ${spentWhy(account)}`;
     const when = inWords(account.spent_until, zone);
     // In a row the time goes under the chip, so the column stays narrow.
     return stacked ? (
@@ -707,7 +720,7 @@ function Detail({
         )}
         {account.spent_by && (
           <div data-testid="fact-spent">
-            <Fact label="Spent">Near its {limitWord(account.spent_by)}</Fact>
+            <Fact label="Spent">{spentLabel(account)}</Fact>
             <p className="pb-1 text-[13px] leading-4 text-text2">{spentWhy(account)}</p>
           </div>
         )}
