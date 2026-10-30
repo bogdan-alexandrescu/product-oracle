@@ -127,6 +127,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   // a second tap on its words opens it.
   const [tapped, setTapped] = useState<string | null>(null);
   const firstTap = useRef(false);
+  // qa-simple-prd-p3-1: a touch that lands on a line's hidden Edit takes no action.
+  const hiddenTap = useRef(false);
   const [diff, setDiff] = useState<string | null>(null);
   const [wide, setWide] = useState<string | null>(null);
   // Lines shortened with "…" shown whole, in place (CLD's production walk, 2026-10-27).
@@ -490,15 +492,25 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                               <button
                                 type="button"
                                 // qa-simple-prd-37: hidden, it takes no width (it overlays the line's end); qa-simple-prd-36: 44 px on a phone.
-                                // qa-simple-prd-p3-1: hidden, it takes no taps either. qa-simple-prd-p3-25: on a desktop it
+                                // qa-simple-prd-p3-1: hidden, a touch on it opens nothing. qa-simple-prd-p3-25: on a desktop it
                                 // always sits in the room kept at the line's end, so showing it moves no words.
                                 data-edit-for={l.id}
-                                className={`simple-noprint flex-none text-sm whitespace-nowrap underline focus:pointer-events-auto focus:opacity-100 max-md:min-h-11 max-md:min-w-11 max-md:px-3 ${
+                                className={`simple-noprint flex-none text-sm whitespace-nowrap underline focus:opacity-100 max-md:min-h-11 max-md:min-w-11 max-md:px-3 ${
                                   tapped === l.id
                                     ? "opacity-100 max-md:static md:absolute md:top-0 md:right-0"
-                                    : "pointer-events-none absolute top-0 right-0 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+                                    : "absolute top-0 right-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                                 }`}
-                                onClick={() => { setDiscarding(false); setEditing(l.id); setDraftText(l.full ?? l.text); }}
+                                // A touch on it while hidden only shows it (as a tap on its line does).
+                                onPointerDown={(e) => { hiddenTap.current = e.pointerType !== "mouse" && tapped !== l.id; }}
+                                onClick={() => {
+                                  if (hiddenTap.current) {
+                                    hiddenTap.current = false;
+                                    return;
+                                  }
+                                  setDiscarding(false);
+                                  setEditing(l.id);
+                                  setDraftText(l.full ?? l.text);
+                                }}
                               >
                                 <span aria-hidden data-testid="line-edit-word">{v.can_edit ? "Edit" : "Propose wording"}</span>
                                 <span className="sr-only">{v.can_edit ? `Edit ${words.get(l.id)}` : `Propose wording for ${words.get(l.id)}`}</span>

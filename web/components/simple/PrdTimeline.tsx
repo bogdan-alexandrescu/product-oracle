@@ -29,7 +29,7 @@ const DAY = 86_400_000;
 const PM_LANE = "Product manager's work";
 const ms = (day: string) => Date.parse(`${day.slice(0, 10)}T00:00:00Z`);
 /** "27 Nov". */
-const dm = (day: string) => calendarDay(day, { day: "numeric", month: "short" }, "en-GB").replace(" ", "\u00a0");
+const dm = (day: string) => calendarDay(day, { day: "numeric", month: "short" }, "en-GB");
 /** "27 Nov 2026". */
 export const dmy = (day: string) => calendarDay(day, { day: "numeric", month: "short", year: "numeric" }, "en-GB");
 /** "56", "2.5": a number of weeks with no pointless ".0". */
@@ -816,7 +816,8 @@ function PhonePlan({ plan, title, today, pick, onPick, onPlan, m }: { plan: Plan
     if (x.start_date) events.push({ day: x.start_date, order: 2, node });
     else undated.push(node);
   }
-  for (const d of datedDecisions(plan)) {
+  // With no milestone dated there is no line to put them on (as on a desktop): they stay under their milestone.
+  for (const d of plan.milestones.some(dated) ? datedDecisions(plan) : []) {
     const due = timelineDue(plan, d, today, false);
     events.push({
       day: d.day,
@@ -1010,9 +1011,10 @@ export function MilestoneCard({ plan, m, today, phone, marked = [] }: { plan: Pl
             {groups.map(([kind, of]) => (
               <div key={kind}>
                 <h4 className="mb-1 text-[12px] leading-4 font-[750] tracking-[.07em] text-text-faint uppercase">
-                  {kind}
-                  {"\u00a0"}
-                  <span className="font-semibold whitespace-nowrap">· {of.length}</span>
+                  {kind.split(" ").slice(0, -1).join(" ")}{" "}
+                  <span data-testid="kind-tail" className="whitespace-nowrap">
+                    {kind.split(" ").at(-1)} <span className="font-semibold">· {of.length}</span>
+                  </span>
                 </h4>
                 <ul>
                   {of.map((s) => (

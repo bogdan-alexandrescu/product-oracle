@@ -125,7 +125,7 @@ test.describe("phone, a plan", () => {
     await plan(page);
     const part = page.getByTestId("milestone-part");
     const pm = part.locator("h4").filter({ hasText: /Product manager/i });
-    if (await pm.count()) expect(await pm.first().evaluate((el) => el.textContent)).toMatch(/engineering · \d/i);
+    if (await pm.count()) await expect(pm.first().getByTestId("kind-tail")).toHaveText(/^engineering · \d$/i);
     const dates = part.getByTestId("part-dates");
     const keep = await dates.locator("span.whitespace-nowrap").allTextContents();
     expect(keep.some((t) => /engineer-weeks/.test(t))).toBe(true);
@@ -231,17 +231,16 @@ test.describe("desktop, no plan", () => {
 });
 
 test.describe("phone, no plan", () => {
-  test.use({ viewport: PHONE });
+  test.use({ viewport: PHONE, hasTouch: true });
 
-  test("a hidden Edit takes no tap (p3-1)", async ({ page }) => {
+  test("a touch on a line's hidden Edit opens nothing; it shows the Edit (p3-1)", async ({ page }) => {
     await paper(page);
     const row = line(page, "bets-1");
-    const edit = row.locator("[data-edit-for]");
-    // A phone has no pointer resting on the page.
-    await page.mouse.move(1, 1);
     const b = (await row.getByTestId("one-pager-line-text").boundingBox())!;
-    const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest("[data-edit-for]") != null, [b.x + b.width - 10, b.y + 10]);
-    expect(hit).toBe(false);
-    await expect(edit).toHaveCSS("pointer-events", "none");
+    const e = (await row.locator("[data-edit-for]").boundingBox())!;
+    expect(e.x).toBeLessThan(b.x + b.width);
+    await page.touchscreen.tap(e.x + e.width / 2, e.y + e.height / 2);
+    await expect(page.getByLabel("New wording for")).toHaveCount(0);
+    await expect(row.locator("[data-edit-for]")).toHaveCSS("opacity", "1");
   });
 });
