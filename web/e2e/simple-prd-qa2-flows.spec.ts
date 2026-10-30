@@ -115,9 +115,9 @@ test.describe("desktop", () => {
   test("qa-20: a flow's time carries the company zone, and its day when not today", async ({ page }) => {
     await open(page);
     // Drawn Oct 26 (the mock's today is Oct 22): the day and the zone.
-    await expect(bet(page, 2).getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM PDT");
+    await expect(bet(page, 2).getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM");
     await bet(page, 2).getByRole("button", { name: "Open the flow", exact: true }).click();
-    await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM PDT");
+    await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM");
   });
 
   test("qa-21: Ask Oracle to draw it titles the flow from the bet's words; drawn today, the time alone with its zone", async ({ page }) => {

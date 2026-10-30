@@ -208,7 +208,7 @@ test("a commenter's board move is a proposal the owner accepts", async ({ page }
   await page.context().addInitScript((key) => localStorage.setItem(key, "default"), MOCK_SCENARIO_KEY);
   await open(page, "board", "commenter@example.com");
   await dragTo(page, "alert-export", "now");
-  await expect(page.getByText("Moved 'Alert history export' to Now proposed: it waits for the decider")).toBeVisible();
+  await expect(page.getByText(/^Moved 'Alert history export' to Now proposed: it waits for .+ in Needs a decision$/)).toBeVisible();
   await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
   await expect(card(page, "alert-export").getByTestId("board-pending")).toContainText("Proposed by Commenter: move to Now");
   await page.goto("/home");

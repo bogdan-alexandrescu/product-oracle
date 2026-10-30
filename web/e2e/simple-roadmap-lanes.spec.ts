@@ -89,21 +89,22 @@ for (const scheme of ["light", "dark"] as const) {
       const b = (await slice(page, "F-05b").locator("rect[data-slice-body]").boundingBox())!;
       expect(Math.abs(a.y - b.y)).toBeLessThan(1);
       await expect(page.locator('[data-testid="slice-connector"][data-feature="F-05"]')).toHaveAttribute("stroke-dasharray", /\d/);
-      await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText(/^F-05a/);
+      // fix4 qa-simple-roadmap-3: a slice is labelled by its name, never its code.
+      await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText(/^Team invites/);
       // The axis: months, weeks, Today; the milestones' flags; the holidays.
       await expect(page.getByTestId("axis-tick").filter({ hasText: "Dec" })).toHaveCount(1);
       await expect(page.getByTestId("axis-week").filter({ hasText: /^16$/ })).toHaveCount(1);
       await expect(page.getByTestId("today-pill")).toHaveText("Today");
       const ends = page.getByTestId("milestone-end");
       await expect(ends).toHaveCount(3);
-      await expect(ends.nth(0).getByTestId("milestone-end-label")).toHaveText("M1 ends 27 Nov");
-      await expect(ends.nth(1).getByTestId("milestone-end-label")).toHaveText("M2 ends 25 Dec");
-      await expect(ends.nth(2).getByTestId("milestone-end-label")).toHaveText("M3 ends 12 Feb");
+      await expect(ends.nth(0).getByTestId("milestone-end-label")).toHaveText("M1 ends Nov 27");
+      await expect(ends.nth(1).getByTestId("milestone-end-label")).toHaveText("M2 ends Dec 25");
+      await expect(ends.nth(2).getByTestId("milestone-end-label")).toHaveText("M3 ends Feb 12, 2027");
       await expect(ends.nth(0).getByTestId("milestone-flag")).toBeAttached();
       await expect(ends.nth(0).getByTestId("milestone-end-line")).toHaveAttribute("stroke-dasharray", /\d/);
       await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
       const legend = page.getByTestId("simple-chart").getByTestId("legend");
-      for (const words of ["M1", "M2", "M3", "PM-owned, no engineering", /^Today \d+ \w{3}$/, "Holidays 28 Dec – 1 Jan", "slices of one feature"])
+      for (const words of ["M1", "M2", "M3", "PM-owned, no engineering", /^Today \w{3} \d+$/, "Holidays Dec 28 – Jan 1, 2027", "slices of one feature"])
         await expect(legend.getByTestId("legend-item").filter({ hasText: words })).toHaveCount(1);
       await expect(page.getByTestId("lanes-hint")).toHaveText("Pieces stack inside a lane when they run at once");
       const w = await page.evaluate(() => document.documentElement.scrollWidth);

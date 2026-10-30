@@ -72,8 +72,9 @@ test.describe("desktop 1440x900", () => {
     await expect(chip).not.toContainText("▘");
     await expect(chip).not.toContainText("⠿");
 
-    // The title is still shown as the chip's visible text, just not as its accessible name.
-    await expect(chip).toContainText(title);
+    // fix4 qa-simple-roadmap-49: the chip keeps saying what it is ("New item"); the title is in the box (and its hover).
+    await expect(chip).toHaveText("New item");
+    await expect(chip.locator("span[title]")).toHaveAttribute("title", title);
   });
 
   test("qa-simple-roadmap-14 / 48: the item card reads in plain words, with a colon after Decided in D-4", async ({ page }) => {
@@ -98,10 +99,11 @@ test.describe("desktop 1440x900", () => {
     await expect(card.getByTestId("card-dates")).toContainText("Dates accepted from Oracle");
 
     // Nothing depends on it: plain words, not "Nothing" (an id-less, unexplained word).
-    await expect(card.getByTestId("card-needed")).toHaveText("no other items");
+    await expect(card.getByTestId("card-needed")).toHaveText("No other items");
 
     // The meeting decision that moved it, with the colon the sentence needs.
-    await expect(card.getByTestId("card-decided-in")).toContainText("Decided in D-4: Moved Weekly alert digest");
-    await expect(card.getByTestId("card-decided-in")).not.toContainText("D-4 Moved");
+    // fix4 qa-simple-roadmap-3: the decision by its title, no "D-4".
+    await expect(card.getByTestId("card-decided-in")).toContainText("Moved Weekly alert digest");
+    await expect(card.getByTestId("card-decided-in")).not.toContainText("D-4");
   });
 });

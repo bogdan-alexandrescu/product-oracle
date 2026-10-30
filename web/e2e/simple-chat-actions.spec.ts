@@ -69,9 +69,10 @@ async function preview(card: Locator, ...lines: string[]) {
   for (const l of lines) await expect(p).toContainText(l);
 }
 
-async function apply(card: Locator, by = "Admin") {
+async function apply(card: Locator) {
   await tap(card.getByRole("button", { name: "Apply" }));
-  await expect(card.getByTestId("chat-card-outcome")).toContainText(`Applied by ${by}`);
+  // fix4 qa-simple-roadmap-27: the one who applied reads "you".
+  await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 }
 
 /** Opens Ask Oracle (the rail's button; the header's Ask on a phone): the visible panel. */
@@ -243,7 +244,7 @@ for (const [phone, dark] of [
       const panel = await openAsk(page, phone);
       const card = await understood(panel, "Approver owns In-app tour", "Make Approver the owner of In-app tour");
       await tap(card.getByRole("button", { name: "Propose" }));
-      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by Approver");
+      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by you");
       await expect(card.getByRole("button", { name: "Undo" })).toHaveCount(0);
 
       // The viewer, in a tab of their own (each tab keeps its own sign-in; the account menu is in the desktop rail).

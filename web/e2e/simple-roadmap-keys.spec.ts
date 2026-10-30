@@ -160,7 +160,7 @@ for (const [where, use] of [
         await page.keyboard.down("ArrowRight");
         for (let n = 0; n < 5; n++) await page.keyboard.down("ArrowRight");
         await page.keyboard.up("ArrowRight");
-        await expect(page.getByText(/proposed: it waits for the decider/)).toBeVisible();
+        await expect(page.getByText(/proposed: it waits for .+ in Needs a decision/)).toBeVisible();
         await page.waitForTimeout(800);
         await expect(b).toHaveAttribute("data-start", start);
         expect(await proposalsOn(page, b)).toBe(had + 1);
@@ -362,7 +362,7 @@ for (const [where, use] of [
         const right = where === "phone" ? "ArrowDown" : "ArrowRight";
         await page.keyboard.press(right);
         await page.keyboard.press(right);
-        await expect(page.getByText(/proposed: it waits for the decider/)).toBeVisible();
+        await expect(page.getByText(/proposed: it waits for .+ in Needs a decision/)).toBeVisible();
         await page.waitForTimeout(800);
         await expect(column(page, "now").locator('[data-item="alert-rules"]')).toBeVisible();
         await expect(card(page, "alert-rules").getByTestId("board-pending")).toHaveText(/Proposed by .*: move to Later/);

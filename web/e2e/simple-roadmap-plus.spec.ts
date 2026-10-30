@@ -103,7 +103,7 @@ for (const [where, use] of [
       test("an owner drags a phased bar on the waterfall, with Undo", async ({ page }) => {
         await openRoadmap(page, "waterfall");
         await expect(page.getByTestId("legend")).toContainText("a dated gate stays on its day");
-        await expect(page.getByTestId("legend")).toContainText(where === "phone" ? "press and hold first" : "drag a bar");
+        await expect(page.getByTestId("legend")).toContainText(where === "phone" ? "press and hold first" : "Drag a bar");
         const start = (await bar(page, "alert-rules").getAttribute("data-start"))!;
         const end = (await bar(page, "alert-rules").getAttribute("data-end"))!;
         const discover = await phase(page, "alert-rules", "discover").getAttribute("data-end");
@@ -147,7 +147,7 @@ for (const [where, use] of [
         const c0 = (await bar(page, "alert-export").getAttribute("data-start"))!;
         await bar(page, "alert-export").focus();
         await page.keyboard.press("ArrowRight");
-        await expect(page.getByText(/proposed: it waits for the decider/)).toBeVisible();
+        await expect(page.getByText(/proposed: it waits for .+ in Needs a decision/)).toBeVisible();
         await expect(bar(page, "alert-export")).toHaveAttribute("data-start", c0);
       });
 
@@ -169,7 +169,7 @@ for (const [where, use] of [
           await expect(marker(page, "Customer conference").getByTestId("key-date-label")).toHaveText("Customer conference");
           await expect(marker(page, "Customer conference").locator("line")).toHaveCount(1);
         }
-        await expect(page.getByTestId("legend")).toContainText("a key date");
+        await expect(page.getByTestId("legend")).toContainText("Key date");
         await page.getByTestId("format-timeline").click();
         await openFromTimeline(page, where === "phone", "alert-rules", "Grow retention");
         await expect(page.getByTestId("card-near")).toHaveText("Customer conference (Nov 14): ends 4 days before");
@@ -231,7 +231,7 @@ for (const [where, use] of [
         await editor(page).getByLabel("New key date's name").fill("Product launch");
         await editor(page).getByLabel("New key date's day").fill("2026-12-08");
         await editor(page).getByRole("button", { name: "Propose" }).click();
-        await expect(page.getByText(/Added the key date 'Product launch' proposed: it waits for the decider/)).toBeVisible();
+        await expect(page.getByText(/Added the key date 'Product launch' proposed: it waits for .+ in Needs a decision/)).toBeVisible();
         await expect(marker(page, "Product launch")).toHaveCount(0);
         await openRoadmap(page, "gantt", undefined, true);
         await page.getByTestId("needs-decision").click();

@@ -92,7 +92,7 @@ for (const [phone, dark] of [
       await expect(moved).toHaveCount(1);
       await expect(last(chat).getByRole("button", { name: "Apply all" })).toHaveCount(0);
       await tap(moved.getByRole("button", { name: "Apply" }));
-      await expect(moved.getByTestId("chat-card-outcome")).toContainText("Applied by Admin");
+      await expect(moved.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
       // chat-join: the owner half is chat-actions' set_owner, a second card.
       await say(chat, "push Delivery integrity and release safety to next quarter and make Commenter own it");

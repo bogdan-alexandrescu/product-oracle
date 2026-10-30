@@ -93,7 +93,8 @@ for (const [where, use] of [
           await expect(page.locator('[data-testid="broken-callout"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
           await expect(page.getByTestId("item-milestone").first()).toBeAttached();
           await expect(page.getByTestId("below-the-line")).toBeVisible();
-          await expect(page.getByTestId("return-place")).toHaveText("#1");
+          // fix4 qa-simple-roadmap-3: the return queue's place is on hover ("1st to come back"), not a "#1" on the bar.
+          await expect(page.locator('[data-testid="bar"][data-place="1"] title').first()).toContainText("1st to come back");
           // B2: the lanes name their goal and count their items.
           await expect(page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getByTestId("lane-count")).toHaveText("4 items");
           expect(await bar(page, "alert-digest").getAttribute("data-lane")).toBe(await page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getAttribute("data-lane"));
@@ -202,7 +203,7 @@ test("a commenter's drag is a proposal the owner accepts in the tray", async ({ 
   await expect(page.getByTestId("needs-decision")).toHaveCount(0);
   const before = await bar(page, "alert-export").getAttribute("data-start");
   await drag(page, "alert-export", 90);
-  await expect(page.getByText(/proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/proposed: it waits for .+ in Needs a decision/)).toBeVisible();
   await expect(bar(page, "alert-export")).toHaveAttribute("data-start", before!);
   await page.goto("/home");
   await signOut(page);
@@ -348,14 +349,14 @@ test("a viewer reads and cannot drag", async ({ page }) => {
 test("only a new feature's proposal carries a flow thumbnail", async ({ page }) => {
   await open(page, "commenter@example.com");
   await drag(page, "alert-export", 90);
-  await expect(page.getByText(/Moved 'Alert history export'.*proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Alert history export'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
   await bar(page, "alert-export").click();
   const card = page.getByTestId("floating-card");
   await expect(card.getByTestId("card-proposals")).toContainText("Move the dates");
   await expect(card.getByTestId("flow-thumb")).toHaveCount(0);
   await card.getByRole("button", { name: "Close" }).click();
   await drag(page, "setup-ideas", 90);
-  await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
   await bar(page, "setup-ideas").click();
   await card.getByTestId("flow-thumb").click();
   await expect(card).toHaveAttribute("data-wide", "true");
@@ -372,7 +373,7 @@ test("a commenter proposes a fix from the callout", async ({ page }) => {
   await open(page, "commenter@example.com");
   const callout = page.locator('[data-testid="broken-callout"][data-item="alert-digest"]');
   await callout.getByRole("button", { name: "Move the dependents" }).click();
-  await expect(page.getByText(/Moved what depends on 'Alert rules engine' proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/Moved what depends on 'Alert rules engine' proposed: it waits for .+ in Needs a decision/)).toBeVisible();
 });
 
 /**
@@ -438,7 +439,7 @@ test.describe("phone, long-press", () => {
   test("a feature's flow opens full height on a phone", async ({ page }) => {
     await open(page, "commenter@example.com", true);
     await longPressDrag(page, "setup-ideas", 60);
-    await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for the decider/)).toBeVisible();
+    await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for .+ in Needs a decision/)).toBeVisible();
     await page.getByTestId("chart-label").filter({ hasText: "Team invite nudges" }).click();
     const card = page.getByTestId("floating-card");
     await card.getByTestId("flow-thumb").click();

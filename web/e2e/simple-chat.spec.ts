@@ -81,7 +81,7 @@ for (const phone of [false, true]) {
       await expect(chat(owner).getByTestId("chat-message-body").filter({ hasText: "rename Setup checklist to First-run checklist" })).toBeVisible();
       const theirs = cardOf(owner, "Rename Setup checklist");
       await tap(theirs.getByRole("button", { name: "Apply" }));
-      await expect(theirs.getByTestId("chat-card-outcome")).toContainText("Applied by Admin");
+      await expect(theirs.getByTestId("chat-card-outcome")).toContainText("Applied by you");
       await expect(theirs.getByTestId("chat-card-decision")).toHaveText("Recorded as a meeting decision");
 
       // The approver's tab sees it applied.
@@ -120,7 +120,7 @@ for (const phone of [false, true]) {
       await expect(owner.getByTestId("chat-rules")).toContainText("Presenter plus Commenter, Approver");
       await approver.bringToFront();
       await tap(card.getByRole("button", { name: "Propose" }));
-      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by Approver");
+      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by you");
       await expect(card.getByTestId("chat-card-decision")).toHaveCount(0);
     });
 

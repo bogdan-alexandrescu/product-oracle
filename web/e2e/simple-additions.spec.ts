@@ -46,7 +46,7 @@ async function dragAdd(page: Page, title: string, target: Locator, at: "top" | "
   // All roadmaps and more than one: quick add asks which (the Roadmap filter's spec).
   await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
   const chip = page.getByTestId("quick-add-chip");
-  await expect(chip).toContainText(title);
+  await expect(chip).toHaveAttribute("aria-disabled", "false");
   // The chip and the target's top on screen together (the page's top).
   await page.evaluate(() => window.scrollTo(0, 0));
   const from = (await chip.boundingBox())!;
@@ -147,9 +147,9 @@ for (const scheme of ["light", "dark"] as const) {
       await page.getByTestId("needs-decision").click();
       const tray = page.getByTestId("decision-tray");
       const twin = tray.getByTestId("tray-twin").filter({ hasText: TWIN });
-      await expect(twin.getByTestId("looks-like-match").first()).toContainText("Looks like F-06 Weekly alert digest");
+      await expect(twin.getByTestId("looks-like-match").first()).toContainText("Looks like Weekly alert digest");
       await twin.getByTestId("looks-like-match").first().getByRole("button", { name: "Merge" }).click();
-      await expect(toastWith(page, `Merged '${TWIN}' into F-06 Weekly alert digest in your working draft`)).toBeVisible();
+      await expect(toastWith(page, `Merged '${TWIN}' into Weekly alert digest in your working draft`)).toBeVisible();
       await tray.getByRole("button", { name: "Close" }).click();
       await expect(column(page, "later").getByTestId("board-below").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
       await expect(c.getByTestId("item-merged")).toHaveText("Merged into alert-digest");
@@ -163,7 +163,7 @@ for (const scheme of ["light", "dark"] as const) {
       await c.click();
       const card = page.getByTestId("floating-card");
       await card.getByRole("button", { name: "Keep both" }).click();
-      await expect(toastWith(page, /Kept 'Alert digest for admins' and F-06 Weekly alert digest/)).toBeVisible();
+      await expect(toastWith(page, /Kept 'Alert digest for admins' and Weekly alert digest/)).toBeVisible();
       await expect(c.getByTestId("board-looks-like")).toHaveCount(0);
       await expect(c.getByTestId("draft-tag")).toBeVisible();
     });
@@ -255,7 +255,7 @@ for (const scheme of ["light", "dark"] as const) {
       await openRoadmap(page, "approver@example.com");
       await board(page);
       await dragAdd(page, "Rule import from a file", column(page, "next"));
-      await expect(toastWith(page, "Proposed Rule import from a file (Next): it waits for the decider")).toBeVisible();
+      await expect(toastWith(page, "Proposed Rule import from a file (Next): it waits for the roadmap's owner in Needs a decision")).toBeVisible();
       await expect(boardCard(page, "rule-import-from-a-file")).toHaveCount(0);
       await page.getByRole("button", { name: "Suggested features for Grow retention", exact: true }).first().click();
       // Only the decider accepts or rejects a goal's suggestions (pick D): an approver reads them.
@@ -375,7 +375,7 @@ for (const scheme of ["light", "dark"] as const) {
     test("a commenter proposes from the sheet and reads a goal's suggestions", async ({ page }) => {
       await openRoadmap(page, "commenter@example.com");
       await sheetAdd(page, "Pause alerts on holidays", "Keep alerts quiet", "Propose");
-      await expect(toastWith(page, "Proposed Pause alerts on holidays (Keep alerts quiet): it waits for the decider")).toBeVisible();
+      await expect(toastWith(page, "Proposed Pause alerts on holidays (Keep alerts quiet): it waits for the roadmap's owner in Needs a decision")).toBeVisible();
       await expect(page.locator('[data-item="pause-alerts-on-holidays"]')).toHaveCount(0);
       await page.getByTestId("goal-counter-empty").getByTestId("goal-counter-suggestions").click();
       const sheet = page.getByTestId("goal-panel");
