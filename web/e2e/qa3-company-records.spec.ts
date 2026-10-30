@@ -102,8 +102,8 @@ test.describe("desktop", () => {
     await page.goto("/company/updates");
     const row = page.getByTestId("update-row").filter({ hasText: "Board update · October 2026" });
     await expect(row).toContainText("Board update · October 2026");
-    await expect(row.getByRole("gridcell").filter({ hasText: /^Board update$/ })).toHaveCount(1);
-    await expect(page.getByTestId("update-row").filter({ hasText: "Investor update · September 2026" }).getByRole("gridcell").filter({ hasText: /^Investor update$/ })).toHaveCount(1);
+    await expect(row.getByRole("cell").filter({ hasText: /^Board update$/ })).toHaveCount(1);
+    await expect(page.getByTestId("update-row").filter({ hasText: "Investor update · September 2026" }).getByRole("cell").filter({ hasText: /^Investor update$/ })).toHaveCount(1);
 
     await page.getByRole("button", { name: "New update" }).click();
     const dialog = page.getByRole("dialog", { name: "New update" });
