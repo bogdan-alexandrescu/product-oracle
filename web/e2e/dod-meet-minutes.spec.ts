@@ -93,8 +93,8 @@ for (const phone of [false, true]) {
       await page.goto("/inbox");
       const row = page.getByRole("row").filter({ hasText: "Review: Guided setup" });
       await expect(row).toContainText("Meeting minutes");
-      await expect(row).toContainText(/\b(now|\d{1,2}m)\b/);
-      await expect(row).not.toContainText(/\b3h\b/);
+      await expect(row.getByText(/^(now|\d{1,2}m)$/)).toBeVisible();
+      await expect(row.getByText("3h", { exact: true })).toHaveCount(0);
     });
 
     // card: dod-meet-minutes-views
