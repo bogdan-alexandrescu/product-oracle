@@ -396,8 +396,8 @@ export function CompositionView({ doc }: { doc: string }) {
         status={
           data && (
             <>
-              {/* qa-docs-22: a viewer or commenter gets the same role badge as every Documents page. */}
-              {role === "viewer" || role === "commenter" ? (
+              {/* qa-docs-22: a viewer or commenter (no section review) gets the same role badge as every Documents page. */}
+              {!can("review_section") ? (
                 <RoleBadge />
               ) : (
                 role && (

@@ -246,13 +246,14 @@ function QuestionBubble({
             {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
             {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
-          {/* qa-docs-86: Answer sits in the question's card, not below it. */}
-          {open && !waiting && (
+          {/* qa-docs-86: the question's actions sit in its card, not below it.
+              qa-work-28: a question that already has an answer (an "I don't know" too) offers to change it. */}
+          {(open || unsure) && !waiting && (
             <div data-testid="question-actions" className="mt-2.5 flex flex-wrap items-center gap-2">
-              {!mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
-              {mayAnswer && mode !== "answer" && (
-                <Button variant={mine ? "solid" : "secondary"} onClick={() => setMode("answer")}>
-                  Answer
+              {open && !mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
+              {(open ? mayAnswer : mayChange) && mode !== "answer" && (
+                <Button variant={mine && !standing ? "solid" : "secondary"} onClick={() => setMode("answer")}>
+                  {standing ? "Change answer" : "Answer"}
                 </Button>
               )}
               {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
@@ -299,18 +300,6 @@ function QuestionBubble({
           />
         )}
         {open && waiting && onTurn && !thinking && <FollowUpReply onTurn={turn} />}
-        {(open || unsure) && !waiting && (
-          <div className="flex flex-wrap items-center gap-2">
-            {open && !mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
-            {/* qa-work-28: a question that already has an answer (an "I don't know" too) offers to change it. */}
-            {(open ? mayAnswer : mayChange) && mode !== "answer" && (
-              <Button variant={mine && !standing ? "solid" : "secondary"} onClick={() => setMode("answer")}>
-                {standing ? "Change answer" : "Answer"}
-              </Button>
-            )}
-            {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
-          </div>
-        )}
         {(open || unsure) && !waiting && mode === "answer" && (
           <div className="rounded-panel border border-line bg-surface p-3">
             <AnswerQuestion

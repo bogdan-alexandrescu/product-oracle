@@ -589,7 +589,15 @@ function SourceRow({
       ? pickIds.filter((id) => names[id]).map((id) => names[id])
       : pickIds.map((id) => names[id] ?? id);
   const unnamed = opaqueIds ? pickIds.length - items.length : 0;
-  const picks = allowlist ? picksSummary(items, unnamed, allowlist.noun) : { text: "", title: "" };
+  // A Drive file saved without a name reads as unknown, its id only in the title (qa-settings-23).
+  const picks = drive
+    ? pickWords(
+        picked.filter((f) => f.kind === "doc").map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined })),
+        UNKNOWN.google_docs,
+      )
+    : allowlist
+      ? picksSummary(items, unnamed, allowlist.noun)
+      : { text: "", title: "" };
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import { Button, Chip, confirmInPage, Dialog, Empty, Icon, Label, Page, PageHeader, Panel } from "@/components/ds";
+import { Button, Chip, confirmInPage, Dialog, Empty, Label, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewLink, type InterviewOut } from "@/lib/api/interviews";
@@ -29,8 +29,7 @@ export function InterviewDetail({ id }: { id: string }) {
   // rirs-40: back to the Interviews tab, above the name.
   const back = (
     <Link href="/requests/interviews" data-testid="interview-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
-      <Icon name="back" size={16} />
-      All interviews
+      ← Interviews
     </Link>
   );
   const requests = useQuery(`interview-requests:${iv?.request_ids.join(",") ?? ""}`, () =>
