@@ -55,6 +55,12 @@ Test cards (protects / fails_when / no_claim):
   field jargon ("values: ..."); a cut on the roadmap is a roadmap card with nothing to
   correct (the web says Reject); fails_when=a refusal starts with an internal field name or
   a roadmap cut has no Correct data; no_claim=the exact wording.
+- test_talk_move_by_a_span_moves_from_newer_dates: protects=a talk card's "two weeks
+  later" carries its span (preview.shift, as the mock's talkMove), so when someone moves
+  the item before it is applied, it is offered again two weeks after the item's new dates
+  and Apply lands there; fails_when=the card keeps its old absolute dates (the API and
+  the mock disagree on what the card does); no_claim=a card naming a day (it keeps that
+  day).
 """
 
 import uuid
@@ -370,3 +376,24 @@ async def test_correct_refusals_are_plain(client):
     assert cut["correct"] == {"fields": [], "values": {}}
     r = await apply(client, w, "owner", cut["id"], {"title": "x"})
     assert r.status_code == 422 and r.json()["detail"] == "The title cannot be corrected here"
+
+
+async def test_talk_move_by_a_span_moves_from_newer_dates(client):
+    w = await world()
+    m = await say(client, w, "owner", "move it two weeks later", page(w))
+    [card] = m["cards"]
+    assert card["preview"]["shift"] == [0, 14]
+    moved = {"start_date": "2026-10-08", "end_date": "2026-11-22"}
+    r = await client.post("/v1/simple/changes", json={
+        "op": "move_dates", "target": {"item_id": w.ids["move_dates-a"]},
+        "before": card["before"], "after": moved}, headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await apply(client, w, "owner", card["id"])
+    assert r.status_code == 409, r.text
+    again = (await last(client, w, "owner", page(w)))["cards"][0]
+    assert again["before"] == moved
+    assert again["after"] == {"start_date": "2026-10-22", "end_date": "2026-12-06"}
+    r = await apply(client, w, "owner", card["id"])
+    assert r.status_code == 200, r.text
+    a = await row(w, "a")
+    assert (a.start_date, a.end_date) == (date(2026, 10, 22), date(2026, 12, 6))
