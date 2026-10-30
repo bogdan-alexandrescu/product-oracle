@@ -127,7 +127,7 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("timer", { name: "Meeting clock" })).toBeVisible();
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
         await expect(page.getByRole("combobox", { name: "Who changes things" })).toHaveCount(0);
-        await expect(chat(page).getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Type “note: …” or “open question: …”");
+        await expect(chat(page).getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", "Ask a question about what is on screen");
         await page.goto("/simple/meetings");
         await expect(page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" })).toHaveCount(0);
         // The live review is listed under Live only.
@@ -175,6 +175,7 @@ test.describe("desktop · the live meeting", () => {
     const first = slice.locator("li").first();
     const title = (await first.locator("strong").innerText()).trim();
     await first.getByRole("button", { name: `Cut ${title}` }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }).click();
     await expect(slice.getByRole("button", { name: `Restore ${title}` })).toBeVisible();
     await expect(page.getByRole("region", { name: "All decisions" }).getByTestId("meeting-decision").first()).toContainText(/[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}/);
 

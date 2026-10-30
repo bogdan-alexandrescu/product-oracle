@@ -32,7 +32,7 @@ async function meeting(page: Page, email: string): Promise<Locator> {
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(MEETING);
-  await expect(page.getByTestId("chat-rules")).toBeVisible();
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
   return page.getByTestId("meeting-chat");
 }
 

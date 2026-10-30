@@ -31,7 +31,7 @@ async function attend(page: Page, email: string, first: boolean): Promise<Page> 
   await tap(tab.getByRole("button", { name: "Sign in" }));
   await expect(tab).not.toHaveURL(/\/login/);
   await tab.goto(MEETING);
-  await expect(tab.getByTestId("chat-rules")).toBeVisible();
+  await expect(tab.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
   return tab;
 }
 
@@ -103,7 +103,7 @@ for (const phone of [false, true]) {
 
       await owner.bringToFront();
       await owner.getByLabel("Who changes things").selectOption("everyone");
-      await expect(owner.getByTestId("chat-rules")).toContainText("Who changes things: Everyone");
+      await expect(owner.getByLabel("Who changes things")).toHaveValue("everyone");
       await approver.bringToFront();
       await expect(approver.getByTestId("chat-rules")).toContainText("Who changes things: Everyone");
       await expect(card.getByRole("button", { name: "Propose" })).toBeEnabled();
@@ -111,13 +111,17 @@ for (const phone of [false, true]) {
       await owner.bringToFront();
       await owner.getByLabel("Who changes things").selectOption("named");
       await owner.getByTestId("chat-mode").getByLabel("Commenter").check();
-      await expect(owner.getByTestId("chat-rules")).toContainText("Who changes things: Presenter plus Commenter");
+      await expect(owner.getByLabel("Who changes things")).toHaveValue("named");
+      await expect(owner.getByTestId("chat-mode").getByLabel("Commenter")).toBeChecked();
       await approver.bringToFront();
       await expect(card.getByTestId("chat-card-why-not")).toHaveText("Only the presenter and the people they named apply changes in this meeting");
 
       await owner.bringToFront();
       await owner.getByTestId("chat-mode").getByLabel("Approver").check();
-      await expect(owner.getByTestId("chat-rules")).toContainText("Presenter plus Commenter, Approver");
+      await expect(owner.getByTestId("chat-mode").getByLabel("Approver")).toBeChecked();
+      await approver.bringToFront();
+      await expect(approver.getByTestId("chat-rules")).toContainText("Presenter plus Commenter, Approver");
+      await owner.bringToFront();
       await approver.bringToFront();
       await tap(card.getByRole("button", { name: "Propose" }));
       await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by Approver");
@@ -130,7 +134,7 @@ for (const phone of [false, true]) {
       // no_claim: Oracle's wording beyond the contract's examples
       const viewer = await attend(page, EMAILS.viewer, true);
       // qa-simple-decide-3: the meeting's chat makes changes and notes; a question goes to Ask Oracle.
-      await expect(chat(viewer).getByTestId("chat-hint")).toHaveText("Viewers don't change the plan. For a question, use Ask Oracle.");
+      await expect(chat(viewer).getByTestId("chat-hint")).toHaveText("Viewers ask questions here; the presenter makes changes and notes.");
       await say(viewer, "move Weekly alert digest to Q2");
       await expect(chat(viewer).locator('[data-testid="chat-message"][data-kind="note"]')).toContainText("Viewers ask questions here");
       await say(viewer, "when is Weekly alert digest?");

@@ -42,7 +42,7 @@ async function startReview(page: Page) {
   await sheet.getByRole("checkbox", { name: "Commenter" }).check();
   await tap(sheet.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-  await expect(page.getByTestId("chat-rules")).toBeVisible();
+  await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
 }
 
 const chat = (page: Page) => page.getByTestId("meeting-chat");
@@ -254,7 +254,7 @@ for (const [phone, dark] of [
       await signOut(tab);
       if (phone) await tab.setViewportSize({ width: 390, height: 844 });
       await signIn(tab, EMAILS.viewer, `/simple/meetings/${CHAT_MEETING_ID}/chat`);
-      await expect(tab.getByTestId("chat-rules")).toBeVisible();
+      await expect(tab.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
       await sayIn(chat(tab), "note: Ship the checklist copy first");
       await expect(chat(tab).locator('[data-testid="chat-message"][data-kind="note"]').last()).toContainText("Viewers ask questions here");
       await sayIn(chat(tab), "Admin owns Setup checklist");

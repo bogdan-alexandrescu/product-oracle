@@ -88,6 +88,8 @@ for (const phone of [false, true]) {
         test("phone: the meeting's buttons and chips are 44 px tall", async ({ page }) => {
           await startReview(page);
           expect(await height(page.getByRole("button", { name: "End meeting" }))).toBeGreaterThanOrEqual(44);
+          // qa-simple-decide-29: the attendees fold into one row on a phone.
+          await page.getByTestId("meeting-people-toggle").click();
           expect(await height(page.getByRole("button", { name: "Commenter is here" }))).toBeGreaterThanOrEqual(44);
           // The one-pager names a line by its first words (qa-simple-prd), not its number.
           await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
