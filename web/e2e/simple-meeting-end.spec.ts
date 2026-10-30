@@ -18,7 +18,7 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  * on (checked, disabled); "Email the attendees" is optional and disabled with "Email isn't
  * set up" when email is not available; Slack reads "Not connected" unless connected, then
  * "Post to #product-reviews"; Send shows "Sent" with each delivery's status (not picked,
- * on its way, on its way to the channel) and links the Decisions page; fails_when = a choice is not
+ * emailing or emailed the attendees, posting or posted to the channel: dod-delivery) and links the Decisions page; fails_when = a choice is not
  * sent, a status is missing, or Slack is offered while not connected; no_claim = the email
  * and Slack sending themselves (the API's outbox).
  */
@@ -115,7 +115,7 @@ for (const phone of [false, true]) {
         await endOne(page);
         await delivery(page).getByRole("checkbox", { name: "Email the attendees" }).check();
         await delivery(page).getByRole("button", { name: "Send" }).click();
-        await expect(page.getByRole("status", { name: "Sent" })).toContainText("Email · on its way");
+        await expect(page.getByRole("status", { name: "Sent" })).toContainText(/Emailing 3 attendees…|Emailed all 3 attendees/);
         await page.goto("/simple/meetings");
         await expect(page.getByRole("region", { name: "Past" })).toContainText("1 decision taken.");
         await switchTo(page, "approver@example.com");
@@ -136,7 +136,7 @@ test.describe("Slack connected", () => {
       await expect(d).not.toContainText("not connected");
       await d.getByRole("checkbox", { name: "Post to #product-reviews" }).check();
       await d.getByRole("button", { name: "Send" }).click();
-      await expect(page.getByRole("status", { name: "Sent" })).toContainText("Slack · on its way to #product-reviews");
+      await expect(page.getByRole("status", { name: "Sent" })).toContainText(/Posting to #product-reviews…|Posted to #product-reviews/);
     });
   }
 });

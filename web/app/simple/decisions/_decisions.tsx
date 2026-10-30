@@ -14,6 +14,7 @@ import { calendarDay, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
+import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
 import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
 
 type Row = Schemas["SimpleDecisionRow"];
@@ -131,7 +132,7 @@ export function SimpleDecisions() {
             </SimpleEmpty>
           )}
           {d.meetings.map((g) => (
-            <MeetingGroup key={g.meeting.id} g={g} filtered={!!(prd || goal)} rowNumbers={new Set([...d.meetings.flatMap((x) => x.decisions), ...other].map((r) => r.number))} />
+            <MeetingGroup key={g.meeting.id} g={g} reload={() => q.reload()} filtered={!!(prd || goal)} rowNumbers={new Set([...d.meetings.flatMap((x) => x.decisions), ...other].map((r) => r.number))} />
           ))}
           {other.length > 0 && (
             <section className="simple-card" aria-label="Outside meetings">
@@ -320,7 +321,7 @@ function Filter({ label, value, options, onChange, all }: { label: string; value
   );
 }
 
-function MeetingGroup({ g, filtered, rowNumbers }: { g: Group; filtered: boolean; rowNumbers: Set<number> }) {
+function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered: boolean; rowNumbers: Set<number>; reload: () => Promise<unknown> }) {
   const zone = useCompanyZone();
   const m = g.meeting;
   const minutes = g.minutes;
@@ -341,6 +342,13 @@ function MeetingGroup({ g, filtered, rowNumbers }: { g: Group; filtered: boolean
         </p>
       )}
       <p className="simple-meta">Attendees: {m.attendees.map((a) => a.name).join(", ")}</p>
+      {/* dod-delivery: how the sent minutes went out (email, Slack), with Retry when one failed. */}
+      {g.delivery && (g.delivery.email || g.delivery.slack) && (
+        <p className="simple-meta flex flex-col gap-0.5" data-testid="meeting-group-delivery">
+          {g.delivery.email && <DeliveryLine meetingId={m.id} what="email" words={emailWords(g.delivery)} canRetry={g.can_retry_delivery} reload={reload} testId="delivery-email" />}
+          {g.delivery.slack && <DeliveryLine meetingId={m.id} what="slack" words={slackWords(g.delivery)} canRetry={g.can_retry_delivery} reload={reload} testId="delivery-slack" />}
+        </p>
+      )}
       {minutes && minutes.open_questions.length > 0 && (
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">Open questions</h3>
