@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
-import { Code, Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
+import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
+import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -34,6 +35,11 @@ const FIX_WORDS: Record<Flag["fixes"][number], string> = {
   move_dependency: "Move the dependency",
   accept_risk: "Accept as risk",
 };
+
+/** fix4 qa-simple-roadmap-18: a reader who may not decide the item (a commenter) only
+ * proposes the fix, and its button says so ("Propose: move the dependents"). */
+const fixWords = (f: Flag["fixes"][number], decides: boolean): string =>
+  decides ? FIX_WORDS[f] : `Propose: ${FIX_WORDS[f][0].toLowerCase()}${FIX_WORDS[f].slice(1)}`;
 
 /** D14's one-click fixes of one flag: move the dependents, move the dependency, or accept
  * the risk with a note (the flag then stays amber). */
@@ -107,7 +113,7 @@ export function FixButtons({
           variant="solid"
           className={inline ? "!h-6 !px-2 !text-xs" : ""}
         >
-          Save the risk
+          {item.can_decide ? "Save the risk" : "Propose the risk"}
         </Button>
         <Button
           variant="ghost"
@@ -130,7 +136,7 @@ export function FixButtons({
             className={inline ? "!h-6 !px-2 !text-xs" : ""}
             onClick={() => setNote("")}
           >
-            {FIX_WORDS[f]}
+            {fixWords(f, item.can_decide)}
           </Button>
         ) : dep ? (
           <Button
@@ -138,7 +144,7 @@ export function FixButtons({
             className={inline ? "!h-6 !px-2 !text-xs" : ""}
             onClick={() => fix(f)}
           >
-            {FIX_WORDS[f]}
+            {fixWords(f, item.can_decide)}
           </Button>
         ) : null,
       )}
@@ -340,7 +346,8 @@ export function SuggestionPopover({
 
 function names(ids: string[], items: Map<string, Item>): string {
   const t = ids.map((id) => items.get(id)?.title).filter(Boolean);
-  return t.length ? t.join(", ") : "no other items";
+  // fix4 qa-simple-roadmap-42: empty values read like "No owner yet", capitalised.
+  return t.length ? t.join(", ") : "No other items";
 }
 
 const OP_WORDS: Record<string, string> = {
@@ -384,14 +391,15 @@ export function LooksLike({
           data-testid="looks-like-match"
         >
           <span className="min-w-0 flex-1">
-            Looks like <b>{m.code}</b> {m.title}
+            {/* fix4 qa-simple-roadmap-3: titles only, no codes. */}
+            Looks like <b>{m.title}</b>
           </span>
           {canChange && (
             <Button
               className="!h-7"
               onClick={() =>
                 void act(
-                  `Merged '${item.title}' into ${`${m.code} ${m.title}`.trim()}`,
+                  `Merged '${item.title}' into ${m.title}`,
                   {
                     op: "merge_item",
                     target:
@@ -415,7 +423,7 @@ export function LooksLike({
           variant="ghost"
           onClick={() =>
             void act(
-              `Kept '${item.title}' and ${item.looks_like.map((m) => `${m.code} ${m.title}`.trim()).join(", ")}`,
+              `Kept '${item.title}' and ${item.looks_like.map((m) => m.title).join(", ")}`,
               {
                 op: "keep_both",
                 target: { item_id: item.id },
@@ -568,8 +576,24 @@ export function FloatingCard({
     setWide(w);
     if (w && !phone) setTalk(false);
   };
-  const about = item.code ? `${item.code} ${item.title}` : item.title;
+  // fix4 qa-simple-roadmap-3: the card, its talk and the chat name the item by its title, no code.
+  const about = item.title;
   const ref = useRef<HTMLDivElement>(null);
+  // fix4 qa-simple-roadmap-16: the changes waiting in the item's talk (cards not yet applied,
+  // proposed or discarded) are proposals on it too: one source, the talk's own thread, read
+  // when the card opens and kept as the talk changes.
+  const [talkCards, setTalkCards] = useState<{ id: string; cards: ChatCard[] } | null>(null);
+  const onTalkCards = useCallback((cards: ChatCard[]) => setTalkCards({ id: item.id, cards }), [item.id]);
+  useEffect(() => {
+    let live = true;
+    askThread(itemTalkPage(item.id))
+      .then((t) => live && onTalkCards(t.messages.flatMap((m) => m.cards ?? [])))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [item.id, onTalkCards]);
+  const waiting = talkCards && talkCards.id === item.id ? talkCards.cards.filter((c) => c.status === "open") : [];
   useScreenSubject(
     { kind: "roadmap_item", subject: { item_id: item.id, key: item.key } },
     item.title,
@@ -614,11 +638,6 @@ export function FloatingCard({
   const head = (
     <div className="flex items-start gap-2">
       <h2 className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words">
-        {item.code && (
-          <>
-            <Code code={item.code} className="mr-0.5 align-[1px]" />{" "}
-          </>
-        )}
         {item.title}
         {item.draft && item.status !== "merged" && (
           <span
@@ -676,13 +695,14 @@ export function FloatingCard({
     )
   ) : (
     <Part title="Flow" testId="card-flow">
+      {/* fix4 qa-simple-roadmap-39: the same row (its thumbnail, or "Ask Oracle to draw it") on
+       * a desktop, a phone and the card widened beside its talk; qa-simple-roadmap-3: no code. */}
       <FlowPanel
-        key={`row-${item.id}-${beside ? "line" : "row"}`}
-        row={!beside}
-        line={beside}
+        key={`row-${item.id}`}
+        row
         subject={{ kind: "feature", id: item.id }}
         openLabel="Open the item's flow"
-        code={item.code}
+        code={null}
         name={item.title}
         backLabel="Roadmap"
         onOpenChange={setFlowOpen}
@@ -703,7 +723,7 @@ export function FloatingCard({
       )}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
-          Merged into {item.merged_into.code} {item.merged_into.title}
+          Merged into {item.merged_into.title}
         </p>
       )}
       <LooksLike item={item} act={act} canChange={canChange} />
@@ -833,7 +853,7 @@ export function FloatingCard({
                 ))}
               </ul>
             ) : (
-              <p className="text-text2">No reasons on record yet.</p>
+              <p className="text-text2">No reasons on record yet</p>
             )}
           </Part>
           <Part title="Open decisions">
@@ -845,14 +865,14 @@ export function FloatingCard({
                       href={`/company/decisions?d=${d.id}`}
                       className="text-accent-ink hover:underline"
                     >
-                      D-{d.number}
-                    </Link>{" "}
-                    {d.title}
+                      {/* fix4 qa-simple-roadmap-3: the decision by its title, no "D-7". */}
+                      {d.title}
+                    </Link>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-text2">None open.</p>
+              <p className="text-text2">No open decisions</p>
             )}
           </Part>
           {item.decided_in.length > 0 && (
@@ -860,14 +880,13 @@ export function FloatingCard({
               <ul className="mt-1" data-testid="card-decided-in">
                 {item.decided_in.map((d) => (
                   <li key={d.id}>
-                    Decided in{" "}
+                    {/* fix4 qa-simple-roadmap-3: under "Decided", the decision by its title alone. */}
                     <Link
                       href={`/simple/decisions#d-${d.number}`}
                       className="text-accent-ink hover:underline"
                     >
-                      D-{d.number}
+                      {d.title}
                     </Link>
-                    : {d.title}
                   </li>
                 ))}
               </ul>
@@ -875,6 +894,23 @@ export function FloatingCard({
           )}
           {flowPart}
           <Part title="Proposals on it">
+            {waiting.length > 0 && (
+              <ul className="mt-1 space-y-1" data-testid="card-talk-proposals">
+                {waiting.map((c) => (
+                  <li key={c.id} className="flex items-center gap-2" data-testid="card-talk-proposal">
+                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                      {c.summary} ·{" "}
+                      <span className="text-text2">waiting in your talk with Oracle</span>
+                    </span>
+                    {!talk && (
+                      <Button className="!h-7" onClick={() => setTalk(true)}>
+                        Open the talk
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
             {proposals.length ? (
               <ul className="mt-1 space-y-2" data-testid="card-proposals">
                 {proposals.map((c) => (
@@ -911,7 +947,7 @@ export function FloatingCard({
                 ))}
               </ul>
             ) : (
-              <p className="text-text2">None waiting.</p>
+              !waiting.length && <p className="text-text2">No proposals waiting</p>
             )}
           </Part>
         </div>
@@ -976,7 +1012,7 @@ export function FloatingCard({
   );
 
   const talkPanel = (
-    <ItemTalk itemId={item.id} about={about} code={item.code} phone={phone} />
+    <ItemTalk itemId={item.id} about={about} phone={phone} onCards={onTalkCards} />
   );
 
   return (
@@ -996,7 +1032,7 @@ export function FloatingCard({
         data-talk={talk ? "true" : "false"}
         data-flow-open={flowOpen ? "true" : "false"}
         style={placeStyle}
-        className={`${place} max-w-[calc(100vw-16px)] border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
+        className={`${place} ${phone ? "max-w-none overflow-hidden" : "max-w-[calc(100vw-16px)]"} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
       >
       {phone ? (
         <>

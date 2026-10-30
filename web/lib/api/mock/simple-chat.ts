@@ -26,6 +26,14 @@ import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
 type Values = Record<string, unknown>;
 type Item = Schemas["SimpleRoadmapItem"];
+
+/** fix4 qa-simple-roadmap-9: the dates an item stores as the reader reads it (their roadmap's
+ * item: the working draft's for those who see it, else the published version's), the
+ * `before` a card sends, so a commenter proposes against the dates their roadmap shows. */
+function seenDates(i: Item): { start: string | null; end: string | null } {
+  const own = (d: Item["start"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
+  return { start: own(i.start), end: own(i.end) };
+}
 type Role = Schemas["Me"]["role"];
 type Preview =
   | { kind: "dates"; item_id: string; start_date: string; end_date: string }
@@ -358,7 +366,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     cards: [{ op, target, before, after, summary, item_id: item?.id ?? null, item_title: item?.title ?? null, preview, flow, fixes: [] }],
   });
   const stored = (i: Item) => {
-    const s = storedDates(db, i.key);
+    const s = seenDates(i);
     return { start_date: s.start, end_date: s.end };
   };
   const move = (i: Item, start: string, end: string) =>
@@ -656,7 +664,7 @@ function plusMonths(day: string, n: number): string {
 }
 
 function moveDraft(db: SimpleDb, i: Item, start: string, end: string): Draft {
-  const s = storedDates(db, i.key);
+  const s = seenDates(i);
   return {
     op: "move_dates", target: { item_id: i.id }, before: { start_date: s.start, end_date: s.end }, after: { start_date: start, end_date: end },
     summary: `Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, item_id: i.id, item_title: i.title,
@@ -896,7 +904,8 @@ function goalNamed(x: string): string | null {
   return Object.keys(GOALS).find((k) => k === q || GOALS[k].toLowerCase() === q) ?? null;
 }
 
-const about = (i: Item) => (i.code ? `${i.code} ${i.title}` : i.title);
+// fix4 qa-simple-roadmap-3: the talk names an item by its title alone, no code (api roadmap_talk.label).
+const about = (i: Item) => i.title;
 
 /**
  * The "roadmap-talk" scenario's invented items (on "simple-chat"): F-16 Adaptive pacing ending
@@ -1394,7 +1403,7 @@ async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
     for (const f of i.flags.filter((x) => x.state === "red" && x.fixes.length > 0)) {
       const dep = f.subject ? byId.get(f.subject) : undefined;
       const sd = (it: Item) => {
-        const s = storedDates(db, it.key);
+        const s = seenDates(it);
         return { start_date: s.start, end_date: s.end };
       };
       const fixes: Fix[] = f.fixes.map((op) =>

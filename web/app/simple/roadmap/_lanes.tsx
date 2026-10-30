@@ -30,7 +30,7 @@ import {
   type Slice,
 } from "./_lib";
 import { CALL_H, RH } from "./_pitch";
-import { PreviewGhost, useAppliedFlash, type Layout } from "./_timeline";
+import { ellipsize, monthTick, ordinal, PreviewGhost, previewSpan, useAppliedFlash, usePreview, type Layout } from "./_timeline";
 
 /*
  * timeline-overlap B (the owner's pick, 2026-10-28; decision roadmap-timeline-goal-lanes-later):
@@ -60,6 +60,8 @@ const BAR_H = 20;
 const MIN_PILL_W = 28;
 /** The phone's lane runs carry no text, so a smaller floor (near B3's bar height) is enough. */
 const MIN_RUN_W = 12;
+/** fix4 qa-simple-roadmap-52: a lane's least height: its name (20 px) and count (16 px) with 4 px above and below. */
+const LANE_MIN_H = 44;
 const LONG_PRESS_MS = 450;
 /** B3: the Today row, the month row, the flags row; each lane's name line, gap and bar row. */
 const P_TODAY_H = 22;
@@ -69,8 +71,10 @@ const P_MARK_ROW = 18;
 const P_BAR_ROW = 16;
 const P_BAR_H = 14;
 
-/** "27 Nov" (the mock-up's day words). */
-const dm = (day: string) => calendarDay(day, { day: "numeric", month: "short" }, "en-GB");
+/** "Nov 27": fix4 qa-simple-roadmap-28, the one way the Roadmap writes a day (month first),
+ * with its year when it is not this year's ("Jan 1, 2027"). */
+const dm = (day: string) =>
+  calendarDay(day, day.slice(0, 4) === String(new Date().getUTCFullYear()) ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
 
 // ---------------------------------------------------------------- text widths
 
@@ -87,8 +91,6 @@ function textWidth(text: string, px: number, weight: number): number {
   measure.font = `${weight} ${px}px ${family}`;
   return measure.measureText(text).width;
 }
-/** The first words that fit `room` ("" when none does: the name is on hover and in the card). */
-const fit = (variants: string[], room: number, px = 12, weight = 650) => variants.find((v) => v && textWidth(v, px, weight) + 2 <= room) ?? "";
 
 /** Measures again once the web fonts have loaded (labels are fitted with them). */
 function useFontsReady(): number {
@@ -145,6 +147,10 @@ function pack(items: Item[], moved: Record<string, [string, string]>, callout: (
   const callouts = new Set<number>();
   for (const u of units) {
     const occ: [number, number][] = u.pieces.map((p) => [ms(p.start), ms(p.end)]);
+    // fix4 qa-simple-roadmap-31: Oracle's suggestion (its dotted outline, and its "?" left of
+    // it) takes its row too, so neither is ever drawn over another pill's name.
+    const sg = u.item.suggestion;
+    if (sg && !closedItem(u.item)) occ.push([Math.min(ms(sg.start_date), ms(u.pieces[0].start)) - WEEK, ms(sg.end_date)]);
     const call = callout(u.item);
     let r = rows.findIndex((row, n) => !(call && callouts.has(n)) && occ.every((o) => row.every((x) => !clash(o, x))));
     if (r < 0) {
@@ -173,7 +179,7 @@ function kept(u: Unit): Unit {
  * PM-owned work has a lane of its own after the goals; closed items (cut, merged) go below the
  * line, last.
  */
-function laneModels(data: Roadmap, lane: Lane, moved: Record<string, [string, string]>): { lanes: LaneModel[]; places: Map<string, number> } {
+function laneModels(data: Roadmap, lane: Lane, moved: Record<string, [string, string]>, callH: Record<string, number> = {}): { lanes: LaneModel[]; places: Map<string, number> } {
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const seen = new Set<string>();
   const groups: { key: string; title: string; kind: LaneModel["kind"]; items: Item[] }[] = [];
@@ -192,11 +198,15 @@ function laneModels(data: Roadmap, lane: Lane, moved: Record<string, [string, st
   if (below.length) groups.push({ key: "below-the-line", title: "Below the line", kind: "below", items: below });
   const lanes = groups.map((g) => {
     const p = pack(g.items, moved, (i) => g.kind !== "below" && broken(i).some((f) => f.kind === "dependency_order"));
+    // fix4 qa-simple-roadmap-1: a callout's line is as tall as its callout is drawn (its words
+    // wrap rather than being cut on a narrow chart): 4 px more than it, CALL_H at least.
+    const callLine = new Map<number, number>();
+    for (const u of p.units) if (p.callouts.has(u.row)) callLine.set(u.row, Math.max(CALL_H, (callH[u.item.key] ?? 0) + 4));
     const line: number[] = [];
     let h = 0;
     for (let r = 0; r < p.rows; r++) {
       line.push(h);
-      h += RH + (p.callouts.has(r) ? CALL_H : 0);
+      h += RH + (callLine.get(r) ?? (p.callouts.has(r) ? CALL_H : 0));
     }
     return { key: g.key, title: g.title, kind: g.kind, units: p.units.map(kept), rows: p.rows, count: g.items.length, h, line, callouts: p.callouts };
   });
@@ -223,8 +233,9 @@ function look(p: Pick<Piece, "milestone" | "pm">, item: Item | null, cut: boolea
 }
 
 /** The days the chart spans: every piece, milestone, key date, suggestion and today, two days either side (B2: 17 Oct to 31 Jan for 19 Oct to 29 Jan). */
-function spanOf(data: Roadmap, lanes: LaneModel[]): { t0: string; t1: string } {
-  const days: string[] = [data.today];
+function spanOf(data: Roadmap, lanes: LaneModel[], extra: string[] = [], before = 2): { t0: string; t1: string } {
+  // fix4 qa-simple-roadmap-10: a chat preview's ghost is inside the span (a move to Q2 2027 ghosts there).
+  const days: string[] = [data.today, ...extra];
   for (const l of lanes)
     for (const u of l.units) {
       for (const p of u.pieces) days.push(p.start, p.end);
@@ -235,19 +246,18 @@ function spanOf(data: Roadmap, lanes: LaneModel[]): { t0: string; t1: string } {
   for (const k of data.key_dates ?? []) days.push(k.date);
   const lo = days.reduce((a, b) => (b < a ? b : a));
   const hi = days.reduce((a, b) => (b > a ? b : a));
-  return { t0: addDays(lo, -2), t1: addDays(hi, 2) };
+  return { t0: addDays(lo, -before), t1: addDays(hi, 2) };
 }
 
 /** The month starts in the span (the first at the span's start), and the Mondays. */
 function calendar(t0: string, t1: string) {
   const months: { day: string; label: string; start: boolean }[] = [];
-  const long = daysBetween(t0, t1) > 300;
   for (let d = new Date(ms(t0)); d.getTime() < ms(t1); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
     const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0, 10);
     const day = first < t0 ? t0 : first;
-    const name = calendarDay(first, { month: "short" }, "en-GB");
-    // A span of more than a year names each January's year.
-    months.push({ day, label: long && d.getUTCMonth() === 0 ? `${name} ${d.getUTCFullYear()}` : name, start: first >= t0 });
+    // fix4 qa-simple-roadmap-30: three letters ("Sep", not en-GB's "Sept"); January names its
+    // year (the first label shown names its own too: monthLabels).
+    months.push({ day, label: monthTick(first, false), start: first >= t0 });
   }
   const mondays: string[] = [];
   for (let d = addDays(t0, (8 - new Date(ms(t0)).getUTCDay()) % 7); d < t1; d = addDays(d, 7)) mondays.push(d);
@@ -385,12 +395,19 @@ function monthLabels(months: { day: string; label: string; start: boolean }[], s
       const w = textWidth(m.label, 13, 650) + 10;
       return sc.x(m.day) + w <= width && (!next || sc.x(next.day) - sc.x(m.day) >= w);
     });
+  // fix4 qa-simple-roadmap-30: the first label shown names its year ("Oct 2026"), as each January does.
+  const withYear = (list: typeof months) => list.map((m, i) => (i === 0 && !/\d/.test(m.label) ? { ...m, label: `${m.label} ${m.day.slice(0, 4)}` } : m));
   for (const step of [1, 2, 3, 6, 12]) {
-    const list = months.filter((m) => m.start && (new Date(ms(m.day)).getUTCMonth() % step === 0 || step === 1));
+    const list = withYear(months.filter((m) => m.start && (new Date(ms(m.day)).getUTCMonth() % step === 0 || step === 1)));
     if (!fits(list)) continue;
-    // The span's first, partial month, when its label fits before the next one.
+    // The span's first, partial month, when it runs at least half a month (a sliver's label
+    // crowds the next month's: qa-simple-roadmap-30) and its label fits before the next one.
     const first = months[0];
-    if (first && !first.start && fits([first, ...list.slice(0, 1)])) return [first, ...list];
+    const next = list[0];
+    if (first && !first.start && next && daysBetween(first.day, next.day) >= 15) {
+      const both = withYear([first, ...list.map((m) => ({ ...m, label: m.label === next.label && !/^Jan/.test(next.label) ? next.label.replace(/ \d{4}$/, "") : m.label }))]);
+      if (fits(both.slice(0, 2))) return both;
+    }
     return list;
   }
   return [];
@@ -548,8 +565,38 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   const fonts = useFontsReady();
   const flash = useAppliedFlash();
   const W = Math.max(200, boxW - LABEL_W);
-  const { lanes, places } = useMemo(() => laneModels(data, lane, moved), [data, lane, moved]);
-  const { t0, t1 } = useMemo(() => spanOf(data, lanes), [data, lanes]);
+  // fix4 qa-simple-roadmap-1: each callout's drawn height (by item key), measured after it is
+  // drawn: its lane makes room for all of it (a narrow chart, the Ask panel open, wraps its words).
+  const [callH, setCallH] = useState<Record<string, number>>({});
+  const over = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = over.current;
+    if (!root) return;
+    const all = () => root.querySelectorAll<HTMLElement>('[data-testid="broken-callout"]');
+    const ro = new ResizeObserver(() => {
+      const next: Record<string, number> = {};
+      all().forEach((el) => {
+        if (el.dataset.item) next[el.dataset.item] = Math.ceil(el.offsetHeight);
+      });
+      setCallH((old) => (Object.keys(next).length === Object.keys(old).length && Object.entries(next).every(([k, v]) => old[k] === v) ? old : next));
+    });
+    // A callout drawn or gone: watch the ones there now (observing reports each one's size).
+    const watch = () => {
+      ro.disconnect();
+      all().forEach((el) => ro.observe(el));
+    };
+    const mo = new MutationObserver(watch);
+    mo.observe(root, { childList: true, subtree: true });
+    watch();
+    return () => {
+      mo.disconnect();
+      ro.disconnect();
+    };
+  }, []);
+  const preview = usePreview();
+  const previewDays = useMemo(() => previewSpan(preview, data), [preview, data]);
+  const { lanes, places } = useMemo(() => laneModels(data, lane, moved, callH), [data, lane, moved, callH]);
+  const { t0, t1 } = useMemo(() => spanOf(data, lanes, previewDays), [data, lanes, previewDays]);
   const sc = useMemo(() => scale(t0, addDays(t1, -1), W / daysBetween(t0, t1)), [t0, t1, W]);
   const { months, mondays } = useMemo(() => calendar(t0, t1), [t0, t1]);
   const marks = useMarks(data, sc, W, false, fonts);
@@ -560,7 +607,8 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     const out: { top: number; height: number }[] = [];
     for (const l of lanes) {
       const prev = out[out.length - 1];
-      out.push({ top: prev ? prev.top + prev.height : top, height: l.h + 8 });
+      // fix4 qa-simple-roadmap-52: never shorter than its name and count (two lines and a gap).
+      out.push({ top: prev ? prev.top + prev.height : top, height: Math.max(LANE_MIN_H, l.h + 8) });
     }
     return out;
   }, [lanes, top]);
@@ -584,6 +632,18 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   const xt = sc.x(data.today) + sc.px / 2;
   const shownMonths = monthLabels(months, sc, W);
   const weekLabels = weekLabelsOf(mondays, sc, W, xt);
+  // fix4 qa-simple-roadmap-2: the room right of each pill, to the next pill in its row (and that
+  // pill's "?"), where a name too long for its pill is written instead.
+  const roomOf = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const l of lanes)
+      for (const u of l.units) {
+        const end = sc.x(u.pieces[u.pieces.length - 1].end);
+        const after = l.units.filter((o) => o.row === u.row && o !== u && sc.x(o.pieces[0].start) > end).map((o) => sc.x(o.pieces[0].start) - (o.item.suggestion ? 26 : 4));
+        out.set(u.item.id, Math.min(W, ...after));
+      }
+    return out;
+  }, [lanes, sc, W]);
 
   const svg = useRef<SVGSVGElement | null>(null);
   const live = useRef<HTMLDivElement>(null);
@@ -610,8 +670,9 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
     rect?.setAttribute("width", String(Math.max(1, w - 1.5)));
     const label = g.querySelector<SVGTextElement>("text[data-testid='bar-label']");
     if (label) {
-      label.setAttribute("x", String(x + 8.5));
-      label.style.visibility = Number(label.dataset.w ?? 0) + 18 <= w ? "visible" : "hidden";
+      // A name beside its pill follows the pill's end; one inside, its start.
+      label.setAttribute("x", String(label.dataset.beside ? x + w + 6 : x + 8.5));
+      label.style.visibility = label.dataset.beside || Number(label.dataset.w ?? 0) + 18 <= w ? "visible" : "hidden";
     }
     g.dataset.dragStart = s;
     g.dataset.dragEnd = e;
@@ -836,16 +897,25 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
                     canDrag={canDrag}
                     cut={l.kind === "below"}
                     place={places.get(u.item.id)}
+                    room={roomOf.get(u.item.id) ?? W}
                     fonts={fonts}
                     {...pills}
                   />
                 )),
               )}
-              <PreviewGhost l={layout} sc={sc} items={items} />
+              <PreviewGhost l={layout} sc={sc} items={items} preview={preview} data={data} inset={{ top: 4, h: BAR_H }} />
               <TodayPill x={xt} y={MONTH_H + 2} />
             </svg>
             <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
-            {overlay?.(layout, sc)}
+            {/* fix4 qa-simple-roadmap-1: a callout under its pill writes its words whole, wrapping
+                (its fixes onto a line of their own) instead of cutting them, at its own width up
+                to the chart's; its lane's line grows to fit it (callH). */}
+            <div
+              ref={over}
+              className="contents [&_[data-testid=broken-callout]]:w-max [&_[data-testid=broken-callout]]:flex-wrap [&_[data-testid=broken-callout]>span]:max-w-none [&_[data-testid=broken-callout]>span]:overflow-visible [&_[data-testid=broken-callout]>span]:break-words [&_[data-testid=broken-callout]>span]:whitespace-normal"
+            >
+              {overlay?.(layout, sc)}
+            </div>
           </div>
         </div>
       </div>
@@ -872,6 +942,8 @@ type PillProps = {
   cut: boolean;
   /** Its place in the return queue (below the line). */
   place?: number;
+  /** fix4 qa-simple-roadmap-2: where the room right of it ends (the next pill in its row, or the chart's edge). */
+  room: number;
   /** The web fonts have loaded (the labels are fitted again). */
   fonts: number;
   onDown: (e: ReactPointerEvent<SVGGElement>, item: Item) => void;
@@ -883,7 +955,7 @@ type PillProps = {
 };
 
 /** One item in its lane: its pieces as B2's pills (a planned feature's slices on one row, joined by a dotted line). */
-const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, flash, canDrag, cut, place, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: PillProps) {
+const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, flash, canDrag, cut, place, room, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: PillProps) {
   const { pieces } = unit;
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
@@ -908,8 +980,40 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${sourceWord(item.estimated ? "estimated" : item.source)}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
   const strokeOf = (base: string) => (red ? "var(--crit)" : amber ? "var(--warn)" : base);
   const strokeW = red || amber || open ? 2.5 : 1.5;
+  // fix4 qa-simple-roadmap-31: the suggestion's outline is drawn under the pill (its fill hides
+  // the outline's edges where they cross it), so it never runs over the pill's name.
+  const outline = s ? (
+    <>
+      {/* QA2 finding 49: clamped to the chart's own width, belt-and-braces alongside
+       * spanOf (which already grows the chart to fit every suggestion). */}
+      {(() => {
+        const sx0 = Math.max(0, sc.x(s.start_date));
+        const sx1 = Math.min(width, Math.max(sc.x(s.end_date) + sc.px, sx0 + MIN_PILL_W));
+        return (
+          <rect
+            data-testid="suggestion-outline"
+            data-item={item.key}
+            x={sx0}
+            y={y - 3}
+            width={Math.max(1, sx1 - sx0)}
+            height={BAR_H + 6}
+            rx={(BAR_H + 6) / 2}
+            fill="none"
+            stroke="var(--accent-ink)"
+            strokeWidth={1.5}
+            strokeDasharray="2 3"
+            pointerEvents="none"
+          >
+            {/* QA2 finding 21: an empty dashed box says what it is on hover. */}
+            <title>{`Oracle suggests dates for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}</title>
+          </rect>
+        );
+      })()}
+    </>
+  ) : null;
   return (
     <g>
+      {outline}
       {/* Slices of one feature on the same row: a dotted line between them (B2). */}
       {pieces.slice(1).map((q, n) => {
         const a = all[n];
@@ -946,6 +1050,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
          * placed beside this bar reads these instead of redoing the scale math. */
         data-x0={x0}
         data-x1={x1}
+        data-place={place}
         data-open={open ? "true" : undefined}
         data-flash={flash ? "true" : undefined}
         role="button"
@@ -972,7 +1077,8 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             {pieces.map((p, n) => {
               const b = all[n];
               const c = look(p, item, cut);
-              const words = fit(p.code ? [`${p.code} ${p.name}`, p.code] : [p.name], b.w - 16);
+              // fix4 qa-simple-roadmap-2/3: the slice's name (never its code), cut with "…" to its pill.
+              const words = ellipsize(p.name, b.w - 16, 12, 650);
               return (
                 <g
                   key={p.key}
@@ -985,7 +1091,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
                   data-estimated={p.slice?.estimated ? "true" : "false"}
                   data-pm-owned={p.pm ? "true" : undefined}
                 >
-                  <title>{`${p.code} ${p.name}${p.slice ? ` · ${p.slice.milestone} ${p.slice.milestone_name}` : ""} · ${dm(p.start)} – ${dm(p.end)}${p.pm ? " · PM-owned" : p.slice ? ` · ${p.slice.effort_weeks} engineer-weeks` : ""}${p.slice?.estimated ? " · placed by Oracle" : ""}`}</title>
+                  <title>{`${p.name}${p.slice ? ` · ${p.slice.milestone} ${p.slice.milestone_name}` : ""} · ${dm(p.start)} – ${dm(p.end)}${p.pm ? " · PM-owned" : p.slice ? ` · ${p.slice.effort_weeks} engineer-weeks` : ""}${p.slice?.estimated ? " · placed by Oracle" : ""}`}</title>
                   <rect
                     data-slice-body
                     x={b.x + 0.75}
@@ -1008,16 +1114,18 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             })}
           </>
         ) : (
-          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} />
+          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} besideAt={s && mark > x1 ? mark + 12 : x1 + 6} room={room} />
         )}
+        {/* fix4 qa-simple-roadmap-4: a track's milestone sits on the pill's top edge at its date,
+            above the pill's name, never over it. */}
         {item.milestone?.date && !sliced && (
           <rect
             data-testid="item-milestone"
-            x={sc.x(item.milestone.date) - 4.5}
-            y={y + BAR_H / 2 - 4.5}
-            width={9}
-            height={9}
-            transform={`rotate(45 ${sc.x(item.milestone.date)} ${y + BAR_H / 2})`}
+            x={sc.x(item.milestone.date) - 3.5}
+            y={y - 3.5}
+            width={7}
+            height={7}
+            transform={`rotate(45 ${sc.x(item.milestone.date)} ${y})`}
             fill="var(--warn)"
             stroke="var(--simple-paper)"
           >
@@ -1027,31 +1135,6 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
       </g>
       {s && (
         <g>
-          {/* QA2 finding 49: clamped to the chart's own width, belt-and-braces alongside
-           * spanOf (which already grows the chart to fit every suggestion). */}
-          {(() => {
-            const sx0 = Math.max(0, sc.x(s.start_date));
-            const sx1 = Math.min(width, Math.max(sc.x(s.end_date) + sc.px, sx0 + MIN_PILL_W));
-            return (
-              <rect
-                data-testid="suggestion-outline"
-                data-item={item.key}
-                x={sx0}
-                y={y - 3}
-                width={Math.max(1, sx1 - sx0)}
-                height={BAR_H + 6}
-                rx={(BAR_H + 6) / 2}
-                fill="none"
-                stroke="var(--accent-ink)"
-                strokeWidth={1.5}
-                strokeDasharray="2 3"
-                pointerEvents="none"
-              >
-                {/* QA2 finding 21: an empty dashed box says what it is on hover. */}
-                <title>{`Oracle suggests dates for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}</title>
-              </rect>
-            );
-          })()}
           <g
             data-testid="suggestion-open"
             data-item={item.key}
@@ -1078,38 +1161,48 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   );
 });
 
-/** An item with no plan as one pill: its code and title where they fit; a draft says so, a cut item is struck through with its place in the return queue. */
-function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number }) {
+/** An item with no plan as one pill: its title, cut with "…" to the pill, or beside a pill too short for it; a draft says so ("Draft · Setup tips"), a cut item is struck through (its place in the return queue on hover). */
+function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, room }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number; besideAt: number; room: number }) {
   const c = look(piece, item, cut);
   const draft = item.draft && !cut;
-  const name = piece.code ? `${piece.code} ${piece.name}` : piece.name;
-  const lead = place != null ? `#${place} ` : "";
-  const room = b.w - 16;
-  const variants = draft ? [`Draft · ${name}`, "Draft"] : [`${lead}${name}`, ...(piece.code ? [`${lead}${piece.code}`] : []), ...(lead ? [lead.trim()] : [])];
-  const words = fit(variants, room);
-  const w = words ? textWidth(words, 12, 650) : 0;
+  // fix4 qa-simple-roadmap-3/15: the title alone (no "F-06", no "#1"); a draft's reads "Draft · <title>".
+  const full = draft ? `Draft · ${piece.name}` : piece.name;
+  // fix4 qa-simple-roadmap-2: inside the pill when a real part of it fits; else beside it, up to the next pill.
+  const inner = ellipsize(full, b.w - 16, 12, 650);
+  const outer = ellipsize(full, room - besideAt - 4, 12, 600);
+  const beside = inner.length < Math.min(full.length, 8) && outer.length > inner.length;
+  const words = beside ? outer : inner;
+  const w = words ? textWidth(words, 12, beside ? 600 : 650) : 0;
   const tag = draft && words.startsWith("Draft");
+  const hover = `${full}${place != null ? ` · ${ordinal(place)} to come back if room opens` : ""}`;
   return (
     <>
+      <title>{hover}</title>
       <rect data-body x={b.x + 0.75} y={y + 0.75} width={Math.max(1, b.w - 1.5)} height={BAR_H - 1.5} rx={(BAR_H - 1.5) / 2} fill={c.fill} stroke={stroke(c.stroke)} strokeWidth={strokeW} strokeDasharray={c.dash} />
       {words && (
-        <text data-testid="bar-label" data-w={w} x={b.x + 8.5} y={y + BAR_H / 2} dominantBaseline="central" fontSize={12} fontWeight={650} fill={c.ink} pointerEvents="none" textDecoration={cut ? "line-through" : undefined}>
+        <text
+          data-testid="bar-label"
+          data-w={w}
+          data-beside={beside ? "true" : undefined}
+          x={beside ? besideAt : b.x + 8.5}
+          y={y + BAR_H / 2}
+          dominantBaseline="central"
+          fontSize={12}
+          fontWeight={beside ? 600 : 650}
+          fill={beside ? "var(--text2)" : c.ink}
+          pointerEvents="none"
+          textDecoration={cut ? "line-through" : undefined}
+        >
           {tag ? (
             <>
               <tspan data-testid="draft-tag">Draft</tspan>
-              {words.length > 5 ? words.slice(5) : ""}
-            </>
-          ) : lead && words.startsWith(lead.trim()) ? (
-            <>
-              <tspan data-testid="return-place">{lead.trim()}</tspan>
-              {words.slice(lead.trim().length)}
+              {words.slice(5)}
             </>
           ) : (
             words
           )}
         </text>
       )}
-      {draft && !tag && <title>Draft</title>}
     </>
   );
 }
@@ -1238,27 +1331,14 @@ function runsOf(l: LaneModel): { runs: Run[]; rows: number } {
   return { runs, rows: Math.max(1, rows.length) };
 }
 
-/** The most pieces of a lane that run on one weekday. */
-function atOnce(l: LaneModel): number {
-  const ps = l.units.flatMap((u) => u.pieces);
-  if (!ps.length) return 0;
-  const lo = Math.min(...ps.map((p) => ms(p.start)));
-  const hi = Math.max(...ps.map((p) => ms(p.end)));
-  let most = 0;
-  for (let t = lo; t <= hi && t - lo < 800 * DAY; t += DAY) {
-    const wd = new Date(t).getUTCDay();
-    if (wd === 0 || wd === 6) continue;
-    most = Math.max(most, ps.filter((p) => ms(p.start) <= t && t <= ms(p.end)).length);
-  }
-  return most;
-}
-
 function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: LanesProps) {
   const [box, boxW] = useWidth(332);
   const fonts = useFontsReady();
   const W = boxW;
   const { lanes } = useMemo(() => laneModels(data, lane, moved), [data, lane, moved]);
-  const { t0, t1 } = useMemo(() => spanOf(data, lanes), [data, lanes]);
+  // fix4 qa-simple-roadmap-45: ten days before the first date, so Today's line and a key date's
+  // (often the first dates) stand clear of the chart's left edge and of where the bars start.
+  const { t0, t1 } = useMemo(() => spanOf(data, lanes, [], 10), [data, lanes]);
   const sc = useMemo(() => scale(t0, addDays(t1, -1), W / daysBetween(t0, t1)), [t0, t1, W]);
   const { months } = useMemo(() => calendar(t0, t1), [t0, t1]);
   const marks = useMarks(data, sc, W, true, fonts);
@@ -1397,8 +1477,9 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
         <section id="lane-list" data-testid="lane-list" data-lane={openLane.key} aria-label={openLane.title} className="flex flex-col gap-0.5 rounded-[14px] border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3">
           <div className="flex items-baseline gap-2">
             <b className="text-[16px] leading-6 font-bold">{openLane.title}</b>
+            {/* fix4 qa-simple-roadmap-45: "at once" counts the lane's bars as drawn (its rows of runs), not its pieces. */}
             <span className="text-[14px] leading-5 text-text-faint" data-testid="lane-list-count">
-              {openLane.count} {openLane.count === 1 ? "item" : "items"}, up to {atOnce(openLane)} at once
+              {openLane.count} {openLane.count === 1 ? "item" : "items"}, up to {runs[lanes.indexOf(openLane)]?.rows ?? 1} at once
             </span>
           </div>
           <ul>
@@ -1425,7 +1506,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                     <span className={`text-[12.5px] whitespace-nowrap ${red.length ? "font-[650] text-crit" : "text-text-faint"}`} title={red[0]?.reason}>
                       <i aria-hidden className="mr-[5px] inline-block h-[9px] w-[9px] rounded-full align-[0]" style={p.pm || !p.milestone ? { border: `1.5px ${p.pm || c.dash ? "dashed" : "solid"} ${c.stroke}`, background: p.pm ? "transparent" : c.fill } : { background: mLine(p.milestone) }} />
                       {red.length ? "⚠ " : ""}
-                      {dm(p.start)} → {dm(p.end)}
+                      {dm(p.start)} – {dm(p.end)}
                     </span>
                   </button>
                 </li>

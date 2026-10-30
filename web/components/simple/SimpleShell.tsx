@@ -86,6 +86,20 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   return counts && { ...counts, Meetings: meetings ?? 0, "Meetings live": live };
 }
 
+/** fix4 qa-simple-roadmap-51: an email with a line break allowed after its "@", so it wraps
+ * between its parts ("viewer@" / "example.com"), not inside one. */
+function breakable(email: string): ReactNode {
+  const at = email.indexOf("@");
+  if (at < 0) return email;
+  return (
+    <>
+      {email.slice(0, at + 1)}
+      <wbr />
+      {email.slice(at + 1)}
+    </>
+  );
+}
+
 /** What a rail count counts, said in words (its label and tooltip). */
 function countWords(label: string, n: number): string {
   if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
@@ -200,10 +214,13 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
     <>
       {/* qa-simple-home-6: from 1200 px the open Ask panel sits beside the page (it keeps the shell's third column), not over it. */}
       {askOpen && me && !/\/present\/?$/.test(pathname) && <span aria-hidden data-testid="simple-ask-room" className="col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block" />}
+      {/* fix4 qa-simple-roadmap-46: the rail's colour runs the page's full height (the sticky rail is one
+       * screen tall), and the rail sits under a page's dimmed backdrop (z-35) like the page. */}
+      <span aria-hidden data-testid="simple-nav-underlay" className="col-start-1 row-start-1 self-stretch bg-rail [border-right:var(--simple-rail-border)] max-[600px]:hidden" />
       <nav
         aria-label="Simple"
         data-testid="simple-nav"
-        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden"
+        className="sticky top-0 z-30 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden"
       >
         <Link href={SIMPLE_HOME} aria-label="Product Oracle" data-testid="simple-nav-brand" className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
@@ -246,9 +263,10 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         <div data-testid="simple-person" className="flex items-center gap-3 border-t border-line pt-3">
           {account("rail")}
           <span className="flex min-w-0 flex-col pt-2 leading-5">
-            {/* qa-simple-home-25: the name (or email) in full, wrapped, never cut to "viewer@example.c…". */}
+            {/* qa-simple-home-25: the name (or email) in full, wrapped, never cut to "viewer@example.c…".
+             * fix4 qa-simple-roadmap-51: an email wraps after its "@", not mid-word. */}
             <span data-testid="simple-person-name" title={me?.email || me?.name || undefined} className="text-[15px] font-semibold [overflow-wrap:anywhere] text-rail-active-text">
-              {me?.name || me?.email || ""}
+              {me?.name || breakable(me?.email ?? "")}
             </span>
             <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>
           </span>

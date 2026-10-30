@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
-import { barKind, broken, closedItem, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, brokenLinks, closedItem, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -20,6 +20,37 @@ const boardSpanWords = (start: string, end: string, today: string): string => sp
  * and the card says its dates sit outside it. */
 function outsideWindow(i: Item, window: { start: string; end: string }): boolean {
   return i.start.date > window.end || i.end.date < window.start;
+}
+
+/** fix4 qa-simple-roadmap-34: one legend style for every format, the Timeline's: a swatch
+ * drawn as the mark is, then short words. */
+export const LEGEND_SWATCH = "inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px]";
+export type LegendEntry = { key: string; swatch: ReactNode; words: ReactNode; testId?: string };
+export function LegendKeys({ entries, className = "" }: { entries: LegendEntry[]; className?: string }) {
+  return (
+    <div data-testid="legend" className={`flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] leading-[18px] text-text-faint ${className}`}>
+      {entries.map((e) => (
+        <span key={e.key} className="inline-flex items-center gap-1.5" data-testid={e.testId ?? "legend-item"} data-key={e.key}>
+          {e.swatch}
+          {e.words}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** fix4 qa-simple-roadmap-7: the board's legend names the marks its cards draw, and only those shown. */
+export function boardLegend(data: Roadmap, phone: boolean, canDrag: boolean): LegendEntry[] {
+  const open = data.items.filter((i) => !closedItem(i));
+  const out: LegendEntry[] = [];
+  if (canDrag) out.push({ key: "drag", swatch: null, words: `Drag a card to another column${phone ? " (press and hold first)" : ""} to change its horizon` });
+  if (open.some((i) => barKind(i) === "estimated"))
+    out.push({ key: "estimated", swatch: <i aria-hidden className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid" />, words: "Estimated dates" });
+  if (open.some((i) => barKind(i) === "draft")) out.push({ key: "draft", swatch: <i aria-hidden className={`${LEGEND_SWATCH} border-dashed border-line-strong`} />, words: "Draft" });
+  if (data.items.some((i) => brokenLinks(i).length > 0))
+    out.push({ key: "broken", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ borderColor: "var(--crit)", borderWidth: 2 }} />, words: "A broken link" });
+  if (data.items.some(closedItem)) out.push({ key: "cut", swatch: <i aria-hidden className="inline-block w-[18px] flex-none border-t border-dashed border-line-strong" />, words: "Below the line: cut" });
+  return out;
 }
 
 const LONG_PRESS_MS = 450;
@@ -285,7 +316,11 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
 
   const card = (item: Item) => {
     const kind = closedItem(item) ? "cut" : barKind(item);
-    const red = broken(item).length > 0;
+    // fix4 qa-simple-roadmap-7: only a broken link draws the red outline; a draft with no
+    // owner (or an end past its milestone) keeps its own outline and says so in amber.
+    const links = brokenLinks(item);
+    const unowned = broken(item).find((f) => !links.includes(f));
+    const red = links.length > 0;
     const pending = proposals.find((c) => c.op === "change_horizon" && c.target.item_id === item.id);
     const movable = canDrag && !closedItem(item);
     return (
@@ -351,7 +386,12 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {red && (
             <p className="mt-1 text-sm text-crit" data-testid="board-broken">
-              {broken(item)[0].reason}
+              {links[0].reason}
+            </p>
+          )}
+          {unowned && (
+            <p className="mt-1 text-sm text-warn" data-testid="board-flag">
+              {unowned.reason}
             </p>
           )}
           {pending && (
@@ -381,8 +421,10 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
             <span className="text-sm text-text2" data-testid="column-window">
               {boardSpanWords(c.window.start, c.window.end, data.today)}
             </span>
-            <span className="tnum ml-auto text-sm text-text2" data-testid="column-count">
+            {/* fix4 qa-simple-roadmap-32: the cut cards under the line are counted too. */}
+            <span className="tnum ml-auto text-sm whitespace-nowrap text-text2" data-testid="column-count">
               {c.groups.reduce((n, g) => n + g.items.length, 0)}
+              {c.below.length > 0 && ` · ${c.below.length} below the line`}
             </span>
           </header>
           {c.groups.map((g) => (

@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { dayIn, formatInZone, todayIn, useCompanyZone, zoneDateTime } from "@/lib/dates";
+import { plainClock, useCompanyZone } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
 import { Code, FlowDiagram, FlowScreen, FlowStepList, Icon, ICONS, ScreenCard, stepsOf, StoryCard, Tabs, usePhone } from "./FlowViews";
@@ -23,10 +23,9 @@ const RUN_SCREEN_MS = 15000;
 /** A drawing made this recently carries "New" (the row need not have watched it land). */
 const NEW_MS = 15 * 60 * 1000;
 
-/** "7:04 PM PDT" today, else "Oct 19, 8:00 AM PDT": a time in the company's zone with its short
- * name, and its day when not today, as every other time in Simple reads (qa-simple-prd-20). */
-export const clock = (iso: string, zone: string): string =>
-  dayIn(iso, zone) === todayIn(zone) ? formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" }) : zoneDateTime(iso, zone);
+/** "7:04 PM" today, else "Oct 19, 8:00 AM": a time in the company's zone, and its day when not
+ * today (qa-simple-prd-20); fix4 qa-simple-roadmap-29: no zone name ("PDT"). */
+export const clock = (iso: string, zone: string): string => plainClock(iso, zone);
 
 /** A flow: three steps joined left to right (qa-simple-prd-33: not the Roadmap's icon). */
 const FLOW_ICON = "r,2,9,5,6,1.5|r,9.5,9,5,6,1.5|r,17,9,5,6,1.5|M7 12h2.5M14.5 12h2.5";
@@ -37,7 +36,7 @@ export function flowSize(flow: Flow): string {
   return `${n} step${n === 1 ? "" : "s"} · ${flow.touches_screen ? "1 screen" : "no screen"}`;
 }
 
-/** "Version 1 · drawn 7:04 PM PDT" (the time in the company's zone; its day when not today). */
+/** "Version 1 · drawn 7:04 PM" (the time in the company's zone; its day when not today). */
 export function flowDrawn(flow: Flow, zone: string): string {
   return `Version ${flow.version}${flow.made_at ? ` · drawn ${clock(flow.made_at, zone)}` : ""}`;
 }
@@ -54,6 +53,8 @@ const codeOf = (name: string): string | null => /^([A-Z][A-Z0-9]*-\d+[a-z]?)\b/.
 const capSection = (key: string): string => key.charAt(0).toUpperCase() + key.slice(1);
 
 // The mock-ups' buttons: .btn (32 px, 8 px corners) and .sbtn.sm (34 px, 10 px corners).
+/** fix4 qa-simple-roadmap-48: a scrolling pane's scrollbar in the theme's colours (dark in dark mode). */
+const SCROLL = "[scrollbar-color:var(--line-strong)_var(--surface)]";
 const BTN = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-text hover:bg-surface2 disabled:opacity-60";
 // qa-simple-roadmap-32: disabled must look disabled too (Revise reads enabled otherwise).
 const BTN_SOLID = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink disabled:cursor-not-allowed disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:hover:bg-surface2";
@@ -303,7 +304,9 @@ export function FlowPanel({
   const [view, setView] = useState<null | "opened" | "story">(row || line ? null : "opened");
   const [full, setFull] = useState(false);
   const [fullTab, setFullTab] = useState<"diagram" | "steps" | "screen">("diagram");
-  const [commenting, setCommenting] = useState(false);
+  const [commentingOn, setCommenting] = useState(false);
+  // fix4 qa-simple-roadmap-47: the opened view has Comment too; with every view closed the comments are closed.
+  const commenting = commentingOn && (view !== null || full);
   // A drawing this row watched land (it was drawing, now it is drawn) carries "New", as does
   // one made in the last NEW_MS (it landed while the card was closed).
   const [fresh, setFresh] = useState(false);
@@ -570,6 +573,14 @@ export function FlowPanel({
     </>
   );
 
+  // fix4 qa-simple-roadmap-47: Comment (the comments, notes, versions and Revise) in the opened
+  // view as in the full-screen viewer; there the panel follows the steps and the screen.
+  const commentButton = (
+    <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
+      Comment
+    </button>
+  );
+
   /** A phone's opened view (A): a full-height sheet, the diagram top to bottom, then the steps. */
   const phoneOpened = (f: Flow) => (
     <div ref={openedRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · flow`} data-testid="flow-detail" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
@@ -584,7 +595,7 @@ export function FlowPanel({
           Full screen
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div className={`min-h-0 flex-1 overflow-y-auto px-4 py-3 ${SCROLL}`}>
         <p className={META} data-testid="flow-drawn">
           {phoneMeta(f)}
           {older}
@@ -596,6 +607,9 @@ export function FlowPanel({
         <FlowStepList flow={f} />
         <p className={`mt-2 ${SUB}`}>Screen: {f.touches_screen ? f.screen.title : "none (it touches no screen)"}</p>
         <FlowScreen flow={f} size={12} />
+        {/* The header has no room on a phone: Comment follows the screen. */}
+        <div className="mt-3">{commentButton}</div>
+        {commenting && !full && <div className="mt-3 border-t border-line pt-3">{commentsPanel(f, true)}</div>}
       </div>
     </div>
   );
@@ -618,6 +632,7 @@ export function FlowPanel({
           {flowDrawn(f, zone)}
           {older}
         </span>
+        {commentButton}
         <button type="button" className={BTN} data-first onClick={() => setFull(true)}>
           <Icon d={ICONS.expand} />
           Full screen
@@ -627,6 +642,7 @@ export function FlowPanel({
         </button>
       </div>
       {acrossBody(f)}
+      {commenting && !full && <div className="mt-3 border-t border-line pt-3">{commentsPanel(f, true)}</div>}
     </div>
   );
 
@@ -682,7 +698,7 @@ export function FlowPanel({
         <div className="relative min-h-0 flex-1">
           {/* qa-simple-roadmap-12: the comments panel is an overlay (`absolute right-0 w-[420px]`);
               while it is open, this pane keeps clear of it so the Steps list is not covered. */}
-          <div className={`h-full overflow-y-auto ${commenting && !phone ? "pr-[420px]" : ""}`}>
+          <div className={`h-full overflow-y-auto ${SCROLL} ${commenting && !phone ? "pr-[420px]" : ""}`}>
             {phone ? (
               <div className="px-4 py-3">
                 <Tabs
@@ -758,7 +774,7 @@ export function FlowPanel({
       <section data-testid="flow-row" aria-label="Flow" className="mt-1 flex items-center gap-2 text-[15px] leading-[22px]">
         {v.flow ? (
           <>
-            <button type="button" aria-label={openLabel} data-testid="flow-row-thumb" onClick={() => setView("opened")} className="grid h-9 w-12 flex-none place-items-center rounded border border-line bg-surface2 hover:border-line-strong">
+            <button type="button" aria-label={openLabel} data-testid="flow-row-thumb" onClick={() => (setCommenting(false), setView("opened"))} className="grid h-9 w-12 flex-none place-items-center rounded border border-line bg-surface2 hover:border-line-strong">
               <svg width="34" height="20" viewBox="0 0 34 20" aria-hidden>
                 <rect x="1" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
                 <rect x="13" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
@@ -784,7 +800,7 @@ export function FlowPanel({
         {v.flow ? (
           <div data-testid="flow-row-drawn">
             <div className="mt-2 flex items-start gap-3 max-[600px]:flex-col max-[600px]:gap-2">
-              <button type="button" aria-label={openLabel} aria-expanded={view === "opened"} data-testid="flow-row-thumb" onClick={() => setView("opened")} className="flex-none rounded-lg border border-line bg-surface p-1.5 hover:border-line-strong">
+              <button type="button" aria-label={openLabel} aria-expanded={view === "opened"} data-testid="flow-row-thumb" onClick={() => (setCommenting(false), setView("opened"))} className="flex-none rounded-lg border border-line bg-surface p-1.5 hover:border-line-strong">
                 <FlowDiagram flow={v.flow} layout="mini" />
               </button>
               <div className="min-w-0 flex-1 max-[600px]:w-full">
@@ -818,7 +834,7 @@ export function FlowPanel({
               </div>
             </div>
             <div className="mt-2.5 flex flex-wrap gap-2">
-              <button type="button" className={SBTN} onClick={() => setView("opened")}>
+              <button type="button" className={SBTN} onClick={() => (setCommenting(false), setView("opened"))}>
                 Open the flow
               </button>
               <button type="button" className={SBTN} onClick={() => setView("story")}>
@@ -856,7 +872,7 @@ export function FlowPanel({
             </button>
           </div>
           {view === "story" ? (
-            <ol aria-label="Storyboard" data-testid="flow-storyboard" className="mt-3 flex items-stretch gap-3 overflow-x-auto pb-1">
+            <ol aria-label="Storyboard" data-testid="flow-storyboard" className="mt-3 flex items-start gap-3 overflow-x-auto pb-1">
               {stepsOf(flow).map((s, i) => (
                 <StoryCard key={s.id} s={s} n={i + 1} />
               ))}
@@ -937,7 +953,8 @@ function Storyboard({
             Close
           </button>
         </div>
-        <ol aria-label="Storyboard" className="mt-3 flex items-stretch gap-3 overflow-x-auto">
+        {/* fix4 qa-simple-roadmap-53: each card as tall as its words (no stretched empty space). */}
+        <ol aria-label="Storyboard" className={`mt-3 flex items-start gap-3 overflow-x-auto ${SCROLL}`}>
           {steps.map((s, i) => (
             <StoryCard key={s.id} s={s} n={i + 1} />
           ))}

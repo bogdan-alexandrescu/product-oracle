@@ -41,6 +41,7 @@ import {
   ownDates,
   prdCode,
   ROADMAP_SLUGS,
+  readerDb,
   readsRoadmap,
   roadmapId,
   roadmapOut,
@@ -570,28 +571,33 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     }
   } else if (applies) session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
   if (TARGETS[body.op]) return createTarget(db, ctx, body, session);
+  // fix4 qa-simple-roadmap-9: as the API (changes.create reads through drafts.overlays_for), the
+  // stale check and a fix's plan read the items as the caller reads them: a commenter who may
+  // not see the working draft is checked against the published items their roadmap shows.
+  const seen = readerDb(db, ctx);
+  if (!seen.items.some((s) => s.key === key)) return json(404, { detail: "No such roadmap item" });
   let before: Values;
   let after: Values;
   if (FIXES.includes(body.op)) {
     const dep = String(target.subject ?? "");
-    const deps = roadmapOut(db, "owner", new URLSearchParams())!.items.find((i) => i.id === target.item_id)?.depends_on ?? [];
+    const deps = roadmapOut(seen, "owner", new URLSearchParams())!.items.find((i) => i.id === target.item_id)?.depends_on ?? [];
     if (!deps.includes(dep)) return json(422, { detail: "target.subject: an item the target depends on" });
     const stale: Values = {};
     for (const id of [String(target.item_id), dep]) {
       const given = body.before[id] as Values | undefined;
       if (!given || !("start_date" in given) || !("end_date" in given)) return json(422, { detail: `before.${id}: start_date and end_date as seen` });
-      const now_ = read(db, keyOf(db, id)!, ["start_date", "end_date"], target);
+      const now_ = read(seen, keyOf(db, id)!, ["start_date", "end_date"], target);
       if (!same(normal(["start_date", "end_date"], given), now_)) stale[id] = now_;
     }
     if (Object.keys(stale).length) return conflict(db, ctx, stale, Object.keys(stale), "Changed since you saw it");
-    const moves = fixPlan(db, body.op, String(target.item_id), dep);
-    before = Object.fromEntries(Object.keys(moves).map((id) => [id, read(db, keyOf(db, id)!, ["start_date", "end_date", "date_source"], target)]));
+    const moves = fixPlan(seen, body.op, String(target.item_id), dep);
+    before = Object.fromEntries(Object.keys(moves).map((id) => [id, read(seen, keyOf(db, id)!, ["start_date", "end_date", "date_source"], target)]));
     after = Object.fromEntries(Object.entries(moves).map(([id, [s, e]]) => [id, { start_date: s, end_date: e, date_source: "typed" }]));
   } else {
     const fields = FIELDS[body.op];
     const missing = fields.filter((f) => !(f in body.before));
     if (missing.length) return json(422, { detail: `before: ${missing.join(", ")} as you saw them` });
-    const now_ = read(db, key, fields, target);
+    const now_ = read(seen, key, fields, target);
     // A suggestion accepted after the item got dates is "outdated" (S2-minor).
     const lead = body.op === "accept_date_suggestion" ? "outdated" : "Changed since you saw it";
     if (!same(normal(fields, body.before), now_)) return conflict(db, ctx, now_, [String(target.item_id)], lead);
@@ -626,7 +632,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
     } else if (body.op === "reorder") after = { position: Number(a.position) };
     else if (body.op === "cut" || body.op === "restore") after = { cut: body.op === "cut" };
     else if (body.op === "confirm_item") {
-      if (!seed(db, key).draft) return json(422, { detail: "Only a draft item is confirmed" });
+      if (!seed(seen, key).draft) return json(422, { detail: "Only a draft item is confirmed" });
       after = { draft: false };
     }
     else if (body.op === "edit_title") {
@@ -640,7 +646,7 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       target.subject = target.subject ?? null;
       after = { risk: { flag: target.flag, subject: target.subject, note, by: ctx.id, at: now } };
     }
-    before = read(db, key, stored, target);
+    before = read(seen, key, stored, target);
   }
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: stableUuid(`simple-doc/${seed(db, key).roadmap}`), draft_ids: [], op: body.op, target, before, after,
