@@ -85,6 +85,12 @@ export interface OnePagerDb {
   owner?: string;
   /** The PRD's roadmap slice, when not the default invented one (SLICE). */
   slice?: SliceItem[];
+  /**
+   * oracle.simple.quality: Oracle's build failed its checks twice: its blocks and the failed
+   * checks' plain words. Owners read it with a "Needs a look" note; everyone else `blocks`
+   * (the last good version).
+   */
+  held?: { blocks: OnePagerDb["blocks"]; checks: string[] } | null;
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
   approval?: { approved_in: string; waiting_on: { id: string; name: string }[]; blocked_by?: string[] } | null;
 }
@@ -190,6 +196,21 @@ const NOTED_SLICE: SliceItem[] = [
 ];
 export const WALK_PROBLEM =
   "New workspace admins stall during setup because the checklist hides the invite step. The queue of half-set-up teams grows every week a cohort lands; teams with more than ten people wait the longest, and the promise we make is a first teammate invited within a 48-hour window that we miss for most new teams after a weekend signup.";
+
+/**
+ * The "one-pager-needs-look" scenario: Oracle's build failed its checks twice (two bets, a
+ * risk saying "TBD"), so it is held: owners read it with the failed checks; everyone else
+ * the last good page. Invented data.
+ */
+export function seedNeedsLookOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  const blocks = db.blocks.map((b) => ({ ...b, lines: b.lines.map((l) => ({ ...l })) }));
+  const bets = blocks.find((b) => b.key === "bets")!;
+  bets.lines = bets.lines.slice(0, 2);
+  blocks.find((b) => b.key === "risks")!.lines = [{ id: "risks-1", text: "Pricing for teams is TBD", keys: ["risks"] }];
+  db.held = { blocks, checks: ["2 bets; a one-pager has 3 to 5", "A line in “Risks and open decisions” says “TBD”"] };
+  return db;
+}
 
 export function seedWalkOnePager(): OnePagerDb {
   const db = seedOnePager();
@@ -385,6 +406,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
   const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
   const span = milestoneSpan(db.slice ?? SLICE);
+  const held = ctx.role === "owner" ? db.held ?? null : null;
   return {
     document: db.doc,
     version: db.version,
@@ -395,7 +417,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     span_end: span?.[1] ?? null,
     built_by: "oracle",
     built_at: "2026-10-20T15:05:00Z",
-    blocks: db.blocks.map((b) => ({
+    blocks: (held?.blocks ?? db.blocks).map((b) => ({
       key: b.key, title: b.title, rules: b.rules, kind: b.kind,
       lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
@@ -429,6 +451,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     can_edit: decides(ctx),
     can_propose: !decides(ctx) && RANK[ctx.role] >= RANK.commenter,
     can_start: starts(ctx),
+    needs_look: held ? [...held.checks] : [],
   };
 }
 

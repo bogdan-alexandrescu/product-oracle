@@ -122,6 +122,8 @@ export interface MockKeyDate {
 /** S7: one of Oracle's suggested features for a goal, as stored. */
 export interface GoalSuggestionRow {
   id: string;
+  /** oracle.simple.quality: Oracle's suggestion failed its checks twice (their plain words): owners only. */
+  checks?: string[];
   goal: string;
   title: string;
   outcome: string;

@@ -154,7 +154,7 @@ import {
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { planSlice, routeOnePager, seedNeedsLookOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -5541,7 +5541,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
   // "one-pager-no-owner": the PRD was imported by a service token (no owner yet).
-  db.simple_one_pager ??= seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
+  // "one-pager-needs-look": Oracle's build failed its checks twice (oracle.simple.quality).
+  db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
+    ? seedNeedsLookOnePager()
+    : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;

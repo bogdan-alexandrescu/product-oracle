@@ -405,6 +405,15 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · you read the published version
         </div>
       )}
+      {/* oracle.simple.quality: Oracle's build failed its checks twice; the API names them to owners only. */}
+      {v.needs_look.length > 0 && !presenting && (
+        <div role="note" aria-label="Needs a look" data-testid="needs-look" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
+          <span className="font-semibold text-text2">Needs a look</span> · Oracle&apos;s page missed these checks; others read the last good version.
+          <ul className="mt-1 list-disc pl-5">
+            {v.needs_look.map((c) => <li key={c}>{c}</li>)}
+          </ul>
+        </div>
+      )}
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
       <div className={`mx-auto flex max-w-[1180px] flex-col gap-5 px-12 pt-[26px] max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>

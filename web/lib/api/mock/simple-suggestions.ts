@@ -180,6 +180,8 @@ function out(db: SimpleDb, s: GoalSuggestionRow, ctx: Ctx): Schemas["SimpleGoalS
     proposed_by_name: s.proposed_by ? (ctx.names[s.proposed_by] ?? "someone") : null,
     can_accept: open && decides,
     can_reject: open && decides,
+    // oracle.simple.quality: a suggestion that failed its checks twice is the owners' to look at.
+    needs_look: ctx.role === "owner" ? [...(s.checks ?? [])] : [],
   };
 }
 
@@ -225,7 +227,7 @@ export async function routeGoalSuggestions(
         const d = goalDecider(db, g, ctx);
         return { goal: { id: goalId(g), key: g, title: GOALS[g] }, pending: !!db.goal_jobs![g], empty: isEmpty(db, g), decider_name: d.id ? (ctx.names[d.id] ?? null) : null, can_decide: d.mine };
       }),
-      suggestions: rows.filter((s) => goals.includes(s.goal) && s.status === status).map((s) => out(db, s, ctx)),
+      suggestions: rows.filter((s) => goals.includes(s.goal) && s.status === status && (ctx.role === "owner" || !s.checks?.length)).map((s) => out(db, s, ctx)),
     });
   }
   if (m !== "POST" || !p[3]) return null;

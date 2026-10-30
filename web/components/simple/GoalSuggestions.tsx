@@ -205,6 +205,12 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
           <p className="text-text2" data-testid="suggestion-why">
             Why: {s.why}
           </p>
+          {/* oracle.simple.quality: it failed its checks twice; the API names them to owners only. */}
+          {s.needs_look.length > 0 && (
+            <p role="note" aria-label="Needs a look" className="text-text-faint" data-testid="needs-look">
+              <span className="font-semibold text-text2">Needs a look</span> · {s.needs_look.join(" · ")}
+            </p>
+          )}
           {s.evidence.length > 0 && (
             <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1" data-testid="suggestion-evidence" aria-label="Sources">
               <li className="text-text2">Sources:</li>
