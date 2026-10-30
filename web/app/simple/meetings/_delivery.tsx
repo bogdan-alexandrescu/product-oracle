@@ -27,7 +27,11 @@ export function emailWords(d: Delivery): { text: string; retry: boolean } {
   const failed = all.filter((e) => e.status === "failed").map((e) => e.person);
   const again = all.filter((e) => e.status !== "sent" && e.status !== "failed").map((e) => e.person);
   if (d.email_status === "unavailable") return { text: "No email went: email isn't set up", retry: false };
-  if (!all.length) return { text: d.email_status === "sent" ? "Emailed the attendees" : "Emailing the attendees…", retry: false };
+  if (!all.length) {
+    // Stored before each attendee carried a status: nothing named is left to retry.
+    if (d.email_status === "failed") return { text: "Couldn't email the attendees", retry: false };
+    return { text: d.email_status === "sent" ? "Emailed the attendees" : "Emailing the attendees…", retry: false };
+  }
   if (d.email_status === "failed") {
     return { text: sent ? `Emailed ${sent} of ${all.length} attendees; ${whose(failed)} didn't go through` : "Couldn't email the attendees", retry: true };
   }

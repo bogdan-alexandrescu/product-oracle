@@ -267,8 +267,8 @@ async def test_meeting_is_not_locked_while_sending(client, monkeypatch, clock): 
     async def probe() -> None:
         async with tenant_session(w.ctx.tenant_id) as s:
             try:
-                await s.execute(text("SELECT id FROM simple_meetings WHERE id = :i FOR UPDATE NOWAIT"),
-                                {"i": uuid.UUID(m["id"])})  # fmt: skip
+                sql = "SELECT id FROM simple_meetings WHERE id = :i FOR UPDATE NOWAIT"
+                await s.execute(text(sql), {"i": uuid.UUID(m["id"])})
                 free.append(True)
             except Exception:  # noqa: BLE001 - locked
                 free.append(False)

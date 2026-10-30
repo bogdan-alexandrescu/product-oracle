@@ -1643,7 +1643,8 @@ async def _post_slack(db: AsyncSession, text: str) -> None:
 
 async def deliver(db: AsyncSession, meeting_id: uuid.UUID) -> int:
     """Try a sent meeting's due emails and Slack post once each; records each status (the
-    caller commits). Returns how many emails went."""
+    caller commits). The meeting is locked only to claim what is due (commits) and to record
+    how it went, never through a send. Returns how many emails went."""
     import html as html_mod
 
     import httpx
@@ -1655,8 +1656,11 @@ async def deliver(db: AsyncSession, meeting_id: uuid.UUID) -> int:
         return 0
     d = dict(m.delivery)
     now = company_time.now()
-    sent = 0
-    text: str | None = None
+    if d.get("slack_status") in _PENDING and "slack_tries" not in d:
+        d["slack_status"] = "sent"  # queued before the post carried its tries: the outbox posted it
+    due: list[str] = []
+    users: dict[str, User] = {}
+    sender = None
     if d.get("email_status") in _PENDING:
         to = {k: dict(v) for k, v in (d.get("email_to") or {}).items()}
         if not to:  # queued before each attendee carried a status
@@ -1667,47 +1671,73 @@ async def deliver(db: AsyncSession, meeting_id: uuid.UUID) -> int:
         due = [k for k, v in to.items() if _due(v, now)]
         sender = mailer.get_mailer() if due else None
         if due and sender is None:
-            d["email_status"] = "unavailable"
-        elif due:
-            names = {u.id: u.name or u.email for u in users.values()}
-            text = _plain(m, m.minutes or {}, names)
-            async with httpx.AsyncClient() as http:
-                for k in due:
-                    msg = mailer.InviteEmail(
-                        to=users[k].email, subject=f"Minutes: {m.title}", text=text,
-                        html=f"<pre style='font-family:inherit'>{html_mod.escape(text)}</pre>",
-                    )  # fmt: skip
-                    try:
-                        await sender.send(http, msg)
-                    except Exception as exc:  # noqa: BLE001 - recorded, never raised
-                        to[k] = _failed_try(to[k], now)
-                        log.warning("minutes email for meeting %s failed: %s", m.id,
-                                    type(exc).__name__)  # fmt: skip
-                    else:
-                        to[k] = {"status": "sent", "tries": int(to[k].get("tries") or 0) + 1}
-                        sent += 1
-        if d.get("email_status") != "unavailable":
+            d["email_status"], due = "unavailable", []
+        else:
             d["email_to"] = to
             d["email_status"] = _email_status(to) if to else "sent"
             d["email_sent"] = sum(1 for v in to.values() if v["status"] == "sent")
     slack = {"status": d.get("slack_status"), "tries": d.get("slack_tries"),
              "next_at": d.get("slack_next_at")}  # fmt: skip
-    if d.get("slack") and _due(slack, now):
-        if text is None:
-            text = _plain(m, m.minutes or {}, await _names(db, set(m.attendee_ids)))
+    post = bool(d.get("slack")) and _due(slack, now)
+    if not due and not post:
+        m.delivery = d
+        await db.flush()
+        return 0
+    # Claim what is due (a second deliver leaves it alone until the lease ends; a crash
+    # mid-send tries it again then), then send with the meeting unlocked.
+    names = {u.id: u.name or u.email for u in users.values()} if due else await _names(
+        db, set(m.attendee_ids))  # fmt: skip
+    text = _plain(m, m.minutes or {}, names)
+    subject = f"Minutes: {m.title}"
+    lease = (now + timedelta(minutes=RETRY_AFTER_MINUTES[0])).isoformat()
+    tried = {k: dict(d["email_to"][k]) for k in due}
+    for k in due:
+        d["email_to"][k]["next_at"] = lease
+    if post:
+        d["slack_next_at"] = lease
+    m.delivery = d
+    await db.commit()
+    done: dict[str, dict] = {}
+    if due:
+        async with httpx.AsyncClient() as http:
+            for k in due:
+                msg = mailer.InviteEmail(
+                    to=users[k].email, subject=subject, text=text,
+                    html=f"<pre style='font-family:inherit'>{html_mod.escape(text)}</pre>",
+                )  # fmt: skip
+                try:
+                    await sender.send(http, msg)
+                except Exception as exc:  # noqa: BLE001 - recorded, never raised
+                    done[k] = _failed_try(tried[k], now)
+                    log.warning("minutes email for meeting %s failed: %s", meeting_id,
+                                type(exc).__name__)  # fmt: skip
+                else:
+                    done[k] = {"status": "sent", "tries": int(tried[k].get("tries") or 0) + 1}
+    if post:
         try:
             await _post_slack(db, text)
         except Exception as exc:  # noqa: BLE001 - recorded, never raised
             slack = _failed_try(slack, now)
-            log.warning("minutes Slack post for meeting %s failed: %s", m.id,
+            log.warning("minutes Slack post for meeting %s failed: %s", meeting_id,
                         type(exc).__name__)  # fmt: skip
         else:
             slack = {"status": "sent", "tries": int(slack.get("tries") or 0) + 1, "next_at": None}
+    m = await db.get(SimpleMeeting, meeting_id, with_for_update=True, populate_existing=True)
+    if m is None or not m.delivery:
+        return 0
+    d = dict(m.delivery)
+    if done:
+        to = {k: dict(v) for k, v in (d.get("email_to") or {}).items()}
+        to.update({k: v for k, v in done.items() if k in to})
+        d["email_to"] = to
+        d["email_status"] = _email_status(to) if to else "sent"
+        d["email_sent"] = sum(1 for v in to.values() if v["status"] == "sent")
+    if post:
         d["slack_status"], d["slack_tries"], d["slack_next_at"] = (
             slack["status"], slack["tries"], slack["next_at"])  # fmt: skip
     m.delivery = d
     await db.flush()
-    return sent
+    return sum(1 for v in done.values() if v["status"] == "sent")
 
 
 async def deliver_email(db: AsyncSession, meeting_id: uuid.UUID) -> int:
@@ -1732,9 +1762,6 @@ async def deliver_due(db: AsyncSession) -> int:
         n += await deliver(db, i)
         await db.commit()
     return n
-
-
-send_queued_emails = deliver_due
 
 
 def may_retry(principal: Any, m: SimpleMeeting) -> bool:
@@ -1791,7 +1818,10 @@ async def delivery_out(db: AsyncSession, m: SimpleMeeting) -> SimpleDelivery | N
         {
             **d,
             "emails": [e.model_dump() for e in emails],
-            "email_sent": sum(1 for e in emails if e.status == "sent"),
+            # Stored before each attendee carried a status: the count it kept.
+            "email_sent": sum(1 for e in emails if e.status == "sent")
+            if to
+            else int(d.get("email_sent") or 0),
         }  # fmt: skip
     )
 
