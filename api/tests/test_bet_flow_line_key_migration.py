@@ -261,3 +261,45 @@ def test_the_published_page_its_keys_and_the_draft(scratch_db):
     }
     command.upgrade(cfg, REVISION)
     assert _flows() == {**moved, key(d, "carried"): flow("A guide")}
+
+
+def test_a_redrawn_line_flow_is_no_copy(scratch_db):
+    """Card: protects=the downgrade drops a line's flow only when it is an exact copy of the
+    one its words hold (every version the same, not just its number and title);
+    fails_when=a line's flow redrawn after the copy (same number and title, other drawing)
+    is dropped as a copy, so its drawing is lost; no_claim=the reads."""
+    cfg = _cfg()
+    command.upgrade(cfg, PREVIOUS)
+    _, d = _world()
+    command.upgrade(cfg, REVISION)
+    line = key(d, "bets-1")
+    # A copy of the line's flow on its words (the same row, versions and comments) ...
+    _run(
+        "WITH v AS (SELECT * FROM simple_visuals WHERE subject_id = :s), n AS ("
+        " INSERT INTO simple_visuals SELECT (jsonb_populate_record(NULL::simple_visuals,"
+        " to_jsonb(v) || jsonb_build_object('id', gen_random_uuid(), 'subject_id',"
+        " CAST(:w AS uuid)))).* FROM v RETURNING id), x AS ("
+        " INSERT INTO simple_visual_versions SELECT (jsonb_populate_record("
+        " NULL::simple_visual_versions, to_jsonb(y) || jsonb_build_object('id',"
+        " gen_random_uuid(), 'visual_id', (SELECT id FROM n)))).* FROM simple_visual_versions y"
+        " WHERE y.visual_id = (SELECT id FROM v))"
+        " INSERT INTO simple_visual_comments SELECT (jsonb_populate_record("
+        " NULL::simple_visual_comments, to_jsonb(c) || jsonb_build_object('id',"
+        " gen_random_uuid(), 'visual_id', (SELECT id FROM n)))).* FROM simple_visual_comments c"
+        " WHERE c.visual_id = (SELECT id FROM v)",
+        s=line, w=words(d, "Checklist"),
+    )  # fmt: skip
+    # ... then the line's own drawing redrawn: the same number and title, other steps.
+    _run(
+        'UPDATE simple_visual_versions SET steps = \'["Open", "Tick"]\','
+        " flow_svg = '<svg><g/></svg>'"
+        " WHERE visual_id = (SELECT id FROM simple_visuals WHERE subject_id = :s)",
+        s=line,
+    )
+    command.downgrade(cfg, PREVIOUS)
+    drawn = _run(
+        "SELECT ver.flow_svg FROM simple_visuals v JOIN simple_visual_versions ver"
+        " ON ver.visual_id = v.id WHERE v.subject_id = :s",
+        s=line,
+    )
+    assert [r[0] for r in drawn] == ["<svg><g/></svg>"]
