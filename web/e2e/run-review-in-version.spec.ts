@@ -109,9 +109,12 @@ test("a send-back is the structured review of the document's feedback, shown on 
   await page.goto(VERSION);
   await openSection(page, "behaviour");
   const panel = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
-  await panel.getByRole("button", { name: "Comment on the whole draft" }).click();
-  await panel.getByRole("textbox", { name: "Comment on the whole draft" }).fill("Say who gets the first alert.");
-  await panel.getByRole("button", { name: "Add", exact: true }).click();
+  // qa-docs-33: whole-draft feedback goes through the header's Discuss.
+  await page.getByTestId("doc-discuss").click();
+  const start = page.getByTestId("start-discussion").filter({ visible: true });
+  await start.getByRole("textbox", { name: "First message" }).fill("Say who gets the first alert.");
+  await start.getByRole("button", { name: "Start discussion" }).click();
+  await page.getByTestId("discussion-thread").filter({ visible: true }).getByRole("button", { name: "All feedback" }).click();
   await expect(panel.getByTestId("feedback-item").filter({ hasText: "Say who gets the first alert." })).toHaveCount(1);
   await page.reload();
   await bar(page).getByRole("button", { name: "Send back to agents" }).click();
