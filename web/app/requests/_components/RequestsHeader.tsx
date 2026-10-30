@@ -74,7 +74,7 @@ export function RequestsHeader({
                     </Button>
                   )}
                   {canChange || canStart ? (
-                    <div role="group" aria-label="Sort new requests automatically" data-testid="triage-menu-panel" className="flex flex-col gap-3">
+                    <div role="group" aria-label="Sort incoming requests automatically" data-testid="triage-menu-panel" className="flex flex-col gap-3">
                       {canChange && <DailyTriageSwitch triage={triage} canChange />}
                       {canStart && <ClassifyNow triage={triage} />}
                     </div>

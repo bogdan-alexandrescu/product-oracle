@@ -106,7 +106,7 @@ test("rirs-35: the header holds one Auto-sort control and two primary actions", 
   await login(page);
   await openRequests(page);
   const actions = page.getByTestId("requests-actions");
-  await expect(actions.getByRole("button", { name: "Sort new requests automatically: Off" })).toBeVisible();
+  await expect(actions.getByRole("button", { name: "Sort incoming requests automatically: Off" })).toBeVisible();
   await expect(actions.getByRole("button", { name: "Interview a customer" })).toBeVisible();
   await expect(actions.getByRole("button", { name: "New request" })).toBeVisible();
   await expect(actions.getByRole("button", { name: "Sort now", exact: true })).toHaveCount(0);

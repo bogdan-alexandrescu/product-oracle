@@ -109,7 +109,7 @@ export function useTriageTime(): string {
 }
 
 /**
- * The header's one triage control (rirs-35): "Sort new requests automatically: Off" (qa-shell-26) opens a panel with the daily
+ * The header's one triage control (rirs-35): "Sort incoming requests automatically: Off" (qa-shell-26) opens a panel with the daily
  * switch and Sort now, so the header keeps two primary actions. Approvers and owners get the
  * panel; commenters and viewers read its state only.
  */
@@ -154,7 +154,7 @@ export function TriageMenu({ triage, canChange, canStart }: { triage: Query<Stat
         className="max-[600px]:h-11 max-[600px]:w-full"
         onClick={() => setOpen((o) => !o)}
       >
-        Sort new requests automatically: {status?.daily_on ? "On" : "Off"}
+        Sort incoming requests automatically: {status?.daily_on ? "On" : "Off"}
       </Button>
       {open && (
         <div

@@ -49,7 +49,7 @@ test("qa-shell-19: a viewer's Inbox has no source to fix; the owner's has it wit
 test("qa-shell-26: on a desktop the sorting control says what it does", async ({ page }) => {
   await login(page);
   await openRequests(page);
-  await expect(actions(page).getByRole("button", { name: "Sort new requests automatically: Off" })).toBeVisible();
+  await expect(actions(page).getByRole("button", { name: "Sort incoming requests automatically: Off" })).toBeVisible();
   await expect(actions(page).getByRole("button", { name: "Interview a customer" })).toBeVisible();
   await expect(actions(page).getByRole("button", { name: "New request", exact: true })).toBeVisible();
   await expect(page.getByTestId("requests-more")).toHaveCount(0);
@@ -67,14 +67,14 @@ test.describe("on a phone", () => {
     const more = (await page.getByTestId("requests-more").boundingBox())!;
     expect(Math.abs(add.y - more.y)).toBeLessThan(1);
     await expect(page.getByRole("button", { name: "Interview a customer" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Sort new requests automatically/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Sort incoming requests automatically/ })).toHaveCount(0);
 
     // Everything the desktop offers is under More.
     await page.getByTestId("requests-more").click();
     const panel = page.getByTestId("requests-more-panel");
     await expect(panel.getByRole("switch", { name: /^Auto-sort new requests daily/ })).toBeVisible();
     await expect(panel.getByRole("button", { name: "Sort now", exact: true })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Sort new requests automatically" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Sort incoming requests automatically" })).toBeVisible();
     // The panel stays on the screen.
     const box = (await panel.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
