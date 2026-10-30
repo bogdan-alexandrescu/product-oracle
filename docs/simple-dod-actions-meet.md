@@ -54,7 +54,7 @@ specs at 1440x900. `(phone)` / `(desktop)` is the test's own suffix or its descr
 | Home, One-pagers, PRDs, a PRD, Roadmap, Priorities, Decisions, Meetings: the card applies | owner | dod-meet-ask › desktop › an owner's Ask card on every Simple page says Apply and does it (desktop) | dod-meet-ask › phone › same test (phone) |
 | The same pages: the card proposes | commenter | dod-meet-ask › desktop › a commenter's Ask card on every Simple page says Propose and does it (desktop) | dod-meet-ask › phone › same test (phone) |
 | Preview, Reject, Apply, Undo on the roadmap | owner | simple-ask-changes › desktop › the owner previews, discards, applies and undoes from the Ask panel (desktop) | simple-ask-changes › phone › same test (phone) |
-| A viewer's card disabled with why | viewer | simple-ask-changes › desktop, dark › a viewer's cards are disabled with why; … | Not run on a phone: the same card and the same reason render in the phone's sheet, which dod-meet-ask drives for the other roles |
+| A viewer's card disabled with why | viewer | simple-ask-changes › desktop, dark › a viewer's cards are disabled with why; … | dod-meet-ask › phone › a viewer's Ask card is disabled with why (phone) |
 
 ## End meeting
 
@@ -88,6 +88,5 @@ specs at 1440x900. `(phone)` / `(desktop)` is the test's own suffix or its descr
   test_simple_additions_api.py › test_a_cut_draft_item_reads_cut; UI: dod-meet-meeting › a
   draft item cut in the meeting reads Cut with Restore, desktop and phone).
 
-No cell is MISSING. Two cells say why they are as they are: the viewer's Ask card on a phone
-(the same card and reason, the phone's sheet proven for the other roles) and the Board (it
-holds questions, not minutes, as designed).
+No cell is MISSING. One cell says why it is as it is: the Board holds the PRDs' questions,
+not minutes, as designed (dod-meet-minutes checks it draws no meeting group).

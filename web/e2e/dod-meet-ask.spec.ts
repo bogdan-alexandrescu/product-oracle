@@ -14,6 +14,10 @@ import { ADMIN } from "./helpers";
  * proposes ("Proposed to Admin by you"); fails_when = a page's Ask panel has no change card,
  * an owner's card proposes, or a commenter's applies; no_claim = previews and ghosts
  * (simple-ask-changes.spec.ts), Oracle's answers to questions.
+ *
+ * Card dod-meet-ask-viewer: protects = a viewer's rename card, on a phone as on a desktop,
+ * has its button disabled with "Viewers read the plan; they don't change it"; fails_when =
+ * a viewer's card may act or gives no reason; no_claim = Detailed's panel.
  */
 
 const PAGES = ["/simple", "/simple/one-pagers", "/simple/prds", "/simple/prds/guided-setup", "/simple/roadmap", "/simple/priorities", "/simple/decisions", "/simple/meetings"];
@@ -75,5 +79,14 @@ for (const phone of [false, true]) {
         }
       });
     }
+
+    // card: dod-meet-ask-viewer
+    test(`a viewer's Ask card is disabled with why (${where})`, async ({ page }) => {
+      await signIn(page, "viewer@example.com");
+      const ask = await askOn(page, "/simple/roadmap", phone, "rename Weekly alert digest to Weekly alert summary");
+      const card = ask.getByTestId("chat-card").filter({ hasText: "Rename Weekly alert digest" });
+      await expect(card.getByRole("button", { name: /^(Apply|Propose)$/ })).toBeDisabled();
+      await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
+    });
   });
 }
