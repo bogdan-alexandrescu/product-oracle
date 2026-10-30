@@ -138,7 +138,8 @@ def _day_words(d: date | str | None, year: bool = False) -> str:
     if d is None:
         return "no date"
     d = date.fromisoformat(d) if isinstance(d, str) else d
-    return f"{d.day} {d.strftime('%b')}" + (f" {d.year}" if year else "")
+    # Month first, as everywhere else in the app: "Nov 20", "Dec 20, 2026".
+    return f"{d:%b} {d.day}" + (f", {d.year}" if year else "")
 
 
 def parse_day(text: str, today: date) -> date | None:

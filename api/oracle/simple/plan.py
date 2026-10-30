@@ -488,8 +488,8 @@ class View:
 
 
 def _day(d: date) -> str:
-    """A calendar day as "2 Nov" (no time of day)."""
-    return f"{d.day} {d:%b}"
+    """A calendar day as "Nov 2" (no time of day), month first as everywhere else."""
+    return f"{d:%b} {d.day}"
 
 
 def span_label(start: date, end: date) -> str:

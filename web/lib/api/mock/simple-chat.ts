@@ -231,8 +231,9 @@ const addDays = (day: string, n: number) => isoDay(msOf(day) + n * DAY);
 const now = () => new Date(mockNowMs()).toISOString();
 // The company's day (its time zone), as oracle.company_time.company_today.
 const today = () => companyDayIso(new Date(mockNowMs()));
+// "Nov 20", "Dec 20, 2026": month first, as the API's chat._day_words.
 const dayWords = (day: string, year = false) =>
-  new Date(msOf(day)).toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" });
+  new Date(msOf(day)).toLocaleDateString("en-US", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" });
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

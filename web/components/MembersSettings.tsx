@@ -603,6 +603,8 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
               <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} className="self-start" />
             )}
           </span>
+          {/* Your own lead box too: on a phone the Eng lead column hides. */}
+          {phoneLead(m)}
         </span>
       );
     }

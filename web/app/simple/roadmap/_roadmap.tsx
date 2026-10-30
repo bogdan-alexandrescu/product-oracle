@@ -457,6 +457,24 @@ export function SimpleRoadmap() {
   const [exporting, setExporting] = useState(false);
   // qa-shell-24: a phone's pickers sit behind one Filters button.
   const [pickersOpen, setPickersOpen] = useState(false);
+  // As the sheets beside it: Escape (focus back on Filters) or a tap outside closes the pickers.
+  useEffect(() => {
+    if (!pickersOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setPickersOpen(false);
+      document.querySelector<HTMLElement>("[data-filters-toggle]")?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target as Element | null)?.closest?.("[data-filters-toggle], #roadmap-pickers")) setPickersOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [pickersOpen]);
   const [starting, setStarting] = useState(false);
   // D3: on a phone, the milestone whose end the weeks hide to the right ("Swipe sideways for M3").
   const [offscreen, setOffscreen] = useState<string | null>(null);
@@ -899,7 +917,7 @@ export function SimpleRoadmap() {
   const filters = (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
       {phone ? (
-        <Button data-testid="filters-toggle" aria-expanded={pickersOpen} aria-controls="roadmap-pickers" onClick={() => setPickersOpen(!pickersOpen)}>
+        <Button data-filters-toggle="" data-testid="filters-toggle" aria-expanded={pickersOpen} aria-controls="roadmap-pickers" onClick={() => setPickersOpen(!pickersOpen)}>
           {narrowed ? `Filters · ${narrowed}` : "Filters"}
         </Button>
       ) : (

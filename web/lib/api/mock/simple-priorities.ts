@@ -342,7 +342,7 @@ export function prioritiesOut(
     yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
   }
   return {
-    // The plan-model lane: with a plan, its span ("2 Nov - 12 Feb"), else the calendar quarter.
+    // The plan-model lane: with a plan, its span ("Nov 2 - Feb 12"), else the calendar quarter.
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
