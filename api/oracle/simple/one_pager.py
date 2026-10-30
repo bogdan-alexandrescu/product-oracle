@@ -50,7 +50,7 @@ from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack
-from oracle.simple import drafts, plan_strip
+from oracle.simple import drafts, plan_strip, quality
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
 from oracle.simple.models import SimpleChange, SimpleDraft, SimpleOnePager, SimpleSession
@@ -514,15 +514,19 @@ def _numbered(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def clean_answer(
-    answer: Any, specs: tuple[Spec, ...], mapped: dict[str, list[Section]]
+    answer: Any, specs: tuple[Spec, ...], mapped: dict[str, list[Section]], strict: bool = True
 ) -> list[dict[str, Any]] | None:
     """The job's answer, held to each block's caps and its own section keys; None when it
-    is not usable (the quick read stays)."""
+    is not usable (the quick read stays). Not ``strict`` (an answer that failed its checks,
+    held for owners): a block left short is kept as it is."""
     given = {b.get("key"): b for b in (answer or {}).get("blocks") or [] if isinstance(b, dict)}
     out = []
     for spec in specs:
         allowed = {s.section_key for s in mapped.get(spec.key, [])}
         lines = []
+        if quality.marked(given.get(spec.key) or {}):
+            out.append({"key": spec.key, "lines": []})  # "Not in the PRD yet"
+            continue
         for raw in (given.get(spec.key) or {}).get("lines") or []:
             if not isinstance(raw, dict):
                 continue
@@ -544,7 +548,7 @@ def clean_answer(
             lines.append(line)
         lines = lines[: spec.max_lines]
         facts = sum(len(_facts(x)) for x in mapped.get(spec.key, []))
-        if len(lines) < min(spec.min_lines, facts):
+        if strict and len(lines) < min(spec.min_lines, facts):
             return None
         out.append({"key": spec.key, "lines": lines})
     return _numbered(out)
@@ -747,8 +751,14 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
             for sp in specs
         ],
     }
+    # oracle.simple.quality: a failing answer is asked once more with its failures named;
+    # failing again, it is stored with them (held for owners; the last good page stays).
     answer = await ask("one_pager", payload)
-    blocks = clean_answer(answer, specs, mapped)
+    checks = quality.one_pager(answer, specs, mapped)
+    if checks:
+        answer = await ask("one_pager", {**payload, "failed_checks": quality.said(checks)})
+        checks = quality.one_pager(answer, specs, mapped)
+    blocks = clean_answer(answer, specs, mapped, strict=not checks)
     if blocks is None:
         return {"built": False, "reason": "the answer missed a block's lines or section keys"}
     if await _lines_in_use(s, document):
@@ -762,10 +772,17 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     )
     blocks = await carry_keys(s, document, v, blocks, row)
     if row is None:
-        row = SimpleOnePager(document_id=document.id, version_id=v.id, sections_hash=h)
+        quick = _numbered(extract(specs, mapped))
+        row = SimpleOnePager(
+            document_id=document.id, version_id=v.id, sections_hash=h, blocks=quick
+        )
         s.add(row)
-    row.blocks, row.built_by, row.job_id = blocks, "oracle", job.id
-    row.built_at = company_time.now()
+    row.job_id, row.built_at = job.id, company_time.now()
+    if checks:
+        row.held, row.checks = blocks, checks
+        await s.flush()
+        return {"built": True, "sections_hash": h, "checks": quality.said(checks)}
+    row.blocks, row.built_by, row.held, row.checks = blocks, "oracle", None, None
     await s.flush()
     # S10: Oracle drafts each bet's visual with the page (once per bet: a bet keeps its flow
     # when its words change).
@@ -1093,6 +1110,10 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     b = await built(db, document, persist=writer)
     if writer:
         await db.commit()
+    # oracle.simple.quality: a build that failed its checks twice is read by owners, with a
+    # note naming them; people below owner read the last good version.
+    owner_reads = has_role(principal.role, "owner") and bool(b.row.held)
+    page = b.row.held if owner_reads else b.row.blocks
     w = await who(db, document)
     d = await _open_draft(db, document)
     me = _me(principal)
@@ -1143,7 +1164,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         db, sids | {c.session_id for c in shown if c.session_id}
         | ({uuid.UUID(approved_sid)} if approved_sid else set())
     )  # fmt: skip
-    line_ids = [x["id"] for blk in b.row.blocks for x in blk["lines"]]
+    line_ids = [x["id"] for blk in page for x in blk["lines"]]
     by_line = await meetings.decided_in(
         db, [{"kind": "section", "id": str(document.id), "ref": f"line:{i}"} for i in line_ids]
     )
@@ -1188,7 +1209,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     proposed = {n.line_id for n in notes if n.kind == "proposal"}
     blocks = []
     for spec in b.specs:
-        raw = next((x for x in b.row.blocks if x["key"] == spec.key), {"lines": []})
+        raw = next((x for x in page if x["key"] == spec.key), {"lines": []})
         lines = []
         for line in raw["lines"]:
             edited = line["id"] in line_text
@@ -1223,7 +1244,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         )  # type: ignore[arg-type]
     # S10: each bet ("What we will build") carries its visual.
     bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
-    keys = {x["id"]: visuals.bet_key(x) for blk in b.row.blocks for x in blk["lines"]}
+    keys = {x["id"]: visuals.bet_key(x) for blk in page for x in blk["lines"]}
     for x in bets:
         x.flow_subject = visuals.line_subject(document.id, keys.get(x.id, x.id))
     line_flows = await visuals.flows_for(db, "one_pager_line", [x.flow_subject for x in bets])
@@ -1279,7 +1300,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             blocked_by=drafts.held(d),
         )
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
-    used = {k for blk in b.row.blocks for x in blk["lines"] for k in x["source_keys"]}
+    used = {k for blk in page for x in blk["lines"] for k in x["source_keys"]}
     sources = [
         OnePagerSource(
             key=x.section_key, heading=x.heading, body=patched.get(x.section_key, x.body_md)
@@ -1296,7 +1317,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         decider=person(w.decider) if w.decider in names else None,
         span_start=span[0] if span else None,
         span_end=span[1] if span else None,
-        built_by=b.row.built_by,
+        built_by="oracle" if owner_reads else b.row.built_by,
         built_at=b.row.built_at,  # type: ignore[arg-type]
         blocks=[*blocks, timeline.model_copy(update={"lines": []})],
         timeline=items,
@@ -1310,6 +1331,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         and _me(principal) is not None
         and has_role(principal.role, "commenter"),
         can_start=starts(principal, w),
+        needs_look=quality.said(b.row.checks) if owner_reads else [],
     )
 
 

@@ -1171,6 +1171,9 @@ class OnePagerOut(BaseModel):
     can_propose: bool
     # Start review: the start API's own rule (meetings.may_start: an owner or the decider).
     can_start: bool
+    # oracle.simple.quality: Oracle's build failed its checks twice; owners read it with
+    # a "Needs a look" note naming them (people below owner read the last good version).
+    needs_look: list[str] = []
 
 
 # --------------------------------------------------------------------------- S7
@@ -1211,6 +1214,9 @@ class SimpleGoalSuggestion(BaseModel):
     can_reject: bool
     # A person's suggestion (origin "person"): their display name.
     proposed_by_name: str | None = None
+    # oracle.simple.quality: Oracle's suggestion failed its checks twice (owners only; people
+    # below owner do not see it).
+    needs_look: list[str] = []
 
 
 class SimpleGoalSuggestionGoal(BaseModel):

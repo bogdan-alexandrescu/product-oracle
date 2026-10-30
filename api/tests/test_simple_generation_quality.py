@@ -83,7 +83,9 @@ def good() -> dict:
 def bad() -> dict:
     a = good()
     a["blocks"][1]["lines"] = a["blocks"][1]["lines"][:2]
-    a["blocks"][4]["lines"] = [{"text": "As an AI, I think risks are TBD", "source_keys": ["risks"]}]
+    a["blocks"][4]["lines"] = [
+        {"text": "As an AI, I think risks are TBD", "source_keys": ["risks"]}
+    ]
     return a
 
 
@@ -92,10 +94,25 @@ def _sec(key: str, heading: str, body: str) -> SimpleNamespace:
 
 
 MAPPED = {
-    "problem": [_sec("problem", "Problem", "New workspace admins stall during setup.")],
-    "bets": [_sec("build", "What we will build", "A setup checklist. Invite suggestions. "
-                  "A sample project.")],  # fmt: skip
-    "outcomes": [_sec("outcomes", "Outcomes", "Teammate invited in week one from 48% to 65%.")],
+    "problem": [
+        _sec("problem", "Problem", "New workspace admins stall during setup."),
+        _sec("who", "Who has it", "Admins of new teams."),
+    ],
+    "bets": [
+        _sec(
+            "build",
+            "What we will build",
+            "A setup checklist. Invite suggestions. A sample project.",
+        )
+    ],  # fmt: skip
+    "outcomes": [
+        _sec(
+            "outcomes",
+            "Outcomes",
+            "Teammate invited in week one from 48% to 65%. "
+            "Setup finished in a day from 30% to 50%.",
+        )
+    ],  # fmt: skip
     "not_doing": [_sec("not-doing", "Not doing", "Single sign-on setup.")],
     "risks": [_sec("risks", "Risks", "Calendar access may scare admins away.")],
 }
@@ -202,8 +219,9 @@ async def test_one_pager_fails_twice(client):
     assert "2 bets; a one-pager has 3 to 5" in out["checks"]
     owner = await get(client, ctx, "owner")
     assert "2 bets; a one-pager has 3 to 5" in owner["needs_look"]
-    assert "A line in “Risks and open decisions” holds the model's chatter (“As an AI…”)" in (
-        owner["needs_look"]
+    assert (
+        "A line in “Risks and open decisions” holds the model's chatter (“As an AI…”)"
+        in (owner["needs_look"])
     )
     assert [x["text"] for x in block(owner, "bets")["lines"]] == [
         "A setup checklist",
@@ -247,7 +265,9 @@ async def test_suggestion_checks_name_each_failure(client):
         ]
         assert says(_idea("Audit log")) == ["“Audit log” repeats “Audit Log”, already a feature"]
         long = "Quiet hours that hold every alert until the morning stand-up starts"
-        assert says(_idea(long)) == ["“Quiet hours that hold every alert…” is too long to read in one line"]
+        assert says(_idea(long)) == [
+            "“Quiet hours that hold every alert…” is too long to read in one line"
+        ]
         assert says(_idea("Quiet hours", why="As an AI, I suggest it.")) == [
             "“Quiet hours”: its why holds the model's chatter (“As an AI…”)"
         ]
@@ -276,18 +296,24 @@ async def _titles(client, w: World, who: str) -> dict[str, list[str]]:
 
 
 GOOD = {"suggestions": [_idea("Quiet hours"), _idea("Alert digest"), _idea("Snooze by team")]}
-BAD = {"suggestions": [_idea("Quiet hours"), _idea("Bulk import"), _idea("Alert digest", goal_key="")]}
+BAD = {
+    "suggestions": [_idea("Quiet hours"), _idea("Bulk import"), _idea("Alert digest", goal_key="")]
+}
 
 
 async def test_suggestions_fail_then_pass(client):
     w = await World().build()
     out, asked = await _suggest(w, [BAD, GOOD])
     assert len(asked) == 2 and out["suggested"] == 3
-    assert "“Bulk import” repeats “Bulk import”, already on the roadmap" in asked[1]["failed_checks"]
+    assert (
+        "“Bulk import” repeats “Bulk import”, already on the roadmap" in asked[1]["failed_checks"]
+    )
     assert "“Alert digest” does not name its goal" in asked[1]["failed_checks"]
     for who in ("owner", "commenter"):
         assert await _titles(client, w, who) == {
-            "Quiet hours": [], "Alert digest": [], "Snooze by team": []
+            "Quiet hours": [],
+            "Alert digest": [],
+            "Snooze by team": [],
         }
 
 
@@ -332,13 +358,17 @@ async def test_item_draft_fails_then_passes_or_twice(client):
 
         async with tenant_session(w.ctx.tenant_id) as s:
             job = await s.scalar(
-                select(LlmJob).where(LlmJob.kind == "item_draft", LlmJob.input["item_id"].astext == iid)
+                select(LlmJob).where(
+                    LlmJob.kind == "item_draft", LlmJob.input["item_id"].astext == iid
+                )
             )
             out = await additions.run_item_draft(s, job, ask)
             job.status = "succeeded"
             await s.commit()
             assert len(asked) == 2
-            assert "Its outcome holds the model's chatter (“As an AI…”)" in asked[1]["failed_checks"]
+            assert (
+                "Its outcome holds the model's chatter (“As an AI…”)" in asked[1]["failed_checks"]
+            )
             row = await s.get(RoadmapItem, uuid.UUID(iid))
             assert row.outcome == outcome
             if outcome is None:

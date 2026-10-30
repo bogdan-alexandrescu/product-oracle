@@ -60,7 +60,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
 from oracle.members.names import display_name
 from oracle.roadmap.models import HORIZONS, ProductTrack, RoadmapItem
-from oracle.simple import changes, drafts, service
+from oracle.simple import changes, drafts, quality, service
 from oracle.simple.models import (
     RoadmapDateSuggestion,
     SimpleChange,
@@ -664,7 +664,15 @@ async def run_item_draft(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
         "features": [{"key": f.key, "title": f.title} for f in features[:200]],
         "items": [{"key": k, "title": t} for k, t in keys],
     }
+    # oracle.simple.quality: a failing draft is asked once more with its failures named;
+    # failing again, nothing of it is written (nothing new) and the job names the checks.
     answer = await ask("item_draft", payload)
+    checks = quality.item_draft(answer, goals)
+    if checks:
+        answer = await ask("item_draft", {**payload, "failed_checks": quality.said(checks)})
+        checks = quality.item_draft(answer, goals)
+    if checks:
+        return {"drafted": False, "checks": quality.said(checks)}
     values: dict[str, Any] = {}
     outcome = answer.get("outcome")
     if not cur.outcome and isinstance(outcome, str) and outcome.strip():
@@ -719,6 +727,16 @@ def _confidence(v: Any) -> str:
     return "high" if x >= 0.75 else "medium" if x >= 0.5 else "low"
 
 
+def _checked(answer: Any, goal: Entity, read_: service.Read, features: list[Entity]):
+    """The answer's suggestions (dicts with a title), each with its failed checks."""
+    raw = (answer or {}).get("suggestions") or [] if isinstance(answer, dict) else []
+    out = []
+    for a in raw:
+        if isinstance(a, dict) and " ".join(str(a.get("title") or "").split()):
+            out.append((a, quality.suggestion(a, goal, read_.entries, features)))
+    return out[:MAX_SUGGESTIONS]
+
+
 async def run_goal_suggestions(s: AsyncSession, job: LlmJob, ask) -> dict[str, Any]:
     """The ``goal_suggestions`` job: 3-5 features for one goal; never a rejected title."""
     goal = await s.get(Entity, uuid.UUID(str(job.input.get("goal_id"))))
@@ -767,11 +785,20 @@ async def run_goal_suggestions(s: AsyncSession, job: LlmJob, ask) -> dict[str, A
         "min": MIN_SUGGESTIONS,
         "max": MAX_SUGGESTIONS,
     }
+    # oracle.simple.quality: each suggestion names its goal, is no duplicate of a roadmap item
+    # or a feature, has a one-line title and no chatter; failing, the job asks once more with
+    # the failures named; failing again, it is stored with them (owners only).
+    read_ = await service.load(s)
     answer = await ask("goal_suggestions", payload)
+    checked = _checked(answer, goal, read_, features)
+    if any(c for _, c in checked):
+        named = [x for _, c in checked for x in quality.said(c)]
+        answer = await ask("goal_suggestions", {**payload, "failed_checks": named})
+        checked = _checked(answer, goal, read_, features)
     seen = {_norm(t) for t in rejected} | {_norm(x.title) for x in taken if x.status == "open"}
     made: list[SimpleGoalSuggestion] = []
-    for a in answer.get("suggestions") or []:
-        if not isinstance(a, dict) or len(made) >= MAX_SUGGESTIONS:
+    for a, checks in checked:
+        if len(made) >= MAX_SUGGESTIONS:
             continue
         title = " ".join(str(a.get("title") or "").split())[: changes.TITLE_MAX]
         if not title or _norm(title) in seen:
@@ -792,6 +819,7 @@ async def run_goal_suggestions(s: AsyncSession, job: LlmJob, ask) -> dict[str, A
             evidence=links,
             origin=job.input.get("origin") if job.input.get("origin") == "auto" else "on_demand",
             job_id=job.id,
+            checks=checks or None,
         )
         s.add(row)
         made.append(row)
@@ -911,6 +939,9 @@ async def listing(
     rows = list(
         await db.scalars(q.order_by(SimpleGoalSuggestion.created_at, SimpleGoalSuggestion.id))
     )
+    # oracle.simple.quality: a suggestion that failed its checks twice is the owners' to look at.
+    owner = has_role(principal.role, "owner")
+    rows = [r for r in rows if owner or not r.checks]
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     live = _live_goals(read_)
     pending = set(
@@ -951,6 +982,7 @@ async def listing(
                 can_accept=rule[r.goal_id][0] and r.status == "open",
                 can_reject=rule[r.goal_id][0] and r.status == "open",
                 proposed_by_name=people.get(r.proposed_by) if r.proposed_by else None,
+                needs_look=quality.said(r.checks) if owner else [],
             )  # fmt: skip
         )
     return SimpleGoalSuggestionsOut(
