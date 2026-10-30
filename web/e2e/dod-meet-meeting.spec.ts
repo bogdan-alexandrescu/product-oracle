@@ -13,6 +13,11 @@ import { expect, test, type Locator, type Page } from "./test";
  * shows with who wrote it and when; fails_when = a decision has no row, or a row (or the
  * comment) has no name or no time; no_claim = the minutes (simple-meeting-end.spec.ts).
  *
+ * Card dod-meet-cut-draft: protects = Cut in the meeting on a draft item (Team invite
+ * nudges, not confirmed yet) shows it cut with Restore, as any cut item; fails_when = the
+ * item keeps its horizon and its Cut button though the cut is recorded (its status read
+ * "draft" over "cut"); no_claim = merged drafts.
+ *
  * Card dod-meet-decider-approve: protects = the PRD's decider (Dana Decider, who owns
  * nothing) starts the review, edits a line and approves in the meeting, and that Approve is
  * the working draft's approval: the meeting reads "Approved in Review: Guided setup" and,
@@ -78,6 +83,19 @@ for (const phone of [false, true]) {
       const rows = allDecisions(page).getByTestId("meeting-decision");
       await expect(rows).toHaveCount(4);
       for (const row of await rows.all()) await expect(row.locator("span")).toHaveText(WHO_WHEN);
+    });
+
+    // card: dod-meet-cut-draft
+    test(`a draft item cut in the meeting reads Cut with Restore (${where})`, async ({ page }) => {
+      await login(page);
+      await startReview(page);
+      await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
+      const slice = page.getByRole("region", { name: "Roadmap slice" });
+      await tap(slice.getByRole("button", { name: "Cut Team invite nudges", exact: true }));
+      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
+      await expect(allDecisions(page)).toContainText("Cut Team invite nudges");
+      await expect(slice.getByRole("listitem").filter({ hasText: "Team invite nudges" })).toContainText("· Cut ·");
+      await expect(slice.getByRole("button", { name: "Restore Team invite nudges" })).toBeVisible();
     });
   });
 }

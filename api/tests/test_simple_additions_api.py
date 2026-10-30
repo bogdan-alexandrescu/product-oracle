@@ -526,6 +526,22 @@ async def test_merge_into_a_cut_item_is_refused(client):
     assert r.status_code == 422, r.text
 
 
+async def test_a_cut_draft_item_reads_cut(client):
+    """dod-actions-meet: a draft item that is cut reads "cut", not "draft", so the roadmap
+    and a meeting's roadmap slice show it cut with Restore; Undo makes it a draft again.
+    protects = the cut wins over the draft in an item's status; fails_when = a cut draft
+    still reads "draft" (it stays in its horizon with Cut); no_claim = merged items."""
+    w = await World().build()
+    draft = (await w.add(client, "owner", "Import from spreadsheets"))["change"]["target"]["item_id"]
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "cut", "target": {"item_id": draft}, "before": {"cut": False}, "after": {}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await w.items(client))[draft]["status"] == "cut"
+    r = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 201, r.text
+    assert (await w.items(client))[draft]["status"] == "draft"
+
+
 async def test_a_goal_with_a_working_draft_item_is_not_empty(client):
     """Review: a goal whose only item is a quick add in the working draft is not empty, so
     the automatic suggestions do not run for it."""
