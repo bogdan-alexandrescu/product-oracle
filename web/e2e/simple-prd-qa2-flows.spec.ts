@@ -123,8 +123,9 @@ test.describe("desktop", () => {
   test("qa-21: Ask Oracle to draw it titles the flow from the bet's words; drawn today, its day and time with its zone", async ({ page }) => {
     await open(page);
     const row = bet(page, 3);
-    await expect(row.getByTestId("flow-empty")).toContainText("No flow yet");
-    await row.getByRole("button", { name: "Ask Oracle to draw it" }).click();
+    // 2026-10-30: no "No flow yet" row; the bet's line ends with a small "Draw the flow".
+    await expect(row).toHaveCount(0);
+    await page.getByRole("button", { name: `Draw the flow for ${BETS[3]}` }).click();
     await expect(row.getByTestId("flow-row-drawn")).toBeVisible({ timeout: 15_000 });
     await expect(row.getByTestId("flow-row-drawn").locator("b").first()).toHaveText("Invite suggestions from the admin's calendar");
     await expect(row).not.toContainText("A bet of the one-pager");
@@ -154,18 +155,14 @@ test.describe("desktop", () => {
     }
   });
 
-  test("qa-33: bets with no flow give the hint once, under a flow icon", async ({ page }) => {
+  test("qa-33 (superseded by the owner's pick, 2026-10-30): bets with no flow show no row, only a small Draw the flow link", async ({ page }) => {
     await open(page);
     const bets = page.getByRole("region", { name: "What we will build" });
-    // Bets 3 and 4 have no flow yet.
-    await expect(bets.getByTestId("flow-empty").filter({ hasText: "No flow yet" })).toHaveCount(2);
-    await expect(bets.locator("p:visible", { hasText: "Oracle draws the steps and the screen they touch, from the PRD." })).toHaveCount(1);
-    // The first of them gives it.
-    await expect(bet(page, 3).getByText("Oracle draws the steps and the screen they touch, from the PRD.")).toBeVisible();
-    // The empty box's icon is a flow (boxes joined), not the Roadmap's lines and dots.
-    const icon = bet(page, 3).getByTestId("flow-empty").locator("svg").first();
-    await expect(icon.locator("rect")).toHaveCount(3);
-    await expect(icon.locator("circle")).toHaveCount(0);
+    // Bets 3 and 4 have no flow yet: no "No flow yet" box, no hint under them.
+    await expect(bets.getByTestId("flow-empty")).toHaveCount(0);
+    await expect(bets.getByText("Oracle draws the steps and the screen they touch, from the PRD.")).toHaveCount(0);
+    for (const n of [3, 4]) await expect(bets.getByRole("button", { name: `Draw the flow for ${BETS[n]}` })).toHaveText("Draw the flow");
+    await expect(bets.getByRole("button", { name: /^Draw the flow/ })).toHaveCount(2);
   });
 
   test("qa-46: the start sheet uses the app's controls, has Cancel beside Start and dims the whole page", async ({ page }) => {

@@ -202,18 +202,22 @@ test.describe("desktop", () => {
     await page.getByTestId("flow-detail").getByRole("button", { name: "Close", exact: true }).click();
     // Drawn today: its day still shows.
     const row = bet(page, 3);
-    await row.getByRole("button", { name: "Ask Oracle to draw it" }).click();
+    await page.getByRole("button", { name: `Draw the flow for ${BETS[3]}` }).click();
     await expect(row.getByTestId("flow-drawn")).toHaveText(/^Version 1 · drawn 22 Oct, \d{1,2}:\d{2} [AP]M PT$/, { timeout: 15_000 });
   });
 
   for (const scheme of ["light", "dark"] as const) {
     test(`qa-simple-prd-p3-24: a "No flow yet" box's dashed border reads against its card (${scheme})`, async ({ page }) => {
       await setUp(page, { scheme });
+      // The drawing box stays while it is read (the job takes a minute here).
+      await page.context().addInitScript(([key]) => localStorage.setItem(key, "60000"), [MOCK_VISUAL_JOB_MS_KEY] as const);
       await page.goto(ONE_PAGER);
       await expect(page.getByTestId("one-pager")).toBeVisible();
       for (const n of [3, 4]) {
+        // 2026-10-30: a bet with no flow has no box until it is asked for; the box shows while drawing.
+        await page.getByRole("button", { name: `Draw the flow for ${BETS[n]}` }).click();
         const empty = bet(page, n).getByTestId("flow-empty");
-        await expect(empty).toContainText("No flow yet");
+        await expect(empty).toContainText("Oracle is drawing the flow");
         const box = empty.locator("span[aria-hidden]").first();
         const look = await box.evaluate((el) => {
           const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
