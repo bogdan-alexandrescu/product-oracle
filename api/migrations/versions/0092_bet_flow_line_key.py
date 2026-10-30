@@ -8,13 +8,17 @@ own id, no longer by the bet's words, so editing a bet keeps its flow.
   oracle.simple.visuals.line_subject); its versions and comments go with it (they hang off
   the visual's id). Two bets with the same words: the first takes the flow, each other one
   gets a copy (the visual, its versions, comments). A flow keyed by the words an open
-  working draft gave a bet moves to that bet's line too (or, a copy of the flow already
-  there, goes). A flow whose words match no current line (a renamed or deleted bet) stays
-  keyed by its words, read as before (oracle.simple.visuals.words_subject).
+  working draft gave a bet stays keyed by those words: it was drawn from unpublished words,
+  so it never goes to the bet's line, which who reads only the published page reads
+  (oracle.simple.visuals.bet_line finds it by the draft's words for who sees the draft); a
+  copy of the line's own flow there (the downgrade's) goes. A flow whose words match no
+  current line (a renamed or deleted bet) stays keyed by its words, read as before
+  (oracle.simple.visuals.words_subject).
 
 The downgrade moves each line's flow (its key carried across builds: ``flow_key``, else
 the line id) back to its bet's words on the same page, and copies it to the words an open
-working draft gives the bet (who sees the draft read it by those). A line's flow that is
+working draft gives the bet, unless a flow is already keyed by them (who sees the draft
+reads it by those). A line's flow that is
 a copy of the one its words hold goes; one drawn for the line itself stays.
 
 Revision ID: 0092_bet_flow_line_key
@@ -159,15 +163,15 @@ def upgrade() -> None:
             else:
                 continue
             have[key] = moved[words]
-        # The words a working draft gave a bet (who saw the draft read its flow by them).
+        # The words a working draft gave a bet: a flow drawn from them stays keyed by them
+        # (who sees the draft reads it by them; on the bet's line, who reads only the
+        # published page would read a drawing of words they may not see). Only the copy the
+        # downgrade left of the line's own flow goes.
         for line_key, text, draft in bets:
             key, words = _key(doc, line_key), _words(doc, draft or "")
             if not draft or words == _words(doc, text) or words not in have:
                 continue
-            if key not in have:
-                _move(bind, have[words], key)
-                have[key] = have.pop(words)
-            elif _same(bind, have[words], have[key]):
+            if key in have and _same(bind, have[words], have[key]):
                 _drop(bind, have.pop(words))
 
 
