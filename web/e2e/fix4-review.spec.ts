@@ -156,8 +156,8 @@ test.describe("desktop", () => {
   test("qa-work-16: headers and the proposal read as words", async ({ page }) => {
     await seeded(page);
     await openReview(page);
-    await expect(page.getByRole("columnheader", { name: "Confidence", exact: true })).toHaveText("Confidence");
-    await expect(page.getByRole("columnheader", { name: "Requirements", exact: true })).toHaveText("Requirements");
+    await expect(page.getByRole("columnheader").filter({ hasText: /^Confidence$/ })).toBeVisible();
+    await expect(page.getByRole("columnheader").filter({ hasText: /^Requirements$/ })).toBeVisible();
     await row(page, "Saved addresses").getByTestId("feature-title").click();
     await expect(inspector(page)).toContainText("Oracle proposes: Include");
     await expect(page.locator("main")).not.toContainText("Proposed: include");
@@ -167,7 +167,7 @@ test.describe("desktop", () => {
     await seeded(page);
     await openReview(page);
     const runUrl = page.url().replace(/\/review\/.*$/, "");
-    const back = page.getByTestId("run-name");
+    const back = page.getByTestId("review-back");
     await expect(back).toHaveText("Saved addresses PRD · Baseline to PRD");
     await expect(back.locator("svg")).toHaveCount(1);
     await expect(page.locator("main")).not.toContainText("Runs /");
@@ -192,7 +192,7 @@ test.describe("phone", () => {
     const fix = row(page, "Bulk address edit").getByRole("button", { name: "Include dependency" });
     await expect(fix).toBeVisible();
     expect(await fix.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
-    const back = page.getByTestId("run-name");
+    const back = page.getByTestId("review-back");
     await expect(back).toBeVisible();
     expect(await back.evaluate((el) => el.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
   });

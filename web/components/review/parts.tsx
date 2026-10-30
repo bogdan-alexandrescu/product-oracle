@@ -247,7 +247,7 @@ export function Menu({
  */
 export function RunBackLink({ run }: { run: Parameters<typeof runLabel>[0] & { id: string } }) {
   return (
-    <Link href={`/runs/${run.id}`} className="inline-flex min-h-6 max-w-full items-center gap-1 break-words hover:text-text hover:underline" data-testid="run-name">
+    <Link href={`/runs/${run.id}`} className="inline-flex min-h-6 max-w-full items-center gap-1 break-words hover:text-text hover:underline" data-testid="review-back">
       <Icon name="back" size={16} />
       <span className="min-w-0 break-words">{runLabel(run)}</span>
     </Link>

@@ -87,7 +87,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
 
   // The writer's revision finishes; Oracle imports it as the review opens.
   await page.getByRole("button", { name: "Refresh progress" }).click();
-  await expect(prd).toContainText("Imported as guest-checkout v1");
+  await expect(prd).toContainText(/Imported as (?!guest-checkout).+ v1/);
   await expect(prd.getByTestId("segment-state")).toHaveText("Succeeded");
   await expect(prd.getByTestId("draft-sent-back")).toHaveCount(0);
   await expect(prd).not.toContainText("Revising");

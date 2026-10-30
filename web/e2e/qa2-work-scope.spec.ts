@@ -125,7 +125,7 @@ test.describe("desktop", () => {
     await seeded(page, "scope-review", APPROVER);
     await openReview(page);
     await expect(page.getByRole("columnheader", { name: "Confidence" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Requirements", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader").filter({ hasText: /^Requirements$/ })).toBeVisible();
     const pick = row(page, "Pick address in one step");
     await pick.getByRole("button", { name: "Requirements of Pick address in one step" }).click();
     const checks = pick.getByTestId("requirement-pick-address-one-screen").getByTestId("requirement-checks");
@@ -198,7 +198,7 @@ test.describe("phone", () => {
     await seeded(page, "feature-set");
     await openReview(page);
     const name = page.getByRole("link", { name: "Saved addresses PRD · Baseline to PRD", exact: true });
-    await expect(name).toHaveAttribute("data-testid", "run-name");
+    await expect(name).toHaveAttribute("data-testid", "review-back");
     await expect(name).toBeVisible();
     expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   });

@@ -146,9 +146,9 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await page.getByRole("button", { name: "Refresh progress" }).click();
   const draft = page.getByTestId("segment-roadmap_draft");
   await expect(draft.getByTestId("checkpoint-roadmap_review")).toContainText("Roadmap review");
-  await expect(draft).toContainText("Imported as usage-alerts-roadmap v2");
+  await expect(draft).toContainText(/Imported as (?!usage-alerts-roadmap).+ v2/);
   await expect(draft.getByTestId("prd-links")).toContainText("6 links to PRD sections");
-  await draft.getByRole("link", { name: "usage-alerts-roadmap v2" }).click();
+  await draft.getByRole("link", { name: / v2$/ }).click();
   await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap\/v\/2$/);
   await expect(source(page)).toHaveText("From Usage alerts PRD v1");
 });

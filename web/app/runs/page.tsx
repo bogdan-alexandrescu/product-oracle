@@ -154,7 +154,7 @@ export default function RunsPage() {
     {
       key: "state",
       header: "State",
-      width: "380px",
+      width: "366px",
       phone: "meta",
       // qa-work-24: one line on a desktop (the cost a chip of the state chip's size); a phone wraps.
       cell: (r) => (
@@ -182,7 +182,7 @@ export default function RunsPage() {
       // qa-work-26: when each run last moved, in the company's time zone.
       key: "updated",
       header: "Updated",
-      width: "96px",
+      width: "72px",
       phone: "meta",
       phoneLabel: "Updated",
       narrow: "hide",
@@ -198,7 +198,7 @@ export default function RunsPage() {
     {
       key: "act",
       header: <span className="sr-only">Action</span>,
-      width: "168px",
+      width: "160px",
       align: "right",
       phone: "action",
       // qa-work-24: one button style, one width, right-aligned; who decides when it is not you.

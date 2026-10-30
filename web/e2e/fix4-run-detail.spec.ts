@@ -100,8 +100,12 @@ test("qa-work-21, 23: pending checkpoints are plain text, role chips one style, 
 });
 
 test("qa-work-22: the actions stay on the title's line on every run, the cost approval's too", async ({ page }) => {
+  await login(page);
   for (const doc of ["team-onboarding", "usage-alerts-v2", "team-workspaces"]) {
-    await openRun(page, doc);
+    // Signed in once: each run from the Runs list.
+    await page.goto("/runs");
+    await page.locator(`[data-testid="run-row"][data-document="${doc}"]`).getByRole("link").first().click();
+    await expect(page.getByTestId("segment-timeline")).toBeVisible();
     const h1 = await box(header(page).getByRole("heading", { level: 1 }));
     const action = await box(header(page).getByRole("button", { name: "Cancel run" }));
     const mid = action.y + action.height / 2;
