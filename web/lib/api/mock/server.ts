@@ -2011,6 +2011,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
     feedback: db.feedback,
     uuid,
     now,
+    closeThread: (item) => closeFeedbackThread(db, item),
     lockedKeys: (v) => lockedKeys(db, v as VersionRow),
     sentToAgents: (sid) =>
       (db.runs?.runs ?? []).some((r) => !["succeeded", "failed", "cancelled"].includes(r.status) && !!(r as SentRun).sent?.suggestion_ids.includes(sid)),
@@ -3124,6 +3125,72 @@ function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): Su
   if (kind === "screen") return { key: `screen:${s.path}`, label: String(s.path), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
+}
+
+/** D13: a "general" item on the whole draft, raised on `v` by `authorId` (as create_general_feedback). */
+function addGeneralFeedback(
+  db: Db,
+  llm: LlmContext,
+  doc: DocumentRow,
+  v: VersionRow,
+  authorId: string,
+  body: string,
+  severity: FeedbackRow["severity"],
+  discussionId: string | null = null,
+): FeedbackRow {
+  const at = now();
+  const f: FeedbackRow = {
+    id: uuid(),
+    document_id: doc.id,
+    raised_on_version: v.number,
+    kind: "general",
+    comment_id: null,
+    section_review_id: null,
+    section_key: null,
+    summary: body,
+    author_id: authorId,
+    anchor: null,
+    verdict: null,
+    status: "open",
+    addressed_in_version: null,
+    resolution_note: null,
+    severity,
+    discussion_id: discussionId,
+    created_at: at,
+    updated_at: at,
+  };
+  db.feedback.push(f);
+  touch(db, doc.id);
+  onFeedback(llm, doc.id, v.number);
+  return f;
+}
+
+/** qa-docs-33 (as oracle.discussions.service.review_feedback): an open Discuss thread on a version under review is its whole-draft feedback. */
+function discussionReviewFeedback(db: Db, me: { id: string; role: Role }, d: DiscussionRow, body: string) {
+  if (d.subject_kind !== "document" || d.origin !== "discuss" || d.visibility !== "open") return;
+  const doc = findDocument(db, String(d.subject.document_id));
+  const v = doc && findVersion(db, doc, Number(d.subject.version));
+  if (!doc || !v || v.approved_at) return;
+  addGeneralFeedback(db, llmContext(db, me.id, me.role), doc, v, me.id, body, null, d.id);
+}
+
+/** As discussions.service.close_for_feedback: closing whole-draft feedback made in Discuss closes its thread. */
+function closeFeedbackThread(db: Db, f: { discussion_id?: string | null }) {
+  const thread = f.discussion_id ? db.discussions?.discussions.find((x) => x.id === f.discussion_id) : null;
+  if (thread && thread.status !== "closed") Object.assign(thread, { status: "closed", lock_version: thread.lock_version + 1 });
+}
+
+/** As oracle.review.schemas.GENERAL_FEEDBACK_MAX and the API's FEEDBACK_TOO_LONG. */
+const GENERAL_FEEDBACK_MAX = 4000;
+const FEEDBACK_TOO_LONG =
+  "During the review, the first message is feedback on the whole draft, which can be at most 4,000 characters. Shorten it, or say the rest in a reply.";
+
+/** fix3-discuss review: the refusal for a first message too long to be whole-draft feedback. */
+function discussionFeedbackRefusal(db: Db, d: DiscussionRow, body: string): string | null {
+  if (d.subject_kind !== "document" || d.origin !== "discuss" || d.visibility !== "open") return null;
+  const doc = findDocument(db, String(d.subject.document_id));
+  const v = doc && findVersion(db, doc, Number(d.subject.version));
+  return doc && v && !v.approved_at && body.length > GENERAL_FEEDBACK_MAX ? FEEDBACK_TOO_LONG : null;
 }
 
 /** An active member of this Oracle (a goal's owner must be one). */
@@ -4774,6 +4841,30 @@ async function route(db: Db, req: Request): Promise<Response> {
       members: db.members,
       me: { id: me.id, role: me.role },
       resolve: (kind, subject) => discussionSubject(db, kind, subject),
+      reviewFeedback: (d, body) => discussionReviewFeedback(db, me, d, body),
+      reviewFeedbackRefusal: (d, body) => discussionFeedbackRefusal(db, d, body),
+      feedbackEdited: (d, body) => {
+        const f = db.feedback.find((x) => x.discussion_id === d.id);
+        if (!f) return null;
+        if (body.length > GENERAL_FEEDBACK_MAX) return FEEDBACK_TOO_LONG;
+        Object.assign(f, { summary: body, updated_at: now() });
+        return null;
+      },
+      // As the API's _withdraw_feedback (fix3-discuss review 2): an item no one acted on goes,
+      // with its suggestions; one triaged, answered, staged or with a suggestion decided is
+      // kept with its text and leaves the thread.
+      feedbackWithdrawn: (d) => {
+        const f = db.feedback.find((x) => x.discussion_id === d.id);
+        if (!f) return;
+        const decided = db.llm?.suggestions.some((x) => x.feedback_item_id === f.id && x.status !== "open" && x.status !== "superseded");
+        if (f.status !== "open" || f.resolution_note || f.staged_for_agents_at || decided) {
+          Object.assign(f, { discussion_id: null, updated_at: now() });
+        } else {
+          db.feedback = db.feedback.filter((x) => x.id !== f.id);
+          if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
+        }
+        touch(db, f.document_id);
+      },
       uuid,
       now,
       refusal: () => poolRefusal(localStorage.getItem(MOCK_SCENARIO_KEY)),
@@ -5325,6 +5416,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     // As the API: reopening clears the version it was addressed in, unless one is given.
     if (patch.status === "open" && !("addressed_in_version" in patch)) patch.addressed_in_version = null;
     Object.assign(f, patch, { updated_at: now() });
+    // fix3-discuss review: resolving whole-draft feedback made in Discuss closes its thread.
+    if (patch.status && patch.status !== "open") closeFeedbackThread(db, f);
     return json(200, f);
   }
 
@@ -5753,29 +5846,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const input = await body<Schemas["GeneralFeedbackCreate"]>();
     const text = (input.body ?? "").trim();
     if (!text || input.body.length > 4000) return json(422, { detail: "Feedback needs 1 to 4,000 characters" });
-    const at = now();
-    const f: FeedbackRow = {
-      id: uuid(),
-      document_id: doc.id,
-      raised_on_version: v.number,
-      kind: "general",
-      comment_id: null,
-      section_review_id: null,
-      section_key: null,
-      summary: input.body,
-      author_id: me.id,
-      anchor: null,
-      verdict: null,
-      status: "open",
-      addressed_in_version: null,
-      resolution_note: null,
-      severity: input.severity ?? null,
-      created_at: at,
-      updated_at: at,
-    };
-    db.feedback.push(f);
-    touch(db, doc.id);
-    onFeedback(llm, doc.id, v.number);
+    const f = addGeneralFeedback(db, llm, doc, v, me.id, input.body, input.severity ?? null);
     return json(201, withSuggestion(db.llm, f));
   }
   if (sub === "sections" && p[7] === "review" && m === "PUT") {

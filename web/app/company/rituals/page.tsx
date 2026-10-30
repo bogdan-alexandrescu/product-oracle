@@ -92,6 +92,12 @@ function Rituals() {
       cell: (r) => (
         <span className="block text-sm">
           <span className="block">{whenText(scheduleOf(r.schedule))}</span>
+          {/* Owner decision 2026-10-29: a built-in waits paused for the first confirmed goal. */}
+          {r.waits_for_goal && (
+            <span className="block text-text2" data-testid="ritual-waits">
+              Starts when the first goal is confirmed
+            </span>
+          )}
           {r.status === "active" && r.next_due_at && (
             <span className="block text-text2">
               Next{" "}

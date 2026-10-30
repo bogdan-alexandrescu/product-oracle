@@ -13,14 +13,12 @@ import {
 import { DiscussionList, type DiscussionRow } from "@/components/discuss/DiscussionList";
 import { Avatar, Button, Chip, Empty, FilterChips, type ChipKind } from "@/components/ds";
 import { LayerChip, Quote, SELECT, TEXTAREA, VerdictChip } from "@/components/review/parts";
-import { ErrorNote } from "@/components/ui";
 import type { CommentOut, Suggestion } from "@/lib/api/client";
 import {
   FEEDBACK_KIND_LABEL,
   FEEDBACK_KINDS,
   FEEDBACK_STATE_LABEL,
   FEEDBACK_STATES,
-  GENERAL_FEEDBACK_MAX,
   isGeneralFeedback,
   type FeedbackEntry,
   type FeedbackKind,
@@ -63,6 +61,8 @@ type Ctx = {
   onChanged: (id: string) => void;
   /** Resolve / Reopen: the item leaves a list it no longer belongs to. */
   onTriaged?: () => void;
+  /** fix3-discuss review: whole-draft feedback made in Discuss opens its thread. */
+  onOpenThread?: (id: string) => void;
 };
 
 function ReplyForm({ onReply, onClose }: { onReply: (body: string) => Promise<void>; onClose: () => void }) {
@@ -102,62 +102,6 @@ function ReplyForm({ onReply, onClose }: { onReply: (body: string) => Promise<vo
       <div className="flex gap-2">
         <Button type="submit" variant="solid" disabled={saving || !body.trim()}>
           Reply
-        </Button>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-/** Feedback on the whole draft (D13): a remark that belongs to no one section. */
-function GeneralForm({ onAdd, onClose }: { onAdd: (body: string) => Promise<void>; onClose: () => void }) {
-  const [body, setBody] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const text = body.trim();
-  const submit = async () => {
-    if (!text || text.length > GENERAL_FEEDBACK_MAX) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await onAdd(text);
-      setBody("");
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not add the feedback");
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <form
-      data-testid="general-feedback-form"
-      className="flex w-full flex-col gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submit();
-      }}
-    >
-      <textarea
-        autoFocus
-        aria-label="Comment on the whole draft"
-        placeholder="Feedback on the whole draft, not one section"
-        rows={3}
-        maxLength={GENERAL_FEEDBACK_MAX}
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
-          if (e.key === "Escape") onClose();
-        }}
-        className={TEXTAREA}
-      />
-      {error && <ErrorNote>{error}</ErrorNote>}
-      <div className="flex gap-2">
-        <Button type="submit" variant="solid" disabled={saving || !text}>
-          Add
         </Button>
         <Button variant="ghost" onClick={onClose}>
           Cancel
@@ -313,6 +257,11 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
               </p>
               <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">{item.summary}</p>
               <p className="tnum mt-1 text-[13px] text-text2">{formatDateTime(item.created_at)}</p>
+              {item.discussion_id && ctx.onOpenThread && (
+                <Button variant="ghost" icon="comment" className="mt-1" onClick={() => ctx.onOpenThread!(item.discussion_id!)}>
+                  Open the thread
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -351,7 +300,8 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
 /**
  * The Feedback tab: comments, Oracle suggestions and section reviews in ONE list, by state
  * (Open, Staged, Declined, Done) and scope (this section, all, or General: the whole-draft
- * items), with a kind filter; commenters add whole-draft feedback at its top. A
+ * items), with a kind filter; whole-draft feedback comes from the header's Discuss
+ * (qa-docs-33: during a review, a thread on the version is a General item). A
  * suggestion just decided stays in view, in its new state, until a filter changes; a
  * resolved item leaves the Open list at once. Discussions (G1) are the fourth kind, behind
  * their own chip: the document's discussions, never counted as open feedback.
@@ -363,19 +313,11 @@ export function FeedbackList({
   setFilters,
   focus = false,
   onFocused,
-  generalOpen = false,
-  setGeneralOpen,
-  onGeneral,
   discussions,
   ...ctx
 }: Ctx & {
   /** The document's discussions (G1), shown under the Discussion chip; absent: no chip. */
   discussions?: { rows: DiscussionRow[] | null; onOpen: (id: string) => void };
-  /** "Comment on the whole draft" is open (the header's action opens it too). */
-  generalOpen?: boolean;
-  setGeneralOpen?: (open: boolean) => void;
-  /** Adds a whole-draft item; absent: no entry (read-only or below commenter). */
-  onGeneral?: (body: string) => Promise<void>;
   entries: FeedbackEntry[];
   /** The open section and the detail shown inside it; null: no section open. */
   scopeKeys: ReadonlySet<string> | null;
@@ -465,22 +407,6 @@ export function FeedbackList({
 
   return (
     <div className="flex flex-col gap-3">
-      {onGeneral &&
-        (generalOpen ? (
-          <GeneralForm
-            onAdd={async (body) => {
-              await onGeneral(body);
-              setFilters({ ...filters, state: "open", scope: "general" });
-            }}
-            onClose={() => setGeneralOpen?.(false)}
-          />
-        ) : (
-          <div>
-            <Button icon="comment" onClick={() => setGeneralOpen?.(true)} data-testid="general-feedback-open">
-              Comment on the whole draft
-            </Button>
-          </div>
-        ))}
       {/* qa-docs-49: no filters until there is feedback (or a discussion) to filter. */}
       {nothing ? null : (
       <div className="flex flex-col gap-2">

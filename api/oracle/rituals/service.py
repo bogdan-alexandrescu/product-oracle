@@ -4,7 +4,9 @@ work and the Inbox rows.
 The ticker step (:func:`tick_due`, from ``oracle.ticker.router._tick_company`` in its
 own ``try``), per company and per tick:
 
-1. seed the built-in rituals (oracle.rituals.kinds) a company does not have yet;
+1. seed the built-in rituals (oracle.rituals.kinds) a company does not have yet, the
+   ones on by default paused while it has no confirmed goal, and turn those on once it
+   has one (:func:`wake_on_first_goal`, owner decision 2026-10-29);
 2. for each active ritual whose ``next_due_at - prep_hours`` has come, create its
    occurrence (unique ``(ritual_id, due_at)``: idempotent across ticks and overlapping
    calls) and advance ``next_due_at``;
@@ -147,6 +149,9 @@ async def seed(db: AsyncSession) -> int:
     attendees = [u.id for u in users if u.role in ("owner", "approver")]
     tz = await company_timezone(db)
     now = clock.now()
+    # Owner decision 2026-10-29: with no confirmed goal yet (nothing to review), the ones
+    # on by default wait paused for the first (:func:`wake_on_first_goal`).
+    waits = not await has_confirmed_goal(db)
     for kind in missing:
         schedule = Schedule(**{**kind.default_schedule, "timezone": tz})
         active = kind.enabled_by_default
@@ -154,17 +159,61 @@ async def seed(db: AsyncSession) -> int:
         if kind.key == "alignment_report":
             schedule, active = await _alignment_schedule(db)
             first = _first_alignment_due(schedule, now)
+        wait = waits and kind.enabled_by_default
+        on = active and not wait
         db.add(
             Ritual(
                 kind=kind.key, title=kind.title, builtin=True,
                 schedule=schedule.model_dump(), duration_min=kind.duration_min,
                 prep_hours=kind.prep_hours, owner_id=owners[0].id, attendee_ids=attendees,
-                status="active" if active else "paused",
-                next_due_at=first if active else None,
+                status="active" if on else "paused", waits_for_goal=wait,
+                next_due_at=first if on else None,
             )
         )  # fmt: skip
     await db.flush()
     return len(missing)
+
+
+async def has_confirmed_goal(db: AsyncSession) -> bool:
+    from oracle.baseline.models import Entity
+
+    return (
+        await db.scalar(
+            select(Entity.id).where(Entity.type == "goal", Entity.status == "confirmed").limit(1)
+        )
+    ) is not None
+
+
+async def wake_on_first_goal(db: AsyncSession) -> int:
+    """The built-ins waiting for the first confirmed goal (seeded paused while there was
+    none) are turned on once there is one, each with its next meeting; F6's report only
+    while its setting is enabled. A ritual a person paused or resumed no longer waits, so
+    it is left as it is. Returns how many were turned on; the caller commits."""
+    waiting = (
+        await db.scalars(
+            select(Ritual).where(Ritual.builtin, Ritual.waits_for_goal).with_for_update()
+        )
+    ).all()
+    if not waiting or not await has_confirmed_goal(db):
+        return 0
+    now, on = clock.now(), 0
+    for ritual in waiting:
+        ritual.waits_for_goal = False
+        ritual.lock_version += 1
+        if ritual.status == "active":
+            continue
+        if ritual.kind == "alignment_report":
+            schedule, enabled = await _alignment_schedule(db)
+            if not enabled:
+                continue
+            ritual.schedule = schedule.model_dump()
+            ritual.next_due_at = _first_alignment_due(schedule, now)
+        else:
+            ritual.next_due_at = next_occurrence(ritual.schedule, now)
+        ritual.status = "active"
+        on += 1
+    await db.flush()
+    return on
 
 
 async def follow_alignment_setting(db: AsyncSession) -> None:
@@ -176,6 +225,11 @@ async def follow_alignment_setting(db: AsyncSession) -> None:
     if ritual is None:
         return
     schedule, enabled = await _alignment_schedule(db)
+    if ritual.waits_for_goal:
+        # Still waiting for the first confirmed goal: the new day and time only.
+        ritual.schedule = schedule.model_dump()
+        ritual.lock_version += 1
+        return
     if ritual.schedule == schedule.model_dump() and (ritual.status == "active") == enabled:
         return
     ritual.schedule = schedule.model_dump()
@@ -353,6 +407,8 @@ async def tick_due(db: AsyncSession) -> dict[str, int]:
 
     out = {"seeded": 0, "created": 0, "ready": 0, "failed": 0, "missed": 0}
     out["seeded"] = await seed(db)
+    # A goal confirmed by any path (the Confirm route wakes them at once).
+    await wake_on_first_goal(db)
     await db.commit()
     now = clock.now()
     budget = PER_TICK
@@ -492,6 +548,7 @@ async def ritual_out(
         last_pre_read=await _last_pre_read(db, r.id, now if r.status == "active" else None),
         next_pre_read=_summary(upcoming) if ready and upcoming is not None else None,
         replaced_by=await replaced_by(db, r),
+        waits_for_goal=r.waits_for_goal and r.status == "paused",
         prepare_usd=await summaries.prepare_usd(db, r.kind, seen),
     )  # fmt: skip
 
@@ -580,6 +637,10 @@ async def set_status(
     db: AsyncSession, principal: Principal, ritual_id: uuid.UUID, status: str
 ) -> Ritual:
     ritual = await get_ritual(db, ritual_id, lock=True)
+    # A person's Pause or Resume: the ritual is theirs, the first goal leaves it as it is.
+    waited, ritual.waits_for_goal = ritual.waits_for_goal, False
+    if ritual.status == status and not waited:
+        return ritual
     if ritual.status != status:
         ritual.status = status
         ritual.next_due_at = None
@@ -589,7 +650,6 @@ async def set_status(
                 if ritual.kind == "alignment_report" and ritual.builtin
                 else next_occurrence(ritual.schedule, clock.now())
             )
-        ritual.lock_version += 1
         if status == "paused":
             # A paused ritual's failed preparation leaves the owners' Inbox.
             for occ in await db.scalars(
@@ -599,9 +659,10 @@ async def set_status(
             ):
                 occ.status = "skipped"
                 occ.skip_reason = "The ritual was paused"
-        await audit.record(db, principal, f"ritual.{'resumed' if status == 'active' else 'paused'}",
-                           "ritual", ritual.id)  # fmt: skip
-        await db.commit()
+    ritual.lock_version += 1
+    await audit.record(db, principal, f"ritual.{'resumed' if status == 'active' else 'paused'}",
+                       "ritual", ritual.id)  # fmt: skip
+    await db.commit()
     return ritual
 
 

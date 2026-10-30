@@ -24,9 +24,11 @@ section's hash are recorded as what the item was reconciled against, and later c
 are judged against them; the item's own trace is kept as built).
 """
 
+import json
 import re
 import uuid
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -219,15 +221,63 @@ def for_reader(reasons: Iterable[str] | None, hidden: Any) -> list[str]:
     )
 
 
+def stored_detail(reasons: list[str]) -> str:
+    """A stale alert's reasons as stored: a JSON list, so a reason naming a title that
+    holds ``"; "`` is never cut in two when it is read (cld-4)."""
+    return json.dumps(reasons, ensure_ascii=False)
+
+
+def _stored_reasons(detail: str) -> list[str] | None:
+    """The reasons of a detail stored by :func:`stored_detail`; None for a line stored
+    before it, its reasons joined by ``"; "``."""
+    if not detail.startswith("["):
+        return None
+    try:
+        reasons = json.loads(detail)
+    except ValueError:
+        return None
+    if isinstance(reasons, list) and all(isinstance(r, str) for r in reasons):
+        return reasons
+    return None
+
+
+def _old_reasons(detail: str, hidden: Any) -> list[str]:
+    """The reasons of a line stored before cld-4, joined by ``"; "``: split on it, and the
+    parts that only together name something hidden (a title holding ``"; "``, cut in two)
+    said as :data:`HIDDEN_REASON`. Judged on the stored text, before any part is put into
+    words or counted, which could break the title up; the other parts are kept."""
+    parts = detail.split("; ")
+    if hidden is None:
+        return parts
+    cut = [False] * len(parts)
+    # Only a title can hold "; " (an id, a slug or "D-7" cannot): each is found on its own,
+    # as the fewest parts that name it, so a reason beside it is never taken for it.
+    for word in (w for w in hidden.words if "; " in w):
+        title = replace(hidden, ids=frozenset(), numbers=frozenset(), words=frozenset({word}))
+        for i in range(len(parts)):
+            for j in range(i + 1, len(parts)):
+                if title.names("; ".join(parts[i : j + 1])):
+                    if not title.names("; ".join(parts[i + 1 : j + 1])):
+                        cut[i : j + 1] = [True] * (j + 1 - i)
+                    break
+    return [HIDDEN_REASON if c else p for p, c in zip(parts, cut, strict=True)]
+
+
 def detail_for_reader(detail: str | None, hidden: Any) -> str | None:
-    """A stored ``"; "``-joined reason line for the reader: what they may not see is
-    hidden first (:func:`for_reader`), then the rest is put into words (:func:`in_words`),
-    so a reader never learns the kind of a hidden item ("A decision ... changed"). A
-    reason stored in an older form (worded, or prod-6's literal refs) reads the same way,
-    with no migration needed."""
+    """A stored stale alert's reasons (:func:`stored_detail`) as one line for the reader:
+    what they may not see is hidden first (:func:`for_reader`), then the rest is put into
+    words (:func:`in_words`), so a reader never learns the kind of a hidden item ("A
+    decision ... changed"). A line stored before cld-4, its reasons joined by ``"; "``, is
+    split on it (:func:`_old_reasons`). A reason stored in an older form (worded, or
+    prod-6's literal refs) reads the same way, with no migration needed."""
     if not detail:
         return detail
-    return "; ".join(in_words(one_count(for_reader(detail.split("; "), hidden))))
+    reasons = _stored_reasons(detail)
+    if reasons is None:
+        reasons = _old_reasons(detail, hidden)
+    line = "; ".join(in_words(one_count(for_reader(reasons, hidden))))
+    # The last word: a line read that still names something hidden is not shown.
+    return HIDDEN_REASON if hidden is not None and hidden.names(line) else line
 
 
 def _mark(item: RoadmapItem, event: ChangeEvent, reason: str, now: datetime) -> None:

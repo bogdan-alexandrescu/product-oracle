@@ -53,6 +53,9 @@ class RitualOut(BaseModel):
     # H5: "Weekly metrics review" on the goals check-in the review replaced (paused while
     # the review is active); null otherwise.
     replaced_by: str | None = None
+    # A built-in on by default, paused until the company's first confirmed goal (Company ›
+    # Rituals: "Starts when the first goal is confirmed").
+    waits_for_goal: bool = False
     # The newest occurrence with a pre-read whose meeting time has come: Company › Rituals'
     # "Last pre-read".
     last_pre_read: "OccurrenceSummary | None" = None

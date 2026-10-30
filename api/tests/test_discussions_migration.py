@@ -106,7 +106,7 @@ def _insert_discussion(tenant: uuid.UUID, **over) -> uuid.UUID:
 # or a fixed number that skips main's; no_claim=what the tables hold.
 def test_the_chain_ends_here_after_feedback_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0090_interview_new_link"]
+    assert script.get_heads() == ["0092_feedback_discussion"]
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 

@@ -168,6 +168,8 @@ test("an owner deletes a run from its page and restores it", async ({ page }) =>
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const url = page.url();
   // qa-work-27: a run's page has a plain Delete button (no menu holding one item).
+  // The heading says "Run" until the run loads; read the run's own title.
+  await expect(page.getByRole("heading", { level: 1 })).not.toHaveText(/^Run$/);
   const title = (await page.getByRole("heading", { level: 1 }).innerText()).trim();
   await page.getByTestId("run-delete").click();
   await page.getByRole("dialog", { name: /^Delete / }).getByRole("button", { name: "Move to Trash" }).click();

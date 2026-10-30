@@ -107,6 +107,96 @@ def _forget_items_checks():
     roadmap._checks.clear()
 
 
+# The suites written before "Start paused until goals" (owner decision 2026-10-29) that
+# reach the built-in rituals' seeding (the ritual ticker, the metrics review's activation):
+# they model a company that already has a confirmed goal, so its built-ins are seeded on.
+_RITUALS_SEEDED_ON = frozenset({
+    "test_adapter_v2_round6",
+    "test_alignment_reports",
+    "test_autonomy",
+    "test_autonomy_strategy_external",
+    "test_autonomy_wired",
+    "test_board_goal_groups",
+    "test_changelog",
+    "test_code_maps",
+    "test_company_day_text",
+    "test_company_timezone",
+    "test_discussion_replies",
+    "test_display_timezone",
+    "test_export_audience",
+    "test_hidden_title_matching",
+    "test_intake_read_private",
+    "test_interviews",
+    "test_launch_kit",
+    "test_launch_request_requesters",
+    "test_launches",
+    "test_market",
+    "test_market_check_now_limits",
+    "test_market_digest",
+    "test_market_watch",
+    "test_market_web_findings",
+    "test_member_draft_runs_visibility",
+    "test_member_runs_visibility",
+    "test_metrics",
+    "test_metrics_posthog",
+    "test_metrics_query_limits",
+    "test_metrics_review",
+    "test_metrics_ticker",
+    "test_next_drafts_autonomy",
+    "test_outcome_capture",
+    "test_outcome_learnings",
+    "test_outcome_shipping",
+    "test_pricing_ritual_visibility",
+    "test_priority_overrides",
+    "test_public_texts",
+    "test_questions_autonomy",
+    "test_requests_triage",
+    "test_rituals",
+    "test_rituals_autonomy",
+    "test_rituals_baseline_rebuild",
+    "test_rituals_schedule",
+    "test_rituals_ticker",
+    "test_run_artifacts_visibility",
+    "test_run_ticker",
+    "test_simple_additions_api",
+    "test_simple_changes_api",
+    "test_simple_chat_api",
+    "test_simple_meetings_review",
+    "test_simple_meetings_walk",
+    "test_simple_review_fixes",
+    "test_simple_roadmap_api",
+    "test_simple_walk_fixes3_cp_api",
+    "test_simple_walk_fixes3_m2_api",
+    "test_simple_walk_fixes_api",
+    "test_simple_walk_fixes_review2_api",
+    "test_simple_walk_fixes_review_api",
+    "test_slack_bridge",
+    "test_source_background_sync",
+    "test_strategy_drift",
+    "test_tenant_settings_api",
+    "test_track_alerts",
+    "test_tracks",
+    "test_tracks_followups",
+    "test_trash",
+    "test_visibility_minors",
+    "test_webhooks_delivery",
+})  # fmt: skip
+
+
+@pytest.fixture(autouse=True)
+def _rituals_seed_on(request, monkeypatch):
+    """Every other suite sees the real check: a new company's built-in rituals wait
+    paused for its first confirmed goal (tests/test_rituals_wait_for_goal*.py)."""
+    if request.module.__name__.rpartition(".")[2] not in _RITUALS_SEEDED_ON:
+        return
+    from oracle.rituals import service as rituals
+
+    async def seeded_on(db) -> bool:
+        return True
+
+    monkeypatch.setattr(rituals, "has_confirmed_goal", seeded_on)
+
+
 async def make_tenant(name: str = "Example Co") -> uuid.UUID:
     async with unscoped_session() as s:
         tenant = Tenant(name=name)

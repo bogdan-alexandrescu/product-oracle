@@ -114,15 +114,15 @@ export default function HomePage() {
   }
   const setup = setupOpen(setupQ.data) ? setupQ.data : undefined;
   // A1 welcome: an invited member's first Home, until they dismiss it (a preference).
+  // The panel closes once the preference is saved, so a reload right after Dismiss
+  // cannot bring it back (the button is disabled while the save runs).
   async function dismissWelcome() {
     setSetupBusy(true);
     setSetupError(null);
-    const before = setupQ.data;
-    setupQ.setData((s) => (s ? { ...s, welcome: false } : s));
     try {
       await unwrap(api.PATCH("/v1/me/preferences", { body: { welcome_dismissed: true } }));
+      setupQ.setData((s) => (s ? { ...s, welcome: false } : s));
     } catch (e) {
-      setupQ.setData(() => before);
       setSetupError(errorMessage(e));
     } finally {
       setSetupBusy(false);
