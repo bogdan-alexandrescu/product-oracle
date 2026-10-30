@@ -62,6 +62,5 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 markers = [
-    "rituals_wait_for_goal: sees whether the company has a confirmed goal when its built-in rituals are seeded (tests.conftest._rituals_seed_on)",
     "timing: asserts a wall-clock limit; CI runs these alone, after the parallel run, so other workers' load does not count",
 ]
