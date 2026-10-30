@@ -169,12 +169,14 @@ async function simple(page: Page, email?: string) {
 test.describe("simple priorities", () => {
   test.use({ viewport: DESKTOP });
 
-  test("qa-plan-14: a commenter is offered Propose, not Confirm; the handle says it proposes", async ({ page }) => {
+  // Train AD: Simple priorities' own lane wins: a draft is added with "Add to the ranking", or
+  // "Propose adding" by whom only proposes (over qa-plan-14's Confirm / Propose).
+  test("qa-plan-14: a commenter is offered Propose adding, not Add to the ranking; the handle says it proposes", async ({ page }) => {
     await simple(page, "commenter@example.com");
     const draft = page.getByTestId("prio-draft").first();
     await expect(draft).toBeVisible();
-    await expect(draft.getByRole("button", { name: "Confirm", exact: true })).toHaveCount(0);
-    const propose = draft.getByRole("button", { name: "Propose", exact: true });
+    await expect(draft.getByRole("button", { name: "Add to the ranking", exact: true })).toHaveCount(0);
+    const propose = draft.getByRole("button", { name: "Propose adding", exact: true });
     await expect(propose).toBeVisible();
     const handle = page.getByRole("button", { name: /^Drag .* to reorder$/ }).first();
     if (await handle.count()) await expect(handle).toHaveAttribute("title", /propose/i);
@@ -182,17 +184,19 @@ test.describe("simple priorities", () => {
     await expect(page.getByText(/^Proposed: .* decides?$/)).toBeVisible();
   });
 
-  test("qa-plan-14: an owner still confirms a draft", async ({ page }) => {
+  test("qa-plan-14: an owner still adds a draft to the ranking", async ({ page }) => {
     await simple(page);
     const draft = page.getByTestId("prio-draft").first();
-    await expect(draft.getByRole("button", { name: "Confirm", exact: true })).toBeVisible();
+    await expect(draft.getByRole("button", { name: "Add to the ranking", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Drag .* to reorder$/ }).first()).toHaveAttribute("title", /^Drag to reorder/);
   });
 
-  test("qa-plan-53: every score has the same two places", async ({ page }) => {
+  // Train AD: Simple priorities' own lane wins on its rows: a score is written to at most two
+  // places, its trailing zeros dropped ("1.6", "1.25"), over qa-plan-53's fixed two places.
+  test("qa-plan-53: every score is a number to at most two places", async ({ page }) => {
     await simple(page);
     const scores = await page.getByTestId("prio-score").allInnerTexts();
     expect(scores.length).toBeGreaterThan(1);
-    for (const s of scores) expect(s.trim()).toMatch(/^(\d+\.\d{2}|–)$/);
+    for (const s of scores) expect(s.trim()).toMatch(/^(\d+(\.\d{1,2})?|–)$/);
   });
 });

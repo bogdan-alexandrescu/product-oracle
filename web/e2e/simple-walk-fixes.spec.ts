@@ -123,12 +123,15 @@ for (const phone of [false, true]) {
         await expect(full.getByText("No comments yet.")).toBeVisible();
       });
 
-      test(`the item card names the PRD's F-code, not the section key (${where})`, async ({ page }) => {
+      // Train AD: the roadmap's own lane wins: the card names an item by its title alone, no code
+      // (fix4 qa-simple-roadmap-3), so its Why line reads the PRD section's words without "F-06".
+      test(`the item card names the PRD's section by its words, not its key or code (${where})`, async ({ page }) => {
         await login(page, "viewer@example.com");
         await page.goto("/simple/roadmap");
         await openRoadmapItem(page, "alert-digest");
         const reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
-        await expect(reasons).toContainText("F-06 Weekly digest of fired alerts.");
+        await expect(reasons).toContainText("From Usage alerts: Weekly digest of fired alerts.");
+        await expect(reasons).not.toContainText("F-06");
         await expect(reasons).not.toContainText("section f-06");
       });
 

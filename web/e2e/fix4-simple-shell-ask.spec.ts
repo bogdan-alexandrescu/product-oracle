@@ -63,8 +63,9 @@ test("qa-simple-home-18: on a phone Tab goes skip link, header and page, then th
   await page.keyboard.press("Tab");
   await expect(page.getByTestId("skip-link")).toBeFocused();
   await page.keyboard.press("Tab");
-  // Next is the header's logo in the page's frame, not the tab bar's Home.
-  expect(await page.evaluate(() => !!document.activeElement?.closest("#main"))).toBe(true);
+  // Next is the header's logo, not the tab bar's Home (the shell's phone header sits before the
+  // page and outside it, qa-shell-31).
+  await expect(page.getByTestId("phone-brand")).toBeFocused();
   await expect(page.getByTestId("simple-tab-home")).not.toBeFocused();
 });
 

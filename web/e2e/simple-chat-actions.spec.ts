@@ -251,6 +251,9 @@ for (const [phone, dark] of [
 
       // The viewer, in a tab of their own (each tab keeps its own sign-in; the account menu is in the desktop rail).
       const tab = await page.context().newPage();
+      // The Ask panel the approver opened is remembered for them; on Detailed below 1600 px it lies
+      // over the page with a backdrop (the shell's), so the person closes it to reach the rail.
+      await tab.addLocatorHandler(tab.getByTestId("hop-backdrop"), (b) => b.click({ position: { x: 5, y: 5 } }));
       await tab.goto("/home");
       await signOut(tab);
       if (phone) await tab.setViewportSize({ width: 390, height: 844 });

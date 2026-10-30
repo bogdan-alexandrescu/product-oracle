@@ -116,7 +116,7 @@ test.describe("phone", () => {
   test("qa-shell-21: a lane's list writes its days month first", async ({ page }) => {
     await open(page);
     await page.locator('g[data-testid="phone-lane"]').first().click();
-    await expect(page.getByTestId("lane-row").first()).toContainText(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} → (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}/);
+    await expect(page.getByTestId("lane-row").first()).toContainText(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} – (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}/);
   });
 
   test("review: the Filters panel closes on Escape and on a tap outside it", async ({ page }) => {

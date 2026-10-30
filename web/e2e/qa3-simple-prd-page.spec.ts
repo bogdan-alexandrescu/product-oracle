@@ -61,10 +61,10 @@ test.describe("desktop, a plan", () => {
   test("Q8 says whose decision it is; Q3 is late in one style everywhere (p3-10, 11)", async ({ page }) => {
     await plan(page);
     const tl = page.getByRole("region", { name: "Timeline" });
-    await expect(tl.getByTestId("timeline-decision").filter({ hasText: "Q8" })).toContainText("M2 decision, taken at the M1 review, 27 Nov");
+    await expect(tl.getByTestId("timeline-decision").filter({ hasText: "Q8" })).toContainText("M2 decision, taken at the M1 review, Nov 27");
     const q3 = tl.getByTestId("timeline-decision").filter({ hasText: "Q3" }).locator("small");
-    await expect(q3).toHaveText("was due 20 Oct");
-    const card = page.getByTestId("part-decisions").getByRole("listitem").filter({ hasText: "Q3" }).getByText("was due 20 Oct");
+    await expect(q3).toHaveText("was due Oct 20");
+    const card = page.getByTestId("part-decisions").getByRole("listitem").filter({ hasText: "Q3" }).getByText("was due Oct 20");
     const colour = (l: typeof q3) => l.evaluate((el) => getComputedStyle(el).color);
     expect(await colour(card)).toBe(await colour(q3));
   });
@@ -102,7 +102,7 @@ test.describe("desktop, a plan", () => {
     const list = (await tl.getByTestId("timeline-undated-milestone").first().boundingBox())!;
     expect(note.y).toBeLessThan(list.y);
     // Q3 is overdue in the list as it is in the card.
-    await expect(tl.getByTestId("timeline-undated-milestone").first()).toContainText("was due 20 Oct");
+    await expect(tl.getByTestId("timeline-undated-milestone").first()).toContainText("was due Oct 20");
   });
 });
 
@@ -180,7 +180,7 @@ test.describe("desktop, no plan", () => {
     await expect(page.getByTestId("one-pager-meta")).toContainText(listed);
     await expect(page.getByTestId("one-pager-meta").locator("b").filter({ hasText: /\S/ }).first()).toBeVisible();
     const legend = page.getByTestId("plan-strip-legend");
-    await expect(legend).toContainText("Today 22 Oct");
+    await expect(legend).toContainText("Today Oct 22");
     await expect(legend).toContainText("hatched = not confirmed");
     await expect(legend).toContainText("milestone end");
     await expect(page.getByLabel("Timeline strip")).toContainText("12 roadmap items");

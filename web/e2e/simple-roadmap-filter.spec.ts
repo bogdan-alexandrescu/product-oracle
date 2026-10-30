@@ -31,12 +31,20 @@ async function openBoard(page: Page) {
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
-  // qa-shell-24: a phone's pickers sit behind the Filters button.
+  await showPickers(page);
+}
+
+/** Opens a phone's Filters (qa-shell-24: its pickers sit behind it; a tap outside closes them). */
+async function showPickers(page: Page) {
+  if ((page.viewportSize()?.width ?? 1366) > 600) return;
   const toggle = page.getByTestId("filters-toggle");
-  if (await toggle.isVisible()) await toggle.click();
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(page.getByTestId("filter-pickers")).toBeVisible();
 }
 
 async function pick(page: Page, roadmap: string) {
+  await showPickers(page);
   await page.getByTestId("filter-roadmap").selectOption({ label: roadmap });
   await expect(page.getByTestId("roadmap-scope")).toHaveText(roadmap);
 }
