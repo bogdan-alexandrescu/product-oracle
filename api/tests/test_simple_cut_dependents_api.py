@@ -24,6 +24,17 @@ Test cards (protects / fails_when / no_claim):
   change to the decider (nothing is cut until they accept, then all four are); a viewer is
   refused; a stale ``before`` is 409; fails_when=a commenter cuts or a viewer gets in;
   no_claim=meeting modes (the cut card's own rules, tests.test_simple_chat_api).
+- test_cut_with_dependents_needs_rights_on_every_item (review major): protects=a person who
+  decides the item but not its dependents applies the plain cut, but the cut with its
+  dependents is a proposal (``may_with_dependents``), routed to the company's owners; only
+  someone who decides every item accepts it; fails_when=the cut applies on the item's
+  rights alone or a decider of some items accepts it; no_claim=the web.
+- test_cut_with_dependents_refuses_dependents_the_card_never_listed (review minor):
+  protects=the apply sends the card's ``dependent_ids``; an item waiting on it since is 409;
+  fails_when=the cut takes an item the card never listed; no_claim=the 409's words.
+- test_a_meeting_decision_names_every_item_cut (review minor): protects=meetings.describe
+  names and makes subjects of every item cut; fails_when=only the item is named;
+  no_claim=the decision's other fields.
 """
 
 from datetime import date
