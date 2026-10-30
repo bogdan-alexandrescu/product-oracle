@@ -205,9 +205,9 @@ class Affected:
 
 def _label(e: Entity) -> str:
     """The item as a person reads it: its title ("Guided setup"), never its baseline key
-    (qa-plan-10); a title-less item by its kind and key."""
+    (qa-plan-10); a title-less item by its kind in words, never its key."""
     title = (e.title or "").strip()
-    return title or f"{e.type.replace('_', ' ')} {e.key}"
+    return title or f"an unnamed {e.type.replace('_', ' ')}"
 
 
 async def _deps_on_document(

@@ -229,7 +229,7 @@ CATALOGUE: dict[str, Entry] = {
         BLOCKING,
         "Date unverified",
         "No verified estimate, capacity or commitment supports {date}.",
-        "Remove date; Record basis (once date bases ship)",
+        "Remove date; Add a date source",
     ),
     "date_outside_now": Entry(
         BLOCKING,
@@ -241,7 +241,7 @@ CATALOGUE: dict[str, Entry] = {
         BLOCKING,
         "Date has no source",
         "The date names no source.",
-        "Remove date; Record basis (once date bases ship)",
+        "Remove date; Add a date source",
     ),
     "invalid_date": Entry(BLOCKING, "Date unreadable", "{value} is not a date.", "Remove date"),
     "horizon_breaks_dependency": Entry(

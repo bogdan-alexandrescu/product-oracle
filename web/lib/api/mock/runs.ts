@@ -621,7 +621,7 @@ function cannotApprove(c: CheckpointOut): string | null {
 
 /** As oracle.runs.gate (D3): a date reason is never waived; file-level problems never are. */
 const DATE_CODES = ["unverified_date", "date_outside_now", "undated_source", "invalid_date"];
-const DATE_NOT_WAIVED = "a date is never waived: remove it or record a verified basis";
+const DATE_NOT_WAIVED = "a date is never waived: remove it or add a date source";
 const FILE_NOT_WAIVED = "a problem of the whole file is never waived: send it back to the agents";
 /** As oracle.runs.gate.message. */
 const gateMessage = (n: number) => `${n} blocking problem${n === 1 ? "" : "s"} left: fix or waive them, or send back to the agents`;

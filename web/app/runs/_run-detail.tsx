@@ -1485,7 +1485,7 @@ function DraftRejected({
 type ItemsCheck = NonNullable<SegmentOut["items_check"]>;
 type ItemReason = ItemsCheck["reasons"][number];
 
-/** A reason's fixes as plain words, until the items review makes them buttons: "Fix: Remove date or Record basis". */
+/** A reason's fixes as plain words, until the items review makes them buttons: "Fix: Remove date or Add a date source". */
 function fixText(reason: ItemReason): string | null {
   const labels = reason.fixes.map((f) => f.label);
   if (labels.length === 0) return null;

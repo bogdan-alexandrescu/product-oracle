@@ -836,8 +836,9 @@ export function SimpleRoadmap() {
         aria-busy={!startOptions.data && !startOptions.error && !can("start_simple_meeting") ? true : undefined}
         title={mayStartReview ? undefined : START_REVIEW_REASON}
         aria-describedby={mayStartReview ? undefined : "start-review-reason"}
-        // qa-plan-56: off reads as off beside its reason, never like the buttons next to it.
-        className={mayStartReview ? "" : "opacity-50"}
+        // qa-plan-56: off reads as off beside its reason, never like the buttons next to it: a
+        // muted fill under the Button's own grey text, not dimmed (only a ghost dims).
+        className={mayStartReview ? "" : "bg-surface2!"}
         onClick={() => setStarting(true)}
       >
         Start review

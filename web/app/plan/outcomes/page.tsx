@@ -688,7 +688,7 @@ function OutcomeInspector({
   const signal = o.ship_signal;
   return (
     <Inspector
-      eyebrow="Outcome · selected"
+      eyebrow="Outcome"
       title={o.title}
       label={`Outcome ${o.title}`}
       testId="outcome-inspector"

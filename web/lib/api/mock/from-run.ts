@@ -10,6 +10,9 @@ import { LOW_CONFIDENCE, type BaselineState } from "./baseline";
 import { goalCheck } from "./goals";
 import type { BaselineReviewOf, GateReason } from "./runs";
 
+/** The API's goals.missing_words: a target is its value, unit and comparison (qa-plan-36). */
+const missingWords = (missing: string[]) => [...new Set(missing.map((k) => (k === "unit" || k === "comparison" ? "target" : k)))].join(", ");
+
 type Row = Schemas["FromRunRow"];
 type Reason = Schemas["RowReason"];
 type Action = Pick<Schemas["ReviewAction"], "item_key" | "kind" | "state" | "answers">;
@@ -84,7 +87,7 @@ export function fromRun(s: BaselineState, runId: string, actions: Schemas["Revie
         // B5's goal_check (the owner a member id; membership is not checked here).
         const missing = goalCheck(e.attrs, e.status, () => true).missing;
         if (missing.length) {
-          reasons.push(reason(e, "goal_not_measurable", "confirm", "Not measurable", "The goal is not measurable yet: it may be confirmed and stays flagged.", { detail: `Missing: ${missing.join(", ")}` }));
+          reasons.push(reason(e, "goal_not_measurable", "confirm", "Not measurable", "The goal is not measurable yet: it may be confirmed and stays flagged.", { detail: `Missing: ${missingWords(missing)}` }));
         }
       }
       if (e.confidence != null && e.confidence < LOW_CONFIDENCE) {

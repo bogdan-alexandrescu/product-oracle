@@ -17,7 +17,10 @@ export default function RoadmapLayout({ children }: { children: ReactNode }) {
         </Suspense>
       }
     >
-      {children}
+      {/* qa-plan-25: the Plan tabs' title line, so the strip does not move between them. */}
+      <div data-plan-tabs-page className="contents min-[601px]:[&_[data-page-header]>h1]:py-1">
+        {children}
+      </div>
     </PageTabsProvider>
   );
 }

@@ -346,6 +346,15 @@ def goal_check(
 
 # --- words -------------------------------------------------------------------------------
 
+# The fields a person reads as one (qa-plan-36): a target is its value, unit and comparison.
+_MISSING_WORDS = {"unit": "target", "comparison": "target"}
+
+
+def missing_words(missing: list[str]) -> str:
+    """What a goal lacks, as people name it: "target, owner", never "unit, comparison"."""
+    return ", ".join(dict.fromkeys(_MISSING_WORDS.get(k, k) for k in missing))
+
+
 _WORDS = {"at_least": "at least", "above": "more than", "at_most": "at most", "below": "less than"}
 
 

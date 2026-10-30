@@ -128,7 +128,7 @@ export function DateMarker({ mark }: { mark: DateMarkOut }) {
                       withdrawn.basis.withdrawn_reason ? `: ${withdrawn.basis.withdrawn_reason}` : ""
                     }.`
                   : `${mark.bases.join(", ")} was withdrawn.`
-                : "No verified basis supports this date."}
+                : "No date source backs this date yet."}
             </span>
             <span className="mt-2 block">
               {mayRecord ? (
