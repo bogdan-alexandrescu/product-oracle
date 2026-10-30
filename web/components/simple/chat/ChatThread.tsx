@@ -86,7 +86,8 @@ export function ChatThreadView({
  * words legible (the secondary text on the raised surface, not a half-faded accent). */
 const SEND = "simple-button simple-button-primary disabled:!border-line-strong disabled:!bg-surface2 disabled:!text-text2 disabled:!opacity-100";
 /** The box's focus: one ring (the outline drawn over its own border, not a second ring outside it). */
-const BOX_FOCUS = "focus-visible:outline-offset-[-1px]";
+// Important: the global :focus-visible rule is unlayered and would win over a layered utility.
+const BOX_FOCUS = "focus-visible:!outline-offset-[-1px]";
 
 /** The chat's box and Send (Enter sends, Shift+Enter a new line); `send` failing keeps the text and says why. */
 export function ChatComposer({

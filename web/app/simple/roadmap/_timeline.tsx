@@ -658,7 +658,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 data-testid="label-title"
                 title={r.item.title}
                 // fix4 qa-simple-roadmap-6: a phone's name wraps onto two lines instead of being cut mid-word.
-                className={`min-w-[45%] flex-1 ${compact ? "line-clamp-2 leading-[14px] break-words" : "truncate"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
+                // (on a phone the name takes 60% of the row at least, room for two words a line beside its chips)
+                className={`flex-1 ${compact ? "line-clamp-2 min-w-[60%] text-[12.5px] leading-[14px] break-words" : "min-w-[45%] truncate"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
               >
                 {r.item.title}
               </span>

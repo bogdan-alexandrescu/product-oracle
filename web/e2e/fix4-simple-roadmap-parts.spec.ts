@@ -99,7 +99,8 @@ for (const [where, use] of [
       const field = page.getByLabel("Add an item");
       await field.click();
       await field.press("Enter");
-      await expect(page.getByTestId("quick-add-error")).toHaveText("Type a title");
+      // Nothing typed and no roadmap chosen: both are said.
+      await expect(page.getByTestId("quick-add-error")).toHaveText("Type a title · Pick the roadmap it goes on");
       await expect(field).toHaveAttribute("aria-invalid", "true");
       // All roadmaps: the roadmap is asked, and an add without one says so.
       await expect(page.getByTestId("quick-add-roadmap")).toBeVisible();
@@ -142,9 +143,14 @@ for (const [where, use] of [
       // One line: the day and the badge sit on the name's line, the badge in one piece.
       const day = (await row.getByTestId("key-date-day").boundingBox())!;
       const b = (await badge.boundingBox())!;
-      expect(Math.abs(day.y - b.y)).toBeLessThan(6);
+      // On the same line: the badge (smaller type) sits inside the day's line box.
+      expect(b.y).toBeGreaterThanOrEqual(day.y - 1);
+      expect(b.y + b.height).toBeLessThanOrEqual(day.y + day.height + 1);
       expect(b.height).toBeLessThan(24);
-      expect(day.height).toBeLessThan(26);
+      // The day is one line, on the name's line (the name is cut, never wrapped).
+      const name = (await row.getByTitle("Partner summit with the whole partner team").boundingBox())!;
+      expect(Math.abs(day.y - name.y)).toBeLessThanOrEqual(1);
+      expect(day.height).toBeLessThanOrEqual(name.height + 1);
 
       // Edit: labelled fields, Cancel and Save the same height.
       await editor(page).getByRole("button", { name: "Edit Customer conference" }).click();

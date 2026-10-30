@@ -138,7 +138,7 @@ function piecesOf(item: Item, span?: [string, string]): Piece[] {
  * go in start order, the longer first. A broken item's callout goes on a line of its own under
  * its row (qa-simple-roadmap-4, "Under the lane"), so a row holds at most one broken item.
  */
-function pack(items: Item[], moved: Record<string, [string, string]>, callout: (i: Item) => boolean): { units: Unit[]; rows: number; callouts: Set<number> } {
+function pack(items: Item[], moved: Record<string, [string, string]>, callout: (i: Item) => boolean, dayPx = 0): { units: Unit[]; rows: number; callouts: Set<number> } {
   const units: Unit[] = items.map((item) => ({ item, pieces: piecesOf(item, moved[item.id]), row: 0 }));
   const len = (p: Piece) => ms(p.end) - ms(p.start);
   units.sort((a, b) => ms(a.pieces[0].start) - ms(b.pieces[0].start) || len(b.pieces[0]) - len(a.pieces[0]) || (a.pieces[0].code ?? a.item.title).localeCompare(b.pieces[0].code ?? b.item.title));
@@ -147,6 +147,15 @@ function pack(items: Item[], moved: Record<string, [string, string]>, callout: (
   const callouts = new Set<number>();
   for (const u of units) {
     const occ: [number, number][] = u.pieces.map((p) => [ms(p.start), ms(p.end)]);
+    // fix4 qa-simple-roadmap-2: a pill too short for its name writes it beside itself; that
+    // room is the pill's too, so the next pill in its row starts after the name.
+    if (dayPx > 0 && !u.item.slices.some((x) => x.start_date && x.end_date)) {
+      const p = u.pieces[0];
+      const pillW = Math.max(MIN_PILL_W, (daysBetween(p.start, p.end) + 1) * dayPx);
+      const name = u.item.draft && !closedItem(u.item) ? `Draft · ${p.name}` : p.name;
+      const need = textWidth(name, 12, 650) + 16;
+      if (need > pillW) occ[0] = [occ[0][0], Math.max(occ[0][1], ms(p.start) + ((pillW + 6 + textWidth(name, 12, 600) + 8) / dayPx) * DAY)];
+    }
     // fix4 qa-simple-roadmap-31: Oracle's suggestion (its dotted outline, and its "?" left of
     // it) takes its row too, so neither is ever drawn over another pill's name.
     const sg = u.item.suggestion;
@@ -179,7 +188,7 @@ function kept(u: Unit): Unit {
  * PM-owned work has a lane of its own after the goals; closed items (cut, merged) go below the
  * line, last.
  */
-function laneModels(data: Roadmap, lane: Lane, moved: Record<string, [string, string]>, callH: Record<string, number> = {}): { lanes: LaneModel[]; places: Map<string, number> } {
+function laneModels(data: Roadmap, lane: Lane, moved: Record<string, [string, string]>, callH: Record<string, number> = {}, dayPx = 0): { lanes: LaneModel[]; places: Map<string, number> } {
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const seen = new Set<string>();
   const groups: { key: string; title: string; kind: LaneModel["kind"]; items: Item[] }[] = [];
@@ -197,11 +206,13 @@ function laneModels(data: Roadmap, lane: Lane, moved: Record<string, [string, st
   if (pm.length) groups.push({ key: "pm-owned", title: "PM-owned", kind: "pm", items: pm });
   if (below.length) groups.push({ key: "below-the-line", title: "Below the line", kind: "below", items: below });
   const lanes = groups.map((g) => {
-    const p = pack(g.items, moved, (i) => g.kind !== "below" && broken(i).some((f) => f.kind === "dependency_order"));
+    const calls = (i: Item) => g.kind !== "below" && broken(i).some((f) => f.kind === "dependency_order");
+    const p = pack(g.items, moved, calls, dayPx);
     // fix4 qa-simple-roadmap-1: a callout's line is as tall as its callout is drawn (its words
     // wrap rather than being cut on a narrow chart): 4 px more than it, CALL_H at least.
     const callLine = new Map<number, number>();
-    for (const u of p.units) if (p.callouts.has(u.row)) callLine.set(u.row, Math.max(CALL_H, (callH[u.item.key] ?? 0) + 4));
+    // (The row's broken item's own callout: a row holds one, among other pills.)
+    for (const u of p.units) if (calls(u.item)) callLine.set(u.row, Math.max(CALL_H, (callH[u.item.key] ?? 0) + 4));
     const line: number[] = [];
     let h = 0;
     for (let r = 0; r < p.rows; r++) {
@@ -595,8 +606,12 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   }, []);
   const preview = usePreview();
   const previewDays = useMemo(() => previewSpan(preview, data), [preview, data]);
-  const { lanes, places } = useMemo(() => laneModels(data, lane, moved, callH), [data, lane, moved, callH]);
-  const { t0, t1 } = useMemo(() => spanOf(data, lanes, previewDays), [data, lanes, previewDays]);
+  // The span (and so the scale) does not depend on the rows: a first packing finds it, then the
+  // lanes are packed with the scale's px a day (a name beside its pill takes room in its row).
+  const first = useMemo(() => laneModels(data, lane, moved), [data, lane, moved]);
+  const { t0, t1 } = useMemo(() => spanOf(data, first.lanes, previewDays), [data, first, previewDays]);
+  const dayPx = W / daysBetween(t0, t1);
+  const { lanes, places } = useMemo(() => (void fonts, laneModels(data, lane, moved, callH, dayPx)), [data, lane, moved, callH, dayPx, fonts]);
   const sc = useMemo(() => scale(t0, addDays(t1, -1), W / daysBetween(t0, t1)), [t0, t1, W]);
   const { months, mondays } = useMemo(() => calendar(t0, t1), [t0, t1]);
   const marks = useMarks(data, sc, W, false, fonts);
@@ -673,6 +688,9 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
       // A name beside its pill follows the pill's end; one inside, its start.
       label.setAttribute("x", String(label.dataset.beside ? x + w + 6 : x + 8.5));
       label.style.visibility = label.dataset.beside || Number(label.dataset.w ?? 0) + 18 <= w ? "visible" : "hidden";
+      const hit = g.querySelector<SVGRectElement>("rect[data-hit]");
+      hit?.setAttribute("x", String(x));
+      hit?.setAttribute("width", String(w + 6 + Number(label.dataset.w ?? 0)));
     }
     g.dataset.dragStart = s;
     g.dataset.dragEnd = e;
@@ -1178,6 +1196,9 @@ function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, 
   return (
     <>
       <title>{hover}</title>
+      {/* A name beside its pill is part of the pill: the gap and the name take the pill's
+          clicks too (the bar's middle never falls through to a quarter's drop target). */}
+      {beside && words && <rect data-hit x={b.x} y={y} width={Math.max(b.w, besideAt + w - b.x)} height={BAR_H} fill="transparent" />}
       <rect data-body x={b.x + 0.75} y={y + 0.75} width={Math.max(1, b.w - 1.5)} height={BAR_H - 1.5} rx={(BAR_H - 1.5) / 2} fill={c.fill} stroke={stroke(c.stroke)} strokeWidth={strokeW} strokeDasharray={c.dash} />
       {words && (
         <text

@@ -230,7 +230,8 @@ test.describe("phone", () => {
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "lanes-phone");
     const svg = (await page.getByTestId("chart-svg").boundingBox())!;
     const line = (await page.getByTestId("today-line").boundingBox())!;
-    expect(line.x - svg.x, "Today's line is off the edge").toBeGreaterThan(12);
+    // Ten days before the first date: about 12 px on a phone (it sat 5 px from the edge before).
+    expect(line.x - svg.x, "Today's line is off the edge").toBeGreaterThan(10);
     const lane = page.locator('[data-testid="phone-lane"][data-open="true"]');
     const rows = new Set(await lane.getByTestId("lane-run").evaluateAll((els) => els.map((e) => e.getAttribute("y"))));
     await expect(page.getByTestId("lane-list-count")).toHaveText(new RegExp(`up to ${rows.size} at once$`));

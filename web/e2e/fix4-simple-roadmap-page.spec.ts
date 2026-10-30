@@ -34,6 +34,9 @@ async function nudge(page: Page, key: string) {
   await page.waitForTimeout(1200);
 }
 
+/** A filter's select, by its label's word (its accessible name also carries the chosen option). */
+const filter = (page: Page, label: string): Locator => page.getByTestId("filters").locator("label", { hasText: new RegExp(`^${label}`) }).locator("select");
+
 const count = async (l: Locator) => Number((await l.textContent())!.match(/(\d+)/)![1]);
 
 test.describe("desktop", () => {
@@ -80,7 +83,7 @@ test.describe("desktop", () => {
     expect(f).not.toBe("");
     expect(f < t).toBe(true);
     // Nothing on the alerts track that late: a message and a way back, not a bare axis.
-    await page.getByLabel("Track", { exact: true }).selectOption({ label: "Usage alerts track" });
+    await filter(page, "Track").selectOption({ label: "Usage alerts track" });
     await from.selectOption({ index: last });
     await to.selectOption({ index: last });
     const empty = page.getByTestId("filters-empty");
@@ -89,12 +92,12 @@ test.describe("desktop", () => {
     await empty.getByRole("button", { name: "Clear filters" }).click();
     await expect(empty).toHaveCount(0);
     await expect(bar(page, "alert-rules")).toBeVisible();
-    await expect(page.getByLabel("Track", { exact: true })).toHaveValue("");
+    await expect(filter(page, "Track")).toHaveValue("");
   });
 
   test("qa-13: the goal cards follow the Goal filter", async ({ page }) => {
     await open(page);
-    await page.getByLabel("Goal", { exact: true }).selectOption({ label: "Faster activation" });
+    await filter(page, "Goal").selectOption({ label: "Faster activation" });
     const cards = page.getByTestId("goal-counters");
     await expect(cards).toContainText("Faster activation");
     await expect(cards).not.toContainText("Keep alerts quiet");
