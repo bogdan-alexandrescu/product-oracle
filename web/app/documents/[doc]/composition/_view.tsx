@@ -475,6 +475,7 @@ export function CompositionView({ doc }: { doc: string }) {
       {confirming && data && (
         <ConfirmStep
           doc={doc}
+          title={docQ.data?.title}
           data={data}
           changes={changes}
           phone={phone}

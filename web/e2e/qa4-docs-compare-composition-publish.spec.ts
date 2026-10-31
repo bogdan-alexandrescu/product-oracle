@@ -85,6 +85,15 @@ test.describe("desktop", () => {
     await expect(dialog.getByTestId("confirm-nothing-changed")).toContainText("Nothing changed: these are the modules of revision 1.");
   });
 
+  test("qa4-docs-42: the Confirm outline calls the opening section Introduction, not the PRD's title", async ({ page }) => {
+    await openComposition(page);
+    await page.getByRole("button", { name: "Use these modules" }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
+    const outline = dialog.getByTestId("outline-full");
+    await expect(outline.locator("li > span.font-medium").first()).toHaveText("Introduction");
+    await expect(outline).not.toContainText("Checkout redesign PRD");
+  });
+
   test("qa4-docs-50: module numbers run in reading order and no Selection column repeats the group", async ({ page }) => {
     await openComposition(page);
     const table = page.getByTestId("composition-modules");

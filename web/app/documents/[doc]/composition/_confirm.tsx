@@ -93,6 +93,7 @@ type Layer = "both" | "brief" | "full";
  */
 export function ConfirmStep({
   doc,
+  title,
   data,
   changes,
   phone,
@@ -101,6 +102,8 @@ export function ConfirmStep({
   onReload,
 }: {
   doc: string;
+  /** The PRD's title: its opening section reads as the Introduction (qa4-docs-42). */
+  title?: string;
   data: InspectorOut;
   changes: Changes;
   phone: boolean;
@@ -174,7 +177,11 @@ export function ConfirmStep({
     }
   }
 
-  const outline = preview?.outline ?? [];
+  // qa4-docs-42: the opening section that carries the PRD's title reads as the Introduction,
+  // as the Document tab names it.
+  const outline = (preview?.outline ?? []).map((o) =>
+    o.level === 1 && title?.trim() && o.heading.trim() === title.trim() ? { ...o, heading: "Introduction" } : o,
+  );
   // Each heading once: a module adding several sections under its own name is one line.
   const entries = (which: "brief" | "full") =>
     outline.filter((o, i) => o.layer === which && !outline.slice(0, i).some((p) => p.layer === which && p.heading === o.heading));
