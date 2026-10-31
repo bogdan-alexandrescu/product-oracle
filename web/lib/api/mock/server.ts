@@ -161,6 +161,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { storedDates } from "./simple-roadmap"; // MOCK-HOOK
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -1064,8 +1065,12 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
   // MOCK-HOOK qp4: a "Move the dependents" proposal (keyed by item id, as the engine keys it), so Home's row shows what it moves.
   const mkId = (k: string) => db.simple_roadmap!.ids[k]; // MOCK-HOOK
-  const mkSpan = (start: string, end: string) => ({ start_date: start, end_date: end }); // MOCK-HOOK
-  seedSimpleProposal(db.simple_roadmap, who, "shift_dependents", "alert-digest", { [mkId("alert-digest")]: mkSpan("2026-10-31", "2026-12-10"), [mkId("alert-mobile")]: mkSpan("2026-10-01", "2026-12-20") }, { [mkId("alert-digest")]: mkSpan("2026-11-11", "2026-12-21"), [mkId("alert-mobile")]: mkSpan("2026-11-11", "2027-01-30") }, "2026-10-27T09:30:00Z", "Both start before Alert rules engine ends"); // MOCK-HOOK
+  const mkDay = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10); // MOCK-HOOK
+  const mkRulesEnd = storedDates(db.simple_roadmap!, "alert-rules").end ?? "2026-11-10"; // MOCK-HOOK
+  const mkDigest = storedDates(db.simple_roadmap!, "alert-digest"); // MOCK-HOOK
+  const mkMobile = storedDates(db.simple_roadmap!, "alert-mobile"); // MOCK-HOOK
+  const mkLen = mkDigest.start && mkDigest.end ? Math.round((Date.parse(mkDigest.end) - Date.parse(mkDigest.start)) / 86_400_000) : 40; // MOCK-HOOK
+  seedSimpleProposal(db.simple_roadmap, who, "shift_dependents", "alert-digest", { [mkId("alert-digest")]: { start_date: mkDigest.start, end_date: mkDigest.end }, [mkId("alert-mobile")]: { start_date: mkMobile.start, end_date: mkMobile.end } }, { [mkId("alert-digest")]: { start_date: mkDay(mkRulesEnd, 1), end_date: mkDay(mkRulesEnd, 1 + mkLen) }, [mkId("alert-mobile")]: { start_date: mkDay(mkRulesEnd, 1), end_date: mkDay(mkRulesEnd, 51) } }, "2026-10-27T09:30:00Z", "Both start before Alert rules engine ends"); // MOCK-HOOK
   return db;
 }
 

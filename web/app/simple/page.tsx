@@ -292,7 +292,7 @@ export default function SimpleHome() {
       .map(([id, v]) => { // MOCK-HOOK
         const a = v as { start_date?: string; end_date?: string }; // MOCK-HOOK
         const b = ((c.before as Record<string, unknown>)[id] ?? {}) as { start_date?: string; end_date?: string }; // MOCK-HOOK
-        const span = (x: { start_date?: string; end_date?: string }) => `${x.start_date ? calendarDay(x.start_date) : "undated"} – ${x.end_date ? calendarDay(x.end_date) : "undated"}`; // MOCK-HOOK
+        const span = (x: { start_date?: string | null; end_date?: string | null }) => (!x.start_date && !x.end_date ? "not dated yet" : `${x.start_date ? calendarDay(x.start_date) : "undated"} – ${x.end_date ? calendarDay(x.end_date) : "undated"}`); // MOCK-HOOK
         return { id, title: itemTitle(id), before: span(b), after: span(a) }; // MOCK-HOOK
       }); // MOCK-HOOK
   const mkMoveList = (c: Change, cut?: number) => { // MOCK-HOOK
