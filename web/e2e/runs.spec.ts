@@ -566,7 +566,7 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   await expect(amber(page).filter({ visible: true }).locator("svg")).toHaveCount(1);
   // The side panel.
   const panel = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
-  await expect(panel).toContainText("Run · delivering decision");
+  await expect(panel).toContainText("Run · Delivering decision");
   await expect(panel).not.toContainText("waiting for review");
   // The runs list: the row's chip.
   await page.getByTestId("nav-runs").click();
