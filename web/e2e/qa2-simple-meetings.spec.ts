@@ -199,7 +199,7 @@ test.describe("desktop · the live meeting", () => {
     await steps(page).getByRole("button", { name: "3 Decisions" }).click();
     const agenda = page.getByTestId("decisions-due");
     const row = agenda.getByTestId("question-row").filter({ has: page.getByRole("button", { name: "Decide as recommended" }) }).first();
-    const rec = (await row.locator(".simple-rec").innerText()).replace(/^.+? recommends:\s*/, "").trim();
+    const rec = (await row.locator(".simple-rec").innerText()).replace(/^Recommended in .+?:\s*/, "").trim();
     await row.getByRole("button", { name: "Decide as recommended" }).click();
     await expect(agenda.getByTestId("question-decided").filter({ hasText: `Decided in this meeting: ${rec}` })).toBeVisible();
 
