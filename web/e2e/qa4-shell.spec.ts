@@ -73,7 +73,7 @@ test("qa4-shell-2, 3: PRDs that fail to load show the error and Try again only, 
   await expect(error).toContainText("Couldn't load your PRDs.");
   await expect(page.getByTestId("table-empty")).toHaveCount(0);
   await expect(page.getByTestId("prds-empty")).toHaveCount(0);
-  await expect(page.getByRole("radiogroup", { name: "Show" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Show" })).toHaveCount(0);
   await stopFailing(page);
   await error.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByTestId("load-error")).toHaveCount(0);
@@ -108,7 +108,7 @@ test("qa4-shell-21: the error has the page's spacing above the next block (the I
   await login(page);
   await failGets(page, "/v1/intakes");
   await page.goto("/documents");
-  await page.getByRole("radiogroup", { name: "Show" }).getByRole("radio", { name: /Ideas/ }).click();
+  await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^Ideas/ }).click();
   const error = page.getByTestId("load-error");
   await expect(error).toContainText("Couldn't load the ideas.");
   // Nothing below it pretends the list is empty.
@@ -124,8 +124,8 @@ test("qa4-shell-18, 19: while PRDs load, no count shows and the loading bars can
     localStorage.setItem("po-mock-slow-ms", "4000");
   });
   await page.goto("/documents");
-  const show = page.getByRole("radiogroup", { name: "Show" });
-  await expect(show.getByRole("radio", { name: "Ideas", exact: true })).toBeVisible();
+  const show = page.getByRole("group", { name: "Show" });
+  await expect(show.getByRole("button", { name: "Ideas", exact: true })).toBeVisible();
   await expect(show.locator("b")).toHaveCount(0);
   const bar = page.getByTestId("documents-table").locator("tbody tr[aria-hidden] span").first();
   await expect(bar).toBeVisible();
@@ -187,7 +187,11 @@ test("qa4-shell-12: under your own message Edit, Delete and Research this sit on
   await panel.getByRole("button", { name: "Send" }).click();
   const mine = panel.getByTestId("discussion-message").filter({ hasText: "Why is checkout first?" });
   const tops = await Promise.all(
-    ["Edit", "Delete", "Research this"].map(async (name) => (await mine.getByRole("button", { name, exact: true }).boundingBox())!.y),
+    ["Edit message", "Delete message", "Research this"].map(async (name) => {
+      const button = mine.getByRole("button", { name, exact: true });
+      await expect(button).toBeVisible();
+      return (await button.boundingBox())!.y;
+    }),
   );
   expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(1);
 });

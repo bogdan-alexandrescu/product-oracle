@@ -948,12 +948,12 @@ function HopDock() {
           <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
         </button>
       )}
-      {/* qa4-shell-9: in dark the navy scrim is the page's own colour; a black one dims it there too. */}
+      {/* qa4-shell-9: in dark the navy scrim is the page's own colour; a black one (not `black`, which follows the theme) dims it there too. */}
       {open && (
         <div
           aria-hidden
           data-testid="hop-backdrop"
-          className={`fixed inset-0 z-40 bg-hero/30 [:root[data-theme=dark]_&]:bg-black/55 dark:[:root:not([data-theme=light])_&]:bg-black/55 ${simple ? "min-[1240px]:hidden" : "min-[1600px]:hidden"}`}
+          className={`fixed inset-0 z-40 bg-hero/30 [:root[data-theme=dark]_&]:bg-[rgb(0_0_0/0.55)] dark:[:root:not([data-theme=light])_&]:bg-[rgb(0_0_0/0.55)] ${simple ? "min-[1240px]:hidden" : "min-[1600px]:hidden"}`}
           onClick={() => setPanelOpen(false)}
         />
       )}
