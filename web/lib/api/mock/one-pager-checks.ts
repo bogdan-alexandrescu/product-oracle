@@ -20,7 +20,7 @@ const STOP = new Set(
  * The text as the PRD's PDF reads it (one_pager_checks.resolved): no [c:id] marker left
  * (oracle.docs.parser.strip_citations), and none an older quick read cut at its end.
  */
-export const resolved = (t: string) => (t ?? "").replace(/(?<![ \t])[ \t]*\[c:[^\]\s[]+\]/g, "").replace(/[ \t]*\[c(?::[^\]\s]*)?(?=…?$)/, "");
+export const resolved = (t: string) => (t ?? "").replace(/(?<![ \t])[ \t]*\[c:[^\]\s[]+\]/g, "").replace(/[ \t]*\[c(?:…|:[^\]\s]*…?)$/, "");
 const plainKeep = (t: string) => (t ?? "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`]+|\{#[^}]*\}|<!--.*?-->/g, "").split(/\s+/).filter(Boolean).join(" ");
 const plain = (t: string) => plainKeep(resolved(t));
 const plainOf = (t: string) => plain(t);
@@ -64,12 +64,17 @@ const WHO_NOT = /\b(?:stor(?:y|ies)|flows?|quotes?|journeys?|scenarios?|problems
 const LABEL = /^(?:(primary|main|core|target)(?:\s+(?:users?|personas?|segments?|audiences?))?|(not\b.*|non[- ]target.*|anti[- ]personas?|out of scope|excluded)|((?:job\s+)?stor(?:y|ies)|jobs?(?:\s+to\s+be\s+done)?|jtbd|scenarios?|quotes?)|(secondary|tertiary|also|other|owners?|buyers?|segments?|personas?|users?|audiences?|customers?|who(?:\s+has\s+it)?)(?:\s+(?:users?|personas?|segments?))?)$/i;
 const firstSentence = (t: string) => sentences(t.trim())[0]?.replace(/\.$/, "").split(/\s+/).filter(Boolean).slice(0, 30).join(" ") ?? "";
 
-/** Who has it from labelled lines ("" when no line names people), null when the lines are not labelled. */
+/** Who has it from labelled lines ("" when no line names people), null when no line is labelled. */
 function labelled(pairs: [string, string][]): string | null {
   const kinds: Record<string, string[]> = { primary: [], people: [], story: [], out: [] };
+  if (!pairs.some(([label]) => LABEL.test(label.trim()))) return null;
   for (const [label, words] of pairs) {
     const m = LABEL.exec(label.trim());
-    if (!m) return null;
+    // A lead among labelled lines ("New admins: ...") names its people.
+    if (!m) {
+      kinds.people.push(label.split(/\s+/).filter(Boolean).slice(0, 12).join(" "));
+      continue;
+    }
     const w = firstSentence(words);
     // The groups in LABEL's order: primary, out, story, people.
     if (w) kinds[["primary", "out", "story", "people"][[m[1], m[2], m[3], m[4]].findIndex((v) => v !== undefined)]].push(w);
@@ -122,6 +127,12 @@ function measureIn(text: string): Measure | null {
 const keysOf = (raw: string, cites: Cites) =>
   [...(raw ?? "").matchAll(/\[c:\s*([^[\]]*?)\s*\]/g)].flatMap((g) => g[1].split(",")).map((k) => k.trim()).filter((k) => k && k in cites);
 
+/** one_pager_checks._excerpt: a citation's excerpt as a measure, at most 20 words, cut with "…". */
+function excerpt(t: string): string {
+  const words = plain(t).split(/\s+/).filter(Boolean);
+  return words.slice(0, 20).join(" ") + (words.length > 20 ? "…" : "");
+}
+
 /** one_pager_checks._cited: a measure with its citations resolved; ids alone are the cited source's words, else no measure. */
 function cited(raw: string, cites: Cites): Measure | null {
   const keys = keysOf(raw, cites);
@@ -130,7 +141,7 @@ function cited(raw: string, cites: Cites): Measure | null {
     const at = MEASURE.exec(raw);
     const src = keys.map((k) => cites[k]).find((c) => c.excerpt);
     if (!at || !src) return null;
-    return { name: trimP(plain(raw.slice(0, at.index))), measure: plain(src.excerpt ?? ""), source: src.title };
+    return { name: trimP(plain(raw.slice(0, at.index))), measure: excerpt(src.excerpt ?? ""), source: src.title };
   }
   if (m.source === null) m.source = keys.map((k) => cites[k].title).find(Boolean) ?? null;
   return m;
@@ -153,7 +164,7 @@ function measures(secs: Sec[], cites: Cites): Measure[] {
       if (mcol > 0 && r[mcol]) {
         const said = scol > 0 ? r[scol] ?? "" : "";
         const keys = [...keysOf(r[mcol], cites), ...keysOf(said, cites)];
-        const measure = plain(r[mcol]) || (keys.map((k) => cites[k].excerpt).find(Boolean) ?? "");
+        const measure = plain(r[mcol]) || excerpt(keys.map((k) => cites[k].excerpt).find(Boolean) ?? "");
         const src = plain(said) || (keys.map((k) => cites[k].title).find(Boolean) ?? null);
         if (measure) out.push({ name: plain(r[0]), measure: plain(measure), source: src || null });
       } else {
@@ -200,7 +211,8 @@ function glossary(secs: Sec[]): Record<string, string> {
       if (n && nameOf(n[1])) put(c[0], nameOf(n[1]));
       else {
         const a = AFTER.exec(rest);
-        if (a && nameOf(a[1]) && !(c[0] in after)) after[c[0]] = nameOf(a[1]);
+        // Its first word starts with a capital ("F-50 requires login" names nothing).
+        if (a && /^[A-Z]/.test(a[1]) && nameOf(a[1]) && !(c[0] in after)) after[c[0]] = nameOf(a[1]);
       }
     }
   };

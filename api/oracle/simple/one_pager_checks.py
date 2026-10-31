@@ -59,7 +59,7 @@ class Look:
 
 
 # A citation an older quick read cut ("time [c…", "time [c:c"): only at the line's end.
-_CUT_CITE = re.compile(r"[ \t]*\[c(?::[^\]\s]*)?(?=…?$)")
+_CUT_CITE = re.compile(r"[ \t]*\[c(?:…|:[^\]\s]*…?)$")
 
 
 def resolved(text: str) -> str:
@@ -142,14 +142,16 @@ def _sentence(text: str) -> str:
 
 
 def _labelled(pairs: list[tuple[str, str]]) -> str | None:
-    """Who has it from labelled lines ("" when no line names people), None when the lines
-    are not labelled."""
+    """Who has it from labelled lines ("" when no line names people), None when no line is
+    labelled."""
     kinds: dict[str, list[str]] = {"primary": [], "people": [], "story": [], "out": []}
+    if not any(_LABEL.match(label.strip()) for label, _ in pairs):
+        return None
     for label, words in pairs:
-        m = _LABEL.match(label.strip())
-        if not m:
-            return None
-        if words := _sentence(words):
+        # A lead among labelled lines ("New admins: ...") names its people.
+        if not (m := _LABEL.match(label.strip())):
+            kinds["people"].append(" ".join(label.split()[:12]))
+        elif words := _sentence(words):
             kinds[next(k for k, v in m.groupdict().items() if v)].append(words)
     named = kinds["primary"] or kinds["people"] or kinds["story"]
     return " ".join("; ".join(named).split()[:30])
@@ -252,6 +254,12 @@ def _keys(raw: str) -> list[str]:
     return [k.strip() for g in _CITED.findall(raw or "") for k in g.split(",") if k.strip()]
 
 
+def _excerpt(text: str) -> str:
+    """A citation's excerpt as a measure: at most 20 words, cut with "…"."""
+    words = _plain(text).split()
+    return " ".join(words[:20]) + ("…" if len(words) > 20 else "")
+
+
 def _cited(raw: str, cites: Cites) -> Measure | None:
     """A measure line as the PRD's PDF reads it: its citations resolved. A definition that is
     only citation ids ("counted as: [c:c4] [c:c11]") is its first cited source's words (the
@@ -265,7 +273,7 @@ def _cited(raw: str, cites: Cites) -> Measure | None:
         if at is None or src is None:
             return None
         name = _plain(raw[: at.start()]).strip(" :,;·-—–")
-        return Measure(name, _plain(src[1] or ""), src[0])
+        return Measure(name, _excerpt(src[1] or ""), src[0])
     if m.source is None:
         m.source = next((cites[k][0] for k in keys if cites[k][0]), None)
     return m
@@ -289,7 +297,9 @@ def measures(sections: list[Section], cites: Cites | None = None) -> list[Measur
             if mcol is not None and mcol < len(r) and r[mcol]:
                 said = r[scol] if scol is not None and scol < len(r) else ""
                 keys = [k for k in _keys(r[mcol]) + _keys(said) if k in cites]
-                measure = _plain(r[mcol]) or next((cites[k][1] for k in keys if cites[k][1]), "")
+                measure = _plain(r[mcol]) or _excerpt(
+                    next((cites[k][1] for k in keys if cites[k][1]), "")
+                )
                 src = _plain(said) or next((cites[k][0] for k in keys if cites[k][0]), None)
                 if measure:
                     out.append(Measure(_plain(r[0]), _plain(measure), src or None))
@@ -334,9 +344,9 @@ _NOT_NAME = (
     r"which|that|who|as|into|after|before|than|then|also|too|now|later|first|next|out|not|"
     r"no|the|a|an|it|its|this|these|those|we|our|you|they|here|there)\b"
 )
+# Its first word starts with a capital ("F-50 requires login" names nothing).
 _AFTER = re.compile(
-    rf"^\s+(?P<n>(?!{_NOT_NAME})[A-Za-z][\w'’-]*(?:\s+(?!{_NOT_NAME})[A-Za-z][\w'’-]*){{0,3}})",
-    re.I,
+    rf"^\s+(?P<n>(?!(?i:{_NOT_NAME}))[A-Z][\w'’-]*(?:\s+(?!(?i:{_NOT_NAME}))[A-Za-z][\w'’-]*){{0,3}})"
 )
 
 

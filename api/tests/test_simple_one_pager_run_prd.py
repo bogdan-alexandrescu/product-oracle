@@ -294,7 +294,9 @@ async def test_code_named_right_after_it(client):
     names = checks.glossary([sec])
     assert names == {"F-11": "Photo editing", "F-14": "Print orders"}
     # A lowercase word after a code is the sentence going on, never its name.
-    sec.body_md = "We keep F-12 depends on F-10. F-50 requires login. F-31 really helps. F-40 blocks F-41."
+    sec.body_md = (
+        "We keep F-12 depends on F-10. F-50 requires login. F-31 really helps. F-40 blocks F-41."
+    )
     names = checks.glossary([sec])
     assert names == {}, names
     assert checks.with_names("F-50 requires login", names) == ("F-50 requires login", ["F-50"])
