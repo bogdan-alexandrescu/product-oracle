@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { meetingSay, meetingThread, setChatMode, type ChangeMode, type ChatRules, type ChatThread } from "@/lib/api/simple-chat";
 import { errorMessage } from "@/lib/use-query";
 
-import { ChatThreadView, usePendingPoll } from "./ChatThread";
+import { ChatMessages, ChatThreadView, usePendingPoll } from "./ChatThread";
 
 const POLL_MS = 2000;
 // qa-simple-decide-7: the same words as the start sheet and the meeting's header.
@@ -17,6 +17,28 @@ const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 function rulesLine(r: ChatRules): string {
   if (r.change_mode === "named") return `Presenter plus ${r.change_people.length ? r.change_people.map((p) => p.name).join(", ") : "no one named yet"}`;
   return MODE_WORDS[r.change_mode];
+}
+
+/** qa4-simple-decide-5: what the rule does not say: within it, who applies and who proposes. */
+const RULES_HINT = "Owners and each item's decider apply; others propose.";
+
+/** qa4-simple-decide-30: a viewer's hint names who makes changes by the rule in force. */
+function viewerHint(r: ChatRules): string {
+  const who =
+    r.change_mode === "everyone"
+      ? "commenters and up make"
+      : r.change_mode === "named"
+        ? r.change_people.length
+          ? `the presenter${r.change_people.length > 1 ? "," : " and"} ${r.change_people.map((p) => p.name).join(" and ")} make`
+          : "the presenter and the people they named make"
+        : "the presenter makes";
+  return `Viewers ask questions here; ${who} changes and notes.`;
+}
+
+/** qa4-simple-decide-29: Oracle's line before its cards ("I understood one change:") ends as a sentence. */
+function plainLines(t: ChatThread): ChatThread {
+  if (!t.messages.some((m) => m.cards.length > 0 && /:\s*$/.test(m.body))) return t;
+  return { ...t, messages: t.messages.map((m) => (m.cards.length > 0 && /:\s*$/.test(m.body) ? { ...m, body: m.body.replace(/:\s*$/, ".") } : m)) };
 }
 
 /**
@@ -80,6 +102,7 @@ export function MeetingChat({
   usePendingPoll(thread, load);
 
   const rules = thread?.rules ?? null;
+  const shown = useMemo(() => (thread ? plainLines(thread) : null), [thread]);
   return (
     <section aria-label="Meeting chat" data-testid="meeting-chat" data-session={sessionId || undefined} className="simple-card flex min-h-0 flex-col gap-3 max-[600px]:mb-[76px]">
       {heading && <h2 className="simple-h2">Meeting chat</h2>}
@@ -96,15 +119,31 @@ export function MeetingChat({
             {rules.ended && " · The meeting has ended"}
           </p>}
           {rulesControl && rules.is_presenter && !rules.ended && <ModeControl meetingId={meetingId} rules={rules} onSaved={(r) => setThread((t) => (t ? { ...t, rules: r } : t))} />}
+          {!rules.ended && (
+            <p className="simple-small text-text2" data-testid="chat-rules-hint">
+              {RULES_HINT}
+            </p>
+          )}
         </div>
       )}
-      {thread && (
+      {/* qa4-simple-decide-4: an ended meeting's chat is read-only: its lines, no box. */}
+      {shown && rules?.ended && (
+        <div className="flex min-h-0 flex-col gap-3" data-testid="meeting-chat-thread">
+          <div className={scroll ? "flex min-h-0 max-h-[50vh] flex-col gap-3 overflow-y-auto" : "contents"} data-testid={scroll ? "meeting-chat-thread-scroll" : undefined}>
+            <ChatMessages messages={shown.messages} onCardChanged={() => void load()} />
+          </div>
+          <p className="simple-small text-text2" data-testid="chat-ended">
+            This meeting has ended; ask Oracle instead.
+          </p>
+        </div>
+      )}
+      {shown && !rules?.ended && (
         <ChatThreadView
           testId="meeting-chat-thread"
-          thread={thread}
+          thread={shown}
           // qa-simple-decide-3: this chat makes changes and notes; questions go to Ask Oracle.
           placeholder={rules?.ask_only ? "Ask a question about what is on screen" : "Ask for a change, or type “note: …”"}
-          hint={rules?.ask_only ? "Viewers ask questions here; the presenter makes changes and notes." : "For a question about the plan, use Ask Oracle."}
+          hint={rules?.ask_only ? viewerHint(rules) : "For a question about the plan, use Ask Oracle."}
           scroll={scroll ? "max-h-[50vh]" : undefined}
           send={async (text) => setThread(await meetingSay(meetingId, text))}
           onCardChanged={() => {

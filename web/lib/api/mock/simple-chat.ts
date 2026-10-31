@@ -1624,6 +1624,30 @@ function unapplyLocal(c: StoredCard, meeting: Meeting | null, s8?: ChatMeetings)
   }
 }
 
+/** S8's past review (./simple-meetings.ts's "Review: Usage alerts"). */
+const PAST_MEETING_ID = stableUuid("simple-meeting/past-alerts");
+
+/**
+ * qa4-simple-decide-4: the past review's chat holds the lines said in it, as the API keeps a
+ * meeting's thread after it ends: the approver's note (the meeting's note "keep quiet hours on
+ * by default", 35 minutes in) and Oracle's reply.
+ */
+function seedPastChat(chat: ChatDb, m: Pick<Meeting, "presenter_id" | "attendee_ids">, ctx: ChatCtx): void {
+  const key = `meeting:${PAST_MEETING_ID}`;
+  if (chat.threads[key]) return;
+  const by = m.attendee_ids.find((id) => ctx.roles[id] === "approver") ?? m.presenter_id;
+  const at = new Date(mockNowMs() - 7 * DAY + 3 * 3_600_000 + 35 * 60_000).toISOString();
+  const said = crypto.randomUUID();
+  const base = { card_ids: [], choices: [], picked: null, retry: false };
+  chat.threads[key] = {
+    id: crypto.randomUUID(), meeting_id: PAST_MEETING_ID, owner_id: null,
+    messages: [
+      { ...base, id: said, author_kind: "person", author_id: by, author_name: ctx.names[by] ?? "someone", body: "note: keep quiet hours on by default", at, kind: "request", reply_to: null },
+      { ...base, id: crypto.randomUUID(), author_kind: "oracle", author_id: null, author_name: "Oracle", body: "Added to the minutes: keep quiet hours on by default", at, kind: "note", reply_to: said },
+    ],
+  };
+}
+
 /** The S9 routes; null for any other path. */
 export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, req: Request, p: string[], s8?: ChatMeetings): Promise<Response | null> {
   if (p[1] !== "simple") return null;
@@ -1635,6 +1659,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     for (const id of ids) {
       const found = s8.find(id);
       if (found) chat.meetings[id] = { ...(chat.meetings[id] ?? { agenda: [], decisions: [] }), ...found, id, s8: true };
+      if (found && id === PAST_MEETING_ID) seedPastChat(chat, found, ctx);
     }
   }
 
