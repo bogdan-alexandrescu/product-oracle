@@ -285,9 +285,10 @@ function Decisions() {
     <DecisionInspector key={detail.id} decision={detail} people={people} onChanged={changed} autoDecide={params.get("act") === "decide"} />
   ) : null;
   // qa4-company-15: beside the list the inspector's column stays while nothing is open, so the
-  // filter chips keep their place when a kind with no decisions is picked.
+  // filter chips keep their place when a kind with no decisions is picked. At 1100 px and
+  // below the layout is one column, so the empty panel would sit under the list: it hides.
   const besideList = inspector ?? (
-    <Panel testId="decision-inspector-empty">
+    <Panel testId="decision-inspector-empty" className="max-[1100px]:hidden">
       <p className="px-4 py-8 text-center text-[15px] text-text2">{listQ.data && rows.length === 0 ? "No decision to show." : "Pick a decision to see it here."}</p>
     </Panel>
   );

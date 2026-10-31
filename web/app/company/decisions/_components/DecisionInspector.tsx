@@ -820,13 +820,14 @@ function ReassignForm({ d, people, onDone, onCancel }: { d: Decision; people: Pe
 }
 
 function WithdrawForm({ d, onDone, onCancel }: { d: Decision; onDone: Done; onCancel: () => void }) {
-  // qa4-company-12: the submit names the decision ("Withdraw D-5"), never a second bare Withdraw.
+  // qa4-company-12: the submit says what it does ("Withdraw this decision"), never a second
+  // bare Withdraw, and shows no bare id.
   const [reason, setReason] = useState("");
   const { busy, error, setError, run } = useSubmit(onDone);
   return (
     <FormShell
       name="Withdraw"
-      submit={`Withdraw ${d.ref}`}
+      submit="Withdraw this decision"
       danger
       busy={busy}
       error={error}
