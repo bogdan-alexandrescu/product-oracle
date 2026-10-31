@@ -209,6 +209,15 @@ async def company_name(db: AsyncSession) -> str:
     return tenant.name if tenant is not None else ""
 
 
+async def export_name(db: AsyncSession) -> str:
+    """The name an export prints when branding names none: the company's, never the
+    seed's placeholder (e2e-pdf-export, 2026-10-30: "" prints no name)."""
+    from oracle.models import PLACEHOLDER_NAME
+
+    name = (await company_name(db)).strip()
+    return "" if name == PLACEHOLDER_NAME else name
+
+
 # --- what renders read ------------------------------------------------------------------
 
 
@@ -288,7 +297,7 @@ async def load_brand(db: AsyncSession) -> Brand:
     accent = value.get("accent")
     return Brand(
         tenant_id=current_tenant(db),
-        display_name=value.get("display_name") or await company_name(db),
+        display_name=value.get("display_name") or await export_name(db),
         accent=accent if isinstance(accent, str) and _HEX.match(accent) else None,
         public_disclaimer=value.get("public_disclaimer") or DEFAULT_DISCLAIMER,
         oracle_mark=bool(value.get("oracle_mark", True)),
@@ -332,10 +341,13 @@ def render_brand_header(
         return Markup("")
     uri = brand.logo_dark_data_uri if dark else brand.logo_data_uri
     name = escape(brand.display_name)
+    if not uri and not name and not (shared and brand.oracle_mark):
+        return Markup("")
     parts = ['<div class="brand-header">']
     if uri:
         parts.append(f'<img class="brand-logo" src="{uri}" alt="{name}" height="40">')
-    parts.append(f'<span class="brand-name">{name}</span>')
+    if name:
+        parts.append(f'<span class="brand-name">{name}</span>')
     if shared and brand.oracle_mark:
         parts.append(f'<span class="brand-mark">{MARK}</span>')
     parts.append("</div>")

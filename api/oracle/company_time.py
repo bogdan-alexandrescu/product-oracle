@@ -95,9 +95,14 @@ def day_first_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
 
 
 def stamp(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
-    """``moment`` in ``zone`` as "2026-10-25 14:59 PDT" (exports, pre-reads)."""
+    """``moment`` in ``zone`` as "Oct 25, 2026, 2:59 PM PDT" (exports, pre-reads): month
+    first, as every other date (e2e-pdf-export, 2026-10-30)."""
     local = _local(moment, zone)
-    return f"{local:%Y-%m-%d %H:%M} {local.tzname()}"
+    hour = local.hour % 12 or 12
+    return (
+        f"{local:%b} {local.day}, {local.year}, {hour}:{local:%M} "
+        f"{'AM' if local.hour < 12 else 'PM'} {local.tzname()}"
+    )
 
 
 def in_words(moment: datetime, zone: str = DEFAULT_ZONE) -> str:

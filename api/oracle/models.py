@@ -14,6 +14,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from oracle.db import Base, IdMixin, TenantScoped
 
 
+# The seed's stand-in company name: not the company's own, so exports never print it.
+PLACEHOLDER_NAME = "Example Co"
+
+
 class Tenant(IdMixin, Base):
     __tablename__ = "tenants"
 
