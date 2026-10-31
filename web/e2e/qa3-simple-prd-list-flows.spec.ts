@@ -105,8 +105,10 @@ for (const [where, viewport] of [
           const locked = ["hidden", "clip"].includes(getComputedStyle(html).overflowY) || ["hidden", "clip"].includes(getComputedStyle(document.body).overflowY);
           return !locked && html.scrollHeight > html.clientHeight + 1;
         });
-      // The one-pager behind is taller than the window.
-      expect(await pageScrolls()).toBe(true);
+      // The one-pager behind is taller than the window, yet it stops under the opened flow's
+      // sheet too (qa4-simple-prd-30): one scroll bar, the sheet's.
+      expect(await page.evaluate(() => document.documentElement.scrollHeight > innerHeight)).toBe(true);
+      expect(await pageScrolls()).toBe(false);
       await opened.getByRole("button", { name: "Full screen" }).click();
       const full = page.getByTestId("flow-fullscreen");
       await expect(full).toBeVisible();
@@ -122,7 +124,7 @@ for (const [where, viewport] of [
       await expect(full.getByRole("button", { name: "Comment", exact: true })).toBeVisible();
       await full.getByRole("button", { name: "Exit full screen" }).click();
       await expect(full).toHaveCount(0);
-      expect(await pageScrolls()).toBe(true);
+      expect(await pageScrolls()).toBe(false);
       // The same Comment in the opened flow: it opens the comments, full screen.
       await opened.getByRole("button", { name: "Comment", exact: true }).click();
       await expect(page.getByTestId("flow-fullscreen").getByTestId("flow-comments-panel")).toBeVisible();

@@ -4799,7 +4799,11 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     if (known) return known;
     const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
     if (!d) return undefined;
-    return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals });
+    // qa4-simple-prd-3/9: as one_pager.published, the version read is the PRD's own latest approved
+    // one, else its latest, dated by its approval (none: never published).
+    const vs = docVersions(db, d);
+    const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
+    return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
@@ -5737,6 +5741,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
+      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)
@@ -5772,6 +5777,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         roadmap: roadmapDb,
         onePager: onePagerDb,
         rituals: ensureRituals(db, me),
+        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
       });
       return { db: ensureMeetings(db, ctx), ctx };
     });

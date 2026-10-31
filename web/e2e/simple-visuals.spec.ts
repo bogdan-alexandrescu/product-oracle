@@ -92,8 +92,9 @@ for (const [where, use] of [
         const full = await openComments(page, opened);
         await expect(full.getByRole("heading", { name: "Finish setup from the checklist", level: 2 })).toBeVisible();
         await expect(full.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        // qa-simple-roadmap-31: plain words, not the internal "PRD §"/"requirement" jargon.
-        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · From the PRD: Build section, Requirement R1");
+        // qa-simple-roadmap-31, qa4-simple-prd-32: the section as the page names it, no requirement code.
+        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · From “What we will build”");
+        await expect(full.getByTestId("flow-annotations")).not.toContainText("Requirement");
         // Roles: a viewer reads, with no comment box and no Revise.
         await expect(full.getByLabel("Comment on the flow")).toHaveCount(0);
         await expect(full.getByRole("button", { name: "Revise" })).toHaveCount(0);
@@ -101,7 +102,7 @@ for (const [where, use] of [
         expect(box.width).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
         await full.getByRole("button", { name: "Exit full screen" }).click();
         await expect(full).toHaveCount(0);
-        await opened.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
+        await opened.getByRole("button", { name: "Close" }).click();
         await expect(page.getByTestId("flow-detail")).toHaveCount(0);
         // A bet Oracle has not drawn yet: a viewer sees no flow row and no prompt (2026-10-30).
         await expect(page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" })).toHaveCount(0);
@@ -114,7 +115,7 @@ for (const [where, use] of [
         await expect(panel.getByRole("button", { name: "Revise" })).toBeDisabled();
         await panel.getByLabel("Comment on the flow").fill("Show where a skipped invite comes back");
         await panel.getByLabel("On annotation").selectOption("2");
-        await panel.getByRole("button", { name: "Comment", exact: true }).click();
+        await panel.getByRole("button", { name: "Post comment" }).click();
         await expect(panel.getByTestId("flow-comments")).toContainText("on note 2: Show where a skipped invite comes back · open");
         await panel.getByRole("button", { name: "Revise" }).click();
         await expect(panel.getByTestId("flow-version")).toHaveText("Version 2 of 2");
@@ -143,7 +144,7 @@ for (const [where, use] of [
         const opened = page.getByTestId("flow-detail");
         await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
         await expect(opened.getByTestId("flow-svg")).toBeVisible();
-        await opened.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
+        await opened.getByRole("button", { name: "Close" }).click();
         // The bet's thumbnail still shows its flow (no longer "No flow yet") after a reload.
         await page.reload();
         await expect(page.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" })).toBeVisible();
@@ -177,7 +178,7 @@ for (const [where, use] of [
         const full = await openComments(page, await openBet(page, "commenter@example.com"));
         const panel = full.getByTestId("flow-comments-panel");
         await panel.getByLabel("Comment on the flow").fill("Name the invite step after the calendar");
-        await panel.getByRole("button", { name: "Comment", exact: true }).click();
+        await panel.getByRole("button", { name: "Post comment" }).click();
         await expect(panel.getByTestId("flow-comments")).toContainText("Name the invite step after the calendar · open");
         await expect(full.getByRole("button", { name: "Revise" })).toHaveCount(0);
       });
@@ -197,7 +198,7 @@ for (const [where, use] of [
           const box = (await view.boundingBox())!;
           expect(box.height).toBeGreaterThanOrEqual(840);
         }
-        await view.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
+        await view.getByRole("button", { name: "Close" }).click();
         await expect(card).toHaveAttribute("data-flow-open", "false");
         await card.getByRole("button", { name: "Close", exact: true }).click();
         await openRoadmapItem(page, "alert-digest");

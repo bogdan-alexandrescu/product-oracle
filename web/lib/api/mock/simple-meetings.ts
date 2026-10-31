@@ -77,6 +77,8 @@ export interface MeetingsCtx {
   view?: () => "list" | "board" | "meetings" | null;
   /** prd-questions: the decision log's judgement calls waiting for this person (not run approvals). */
   othersWaiting?: () => number;
+  /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
+  documents?: () => { id: string; slug: string; title: string }[];
 }
 
 interface Meeting {
@@ -181,10 +183,16 @@ const emailAvailable = () => !flags().includes("no-email");
 function prds(ctx: MeetingsCtx): Prd[] {
   const dana = ctx.members.find((m) => m.email === "dana.decider@example.com");
   const approver = ctx.members.find((m) => m.email === "approver@example.com");
-  return [
-    { slug: "guided-setup", title: "Guided setup", id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver && !flags().includes("no-reviewers") ? [approver.id] : [] },
-    { slug: "usage-alerts", title: "Usage alerts", id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: null, reviewers: [] },
+  const docs = ctx.documents?.() ?? [];
+  // qa4-simple-prd-28: a PRD is named by its document's title, as the API names it.
+  const titled = (slug: string, title: string) => docs.find((d) => d.slug === slug)?.title ?? title;
+  const known: Prd[] = [
+    { slug: "guided-setup", title: titled("guided-setup", "Guided setup"), id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver && !flags().includes("no-reviewers") ? [approver.id] : [] },
+    { slug: "usage-alerts", title: titled("usage-alerts", "Usage alerts"), id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: null, reviewers: [] },
   ];
+  // qa4-simple-prd-1: the API starts a review of any PRD the reader reads, not only these two.
+  const more = docs.filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id))).map((d) => ({ slug: d.slug, title: d.title, id: d.id, ids: [d.id], decider: null, reviewers: [] }));
+  return [...known, ...more];
 }
 
 const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === "owner").map((m) => m.id);
@@ -962,7 +970,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   }
   if (p[3] === "options" && method === "GET") {
     const prdQ = q.get("prd");
-    const list = prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : ps;
+    // As the API's, every PRD by its title.
+    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : [...ps]).sort((a, b) => a.title.localeCompare(b.title));
     if (prdQ && !list.length) return json(404, { detail: "No such PRD" });
     const occQ = q.get("occurrence");
     const occ = occQ ? upcoming(ctx, db, occQ)[0] : null;

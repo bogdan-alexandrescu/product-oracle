@@ -108,7 +108,7 @@ test.describe("desktop", () => {
     await expect(s.getByTestId("plan-strip-month")).toHaveText(["Oct", "Nov", "Dec", "Jan"]);
     await expect(s).not.toContainText("Guided setup");
     await expect(s.getByTestId("plan-strip-label")).toHaveText(["Milestone M1 · 12 roadmap items", "Milestone M2 · 5 roadmap items", "Milestone M3 · 3 roadmap items", "No milestone · 2 roadmap items"]);
-    await expect(s.getByTestId("plan-strip-edge")).toHaveText("1 commitment with no milestone ends after Jan");
+    await expect(s.getByTestId("plan-strip-edge")).toHaveText("1 roadmap item with no milestone ends after Jan");
     await expect(s).not.toContainText("→");
   });
 
