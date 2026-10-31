@@ -190,16 +190,16 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("today-pill")).toHaveText("Today");
       await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
       await expect(phoneLane(page, "Reliability")).toHaveAttribute("data-open", "true");
-      await expect(phoneLane(page, "Reliability").getByTestId("lane-open-chip")).toHaveText("open below");
+      await expect(phoneLane(page, "Reliability").getByTestId("lane-open-chip")).toHaveText("Listed below");
       const list = page.getByTestId("lane-list");
       await expect(list).toContainText("Reliability");
-      await expect(list.getByTestId("lane-list-count")).toHaveText("5 items, up to 1 at once");
+      await expect(list.getByTestId("lane-list-count")).toHaveText("5 items");
       await expect(list.getByTestId("lane-row")).toHaveCount(5);
-      await expect(list.getByTestId("lane-row").first()).toContainText(/F-03\s*Setup failure alerts\s*Nov 2 – Nov 13/);
+      await expect(list.getByTestId("lane-row").first()).toContainText(/^Setup failure alerts\s*Nov 2 – Nov 13/);
 
       await phoneLane(page, "Growth").click();
       await expect(phoneLane(page, "Growth")).toHaveAttribute("aria-expanded", "true");
-      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items, up to 1 at once");
+      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items");
       await expect(list.getByTestId("lane-row")).toHaveCount(6);
       await list.locator('[data-testid="lane-row"][data-code="F-05b"]').click();
       const card = page.getByTestId("floating-card");

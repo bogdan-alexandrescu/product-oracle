@@ -72,7 +72,7 @@ for (const [where, use] of [
         await expect(legendItem(page, /^A broken link$/)).toHaveCount(1);
         // qa-simple-roadmap-32: the Later column's count includes the cut In-app tour.
         await expect(column(page, "later").getByTestId("board-below")).toContainText("In-app tour");
-        await expect(column(page, "later").getByTestId("column-count")).toHaveText("1 · 1 below the line");
+        await expect(column(page, "later").getByTestId("column-count")).toHaveText("1 item, 1 cut");
       });
     });
   }
