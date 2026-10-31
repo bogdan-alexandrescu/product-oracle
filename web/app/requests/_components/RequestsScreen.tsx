@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react"; // MOCK-HOOK: useState
 
 import { Button, Empty, Page, Panel, Split } from "@/components/ds";
 import { startPrdHref } from "@/components/RequestsBehind";
@@ -72,7 +72,9 @@ function Requests({ view }: { view: RequestsView }) {
   const setSelected = (id: string | null) => setPicked(id ? { id, under: wanted } : null);
   const router = useRouter();
   const canStart = can("create_intake", true);
+  const [mkFiled, setMkFiled] = useState(0); // MOCK-HOOK: a request filed from a found item leaves the found list
   const filed = (request: Schemas["RequestOut"]) => {
+    setMkFiled((n) => n + 1); // MOCK-HOOK
     // Clear the filters so the filed request shows, selected.
     setFilters(NO_FILTERS);
     // On Themes, the filed request opens on All requests.
@@ -117,7 +119,7 @@ function Requests({ view }: { view: RequestsView }) {
     <Page>
       <RequestsHeader triage={triage} onFiled={filed} />
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-        {view === "all" && can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} onFiledMk={filed} /* MOCK-HOOK */ />}
+        {view === "all" && can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}:${mkFiled}`} onFiledMk={filed} /* MOCK-HOOK */ />}
         {view === "themes" ? (
           <Panel title="Themes" count={liveThemes.length}>
             {themes.error && (

@@ -105,7 +105,7 @@
       "code": "QD3",
       "name": "New request and File as request",
       "question": "Should New request and File as request be one form or two, and where is each reached?",
-      "common": "A request has the same fields however it is made: title, what it is and why, goal, requester, channel, and customer or team. A filed request shows in All requests.",
+      "common": "A request has the same fields however it is made: title, what it is and why, goal, requester, channel, and customer or team. Filing a found item takes it off the found list.",
       "proposals": [
         {
           "letter": "a",
@@ -135,7 +135,7 @@
           "frames": [
             {"file": "qd3-b-open.html", "caption": "New request opens with Start from: a blank request."},
             {"file": "qd3-b-mid.html", "caption": "Start from \"Found: Pick a delivery slot\" fills in the title, what they asked and the channel."},
-            {"file": "qd3-b-result.html", "caption": "After File request: Pick a delivery slot is selected in All requests, now 13."},
+            {"file": "qd3-b-result.html", "caption": "After File request: Pick a delivery slot is selected in All requests, now 13, and is off the found list."},
             {"file": "qd3-b-open-1512.html", "caption": "At 1512 wide the form, starting from the first found item."}
           ]
         },
