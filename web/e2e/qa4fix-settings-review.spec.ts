@@ -72,6 +72,6 @@ test.describe("dark theme", () => {
     await page.getByTestId("triage-menu").click();
     const box = page.getByTestId("triage-menu-panel").getByRole("switch", { name: /^Auto-sort new requests daily/ });
     await expectDarkSwitch(page, box);
-    await expect(page.getByTestId("daily-triage-state").first()).toHaveText("Auto-sort: On");
+    await expect(page.getByTestId("triage-menu")).toHaveText("Auto-sort: On");
   });
 });
