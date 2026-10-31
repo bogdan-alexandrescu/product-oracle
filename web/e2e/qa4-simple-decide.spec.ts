@@ -201,6 +201,7 @@ test.describe("desktop", () => {
     await page.goto("/simple/meetings");
     await tap(page.getByRole("button", { name: "Start review" }).first());
     const s = sheet(page);
+    await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
     await expect(s.getByRole("checkbox", { name: "Approver" })).toBeChecked();
     await s.getByRole("checkbox", { name: "Approver" }).uncheck();
     await expect(s.getByRole("checkbox", { name: "Approver" })).not.toBeChecked();
