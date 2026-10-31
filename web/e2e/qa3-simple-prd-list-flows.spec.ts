@@ -1,7 +1,7 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
 import { THEME_KEY } from "../lib/theme";
-import { login, openRoadmapItem } from "./helpers";
+import { clearName, login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -32,7 +32,10 @@ const ONE_PAGER = "/simple/one-pagers/guided-setup";
 const BETS: Record<number, string> = { 2: "“A setup checklist that shows", 3: "“Invite suggestions from the admin's", 4: "“A sample project created on" };
 const bet = (page: Page, n: number) => page.getByRole("group", { name: `User flow of ${BETS[n]}` }).getByTestId("flow-row");
 
-async function setUp(page: Page, { scenario = null, scheme = "light", email }: { scenario?: string | null; scheme?: "light" | "dark"; email?: string } = {}) {
+async function setUp(
+  page: Page,
+  { scenario = null, scheme = "light", email, unnamed = false }: { scenario?: string | null; scheme?: "light" | "dark"; email?: string; unnamed?: boolean } = {},
+) {
   await page.context().addInitScript(
     ([key, value, themeKey, theme, jobKey]) => {
       if (value) localStorage.setItem(key, value);
@@ -43,6 +46,8 @@ async function setUp(page: Page, { scenario = null, scheme = "light", email }: {
     [MOCK_SCENARIO_KEY, scenario ?? "", THEME_KEY, scheme, MOCK_VISUAL_JOB_MS_KEY] as const,
   );
   await page.emulateMedia({ colorScheme: scheme });
+  // `unnamed`: the owner clears the member's invented name first (a member with no name).
+  if (unnamed && email) await clearName(page, email);
   await login(page, email);
 }
 
@@ -182,7 +187,7 @@ test.describe("desktop", () => {
   });
 
   test("qa-simple-prd-p3-31: a member with no name reads their email once in the rail", async ({ page }) => {
-    await setUp(page, { email: "viewer@example.com" });
+    await setUp(page, { email: "viewer@example.com", unnamed: true });
     await openOnePagers(page);
     const person = page.getByTestId("simple-person");
     await expect(person.getByTestId("simple-person-name")).toHaveText("viewer@example.com");

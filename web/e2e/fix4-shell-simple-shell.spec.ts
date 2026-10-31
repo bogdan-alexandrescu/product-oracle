@@ -1,4 +1,4 @@
-import { login } from "./helpers";
+import { clearName, login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
@@ -71,6 +71,8 @@ test.describe("phone", () => {
 
 test("qa-shell-18: a member with no name sees their email broken at its @, never mid-word", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
+  // The owner clears the viewer's invented name first.
+  await clearName(page, "viewer@example.com");
   await login(page, "viewer@example.com");
   await page.goto("/simple");
   const name = page.getByTestId("simple-person-name");
