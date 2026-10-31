@@ -230,11 +230,17 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
       noGaBasis
         ? ([["ENG-412", "2026-11-30", "verified"], ["ENG-420", "2027-01-15", "proposed"]] as const)
         : ([["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", ga]] as const);
-    for (const [reference, day, status] of seeds) {
+    // qa4-plan-31: the Plan's "Threshold alerts on spend" reads Nov 20 verified from ENG-402, so
+    // that basis is on Dates too (for that item), as the API's plan reads it from a verified basis.
+    const all: (readonly [reference: string, day: string, status: "verified" | "proposed" | "withdrawn", itemKey?: string])[] = [
+      ...seeds,
+      ...(track.plan ? ([["ENG-402", "2026-11-20", "verified", "threshold-alerts"]] as const) : []),
+    ];
+    for (const [reference, day, status, itemKey] of all) {
       const proposed = status === "proposed";
       db.bases.push({
         id: mockUuid(), kind: "estimate", reference, supports_date: day, detail: null, prd_document_id: prd.id,
-        item_key: null, tracker_key: null, tracker_record_id: null, status, note: null,
+        item_key: itemKey ?? null, tracker_key: null, tracker_record_id: null, status, note: null,
         proposed_by: proposed ? (ctx.approverId ?? null) : null, proposed_at: proposed ? AT : null,
         verified_by: proposed ? null : ctx.userId, verified_at: proposed ? null : AT,
         withdrawn_by: status === "withdrawn" ? ctx.userId : null, withdrawn_at: status === "withdrawn" ? AT : null,
@@ -604,8 +610,11 @@ function trackHeadline(health: Schemas["TrackOverview"]["health"], counts: Recor
   if (health === "on_track") return `On track: ${n} ${n === 1 ? "item" : "items"}.${when}`;
   const word = health === "off_track" ? "Off track" : "At risk";
   if (!counts.at_risk) return moved ? `${word}:${moved}${when}` : `${word}.${when}`;
-  const parts = ([["blocked", "blocked"], ["stale", "may be out of date"], ["slipping", "slipping"]] as const).filter(([k]) => counts[k]).map(([k, label]) => `${counts[k]} ${label}`);
-  const attention = n > 1 ? `${counts.at_risk} of ${n} items need attention` : "the item needs attention";
+  const reasons = ([["blocked", "blocked"], ["stale", "may be out of date"], ["slipping", "slipping"]] as const).filter(([k]) => counts[k]);
+  // qa4-plan-26: one item's reasons without counts, so two reasons never read as two items.
+  const one = counts.at_risk === 1;
+  const parts = one ? (reasons.length ? [reasons.map(([, label]) => label).join(" and ")] : []) : reasons.map(([k, label]) => `${counts[k]} ${label}`);
+  const attention = n > 1 ? `${counts.at_risk} of ${n} items ${one ? "needs" : "need"} attention` : "the item needs attention";
   return `${word}: ${attention}${parts.length ? ` (${parts.join(", ")}).` : "."}${when}${moved}`;
 }
 
@@ -1242,7 +1251,7 @@ export function reportTracks(ctx: RoadmapContext, db: RoadmapDb, calm = false): 
         // As the monitor last recorded it: the Plan's track was on track before this week.
         health_before: t.plan || quiet ? "on_track" : o.health,
         headline: quiet ? `On track: ${n} ${n === 1 ? "item" : "items"}.${when}` : o.headline,
-        next_milestone: nxt ? { name: nxt.name, date: nxt.target_date ?? null, verified: nxt.dated } : null,
+        next_milestone: nxt ? { name: nxt.name, date: nxt.target_date ?? null, verified: nxt.dated, at_risk: !calm && milestoneAtRisk(db, o) } : null,
         alignment: counts,
         needs_attention: calm
           ? []
@@ -1261,6 +1270,15 @@ export function reportTracks(ctx: RoadmapContext, db: RoadmapDb, calm = false): 
         untracked_now: untrackedNow,
       } as Schemas["ReportTrack"] & { untracked_now: number };
     });
+}
+
+/** As oracle.reports.alignment.milestone_at_risk (qa4-plan-7): an item of the next milestone slips past it. */
+function milestoneAtRisk(db: RoadmapDb, o: Schemas["TrackOverview"]): boolean {
+  const nxt = o.next_milestone;
+  if (!nxt) return false;
+  if (o.health === "off_track") return true;
+  const keys = new Set(db.milestones.find((m) => m.id === nxt.milestone_id)?.item_keys ?? []);
+  return o.at_risk.some((a) => keys.has(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
 }
 
 /** F5 lane 3: the title of a feature or requirement the mock plan's items trace, by its id. */

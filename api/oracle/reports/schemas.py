@@ -38,6 +38,8 @@ class ReportMilestone(BaseModel):
     date: date | None
     # A verified schedule basis supports the date.
     verified: bool
+    # qa4-plan-7: an item of the milestone slips past it (reports made before carry none).
+    at_risk: bool = False
 
 
 class ReportAlignmentCounts(BaseModel):

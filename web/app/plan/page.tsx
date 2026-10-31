@@ -284,7 +284,8 @@ export default function PlanPage() {
                 by={by}
                 tags={tags}
                 prdOrder={prdOrder}
-                selected={item?.id ?? null}
+                // qa4-plan-20: a picked milestone is the one thing shown, so no row stays highlighted.
+                selected={msTrack ? null : (item?.id ?? null)}
                 onSelect={onSelect}
                 me={userId}
                 loading={q.loading}

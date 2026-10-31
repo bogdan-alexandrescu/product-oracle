@@ -48,13 +48,15 @@ export function ReportDetail({ id }: { id: string }) {
     <Page>
       <PageHeader
         title={report?.title ?? "Alignment report"}
+        // qa4-plan-37: on a phone the title is drawn in full, wrapping, not cut in the phone header.
+        phoneTitle
         // qa-plan-11: no back link above the title: the Reports tab below leads to every report.
         info={
           <InfoTip label="this report" align="start" side="bottom">
             How each track stood against its milestones over the week. Every report is under the Reports tab.
           </InfoTip>
         }
-        status={report && <Chip kind="line">{report.kind === "weekly" ? "Weekly" : "On demand"}</Chip>}
+        status={report && <Chip kind="line">{report.kind === "weekly" ? "Weekly" : "Made by hand"}</Chip>}
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {q.loading && !report && <Loading />}
@@ -115,7 +117,7 @@ function Figures({ report }: { report: Report }) {
     ["At risk", s.at_risk],
     ["Off track", s.off_track],
     ["Dates slipping", s.slips],
-    ["Now items without an issue", s.untracked_now],
+    ["Now items with no engineering ticket", s.untracked_now],
     ["Unplanned work", s.unplanned],
     ["Dates verified", s.dates_verified],
     ["Dates withdrawn", s.dates_withdrawn],
@@ -136,8 +138,8 @@ function Figures({ report }: { report: Report }) {
       </dl>
       {/* qa-plan-56: where the items behind the totals are listed. */}
       <p data-testid="report-figures-note" className="text-sm text-text2">
-        Dates slipping are listed under each track&apos;s Needs attention. Now items without an issue are among the untracked
-        items in each track&apos;s Alignment.
+        Dates slipping are listed under each track&apos;s Needs attention. Now items with no engineering ticket are among the
+        items with no ticket in each track&apos;s Alignment.
       </p>
     </div>
   );
@@ -176,7 +178,14 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
             <>
               {nxt.name}
               {nxt.date ? `, ${formatDay(nxt.date)}` : ""}{" "}
-              <span className="text-text2">{nxt.date ? (nxt.verified ? "· a verified basis supports it" : "· no verified basis") : "· undated"}</span>
+              {/* qa4-plan-7: an item of the milestone slipping past it puts it at risk, whatever supports its date. */}
+              {nxt.at_risk ? (
+                <span data-testid="report-milestone-risk" className="font-semibold text-warn">
+                  · at risk: an item slips past it
+                </span>
+              ) : (
+                <span className="text-text2">{nxt.date ? (nxt.verified ? "· a verified basis supports it" : "· no verified basis") : "· undated"}</span>
+              )}
             </>
           ) : (
             <span className="text-text2">None</span>
@@ -184,7 +193,7 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
         </Row>
         <Row label="Alignment">
           <span className="tnum">
-            {a.aligned} aligned · {a.drift} drift · {a.untracked} untracked · {a.done} done
+            {a.aligned} aligned · {a.drift} drift · {a.untracked} with no ticket · {a.done} done
           </span>
         </Row>
         {/* qa-plan-43: which version is approved; fix4 qa-plan-3: the link lands on the PRD's
