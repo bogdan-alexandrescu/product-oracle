@@ -13,6 +13,7 @@ import { NEEDED, RUN_MAIN, RUNS_MORE, type MockRun, type Needed, type RunStop } 
 /** MOCK-HOOK: the address's switches, read after mount (no Suspense needed). */
 export function useMk() {
   const [p, setP] = useState<URLSearchParams | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK: the address is only readable after mount
   useEffect(() => setP(new URLSearchParams(window.location.search)), []);
   return {
     ready: !!p,
