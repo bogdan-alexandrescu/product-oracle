@@ -186,7 +186,7 @@ test.describe("QA pass 2: simple-plan, Value / effort", () => {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 8 });
     await page.mouse.up();
-    await expect(toast(page, /^Re-estimated Mobile alert push \(AMP?\): effort/)).toBeVisible();
+    await expect(toast(page, /^Re-estimated Mobile alert push \(MAP\): effort/)).toBeVisible();
     const side = page.locator('[data-testid="side-row"][data-code="alert-mobile"]');
     await expect(side.getByTestId("moved")).toHaveText(/^now #\d+ \(effort [\d.]+ wk\)$/);
     await expect(side.getByTestId("prio-title")).toHaveText("Mobile alert push");
