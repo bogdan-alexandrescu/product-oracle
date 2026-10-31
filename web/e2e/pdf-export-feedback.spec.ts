@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/ids";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -8,6 +10,9 @@ import { expect, test, type Page } from "./test";
 // Card detailed-pdf-toast: protects = Detailed's Export › Full › PDF starts the download,
 //   closes the Export menu and says "PDF downloaded", as the one-pager's Export PDF does;
 //   fails_when = the menu stays open or nothing is said; no_claim = the PDF's text (API tests).
+// Card export-company-name: protects = an export carries no placeholder company ("Example Co",
+//   the seed's) and, once an owner names the company in Settings › Company, that name;
+//   fails_when = "Example Co" is printed; no_claim = the PDF's layout (API tests).
 // Card one-pager-overflow-note: protects = a one-pager that runs to 2 pages downloads and its
 //   note says so ("It runs to 2 pages"); fails_when = the note is missing; no_claim = the
 //   layout itself (the API's check, test_pdf_export_text.py).
@@ -35,6 +40,27 @@ for (const [name, viewport] of [
       expect((await download).suggestedFilename()).toBe("saved-carts-v2.pdf");
       await expect(pdf).toBeHidden();
       await expect(page.getByRole("status").filter({ hasText: "PDF downloaded" })).toBeVisible();
+    });
+
+    test("an export carries the company's own name, never the placeholder", async ({ page }) => {
+      await login(page);
+      const exportHtml = async () => {
+        await page.goto(CARTS);
+        if (name === "phone") await page.getByTestId("version-more").click();
+        await page.getByRole("button", { name: "Export", exact: true }).click();
+        const download = page.waitForEvent("download");
+        await page.getByRole("button", { name: "Export HTML", exact: true }).click();
+        return readFile((await (await download).path())!, "utf8");
+      };
+      expect(await exportHtml()).not.toContain("Example Co");
+      await page.goto("/settings/company");
+      const card = page.getByTestId("branding-panel");
+      await card.getByLabel("Display name").fill("Northwind Labs");
+      await card.getByRole("button", { name: "Save branding" }).click();
+      await expect(card.getByRole("status")).toHaveText("Saved");
+      const html = await exportHtml();
+      expect(html).toContain('<span class="brand-name">Northwind Labs</span>');
+      expect(html).not.toContain("Example Co");
     });
 
     test("a one-pager that runs past its page says so to the person exporting", async ({ page }) => {
