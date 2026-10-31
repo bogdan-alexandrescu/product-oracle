@@ -101152,6 +101152,11 @@
           "verified": {
             "type": "boolean",
             "title": "Verified"
+          },
+          "at_risk": {
+            "type": "boolean",
+            "title": "At Risk",
+            "default": false
           }
         },
         "type": "object",

@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -9,6 +10,13 @@ import { login } from "./helpers";
  * names (qa-plan-21), the approval state Edit plan states (qa-plan-17) and the Edit plan rows'
  * layout on a desktop and a phone (qa-plan-15, qa-plan-34).
  */
+
+
+// qa4-plan-3: the Plan reads the roadmap document's approval; "plan-decider" has usage-alerts-roadmap v1
+// approved (by default it is in review, so the Plan's rows are a draft's).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "plan-decider"] as const);
+});
 
 const track = (page: Page) => page.getByTestId("plan-track").filter({ visible: true }).filter({ hasText: "Usage alerts" });
 const editor = (page: Page) => page.getByTestId("plan-milestone").filter({ visible: true });
@@ -87,13 +95,13 @@ test("closing a track asks first and says what it does", async ({ page }) => {
 });
 
 // protects = qa-plan-21 and qa-plan-17: the Roadmap header and Edit plan name the roadmap by its
-// title, and Edit plan states the roadmap document's real approval state (the mock's document
-// is In review); fails_when = the slug shows, or Edit plan calls an unapproved version approved.
+// title, and Edit plan states the roadmap document's real approval state (approved in
+// "plan-decider"); fails_when = the slug shows, or Edit plan calls an unapproved version approved.
 test("Edit plan names the roadmap by its title and states its approval as the document does", async ({ page }) => {
   await openEditPlan(page);
   await expect(page.getByTestId("plan-live-version")).toHaveText("Usage alerts roadmap v1");
-  await expect(changes(page)).toContainText("Changes to version 1 (In review, not approved) of Usage alerts roadmap");
-  await expect(changes(page)).toContainText("Against version 1 (In review, not approved)");
+  await expect(changes(page)).toContainText("Changes to approved version 1 of Usage alerts roadmap");
+  await expect(changes(page)).toContainText("Against approved version 1");
   await expect(changes(page)).not.toContainText("usage-alerts-roadmap");
 });
 

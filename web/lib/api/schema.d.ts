@@ -33238,6 +33238,11 @@ export interface components {
             date: string | null;
             /** Verified */
             verified: boolean;
+            /**
+             * At Risk
+             * @default false
+             */
+            at_risk: boolean;
         };
         /** ReportPeriod */
         ReportPeriod: {

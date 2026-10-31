@@ -391,7 +391,10 @@ export default function BaselinePage() {
 
   // The count strip: only what the graph and the trace report say.
   const s = trace.data?.summary;
-  const traced = trace.data?.features.filter((f) => f.goals.length > 0).length;
+  // qa4-plan-51: traced is serving a confirmed goal, so the count matches the features Feature × goal
+  // marks "Serves no goal"; the tile's tip names them.
+  const untraced = trace.data?.features.filter((f) => f.flags.includes("serves_no_goal")) ?? [];
+  const traced = trace.data ? trace.data.features.length - untraced.length : undefined;
   const evidence = graph.data
     ? [...graph.data.entities, ...graph.data.edges]
         .filter((e) => e.status !== "rejected")
@@ -405,7 +408,19 @@ export default function BaselinePage() {
       : { label: "Goals confirmed", value: s?.confirmed_goals ?? "–", of: s?.goals, testId: "kpi-goals" },
     s?.features === 0
       ? { label: "Features", value: none("No features yet"), testId: "kpi-traced" }
-      : { label: "Features traced", value: traced ?? "–", of: s?.features, testId: "kpi-traced" },
+      : {
+          label: "Features traced",
+          value: traced ?? "–",
+          of: s?.features,
+          testId: "kpi-traced",
+          extra: (
+            <InfoTip label="Features traced">
+              Features that serve a confirmed goal.
+              {untraced.length > 0 &&
+                ` Not traced: ${untraced.map((f) => f.title).join(", ")}, marked “Serves no goal” in Feature × goal.`}
+            </InfoTip>
+          ),
+        },
     { label: "Evidence items", value: evidence ?? "–", testId: "kpi-evidence" },
     {
       label: "Weak evidence",

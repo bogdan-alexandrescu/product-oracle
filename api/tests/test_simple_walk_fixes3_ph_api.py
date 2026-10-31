@@ -195,7 +195,8 @@ async def test_track_headline_counts_only_own_staleness(client, owner, runtime):
     track = await _track(client, auth)
     assert track["counts"]["stale"] == 1
     assert track["health"] in ("at_risk", "off_track")
-    assert "1 may be out of date" in track["headline"], track["headline"]
+    headline = track["headline"]
+    assert "1 of 2 items needs attention (may be out of date)" in headline, headline
     assert "stale" not in track["headline"]
     reasons = {i["item_key"]: [r["detail"] for r in i["reasons"] if r["kind"] == "stale"]
                for i in track["at_risk"]}  # fmt: skip

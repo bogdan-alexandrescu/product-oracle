@@ -75,15 +75,21 @@ function GoalCard({
             <span className={`tnum ml-1 text-[15px] font-medium text-text2 ${p.state === "raw" ? "break-words" : "whitespace-nowrap"}`}>/ {g.targetText}</span>
           )}
         </span>
-        {!noValue && (
-          // The ring says what it is: the evidence's confidence, not the goal's progress.
-          <span className="flex flex-none flex-col items-center gap-0.5" data-testid="goal-confidence">
-            <Ring value={g.confidence} size={44} label={g.confidence == null ? "No confidence" : `Confidence ${g.confidence}`} />
-            <span aria-hidden className="text-[12px] leading-4 font-medium text-text2">
-              confidence
+        {!noValue &&
+          (g.confidence == null ? (
+            // qa4-plan-24: no score yet says so and why, never an empty ring with a dash.
+            <span data-testid="goal-confidence" className="max-w-28 flex-none text-right text-[13px] leading-4 font-medium text-text2">
+              No confidence yet: add evidence
             </span>
-          </span>
-        )}
+          ) : (
+            // The ring says what it is: the evidence's confidence, not the goal's progress.
+            <span className="flex flex-none flex-col items-center gap-0.5" data-testid="goal-confidence">
+              <Ring value={g.confidence} size={44} label={`Confidence ${g.confidence}`} />
+              <span aria-hidden className="text-[12px] leading-4 font-medium text-text2">
+                confidence
+              </span>
+            </span>
+          ))}
       </div>
       {/* The trend's room (the Sparkline's 240 x 40) is kept while it loads, so the band does not
           grow under the page a moment after it is drawn (#520: a goal chip's card below it closed). */}

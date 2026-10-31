@@ -162,6 +162,10 @@ const causeWords = (cause: string) => CAUSE[cause] ?? cause.replace(/^(?:section
 export type SubjectWords = {
   /** "Checkout redesign PRD v2 › Success metrics section edited". */
   title: string;
+  /** The title without the version it names ("Success metrics section edited"), for a page whose back link names it. */
+  short: string;
+  /** The version the title starts with ("Checkout redesign PRD v2"), when it names one. */
+  where: string | null;
   /** Where the report's subject lives, for the back link: "Checkout redesign PRD v2" at its version page. */
   back: { href: string; label: string } | null;
   /** The document and version the subject names, where it names one: the lineage shows that version. */
@@ -179,8 +183,11 @@ export function subjectWords(report: Report, names: Names): SubjectWords {
   if (p && p.n != null) {
     const where = `${names.doc(p.slug)} v${p.n}`;
     const what = c ? (p.key ? `${names.section(p.key, p.slug, p.n)} section ${causeWords(c.cause)}` : causeWords(c.cause)) : null;
+    const title = report.subject.title && !c ? report.subject.title : what ? `${where} › ${what}` : where;
     return {
-      title: report.subject.title && !c ? report.subject.title : what ? `${where} › ${what}` : where,
+      title,
+      short: c && p.key && what ? what : title,
+      where,
       back: { href: `/documents/${p.slug}/v/${p.n}`, label: where },
       version: { slug: p.slug, n: p.n },
     };
@@ -201,5 +208,5 @@ export function subjectWords(report: Report, names: Names): SubjectWords {
       : ["member", "intake", "access_request"].includes(kind)
         ? null
         : { href: "/baseline", label: "Baseline" };
-  return { title, back, version: null };
+  return { title, short: title, where: null, back, version: null };
 }

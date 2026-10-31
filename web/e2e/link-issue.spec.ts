@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -16,6 +16,13 @@ import { login } from "./helpers";
 async function asRole(page: Page, role: "viewer" | "commenter" | "approver") {
   await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
 }
+
+
+// qa4-plan-3: the Plan reads the roadmap document's approval; "plan-decider" has usage-alerts-roadmap v1
+// approved (by default it is in review, so the Plan's rows are a draft's).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "plan-decider"] as const);
+});
 
 const rows = (page: Page) => page.getByTestId("plan-row").filter({ visible: true });
 const row = (page: Page, title: string) => rows(page).filter({ hasText: title });
@@ -52,7 +59,7 @@ test("Link issue on an untracked Now item links #412 and the cell reads its date
   await results(page).click();
   await dialog(page).getByRole("button", { name: "Link", exact: true }).click();
   await expect(dialog(page)).toHaveCount(0);
-  await expect(cell(page, "Usage dashboard")).toHaveText("acme/app#412 · Nov 30 ✓");
+  await expect(cell(page, "Usage dashboard")).toHaveText("Issue 412 · Nov 30 ✓");
   // An issue that is not among the synced ones says where to add it.
   await row(page, "Usage dashboard").click();
   await page.getByTestId("plan-inspector").filter({ visible: true }).getByRole("button", { name: "+ Link issue" }).click();
@@ -66,7 +73,7 @@ test("Link issue on an untracked Now item links #412 and the cell reads its date
 // no_claim = the API's 409 and audit (api/tests/test_tracker_links.py).
 test("linking an issue linked elsewhere asks to move it; confirming moves it", async ({ page }) => {
   await openApprovedPlan(page);
-  await expect(cell(page, "Spend forecast for the month")).toHaveText("acme/app#418 · Nov 30 ✓");
+  await expect(cell(page, "Spend forecast for the month")).toHaveText("Issue 418 · Nov 30 ✓");
   await row(page, "Usage dashboard").getByRole("button", { name: "Link issue" }).click();
   await dialog(page).getByRole("searchbox").fill("forecast");
   await expect(results(page)).toHaveCount(1);
@@ -77,7 +84,7 @@ test("linking an issue linked elsewhere asks to move it; confirming moves it", a
   await expect(ask).toContainText("Move it from Spend forecast for the month?");
   await ask.getByRole("button", { name: "Move" }).click();
   await expect(dialog(page)).toHaveCount(0);
-  await expect(cell(page, "Usage dashboard")).toHaveText("acme/app#418 · Nov 30 ✓");
+  await expect(cell(page, "Usage dashboard")).toHaveText("Issue 418 · Nov 30 ✓");
   await expect(cell(page, "Spend forecast for the month")).toHaveText("Untracked");
 });
 
@@ -143,5 +150,5 @@ test("phone: the dialog fits 390 px and its results are tappable rows", async ({
   await expect(dialog(page).getByRole("button", { name: "Link", exact: true })).toBeEnabled();
   await dialog(page).getByRole("button", { name: "Link", exact: true }).click();
   await expect(dialog(page)).toHaveCount(0);
-  await expect(cell(page, "Usage dashboard")).toHaveText(/^acme\/app#425/);
+  await expect(cell(page, "Usage dashboard")).toHaveText(/^Issue 425/);
 });

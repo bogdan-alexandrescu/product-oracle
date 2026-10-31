@@ -695,6 +695,16 @@ function createOverride(st: LaneFState, me: string, input: Schemas["OverrideCrea
   };
   const after = applyOverrides(base, [...inputs.filter((i) => i.feature !== f.key), change]);
   const row = after.features.find((x) => x.key === f.key)!;
+  // As the API (qa4-plan-2): a move that leaves the order as it is is refused, not logged.
+  const same = after.features.map((x) => x.key).join() === before.features.map((x) => x.key).join();
+  if (input.kind === "move" && !row.held_below && !inputs.some((i) => i.feature === f.key) && same) {
+    const needs = after.features.filter((x) => x.held_below === f.key).map((x) => x.title);
+    return json(422, {
+      detail: needs.length
+        ? `This move leaves ${f.title} where it is: ${needs.join(", ")} ${needs.length === 1 ? "depends" : "depend"} on it and would move down with it, so nothing was saved`
+        : `This move leaves ${f.title} where it is, so nothing was saved`,
+    });
+  }
   const messages = pushbackRules(before.features, after.features, f.key);
   let check: { status: ReasonCheckRow["status"]; ms: number | null };
   if (!input.confirm) {

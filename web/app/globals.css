@@ -385,8 +385,9 @@ body {
 
 /* A strip that scrolls sideways (ScrollStrip): fades out at each edge that has more to scroll to,
    so a cut-off item reads as "more", not clipped. ScrollStrip sets --cut-l/--cut-r to where the
-   first whole item starts: an item cut by the edge is hidden up to its last 20 px (its padding),
-   so no label shows cut mid-word; a whole item at the edge fades over its 12 px padding only.
+   first whole item starts: an item cut by the edge is hidden up to its last 6 px (inside its
+   padding, 8 px at the least), so no letter of a cut label shows, not even faintly (qa4-plan-38);
+   a whole item at the edge fades over its 12 px padding only.
    Nothing fades when everything fits. No native scrollbar: the chevrons and swipes move it. */
 @utility scroll-fade {
   --fade-l0: 0px;
@@ -405,11 +406,11 @@ body {
     display: none;
   }
   &[data-more-left] {
-    --fade-l0: max(0px, calc(var(--cut-l, 0px) - 20px));
+    --fade-l0: max(0px, calc(var(--cut-l, 0px) - 6px));
     --fade-l1: max(12px, var(--cut-l, 0px));
   }
   &[data-more-right] {
-    --fade-r0: max(0px, calc(var(--cut-r, 0px) - 20px));
+    --fade-r0: max(0px, calc(var(--cut-r, 0px) - 6px));
     --fade-r1: max(12px, var(--cut-r, 0px));
   }
 }

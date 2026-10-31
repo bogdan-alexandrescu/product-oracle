@@ -160,7 +160,10 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
     </>
   );
   // qa-plan-61: one sentence, "Impact: Guided setup", not the title and a suffix run together.
-  const title = subject ? `Impact: ${subject.title}` : "Impact";
+  // qa4-plan-45: a back link that names the version ("‹ Impact of Checkout redesign PRD v2")
+  // leaves it out of the title: "Impact: Success metrics section edited".
+  const named = !!subject?.where && !!backTo?.label.endsWith(subject.where);
+  const title = subject ? `Impact: ${named ? subject.short : subject.title}` : "Impact";
 
   return (
     <NamesContext.Provider value={names}>
@@ -168,9 +171,10 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       <PageHeader
         title={title}
         back={back}
-        // qa-plan-11: Baseline's and a change's back link (‹, like the Plan crumb) sit on the
-        // title row, so the title does not move down; a version's crumb keeps its own line.
-        backInline={source.kind !== "version"}
+        // qa-plan-11: Baseline's back link (‹, like the Plan crumb) sits on the title row, so the
+        // title does not move down; a change's longer crumb and a version's keep their own line
+        // above the title (qa4-plan-45).
+        backInline={source.kind === "entity"}
         // qa-plan-62: on a phone the top bar cuts a long title; the page's H1 says it in full.
         phoneTitle
         status={status}
@@ -391,10 +395,13 @@ function Lineage({
               All categories
             </button>
           )}
-          <span className="flex items-center gap-3 text-[13px] text-text2">
+          <span className="flex items-center gap-3 text-[13px] text-text2" data-testid="lineage-legend">
             <span className="flex items-center gap-1.5"><i aria-hidden className="h-0.5 w-4 bg-line-strong" />depends on</span>
             <span className="flex items-center gap-1.5"><i aria-hidden className="h-0.5 w-4 bg-accent" />selected path</span>
-            <span className="flex items-center gap-1.5"><i aria-hidden className="h-0 w-4 border-t-2 border-dashed border-crit" />deleted upstream</span>
+            {/* Only what the diagram draws (qa4-plan-46). */}
+            {shownUps.some((u) => u.deleted) && (
+              <span className="flex items-center gap-1.5"><i aria-hidden className="h-0 w-4 border-t-2 border-dashed border-crit" />deleted upstream</span>
+            )}
           </span>
         </>
       }

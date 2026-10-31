@@ -34,7 +34,8 @@ const SUBJECT = "Checkout redesign PRD v2 › Success metrics section edited";
 test("qa-plan-10/61: a recorded change is named in words, in the heading and the lineage, with no internal refs", async ({ page }) => {
   await scenario(page, "impact");
   await openRecordedChange(page);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Impact: ${SUBJECT}`);
+  // qa4-plan-45: the back link above names the version, so the heading does not repeat it.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Impact: Success metrics section edited");
   const graph = page.getByRole("region", { name: "Lineage" });
   await expect(graph.getByTestId("lineage-subject")).toContainText(SUBJECT);
   await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Success metrics" })).toBeVisible();

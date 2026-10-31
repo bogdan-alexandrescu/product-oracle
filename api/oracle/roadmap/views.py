@@ -602,9 +602,18 @@ def _headline(
     word = "Off track" if health == "off_track" else "At risk"
     if not counts["at_risk"]:
         return f"{word}:{moved}{when}" if moved else f"{word}.{when}"
-    parts = [f"{counts[k]} {label}" for k, label in ATTENTION if counts[k]]
     k = counts["at_risk"]
-    attention = f"{k} of {n} items need attention" if n > 1 else "the item needs attention"
+    # qa4-plan-26: one item's reasons are named without counts ("slipping and may be out of
+    # date"), so two reasons never read as two items; several items keep a count per reason.
+    if k == 1:
+        why = [label for key, label in ATTENTION if counts[key]]
+        parts = [" and ".join(why)] if why else []
+    else:
+        parts = [f"{counts[key]} {label}" for key, label in ATTENTION if counts[key]]
+    if n == 1:
+        attention = "the item needs attention"
+    else:
+        attention = f"{k} of {n} items {'needs' if k == 1 else 'need'} attention"
     return f"{word}: {attention}" + (f" ({', '.join(parts)})." if parts else ".") + when + moved
 
 

@@ -56,8 +56,9 @@ test.describe("desktop", () => {
   test("progress says it is measured from the goal's start", async ({ page }) => {
     await openBaseline(page);
     const progress = page.getByTestId("goal-g.activation").locator('[data-attr="progress"]');
-    await expect(progress).toHaveText("50% of the way from 31% to ≥ 45%");
-    await expect(progress).toHaveAttribute("title", /31% \(start\) to ≥ 45%; 38% now/);
+    // qa4-plan-42: in Plan's words, the distance to go from today's value.
+    await expect(progress).toHaveText("7 pts to go (38% now)");
+    await expect(progress).toHaveAttribute("title", "38% now, target ≥ 45%: 7 pts to go");
   });
 
   // protects=qa-plan-8: a goal with no evidence shows no confidence score, in the table and its
