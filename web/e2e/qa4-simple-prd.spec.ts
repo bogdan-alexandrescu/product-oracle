@@ -147,6 +147,17 @@ test.describe("desktop", () => {
     await panel.getByRole("button", { name: "Post comment" }).click();
     await expect(panel.getByTestId("flow-comments")).toContainText("Name the invite step after the calendar · open");
   });
+
+  test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
+    await openFromList(page, "Saved carts PRD");
+    const line = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
+    await line.getByRole("button", { name: "Draw the flow" }).click();
+    await page.getByRole("button", { name: /^Flow for “Invite suggestions/ }).click();
+    const opened = page.getByTestId("flow-detail");
+    await expect(opened).toContainText("Invite suggestions from the admin's calendar · flow");
+    await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
+    await expect(opened).not.toContainText("(revised)");
+  });
 });
 
 test.describe("phone", () => {
