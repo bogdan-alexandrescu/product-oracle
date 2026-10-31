@@ -686,6 +686,21 @@ def item_risk(
     return risk
 
 
+def next_milestone_keys(
+    nxt: NextMilestone | None,
+    milestones: list[TrackMilestone],
+    rows: list[RoadmapItem],
+    ctx: ItemContext,
+) -> set[str]:
+    """The item keys of the next milestone: a track milestone's own list, or the items an
+    item-named milestone names."""
+    if nxt is None:
+        return set()
+    if nxt.milestone_id is not None:
+        return set(next((m.item_keys for m in milestones if m.id == nxt.milestone_id), None) or [])
+    return {i.item_key for i in rows if (ctx.milestone_of(i) or {}).get("name") == nxt.name}
+
+
 def assess(
     track: ProductTrack,
     base: TrackOut,
@@ -702,13 +717,7 @@ def assess(
     every tracker record of the track."""
     dated = dated_items(milestones)
     nxt = next_milestone(milestones, rows, ctx, bases, now)
-    next_keys: set[str] = set()
-    if nxt is not None and nxt.milestone_id is not None:
-        next_keys = set(next(m.item_keys for m in milestones if m.id == nxt.milestone_id) or [])
-    elif nxt is not None:
-        next_keys = {
-            i.item_key for i in rows if (ctx.milestone_of(i) or {}).get("name") == nxt.name
-        }
+    next_keys = next_milestone_keys(nxt, milestones, rows, ctx)
 
     counts = {k: 0 for k in ("items", "now", "next", "later", "at_risk", "blocked", "stale",
                              "slipping", "done")}  # fmt: skip

@@ -349,16 +349,21 @@ async def _track_content(
 
 
 def milestone_at_risk(o: Any) -> bool:
-    """qa4-plan-7: whether an item of the track's next milestone is slipping (past it), so
-    the report says the milestone is at risk rather than only that a date supports it. The
-    milestone's items are its own list; an item-named milestone's are the ones the monitor
-    found off track for."""
+    """qa4-plan-7, qa5-plan-at-risk: whether the next milestone's own date is threatened: it
+    has a date and an item of it is slipping (its tracker date past the milestone's, overdue,
+    cancelled, or the milestone passed with it not done). The track's health is not asked: a
+    track is off track for a critical blocker too, which moves no date of the milestone. The
+    milestone's items are its own list; an item-named milestone's are the items naming it."""
     nxt = o.next_milestone
-    if nxt is None:
+    if nxt is None or nxt.target_date is None:
         return False
-    if o.health == "off_track":
-        return True
-    keys = next((set(m.item_keys or []) for m in o.milestones if m.id == nxt.milestone_id), set())
+    found = getattr(o, "_found", None)
+    if found is not None:
+        keys = views.next_milestone_keys(nxt, found.milestones, found.rows, found.ctx)
+    else:
+        keys = next(
+            (set(m.item_keys or []) for m in o.milestones if m.id == nxt.milestone_id), set()
+        )
     return any(
         i.item_key in keys and any(r.get("kind") == "slipping" for r in i.reasons)
         for i in o.at_risk
