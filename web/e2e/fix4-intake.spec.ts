@@ -57,7 +57,7 @@ test("qa-work-2 (review): a brief with critical questions not asked yet does not
 });
 
 test("qa-work-2 (review): the chip with a critical gap open and nothing asked yet", () => {
-  const s = { intake: { status: "awaiting_answers" }, readiness: { open_critical: 1 } } as unknown as Summary;
+  const s = { intake: { status: "awaiting_answers" }, readiness: { open_critical: 1 }, gaps: [{ importance: "critical", status: "unknown" }] } as unknown as Summary;
   expect(statusChip(s, { open: 0, answered: 0, unknown: 0 }).label).toBe("Nothing asked yet");
   expect(statusChip(s, { open: 0, answered: 1, unknown: 0 }).label).toBe("Waiting for a decision");
   expect(statusChip(s, { open: 1, answered: 0, unknown: 0 }).label).toBe("Waiting for answers");
