@@ -602,3 +602,38 @@ async def test_meeting_option_title_carries_the_day_and_live(client):
     live_words = company_time.date_in_words(company_time.day(live["started_at"]))
     assert options[ended["id"]] == f"Ended review · {ended_words}"
     assert options[live["id"]] == f"Live review · {live_words} · live"
+
+
+async def test_decisions_page_reads_comment_authors_once(client, monkeypatch):
+    """qa5-simple-decide-rest review: the Decisions page names every meeting's comment
+    authors in one read of the people (meetings._names), not one per meeting."""
+    names = meetings._names
+    calls: list[set] = []
+
+    async def counted(db, ids):
+        if ids:  # an empty set reads nothing
+            calls.append(set(ids))
+        return await names(db, ids)
+
+    async def name_reads(n: int) -> int:
+        w = await world()
+        for i in range(n):
+            m = await start(client, w)
+            r = await client.post(f"{MEETINGS}/{m['id']}/comments", json={"text": f"Note {i}"},
+                                  headers=w.ctx.as_("approver"))  # fmt: skip
+            assert r.status_code == 201, r.text
+            await end(client, w, m["id"])
+        calls.clear()
+        monkeypatch.setattr(meetings, "_names", counted)
+        try:
+            r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
+        finally:
+            monkeypatch.setattr(meetings, "_names", names)
+        assert r.status_code == 200, r.text
+        groups = r.json()["meetings"]
+        assert len(groups) == n
+        assert all([x["by_name"] for x in g["notes"]] == ["approver@example.com"] for g in groups)
+        return len(calls)
+
+    one, three = await name_reads(1), await name_reads(3)
+    assert three == one, (one, three)
