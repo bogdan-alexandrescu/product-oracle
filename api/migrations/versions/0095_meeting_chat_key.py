@@ -6,9 +6,10 @@ whichever came first became the chat. The chat is now keyed ``meeting_chat:<id>`
 
 Upgrade: on each meeting screen key, the discussion the chat used (the oldest panel
 discussion there) moves to the new key when the chat wrote in it (it holds a line of the
-chat's own, ``model = 'oracle.simple.chat'``); an Ask discussion the chat adopted keeps
-being the chat, as it holds the meeting's lines. A key whose oldest discussion holds no
-chat line is an Ask discussion only and stays the Ask panel's.
+chat's own, ``model = 'oracle.simple.chat'``) or is the chat's own with no line yet
+(titled ``Meeting chat``, as the chat names it); an Ask discussion the chat adopted keeps
+being the chat, as it holds the meeting's lines. A key whose oldest discussion is neither is
+an Ask discussion only and stays the Ask panel's.
 
 Downgrade: the chats go back to the meeting's screen key.
 
@@ -42,9 +43,12 @@ def upgrade() -> None:
             ORDER BY tenant_id, subject_key, created_at, id
         ) chat
         WHERE d.id = chat.id
-          AND EXISTS (
-            SELECT 1 FROM discussion_messages m
-            WHERE m.discussion_id = d.id AND m.model = 'oracle.simple.chat'
+          AND (
+            d.title = 'Meeting chat'
+            OR EXISTS (
+              SELECT 1 FROM discussion_messages m
+              WHERE m.discussion_id = d.id AND m.model = 'oracle.simple.chat'
+            )
           )
         """
     )
