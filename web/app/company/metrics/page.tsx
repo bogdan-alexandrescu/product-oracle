@@ -79,9 +79,12 @@ function Metrics() {
     if (phone) setSheetOpen(true);
   };
   async function changed() {
-    await Promise.all([listQ.reload(), detailQ.reload()]);
+    // qa4-company-4: a linked goal takes the metric's latest weekly value, so its distance to go is read again.
+    await Promise.all([listQ.reload(), detailQ.reload(), goalsQ.reload()]);
   }
 
+  // qa4-company-3: the Metric column takes the room left; in a narrow table (the inspector
+  // beside it) Kind, Owner, Source and then the sparkline give way, so a name is not cut to "Ac…".
   const columns: Column<Metric>[] = [
     {
       key: "title",
@@ -89,7 +92,7 @@ function Metrics() {
       phone: "title",
       cell: (m) => <span className={`truncate font-medium ${m.kind === "input" ? "pl-5 max-[600px]:pl-3" : ""}`}>{m.title}</span>,
     },
-    { key: "kind", header: "Kind", width: "84px", phone: "hide", cell: (m) => <span className="text-sm text-text2">{KIND_LABEL[m.kind]}</span> },
+    { key: "kind", header: "Kind", width: "84px", phone: "hide", narrow: "mid", cell: (m) => <span className="text-sm text-text2">{KIND_LABEL[m.kind]}</span> },
     {
       key: "last",
       header: "Last week",
@@ -105,7 +108,7 @@ function Metrics() {
     {
       key: "change",
       header: "Change",
-      width: "168px",
+      width: "140px",
       phone: "meta",
       cell: (m) =>
         m.change ? (
@@ -114,7 +117,11 @@ function Metrics() {
             {m.change.variance && <Chip kind={VARIANCE_KIND[m.change.variance]}>{VARIANCE_LABEL[m.change.variance]}</Chip>}
           </span>
         ) : (
-          <span className="text-sm text-text2">—</span>
+          // qa4-company-42: on a phone the column has no header, so the dash says what it means.
+          <span className="text-sm text-text2" data-col="change">
+            <span className="max-[600px]:hidden">—</span>
+            <span className="hidden max-[600px]:inline">No change yet</span>
+          </span>
         ),
     },
     {
@@ -122,13 +129,14 @@ function Metrics() {
       header: "12 weeks",
       width: "116px",
       phone: "hide",
+      narrow: "hide",
       cell: (m) => {
         const known = m.spark.filter((v): v is number => v != null);
         return known.length > 1 ? <Sparkline values={known} label={`Trend ${known.join(", ")}`} /> : <span className="text-sm text-text2">—</span>;
       },
     },
-    { key: "owner", header: "Owner", width: "120px", phone: "hide", cell: (m) => <span className="truncate text-sm">{m.owner_name ?? "—"}</span> },
-    { key: "source", header: "Source", width: "92px", phone: "hide", cell: (m) => <span className="text-sm text-text2">{SOURCE_LABEL[m.source]}</span> },
+    { key: "owner", header: "Owner", width: "120px", phone: "hide", narrow: "mid", cell: (m) => <span className="truncate text-sm">{m.owner_name ?? "—"}</span> },
+    { key: "source", header: "Source", width: "92px", phone: "hide", narrow: "wide", cell: (m) => <span className="text-sm text-text2">{SOURCE_LABEL[m.source]}</span> },
     {
       key: "state",
       header: "State",

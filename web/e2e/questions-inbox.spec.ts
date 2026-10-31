@@ -64,7 +64,7 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   await expect(row).toContainText("Oracle asks");
   await expect(row).toContainText("Before drafting · Clinic waitlist");
   await expect(questionRow(page, TIERS)).toContainText("Approver asks");
-  await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · 7. Success metrics");
+  await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · Success metrics");
   // The pending access request (A5, #203 part 3) counts too.
   await expect(badge(page)).toHaveText("13");
 
@@ -178,7 +178,7 @@ test("ask a teammate on a section: Waiting on them, then their answer on the Fee
   await expect(answered).not.toContainText("Waiting on");
 });
 
-test("Home: Needs you shows the same question row, answered in place", async ({ page }) => {
+test("Home: Needs you shows the same question row; answered, it leaves with its count (qa4-company-47)", async ({ page }) => {
   await login(page);
   await page.goto("/home");
   const row = page.getByTestId("home-needs-table").locator("tr[data-row]").filter({ hasText: CLINIC });
@@ -188,7 +188,8 @@ test("Home: Needs you shows the same question row, answered in place", async ({ 
   const form = page.getByTestId("answer-question");
   await form.getByLabel("Your answer").fill("The two downtown clinics.");
   await form.getByRole("button", { name: "Send answer" }).click();
-  await expect(row).toContainText("Answered ✓");
+  await expect(page.getByTestId("home-needs").getByTestId("inbox-acted")).toContainText(`Answered: ${CLINIC}`);
+  await expect(row).toHaveCount(0);
   await expect(badge(page)).toHaveText("12");
 });
 

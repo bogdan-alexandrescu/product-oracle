@@ -160,6 +160,16 @@ function VersionInspector({
   headings: Map<string, string>;
 }) {
   const { can } = useMe();
+  // qa4-company-7: a draft made in the app (from a template, or by Oracle) was created, not
+  // imported. Only starting from a template (templates.service) gives a version the
+  // template_only note; an import never does. The API already names a token "An integration".
+  const byName = v.imported_by_name;
+  const made =
+    byName === "Oracle"
+      ? { date: "Created", by: "Drafted by" }
+      : (v.notes ?? []).some((n) => n.code === "template_only")
+        ? { date: "Created", by: "Started by" }
+        : { date: "Imported", by: "Imported by" };
   return (
     <Inspector
       testId="version-inspector"
@@ -188,16 +198,16 @@ function VersionInspector({
           Approved
         </InspectorRow>
         <InspectorRow value={v.warnings.length ? plural(v.warnings.length, "warning") : "None"}>Warnings</InspectorRow>
-        <InspectorRow value={formatDateTime(v.created_at)}>Imported</InspectorRow>
-        {v.imported_by_name && (
+        <InspectorRow value={formatDateTime(v.created_at)}>{made.date}</InspectorRow>
+        {byName && (
           <InspectorRow
             value={
               <span data-testid="version-importer">
-                {v.imported_by_name}
+                {byName}
               </span>
             }
           >
-            Imported by
+            {made.by}
           </InspectorRow>
         )}
         {v.imported_again && (

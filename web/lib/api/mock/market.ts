@@ -12,6 +12,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { isHttpsSite } from "@/lib/https-site";
 import { stableUuid } from "./ids";
 
 type CompetitorOut = Schemas["CompetitorOut"];
@@ -110,7 +111,8 @@ export function seedMarket(occurrenceId: string | null): MarketDb {
     lock_version: 1,
   });
   const a = competitor("a", "Competitor A", "direct", "https://competitor-a.example", ["CompA"], "A planning tool for product teams.");
-  const b = competitor("b", "Competitor B", "indirect", "https://competitor-b.example", [], "A general project tracker teams use for roadmaps.");
+  // Competitor B was saved before websites had to be https://, so an edit must not send it back.
+  const b = competitor("b", "Competitor B", "indirect", "http://competitor-b.example", [], "A general project tracker teams use for roadmaps.");
   const s = competitor("s", "Spreadsheets", "status_quo", null, ["a spreadsheet"], "Roadmaps and request lists kept in shared spreadsheets.");
   db.competitors.push(a, b, s);
   const page = (key: string, c: Competitor, url: string, label: Page["label"], fields: Partial<Page> = {}): Page => ({
@@ -357,6 +359,8 @@ export function digestBlocks(db: MarketDb, zone: string, asOf: string) {
 // --- routes -----------------------------------------------------------------------------------
 
 /** Handles the market routes; null for any other path. */
+const WEBSITE_HTTPS = "website: only https:// addresses can be added";
+
 export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   const area = p[1];
   if (!["competitors", "competitor-pages", "competitor-changes", "competitor-web-findings", "positioning", "positioning-suggestions"].includes(area)) return null;
@@ -385,11 +389,13 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
       if (db.competitors.some((c) => c.status === "active" && c.name.toLowerCase() === name.toLowerCase())) return fail(422, "name: another active alternative has this name");
       const aliases = (input.aliases ?? []).map((a) => a.trim()).filter(Boolean);
       if (aliases.length > MAX_ALIASES) return fail(422, `aliases: at most ${MAX_ALIASES} aliases`);
+      const website = input.website?.trim() || null;
+      if (website && !isHttpsSite(website)) return fail(422, WEBSITE_HTTPS);
       const c: Competitor = {
         id: ctx.uuid(),
         name,
         kind: input.kind,
-        website: input.website?.trim() || null,
+        website,
         aliases,
         description: input.description?.trim() || null,
         status: "active",
@@ -412,6 +418,33 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
         changes,
         web_findings: db.findings.filter((f) => f.competitor_id === c.id && f.status === "open").map((f) => findingOut(db, f, zone)),
       } satisfies Schemas["CompetitorDetail"]);
+    }
+    if (p.length === 3 && m === "PATCH") {
+      // As the API's update_competitor: lock_version, then the fields sent (qa4-company-6).
+      if (!approver) return notApprover();
+      const input = await body<Schemas["CompetitorPatch"]>();
+      if (input.lock_version !== c.lock_version) return fail(409, "Someone else changed this alternative; reload");
+      if (input.name != null) {
+        const name = input.name.split(/\s+/).filter(Boolean).join(" ");
+        if (!name) return fail(422, "name: required");
+        if (c.status === "active" && db.competitors.some((x) => x.id !== c.id && x.status === "active" && x.name.toLowerCase() === name.toLowerCase()))
+          return fail(422, "name: another active alternative has this name");
+        c.name = name;
+      }
+      if ("website" in input) {
+        const website = input.website?.trim() || null;
+        if (website && !isHttpsSite(website)) return fail(422, WEBSITE_HTTPS);
+        c.website = website;
+      }
+      if (input.kind != null) c.kind = input.kind;
+      if ("description" in input) c.description = input.description?.trim() || null;
+      if (input.aliases != null) {
+        const aliases = input.aliases.map((a) => a.trim()).filter(Boolean);
+        if (aliases.length > MAX_ALIASES) return fail(422, `aliases: at most ${MAX_ALIASES} aliases`);
+        c.aliases = aliases;
+      }
+      c.lock_version += 1;
+      return json(200, competitorOut(db, c, zone));
     }
     if (p.length === 4 && m === "POST" && p[3] === "pages") {
       if (!approver) return notApprover();

@@ -130,9 +130,9 @@ test.describe("desktop", () => {
     await page.getByTestId("metrics-empty").filter({ visible: true }).getByRole("button", { name: "Add your first metric" }).click();
     const dialog = page.getByRole("dialog", { name: "Add metric" });
     const goal = dialog.getByLabel("Goal");
-    await expect(goal.locator("option")).toHaveText(["Pick a unit to see goals measured in it"]);
+    await expect(goal.locator("option")).toHaveText(["No goal"]);
     await expect(dialog.getByTestId("metric-goal-help")).toHaveText("Pick a unit to see goals measured in it.");
-    await dialog.getByLabel("Unit", { exact: true }).fill("%");
+    await dialog.getByLabel("Unit", { exact: true }).selectOption("%");
     await expect(goal.locator("option").first()).toHaveText("No goal");
     await expect(dialog.getByTestId("metric-goal-help")).toContainText("Confirmed goals measured in the same unit.");
   });

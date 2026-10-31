@@ -1798,7 +1798,7 @@ export function nothingWritten(db: Db, doc: { template?: string | null; template
   return sections.every((s) => !s.body_md.trim() || bodies.get(s.section_key) === s.body_md);
 }
 
-function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Response {
+function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"], who?: { id: string; name: string }): Response {
   const t = st.templates.find((x) => x.key === input.template);
   if (!t) return notFound("Template");
   if (t.kind !== input.kind) {
@@ -1872,8 +1872,9 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     warnings: [],
     // #255: as the API, the skeleton has no content yet.
     notes: [{ code: "template_only", message: "the template's skeleton, with no content yet", section_keys: [], refs: {} }],
-    imported_by: "4a1c8e6f-2d93-4b57-9e0a-c3f6d81b2a75",
-    imported_by_name: "API token draft-picker",
+    // As the API (importer_names): the person who started it, by name; never a token's name.
+    imported_by: who?.id ?? "4a1c8e6f-2d93-4b57-9e0a-c3f6d81b2a75",
+    imported_by_name: who?.name ?? "An integration",
     approved_at: null,
     approval_lapses: [],
     brief_source: briefKeys.size ? "draft" : "none",
@@ -2002,6 +2003,8 @@ export async function laneF(
   m: string,
   role?: Schemas["Me"]["role"],
   scenario?: string | null,
+  /** The signed-in person (qa4-company-7): a started draft is theirs, by name, as the API's. */
+  who?: { id: string; name: string },
 ): Promise<Response | null> {
   const area = p[1];
   if (!["priorities", "templates", "themes", "drafts"].includes(area)) return null;
@@ -2272,7 +2275,7 @@ export async function laneF(
     // As the API (MIN_STARTER_ROLE): a vision or a product strategy is an owner's to start.
     const words = input.kind === "vision" ? "a vision" : input.kind === "strategy" ? "a product strategy" : null;
     if (words && role !== "owner") return json(403, { detail: `Only an owner can start ${words}` });
-    return startDraft(db, st, input);
+    return startDraft(db, st, input, who);
   }
   return notFound("Route");
 }

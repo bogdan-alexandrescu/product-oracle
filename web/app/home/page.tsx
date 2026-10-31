@@ -170,20 +170,23 @@ export default function HomePage() {
     }
   }
   // D14: feedback rows act in place (one primary action each); what they did shows here.
-  const { onActed, notice } = useActed(() => Promise.all([inboxQ.reload(), questionsQ.reload()]));
+  const { onActed, notice, say } = useActed(() => Promise.all([inboxQ.reload(), questionsQ.reload()]));
   const inbox = inboxQ.data;
   // The API filters (asked of me, still open): Home counts exactly what the badge counts.
-  // Answered here, a question stays in its line with its outcome (C2).
-  const questionRows = useQuestionRows(questionsQ.data ?? [], questionsQ.reload);
+  // qa4-company-47: answered here, a question leaves Needs you as it leaves the count; the
+  // line above the list says what was done ("Answered: <the question>").
+  const questionRows = useQuestionRows(questionsQ.data ?? [], questionsQ.reload, (q, label) =>
+    say(`${label.replace(/\s*✓$/, "")}: ${q.question.prompt}`),
+  );
   // A5: access requests, approved or declined in their line (as the Inbox).
   const requestRows = useAccessRequestRows(inbox?.access_requests ?? [], inboxQ.reload);
   // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20); a question
-  // answered here stays shown, no longer counted.
+  // answered here leaves with its count (qa4-company-47).
   // qa-company-3: a line draws only the actions the signed-in person's role can take.
   const perms = usePerms();
   const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true, undefined, requestRows.rows, perms) : [];
   const needs = waitingNeeds(all);
-  const visible = all.filter((r) => needs.includes(r) || ((r.group === "questions" || r.group === "access-requests") && !r.counted && r.state !== "done"));
+  const visible = all.filter((r) => needs.includes(r) || (r.group === "access-requests" && !r.counted && r.state !== "done"));
   // Checkpoints, cost approvals and overruns: "Approvals", what they are (qa-shell-6), not the
   // decision log's Decisions.
   const approvals = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
@@ -276,6 +279,9 @@ export default function HomePage() {
           title="Needs you"
           count={waiting ? waiting : undefined}
           testId="home-needs"
+          // qa4-company-50: on a phone the head's tools join its line (display: contents), so the
+          // counts group can sit on a line of its own under the title, Info and Inbox beside it.
+          toolsClassName="max-[600px]:contents"
           tools={
             <>
               {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}
@@ -283,12 +289,18 @@ export default function HomePage() {
                 Everything the Inbox has waiting on you: approvals, runs, access requests, reviews and the questions asked of you.
                 Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
               </InfoTip>
-              {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are. */}
-              {approvals.length > 0 && <Count label="Approvals" n={approvals.length} testId="home-count-approvals" />}
-              {runs.length > 0 && <Count label="Runs" n={runs.length} testId="home-count-runs" />}
-              {access.length > 0 && <Count label="Access" n={access.length} testId="home-count-access" />}
-              {reviews.length > 0 && <Count label="Reviews" n={reviews.length} testId="home-count-reviews" />}
-              {asked.length > 0 && <Count label="Questions" n={asked.length} testId="home-count-questions" />}
+              {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are.
+                  qa4-company-50: one group; on a phone it takes its own line under the title, so
+                  no count is left alone beside Inbox. */}
+              {(approvals.length > 0 || runs.length > 0 || access.length > 0 || reviews.length > 0 || asked.length > 0) && (
+                <span data-testid="home-needs-counts" className="flex flex-wrap items-center gap-x-2.5 max-[600px]:order-last max-[600px]:basis-full">
+                  {approvals.length > 0 && <Count label="Approvals" n={approvals.length} testId="home-count-approvals" />}
+                  {runs.length > 0 && <Count label="Runs" n={runs.length} testId="home-count-runs" />}
+                  {access.length > 0 && <Count label="Access" n={access.length} testId="home-count-access" />}
+                  {reviews.length > 0 && <Count label="Reviews" n={reviews.length} testId="home-count-reviews" />}
+                  {asked.length > 0 && <Count label="Questions" n={asked.length} testId="home-count-questions" />}
+                </span>
+              )}
               <Link
                 href="/inbox"
                 data-testid="home-inbox-link"

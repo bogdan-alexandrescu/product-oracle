@@ -1361,7 +1361,8 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
           <span className="block truncate" title={[c.segment_title, runLabel(c)].filter(Boolean).join(" · ")}>
             {c.segment_title ?? c.flow_title}
             {/* qa-company-17: the document's whole title ("Investor update · October 2026"), not cut at its own "·". */}
-            {c.document_slug && <span className="ml-1.5 text-sm text-text2">{runLabel({ ...c, flow_title: "" }).replace(/ · $/, "")}</span>}
+            {/* qa4-company-45: " · " between the step and the document, as on every other line. */}
+            {c.document_slug && <span className="text-sm text-text2">{` · ${runLabel({ ...c, flow_title: "" }).replace(/ · $/, "")}`}</span>}
             {isHeld(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
           </span>
         ),

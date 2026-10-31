@@ -21,7 +21,7 @@ test("metrics: an owner adds a metric linked to a goal and sees its row", async 
   await sheet.getByLabel("Title").fill("Setup completion rate");
   await sheet.getByLabel("What it counts").fill("Accounts that finish setup within 7 days of signing up");
   await sheet.getByLabel("Kind").selectOption("output");
-  await sheet.getByLabel("Unit", { exact: true }).fill("%");
+  await sheet.getByLabel("Unit", { exact: true }).selectOption("%");
   await sheet.getByLabel("Goal").selectOption({ label: goal.title });
   await sheet.getByLabel("Owner").selectOption({ index: 1 });
   await sheet.getByLabel("Source").selectOption("manual");
