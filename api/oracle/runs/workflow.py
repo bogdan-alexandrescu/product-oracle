@@ -167,16 +167,27 @@ def import_findings(
     return rejection.findings(name, problems, total)
 
 
-def code_name_findings(name: str, code_names: list[str]) -> list[str]:
-    """The review findings for a draft imported with codes it does not name (#306,
-    oracle.docs.named_codes): a lead line, then the import's warning per rule. Nothing when
-    the draft names its codes."""
+def code_name_trouble(warnings: list[str]) -> str:
+    """What a draft does wrong with its codes, in plain words, by the import's warning
+    codes (oracle.docs.named_codes.CODES)."""
+    parts = []
+    if "unnamed_code" in warnings:
+        parts.append("uses codes without their names")
+    if "codes_not_listed" in warnings:
+        parts.append("writes three or more codes in a row instead of a list")
+    return " and ".join(parts) or "uses codes without their names"
+
+
+def code_name_findings(name: str, code_names: list[str], warnings: list[str]) -> list[str]:
+    """The review findings for a draft imported with codes it does not name or list (#306,
+    oracle.docs.named_codes): a lead line saying which rule it breaks, then the import's
+    warning per rule. Nothing when the draft writes its codes well."""
     if not code_names:
         return []
     return [
-        f"Oracle imported {name}, but it uses codes without their names, so it sent the "
-        "draft back before a person reviews it. Name each code below where its section "
-        "first uses it and write the whole file again; keep the rest as it is.",
+        f"Oracle imported {name}, but it {code_name_trouble(warnings)}, so it sent the "
+        "draft back before a person reviews it. Fix each line below and write the whole "
+        "file again; keep the rest as it is.",
         *code_names,
     ]
 

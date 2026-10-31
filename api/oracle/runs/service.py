@@ -5425,7 +5425,8 @@ async def _send_back(
     step = wait["step_id"]
     name = flows.draft_file(kind)
     refused = bool(imported.get("problems"))
-    why = "was refused at import" if refused else "names codes without their names"
+    trouble = workflow.code_name_trouble(list(imported.get("warnings") or []))
+    why = "was refused at import" if refused else trouble
     left = _left(wf)
     steps = workflow.agent_steps_after(wf.get("segments") or [], segment.seq, False, round_)
     tail = workflow.tail_seconds(steps, get_runtime_settings())
@@ -5442,7 +5443,9 @@ async def _send_back(
             name, imported.get("problems") or [], imported.get("problems_total")
         )
         if refused
-        else workflow.code_name_findings(name, list(imported.get("code_names") or []))
+        else workflow.code_name_findings(
+            name, list(imported.get("code_names") or []), list(imported.get("warnings") or [])
+        )
     )
     payload = {"verdict": NOT_YET, "findings": findings}
     # The same id for the same wait: a post repeated after a lost response is a replay.
@@ -5462,6 +5465,7 @@ async def _send_back(
                 f"writer (SwarmCloud: {_shown(exc)}): {checkpoint} waits for a person.",
             )
             return False
+    still = "is still refused," if refused else f"still {trouble}, the import says which codes and"
     _note(
         segment,
         f"{name} {why}, so Oracle sent the draft back to the writer before "
@@ -5469,8 +5473,7 @@ async def _send_back(
         f"{'import' if refused else 'unnamed code'}'s problems as findings. This is "
         "Oracle's answer, not a person's decision: nothing is "
         "approved, and the run's agents may not write to Oracle until a person's answer "
-        "counts. The revision is imported when the next review opens; if it is still "
-        f"{'refused' if refused else 'short of names, the import says which codes, and'}, "
+        f"counts. The revision is imported when the next review opens; if it {still} "
         f"{checkpoint} waits in the Inbox.",
     )
     await audit.record(
