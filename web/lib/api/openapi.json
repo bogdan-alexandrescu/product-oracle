@@ -91901,6 +91901,11 @@
             ],
             "title": "Built By"
           },
+          "writing": {
+            "type": "boolean",
+            "title": "Writing",
+            "default": false
+          },
           "built_at": {
             "type": "string",
             "format": "date-time",

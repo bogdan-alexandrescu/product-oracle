@@ -425,6 +425,12 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           </ul>
         </div>
       )}
+      {v.writing && !presenting && (
+        // The one_pager job is still writing the page: until then it is Oracle's quick read.
+        <p role="status" data-testid="one-pager-writing" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
+          Oracle is still writing this one-pager. Until then you see the PRD&apos;s own lines.
+        </p>
+      )}
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
       <div className={`mx-auto flex max-w-[1180px] flex-col gap-5 px-12 pt-[26px] max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>

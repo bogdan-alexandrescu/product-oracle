@@ -16,10 +16,18 @@ const STOP = new Set(
   "this that them they their with from have will when what which into than then more most some only also each every week month year days were been does done they're there here about after before over under people".split(" "),
 );
 
-const plain = (t: string) => (t ?? "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`]+|\{#[^}]*\}|<!--.*?-->/g, "").split(/\s+/).filter(Boolean).join(" ");
+/**
+ * The text as the PRD's PDF reads it (one_pager_checks.resolved): no [c:id] marker left
+ * (oracle.docs.parser.strip_citations), and none an older quick read cut at its end.
+ */
+export const resolved = (t: string) => (t ?? "").replace(/(?<![ \t])[ \t]*\[c:[^\]\s[]+\]/g, "").replace(/[ \t]*\[c(?::[^\]\s]*)?(?=…?$)/, "");
+const plainKeep = (t: string) => (t ?? "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`]+|\{#[^}]*\}|<!--.*?-->/g, "").split(/\s+/).filter(Boolean).join(" ");
+const plain = (t: string) => plainKeep(resolved(t));
+const plainOf = (t: string) => plain(t);
 const sentences = (t: string) => t.split(/(?<=[.!?])\s+/).filter(Boolean);
 
-function rows(body: string): { bullets: string[]; cells: string[][]; prose: string[] } {
+function rows(body: string, cites = false): { bullets: string[]; cells: string[][]; prose: string[] } {
+  const plain = cites ? plainKeep : plainOf;
   const bullets: string[] = [], cells: string[][] = [], prose: string[] = [];
   const lines = (body ?? "").split("\n");
   lines.forEach((raw, i) => {
@@ -48,11 +56,42 @@ const WHO_HEAD = /\b(?:users?|personas?|who\b|audiences?|customers?)/i;
 const WHO_BEST = /\b(?:personas?|users?|who has it)\b/i;
 const WHO_NOT = /\b(?:stor(?:y|ies)|flows?|quotes?|journeys?|scenarios?|problems?)\b/i;
 
+/**
+ * A users section of labelled lines (a run's PRD: "Primary: …", "Job story: …", "Owner: …",
+ * "Not the target: …"): the label says what the line is, its words who. The primary people
+ * first, a story only when no line names people, the excluded never.
+ */
+const LABEL = /^(?:(primary|main|core|target)(?:\s+(?:users?|personas?|segments?|audiences?))?|(not\b.*|non[- ]target.*|anti[- ]personas?|out of scope|excluded)|((?:job\s+)?stor(?:y|ies)|jobs?(?:\s+to\s+be\s+done)?|jtbd|scenarios?|quotes?)|(secondary|tertiary|also|other|owners?|buyers?|segments?|personas?|users?|audiences?|customers?|who(?:\s+has\s+it)?)(?:\s+(?:users?|personas?|segments?))?)$/i;
+const firstSentence = (t: string) => sentences(t.trim())[0]?.replace(/\.$/, "").split(/\s+/).filter(Boolean).slice(0, 30).join(" ") ?? "";
+
+/** Who has it from labelled lines ("" when no line names people), null when the lines are not labelled. */
+function labelled(pairs: [string, string][]): string | null {
+  const kinds: Record<string, string[]> = { primary: [], people: [], story: [], out: [] };
+  for (const [label, words] of pairs) {
+    const m = LABEL.exec(label.trim());
+    if (!m) return null;
+    const w = firstSentence(words);
+    // The groups in LABEL's order: primary, out, story, people.
+    if (w) kinds[["primary", "out", "story", "people"][[m[1], m[2], m[3], m[4]].findIndex((v) => v !== undefined)]].push(w);
+  }
+  const named = kinds.primary.length ? kinds.primary : kinds.people.length ? kinds.people : kinds.story;
+  return named.join("; ").split(/\s+/).filter(Boolean).slice(0, 30).join(" ");
+}
+
 export function whoHasIt(secs: Sec[]): string | null {
   const heads = secs.filter((s) => WHO_HEAD.test(s.heading) && !WHO_NOT.test(s.heading));
   heads.sort((a, b) => Number(!WHO_BEST.test(a.heading)) - Number(!WHO_BEST.test(b.heading)));
   for (const s of heads) {
     const { bullets, cells, prose } = rows(guidanceless(s.body));
+    const split = bullets.map((b) => /^(.*?)\s*(?::|—|–| - )\s*([\s\S]*)$/.exec(b)).map((m) => (m ? [m[1], m[2]] as [string, string] : null));
+    const pairs = [...split.filter((p): p is [string, string] => !!p), ...cells.filter((r) => r.length > 1 && r[0]).map((r) => [r[0], r.slice(1).join(" ")] as [string, string])];
+    if (pairs.length && pairs.length === bullets.length + cells.filter((r) => r[0]).length) {
+      const who = labelled(pairs);
+      if (who !== null) {
+        if (who) return who;
+        continue;
+      }
+    }
     let named = [...bullets.map((b) => b.split(/\s*(?::|—|–| - )\s*/)[0]), ...cells.map((r) => r[0]).filter(Boolean)];
     if (!named.length && prose.length) named = [sentences(prose.join(" "))[0].replace(/\.$/, "")];
     named = named.filter((n) => n.trim()).map((n) => n.split(/\s+/).slice(0, 12).join(" "));
@@ -66,21 +105,43 @@ const MEASURE = /\b(?:counted as|measured as|measured by|measured on|defined as|
 const SOURCE = /(?:\bsources?\s*:?\s*|[;·,|]\s*from\s+|\bfrom\s+(?=(?:the|our)\b)|\bvia\s+)([^.;·|]+)/i;
 const trimP = (t: string) => t.replace(/^[\s:,;·\-—–.]+|[\s:,;·\-—–.]+$/g, "");
 
+/** A source named only by its citation ("source: [c:c1]") leaves its word behind. */
+const SOURCE_LEFT = /[\s;,·|]*\b(?:sources?|from|via)\s*:?\s*$/i;
+/** Each citation's title and excerpt, by its id (the API's Citation rows). */
+export type Cites = Record<string, { title: string | null; excerpt: string | null }>;
+
 function measureIn(text: string): Measure | null {
   const m = MEASURE.exec(text);
   if (!m) return null;
   const rest = text.slice(m.index + m[0].length);
   const s = SOURCE.exec(rest);
-  const measure = trimP(s ? rest.slice(0, s.index) : rest);
+  const measure = trimP((s ? rest.slice(0, s.index) : rest).replace(SOURCE_LEFT, ""));
   return measure ? { name: trimP(text.slice(0, m.index)), measure, source: s ? trimP(s[1]) || null : null } : null;
 }
 
-function measures(secs: Sec[]): Measure[] {
+const keysOf = (raw: string, cites: Cites) =>
+  [...(raw ?? "").matchAll(/\[c:\s*([^[\]]*?)\s*\]/g)].flatMap((g) => g[1].split(",")).map((k) => k.trim()).filter((k) => k && k in cites);
+
+/** one_pager_checks._cited: a measure with its citations resolved; ids alone are the cited source's words, else no measure. */
+function cited(raw: string, cites: Cites): Measure | null {
+  const keys = keysOf(raw, cites);
+  const m = measureIn(plain(raw));
+  if (!m) {
+    const at = MEASURE.exec(raw);
+    const src = keys.map((k) => cites[k]).find((c) => c.excerpt);
+    if (!at || !src) return null;
+    return { name: trimP(plain(raw.slice(0, at.index))), measure: plain(src.excerpt ?? ""), source: src.title };
+  }
+  if (m.source === null) m.source = keys.map((k) => cites[k].title).find(Boolean) ?? null;
+  return m;
+}
+
+function measures(secs: Sec[], cites: Cites): Measure[] {
   const out: Measure[] = [];
   for (const s of secs) {
-    const { bullets, cells, prose } = rows(s.body);
+    const { bullets, cells, prose } = rows(s.body, true);
     for (const t of [...bullets, ...sentences(prose.join(" "))]) {
-      const m = measureIn(t);
+      const m = cited(t, cites);
       if (m) out.push(m);
     }
     const lines = s.body.split("\n");
@@ -89,9 +150,14 @@ function measures(secs: Sec[]): Measure[] {
     const mcol = head.findIndex((h, i) => i > 0 && /defin|measure|counted|how/.test(h));
     const scol = head.findIndex((h, i) => i > 0 && /source|data|where/.test(h));
     for (const r of cells) {
-      if (mcol > 0 && r[mcol]) out.push({ name: r[0], measure: r[mcol], source: scol > 0 && r[scol] ? r[scol] : null });
-      else {
-        const m = measureIn(r.join(" · "));
+      if (mcol > 0 && r[mcol]) {
+        const said = scol > 0 ? r[scol] ?? "" : "";
+        const keys = [...keysOf(r[mcol], cites), ...keysOf(said, cites)];
+        const measure = plain(r[mcol]) || (keys.map((k) => cites[k].excerpt).find(Boolean) ?? "");
+        const src = plain(said) || (keys.map((k) => cites[k].title).find(Boolean) ?? null);
+        if (measure) out.push({ name: plain(r[0]), measure: plain(measure), source: src || null });
+      } else {
+        const m = cited(r.join(" · "), cites);
         if (m) out.push(m);
       }
     }
@@ -120,26 +186,37 @@ const CAPITAL = /^\s+([A-Z][^.;,()|:\n]*)/;
 const nameOf = (t: string) => t.split(/\s+/).filter(Boolean).slice(0, 5).join(" ").replace(/^[\s\-—–]+|[\s\-—–]+$/g, "");
 const isCode = (t: string) => new RegExp(`^${CODE.source}$`).test(t);
 
+/** A name written right after its code in prose ("so F-11 Photo editing is out"): its words up to the first that is not a name's, at most four. */
+const NOT_NAME = "(?:is|are|was|were|be|been|will|would|can|could|may|might|must|shall|should|has|have|had|do|does|did|gets?|stays?|waits?|goes|go|moves?|ships?|comes?|lands?|slips?|starts?|ends?|needs?|and|or|but|nor|to|in|on|at|by|of|for|from|with|without|until|because|so|which|that|who|as|into|after|before|than|then|also|too|now|later|first|next|out|not|no|the|a|an|it|its|this|these|those|we|our|you|they|here|there)\\b";
+const AFTER = new RegExp(`^\\s+((?!${NOT_NAME})[A-Za-z][\\w'’-]*(?:\\s+(?!${NOT_NAME})[A-Za-z][\\w'’-]*){0,3})`, "i");
+
 function glossary(secs: Sec[]): Record<string, string> {
-  const out: Record<string, string> = {};
+  const out: Record<string, string> = {}, after: Record<string, string> = {};
   const put = (c: string, n: string) => { if (!(c in out) && n) out[c] = n; };
+  const scan = (text: string) => {
+    for (const c of text.matchAll(CODE)) {
+      const rest = text.slice(c.index! + c[0].length);
+      const n = NAMED.exec(rest) ?? (c.index === 0 ? CAPITAL.exec(rest) : null);
+      if (n && nameOf(n[1])) put(c[0], nameOf(n[1]));
+      else {
+        const a = AFTER.exec(rest);
+        if (a && nameOf(a[1]) && !(c[0] in after)) after[c[0]] = nameOf(a[1]);
+      }
+    }
+  };
   for (const s of secs) {
     for (const raw of [s.heading, ...s.body.split("\n")]) {
       if (raw.trim().startsWith("|")) {
         const cells = raw.trim().replace(/^\||\|$/g, "").split("|").map(plain);
         cells.slice(0, -1).forEach((c, i) => { if (isCode(c) && cells[i + 1] && !isCode(cells[i + 1])) put(c, nameOf(cells[i + 1])); });
+        cells.filter((c) => !isCode(c)).forEach(scan);
         continue;
       }
       const m = BULLET.exec(raw);
-      const text = plain((m ? m[1] : raw).replace(/^[#\s]+/, ""));
-      for (const c of text.matchAll(CODE)) {
-        const rest = text.slice(c.index! + c[0].length);
-        const n = NAMED.exec(rest) ?? (c.index === 0 ? CAPITAL.exec(rest) : null);
-        if (n) put(c[0], nameOf(n[1]));
-      }
+      scan(plain((m ? m[1] : raw).replace(/^[#\s]+/, "")));
     }
   }
-  return out;
+  return { ...after, ...out };
 }
 
 function withNames(text: string, names: Record<string, string>): [string, string[]] {
@@ -246,8 +323,8 @@ function numbers(secs: Sec[]): Look[] {
 }
 
 /** one_pager_checks.annotate: fills the blocks' clear-reading fields in place; the "Needs a look" items. */
-export function annotate(blocks: Block[], secs: Sec[]): Look[] {
-  const names = glossary(secs), notes = footnoteNotes(secs), found = measures(secs), who = whoHasIt(secs);
+export function annotate(blocks: Block[], secs: Sec[], cites: Cites = {}): Look[] {
+  const names = glossary(secs), notes = footnoteNotes(secs), found = measures(secs, cites), who = whoHasIt(secs);
   const unnamed = new Map<string, string[]>();
   for (const b of blocks) {
     if (b.key === "problem") b.who = who;
