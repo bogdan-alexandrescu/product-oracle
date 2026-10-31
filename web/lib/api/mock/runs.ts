@@ -2649,6 +2649,23 @@ export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOu
   return r;
 }
 
+/**
+ * The "eng-check-unmapped" scenario: the "eng-check" run whose maps cover example/shop-app and
+ * example/shop-api while the features cite ids of example/shop-web, which has no map.
+ */
+export function seedEngCheckUnmappedRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOut {
+  const r = seedEngCheckRun(db, ctx);
+  const cp = r.checkpoints.find((c) => c.kind === "eng_review" && c.status === "pending")!;
+  const file: BriefsMaps = {
+    cites: { "f.guided-setup": ["module:onboarding", "module:storefront"], "f.sample-data": ["module:storefront", "model:catalogue"], "f.saved-carts": ["module:storefront"] },
+    repos: ["example/shop-app"],
+    unmapped: ["example/shop-web"],
+  };
+  const maps: RunMaps = { ids: ["module:onboarding", "module:checkout"], repos: ["example/shop-app", "example/shop-api"] };
+  cp.payload = { ...cp.payload, briefs_check: briefsCheckOf(SEEDED_BRIEFS, file, maps) };
+  return r;
+}
+
 /** The runs the "eng-dates" scenario seeds (F4 lane B). */
 export const ENG_DATES_RUN = "7a11c0de-0000-4000-8000-0000000000d4";
 export const ENG_DATES_WAITING_RUN = "7a11c0de-0000-4000-8000-0000000000d5";
@@ -3430,7 +3447,7 @@ export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, 
 // ---------------------------------------------------------------- F4 Engineering check
 
 type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
-type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null }[]; code_map_used: boolean };
+type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[] };
 const SIZES = ["xs", "s", "m", "l", "xl"];
 const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
 const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
@@ -3449,8 +3466,30 @@ const SEEDED_BRIEFS: Brief[] = [
   { key: "f.saved-carts", title: "Saved carts", approach: "Keep the cart server-side and sync it on sign-in.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
 ];
 
-function briefsCheckOf(briefs: Brief[]): BriefsCheck {
-  return { features: briefs, problems: [], code_map_used: false };
+/** What a brief file says of the code maps: the ids each feature cites and the repositories it names. */
+type BriefsMaps = { cites: Record<string, string[]>; repos: string[]; unmapped: string[] };
+/** What the run's maps hold: their ids and repositories. */
+type RunMaps = { ids: string[]; repos: string[] };
+
+/**
+ * As oracle.engineering.check._summarize: an unknown code map id once (sorted), with the
+ * features citing it; the repositories the file names that none of the run's maps covers.
+ */
+function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps): BriefsCheck {
+  const cited: Record<string, string[]> = {};
+  for (const b of briefs) {
+    for (const ref of file?.cites[b.key] ?? []) {
+      if (maps?.ids.includes(ref)) continue;
+      const keys = (cited[ref] ??= []);
+      if (!keys.includes(b.key)) keys.push(b.key);
+    }
+  }
+  const problems = Object.keys(cited)
+    .sort()
+    .map((ref) => ({ code: "unknown_ref", feature: null, features: cited[ref], message: `'${ref}' is not in the code map this run used: cited by ${cited[ref].join(", ")}` }));
+  const mapped = new Set((maps?.repos ?? []).map((r) => r.toLowerCase()));
+  const unmapped_repos = [...new Set([...(file?.repos ?? []), ...(file?.unmapped ?? [])])].filter((r) => r.trim() && !mapped.has(r.toLowerCase()));
+  return { features: briefs, problems, code_map_used: !!file?.repos.length, unmapped_repos };
 }
 
 function briefsYaml(briefs: Brief[], attempt: number): string {

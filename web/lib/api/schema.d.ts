@@ -18599,6 +18599,11 @@ export interface components {
              * @default []
              */
             repos: components["schemas"]["RepoRef"][];
+            /**
+             * Unmapped
+             * @default []
+             */
+            unmapped: string[];
         };
         /** CommentCreate */
         CommentCreate: {

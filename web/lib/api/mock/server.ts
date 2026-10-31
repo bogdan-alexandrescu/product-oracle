@@ -73,6 +73,7 @@ import {
   routeRuns,
   scopeStop,
   seedEngCheckRun,
+  seedEngCheckUnmappedRun,
   seedEngDatesRuns,
   seedBaselineReviewRun,
   seedEngReviewRun,
@@ -1352,6 +1353,14 @@ function seedEngDates(): Db {
   const db = seed();
   db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded("eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db)));
+  return db;
+}
+
+/** "eng-check-unmapped" scenario: the "eng-check" run whose briefs cite ids of a repository with no code map. */
+function seedEngCheckUnmapped(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-check-unmapped", () => seedEngCheckUnmappedRun(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -2773,6 +2782,8 @@ function load(): Db {
             ? seedEngCheck
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
+          : scenario === "eng-check-unmapped"
+            ? seedEngCheckUnmapped
           : scenario === "eng-dates"
             ? seedEngDates
           : scenario === "roadmap-items-console-held"
