@@ -88,8 +88,12 @@ export type Ui = {
   waive: (f: Feature, code: string) => void;
 };
 
-/** `decision`: the fix is one of the feature's own decisions (Include, Leave out, Defer), which the inspector's Decision control offers once. */
-export type Fix = { label: string; run: () => Promise<void> | void; title?: string; decision?: boolean };
+/**
+ * `decision`: the fix is one of the feature's own decisions (Include, Leave out, Defer to a later
+ * PRD), which the inspector's Decision control offers once, in the same words. `short`: a
+ * commenter's label without its "Suggest" (qa4-work-39: the row's column is headed Suggest).
+ */
+export type Fix = { label: string; run: () => Promise<void> | void; title?: string; decision?: boolean; short?: string };
 
 /** Sets a row's decision: a person's write for an approver, a suggestion for a commenter. */
 export function setDecision(mode: Mode, ops: Ops, row: { id: string; key: string; lock_version: number }, decision: string, reason?: string | null) {
@@ -110,7 +114,8 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
   // qa-work-9: one word for keeping a feature in the set, as the Decision control says it (Include).
   const keep = (label: string): Fix => ({ label, decision: true, run: () => ops.act({ item_key: f.key, kind: "accept", answers: [reason.code] }) });
   const leaveOut: Fix = { label: "Leave out", decision: true, run: () => ui.leaveOut(f) };
-  const defer: Fix = { label: "Defer", decision: true, run: () => setDecision(mode, ops, f, "defer") };
+  // qa4-work-41: the row's decisions read as the inspector's Decision control (Include, Leave out, Defer to a later PRD).
+  const defer: Fix = { label: "Defer to a later PRD", decision: true, run: () => setDecision(mode, ops, f, "defer") };
   const waive: Fix | null = approver && reason.waivable ? { label: "Waive", run: () => ui.waive(f, reason.code) } : null;
   const removeDeps = (keys: string[]): Fix => ({ label: "Remove dependency", run: () => setField(mode, ops, f, "depends_on", f.depends_on.filter((d) => !keys.includes(d))) });
   let fixes: (Fix | null)[];
@@ -119,7 +124,7 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
       const dep = f.depends_on.map((d) => byKey.get(d)).find((d) => d && d.decision !== "include");
       fixes = dep
         ? // qa-work-12: a short label on one line; the dependency is named in the reason chip and the tooltip.
-          [{ label: "Include dependency", title: `Include ${dep.title}`, run: () => setDecision(mode, ops, dep, "include") }, removeDeps([dep.key]), { label: "Leave this out too", decision: true, run: () => ui.leaveOut(f) }, waive]
+          [{ label: "Include dependency", title: `Include ${dep.title}`, run: () => setDecision(mode, ops, dep, "include") }, removeDeps([dep.key]), leaveOut, waive]
         : [waive];
       break;
     }
@@ -140,7 +145,7 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
       fixes = [leaveOut];
       break;
     case "serves_no_goal":
-      fixes = [leaveOut, { label: "Pick a goal", run: () => ui.pickGoal(f) }, keep("Include anyway")];
+      fixes = [leaveOut, { label: "Pick a goal", run: () => ui.pickGoal(f) }, keep("Include")];
       break;
     case "low_confidence":
     case "linked_blocker":
@@ -157,7 +162,7 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
   }
   const out = fixes.filter((x): x is Fix => !!x);
   // A commenter's Waive is never offered; every other fix becomes a suggestion.
-  return approver ? out : out.map((x) => ({ ...x, label: `Suggest ${x.label}` }));
+  return approver ? out : out.map((x) => ({ ...x, label: `Suggest ${x.label}`, short: x.label }));
 }
 
 /** The D8 actions on a row's key, by state. */
