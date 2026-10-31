@@ -139,7 +139,8 @@ export function DraftSheet({
       actions={
         <>
           {!doc && (
-            <Button variant={observing ? "primary" : "ghost"} disabled={busy !== null} onClick={emptyTemplate}>
+            // qa4-company-27: a bordered button, as it creates a document, not a text link beside Cancel.
+            <Button variant={observing ? "primary" : "secondary"} disabled={busy !== null} onClick={emptyTemplate}>
               {busy === "empty" ? "Creating…" : "Start from the empty template"}
             </Button>
           )}

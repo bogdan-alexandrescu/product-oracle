@@ -138,6 +138,15 @@ function VersionInspector({
   latest: number | null | undefined;
 }) {
   const { can } = useMe();
+  // qa4-company-7: a draft made in the app (from a template, or by Oracle) was created, not
+  // imported; and a token's own name is never shown, only "An integration".
+  const byName = v.imported_by_name && /^API token\b/i.test(v.imported_by_name) ? "An integration" : v.imported_by_name;
+  const made =
+    byName === "Oracle"
+      ? { date: "Created", by: "Drafted by" }
+      : (v.notes ?? []).some((n) => n.code === "template_only")
+        ? { date: "Created", by: "Started by" }
+        : { date: "Imported", by: "Imported by" };
   return (
     <Inspector
       testId="version-inspector"
@@ -165,16 +174,16 @@ function VersionInspector({
           Approved
         </InspectorRow>
         <InspectorRow value={v.warnings.length ? plural(v.warnings.length, "warning") : "None"}>Warnings</InspectorRow>
-        <InspectorRow value={formatDateTime(v.created_at)}>Imported</InspectorRow>
-        {v.imported_by_name && (
+        <InspectorRow value={formatDateTime(v.created_at)}>{made.date}</InspectorRow>
+        {byName && (
           <InspectorRow
             value={
               <span data-testid="version-importer">
-                {v.imported_by_name}
+                {byName}
               </span>
             }
           >
-            Imported by
+            {made.by}
           </InspectorRow>
         )}
         {v.imported_again && (
