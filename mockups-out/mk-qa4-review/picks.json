@@ -6,7 +6,7 @@
       "code": "QV1",
       "name": "Sending edits for approval",
       "question": "How does an owner send edits for approval, pick who approves, and tell that apart from a review meeting?",
-      "common": "Every proposal names the reviewer by name, not by role (\"waiting on Rae Okafor\"), keeps published v3 live until approval, and keeps Remind after sending. None of them sends without the owner seeing who gets it, except C.",
+      "common": "Every proposal names the reviewer by name, not by role (\"waiting on Rae Okafor\"), keeps published v3 live until approval, and keeps Remind after sending. None of them sends without the owner seeing who gets it, except C. The signed-in owner, Jo Rivera, reads their own edits as \"You changed\" in every frame, and the edits keep one time, Oct 30, 10:22 PM PT.",
       "proposals": [
         {
           "letter": "A",
@@ -30,8 +30,12 @@
               "caption": "\"+ Add a reviewer\" lists people to add, with their email."
             },
             {
+              "file": "frames/qv1-a-picked.html",
+              "caption": "Lee Park picked: the chip sits next to Rae Okafor, ready to send."
+            },
+            {
               "file": "frames/qv1-a-result.html",
-              "caption": "After adding Lee Park and pressing Send for approval: the bar says \"Sent for approval · waiting on Rae Okafor, Lee Park\", with Remind. Undo has left the change card."
+              "caption": "After pressing Send for approval: the bar says \"Sent for approval · waiting on Rae Okafor, Lee Park\", with Remind. Undo has left the change note; it still says \"You changed\", at the same time."
             },
             {
               "file": "frames/qv1-a-many-1512.html",
@@ -39,7 +43,7 @@
             },
             {
               "file": "frames/qv1-a-open-390.html",
-              "caption": "Phone: the dialog fills the screen, Send for approval at the bottom."
+              "caption": "Phone: the dialog fills the width; Cancel and Send for approval sit right under who approves, not pinned to the bottom."
             },
             {
               "file": "frames/qv1-a-result-390.html",
@@ -109,7 +113,7 @@
       "code": "QV2",
       "name": "Seeing changes in review",
       "question": "What do viewers and commenters see of changes in review, and how does someone asked for feedback get to it?",
-      "common": "Readers still read the published words in the page; the bar still says how many changes are in review. Frames show the viewer (one-pager) and the commenter (the PRD's overview in Detailed).",
+      "common": "Readers still read the published words in the page; the bar still says how many changes are in review. Frames show the viewer (one-pager) and the commenter (the PRD's overview in Detailed). The owner's buttons keep today's names here (\"Submit for review\", \"Start review\"); QV1 decides those names, so judge each decision alone. None of the three yet links a commenter's own overdue section row (under \"Section owners and reviewers\") to where they comment; that stays plain text in all three and is left for later.",
       "proposals": [
         {
           "letter": "A",
@@ -160,7 +164,7 @@
             },
             {
               "file": "frames/qv2-b-open.html",
-              "caption": "Tapping the mark under the checklist line opens its old and new words, who edited it and who it waits on."
+              "caption": "Tapping the mark right under the checklist line opens its old and new words, who edited it and who it waits on."
             },
             {
               "file": "frames/qv2-b-open-1512.html",
@@ -208,7 +212,7 @@
       "code": "QV3",
       "name": "Presenting a PRD with edits",
       "question": "When an owner presents a PRD with unapproved edits and proposals, what does the audience see?",
-      "common": "Every proposal shows a line over the presented page saying what it is. Frames are the owner's page with 2 unapproved edits and a commenter's proposal.",
+      "common": "Every proposal shows a line over the presented page saying what it is. Frames are the owner's page with 2 unapproved edits and a commenter's proposal. The header keeps today's \"Start review\" name; QV1 decides that. While presenting, the page no longer shows \"draft in progress\" under the title.",
       "proposals": [
         {
           "letter": "A",
@@ -269,7 +273,7 @@
           "frames": [
             {
               "file": "frames/qv3-c-result.html",
-              "caption": "Present pressed: the draft with \"Showing the working draft\" and the key to the colours."
+              "caption": "Present pressed: the draft with \"Showing the working draft\" and the key: yellow for edits not yet approved, blue for a line a commenter proposed new words for (the line still shows its old words)."
             },
             {
               "file": "frames/qv3-c-result-1512.html",
@@ -304,11 +308,11 @@
             },
             {
               "file": "frames/qv4-a-result.html",
-              "caption": "After Publish: Published v1, \"You can share it as a link now\", and Share a link."
+              "caption": "After Publish: the crumb and the header both say Published v1, \"You can share it as a link now\", and Share a link. There is no longer an approved-but-not-shared state to be in."
             },
             {
               "file": "frames/qv4-a-share.html",
-              "caption": "Share a link opens the link form straight away: v1 is published and ready."
+              "caption": "Share a link opens the link form straight away: v1 is published and ready. Allow PDF download starts unticked."
             },
             {
               "file": "frames/qv4-a-blockers-1512.html",
@@ -326,7 +330,7 @@
           "frames": [
             {
               "file": "frames/qv4-b-rest.html",
-              "caption": "The page is now Approve v1, saying it is step 2 of 3."
+              "caption": "The page is now Approve v1: \"Can be approved, but…\", and the On approve list ends \"Not shared yet: publish from Share a link\"."
             },
             {
               "file": "frames/qv4-b-open.html",
@@ -334,11 +338,11 @@
             },
             {
               "file": "frames/qv4-b-mid.html",
-              "caption": "After Approve v1: Published is next, with Publish v1 for sharing."
+              "caption": "After Approve v1: Published is next, with Publish v1 for sharing; behind the dialog the title and version now say Approved."
             },
             {
               "file": "frames/qv4-b-result.html",
-              "caption": "After publishing: all three steps done and the link form below."
+              "caption": "After publishing: all three steps done and the link form below; the page behind shows v1 approved."
             },
             {
               "file": "frames/qv4-b-blockers-1512.html",
@@ -360,11 +364,11 @@
             },
             {
               "file": "frames/qv4-c-open.html",
-              "caption": "Share roadmap: dates are done; approve and publish are done by the button, after a label."
+              "caption": "Share roadmap: dates are done (ticked); approve and publish are done by the button, after a label."
             },
             {
               "file": "frames/qv4-c-result.html",
-              "caption": "After Approve, publish and share v1: the link and its passcode, shown once."
+              "caption": "After Approve, publish and share v1: the link and its passcode, shown once; behind it the title says Approved and Share links reads 1."
             },
             {
               "file": "frames/qv4-c-blockers-1512.html",

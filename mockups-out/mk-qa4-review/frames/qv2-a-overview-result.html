@@ -1770,8 +1770,13 @@
   .max-\[420px\]\:grid-cols-1 { grid-template-columns: repeat(1, minmax(0px, 1fr)); }
 }
   @media not all and (min-width: 48rem) {
+  .max-md\:fixed { position: fixed; }
   .max-md\:static { position: static; }
+  .max-md\:top-auto { top: auto; }
+  .max-md\:right-4 { right: calc(var(--spacing) * 4); }
+  .max-md\:left-4 { left: calc(var(--spacing) * 4); }
   .max-md\:min-h-11 { min-height: calc(var(--spacing) * 11); }
+  .max-md\:w-auto { width: auto; }
   .max-md\:min-w-11 { min-width: calc(var(--spacing) * 11); }
   .max-md\:px-3 { padding-inline: calc(var(--spacing) * 3); }
 }
