@@ -2883,20 +2883,12 @@ function load(): Db {
   db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
-  if (scenario === "launches") {
-    db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
-    // Launches are planned from an approved roadmap: usage-alerts-roadmap v1 is approved here,
-    // so New launch (#344) has items to pick.
-    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
-    const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
-    if (roadmap && v1) {
-      v1.approved_at = "2026-10-05T09:00:00Z";
-      roadmap.status = "approved";
-    }
-  }
-  // qa4-plan-3: "plan-decider" (#346) edits the approved plan, so usage-alerts-roadmap v1 is
-  // approved there (the Plan reads the document's state; by default it is in review).
-  if (scenario === "plan-decider") {
+  if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
+  // usage-alerts-roadmap v1 is in review by default (the Plan reads the document's state:
+  // qa4-plan-3). It is approved where a scenario works on the approved plan: launches are
+  // planned from it (New launch, #344, has items to pick), "plan-decider" (#346) edits it, and
+  // "date-bases" verifies its dates.
+  if (scenario === "launches" || scenario === "plan-decider" || scenario === DATE_BASES_SCENARIO) {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
     const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
     if (roadmap && v1) {
