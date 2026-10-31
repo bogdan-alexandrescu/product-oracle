@@ -149,7 +149,7 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
               <span aria-hidden className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 bg-accent-ink" />
               <div className="min-w-0 flex-1">
                 {/* fix4 qa-simple-roadmap-36: one line: the name (its whole in title= when cut), its day and the badge, each kept whole. */}
-                <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 font-medium">
+                <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
                   {/* qa4-simple-roadmap-37: the name wraps, never cut mid-word. */}
                   <span className="min-w-0 break-words" title={k.name}>
                     {k.name}
