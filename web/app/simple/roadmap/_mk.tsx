@@ -46,7 +46,7 @@ function rowsOf(data: Roadmap): Row[] { // MOCK-HOOK
 /** QR2: how a bar shows its state. "" is today's build (one red for a draft, a broken link, a cut item and Today). */
 type Look = { bar: CSSProperties; name?: CSSProperties; chip?: string; mark?: string }; // MOCK-HOOK
 function lookOf(i: Item, qr2: string): Look { // MOCK-HOOK
-  const isBroken = broken(i).length > 0; // MOCK-HOOK
+  const isBroken = !!brokenFlag(i); // MOCK-HOOK review: red only while a broken link is open (a missed date alone is not red)
   const cut = closedItem(i); // MOCK-HOOK
   const hatch = "repeating-linear-gradient(45deg, var(--accent-soft) 0 3px, color-mix(in srgb, var(--accent) 35%, transparent) 3px 6px)"; // MOCK-HOOK
   const base: CSSProperties = { background: i.estimated ? hatch : "var(--accent-soft)", border: "1.5px solid var(--accent)" }; // MOCK-HOOK
@@ -80,13 +80,14 @@ function Key({ data, qr2 }: { data: Roadmap; qr2: string }) { // MOCK-HOOK
   if (qr2 === "d") { // MOCK-HOOK
     e.push(["prog", sw({ background: "var(--pass-bg)", border: "1.5px solid var(--pass)" }), "In progress"]); // MOCK-HOOK
     e.push(["plan", sw({ background: "var(--accent-soft)", border: "1.5px solid var(--accent)" }), "Planned"]); // MOCK-HOOK
+    if (has((i) => i.status === "done")) e.push(["done", sw({ background: "var(--surface2)", border: "1.5px solid var(--line-strong)" }), "Done"]); // MOCK-HOOK
   } else e.push(["plan", sw({ background: "var(--accent-soft)", border: "1.5px solid var(--accent)" }), "Dated"]); // MOCK-HOOK
   if (has((i) => i.estimated)) e.push(["est", sw(lookOf({ ...data.items.find((i) => i.estimated)!, draft: false, flags: [], status: "planned" }, "a").bar), "Estimated"]); // MOCK-HOOK
   if (qr2 === "c") { // MOCK-HOOK
     e.push(["words", <span key="w" className="rounded-full bg-surface2 px-2 text-xs text-text2">Draft</span>, "A word on the row says a draft, a cut item or a broken link"]); // MOCK-HOOK
   } else { // MOCK-HOOK
     if (has((i) => i.draft)) e.push(["draft", sw({ background: "var(--surface)", border: "1.5px dashed var(--line-strong)" }), "Draft"]); // MOCK-HOOK
-    if (has((i) => broken(i).length > 0)) e.push(["broken", sw({ background: "var(--accent-soft)", border: "2px solid var(--crit)" }), "⚠ Broken link (red is only this)"]); // MOCK-HOOK
+    if (has((i) => !!brokenFlag(i))) e.push(["broken", sw({ background: "var(--accent-soft)", border: "2px solid var(--crit)" }), "⚠ Broken link"]); // MOCK-HOOK
     if (has(closedItem)) e.push(["cut", <span key="c" className="text-sm text-text2 line-through">Cut</span>, "Cut, below the line"]); // MOCK-HOOK
   } // MOCK-HOOK
   e.push(["today", <i key="t" aria-hidden className="inline-block h-3.5 w-0.5 flex-none" style={{ background: TODAY_COLOR(qr2) }} />, `Today ${shortDay(data.today)}`]); // MOCK-HOOK
@@ -142,9 +143,14 @@ export function MkTimeline(props: MkProps) { // MOCK-HOOK
           </aside> // MOCK-HOOK
         )}
       </div> {/* MOCK-HOOK */}
-      {openItem && (phone ? opts.qr4 !== "b" : false) && props.card(openItem, {}, true, () => setOpenKey(null))} {/* MOCK-HOOK */}
+      {openItem && (phone ? opts.qr4 !== "b" : false) && props.card(openItem, { height: "52dvh" }, true, () => setOpenKey(null))} {/* MOCK-HOOK */}
     </div> // MOCK-HOOK
   ); // MOCK-HOOK
+}
+
+/** QR3 a on the Waterfall (and the Gantt): the same panel above the chart replaces the banners drawn over bars. */
+export function MkConflicts(props: Omit<MkProps, "opts" | "card"> & { onShow: (k: string) => void }) { // MOCK-HOOK
+  return <ConflictPanel {...props} opts={{ qr1: "a", qr2: "a", qr3: "a", qr4: "a", zoom: "6m", open: null }} card={() => null} />; // MOCK-HOOK
 }
 
 /** QR4 c: the card beside the bar's visible part; right when it fits, else left, else under the bar. */
@@ -183,7 +189,7 @@ function ConflictPanel({ data, act, canChange, byId, onShow, phone, rail = false
 }
 
 /** QR3 b / c and today's build: the conflict shown at the item itself. */
-function brokenFlag(i: Item): Flag | undefined { // MOCK-HOOK
+export function brokenFlag(i: Item): Flag | undefined { // MOCK-HOOK
   return closedItem(i) ? undefined : broken(i).find((f) => f.kind === "dependency_order"); // MOCK-HOOK
 }
 
@@ -228,6 +234,7 @@ function DayChart(props: Inner) { // MOCK-HOOK
     d = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 1)).toISOString().slice(0, 10); // MOCK-HOOK
   } // MOCK-HOOK
   const two = opts.qr1 === "c"; // MOCK-HOOK
+  const firstSeen = fit ? months[0]?.day : months.find((m) => x(m.day) >= sl - 2)?.day; // MOCK-HOOK review: the first month in sight carries its year
   const rowH = two ? (phone ? 40 : 42) : ROW_H; // MOCK-HOOK
   const zooms: [string, string][] = [["6m", "6 months"], ["1y", "1 year"], ["all", "All 3 years"]]; // MOCK-HOOK
   const here = typeof window === "undefined" ? "" : window.location.search; // MOCK-HOOK
@@ -246,15 +253,15 @@ function DayChart(props: Inner) { // MOCK-HOOK
       )}
       <div ref={box} data-testid="mk-scroll" onScroll={(e) => setSl(e.currentTarget.scrollLeft)} className="relative overflow-x-auto"> {/* MOCK-HOOK */}
         <div className="relative" style={{ width: labelW + trackW }}> {/* MOCK-HOOK */}
-          <div className="sticky top-0 z-20 flex h-8 border-b border-line bg-surface"> {/* MOCK-HOOK */}
+          <div className="sticky top-0 z-20 flex h-11 border-b border-line bg-surface"> {/* MOCK-HOOK */}
             {labelW > 0 && <div className="sticky left-0 z-20 flex-none border-r border-line bg-surface" style={{ width: labelW }} />} {/* MOCK-HOOK */}
             <div className="relative" style={{ width: trackW }}> {/* MOCK-HOOK */}
-              {months.map((m) => <span key={m.day} className="absolute top-2 text-xs whitespace-nowrap text-text2" style={{ left: x(m.day) + 4 }}>{m.label}</span>)} {/* MOCK-HOOK */}
+              {months.filter((m) => !fit || x(m.day) < trackW - 64).map((m) => <span key={m.day} className="absolute top-1 text-xs whitespace-nowrap text-text2" style={{ left: x(m.day) + 4 }}>{m.day === firstSeen ? monthWord(m.day) : m.label}</span>)} {/* MOCK-HOOK */}
             </div> {/* MOCK-HOOK */}
           </div> {/* MOCK-HOOK */}
-          <div className="pointer-events-none absolute top-8 bottom-0 z-10" style={{ left: labelW + xt, width: 2, background: TODAY_COLOR(opts.qr2) }} data-testid="mk-today" /> {/* MOCK-HOOK */}
-          <span className="absolute top-1 z-30 rounded-full px-2 text-xs leading-5 font-bold text-white" style={{ left: labelW + xt - 22, background: TODAY_COLOR(opts.qr2) }}>Today</span> {/* MOCK-HOOK */}
-          {months.map((m) => <div key={m.day} aria-hidden className="absolute top-8 bottom-0 border-l border-line/60" style={{ left: labelW + x(m.day) }} />)} {/* MOCK-HOOK */}
+          <div className="pointer-events-none absolute top-11 bottom-0 z-10" style={{ left: labelW + xt, width: 2, background: TODAY_COLOR(opts.qr2) }} data-testid="mk-today" /> {/* MOCK-HOOK */}
+          <span className="absolute top-[21px] z-30 rounded-full px-2 text-xs leading-5 font-bold whitespace-nowrap text-white" style={{ left: Math.max(labelW + 2, Math.min(labelW + xt - 22, labelW + trackW - 56)), background: TODAY_COLOR(opts.qr2) }}>Today</span> {/* MOCK-HOOK */}
+          {months.map((m) => <div key={m.day} aria-hidden className="absolute top-11 bottom-0 border-l border-line/60" style={{ left: labelW + x(m.day) }} />)} {/* MOCK-HOOK */}
           {rows.map((r) => { // MOCK-HOOK
             if (r.kind === "lane") return ( // MOCK-HOOK
               <div key={`l-${r.key}`} className="relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"> {/* MOCK-HOOK */}
@@ -267,7 +274,7 @@ function DayChart(props: Inner) { // MOCK-HOOK
             const bx = x(i.start.date); // MOCK-HOOK
             const bw = Math.max(8, x(addDays(i.end.date, 1)) - bx); // MOCK-HOOK
             const sel = openKey === i.key; // MOCK-HOOK
-            const nameX = Math.max(0, Math.min(bx, trackW - 220)); // MOCK-HOOK
+            const nameX = Math.max(8, Math.min(bx, trackW - 220)); // MOCK-HOOK
             const inline = opts.qr4 === "b" && sel; // MOCK-HOOK
             const popHere = opts.qr4 === "c" && sel && !phone; // MOCK-HOOK
             return ( // MOCK-HOOK
@@ -281,9 +288,9 @@ function DayChart(props: Inner) { // MOCK-HOOK
                     </button> // MOCK-HOOK
                   )}
                   <div className="relative" style={{ width: trackW }}> {/* MOCK-HOOK */}
-                    {two && <span className="absolute top-0.5 text-[13px] whitespace-nowrap" style={{ left: nameX, ...lk.name }}>{i.title}{lk.chip ? ` · ${lk.chip}` : ""}{lk.mark ? " ⚠" : ""}</span>} {/* MOCK-HOOK */}
+                    {two && <span className="absolute top-0.5 z-[11] rounded bg-surface px-1 text-[13px] whitespace-nowrap" style={{ left: nameX, ...lk.name }}>{i.title}{lk.chip ? ` · ${lk.chip}` : ""}{lk.mark ? " ⚠" : ""}</span>} {/* MOCK-HOOK */}
                     <button type="button" data-bar-id={i.id} data-testid="mk-bar" aria-label={`${i.title}, ${spanWords(i.start.date, i.end.date, data.today)}`} onClick={() => onOpen(sel ? null : i.key)} className="absolute rounded-full" style={{ ...lk.bar, left: bx, width: bw, top: two ? 22 : 8, height: two ? 12 : 18, outline: sel ? "2px solid var(--accent-ink)" : undefined, outlineOffset: 2 }} /> {/* MOCK-HOOK */}
-                    {!two && !fit && bx + bw - Math.max(bx, sl) > 120 && <span className="pointer-events-none absolute top-[9px] truncate px-2 text-xs leading-4 text-text2" style={{ left: Math.max(bx, sl), width: bx + bw - Math.max(bx, sl) }}>{spanWords(i.start.date, i.end.date, data.today)}</span>} {/* MOCK-HOOK */}
+                    {!two && !fit && bx + bw - Math.max(bx, sl) > 120 && <span className="pointer-events-none absolute top-[9px] z-[11] flex px-1.5" style={{ left: Math.max(bx, sl), width: bx + bw - Math.max(bx, sl) }}><span className="min-w-0 truncate rounded bg-surface px-1 text-xs leading-4 text-text">{spanWords(i.start.date, i.end.date, data.today)}</span></span>} {/* MOCK-HOOK */}
                     {f && opts.qr3 === "c" && ( // MOCK-HOOK
                       <button type="button" data-testid="mk-badge" aria-label="Broken link: show it" onClick={() => setPop(pop === i.key ? null : i.key)} className="absolute z-[13] grid h-5 w-5 place-items-center rounded-full bg-crit text-[11px] font-bold text-white" style={{ left: bx + bw + 6, top: two ? 18 : 7 }}>!</button> // MOCK-HOOK
                     )}
@@ -307,17 +314,17 @@ function DayChart(props: Inner) { // MOCK-HOOK
                   </div> {/* MOCK-HOOK */}
                 </div> {/* MOCK-HOOK */}
                 {f && opts.qr3 === "b" && ( // MOCK-HOOK
-                  <div data-testid="mk-conflict" data-item={i.key} className="flex border-b border-line/60 bg-crit-bg"> {/* MOCK-HOOK */}
+                  <div data-testid="mk-conflict" data-item={i.key} className="relative z-[12] flex border-b border-line/60 bg-surface"><div className="flex w-full bg-crit-bg"> {/* MOCK-HOOK */}
                     <div className="sticky left-0 flex flex-wrap items-center gap-2 px-3 py-1.5" style={{ width: Math.min(w - 4, labelW + trackW) }}> {/* MOCK-HOOK */}
                       <span className="text-sm text-crit">⚠ {f.reason}</span> {/* MOCK-HOOK */}
                       <FixButtons item={i} flag={f} items={props.byId} act={props.act} canChange={props.canChange} inline /> {/* MOCK-HOOK */}
                     </div> {/* MOCK-HOOK */}
-                  </div> // MOCK-HOOK
+                  </div></div> // MOCK-HOOK
                 )}
                 {inline && ( // MOCK-HOOK
                   <div data-testid="mk-inline" className="relative z-[15] border-b border-line bg-surface2 py-2"> {/* MOCK-HOOK */}
                     <div className="sticky left-0 px-3" style={{ width: Math.min(w - 4, 760) }}> {/* MOCK-HOOK */}
-                      {props.card(i, { position: "relative", left: 0, top: 0, width: "100%" }, false, () => onOpen(null))} {/* MOCK-HOOK */}
+                      {props.card(i, { position: "relative", left: 0, top: 0, width: "100%", zIndex: 1 }, false, () => onOpen(null))} {/* MOCK-HOOK */}
                     </div> {/* MOCK-HOOK */}
                   </div> // MOCK-HOOK
                 )}
@@ -370,13 +377,13 @@ function QuarterGrid(props: Inner) { // MOCK-HOOK
               <div className="relative flex-1 py-1"> {/* MOCK-HOOK */}
                 {qs.map((q, n) => <div key={q.start} aria-hidden className={`absolute top-0 bottom-0 border-r border-line/60 ${n === tq ? "bg-accent-soft/30" : ""}`} style={{ left: n * colW, width: colW }} />)} {/* MOCK-HOOK */}
                 {rows.map((r, rn) => ( // MOCK-HOOK
-                  <div key={rn} className="relative h-[54px]"> {/* MOCK-HOOK */}
+                  <div key={rn} className={`relative ${phone ? "h-[72px]" : "h-[54px]"}`}> {/* MOCK-HOOK */}
                     {r.map((i) => { // MOCK-HOOK
                       const s = qi(i.start.date), e = qi(i.end.date); // MOCK-HOOK
                       const lk = lookOf(i, opts.qr2); // MOCK-HOOK
                       return ( // MOCK-HOOK
-                        <button key={i.id} type="button" data-bar-id={i.id} data-testid="mk-bar" onClick={() => onOpen(openKey === i.key ? null : i.key)} className="absolute top-1 h-[46px] overflow-hidden rounded-lg px-2 text-left" style={{ ...lk.bar, left: s * colW + 4, width: (e - s + 1) * colW - 8, outline: openKey === i.key ? "2px solid var(--accent-ink)" : undefined }}> {/* MOCK-HOOK */}
-                          <span className="block w-fit max-w-full truncate rounded bg-surface/85 px-1 text-sm font-semibold" style={lk.name}>{lk.mark ? "⚠ " : ""}{i.title}</span> {/* MOCK-HOOK */}
+                        <button key={i.id} type="button" data-bar-id={i.id} data-testid="mk-bar" onClick={() => onOpen(openKey === i.key ? null : i.key)} className={`absolute top-1 overflow-hidden rounded-lg px-2 text-left ${phone ? "h-[64px] py-0.5" : "h-[46px]"}`} style={{ ...lk.bar, left: s * colW + 4, width: (e - s + 1) * colW - 8, outline: openKey === i.key ? "2px solid var(--accent-ink)" : undefined }}> {/* MOCK-HOOK */}
+                          <span className={`block w-fit max-w-full rounded bg-surface/85 px-1 text-sm font-semibold ${phone ? "leading-[18px]" : "truncate"}`} style={lk.name}>{lk.mark ? "⚠ " : ""}{i.title}</span> {/* MOCK-HOOK */}
                           <span className="block w-fit max-w-full truncate rounded bg-surface/85 px-1 text-xs text-text2">{spanWords(i.start.date, i.end.date, data.today)}</span> {/* MOCK-HOOK */}
                         </button> // MOCK-HOOK
                       ); // MOCK-HOOK
@@ -421,7 +428,7 @@ function QuarterList(props: Inner) { // MOCK-HOOK
                         {f && (opts.qr3 === "a" || opts.qr3 === "d" ? <span className="block text-xs text-crit">⚠ Broken link</span> : <span className="block text-xs text-crit">⚠ {f.reason}</span>)} {/* MOCK-HOOK */}
                       </span> {/* MOCK-HOOK */}
                     </button> {/* MOCK-HOOK */}
-                    {sel && opts.qr4 === "b" && <div className="px-3 pb-3">{props.card(i, { position: "relative", left: 0, top: 0, width: "100%" }, false, () => onOpen(null))}</div>} {/* MOCK-HOOK */}
+                    {sel && opts.qr4 === "b" && <div className="px-3 pb-3">{props.card(i, { position: "relative", left: 0, top: 0, width: "100%", zIndex: 1 }, false, () => onOpen(null))}</div>} {/* MOCK-HOOK */}
                   </li> // MOCK-HOOK
                 ); // MOCK-HOOK
               })}

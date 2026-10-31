@@ -16,6 +16,7 @@ import {
   confidenceWord,
   milestoneInk,
   shortDay,
+  spanWords, // MOCK-HOOK
   sourceWord,
   statusWord,
   storedDates,
@@ -617,9 +618,10 @@ export function FloatingCard({
     ref.current?.focus({ preventScroll: true }); // MOCK-HOOK mk-qa4-roadmap QR4: opening a card never scrolls the page
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  const span = spanWords(item.start.date, item.end.date, new Date().toISOString().slice(0, 10)); // MOCK-HOOK mk-qa4-roadmap review: the card's dates carry the year when it is not this one, as the bar does
   const dates = item.estimated
-    ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · Estimated by Oracle (the ${item.horizon} window)`
-    : `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · ${sourceWord(item.source)}`;
+    ? `${span} · Estimated by Oracle (the ${item.horizon} window)` // MOCK-HOOK
+    : `${span} · ${sourceWord(item.source)}`; // MOCK-HOOK
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside);
   // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
@@ -641,7 +643,7 @@ export function FloatingCard({
       ? "fixed z-40 flex w-[840px] flex-col rounded-xl border"
       : `absolute z-40 rounded-xl border p-4 ${wide ? "w-[760px]" : "w-[380px]"}`;
   const placeStyle: React.CSSProperties | undefined = phone
-    ? undefined
+    ? !wide && style.height ? { height: style.height } : undefined // MOCK-HOOK mk-qa4-roadmap QR4 a: a part-height sheet keeps the marked row in sight
     : beside
       ? { top: 16, bottom: 16, right: talkRight }
       : left == null

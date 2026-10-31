@@ -41,7 +41,7 @@
   },
   {
     "file": "qr1-c-rest-1512.html",
-    "caption": "1512 wide: a short item is still only a few pixels; the chart runs long down the page (the cost)."
+    "caption": "1512 wide: a short item is still only a few pixels; the chart runs on down the page, past the screen (the cost)."
   },
   {
     "file": "qr1-c-rest-390.html",
@@ -64,6 +64,14 @@
     "caption": "Phone: the same key above the list, wrapped onto lines."
   },
   {
+    "file": "qr2-a-cut-390.html",
+    "caption": "Phone, further down: In-app tour, cut, is grey and struck through in its quarter."
+  },
+  {
+    "file": "qr2-a-cut.html",
+    "caption": "Scrolled down to Below the line: In-app tour, cut, is a grey bar with its name struck through; no red."
+  },
+  {
     "file": "qr2-b-rest.html",
     "caption": "At rest: the same colours, no key on the page; one button, What the colours mean."
   },
@@ -72,16 +80,32 @@
     "caption": "After a click: the key opens under the button and covers the conflicts list until closed (the cost)."
   },
   {
+    "file": "qr2-b-cut.html",
+    "caption": "Key closed, scrolled down to Below the line: the cut item looks as in A, with no key in sight to say so."
+  },
+  {
     "file": "qr2-c-rest.html",
-    "caption": "At rest: every bar the same blue; a short word on the row says Draft, Cut or Broken link; Today is a dark line."
+    "caption": "At rest: every bar the same blue; a short word on the row says Draft, Cut or Broken link; Today is a plain line."
   },
   {
     "file": "qr2-c-rest-390.html",
     "caption": "Phone: the words sit after each name in the list."
   },
   {
+    "file": "qr2-c-cut-390.html",
+    "caption": "Phone, further down: In-app tour says Cut after its struck-through name; its mark is as blue as the rest."
+  },
+  {
+    "file": "qr2-c-cut.html",
+    "caption": "Scrolled down to Below the line: In-app tour has the same blue bar as live work; only the word Cut and the strike say it is out."
+  },
+  {
     "file": "qr2-d-rest.html",
-    "caption": "At rest: the fill says progress (green in progress, blue planned); red stays only for a broken link; Today is purple. One more colour to learn (the cost)."
+    "caption": "Scrolled back a little: the fill says progress (grey done, green in progress, blue planned); red stays only for a broken link. One more colour to learn (the cost)."
+  },
+  {
+    "file": "qr2-d-cut.html",
+    "caption": "Scrolled down to Below the line: a cut item is grey like a done one, told apart only by its struck-through name."
   },
   {
     "file": "qr3-a-rest.html",
@@ -102,6 +126,10 @@
   {
     "file": "qr3-a-shut.html",
     "caption": "Hide folds the panel to one line; the chart moves up."
+  },
+  {
+    "file": "qr3-a-waterfall.html",
+    "caption": "Waterfall chosen: the same panel sits above its chart, and no banner covers a phase bar."
   },
   {
     "file": "qr3-b-rest.html",
@@ -125,7 +153,7 @@
   },
   {
     "file": "qr3-d-rest-1512.html",
-    "caption": "1512 wide: about four months of chart show beside the column."
+    "caption": "1512 wide: about six months of chart show beside the column, each week narrower."
   },
   {
     "file": "qr4-a-open.html",
@@ -145,7 +173,7 @@
   },
   {
     "file": "qr4-a-open-390.html",
-    "caption": "Phone: the item opens as a sheet from the bottom; the list stays where it was underneath."
+    "caption": "Phone: the item opens as a sheet over the lower half; Mobile alert push stays marked in sight above it."
   },
   {
     "file": "qr4-b-open.html",
@@ -153,7 +181,7 @@
   },
   {
     "file": "qr4-b-open-390.html",
-    "caption": "Phone: the details open inside the list under the item."
+    "caption": "Phone: the details open inside the list under the item and push the next items down."
   },
   {
     "file": "qr4-c-open.html",
@@ -161,6 +189,6 @@
   },
   {
     "file": "qr4-c-open-hard.html",
-    "caption": "Alert routing by team, a long bar filling the screen: no room either side, so the card opens under it and covers the rows below (the cost)."
+    "caption": "Scrolled to 2027, Alert routing by team fills the chart: no room either side, so the card opens under it and covers the rows below (the cost)."
   }
 ]

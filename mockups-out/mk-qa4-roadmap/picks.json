@@ -79,7 +79,7 @@
             },
             {
               "file": "qr1-c-rest-1512.html",
-              "caption": "1512 wide: a short item is still only a few pixels; the chart runs long down the page (the cost)."
+              "caption": "1512 wide: a short item is still only a few pixels; the chart runs on down the page, past the screen (the cost)."
             },
             {
               "file": "qr1-c-rest-390.html",
@@ -127,8 +127,16 @@
               "caption": "At rest: the key sits above the chart. Red only for a broken link; a draft is grey and dashed; a cut item is struck through; Today is purple."
             },
             {
+              "file": "qr2-a-cut.html",
+              "caption": "Scrolled down to Below the line: In-app tour, cut, is a grey bar with its name struck through; no red."
+            },
+            {
               "file": "qr2-a-rest-390.html",
               "caption": "Phone: the same key above the list, wrapped onto lines."
+            },
+            {
+              "file": "qr2-a-cut-390.html",
+              "caption": "Phone, further down: In-app tour, cut, is grey and struck through in its quarter."
             }
           ]
         },
@@ -147,6 +155,10 @@
             {
               "file": "qr2-b-open.html",
               "caption": "After a click: the key opens under the button and covers the conflicts list until closed (the cost)."
+            },
+            {
+              "file": "qr2-b-cut.html",
+              "caption": "Key closed, scrolled down to Below the line: the cut item looks as in A, with no key in sight to say so."
             }
           ]
         },
@@ -160,11 +172,19 @@
           "frames": [
             {
               "file": "qr2-c-rest.html",
-              "caption": "At rest: every bar the same blue; a short word on the row says Draft, Cut or Broken link; Today is a dark line."
+              "caption": "At rest: every bar the same blue; a short word on the row says Draft, Cut or Broken link; Today is a plain line."
+            },
+            {
+              "file": "qr2-c-cut.html",
+              "caption": "Scrolled down to Below the line: In-app tour has the same blue bar as live work; only the word Cut and the strike say it is out."
             },
             {
               "file": "qr2-c-rest-390.html",
               "caption": "Phone: the words sit after each name in the list."
+            },
+            {
+              "file": "qr2-c-cut-390.html",
+              "caption": "Phone, further down: In-app tour says Cut after its struck-through name; its mark is as blue as the rest."
             }
           ]
         },
@@ -178,7 +198,11 @@
           "frames": [
             {
               "file": "qr2-d-rest.html",
-              "caption": "At rest: the fill says progress (green in progress, blue planned); red stays only for a broken link; Today is purple. One more colour to learn (the cost)."
+              "caption": "Scrolled back a little: the fill says progress (grey done, green in progress, blue planned); red stays only for a broken link. One more colour to learn (the cost)."
+            },
+            {
+              "file": "qr2-d-cut.html",
+              "caption": "Scrolled down to Below the line: a cut item is grey like a done one, told apart only by its struck-through name."
             }
           ]
         }
@@ -188,7 +212,7 @@
       "code": "QR3",
       "name": "Where conflict notices go",
       "question": "Where should broken-link notices and their fixes appear so they never cover bars or names?",
-      "common": "In every proposal the notice is never drawn on top of a bar or a name, its words are shown in full (no … cut), and the three fixes (Move the dependents, Move the dependency, Accept as risk) stay one click away. Shown on QR1 A with QR2 A. Fixes qa4-simple-roadmap-4.",
+      "common": "In every proposal the notice's words are shown in full (no … cut), the three fixes (Move the dependents, Move the dependency, Accept as risk) stay one click away, and red on a bar means an open broken link only. A, B and D never draw a notice on top of a bar or a name; C does, but only while you have it open. The placement you pick also replaces the banners on the Waterfall (shown for A). Shown on QR1 A with QR2 A. Fixes qa4-simple-roadmap-4.",
       "proposals": [
         {
           "letter": "A",
@@ -218,6 +242,10 @@
             {
               "file": "qr3-a-shut.html",
               "caption": "Hide folds the panel to one line; the chart moves up."
+            },
+            {
+              "file": "qr3-a-waterfall.html",
+              "caption": "Waterfall chosen: the same panel sits above its chart, and no banner covers a phase bar."
             }
           ]
         },
@@ -245,7 +273,7 @@
           "recommended": false,
           "what": "Only a small red mark after the bar; clicking it opens the words and fixes under the bar.",
           "plus": "Smallest footprint; the chart stays as it is.",
-          "cost": "You cannot read what is wrong without a click; easy to miss.",
+          "cost": "You cannot read what is wrong without a click, so it is easy to miss; while open, the words cover the bar below until you close them.",
           "frames": [
             {
               "file": "qr3-c-rest.html",
@@ -271,7 +299,7 @@
             },
             {
               "file": "qr3-d-rest-1512.html",
-              "caption": "1512 wide: about four months of chart show beside the column."
+              "caption": "1512 wide: about six months of chart show beside the column, each week narrower."
             }
           ]
         }
@@ -281,7 +309,7 @@
       "code": "QR4",
       "name": "What opening an item does",
       "question": "When someone clicks an item on the Timeline, where should its card open?",
-      "common": "In every proposal the page does not jump, the rail stays full height, no grey band appears and the item you clicked stays in sight and marked. The card's content is today's item card. Shown on QR1 A, QR2 A, QR3 A. Fixes qa4-simple-roadmap-11.",
+      "common": "In every proposal the page does not jump, the rail stays full height, no grey band appears and the item you clicked stays in sight and marked (on a phone too). The card's content is today's item card. Shown on QR1 A, QR2 A, QR3 A. Fixes qa4-simple-roadmap-11.",
       "proposals": [
         {
           "letter": "A",
@@ -290,7 +318,7 @@
           "what": "The item opens in a panel on the right of the chart; the chart narrows but stays usable and scrollable, the clicked row is marked, and clicking another item swaps the panel. On a phone it opens as a sheet from the bottom.",
           "why": "Nothing is covered: you can read the card and see the item and its neighbours at once, and moving from item to item is one click. A phone already uses a sheet, so both read the same way.",
           "plus": "Never covers the chart; quick to move between items; same idea on phone.",
-          "cost": "The chart loses about 410 px while the panel is open (about five months show at 1440).",
+          "cost": "The chart loses about 410 px while the panel is open (about five months show at 1440). On a phone the sheet covers the lower half of the list while it is open.",
           "frames": [
             {
               "file": "qr4-a-open.html",
@@ -310,7 +338,7 @@
             },
             {
               "file": "qr4-a-open-390.html",
-              "caption": "Phone: the item opens as a sheet from the bottom; the list stays where it was underneath."
+              "caption": "Phone: the item opens as a sheet over the lower half; Mobile alert push stays marked in sight above it."
             }
           ]
         },
@@ -328,7 +356,7 @@
             },
             {
               "file": "qr4-b-open-390.html",
-              "caption": "Phone: the details open inside the list under the item."
+              "caption": "Phone: the details open inside the list under the item and push the next items down."
             }
           ]
         },
@@ -346,7 +374,7 @@
             },
             {
               "file": "qr4-c-open-hard.html",
-              "caption": "Alert routing by team, a long bar filling the screen: no room either side, so the card opens under it and covers the rows below (the cost)."
+              "caption": "Scrolled to 2027, Alert routing by team fills the chart: no room either side, so the card opens under it and covers the rows below (the cost)."
             }
           ]
         }

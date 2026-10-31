@@ -56,7 +56,7 @@ import {
   type Where,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
-import { MkTimeline, useMk } from "./_mk"; // MOCK-HOOK mk-qa4-roadmap
+import { MkConflicts, MkTimeline, useMk } from "./_mk"; // MOCK-HOOK mk-qa4-roadmap
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -1284,6 +1284,8 @@ export function SimpleRoadmap() {
             }
           />
         ) : (
+          <>
+          {mk?.qr3 === "a" && <MkConflicts data={laned ?? data} phone={phone} act={act} canChange={canChange} byId={byId} onShow={(k) => { const it = data.items.find((x) => x.key === k); if (it) { setPop(null); setCard({ id: it.id, ...anchorOf(it.id) }); } }} />} {/* MOCK-HOOK mk-qa4-roadmap QR3 a on the Waterfall */}
           <Chart
             data={laned ?? data}
             lane={f.group}
@@ -1313,6 +1315,7 @@ export function SimpleRoadmap() {
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
             overlay={(l, sc) =>
+              mk?.qr3 === "a" ? [] : // MOCK-HOOK mk-qa4-roadmap QR3 a: no banners over bars
               data.items.flatMap((i) => {
                 const y = l.y.get(i.id);
                 if (y == null || closedItem(i)) return [];
@@ -1323,6 +1326,7 @@ export function SimpleRoadmap() {
               })
             }
           />
+          </>
         )}
         {cardItem && card && (
           <FloatingCard
