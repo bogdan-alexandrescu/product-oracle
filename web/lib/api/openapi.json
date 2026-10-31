@@ -61152,6 +61152,14 @@
             "type": "array",
             "title": "Repos",
             "default": []
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unmapped",
+            "default": []
           }
         },
         "type": "object",

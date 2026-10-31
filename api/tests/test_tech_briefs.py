@@ -514,7 +514,7 @@ async def test_the_read_routes(client, eng_flow, no_map_runtime):
     assert resp.status_code == 200, resp.text
     listed = resp.json()
     assert [b["feature"]["key"] for b in listed] == ["feature-a", "feature-b"]
-    assert listed[0]["code_map"] == {"used": False, "repos": []}
+    assert listed[0]["code_map"] == {"used": False, "repos": [], "unmapped": []}
     assert listed[0]["assumptions"] == ["A billing module exists"]
     assert listed[0]["prd"] == {"slug": "map-less", "version": 1}
     resp = await client.get(

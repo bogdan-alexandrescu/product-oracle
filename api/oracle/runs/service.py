@@ -2815,6 +2815,9 @@ async def _prompt_context(
         if scope is not None:
             scope_rows = await feature_set.scope_items(db, scope.id)
             scope_yaml = await feature_set.scope_yaml_async(scope, scope_rows)
+    # SwarmCloud reaches Oracle only through the credential it attaches; the local
+    # runtime's agents are Oracle's own.
+    mcp_reachable = attached or (runtime.can_reach_oracle and runtime.name != "swarmcloud")
     return flows.PromptContext(
         run_id=str(run.id),
         document=document,
@@ -2833,9 +2836,7 @@ async def _prompt_context(
         previous_seq=segment.seq if previous_attempt is not None else None,
         previous_files=previous_files,
         previous_problems=previous_problems,
-        # SwarmCloud reaches Oracle only through the credential it attaches; the local
-        # runtime's agents are Oracle's own.
-        mcp_reachable=attached or (runtime.can_reach_oracle and runtime.name != "swarmcloud"),
+        mcp_reachable=mcp_reachable,
         mcp_attached=attached,
         prior_files=prior_files,
         kind=kind,
@@ -2844,6 +2845,11 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
+            *(
+                await eng_check.run_architect_lines(db, run, mcp_reachable=mcp_reachable)
+                if flows.BRIEFS_FILE in _flow(run).segment(segment.name).outputs
+                else []
+            ),
             *await eng_dates.prompt_lines(db, run, segment.name),
             *_regenerate_note(run, hidden),
         ],
