@@ -20,7 +20,7 @@ test("Home: goals show current over target, distance to go, confidence and trend
   // I3: distance to go in the goal's own unit, never a percentage of target.
   await expect(g1.getByTestId("goal-to-go")).toHaveText("7 pts to go");
   // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
-  await expect(g1.getByRole("img", { name: "No confidence" })).toBeVisible();
+  await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
   // The trend comes from the goal's recorded revisions, with the target dashed.
   await expect(g1.getByTestId("goal-trend").locator("line[data-target='45']")).toHaveCount(1);
   await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");

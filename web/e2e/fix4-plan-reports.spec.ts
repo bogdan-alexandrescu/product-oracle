@@ -37,7 +37,7 @@ async function openReport(page: Page) {
 test("qa-plan-1: the report and the Plan count a track's items needing attention the same way", async ({ page }) => {
   await start(page, "alignment-report");
   const plan = await planHeadline(page);
-  expect(plan).toMatch(/1 of 7 items need attention/);
+  expect(plan).toMatch(/1 of 7 items needs attention/);
   const track = await openReport(page);
   await expect(track).toContainText(plan);
   await expect(track).not.toContainText("1 of 3 items");

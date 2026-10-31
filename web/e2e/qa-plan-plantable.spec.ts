@@ -67,7 +67,7 @@ for (const width of [1440, 1512]) {
     await expect(goal.getByTestId("code-chip")).toHaveCount(1);
     await notCut(goal.getByTestId("code-name"));
     const more = goal.getByTestId("plan-goal-more");
-    await expect(more).toHaveText("+2");
+    await expect(more).toHaveText("+2 goals");
     await expect(more).toHaveAttribute("title", /Grow paid conversion.*Cut early churn/);
     const gb = (await goal.boundingBox())!;
     const mb = (await more.boundingBox())!;
@@ -90,7 +90,7 @@ test("an item's History has one line per event", async ({ page }) => {
   await row(page, "Threshold alerts on spend").getByTestId("plan-title").click();
   const lines = inspector(page).getByTestId("plan-history").getByTestId("plan-history-version");
   // qa-plan-17: the roadmap is never approved by default, so its item history agrees.
-  await expect(lines).toHaveText(["PRD v1 Now · in a draft"]);
+  await expect(lines).toHaveText(["Added to Now in draft 1 from PRD v1"]);
 });
 
 test("Why it needs you says what changed in words", async ({ page }) => {
@@ -109,7 +109,7 @@ test("phone: a row with three goals reads the first and +2, no sideways scroll",
   await page.goto("/plan");
   await expect(rows(page).first()).toBeVisible();
   const goal = row(page, "Usage dashboard").getByTestId("plan-goal");
-  await expect(goal.getByTestId("plan-goal-more")).toHaveText("+2");
+  await expect(goal.getByTestId("plan-goal-more")).toHaveText("+2 goals");
   await expect(row(page, "Threshold alerts on spend").getByTestId("plan-prd")).toHaveText("Usage alerts");
   expect(await page.evaluate(() => document.scrollingElement!.scrollWidth)).toBeLessThanOrEqual(390);
 });

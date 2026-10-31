@@ -196,7 +196,7 @@ test("selecting a row opens the inspector with its links", async ({ page }) => {
   await expect(inspector.getByTestId("plan-why")).toContainText("ENG-405 targets Dec 9");
   // qa-plan-17: the roadmap is never approved by default (the Documents tab agrees), so its
   // item history says so too, instead of a date that contradicted it.
-  await expect(inspector.getByTestId("plan-history")).toContainText("PRD v1 Now · in a draft");
+  await expect(inspector.getByTestId("plan-history")).toContainText("Added to Now in draft 1 from PRD v1");
   await expect(inspector.getByTestId("plan-item-goal")).toContainText("Grow paid conversion");
   await expect(inspector.getByTestId("plan-item-goal")).toContainText("to go");
 });

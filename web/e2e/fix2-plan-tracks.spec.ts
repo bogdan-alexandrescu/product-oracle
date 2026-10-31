@@ -37,7 +37,7 @@ for (const phone of [false, true]) {
       const t = track(page);
       await expect(c.getByTestId("plan-prd-figure")).toHaveText("At risk");
       await expect(t.getByTestId("track-health")).toHaveText("At risk");
-      await expect(t).toContainText("At risk: 1 of 7 items need attention");
+      await expect(t).toContainText("At risk: 1 of 7 items needs attention");
       await expect(t).not.toContainText("On track");
       await t.getByRole("group", { name: "Track status" }).getByRole("button", { name: "Paused" }).click();
       await expect(t.getByTestId("track-health")).toHaveText("Paused");
