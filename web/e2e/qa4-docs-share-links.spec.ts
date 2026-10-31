@@ -146,7 +146,7 @@ test.describe("desktop", () => {
     await expect(sheet.getByText("Add a label first.")).toHaveCount(0);
   });
 
-  test("qa4-docs-share-29, 30: Revoke says right away; the revoked row shows when and why, and the count matches", async ({ page }) => {
+  test("qa4-docs-share-29, 30: Revoke says right away; the revoked row shows when, who and why, and the count matches", async ({ page }) => {
     await sharing(page);
     await page.goto(DOC);
     const row = linkRow(page, "Team, all-hands");
@@ -157,7 +157,9 @@ test.describe("desktop", () => {
     await revoke.getByLabel("Reason (optional)").fill("Meeting moved");
     await revoke.getByRole("button", { name: "Revoke link" }).click();
     await expect(row.getByTestId("share-state")).toHaveText("Revoked");
-    await expect(row.getByTestId("share-revoked")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, \d{4} · Reason: Meeting moved$/);
+    // qa4fix-docs-share review: and who revoked it, by name.
+    await expect(row.getByTestId("share-revoked")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, \d{4} · by \S.* · Reason: Meeting moved$/);
+    await expect(row.getByTestId("share-revoked")).not.toContainText("by A member");
     const count = page.locator('section[aria-label="Share links"]').getByTestId("panel-count");
     await expect(count).toHaveText(/^0 active · \d+ total$/);
   });

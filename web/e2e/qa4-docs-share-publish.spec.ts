@@ -57,6 +57,35 @@ test.describe("desktop", () => {
     await expect(advisory).not.toContainText("Pass");
   });
 
+  test("qa4fix-docs-share review: the advisory blocker check is critical when a critical blocker has no workable option or experiment", async ({ page }) => {
+    // As the API's rule: the seeded critical blocker's one option is rejected and its experiment fails.
+    await login(page);
+    await page.goto("/baseline?tab=blockers");
+    await page.getByTestId("blocker-row").filter({ hasText: "The address lookup service allows 100 requests a minute per company" }).click();
+    const insp = page.getByTestId("blocker-inspector");
+    const option = insp.getByTestId("blocker-option").filter({ hasText: "Batch address lookups within the published quota" });
+    await option.getByRole("button", { name: "Reject" }).click();
+    const no = option.getByRole("form", { name: "Reject option" });
+    await no.getByLabel("Reason").fill("Batching still passes the quota at launch");
+    await no.getByRole("button", { name: "Reject" }).click();
+    await expect(option).toContainText("Rejected");
+    const x = insp.getByTestId("experiment").filter({ hasText: "Batching halves lookup calls" });
+    await x.getByRole("button", { name: "Start" }).click();
+    await expect(x).toContainText("Running");
+    await x.getByRole("button", { name: "Conclude" }).click();
+    const end = x.getByRole("form", { name: "Conclude experiment" });
+    await end.getByLabel("Outcome").selectOption("failed");
+    await end.getByLabel("Result").fill("Calls fell by a tenth only");
+    await end.getByRole("button", { name: "Save result" }).click();
+    await expect(x).toContainText("Failed");
+
+    await page.goto("/documents/checkout-redesign/publish");
+    await expect(page.getByTestId("publish-readiness")).toBeVisible();
+    const advisory = page.locator('[data-testid="advisory"][data-key="blocker_feasibility"]');
+    await expect(advisory).toHaveAttribute("data-status", "critical");
+    await expect(advisory).toContainText("no workable mitigation");
+  });
+
   test("qa4-docs-share-52: a blocker's Resolve and Open blocker go to the same place", async ({ page }) => {
     await open(page, "checkout-redesign");
     const row = page.getByTestId("block-row").filter({ hasText: "Critical blocker" }).first();

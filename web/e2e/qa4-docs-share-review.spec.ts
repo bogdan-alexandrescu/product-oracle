@@ -92,6 +92,36 @@ test("qa4-docs-share-36: an open campaign past its due date is marked Overdue", 
   await expect(row).not.toContainText(/\bdue Oct 26/);
 });
 
+test.describe("on a browser far east of the company's time zone", () => {
+  // The company's zone is America/Los_Angeles; this browser's calendar is a day ahead near midnight.
+  test.use({ timezoneId: "Asia/Tokyo" });
+
+  test("qa4fix-docs-share review: today for a due date is the company's day, not the browser's", async ({ page }) => {
+    // Oct 22, 1 PM in Los Angeles; already Oct 23 in Tokyo.
+    await page.clock.setSystemTime(new Date("2026-10-22T20:00:00Z"));
+    await login(page);
+    await page.goto(PRD);
+    const panel = page.getByTestId("campaigns");
+    await panel.getByRole("button", { name: "Ask for feedback" }).click();
+    await panel.getByLabel("Title").fill("Example same-day read-through");
+    await expect(panel.getByLabel("Due date (optional)")).toHaveAttribute("min", "2026-10-22");
+    await panel.getByLabel("Due date (optional)").fill("2026-10-22");
+    await panel.getByRole("button", { name: "Send" }).click();
+    await expect(panel).not.toContainText("Pick today or a later day for the due date.");
+    await expect(panel.getByRole("listitem").filter({ hasText: "Example same-day read-through" })).toContainText("due Oct 22");
+  });
+
+  test("qa4fix-docs-share review: Overdue starts on the company's next day, not the browser's", async ({ page }) => {
+    // Oct 26, 8 PM in Los Angeles (the due day still); already Oct 27 in Tokyo.
+    await page.clock.setSystemTime(new Date("2026-10-27T03:00:00Z"));
+    await login(page);
+    await page.goto(PRD);
+    const row = page.getByTestId("campaigns").getByRole("listitem").filter({ hasText: "Company-wide feedback" });
+    await expect(row).toContainText("due Oct 26");
+    await expect(row).not.toContainText("Overdue");
+  });
+});
+
 test("qa4-docs-share-37: the cards' equal actions share one button style", async ({ page }) => {
   await login(page);
   await page.goto(PRD);

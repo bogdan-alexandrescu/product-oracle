@@ -48,6 +48,20 @@ test("qa4-docs-share-47: the To approve count matches the rows with an Approve b
   await expect(rows.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
 });
 
+test("qa4fix-docs-share review: a draft on an item that serves no goal is not counted To approve, as the API counts", async ({ page }) => {
+  await openPublic(page);
+  const row = behaviour(page);
+  await row.getByRole("button", { name: "Write text" }).click();
+  await row.getByLabel("Public title").fill("Example usage alerts");
+  await row.getByLabel("Public description").fill("Get a note when usage runs high.");
+  await row.getByRole("button", { name: "Save draft" }).click();
+  await expect(row.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+  // The item serves no confirmed goal: the API's not_ready skips it, and so does the count.
+  const toApprove = page.getByRole("radiogroup", { name: "Filter" }).getByRole("radio", { name: /To approve/ });
+  await expect(toApprove).toHaveText(/To approve\s*0/);
+  await expect(page.getByTestId("public-next")).not.toContainText("Approve or exclude");
+});
+
 test("qa4-docs-share-48: an item with no text has one control to write it, and its stage starts from its horizon", async ({ page }) => {
   await openPublic(page);
   const row = behaviour(page);
