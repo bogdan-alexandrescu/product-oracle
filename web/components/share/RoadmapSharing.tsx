@@ -196,7 +196,7 @@ export function RoadmapSharing({ d }: { d: Doc }) {
   const fallback: Audience = d.audience && (d.audience !== "public" || showPublic) ? d.audience : "team";
   const audience: Audience = isAudience(fromUrl) && (fromUrl !== "public" || showPublic) ? fromUrl : fallback;
   const shareParam = params.get("share");
-  const [sharing, setSharing] = useState<Audience | null>(isAudience(shareParam) ? shareParam : null);
+  const [sharing, setSharing] = useState<Audience | null>(isAudience(shareParam) ? shareParam : params.get("open") === "1" ? audience : null); // MOCK-HOOK
   const [linksKey, setLinksKey] = useState(0);
   const canShare = can("create_share_link", true);
   const checkPublic = can("list_public_texts");
@@ -370,6 +370,8 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
   const ownerPublic = can("create_share_link");
+  const qv4 = useSearchParams().get("qv4"); // MOCK-HOOK
+  const qv = qv4 === "a" || qv4 === "b" || qv4 === "c" ? qv4 : null; // MOCK-HOOK
   const check = useQuery(`share-public-check|${doc}|${pub?.version_number ?? 0}|${audience}`, () =>
     audience === "public" && pub && can("list_public_texts")
       ? unwrap(api.GET("/v1/roadmaps/{doc}/public-texts", { params: { path: { doc }, query: { version: pub.version_number } } }))
@@ -444,9 +446,24 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
     >
       {pubs.error && <ErrorNote>{pubs.error}</ErrorNote>}
       {!pubs.data && !pubs.error && <Loading />}
-      {pubs.data && !pub && <NotPublished doc={doc} n={n} onClose={onClose} onPublished={() => void pubs.reload()} />}
+      {pubs.data && !pub && !qv && <NotPublished doc={doc} n={n} onClose={onClose} onPublished={() => void pubs.reload()} />}{/* MOCK-HOOK */}
+      {pubs.data && !pub && qv && ( // MOCK-HOOK
+        <Qv4Blockers // MOCK-HOOK
+          qv={qv} // MOCK-HOOK
+          doc={doc} // MOCK-HOOK
+          n={n} // MOCK-HOOK
+          audience={audience} // MOCK-HOOK
+          onClose={onClose} // MOCK-HOOK
+          onPublished={() => void pubs.reload()} // MOCK-HOOK
+          onShared={(out) => { // MOCK-HOOK
+            setCreated(out); // MOCK-HOOK
+            onCreated(); // MOCK-HOOK
+          }} // MOCK-HOOK
+        /> // MOCK-HOOK
+      )}{/* MOCK-HOOK */}
       {pub && (
         <>
+          {qv && <Qv4Ready qv={qv} n={pub.version_number} />}{/* MOCK-HOOK */}
           <p className="text-text2" data-testid="share-shares">
             Shares the published v{pub.version_number} ({formatShortDate(pub.created_at)}).
           </p>
@@ -928,3 +945,212 @@ function ViewLog({ link, onClose }: { link: Link_; onClose: () => void }) {
     </Modal>
   );
 }
+// MOCK-HOOK
+/* QV4 mock-up: one meaning for Publish, and every sharing blocker shown together (?qv4=a|b|c). */ // MOCK-HOOK
+type Qv = "a" | "b" | "c"; // MOCK-HOOK
+const QV_FIX = "font-semibold whitespace-nowrap text-accent-ink underline"; // MOCK-HOOK
+// MOCK-HOOK
+/** One row of a list: done or not, what it is, and how to fix it. */ // MOCK-HOOK
+function Qv4Row({ done, testId, children, fix }: { done: boolean; testId: string; children: ReactNode; fix?: ReactNode }) { // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <li data-testid={testId} data-done={done} className="flex min-h-9 items-center gap-2 border-t border-line py-1.5 first:border-t-0">{/* MOCK-HOOK */}
+      <Icon name={done ? "check" : "alert"} size={16} className={`flex-none ${done ? "text-pass" : "text-warn"}`} />{/* MOCK-HOOK */}
+      <span className={`min-w-0 flex-1 ${done ? "text-text2 line-through" : "font-medium text-text"}`}>{children}</span>{/* MOCK-HOOK */}
+      {!done && fix}{/* MOCK-HOOK */}
+    </li> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK
+// MOCK-HOOK
+/** b: the three steps, all on screen; the current one carries its action. */ // MOCK-HOOK
+function Qv4Steps({ steps }: { steps: { label: string; done: boolean; note: string; action?: ReactNode }[] }) { // MOCK-HOOK
+  const current = steps.findIndex((x) => !x.done); // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <ol aria-label="Steps to share" data-testid="qv4-steps" className="space-y-2">{/* MOCK-HOOK */}
+      {steps.map((x, i) => ( // MOCK-HOOK
+        <li key={x.label} data-testid="qv4-step" data-state={x.done ? "done" : i === current ? "current" : "waiting"} aria-current={i === current ? "step" : undefined} className={`flex gap-3 rounded-lg border px-3 py-2 ${i === current ? "border-accent bg-accent-soft" : "border-line"}`}>{/* MOCK-HOOK */}
+          <span className={`grid size-7 flex-none place-items-center rounded-full text-sm font-bold ${x.done ? "bg-pass text-on-accent" : i === current ? "bg-accent text-on-accent" : "bg-surface2 text-text2"}`}>{/* MOCK-HOOK */}
+            {x.done ? <Icon name="check" size={16} /> : i + 1}{/* MOCK-HOOK */}
+          </span>{/* MOCK-HOOK */}
+          <div className="min-w-0 flex-1">{/* MOCK-HOOK */}
+            <p className="font-semibold">{x.label}</p>{/* MOCK-HOOK */}
+            <p className="text-sm text-text2">{x.note}</p>{/* MOCK-HOOK */}
+            {i === current && x.action && <div className="mt-2">{x.action}</div>}{/* MOCK-HOOK */}
+          </div>{/* MOCK-HOOK */}
+        </li> // MOCK-HOOK
+      ))}{/* MOCK-HOOK */}
+    </ol> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK
+// MOCK-HOOK
+/** Above the form once v is published: what is done, in each proposal's words. */ // MOCK-HOOK
+function Qv4Ready({ qv, n }: { qv: Qv; n: number }) { // MOCK-HOOK
+  if (qv === "b") { // MOCK-HOOK
+    return ( // MOCK-HOOK
+      <Qv4Steps // MOCK-HOOK
+        steps={[ // MOCK-HOOK
+          { label: "Dates set", done: true, note: "Every date has a source." }, // MOCK-HOOK
+          { label: "Approved", done: true, note: `v${n} is approved.` }, // MOCK-HOOK
+          { label: "Published", done: true, note: `v${n} is published for sharing. Make the link below.` }, // MOCK-HOOK
+        ]} // MOCK-HOOK
+      /> // MOCK-HOOK
+    ); // MOCK-HOOK
+  } // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <p data-testid="qv4-ready" className="flex items-center gap-2 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">{/* MOCK-HOOK */}
+      <Icon name="check" size={16} className="flex-none" />{/* MOCK-HOOK */}
+      v{n} is published and ready to share.{/* MOCK-HOOK */}
+    </p> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK
+// MOCK-HOOK
+/** What still stops sharing, all at once, with each proposal's way through. */ // MOCK-HOOK
+function Qv4Blockers({ qv, doc, n, audience, onClose, onPublished, onShared }: { qv: Qv; doc: string; n: number; audience: Audience; onClose: () => void; onPublished: () => void; onShared: (out: Created) => void }) { // MOCK-HOOK
+  const { can } = useMe(); // MOCK-HOOK
+  const q = useQuery(`qv4-blockers|${doc}|${n}`, () => // MOCK-HOOK
+    Promise.all([ // MOCK-HOOK
+      unwrap(api.GET("/v1/documents/{doc}/versions/{n}/publish-check", { params: { path: { doc, n } } })), // MOCK-HOOK
+      unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })), // MOCK-HOOK
+    ]), // MOCK-HOOK
+  ); // MOCK-HOOK
+  const [busy, setBusy] = useState(false); // MOCK-HOOK
+  const [error, setError] = useState<string | null>(null); // MOCK-HOOK
+  const [label, setLabel] = useState(""); // MOCK-HOOK
+  const labelId = useId(); // MOCK-HOOK
+  if (q.error) return <ErrorNote>{q.error}</ErrorNote>; // MOCK-HOOK
+  if (!q.data) return <Loading />; // MOCK-HOOK
+  const [check, version] = q.data; // MOCK-HOOK
+  const dates = dateBlocksOf(version.date_marks, new Map(version.sections.map((s) => [s.section_key, s.heading]))); // MOCK-HOOK
+  const datesOk = dates.length === 0; // MOCK-HOOK
+  const approved = !!version.approved_at; // MOCK-HOOK
+  const other = check.blockers.filter((b) => !["already_published", "version_not_approved"].includes(b.code)); // MOCK-HOOK
+  const mayApprove = can("approve_version", true); // MOCK-HOOK
+  const mayPublish = can("publish_version"); // MOCK-HOOK
+  const mkdates = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("mkdates"); // MOCK-HOOK
+  const publishPage = `/documents/${doc}/publish?qv4=${qv}${mkdates ? `&mkdates=${mkdates}` : ""}`; // MOCK-HOOK
+  const datesFix = ( // MOCK-HOOK
+    <Link href="/plan/dates" onClick={onClose} className={QV_FIX}>{/* MOCK-HOOK */}
+      Fix in Plan › Dates{/* MOCK-HOOK */}
+    </Link> // MOCK-HOOK
+  ); // MOCK-HOOK
+  const datesText = `Pick where dates come from: ${plural(dates.length, "date")} ${dates.length === 1 ? "has" : "have"} no source yet`; // MOCK-HOOK
+  // The steps, as the API's own calls: approve, then publish (a fresh check gives the content hash). // MOCK-HOOK
+  const doApprove = async () => { // MOCK-HOOK
+    await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } })); // MOCK-HOOK
+  }; // MOCK-HOOK
+  const doPublish = async () => { // MOCK-HOOK
+    const fresh = await unwrap(api.GET("/v1/documents/{doc}/versions/{n}/publish-check", { params: { path: { doc, n } } })); // MOCK-HOOK
+    return unwrap(api.POST("/v1/documents/{doc}/versions/{n}/publish", { params: { path: { doc, n } }, body: { content_hash: fresh.content_hash } })); // MOCK-HOOK
+  }; // MOCK-HOOK
+  const run = async (steps: () => Promise<unknown>) => { // MOCK-HOOK
+    setBusy(true); // MOCK-HOOK
+    setError(null); // MOCK-HOOK
+    try { // MOCK-HOOK
+      await steps(); // MOCK-HOOK
+    } catch (e) { // MOCK-HOOK
+      setError(errorMessage(e)); // MOCK-HOOK
+    } finally { // MOCK-HOOK
+      setBusy(false); // MOCK-HOOK
+      void q.reload(); // MOCK-HOOK
+    } // MOCK-HOOK
+  }; // MOCK-HOOK
+  const errorNote = error && <ErrorNote>{error}</ErrorNote>; // MOCK-HOOK
+  const otherRows = other.map((b, i) => ( // MOCK-HOOK
+    <Qv4Row key={`${b.code}-${i}`} done={false} testId="qv4-blocker" fix={<Link href={publishPage} onClick={onClose} className={QV_FIX}>Fix on Publish page</Link>}>{/* MOCK-HOOK */}
+      {b.message}{/* MOCK-HOOK */}
+    </Qv4Row> // MOCK-HOOK
+  )); // MOCK-HOOK
+  // MOCK-HOOK
+  if (qv === "a") { // MOCK-HOOK
+    const left = Number(!datesOk) + other.length + 1; // MOCK-HOOK
+    return ( // MOCK-HOOK
+      <div data-testid="qv4-checklist" className="space-y-2">{/* MOCK-HOOK */}
+        <p className="font-semibold" data-testid="share-not-published">{/* MOCK-HOOK */}
+          Before you can share v{n}, {left === 1 ? "1 thing is" : `${left} things are`} left:{/* MOCK-HOOK */}
+        </p>{/* MOCK-HOOK */}
+        <ul className="rounded-lg border border-line px-3">{/* MOCK-HOOK */}
+          <Qv4Row done={datesOk} testId="qv4-blocker" fix={datesFix}>{/* MOCK-HOOK */}
+            {datesOk ? "Dates have a source" : datesText}{/* MOCK-HOOK */}
+          </Qv4Row>{/* MOCK-HOOK */}
+          {otherRows}{/* MOCK-HOOK */}
+          <Qv4Row // MOCK-HOOK
+            done={false} // MOCK-HOOK
+            testId="qv4-blocker" // MOCK-HOOK
+            fix={<Link href={publishPage} onClick={onClose} className={QV_FIX}>Fix on Publish page</Link>} // MOCK-HOOK
+          >{/* MOCK-HOOK */}
+            Publish v{n}{approved ? "" : " (this approves it too)"}{/* MOCK-HOOK */}
+          </Qv4Row>{/* MOCK-HOOK */}
+        </ul>{/* MOCK-HOOK */}
+        <p className="text-sm text-text2">A link shows a published version, never a draft.</p>{/* MOCK-HOOK */}
+      </div> // MOCK-HOOK
+    ); // MOCK-HOOK
+  } // MOCK-HOOK
+  // MOCK-HOOK
+  if (qv === "b") { // MOCK-HOOK
+    return ( // MOCK-HOOK
+      <div className="space-y-2">{/* MOCK-HOOK */}
+        <p className="font-semibold" data-testid="share-not-published">Three steps before you can share v{n}:</p>{/* MOCK-HOOK */}
+        <Qv4Steps // MOCK-HOOK
+          steps={[ // MOCK-HOOK
+            { label: "Dates set", done: datesOk, note: datesOk ? "Every date has a source." : datesText, action: <LinkButton variant="primary" href="/plan/dates" onClick={onClose}>Fix in Plan › Dates</LinkButton> }, // MOCK-HOOK
+            { // MOCK-HOOK
+              label: "Approved", // MOCK-HOOK
+              done: approved, // MOCK-HOOK
+              note: approved ? `v${n} is approved.` : `An approver or owner approves v${n}.`, // MOCK-HOOK
+              action: mayApprove ? <Button variant="primary" disabled={busy} onClick={() => run(doApprove)}>{busy ? "Approving…" : `Approve v${n}`}</Button> : <span className="text-sm">Ask an approver or owner to approve it.</span>, // MOCK-HOOK
+            }, // MOCK-HOOK
+            { // MOCK-HOOK
+              label: "Published", // MOCK-HOOK
+              done: false, // MOCK-HOOK
+              note: `Publishing for sharing fixes what the link shows. A link never shows a draft.`, // MOCK-HOOK
+              action: mayPublish ? ( // MOCK-HOOK
+                <Button variant="primary" disabled={busy || other.length > 0} onClick={() => run(async () => { await doPublish(); onPublished(); })}>{/* MOCK-HOOK */}
+                  {busy ? "Publishing…" : `Publish v${n} for sharing`}{/* MOCK-HOOK */}
+                </Button> // MOCK-HOOK
+              ) : <span className="text-sm">Ask an approver or owner to publish it.</span>, // MOCK-HOOK
+            }, // MOCK-HOOK
+          ]} // MOCK-HOOK
+        />{/* MOCK-HOOK */}
+        {other.length > 0 && <ul className="rounded-lg border border-line px-3">{otherRows}</ul>}{/* MOCK-HOOK */}
+        {errorNote}{/* MOCK-HOOK */}
+      </div> // MOCK-HOOK
+    ); // MOCK-HOOK
+  } // MOCK-HOOK
+  // MOCK-HOOK
+  // c: everything that can be done, in one button; the dates still need their fix. // MOCK-HOOK
+  const why = !datesOk ? "Pick where dates come from first." : other.length > 0 ? "Fix the other problems first." : !(approved || mayApprove) || !mayPublish || !can("create_share_link", true) ? "Only an approver or owner can do this." : !label.trim() ? "Add a label first." : null; // MOCK-HOOK
+  const verb = approved ? `Publish and share v${n}` : `Approve, publish and share v${n}`; // MOCK-HOOK
+  const goAll = () => // MOCK-HOOK
+    run(async () => { // MOCK-HOOK
+      if (!approved) await doApprove(); // MOCK-HOOK
+      const pub = await doPublish(); // MOCK-HOOK
+      const out = await unwrap(api.POST("/v1/documents/{doc}/share-links", { params: { path: { doc } }, body: { publication_id: pub.id, audience, label: label.trim(), expires_in: "14d", allow_download: true, passcode: null } })); // MOCK-HOOK
+      onShared({ url: out.url, passcode: out.passcode, expires_at: out.expires_at }); // MOCK-HOOK
+    }); // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <div className="space-y-3">{/* MOCK-HOOK */}
+      <p className="font-semibold" data-testid="share-not-published">To share v{n}, this still has to happen:</p>{/* MOCK-HOOK */}
+      <ul className="rounded-lg border border-line px-3">{/* MOCK-HOOK */}
+        <Qv4Row done={datesOk} testId="qv4-blocker" fix={datesFix}>{/* MOCK-HOOK */}
+          {datesOk ? "Dates have a source" : datesText}{/* MOCK-HOOK */}
+        </Qv4Row>{/* MOCK-HOOK */}
+        {otherRows}{/* MOCK-HOOK */}
+        <Qv4Row done={approved} testId="qv4-blocker">{approved ? `v${n} is approved` : `Approve v${n}: done by the button below`}</Qv4Row>{/* MOCK-HOOK */}
+        <Qv4Row done={false} testId="qv4-blocker">Publish v{n}: done by the button below</Qv4Row>{/* MOCK-HOOK */}
+      </ul>{/* MOCK-HOOK */}
+      <div>{/* MOCK-HOOK */}
+        <label htmlFor={labelId} className={LABEL}>{/* MOCK-HOOK */}
+          Label <span className="font-normal">(required)</span>{/* MOCK-HOOK */}
+        </label>{/* MOCK-HOOK */}
+        <input id={labelId} className={INPUT} maxLength={120} value={label} onChange={(e) => setLabel(e.target.value)} />{/* MOCK-HOOK */}
+        <p className={HINT}>Who the link is for, for example Board, November meeting. {audienceLabel(audience)} view, ends in 14 days.</p>{/* MOCK-HOOK */}
+      </div>{/* MOCK-HOOK */}
+      <div className="flex flex-wrap items-center gap-2">{/* MOCK-HOOK */}
+        <Button variant="primary" disabled={busy || !!why} aria-describedby={why ? `${labelId}-why` : undefined} onClick={goAll}>{/* MOCK-HOOK */}
+          {busy ? "Sharing…" : verb}{/* MOCK-HOOK */}
+        </Button>{/* MOCK-HOOK */}
+        {why && <span id={`${labelId}-why`} data-testid="create-why" className="text-sm font-medium">{why}</span>}{/* MOCK-HOOK */}
+      </div>{/* MOCK-HOOK */}
+      {errorNote}{/* MOCK-HOOK */}
+    </div> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation"; // MOCK-HOOK
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { DocCrumb } from "@/components/DocToolbar";
@@ -154,14 +155,18 @@ function age(iso: string): string {
 }
 
 /** What publishing does on main: POST .../approve stamps the version, the PRD and the audit log. */
-function onPublishLines(n: number) {
-  return [`Version v${n} approved with its evidence`, "PRD status set to Approved", "Approval recorded in the audit log"];
-}
-
-function OnPublish({ n }: { n: number }) {
+function onPublishLines(n: number, qv: Qv4 = null) { // MOCK-HOOK
+  const lines = [`Version v${n} approved with its evidence`, "PRD status set to Approved", "Approval recorded in the audit log"]; // MOCK-HOOK
+  if (qv === "a" || qv === "c") return [...lines, `v${n} ready to share as a link`]; // MOCK-HOOK
+  if (qv === "b") return [...lines, `Not shared yet: publish v${n} for sharing from Share a link`]; // MOCK-HOOK
+  return lines; // MOCK-HOOK
+} // MOCK-HOOK
+/** QV4 mock-up: which proposal the page shows (?qv4=a|b|c, roadmaps only). */ // MOCK-HOOK
+type Qv4 = "a" | "b" | "c" | null; // MOCK-HOOK
+function OnPublish({ n, qv = null }: { n: number; qv?: Qv4 }) { // MOCK-HOOK
   return (
     <ul className="flex flex-col" data-testid="on-publish">
-      {onPublishLines(n).map((line) => (
+      {onPublishLines(n, qv).map((line) => ( // MOCK-HOOK
         <li key={line} className="flex min-h-[30px] items-center gap-2">
           <Icon name="doc" size={16} className="flex-none text-accent-ink" />
           <span className="min-w-0 truncate">{line}</span>
@@ -326,13 +331,13 @@ function BlockInspector({
   );
 }
 
-function ReadyInspector({ n, published }: { n: number; published: boolean }) {
+function ReadyInspector({ n, published, qv = null }: { n: number; published: boolean; qv?: Qv4 }) { // MOCK-HOOK
   // qa-docs-62: once published, the panel says what publishing did, in the past.
-  const label = published ? "When it was published" : "On publish";
+  const label = qv === "b" ? (published ? "When it was approved" : "On approve") : published ? "When it was published" : "On publish"; // MOCK-HOOK
   return (
     <Inspector testId="publish-inspector" label={label} eyebrow={label}>
       <InspectorSection>
-        <OnPublish n={n} />
+        <OnPublish n={n} qv={qv} />{/* MOCK-HOOK */}
       </InspectorSection>
     </Inspector>
   );
@@ -478,6 +483,12 @@ export function PublishView({ doc }: { doc: string }) {
   const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
   const d = docQ.data;
   const n = d?.latest_version ?? null;
+  const qv4 = useSearchParams().get("qv4"); // MOCK-HOOK
+  const qv: Qv4 = d?.kind === "roadmap" && (qv4 === "a" || qv4 === "b" || qv4 === "c") ? qv4 : null; // MOCK-HOOK
+  // QV4 a/c: "Published" means published for sharing (a publication), not only approved. // MOCK-HOOK
+  const pubsQ = useQuery(`qv4-pubs|${doc}|${qv}`, () => // MOCK-HOOK
+    qv ? unwrap(api.GET("/v1/documents/{doc}/publications", { params: { path: { doc } } })) : Promise.resolve(undefined), // MOCK-HOOK
+  ); // MOCK-HOOK
   // G7 3.3: the panel is about this document (its latest version).
   useScreenSubject(d && n != null ? { kind: "document", subject: { document_id: d.id, version: n } } : null, d?.title);
   const readinessQ = useQuery(`readiness|${doc}|${n}`, () =>
@@ -517,7 +528,8 @@ export function PublishView({ doc }: { doc: string }) {
   // page lists those, from the version the approve checks.
   const dated = d != null && DATED_KINDS.has(d.kind);
   const headings = new Map(sections.map((s) => [s.section_key, s.heading]));
-  const published = n != null && d?.approved_version === n;
+  const approved = n != null && d?.approved_version === n; // MOCK-HOOK
+  const published = qv === "a" || qv === "c" ? approved && !!pubsQ.data?.some((p) => p.version_number === n) : approved; // MOCK-HOOK
   // A published version has nothing left to block it: no blocks, even for a roadmap's dates.
   const blocks =
     readiness && n != null && !published
@@ -575,6 +587,7 @@ export function PublishView({ doc }: { doc: string }) {
         return;
       }
       // The API runs the publish checks itself and answers 409 naming the blocks.
+      if (!(qv && approved)) { // MOCK-HOOK
       const res = await api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } });
       if (res.response.status === 409 && res.error && "blocking" in res.error) {
         setRefusal(res.error);
@@ -583,6 +596,13 @@ export function PublishView({ doc }: { doc: string }) {
         return;
       }
       await unwrap(Promise.resolve(res));
+      } // MOCK-HOOK
+      // QV4 a/c: one Publish step: approve, then publish for sharing, in one go. // MOCK-HOOK
+      if (qv === "a" || qv === "c") { // MOCK-HOOK
+        const check = await unwrap(api.GET("/v1/documents/{doc}/versions/{n}/publish-check", { params: { path: { doc, n } } })); // MOCK-HOOK
+        if (check.can_publish) await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/publish", { params: { path: { doc, n } }, body: { content_hash: check.content_hash } })); // MOCK-HOOK
+        void pubsQ.reload(); // MOCK-HOOK
+      } // MOCK-HOOK
       closeConfirm();
       // qa-docs-62: the header's "Published v2" chip confirms it; no notice repeats it.
       setNotice(null);
@@ -619,20 +639,21 @@ export function PublishView({ doc }: { doc: string }) {
   const whoPublishes = d && OWNER_APPROVES[d.kind] ? "Only an owner can publish" : "Only an approver or owner can publish";
   // qa-docs-62: the header's chip says "Published v2"; the headline says when, not that again.
   const approvedAt = versionQ.data?.approved_at;
+  const word = qv === "b" ? "Approve" : "Publish"; // MOCK-HOOK
   const headline = published
     ? approvedAt
-      ? `Published on ${formatDate(approvedAt)}`
-      : "Published"
+      ? `${qv === "b" ? "Approved" : "Published"} on ${formatDate(approvedAt)}` // MOCK-HOOK
+      : qv === "b" ? "Approved" : "Published" // MOCK-HOOK
     : !canPublish
       ? `${whoPublishes} v${n}`
       : caveats.length > 0
         ? `Publishable, but ${caveats.join(" and ")}`
-        : `Ready to publish v${n}`;
+        : `Ready to ${word.toLowerCase()} v${n}`; // MOCK-HOOK
   const action =
     n == null ? null : published ? (
       <Chip kind="pass" className="h-10 px-4 text-[15px]" data-testid="published-chip">
         <Icon name="check" size={16} />
-        Published v{n}
+        {qv === "b" ? "Approved" : "Published"} v{n}{/* MOCK-HOOK */}
       </Chip>
     ) : !canPublish ? null : (
       <>
@@ -645,7 +666,7 @@ export function PublishView({ doc }: { doc: string }) {
           data-testid="publish-button"
           onClick={() => setConfirming(true)}
         >
-          Publish v{n}
+          {word} v{n}{/* MOCK-HOOK */}
         </Button>
         {reason && (
           <span id="publish-reason" className="sr-only">
@@ -667,7 +688,7 @@ export function PublishView({ doc }: { doc: string }) {
     n == null || !readiness ? undefined : selected ? (
       <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} onChanged={changed} />
     ) : (
-      <ReadyInspector n={n} published={published} />
+      <ReadyInspector n={n} published={published} qv={qv} /> // MOCK-HOOK
     );
 
   return (
@@ -676,7 +697,7 @@ export function PublishView({ doc }: { doc: string }) {
         testId="publish-header"
         // qa-docs-31: the same crumb as the document's other pages: PRDs / <document> <status>.
         back={<DocCrumb doc={d} />}
-        title="Publish"
+        title={word} // MOCK-HOOK
         suffix={d ? `${d.title}${n != null ? ` v${n}` : ""}` : undefined}
         status={blocksChip}
         action={action}
@@ -684,6 +705,7 @@ export function PublishView({ doc }: { doc: string }) {
       {docQ.error && <ErrorNote>{docQ.error}</ErrorNote>}
       {readinessQ.error && <ErrorNote>{readinessQ.error}</ErrorNote>}
       {notice && <Notice tone="pass">{notice}</Notice>}
+      {qv && n != null && d && <Qv4Note qv={qv} doc={doc} n={n} published={published} />}{/* MOCK-HOOK */}
       {d && n == null && <Notice>No version yet</Notice>}
 
       {readiness && n != null && (
@@ -780,7 +802,7 @@ export function PublishView({ doc }: { doc: string }) {
           >
             <div className="flex min-h-14 items-center border-b border-line px-5 max-[600px]:px-4">
               <h2 id="publish-confirm-title" className="font-display text-lg font-bold tracking-heading">
-                Publish v{n}?
+                {word} v{n}?{/* MOCK-HOOK */}
               </h2>
             </div>
             <div className="px-5 py-3.5 max-[600px]:px-4">
@@ -789,13 +811,13 @@ export function PublishView({ doc }: { doc: string }) {
                   {unreviewedText(unreviewed, sections.length)}
                 </p>
               )}
-              <OnPublish n={n} />
+              <OnPublish n={n} qv={qv} />{/* MOCK-HOOK */}
             </div>
             {refusal && (
               <div id="publish-refusal" role="alert" data-testid="publish-refusal" className="border-t border-line bg-crit-bg px-5 py-3 text-crit max-[600px]:px-4">
                 <p className="flex items-start gap-2 font-semibold">
                   <Icon name="alert" size={16} className="mt-0.5 flex-none" />
-                  <span className="min-w-0">{refusal.blocking.length > 0 ? "Not published" : refusal.detail}</span>
+                  <span className="min-w-0">{refusal.blocking.length > 0 ? (qv === "b" ? "Not approved" : "Not published") : refusal.detail}</span>{/* MOCK-HOOK */}
                 </p>
                 {refusal.blocking.length > 0 && (
                   <>
@@ -830,7 +852,7 @@ export function PublishView({ doc }: { doc: string }) {
                   onClick={publish}
                   data-autofocus
                 >
-                  {busy ? "Publishing…" : "Publish"}
+                  {busy ? (qv === "b" ? "Approving…" : "Publishing…") : word}{/* MOCK-HOOK */}
                 </Button>
               )}
             </div>
@@ -840,3 +862,31 @@ export function PublishView({ doc }: { doc: string }) {
     </Page>
   );
 }
+// MOCK-HOOK
+/** QV4 mock-up: one line under the header that says how Publish and sharing fit, per proposal. */ // MOCK-HOOK
+function Qv4Note({ qv, doc, n, published }: { qv: "a" | "b" | "c"; doc: string; n: number; published: boolean }) { // MOCK-HOOK
+  const mkdates = useSearchParams().get("mkdates"); // MOCK-HOOK
+  const share = `/documents/${doc}?qv4=${qv}&open=1${mkdates ? `&mkdates=${mkdates}` : ""}`; // MOCK-HOOK
+  const text = // MOCK-HOOK
+    qv === "a" // MOCK-HOOK
+      ? published // MOCK-HOOK
+        ? `v${n} is published. You can share it as a link now.` // MOCK-HOOK
+        : `Publish v${n} approves it and makes it ready to share, in one step.` // MOCK-HOOK
+      : qv === "b" // MOCK-HOOK
+        ? published // MOCK-HOOK
+          ? `v${n} is approved. Last step: publish it for sharing, from Share a link.` // MOCK-HOOK
+          : `Approve is step 2 of 3. After it, publish v${n} for sharing from Share a link.` // MOCK-HOOK
+        : published // MOCK-HOOK
+          ? `v${n} is published. You can share it as a link now.` // MOCK-HOOK
+          : "Sharing a link also publishes. You can skip this page and share from the roadmap."; // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <div data-testid="qv4-note" className="mb-3 flex flex-wrap items-center gap-3 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">{/* MOCK-HOOK */}
+      <span className="min-w-0 flex-1">{text}</span>{/* MOCK-HOOK */}
+      {(published || qv === "c") && ( // MOCK-HOOK
+        <LinkButton variant={published ? "primary" : "secondary"} href={share}>{/* MOCK-HOOK */}
+          {qv === "b" && published ? `Publish v${n} for sharing` : "Share a link"}{/* MOCK-HOOK */}
+        </LinkButton> // MOCK-HOOK
+      )}{/* MOCK-HOOK */}
+    </div> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK

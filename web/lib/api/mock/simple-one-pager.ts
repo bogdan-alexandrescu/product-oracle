@@ -478,6 +478,11 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
         }
       : null,
     changes_in_review: hiddenDraft + (proposals.length - shown.length),
+    // MOCK-HOOK QV2: what readers would be sent of the changes in review (a new field the API would add).
+    ...({ mk_in_review: sees ? [] : [ // MOCK-HOOK
+      ...Object.entries(db.draft?.lines ?? {}).map(([id, after]) => ({ line_id: id, before: seedLine(db, id)?.text ?? "", after, by_name: ctx.names[ctx.owners[0]] ?? "an owner", kind: "change", waiting_on: (db.draft?.waiting_on ?? []).map((i) => ctx.names[i] ?? "someone") })), // MOCK-HOOK
+      ...proposals.filter((c) => !shown.includes(c)).map((c) => ({ line_id: String(c.target.line_id), before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), by_name: c.by_name, kind: "proposal", waiting_on: c.routed_to.map((i) => ctx.names[i] ?? "someone") })), // MOCK-HOOK
+    ] } as Record<string, unknown>), // MOCK-HOOK
     can_edit: decides(ctx),
     can_propose: !decides(ctx) && RANK[ctx.role] >= RANK.commenter,
     can_start: starts(ctx),
@@ -494,8 +499,38 @@ async function body(req: Request): Promise<Record<string, unknown>> {
   return ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
 }
 
-export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Request, p: string[]): Promise<Response | null> {
+// MOCK-HOOK mk-qa4-review: the frames seed Guided setup from the URL once per page load:
+// ?mkdraft=working|submitted (the owner's 2 edits) &mkprop=1 (a commenter's proposal). Invented people.
+let mkSeeded = false; // MOCK-HOOK
+export const MK_PEOPLE: Record<string, string> = { Admin: "Jo Rivera", Approver: "Rae Okafor", Commenter: "Sam Ortiz" }; // MOCK-HOOK
+async function mkSeed(db: OnePagerDb, ctx: OnePagerCtx) { // MOCK-HOOK
+  if (typeof window === "undefined") return; // MOCK-HOOK
+  const q = new URLSearchParams(window.location.search); // MOCK-HOOK
+  if (q.get("mkdraft") || q.get("mkprop")) for (const [k, v] of Object.entries(ctx.names)) ctx.names[k] = MK_PEOPLE[v] ?? v; // MOCK-HOOK
+  for (const i of db.draft?.waiting_on ?? []) if (i.startsWith("mk:")) ctx.names[i] = i.slice(3); // MOCK-HOOK
+  if (mkSeeded || !(q.get("mkdraft") || q.get("mkprop")) || db.doc.slug !== "guided-setup") return; // MOCK-HOOK
+  mkSeeded = true; // MOCK-HOOK
+  Object.assign(db, { ...seedOnePager(), visuals: db.visuals, decisions: db.decisions, approval: null }); // MOCK-HOOK
+  const ownerId = ctx.owners[0]; // MOCK-HOOK
+  const commenterId = Object.keys(ctx.names).find((k) => ctx.names[k] === MK_PEOPLE.Commenter) ?? ownerId; // MOCK-HOOK
+  const edit = (id: string, role: Role, line: string, before: string, after: string) => // MOCK-HOOK
+    routeOnePager(db, { ...ctx, id, role }, new Request("http://mock/v1/simple/changes", { method: "POST", body: JSON.stringify({ op: "edit_line", target: { document_id: db.doc.id, line_id: line }, before: { line: before }, after: { line: after } }) }), ["v1", "simple", "changes"], true); // MOCK-HOOK
+  if (q.get("mkdraft")) { // MOCK-HOOK
+    await edit(ownerId, "owner", "bets-1", "A setup checklist that shows the next step", "A setup checklist that shows the next two steps and how long each takes"); // MOCK-HOOK
+    await edit(ownerId, "owner", "not_doing-2", "A mobile setup flow", "A mobile setup flow before the spring release"); // MOCK-HOOK
+  } // MOCK-HOOK
+  if (q.get("mkprop")) await edit(commenterId, "commenter", "risks-1", "Calendar access may scare admins away", "Asking for calendar access on day one may scare admins away; ask after the first invite"); // MOCK-HOOK
+  if (q.get("mkdraft") === "submitted" && db.draft) { // MOCK-HOOK
+    db.draft.status = "submitted"; // MOCK-HOOK
+    db.draft.waiting_on = [...ctx.reviewers]; // MOCK-HOOK
+    db.draft.reminders = {}; // MOCK-HOOK
+    db.changes.forEach((c) => (c.session_open = false)); // MOCK-HOOK
+  } // MOCK-HOOK
+} // MOCK-HOOK
+
+export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Request, p: string[], mkInner = false): Promise<Response | null> { // MOCK-HOOK
   if (p[1] !== "simple") return null;
+  if (!mkInner) await mkSeed(db, ctx); // MOCK-HOOK
   const m = req.method;
   if (p[2] === "one-pagers" && m === "GET") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
@@ -513,6 +548,8 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if ((db.draft.status ?? "working") !== "working") return json(409, { detail: "This draft is submitted already" });
     db.draft.status = "submitted";
     db.draft.waiting_on = [...ctx.reviewers];
+    const mkAlso = ((await body(req.clone())).mk_also ?? []) as string[]; // MOCK-HOOK QV1: reviewers the owner added, by name
+    for (const n of mkAlso) { ctx.names[`mk:${n}`] = n; db.draft.waiting_on.push(`mk:${n}`); } // MOCK-HOOK
     db.draft.reminders = {};
     db.changes.forEach((c) => (c.session_open = false));
     return json(200, { id: db.draft.id, status: "submitted", version: db.version + 1, waiting_on: db.draft.waiting_on });

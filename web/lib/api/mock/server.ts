@@ -132,6 +132,7 @@ import {
   type QualityDb,
 } from "./quality";
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
+import { QV4_SLUG, qv4Marks, qv4Param, qv4PubOnce } from "./qv4"; // MOCK-HOOK
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
 import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
@@ -1959,6 +1960,25 @@ function ensureReviewV2(db: Db): ReviewV2Db {
   return db.review_v2;
 }
 
+/** QV4 mock-up: &mkpub= sets usage-alerts-roadmap's latest version to a draft, approved, or published (once per page load). */ // MOCK-HOOK
+function qv4Force(db: Db) { // MOCK-HOOK
+  qv4PubOnce((state) => { // MOCK-HOOK
+    const doc = db.documents.find((d) => d.slug === QV4_SLUG); // MOCK-HOOK
+    const v = doc && docVersions(db, doc).pop(); // MOCK-HOOK
+    if (!doc || !v) return; // MOCK-HOOK
+    const pubs = ensureReviewV2(db).publications; // MOCK-HOOK
+    for (let i = pubs.length - 1; i >= 0; i--) if (pubs[i].document_id === doc.id) pubs.splice(i, 1); // MOCK-HOOK
+    v.approved_at = state === "draft" ? null : (v.approved_at ?? "2026-10-30T21:49:00Z"); // MOCK-HOOK
+    doc.status = state === "draft" ? "in_review" : "approved"; // MOCK-HOOK
+    if (state !== "published") return; // MOCK-HOOK
+    pubs.push({ // MOCK-HOOK
+      id: uuid(), document_id: doc.id, number: 1, version_id: v.id, version_number: v.number, content_hash: v.content_hash, // MOCK-HOOK
+      manifest_hash: hash(`${v.content_hash}:1`), published_by: db.user_id, created_at: "2026-10-30T21:50:00Z", has_brief: true, // MOCK-HOOK
+      manifest: { format: 1, document: { id: doc.id, slug: doc.slug, title: doc.title }, version: { id: v.id, number: v.number, content_hash: v.content_hash }, approval: { approved_at: v.approved_at ?? null, decider_id: db.user_id }, sections: [] }, // MOCK-HOOK
+      markdown: "", html: exportHtml(doc, v), // MOCK-HOOK
+    }); // MOCK-HOOK
+  }); // MOCK-HOOK
+} // MOCK-HOOK
 /** O5: the share links' context (./shares.ts); `me` is null for a link holder. */
 function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesContext {
   const publications = ensureReviewV2(db).publications;
@@ -5962,7 +5982,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         : doc.kind === "update"
           ? updateDateMarks(db.roadmap, v.sections)
           : [];
-    return json(200, { ...versionOut(db, v), date_marks: marks });
+    return json(200, { ...versionOut(db, v), date_marks: doc.kind === "roadmap" ? qv4Marks(doc.slug, v.sections, marks) : marks }); // MOCK-HOOK
   }
   if (sub === "markdown") {
     return new Response(versionMarkdown(doc, v), { headers: { "content-type": "text/markdown" } });
@@ -6085,8 +6105,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (refusal) return json(409, refusal);
     }
     // O4 'document dates' (owner, 2026-10-20): not while a date of the roadmap is marked.
-    if (doc.kind === "roadmap" && db.roadmap && !v.approved_at) {
-      const marked = dateMarks(db.roadmap, v.source?.document_id, v.sections).filter((d) => d.label);
+    if (doc.kind === "roadmap" && (db.roadmap || qv4Param("mkdates")) && !v.approved_at) { // MOCK-HOOK
+      const marked = qv4Marks(doc.slug, v.sections, db.roadmap ? dateMarks(db.roadmap, v.source?.document_id, v.sections) : []).filter((d) => d.label); // MOCK-HOOK
       if (marked.length) {
         return json(409, {
           detail: `${marked.length} date${marked.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${marked
@@ -6289,6 +6309,7 @@ export async function mockFetch(req: Request): Promise<Response> {
   }
   const next = queue.then(async () => {
     const db = load();
+    if (qv4Param("mkpub")) qv4Force(db); // MOCK-HOOK
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     const res = await route(db, req);
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).

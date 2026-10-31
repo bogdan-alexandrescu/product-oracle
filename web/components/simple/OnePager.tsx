@@ -10,6 +10,7 @@ import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeli
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
+import { MK_REQUIRED, Qv1InlineAsk, Qv1ReviewMenu, Qv1SendDialog, Qv2Bar, Qv2LineMark, Qv3Label, Qv3Legend, Qv3PresentMenu, useMk } from "@/components/simple/MkQa4"; // MOCK-HOOK
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
@@ -139,6 +140,11 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   // 2026-10-30: the bets whose flow was asked for here ("Draw the flow"): their flow row shows while Oracle draws.
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
+  const mk = useMk(); // MOCK-HOOK mk-qa4-review variants
+  const [mkSend, setMkSend] = useState(false); // MOCK-HOOK QV1 a: the Send for approval dialog
+  const [mkMenu, setMkMenu] = useState(false); // MOCK-HOOK QV1 b / QV3 a: a header menu is open
+  const [mkShow, setMkShow] = useState<"draft" | "published" | null>(null); // MOCK-HOOK QV3: what is presented
+  useEffect(() => { if (mk.open && mk.qv1 === "a") setMkSend(true); if (mk.open && (mk.qv1 === "b" || mk.qv3 === "a")) setMkMenu(true); if (mk.present) { setPresenting(true); setMkShow(mk.show); } }, [mk.open, mk.qv1, mk.qv3, mk.present, mk.show]); // MOCK-HOOK
   const [saved, setSaved] = useState(false);
   // qa-simple-prd-25: "PDF downloaded" shows a few seconds, then goes.
   useEffect(() => {
@@ -284,8 +290,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     });
   const decide = (n: Note, action: "accept" | "decline") =>
     act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: sessionId ? { session_id: sessionId } : {} })));
-  const submit = () =>
-    act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: v.draft!.id } } })));
+  const submit = (mkAlso: string[] = []) => // MOCK-HOOK QV1: the reviewers the owner added
+    act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: v.draft!.id } }, ...({ body: { mk_also: mkAlso } } as object) }))); // MOCK-HOOK
   // Remind (owner, 2026-10-26): each waiting reviewer gets an Inbox nudge, once a day at most.
   const remind = () =>
     act(() => unwrap(api.POST("/v1/simple/one-pagers/{doc}/remind", { params: { path: { doc } } })));
@@ -342,13 +348,24 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const heldChecks = v.needs_look.filter((x) => x.kind === "check");
   const prdLooks = v.needs_look.filter((x) => x.kind !== "check");
   const startWhy = v.decider ? `Ask ${v.decider.name} or an owner to start a review` : "Ask an owner to start a review";
+  // MOCK-HOOK QV3: a and b present without the editing marks; "published" shows each line's published words.
+  const mkPlain = presenting && (mk.qv3 === "a" || mk.qv3 === "b"); // MOCK-HOOK
+  const mkPub = presenting && (mk.qv3 === "b" || (mk.qv3 === "a" && mkShow === "published")); // MOCK-HOOK
+  const mkBefore = new Map(v.notes.filter((n) => n.kind === "change").map((n) => [n.line_id, n.before] as const)); // MOCK-HOOK
   const actions = presenting ? (
     <button type="button" className={btn(phone)} onClick={stopPresenting}>Stop presenting</button>
   ) : (
     <>
+      {mk.qv3 === "a" && v.draft && v.draft.changes > 0 ? ( // MOCK-HOOK QV3 a: Present asks what to show
+        <Qv3PresentMenu btnClass={btn(phone)} v={v} open={mkMenu} setOpen={setMkMenu} onPick={(x) => { setMkMenu(false); setMkShow(x); void present(); }}>{!phone && <Glyph d={PRESENT} />}Present ▾</Qv3PresentMenu> // MOCK-HOOK
+      ) : ( // MOCK-HOOK
       <button type="button" className={btn(phone)} onClick={present}>{!phone && <Glyph d={PRESENT} />}Present</button>
+      )} {/* MOCK-HOOK */}
       <button type="button" className={btn(phone)} onClick={exportPdf}>{!phone && <Glyph d={PDF} />}Export PDF</button>
-      {!sessionId && (
+      {!sessionId && mk.qv1 === "b" && ( // MOCK-HOOK QV1 b: one Review menu
+        <Qv1ReviewMenu btnClass={btn(phone)} changes={v.draft?.can_submit ? v.draft.changes : 0} canStart={v.can_start} open={mkMenu} setOpen={setMkMenu} onAsk={() => { setMkMenu(false); setMkSend(true); }} onMeeting={() => { setMkMenu(false); setStarting(true); }} /> // MOCK-HOOK
+      )} {/* MOCK-HOOK */}
+      {!sessionId && mk.qv1 !== "b" && ( // MOCK-HOOK
         // qa-simple-prd-p3-28: the reason sits under the disabled button, not in the row.
         <span className="relative inline-flex">
           <button
@@ -359,7 +376,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
             aria-describedby={v.can_start ? undefined : "start-review-why"}
             onClick={() => setStarting(true)}
           >
-            {!phone && <Glyph d={REVIEW} />}Start review
+            {!phone && <Glyph d={REVIEW} />}{mk.qv1 === "a" || mk.qv1 === "c" ? "Start a review meeting" : "Start review"} {/* MOCK-HOOK */}
           </button>
           {!v.can_start && (
             <span id="start-review-why" data-testid="start-review-why" className="absolute top-full right-0 z-[1] mt-1 w-max max-w-[240px] text-right text-[13px] leading-[17px] text-text2">
@@ -394,11 +411,15 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
             <span>· Approved in {v.draft.approved_in ?? "the meeting"} · not yet published: {heldWords(v.draft)}</span>
           )}
           {v.draft.status === "submitted" && !v.draft.decider_approved && v.draft.waiting_on.length > 0 && (
-            <span data-testid="draft-waits-on">· Submitted · waiting on review from {v.draft.waiting_on.map((p) => p.name).join(", ")}</span>
+            <span data-testid="draft-waits-on">{mk.qv1 ? `· Sent for approval · waiting on ${v.draft.waiting_on.map((p) => p.name).join(", ")}` : `· Submitted · waiting on review from ${v.draft.waiting_on.map((p) => p.name).join(", ")}`}</span> // MOCK-HOOK
           )}
-          {v.draft.can_submit && (
+          {v.draft.can_submit && !mk.qv1 && ( // MOCK-HOOK
             <Button disabled={busy} onClick={() => void submit()}>Submit for review</Button>
           )}
+          {v.draft.can_submit && mk.qv1 === "a" && <Button variant="primary" disabled={busy} onClick={() => setMkSend(true)}>Send for approval…</Button>} {/* MOCK-HOOK */}
+          {v.draft.can_submit && mk.qv1 === "b" && <span className="text-text2">· to send, use Review › Ask for approval</span>} {/* MOCK-HOOK */}
+          {v.draft.can_submit && mk.qv1 === "c" && <Button disabled={busy} onClick={() => void submit()} title={`Sends at once; ${MK_REQUIRED} is asked to approve`}>Send edits for approval</Button>} {/* MOCK-HOOK */}
+          {v.draft.can_submit && mk.qv1 === "c" && <span className="text-text2">· goes to {MK_REQUIRED} at once</span>} {/* MOCK-HOOK */}
           {v.draft.status === "submitted" && v.draft.waiting_on.length > 0 && (v.draft.can_remind || v.draft.reminded_at) && (
             <span className="flex items-center gap-2">
               {v.draft.can_remind && (
@@ -411,7 +432,10 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           )}
         </div>
       )}
-      {!draftShown && v.changes_in_review > 0 && !presenting && (
+      {mkSend && mk.qv1 === "a" && v.draft && <Qv1SendDialog v={v} busy={busy} onClose={() => setMkSend(false)} onSend={(also) => { setMkSend(false); void submit(also); }} />} {/* MOCK-HOOK */}
+      {mkSend && mk.qv1 === "b" && v.draft?.can_submit && !presenting && <Qv1InlineAsk v={v} busy={busy} onCancel={() => setMkSend(false)} onSend={(also) => { setMkSend(false); void submit(also); }} />} {/* MOCK-HOOK */}
+      {!draftShown && v.changes_in_review > 0 && !presenting && mk.qv2 && <Qv2Bar v={v} variant={mk.qv2} listOpen={mk.list} />} {/* MOCK-HOOK */}
+      {!draftShown && v.changes_in_review > 0 && !presenting && !mk.qv2 && ( // MOCK-HOOK
         <div role="status" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
           {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · you read the published version
         </div>
@@ -428,6 +452,14 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
       <div className={`mx-auto flex max-w-[1180px] flex-col gap-5 px-12 pt-[26px] max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
+        {presenting && mk.qv3 && ( // MOCK-HOOK QV3: what is on screen, said over the page
+          <div className="flex flex-wrap items-center gap-3"> {/* MOCK-HOOK */}
+            {mk.qv3 === "a" && <Qv3Label>{mkPub ? `Showing published v${v.version}` : `Showing the working draft · ${v.draft?.changes ?? 0} changes not yet approved`}</Qv3Label>} {/* MOCK-HOOK */}
+            {mk.qv3 === "b" && <Qv3Label>{`Showing published v${v.version}`}{v.draft?.changes ? ` · ${v.draft.changes} changes in review are not shown` : ""}</Qv3Label>} {/* MOCK-HOOK */}
+            {mk.qv3 === "c" && <Qv3Label>Showing the working draft</Qv3Label>} {/* MOCK-HOOK */}
+            {mk.qv3 === "c" && <Qv3Legend />} {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        )} {/* MOCK-HOOK */}
         <PrdHeader
           inMeeting={!!sessionId}
           v={v}
@@ -470,7 +502,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                 <ul className="mt-1 space-y-1">
                   {b.lines.map((l) => (
                     <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none" onPointerDown={(e) => { const touch = e.pointerType !== "mouse"; firstTap.current = touch && tapped !== l.id; if (touch) setTapped(l.id); }} onClick={() => { firstTap.current = false; }}>
-                      <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
+                      <div className={`rounded px-2 py-1 ${mkPlain ? "" : TINT[l.state]}`}> {/* MOCK-HOOK QV3: no marks when presenting (a, b) */}
                         {editing === l.id ? (
                           <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
                             <label className="sr-only" htmlFor={`edit-${l.id}`}>New wording for {words.get(l.id)}</label>
@@ -518,7 +550,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                             <span className={`min-w-0 flex-1 ${(v.can_edit || v.can_propose) && !presenting ? (v.can_edit ? "md:pr-10" : "md:pr-36") : ""}`}>
                               <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => { if (!firstTap.current) setOpen(open === l.id ? null : l.id); }} data-testid="one-pager-line-text">
                                 {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
-                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
+                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : mkPub && mkBefore.has(l.id) ? mkBefore.get(l.id) /* MOCK-HOOK */ : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
                               </button>
                               {l.full && !l.metric && foldAtSentence(l.full, l.text) !== l.full && (
                                 <button
@@ -629,6 +661,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                           </div>
                         )}
                       </div>
+                      {mk.qv2 === "b" && !presenting && <Qv2LineMark v={v} lineId={l.id} />} {/* MOCK-HOOK QV2 b: marked in place */}
                       {/* Phone: the margin notes move under their line. */}
                       <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
                     </li>

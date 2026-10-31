@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react"; // MOCK-HOOK useEffect
 
-import { Button, Chip, Icon, Panel, Sheet } from "@/components/ds";
+import { Button, Chip, Icon, LinkButton, Panel, Sheet } from "@/components/ds"; // MOCK-HOOK LinkButton
 import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -486,6 +486,8 @@ function ChangedNote({ was, now, people }: { was: SectionState; now: SectionStat
 export function Campaigns({ doc }: { doc: string }) {
   const { can } = useMe();
   const canEdit = can("create_review_campaign");
+  const [mkQv2, setMkQv2] = useState<string | null>(null); // MOCK-HOOK
+  useEffect(() => setMkQv2(new URLSearchParams(window.location.search).get("qv2")), []); // MOCK-HOOK
   const q = useQuery(`campaigns|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/campaigns", { params: { path: { doc } } })));
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -540,6 +542,13 @@ export function Campaigns({ doc }: { doc: string }) {
       {q.error && <div className="p-4"><ErrorNote>{q.error}</ErrorNote></div>}
       {error && <div className="px-4 pt-2"><InlineError>{error}</InlineError></div>}
       {q.data && rows.length === 0 && <p className="px-4 py-3 text-sm text-text2">Nobody has been asked for feedback yet.</p>}
+      {mkQv2 === "b" && !canEdit && rows.some((c) => c.status === "open") && ( // MOCK-HOOK QV2 b: what is asked of you, first
+        <div data-testid="asked-of-you" className="m-3 rounded-md border border-line-strong bg-surface px-4 py-3"> {/* MOCK-HOOK */}
+          <p className="font-semibold text-text">Asked of you</p> {/* MOCK-HOOK */}
+          <p className="text-sm text-text2">{rows.filter((c) => c.status === "open").map((c) => `${c.title}${c.due_at ? `, due ${formatDay(c.due_at)}` : ""}`).join(" · ")}</p> {/* MOCK-HOOK */}
+          <LinkButton className="mt-2" variant="primary" href={`/documents/${doc}/v/${rows.find((c) => c.status === "open")!.version_number}`}>Give your feedback</LinkButton> {/* MOCK-HOOK */}
+        </div> // MOCK-HOOK
+      )} {/* MOCK-HOOK */}
       <ul className="divide-y divide-line">
         {rows.map((c) => (
           <li key={c.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
@@ -550,6 +559,7 @@ export function Campaigns({ doc }: { doc: string }) {
               {c.due_at ? ` · due ${formatDay(c.due_at)}` : ""}
             </span>
             <span className="flex-1" />
+            {mkQv2 === "a" && !canEdit && c.status === "open" && <LinkButton href={`/documents/${doc}/v/${c.version_number}`}>Give feedback</LinkButton>} {/* MOCK-HOOK QV2 a */}
             {canEdit && (
               // qa-docs-30: what the action does to the campaign, not a bare Close.
               <Button variant="ghost" aria-label={`${c.status === "open" ? "End campaign" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => toggle(c)}>
