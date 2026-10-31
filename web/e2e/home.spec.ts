@@ -85,19 +85,19 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
   await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
 
-  // A run: its segments and what comes next.
-  const onboarding = flights.filter({ hasText: "Team onboarding PRD" });
+  // A run: its segments and what comes next. Named by its document's own title and its flow (#979).
+  const onboarding = flights.filter({ hasText: "Team onboarding · Baseline to PRD" });
   await onboarding.click();
   await expect(onboarding).toHaveAttribute("aria-selected", "true");
   await expect(inspector).toContainText("selected");
-  await expect(inspector.getByRole("heading", { name: /^Team onboarding PRD/ })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: /^Team onboarding · Baseline to PRD/ })).toBeVisible();
   await expect(inspector.getByTestId("inspector-next")).toContainText("Confirm the baseline");
   await expect(inspector.getByTestId("stat-segments")).toContainText("1/4");
 
   // Keyboard: ArrowUp moves the selection back up the table.
   await page.keyboard.press("ArrowUp");
-  await expect(flights.filter({ hasText: "Usage alerts v2 PRD" })).toHaveAttribute("aria-selected", "true");
-  await expect(inspector.getByRole("heading", { name: /^Usage alerts v2 PRD/ })).toBeVisible();
+  await expect(flights.filter({ hasText: "Usage alerts v2 · Baseline to PRD" })).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByRole("heading", { name: /^Usage alerts v2 · Baseline to PRD/ })).toBeVisible();
 });
 
 test("Home on a phone: stacked blocks under the phone header, inspector below, no sideways scroll", async ({ page }) => {
