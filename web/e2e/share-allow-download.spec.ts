@@ -54,5 +54,5 @@ test("a link with downloads on: the shared page shows Download PDF and it downlo
   await expect(button).toBeVisible();
   const download = holder.waitForEvent("download");
   await button.click();
-  expect((await download).suggestedFilename()).toBe("roadmap.pdf");
+  expect((await download).suggestedFilename()).toMatch(/^Platform roadmap, autumn - [A-Z][a-z]{2} \d{1,2}, \d{4}\.pdf$/);
 });

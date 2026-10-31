@@ -362,7 +362,7 @@ def render_public(
     if shared_on and expires_on:
         footer = f"Shared {shared_on} · expires {expires_on}"
     else:
-        footer = "Preview: a shared link's page shows when it was shared and when it ends here"
+        footer = "On a shared link, this shows when it was shared and when it ends."
     columns = [
         {
             "label": STAGE_LABELS[stage],

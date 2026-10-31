@@ -63,7 +63,11 @@ READER_CSS = (
     "th,td{word-break:normal;overflow-wrap:normal;hyphens:manual}"
     "th:first-child,td:first-child{min-width:8rem}"
     "@media (max-width:640px){body{margin:0;padding:0}"
-    "table{display:block;overflow-x:auto;max-width:100%}}"
+    "table{display:block;overflow-x:auto;max-width:100%}"
+    # qa4-docs-share-5: a company's copy of the board theme (seeded before its phone rule)
+    # still stacks its cards in one column on a phone.
+    ".section-group>.group-body{grid-template-columns:minmax(0,1fr)!important}"
+    ".section-group>.group-body>.section-wide{grid-column:auto!important}}"
     "@media (prefers-color-scheme:dark){html,body{background:#0f172a!important;"
     "color:#e2e8f0!important}body *{color:inherit!important;"
     "background-color:transparent!important;border-color:#334155!important}"

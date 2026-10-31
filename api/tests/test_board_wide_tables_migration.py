@@ -37,7 +37,8 @@ def test_chains_on_the_single_head():
 
 def test_the_new_css_is_the_packaged_theme():
     m = _migration()
-    assert m.NEW_CSS == (BUILTIN_DIR / "themes" / "roadmap-board.css").read_text("utf-8")
+    # Later rules are appended after it (qa4-docs-share-5's phone rule).
+    assert (BUILTIN_DIR / "themes" / "roadmap-board.css").read_text("utf-8").startswith(m.NEW_CSS)
     assert "section-wide" in m.NEW_CSS and "section-wide" not in m.OLD_CSS
 
 

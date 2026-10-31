@@ -591,7 +591,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
     if (p[3] === "versions" && p[5] === "public-preview" && m === "GET") {
       const v = pick(Number(p[4]));
       if (!v) return json(404, { detail: "Version not found" });
-      return html(200, renderPublic(review(ctx, doc, v), "Preview: a shared link's page shows when it was shared and when it ends here"));
+      return html(200, renderPublic(review(ctx, doc, v), "On a shared link, this shows when it was shared and when it ends."));
     }
     if (p[3] === "publications" && p[5] === "public-check" && m === "POST") {
       const pub = ctx.publications.find((x) => x.document_id === doc.id && x.number === Number(p[4]));
@@ -702,11 +702,14 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
   }
   if (p[3] === "views" && m === "GET") {
     const rows = ctx.db.views.filter((v) => v.link_id === link.id).sort((a, b) => b.viewed_at.localeCompare(a.viewed_at));
+    // As the API: the Company time zone, and each view's day in it (qa4-docs-share-6).
+    const zone = ctx.zone?.() ?? "America/Los_Angeles";
+    const dayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
     const days = new Map<string, number>();
-    for (const r of rows) days.set(r.viewed_at.slice(0, 10), (days.get(r.viewed_at.slice(0, 10)) ?? 0) + 1);
+    for (const r of rows) days.set(dayOf(r.viewed_at), (days.get(dayOf(r.viewed_at)) ?? 0) + 1);
     const out: Schemas["ShareViewsOut"] = {
       link_id: link.id,
-      zone: "UTC",
+      zone,
       note: VIEW_NOTE,
       views: rows.length,
       distinct_browsers: new Set(rows.map((r) => r.browser_key)).size,
@@ -875,7 +878,7 @@ function record(ctx: SharesContext, link: LinkRow, kind: "page" | "download") {
   const at = ctx.now();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const family = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Other";
-  ctx.db.views.push({ link_id: link.id, viewed_at: at, kind, browser_key: `k:${ctx.db.opened[link.token]?.b ?? "x"}`, browser_family: family, country: null });
+  ctx.db.views.push({ link_id: link.id, viewed_at: at, kind, browser_key: `k:${ctx.db.opened[link.token]?.b ?? "x"}:${family}`, browser_family: family, country: null });
   link.views += 1;
   link.last_viewed_at = at;
 }
