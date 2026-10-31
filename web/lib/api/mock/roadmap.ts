@@ -634,6 +634,38 @@ function trackHeadline(health: Schemas["TrackOverview"]["health"], counts: Recor
   return `${word}: ${attention}${parts.length ? ` (${parts.join(", ")}).` : "."}${when}${moved}`;
 }
 
+type NamedRow = { item_key: string; horizon: Horizon; milestone: { name?: string | null; date?: string | null } | null };
+const HORIZON_ORDER: Record<Horizon, number> = { now: 0, next: 1, later: 2 };
+
+/**
+ * As oracle.roadmap.views.next_milestone with no track milestone: the items' own, earliest
+ * horizon first, dated before undated, on the earliest of its items' dates.
+ */
+function itemNamedMilestone(rows: NamedRow[]): { name: string; horizon: Horizon; date: string | null; keys: string[] } | null {
+  const named = new Map<string, NamedRow[]>();
+  for (const i of rows) if (i.milestone?.name) named.set(i.milestone.name, [...(named.get(i.milestone.name) ?? []), i]);
+  const days = (members: NamedRow[]) => members.flatMap((i) => (i.milestone?.date ? [i.milestone.date] : [])).sort();
+  const order = ([name, members]: [string, NamedRow[]]) => [Math.min(...members.map((i) => HORIZON_ORDER[i.horizon])), days(members).length ? 0 : 1, days(members)[0] ?? "", name] as const;
+  const [first] = [...named].sort((a, b) => {
+    const [x, y] = [order(a), order(b)];
+    return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2]) || x[3].localeCompare(y[3]);
+  });
+  if (!first) return null;
+  const [name, members] = first;
+  const horizon = [...members].sort((a, b) => HORIZON_ORDER[a.horizon] - HORIZON_ORDER[b.horizon])[0].horizon;
+  return { name, horizon, date: days(members)[0] ?? null, keys: members.map((i) => i.item_key) };
+}
+
+/** A Plan item's own milestone: a Now item names First release, on its date once verified (or accepted). */
+function planItemMilestone(db: RoadmapDb, s: PlanSeedItem): NamedRow["milestone"] {
+  if (s.horizon !== "now") return null;
+  const accepted = db.accepted?.[s.key]?.day;
+  return { name: "First release", date: accepted ?? (s.dateStatus === "verified" ? s.date ?? null : null) };
+}
+
+/** The item keys of each overview's next milestone, as oracle.roadmap.views.next_milestone_keys reads them. */
+const NEXT_KEYS = new WeakMap<Schemas["TrackOverview"], Set<string>>();
+
 function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackOverview"] {
   const prd = ctx.documents.find((d) => d.id === t.prd_id)!;
   const roadmap = t.roadmap_id ? ctx.documents.find((d) => d.id === t.roadmap_id) : undefined;
@@ -669,24 +701,34 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   const milestones = db.milestones.filter((m) => m.track_id === t.id);
   const planned = milestones.filter((m) => m.status === "planned");
   const next = planned.filter((m) => m.target_date && m.target_date >= today()).sort((a, b) => a.target_date!.localeCompare(b.target_date!))[0] ?? planned.find((m) => !m.target_date);
+  const rows: NamedRow[] = own
+    ? ALERTS_APPROVED.map((s) => ({ item_key: s.key, horizon: s.horizon, milestone: planItemMilestone(db, s) }))
+    : items.map((i) => ({ item_key: i.item_key, horizon: i.horizon, milestone: i.milestone as NamedRow["milestone"] }));
+  const named = next ? null : itemNamedMilestone(rows);
+  const nextKeys = new Set(next ? next.item_keys : named?.keys ?? []);
+  const nextName = next?.name ?? named?.name;
+  const nextDate = next ? next.target_date : named?.date;
   const source = rv?.source?.version ?? null;
   const prdMoved = !!(source && latestApproved && latestApproved > source);
   // The Plan's items carry their own state (at risk, not off track), as its table shows them.
-  const slippingNext = !own && !!next && atRisk.some((a) => next.item_keys.includes(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
+  const slippingNext = !own && atRisk.some((a) => nextKeys.has(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
   // As the API: an open critical hard blocker on a Now item puts the track off track too.
   const criticalNow = (own ?? items.map((i) => ({ item_key: i.item_key, horizon: i.horizon }))).some((i) => i.horizon === "now" && !!db.critical?.[i.item_key]);
   const health: Schemas["TrackOverview"]["health"] =
     t.status !== "active" ? t.status : !counts.items ? "no_roadmap" : slippingNext || criticalNow ? "off_track" : atRisk.length || prdMoved ? "at_risk" : "on_track";
-  const when = next ? ` Next milestone: ${next.name}${next.target_date ? `, ${calendarDay(next.target_date)}` : ""}.` : "";
+  const when = nextName ? ` Next milestone: ${nextName}${nextDate ? `, ${calendarDay(nextDate)}` : ""}.` : "";
   const headline = trackHeadline(health, counts, when, prdMoved ? latestApproved : null);
-  return {
+  const out: Schemas["TrackOverview"] = {
     id: t.id, title: t.title, status: t.status, owner_id: t.owner_id, prd: docRef(prd), started_version: t.started_version,
     current_version: t.current_version, latest_approved_version: latestApproved,
     roadmap: roadmap ? docRef(roadmap, rv) : null, lock_version: t.lock_version, created_at: t.created_at, monitored_at: t.monitored_at,
     health, headline, counts,
-    next_milestone: next ? { milestone_id: next.id, name: next.name, horizon: next.horizon, target_date: next.target_date, dated: !!next.target_date, bases: db.bases.filter((b) => next.basis_ids.includes(b.id)).map((b) => ({ id: b.id, kind: b.kind, reference: b.reference })), items: next.item_keys.length } : null,
+    next_milestone: next ? { milestone_id: next.id, name: next.name, horizon: next.horizon, target_date: next.target_date, dated: !!next.target_date, bases: db.bases.filter((b) => next.basis_ids.includes(b.id)).map((b) => ({ id: b.id, kind: b.kind, reference: b.reference })), items: next.item_keys.length }
+      : named ? { milestone_id: null, name: named.name, horizon: named.horizon, target_date: named.date, dated: !!named.date, bases: [], items: named.keys.length } : null,
     at_risk: atRisk, drift: allDrift, engineering_known: db.records.some((r) => r.track_id === t.id), prd_moved: prdMoved, milestones,
   };
+  NEXT_KEYS.set(out, nextKeys);
+  return out;
 }
 
 function checkDate(db: RoadmapDb, t: Track, horizon: string, date: string | null | undefined, basisIds: string[], itemKeys: string[] = []): string | null {
@@ -1272,7 +1314,7 @@ export function reportTracks(ctx: RoadmapContext, db: RoadmapDb, calm = false): 
         // As the monitor last recorded it: the Plan's track was on track before this week.
         health_before: t.plan || quiet ? "on_track" : o.health,
         headline: quiet ? `On track: ${n} ${n === 1 ? "item" : "items"}.${when}` : o.headline,
-        next_milestone: nxt ? { name: nxt.name, date: nxt.target_date ?? null, verified: nxt.dated, at_risk: !calm && milestoneAtRisk(db, o) } : null,
+        next_milestone: nxt ? { name: nxt.name, date: nxt.target_date ?? null, verified: nxt.dated, at_risk: !calm && milestoneAtRisk(o) } : null,
         alignment: counts,
         needs_attention: calm
           ? []
@@ -1296,11 +1338,11 @@ export function reportTracks(ctx: RoadmapContext, db: RoadmapDb, calm = false): 
 /**
  * As oracle.reports.alignment.milestone_at_risk (qa4-plan-7, qa5-plan-at-risk): the next milestone
  * has a date and an item of it slips past it. Off track alone (a critical blocker) is not enough.
+ * Its items are a track milestone's own list, or the items an item-named milestone names.
  */
-function milestoneAtRisk(db: RoadmapDb, o: Schemas["TrackOverview"]): boolean {
-  const nxt = o.next_milestone;
-  if (!nxt?.target_date) return false;
-  const keys = new Set(db.milestones.find((m) => m.id === nxt.milestone_id)?.item_keys ?? []);
+function milestoneAtRisk(o: Schemas["TrackOverview"]): boolean {
+  if (!o.next_milestone?.target_date) return false;
+  const keys = NEXT_KEYS.get(o) ?? new Set<string>();
   return o.at_risk.some((a) => keys.has(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
 }
 
