@@ -1277,6 +1277,16 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   return { may: decides ? "apply" : "propose", why_not: null };
 }
 
+/** qa4-simple-decide-1 (chat._undo_bar): why the reader may not undo an applied card, by its Apply's rule. */
+function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): string | null {
+  const m = meetingOf(chat, c);
+  const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
+  if (bar || LOCAL_OPS.has(c.op) || c.op === "add_feature_ask" || c.op === "suggest_feature") return bar;
+  const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
+  const decides = c.item_id ? !!item?.can_decide : ctx.role === "owner";
+  return decides ? null : "Only someone who may change this item undoes it";
+}
+
 function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   const check = c.flag !== undefined ? { flags: c.flag ? [c.flag] : [] } : asIf(db, c);
   const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, ...rest } = c;
@@ -1291,7 +1301,7 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   // Review major (chat.cards_out): "Cut it and its dependents" applies only when the reader decides every item it cuts.
   const allMine = [c.item_id, ...waiting.map((i) => i.id)].every((id) => !!items.find((i) => i.id === id)?.can_decide);
   const may_with_dependents = waiting.length && may.may ? (allMine ? "apply" : "propose") : null;
-  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents };
+  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -1770,6 +1780,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
     if (p[5] === "undo") {
       if (c.status !== "applied" || !c.change_id) return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
+      const bar = undoBar(db, chat, c, ctx);
+      if (bar) return json(403, { detail: bar });
       const meeting = meetingOf(chat, c);
       if (c.op === "suggest_feature") {
         if (!unfileSuggestion(db, String(c.target.suggestion_id ?? ""))) return json(409, { detail: "The decider has decided this suggestion already" });

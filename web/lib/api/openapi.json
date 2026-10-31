@@ -44233,7 +44233,7 @@
           "simple"
         ],
         "summary": "Undo Simple Chat Card",
-        "description": "Undo the change an applied card made (its author, in its session).",
+        "description": "Undo the change an applied card made: whoever its Apply would let apply it now (403\nwith the reason otherwise; ``ChatCardOut.can_undo``).",
         "operationId": "undo_simple_chat_card",
         "security": [
           {
@@ -59100,6 +59100,11 @@
               }
             ],
             "title": "May With Dependents"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo",
+            "default": false
           }
         },
         "type": "object",

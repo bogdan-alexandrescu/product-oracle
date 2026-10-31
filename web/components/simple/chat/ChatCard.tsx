@@ -335,7 +335,8 @@ export function ChatCard({
               Recorded as a meeting decision
             </span>
           )}
-          {card.status === "applied" && (
+          {/* qa4-simple-decide-1: only a reader the card's Apply rule lets change it undoes it. */}
+          {card.status === "applied" && card.can_undo && (
             <button type="button" className="simple-button" disabled={busy} onClick={() => void run(() => undoCard(card.id))}>
               Undo this change
             </button>

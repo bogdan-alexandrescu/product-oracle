@@ -419,7 +419,8 @@ async def test_undo_takes_the_rights_apply_takes(client):
         for c in (note, cut):
             assert (await undo(client, w, who, c["id"])).status_code == 403, (who, c["op"])
     assert [n["text"] for n in (await get(client, w, mid, "owner"))["notes"]] == [
-        "keep reminders quiet on weekends"]
+        "keep reminders quiet on weekends"
+    ]
     seen = await cards("owner")
     assert seen[note["id"]]["can_undo"] and seen[cut["id"]]["can_undo"]
     for c in (note, cut):
