@@ -52,7 +52,7 @@ export const DECIDED_GAP = new Set<Gap["status"]>(["answered", "validated", "acc
  * The critical questions still open, as the inspector lists them: the one source the
  * "Critical open" count, the chips and each line read (production minors 24).
  */
-export function openCriticalGaps(s: Summary): Gap[] {
+export function openCriticalGaps(s: Summary): Summary["gaps"] {
   return s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
 }
 
