@@ -59488,6 +59488,33 @@
           "ended": {
             "type": "boolean",
             "title": "Ended"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "ended_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended_by_itself": {
+            "type": "boolean",
+            "title": "Ended By Itself",
+            "default": false
           }
         },
         "type": "object",

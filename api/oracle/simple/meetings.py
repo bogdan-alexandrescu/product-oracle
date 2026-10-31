@@ -56,8 +56,8 @@ from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
-from oracle.models import AuditEvent
 from oracle.docs.models import Document
+from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, minutes
 from oracle.simple.models import (
@@ -175,8 +175,9 @@ async def ended_by_itself(db: AsyncSession, meeting_id: uuid.UUID) -> bool:
     return (
         await db.scalar(
             select(AuditEvent.id)
-            .where(AuditEvent.action == "simple_meeting.ended_idle",
-                   AuditEvent.entity_id == meeting_id)
+            .where(
+                AuditEvent.action == "simple_meeting.ended_idle", AuditEvent.entity_id == meeting_id
+            )
             .limit(1)
         )  # fmt: skip
     ) is not None

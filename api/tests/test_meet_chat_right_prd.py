@@ -44,8 +44,8 @@ from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem, TrackMilestone
 from oracle.simple.models import SimpleMeeting, SimpleSession
 from oracle.tenancy import tenant_session
-from tests.test_simple_chat_reader import act, actions, read
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
+from tests.test_simple_chat_reader import act, actions, read
 from tests.test_simple_meetings_api import MEETINGS, PRD, end, start, world
 
 CHAT = "/v1/simple/meetings/{}/chat"
@@ -66,9 +66,9 @@ async def two_prds(w) -> dict[str, str]:
         await s.flush()
         vs = []
         for n in (1, 2):
+            approved = datetime(2026, 9, 1, tzinfo=UTC) if n == 1 else None
             v = DocumentVersion(document_id=doc.id, number=n, markdown=f"# Alerts v{n}\n",
-                                content_hash=f"alerts-{n}",
-                                approved_at=datetime(2026, 9, 1, tzinfo=UTC) if n == 1 else None)  # fmt: skip
+                                content_hash=f"alerts-{n}", approved_at=approved)  # fmt: skip
             s.add(v)
             await s.flush()
             vs.append(v)
@@ -123,7 +123,10 @@ async def test_the_reader_reads_only_the_meetings_prd(client):
     titles = [i["title"] for i in payload["items"]]
     assert sorted(titles) == sorted([FIRST, "Alert digests", "Alert digests weekly"])
     assert {i["id"] for i in payload["items"]} == {
-        ids[FIRST], ids["Alert digests"], ids["Alert digests weekly"]}
+        ids[FIRST],
+        ids["Alert digests"],
+        ids["Alert digests weekly"],
+    }
     assert "M1 Ledger" not in payload["milestones"]
     meeting_ = payload["context"]["meeting"]
     assert meeting_["prd"] == "Alerts PRD"

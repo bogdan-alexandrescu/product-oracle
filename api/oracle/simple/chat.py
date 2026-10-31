@@ -1905,7 +1905,7 @@ async def cards_out(
             if bar is None and e is not None and _on_draft(e):
                 # A draft-roadmap item has no change engine: its decider applies, no proposal.
                 if c.op not in DRAFT_ITEM_OPS:
-                    bar = "This item is on the PRD's draft roadmap: that change waits for its approval"
+                    bar = DRAFT_ITEM_WAITS
                 elif not _decides(principal, c, read_):
                     bar = DRAFT_ITEM_BAR
                 else:
@@ -2084,6 +2084,7 @@ async def rebase(db: AsyncSession, card_id: uuid.UUID, detail: Any) -> None:
 
 DRAFT_ITEM_OPS = ("move_dates", "change_horizon", "edit_title", "cut", "restore")
 DRAFT_ITEM_BAR = "Only the PRD's decider or an owner changes its draft roadmap"
+DRAFT_ITEM_WAITS = "This item is on the PRD's draft roadmap: that change waits for its approval"
 
 
 def _on_draft(e: service.Entry) -> bool:
@@ -2103,8 +2104,7 @@ async def _apply_draft_item(
     if card is None or card.status != "open":
         raise ChatError(409, f"This card is {card.status if card else 'gone'} already")
     if card.op not in DRAFT_ITEM_OPS:
-        raise ChatError(409, "This item is on the PRD's draft roadmap: that change waits for "
-                        "its approval")  # fmt: skip
+        raise ChatError(409, DRAFT_ITEM_WAITS)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     await meeting_prd(db, read_, rules)
     if not _decides(principal, card, read_):
