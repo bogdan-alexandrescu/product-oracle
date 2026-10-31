@@ -37,6 +37,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.auth.deps import TenantDB
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
+from oracle.docs import visibility
+from oracle.docs.models import Document, DocumentVersion
 from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
 from oracle.roadmap.models import HORIZONS, RoadmapItem
@@ -269,9 +271,10 @@ def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
 FEATURE_CODE = re.compile(r"[A-Z]{1,3}-\d+")
 
 
-def _initials(key: str) -> str:
-    """Initials of up to three words of ``key``; a one-word key's first two letters."""
-    words = re.findall(r"[a-z]+", key.lower())
+def _initials(name: str) -> str:
+    """Initials of up to three words of ``name`` (Team invite nudges TIN); a one-word name's
+    first two letters (Pricing PR)."""
+    words = re.findall(r"[^\W\d_]+", name)
     if len(words) >= 2:
         return "".join(w[0] for w in words[:3]).upper()
     return ((words[0] if words else "") + "xx")[:2].upper()
@@ -287,13 +290,17 @@ def prd_code(section_key: str | None) -> str | None:
     return f"{m.group(1).upper()}-{m.group(2)}" if m else None
 
 
-def short_codes(keys: list[str], prd: dict[str, str] | None = None) -> list[str]:
+def short_codes(
+    keys: list[str], prd: dict[str, str] | None = None, names: dict[str, str] | None = None
+) -> list[str]:
     """Each feature's short code, for feature keys in the features' creation order: the key
     when it is a code (F-12), else the PRD code of the section its roadmap item was imported
-    from (``prd``: "F-06"), else its initials, a digit added on a clash (DI, DI2) in creation
+    from (``prd``: "F-06"), else the initials of its shown name (``names``, by key; the key
+    when it has none: Team invite nudges TIN), a digit added on a clash (SC, SC2) in creation
     order. From the feature alone, never the item a reader sees, nor the key's order or the
     rank: every reader reads the same code, and a new feature never renames an older one."""
     prd = prd or {}
+    names = names or {}
     out: list[str | None] = [None] * len(keys)
     taken: set[str] = set()
     # Codes (the key's own, else the PRD's) in creation order: the older feature keeps a
@@ -313,7 +320,7 @@ def short_codes(keys: list[str], prd: dict[str, str] | None = None) -> list[str]
     for i, k in enumerate(keys):
         if out[i] is not None:
             continue
-        base = _initials(k)
+        base = _initials(names.get(k) or k)
         code, n = base, 1
         while code in taken:
             n += 1
@@ -323,19 +330,72 @@ def short_codes(keys: list[str], prd: dict[str, str] | None = None) -> list[str]
     return out  # type: ignore[return-value]
 
 
+async def _shown_names(db: AsyncSession, key_of: dict[uuid.UUID, str]) -> dict[str, str]:
+    """Each feature's shown name by its key: the title of its item on a roadmap every reader
+    sees (the version the roadmap shows; the earliest horizon, then the lowest key, as
+    ``_items``; never a draft item), else the feature's own title. So a rename moves the code,
+    and every reader reads the same one."""
+    docs = list(
+        await db.scalars(
+            select(Document.id).where(
+                Document.kind == "roadmap", Document.visibility == visibility.COMPANY
+            )
+        )
+    )
+    if not docs:
+        return {}
+    versions = (
+        await db.execute(
+            select(
+                DocumentVersion.id,
+                DocumentVersion.document_id,
+                DocumentVersion.number,
+                DocumentVersion.approved_at,
+            ).where(DocumentVersion.document_id.in_(docs))
+        )
+    ).all()
+    with_items = set(
+        await db.scalars(
+            select(RoadmapItem.roadmap_version_id)
+            .where(RoadmapItem.roadmap_document_id.in_(docs))
+            .distinct()
+        )
+    )
+    shown = service._versions(versions, with_items, await drafts.submitted_versions(db))
+    best: dict[str, tuple[tuple, str]] = {}
+    for fid, title, horizon, item_key in await db.execute(
+        select(
+            RoadmapItem.feature_id, RoadmapItem.title, RoadmapItem.horizon, RoadmapItem.item_key
+        ).where(
+            RoadmapItem.roadmap_version_id.in_(list(shown.values())),
+            RoadmapItem.feature_id.is_not(None),
+            RoadmapItem.draft.is_(False),
+        )
+    ):
+        k = key_of.get(fid)
+        if k is None or not (title or "").strip():
+            continue
+        rank = (HORIZONS.index(horizon) if horizon in HORIZONS else len(HORIZONS), item_key)
+        if k not in best or rank < best[k][0]:
+            best[k] = (rank, title.strip())
+    return {k: t for k, (_, t) in best.items()}
+
+
 async def _short_codes(db: AsyncSession) -> dict[str, str]:
     """Every feature's short code by its key, over all the company's features (dropped ones
     keep theirs, so no code moves when one goes). A feature whose roadmap item came from a
-    PRD section with a code ("f-06") reads as the PRD names it (F-06)."""
+    PRD section with a code ("f-06") reads as the PRD names it (F-06); one with no code the
+    letters of its shown name (``_shown_names``)."""
     rows = (
         await db.execute(
-            select(Entity.id, Entity.key)
+            select(Entity.id, Entity.key, Entity.title)
             .where(Entity.type == "feature")
             .order_by(Entity.created_at, Entity.key)
         )
     ).all()
-    keys = [k for _, k in rows]
-    key_of = {i: k for i, k in rows}
+    keys = [k for _, k, _ in rows]
+    key_of = {i: k for i, k, _ in rows}
+    names = {k: t for _, k, t in rows if (t or "").strip()} | await _shown_names(db, key_of)
     prd: dict[str, str] = {}
     for fid, section in await db.execute(
         select(RoadmapItem.feature_id, RoadmapItem.prd_section_key)
@@ -350,7 +410,7 @@ async def _short_codes(db: AsyncSession) -> dict[str, str]:
         code = prd_code(section)
         if code and fid in key_of:
             prd.setdefault(key_of[fid], code)
-    return dict(zip(keys, short_codes(keys, prd), strict=True))
+    return dict(zip(keys, short_codes(keys, prd, names), strict=True))
 
 
 def _buckets(

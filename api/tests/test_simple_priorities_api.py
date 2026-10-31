@@ -421,7 +421,7 @@ def test_short_codes_take_the_letters_of_the_shown_name():
     names = {"setup-ideas": "Team invite nudges", "saved-carts": "Saved carts",
              "saved-cards": "Saved cards", "F-12": "Bulk import", "price-tiers": "Pricing",
              "pay-1": "Pay 1"}  # fmt: skip
-    assert short_codes(keys, names=names) == ["TIN", "SC", "SC2", "F-12", "PR", "P1"]
+    assert short_codes(keys, names=names) == ["TIN", "SC", "SC2", "F-12", "PR", "PA"]
 
 
 async def test_short_codes_follow_a_rename(client):
@@ -453,14 +453,15 @@ async def test_short_codes_follow_a_rename(client):
 
 async def test_short_codes_stay_when_the_rank_moves(client):
     """protects=each priorities row carries a short code computed once on the API (its
-    feature's shown name's initials: Pay 1 P1, Pay 2 P2, ...), and a re-estimate
+    feature's shown name's letters, Pay 1 ... Pay 4 all PA, a digit in the features' creation
+    order), and a re-estimate
     that moves pay-2 from rank 2 to rank 1 leaves every code where it was; fails_when=a row has
     no short code, two rows share one, or a code follows the rank; no_claim=the web's highlight
     of the moved row."""
     ctx = await make_people()
     w = await World(ctx).build()
     before = {r["code"]: r["short_code"] for r in (await w.read(client))["rows"]}
-    assert before == {"pay-1": "P1", "pay-2": "P2", "pay-3": "P3", "pay-4": "P4",
+    assert before == {"pay-1": "PA3", "pay-2": "PA4", "pay-3": "PA2", "pay-4": "PA",
                       "insights": "IN", "widgets": "WI"}  # fmt: skip
     r = await w.change(client, "owner", "estimate_feature", "pay-2",
                        {"goal_value": None, "effort": 8}, {"goal_value": 20})  # fmt: skip

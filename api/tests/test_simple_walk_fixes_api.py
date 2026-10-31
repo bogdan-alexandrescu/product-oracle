@@ -178,7 +178,7 @@ async def test_prd_codes_on_priorities(client):
         out = await w.read(client, who)
         codes = {r["code"]: r["short_code"] for r in out["rows"]}
         assert codes["delivery-integrity"] == "F-06", who
-        assert codes["pay-1"] == "LE", who  # no PRD code: initials
+        assert codes["pay-1"] == "PA3", who  # no PRD code: its name's letters (Pay 1)
 
 
 async def test_item_card_names_the_prd_section(client):
