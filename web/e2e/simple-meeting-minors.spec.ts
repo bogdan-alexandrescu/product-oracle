@@ -9,7 +9,9 @@ import { ADMIN } from "./helpers";
  * - past its length the clock reads "Over by 30 min" and the page offers to end it;
  * - left alone past the idle limit (4 hours without a change), it has ended when opened;
  * - a question typed in its chat ("Kept as a question for the minutes…") shows under
- *   "Notes so far" at once as an open question, and the minutes list it.
+ *   "Notes so far" at once as an open question, and the minutes list it;
+ * - the idle limit counts from the last change made in it, as the API's session does: an
+ *   Approve (a decision, not a change) 3 hours after an edit does not keep it open.
  * Invented example data only. Desktop (1366x820) and phone (390x844).
  */
 
@@ -67,6 +69,25 @@ for (const phone of [false, true]) {
       await page.goto(url);
       await expect(page.getByTestId("end-screen")).toBeVisible();
       await expect(page.getByRole("timer", { name: "Meeting clock" })).toHaveCount(0);
+    });
+
+    test(`the idle limit counts from the last change, not an approval (${where})`, async ({ page }) => {
+      // protects: as the API (changes.close_idle counts from the session's last change), the mock ends a meeting 4 hours after its last edit even when it was approved since; Approve is a decision, not a change
+      // fails_when: the meeting is still live 4 hours after the edit because the approval came later
+      // no_claim: the API's sweep (api/tests/test_simple_meetings_minors.py)
+      const url = await startReview(page);
+      await expect(page.getByTestId("meeting-screen").getByTestId("one-pager")).toContainText("Version 3");
+      await tap(page.getByRole("button", { name: "Edit “A setup checklist that shows" }));
+      await page.getByLabel("New wording for").fill("A checklist that names the next step");
+      await tap(page.getByRole("button", { name: "Save" }));
+      await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+      await page.clock.fastForward(3 * 60 * 60_000);
+      await tap(page.getByRole("button", { name: /^Approve one-pager edits/ }));
+      await expect(page.getByTestId("meeting-screen")).toContainText("Approved Guided setup");
+      await page.goto("/simple/meetings");
+      await page.clock.fastForward(61 * 60_000);
+      await page.goto(url);
+      await expect(page.getByTestId("end-screen")).toBeVisible();
     });
 
     test(`a kept question shows under "Notes so far" at once and the minutes list it (${where})`, async ({ page }) => {

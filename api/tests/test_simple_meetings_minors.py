@@ -13,6 +13,14 @@ Test cards (protects / fails_when / no_claim):
   meeting's notes at once, by its asker, and the minutes list it once; fails_when=the
   notes stay empty until the meeting ends, or the minutes list it twice;
   no_claim=the reader's wording.
+- test_the_ticker_ends_an_idle_meeting: protects=the company tick itself (ticker.body)
+  ends a meeting idle past MEETING_IDLE, not only the sweep's own functions;
+  fails_when=the tick closes the session and leaves the meeting live; no_claim=the
+  scheduler that calls the tick.
+- test_a_failing_meeting_end_keeps_the_ticks_session_closes: protects=a meeting whose end
+  raises (its minutes' extract) does not undo the sessions that tick closed, and the next
+  tick ends it; fails_when=the session stays open after the failed tick;
+  no_claim=why the end failed.
 """
 
 import uuid
@@ -21,8 +29,9 @@ from datetime import timedelta
 from sqlalchemy import select
 
 from oracle.simple import changes, chat, meetings
-from oracle.simple.models import SimpleMeeting
+from oracle.simple.models import SimpleMeeting, SimpleSession
 from oracle.tenancy import tenant_session
+from oracle.ticker import body as ticker_body
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_chat_reader import read
 from tests.test_simple_meetings_api import MEETINGS, end, get, start, uid, world
@@ -83,3 +92,42 @@ async def test_a_kept_question_shows_under_notes_at_once(client):
     assert notes[0]["card_id"] is None and notes[0]["by_name"] != "someone"
     out = await end(client, w, mid)
     assert out["minutes"]["open_questions"].count(line) == 1
+
+
+async def _tick(w) -> ticker_body.CompanyTick:
+    async with tenant_session(w.ctx.tenant_id) as s:
+        return await ticker_body.tick_company(s, w.ctx.tenant_id)
+
+
+async def test_the_ticker_ends_an_idle_meeting(client, clock):  # noqa: F811
+    w = await world()
+    mid = (await start(client, w, length_min=60))["id"]
+    clock["now"] = NOW + changes.MEETING_IDLE + timedelta(minutes=1)
+    out = await _tick(w)
+    assert out.sessions_closed >= 1 and out.meetings_ended == 1
+    row = await _row(w, mid)
+    assert row.status == "ended" and row.minutes_state == "ready"
+    assert row.ended_by == row.presenter_id and row.minutes is not None
+
+
+async def test_a_failing_meeting_end_keeps_the_ticks_session_closes(client, clock, monkeypatch):  # noqa: F811
+    w = await world()
+    mid = (await start(client, w, length_min=60))["id"]
+    clock["now"] = NOW + changes.MEETING_IDLE + timedelta(minutes=1)
+
+    async def boom(db):
+        raise RuntimeError("the minutes failed")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(meetings, "end_idle", boom)
+        out = await _tick(w)
+    assert out.sessions_closed >= 1 and out.meetings_ended == 0
+    assert any(isinstance(e, RuntimeError) for e in out.errors)
+    row = await _row(w, mid)
+    assert row.status == "live"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        session = await s.get(SimpleSession, row.session_id)
+        assert session is not None and session.closed_at is not None
+    # The next tick ends it.
+    assert (await _tick(w)).meetings_ended == 1
+    assert (await _row(w, mid)).status == "ended"
