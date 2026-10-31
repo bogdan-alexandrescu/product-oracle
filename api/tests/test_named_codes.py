@@ -136,7 +136,7 @@ def test_a_name_in_brackets_after_its_code_names_it():
 
 def test_a_bracket_or_colon_names_a_code_only_when_it_holds_a_name():
     """e2e-draft-codes review: a reference, a number or another code after the code is no
-    name; a capital or a number then words is."""
+    name; a word or a number then words is."""
     for body in (
         "F-28 (see below) ships first.",
         "G1 (40%) is the target.",
@@ -146,6 +146,7 @@ def test_a_bracket_or_colon_names_a_code_only_when_it_holds_a_name():
         assert named_codes.findings(body).unnamed[:1] in (["F-28"], ["G1"], ["R1"]), body
     for body in (
         "F-28 (Retire the legacy deploy path) ships first.",
+        "G1 (activation) comes first.",
         f"M3 ({MILESTONE}) is next.",
         f"M3: {MILESTONE} is next.",
     ):

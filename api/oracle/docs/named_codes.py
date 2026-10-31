@@ -25,11 +25,11 @@ _JOINER = re.compile(r"[ \t]*(?:,|/|&|,?[ \t]+(?:and|or))[ \t]*")
 # A name after a code: an optional separator, then a capital.
 _NAME_AFTER = re.compile(r"[ \t]*(?:[:·–—-][ \t]*)?(\w)")
 # A name in brackets or after a separator, which may start with a number or hold commas
-# ("M3 (200 teams and 50 seats, and onboarding at scale)", "M3: 200 teams ..."): a capital
-# that starts no code, or a number then a word; never "(see below)", "(40%)" or "(M3)".
+# ("M3 (200 teams and 50 seats, and onboarding at scale)", "G1 (activation)"): a word that
+# is no code and no reference, or a number then a word; never "(see below)", "(40%)", "(M3)".
 _NAME_MARKED = re.compile(
     r"[ \t]*(?:\(|[:·–—])[ \t]*"
-    r"(?:(?!(?:[A-Z]{1,3}-\d|[A-Z]\d))[A-Z]|\d[\d,.]*[ \t]+[A-Za-z])"
+    r"(?:(?!(?:[A-Z]{1,3}-\d|[A-Z]\d|(?:see|cf|e\.g|i\.e)\b))[A-Za-z]|\d[\d,.]*[ \t]+[A-Za-z])"
 )
 # The warning codes of this check (a run sends a draft with either back to the writer).
 CODES = ("unnamed_code", "codes_not_listed")
