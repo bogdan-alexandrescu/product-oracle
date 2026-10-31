@@ -198,9 +198,17 @@ for (const [name, viewport] of [
       if (viewport === DESKTOP) {
         expect(b.width).toBeLessThan(720);
         expect(b.width).toBeGreaterThan(400);
-        // Centred in the page's own width: from 640 px the page keeps a scrollbar's gutter (#1003),
-        // which takes about 15 px where scrollbars take space (Windows, Linux) and none on a Mac.
-        const middle = await page.evaluate(() => document.documentElement.clientWidth / 2);
+        // Centred in the box a fixed dialog is laid out in: from 640 px the page keeps a scrollbar's
+        // gutter (#1003), about 15 px where scrollbars take space (Windows, Linux) and none on a Mac,
+        // and it stays while the open dialog locks the page's scroll.
+        const middle = await page.evaluate(() => {
+          const probe = document.createElement("div");
+          probe.style.cssText = "position:fixed;inset:0;visibility:hidden;pointer-events:none";
+          document.body.appendChild(probe);
+          const r = probe.getBoundingClientRect();
+          probe.remove();
+          return r.left + r.width / 2;
+        });
         expect(Math.abs(b.x + b.width / 2 - middle)).toBeLessThan(4);
         expect(b.y + b.height).toBeLessThan(DESKTOP.height - 8);
         await expect(page.getByTestId("date-change").getByTestId("sheet-handle")).toBeHidden();
