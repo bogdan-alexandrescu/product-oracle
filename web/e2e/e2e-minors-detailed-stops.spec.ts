@@ -198,7 +198,10 @@ for (const [name, viewport] of [
       if (viewport === DESKTOP) {
         expect(b.width).toBeLessThan(720);
         expect(b.width).toBeGreaterThan(400);
-        expect(Math.abs(b.x + b.width / 2 - DESKTOP.width / 2)).toBeLessThan(4);
+        // Centred in the page's own width: from 640 px the page keeps a scrollbar's gutter (#1003),
+        // which takes about 15 px where scrollbars take space (Windows, Linux) and none on a Mac.
+        const middle = await page.evaluate(() => document.documentElement.clientWidth / 2);
+        expect(Math.abs(b.x + b.width / 2 - middle)).toBeLessThan(4);
         expect(b.y + b.height).toBeLessThan(DESKTOP.height - 8);
         await expect(page.getByTestId("date-change").getByTestId("sheet-handle")).toBeHidden();
       } else {
