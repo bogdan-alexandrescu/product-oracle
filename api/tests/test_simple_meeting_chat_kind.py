@@ -104,3 +104,36 @@ async def test_a_stray_oracle_line_reads_as_an_answer(client, meetings):  # noqa
     [stray] = [m for m in msgs if m["body"] == "Here is what I found."]
     assert stray["kind"] == "answer" and stray["author_name"] == "Oracle"
     assert stray["retry"] is False and stray["cards"] == []
+
+
+async def test_oracles_ask_on_the_meeting_page_is_still_answered(
+    client,
+    meetings,  # noqa: F811
+    fake,  # noqa: F811
+    monkeypatch,
+):
+    """protects=Oracle's Ask panel on a meeting's page (a discussion on the same Simple path)
+    is still answered by the reply sweep; fails_when=the guard skips every Simple page's
+    discussion; no_claim=the reply's words."""
+    from oracle.simple import chat
+
+    assert replies.SIMPLE_CHAT == chat.ENGINE
+    ctx = await make_people()
+    await World(ctx).build()
+    await with_key(ctx)
+    mid = _meeting(ctx, meetings)
+    monkeypatch.setattr(replies, "PENDING_GRACE", timedelta(seconds=-60))
+    r = await client.post(
+        "/v1/discussions",
+        json={"subject_kind": "screen", "subject": {"path": f"/simple/meetings/{mid}"},
+              "origin": "panel", "visibility": "private"},
+        headers=ctx.as_("owner"),
+    )  # fmt: skip
+    assert r.status_code == 201, r.text
+    d = r.json()
+    r = await client.post(f"/v1/discussions/{d['id']}/messages", headers=ctx.as_("owner"),
+                          json={"body": "what is late?", "mention_oracle": False})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert r.json()["reply"] is not None
+    out = await replies.run_pending(ctx.tenant_id)
+    assert (out.ran, out.completed) == (1, 1)

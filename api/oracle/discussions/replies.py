@@ -85,6 +85,8 @@ GOAL_JOB = "discussion_reply_goal"
 MAX_TOKENS = 1500
 LEASE = timedelta(seconds=150)
 PENDING_GRACE = timedelta(seconds=10)
+# oracle.simple.chat.ENGINE: the model of the Simple chat's own lines.
+SIMPLE_CHAT = "oracle.simple.chat"
 CHECK_SECONDS = 0.5
 SAVE_SECONDS = 1.0
 SAVE_CHARS = 400
@@ -434,15 +436,11 @@ def _listen(reply_id: uuid.UUID) -> tuple[asyncio.Queue, str] | None:
 
 
 def _not_simple_chat() -> Any:
-    """A message outside every Simple chat (a person's Ask chat on a page, a meeting's
-    chat): those are answered by the Simple chat reader only (oracle.simple.chat's
-    ``chat_reader`` job), whose pending line waits here as a ``pending`` Oracle message
-    too (meet-chat-kind)."""
-    return DiscussionMessage.discussion_id.not_in(
-        select(Discussion.id).where(
-            Discussion.origin == "panel", Discussion.subject_key.like("screen:/simple/%")
-        )
-    )
+    """Not the Simple chat reader's own line: a Simple chat (a person's Ask chat on a page, a
+    meeting's chat) shows "Reading that…" as a ``pending`` Oracle message of its engine while
+    its ``chat_reader`` job runs; only that job answers it, once (meet-chat-kind). Oracle's
+    Ask panel on a Simple page is a discussion like any other and is still answered here."""
+    return DiscussionMessage.model.is_distinct_from(SIMPLE_CHAT)
 
 
 async def claim(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> bool:
