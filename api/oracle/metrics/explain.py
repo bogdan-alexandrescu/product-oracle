@@ -80,6 +80,7 @@ def _uuid(value: Any) -> uuid.UUID | None:
 async def _readable(db: AsyncSession, refs: list[tuple[str, uuid.UUID]], reader) -> set:
     from oracle.decisions.models import Decision
     from oracle.launches.models import ChangelogEntry, Launch
+    from oracle.roadmap.draft_items import item_documents
     from oracle.roadmap.models import RoadmapItem
     from oracle.sources.models import Source, SourceItem
 
@@ -93,15 +94,7 @@ async def _readable(db: AsyncSession, refs: list[tuple[str, uuid.UUID]], reader)
             if kind == "decision":
                 found -= await visibility.hidden_decision_ids(db, found, as_member=True)
             elif kind == "roadmap_item" and found:
-                docs = dict(
-                    (
-                        await db.execute(
-                            select(RoadmapItem.id, RoadmapItem.roadmap_document_id).where(
-                                RoadmapItem.id.in_(found)
-                            )
-                        )
-                    ).all()
-                )
+                docs = await item_documents(db, found)
                 hidden = await visibility.hidden_document_ids(db, docs.values(), as_member=True)
                 found = {i for i in found if docs.get(i) not in hidden}
             out |= {(kind, i) for i in found}

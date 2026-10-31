@@ -456,8 +456,9 @@ async def submitted_versions(db: AsyncSession) -> set[uuid.UUID]:
 
 
 async def effective(db: AsyncSession, rows: list[RoadmapItem]) -> dict[str, RoadmapItem]:
-    """Each row as its roadmap's open draft has it (the stored values a change checks)."""
-    docs = {r.roadmap_document_id for r in rows}
+    """Each row as its roadmap's open draft has it (the stored values a change checks).
+    An item on a run's draft roadmap has no roadmap, so no open draft (meet-draft-items)."""
+    docs = {r.roadmap_document_id for r in rows if r.roadmap_document_id is not None}
     ds = (
         {
             d.document_id: d
