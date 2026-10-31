@@ -40,8 +40,12 @@ function useIsPhone(): boolean {
   );
 }
 
-/** Every batch asked so far, oldest first. */
-async function loadBatches(intakeId: string, current: number | null | undefined): Promise<Batch[]> {
+/**
+ * Every batch asked so far, oldest first; undefined while the summary (and so the current
+ * batch) is not loaded yet, so the chip and counts never read an empty thread before it.
+ */
+async function loadBatches(intakeId: string, current: number | null | undefined): Promise<Batch[] | undefined> {
+  if (current === undefined) return undefined;
   const numbers = Array.from({ length: current ?? 0 }, (_, i) => i + 1);
   const batches = await Promise.all(
     numbers.map((n) => unwrap(api.GET("/v1/intakes/{intake_id}/question-batch", { params: { path: { intake_id: intakeId }, query: { batch: n } } }))),
