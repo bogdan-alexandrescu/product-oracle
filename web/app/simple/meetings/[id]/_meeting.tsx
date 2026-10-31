@@ -148,6 +148,9 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
     const yes = await confirmInPage({ action: "End meeting", message: "End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.", destructive: true });
     if (yes) await act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/end", path)));
   };
+  // e2e-minors-simple: past its length the clock says by how much, and the page offers to end it.
+  const elapsed = now - Date.parse(m.started_at);
+  const overBy = elapsed > m.length_min * 60_000 ? Math.max(1, Math.round(elapsed / 60_000 - m.length_min)) : 0;
   // qa-simple-decide-42: a change applied in the chat shows at once in the stage and All decisions (read now and once the chat has settled).
   const changed = () => {
     void reload();
@@ -173,7 +176,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           ))}
         </nav>
         <span role="timer" aria-label="Meeting clock" className="font-semibold tabular-nums">
-          {clock(now - Date.parse(m.started_at))} / {m.length_min}:00
+          {overBy > 0 ? `Over by ${overBy} min` : `${clock(elapsed)} / ${m.length_min}:00`}
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {!joined && can("join_simple_meeting") && <Button variant="primary" className={PHONE_TAP} disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/join", path)))}>Join</Button>}
@@ -195,6 +198,16 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           {m.can.end && <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => void end()}>End meeting</Button>}
         </div>
       </header>
+      {overBy > 0 && (
+        <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 text-base" data-testid="meeting-overrun">
+          This meeting ran past its {m.length_min} minutes.
+          {m.can.end ? (
+            <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => void end()}>End it now</Button>
+          ) : (
+            <span className="text-text2">Ask the presenter to end it.</span>
+          )}
+        </p>
+      )}
       {/* qa-simple-decide-29: on a phone the attendees and the mode fold into one row. */}
       <button type="button" className={`hidden border-b border-line px-4 py-2 text-left text-base max-[600px]:block ${PHONE_TAP}`} aria-expanded={people} data-testid="meeting-people-toggle" onClick={() => setPeople((x) => !x)}>
         {m.attendees.filter((a) => a.present).length} of {m.attendees.length} here · Who changes things: {MODE_WORDS[m.change_mode]} <span aria-hidden>{people ? "▴" : "▾"}</span>

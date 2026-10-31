@@ -521,6 +521,23 @@ async def _settle(db: AsyncSession, ms: list[SimpleMeeting]) -> None:
         await audit.record(db, None, "simple_meeting.ended_idle", "simple_meeting", m.id, data={})
 
 
+async def end_idle(db: AsyncSession) -> int:
+    """The idle sweep's second step (oracle.ticker.body, after changes.close_idle): every
+    live meeting whose session closed ends with its quick minutes, whether or not anyone
+    opens it again (a meeting whose start never answered its presenter included). The
+    caller commits; how many ended."""
+    ms = list(
+        await db.scalars(
+            select(SimpleMeeting)
+            .join(SimpleSession, SimpleSession.id == SimpleMeeting.session_id)
+            .where(SimpleMeeting.status == "live", SimpleSession.closed_at.is_not(None))
+            .with_for_update(of=SimpleMeeting)
+        )
+    )
+    await _settle(db, ms)
+    return len(ms)
+
+
 def _presenter_or_decider(principal: Any, m: SimpleMeeting, w: PrdWho) -> bool:
     me = _me(principal)
     return me is not None and (
