@@ -178,6 +178,13 @@ test("qa-simple-home-24: one change in review reads 'until it is approved'", asy
 test("qa-simple-home-25 and -36: a viewer with no name is greeted plainly, with no gap for a walk", async ({ page }) => {
   // fails_when: "Good morning, viewer." or an invisible 40 px "Walk me through it" slot for a known viewer
   await signIn(page, EMAILS.viewer);
+  // The mock's viewer has a name: they clear it on My account first.
+  await page.goto("/account");
+  const mine = page.getByRole("form", { name: "Your name" });
+  await mine.getByLabel("Name", { exact: true }).fill("");
+  await mine.getByRole("button", { name: "Save" }).click();
+  await expect(mine.getByRole("button", { name: "Saved" })).toBeVisible();
+  await page.goto("/simple");
   const lead = page.getByTestId("home-greeting").locator(".simple-lead");
   await expect(lead).toHaveText(/^Good (morning|afternoon|evening)\. Here is where the plan stands\.$/);
   await expect(page.getByTestId("home-walk-slot")).toHaveCount(0);
