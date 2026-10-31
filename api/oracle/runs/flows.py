@@ -151,7 +151,11 @@ DECISIONS_TASK = (
 NAMED_CODES = (
     "Codes: the first time a section or note uses a code (a feature, requirement, goal, "
     "decision or milestone key), write it with its name: F-28 Retire the legacy deploy "
-    "path, not F-28; later mentions in the same section may use the code alone. Write "
+    "path, not F-28; later mentions in the same section may use the code alone. A name "
+    "that reads like a sentence (it starts with a number or holds commas) goes in brackets "
+    "after its code, M3 (200 teams and 50 seats, and onboarding at scale), or first with "
+    "the code in brackets after it; never splice a code and such a name into the middle of "
+    "a sentence. Write "
     "three or more codes as a list, one per line, each with its name, never as a "
     "comma-separated run of codes. Title a milestone section with its dates, e.g. "
     "M1 · Oct 19 – Nov 13, not just M1. Never invent a code to stand for something; a "

@@ -371,8 +371,9 @@ async def test_a_draft_with_unnamed_codes_goes_back_to_the_writer_first(client, 
     [line] = [f for f in findings if "Goal trace" in f]
     assert "G1" in line and "M3" in line
     assert any("M3 (its name)" in f for f in findings)
+    # Imported, never refused: no "Draft rejected"; the run's note says what Oracle did.
     seg = run["segments"][0]
-    assert seg["sent_back"] is True
+    assert run["draft_rejected"] is None and run["sent_back"] is None
     assert seg["attempts"][-1]["note_by"] == "Oracle"
     assert any("Oracle sent" in n and "back to the writer" in n for n in run["notes"])
     [event] = await _audit(tenant_id, "run.draft_sent_back")
@@ -386,7 +387,8 @@ async def test_a_draft_with_unnamed_codes_goes_back_to_the_writer_first(client, 
     assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
     cp = pending(run)
     assert cp["payload"]["wait"]["step_id"] == "next_draft-review2"
-    assert cp["payload"]["import"]["version"] == 2
+    # The draft sent back was imported (version 2); the revision is version 3.
+    assert cp["payload"]["import"]["version"] == 3
     assert "unnamed_code" not in cp["payload"]["import"]["warnings"]
     assert len(swarm.answers) == 1
 
@@ -405,6 +407,7 @@ async def test_codes_still_unnamed_after_the_revision_say_which_at_the_review(cl
     assert cp["payload"]["wait"]["step_id"] == "next_draft-review2"
     # Imported, never refused: the person reads which codes still lack names.
     imported = cp["payload"]["import"]
+    # The same text again: no new version.
     assert imported["version"] == 2 and "unnamed_code" in imported["warnings"]
     [names] = imported["code_names"]
     assert "Goal trace: G1, M3" in names

@@ -167,8 +167,25 @@ def import_findings(
     return rejection.findings(name, problems, total)
 
 
+def code_name_findings(name: str, code_names: list[str]) -> list[str]:
+    """The review findings for a draft imported with codes it does not name (#306,
+    oracle.docs.named_codes): a lead line, then the import's warning per rule. Nothing when
+    the draft names its codes."""
+    if not code_names:
+        return []
+    return [
+        f"Oracle imported {name}, but it uses codes without their names, so it sent the "
+        "draft back before a person reviews it. Name each code below where its section "
+        "first uses it and write the whole file again; keep the rest as it is.",
+        *code_names,
+    ]
+
+
 def check_problems(
-    name: str, items_check: dict[str, Any] | None, import_problems: list[dict[str, Any]]
+    name: str,
+    items_check: dict[str, Any] | None,
+    import_problems: list[dict[str, Any]],
+    code_names: list[str] | None = None,
 ) -> list[str]:
     """One line per problem Oracle's check found in ``name`` that the agents must fix:
     the items check's blocking reasons (D2 Product reasons: label and sentence; to-confirm
@@ -192,6 +209,8 @@ def check_problems(
     if import_problems:
         problems = [ImportProblem.model_validate(p) for p in import_problems]
         out.append(rejection.summary(name, problems))
+    # Codes an imported draft uses without their names (#306): the import's warnings.
+    out += code_names or []
     return out
 
 
@@ -200,11 +219,14 @@ def _blocking(reason: dict[str, Any]) -> bool:
 
 
 def check_findings(
-    name: str, items_check: dict[str, Any] | None, import_problems: list[dict[str, Any]]
+    name: str,
+    items_check: dict[str, Any] | None,
+    import_problems: list[dict[str, Any]],
+    code_names: list[str] | None = None,
 ) -> list[str]:
     """A person's NOT_YET at the last segment's review: a lead line and the problems
     Oracle's check found in ``name`` (:func:`check_problems`), or nothing when none."""
-    lines = check_problems(name, items_check, import_problems)
+    lines = check_problems(name, items_check, import_problems, code_names)
     if not lines:
         return []
     return [f"Oracle's check found these problems in {name}; fix each one:", *lines]
