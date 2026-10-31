@@ -59,6 +59,8 @@ export interface RoadmapDb {
   recordEvents?: (TrackerRecordEventOut & { record_id: string })[];
   /** F2: dates accepted from the tracker, by item key, with the reference of the basis they rest on (the Plan row reads them). */
   accepted?: Record<string, { day: string; reference: string }>;
+  /** qa5-plan-at-risk: open critical hard blockers on items, by item key (the API's "blocked" reason detail). */
+  critical?: Record<string, string>;
 }
 
 export interface RoadmapContext {
@@ -120,6 +122,8 @@ export const PLAN_STALE_SCENARIO = "plan-stale";
 export const APPROVED_PLAN_SCENARIO = "approved-plan";
 /** Only usage-alerts-roadmap v1 approved (it is in review by default): specs on the approved plan. */
 export const ALERTS_APPROVED_SCENARIO = "alerts-approved";
+/** qa5-plan-at-risk: "alignment-report" with the Plan's track off track for a critical blocker, nothing slipping. */
+export const REPORT_OFF_TRACK_SCENARIO = "report-off-track";
 
 const now = () => new Date().toISOString();
 // The company's day (its time zone), as oracle.company_time.company_today (qa-shell-6).
@@ -269,6 +273,13 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
         : (rv ? db.items[rv.id] : []).filter((i) => i.horizon === "now").map((i) => i.item_key),
       status: "planned", lock_version: 1, created_at: AT, updated_at: AT,
     });
+    // qa5-plan-at-risk "report-off-track": the digest's slip was accepted at First release's own
+    // Nov 30, and the team chat item (Now) has an open critical hard blocker: off track, with
+    // no item slipping past the milestone.
+    if (scenario === REPORT_OFF_TRACK_SCENARIO && track.plan) {
+      db.accepted = { "alert-digest": { day: "2026-11-30", reference: "ENG-412" } };
+      db.critical = { "slack-alerts": "Chat app review takes two weeks (open)" };
+    }
     // F7: acme/app#418 is already linked to "Spend forecast for the month" (the move flow).
     db.records.push(issueRecord(SYNCED_ISSUES[1], prd.id, "spend-forecast", ctx.userId));
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
@@ -288,7 +299,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
     // "launches": a second track, Checkout redesign PRD, with no roadmap yet (New launch's Track picker).
     // fix4: the alignment report scenarios have it too, so a report's second track is one the mock keeps.
-    const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved";
+    const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved" || scenario === REPORT_OFF_TRACK_SCENARIO;
     const checkout = secondTrack ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
     if (checkout) {
       const started = latest(ctx, checkout.id)?.number ?? 1;
@@ -659,8 +670,10 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   const prdMoved = !!(source && latestApproved && latestApproved > source);
   // The Plan's items carry their own state (at risk, not off track), as its table shows them.
   const slippingNext = !own && !!next && atRisk.some((a) => next.item_keys.includes(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
+  // As the API: an open critical hard blocker on a Now item puts the track off track too.
+  const criticalNow = (own ?? items.map((i) => ({ item_key: i.item_key, horizon: i.horizon }))).some((i) => i.horizon === "now" && !!db.critical?.[i.item_key]);
   const health: Schemas["TrackOverview"]["health"] =
-    t.status !== "active" ? t.status : !counts.items ? "no_roadmap" : slippingNext ? "off_track" : atRisk.length || prdMoved ? "at_risk" : "on_track";
+    t.status !== "active" ? t.status : !counts.items ? "no_roadmap" : slippingNext || criticalNow ? "off_track" : atRisk.length || prdMoved ? "at_risk" : "on_track";
   const when = next ? ` Next milestone: ${next.name}${next.target_date ? `, ${calendarDay(next.target_date)}` : ""}.` : "";
   const headline = trackHeadline(health, counts, when, prdMoved ? latestApproved : null);
   return {
@@ -1183,7 +1196,10 @@ function planTrackItems(db: RoadmapDb): Schemas["AtRiskItem"][] {
     item_key: s.key,
     title: s.title,
     horizon: s.horizon,
-    reasons: db.accepted?.[s.key] ? [] : (s.reasons ?? []).map((r) => ({ ...r })),
+    reasons: [
+      ...(db.critical?.[s.key] ? [{ kind: "blocked", detail: db.critical[s.key] }] : []),
+      ...(db.accepted?.[s.key] ? [] : (s.reasons ?? []).map((r) => ({ ...r }))),
+    ],
   }));
 }
 
@@ -1274,11 +1290,13 @@ export function reportTracks(ctx: RoadmapContext, db: RoadmapDb, calm = false): 
     });
 }
 
-/** As oracle.reports.alignment.milestone_at_risk (qa4-plan-7): an item of the next milestone slips past it. */
+/**
+ * As oracle.reports.alignment.milestone_at_risk (qa4-plan-7, qa5-plan-at-risk): the next milestone
+ * has a date and an item of it slips past it. Off track alone (a critical blocker) is not enough.
+ */
 function milestoneAtRisk(db: RoadmapDb, o: Schemas["TrackOverview"]): boolean {
   const nxt = o.next_milestone;
-  if (!nxt) return false;
-  if (o.health === "off_track") return true;
+  if (!nxt?.target_date) return false;
   const keys = new Set(db.milestones.find((m) => m.id === nxt.milestone_id)?.item_keys ?? []);
   return o.at_risk.some((a) => keys.has(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
 }

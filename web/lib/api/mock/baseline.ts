@@ -91,6 +91,9 @@ export type ReviewStatus = Schemas["ReviewStatusOut"];
 
 /** The scenario whose last baseline review is too old to reuse (approved 41 days ago). */
 export const BASELINE_STALE_SCENARIO = "baseline-stale";
+/** qa5-plan-at-risk: paid conversion carries a long name (Priorities' Goal column wraps it whole). */
+export const LONG_GOAL_SCENARIO = "long-goal";
+export const LONG_GOAL_NAME = "Grow paid conversion for small teams on the yearly plan";
 const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
 
 /**
@@ -265,7 +268,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
     },
     confidence: 0.78,
   });
-  const paid = entity("goal", "g.paid-conversion", "Grow paid conversion", {
+  const longGoal = typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === LONG_GOAL_SCENARIO;
+  const paid = entity("goal", "g.paid-conversion", longGoal ? LONG_GOAL_NAME : "Grow paid conversion", {
     body: "More trial accounts move to a paid plan.",
     attrs: {
       // qa4-simple-home-6: its starting value, as activation has one (the first of its monthly reads below).

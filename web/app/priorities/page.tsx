@@ -1107,7 +1107,8 @@ function Priorities() {
       // between words, never inside one ("Scalin g"); no wider, so the Feature column keeps its
       // room beside the docked inspector and an approver's move column (qa-plan-5).
       width: "128px",
-      // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
+      // Every goal whole (prod-4, qa-plan-42): one per line, a long name on as many lines as it
+      // needs, wrapped between words and never cut (qa5-plan-at-risk).
       wrap: true,
       cell: (f) =>
         f.explanation.goals.length === 0 ? (
@@ -1115,7 +1116,7 @@ function Priorities() {
         ) : (
           <span className="flex min-w-0 flex-col items-start gap-1 py-0.5 max-[600px]:flex-row max-[600px]:flex-wrap" data-testid="row-goals">
             {f.explanation.goals.map((g) => (
-              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap />
+              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole />
             ))}
           </span>
         ),
