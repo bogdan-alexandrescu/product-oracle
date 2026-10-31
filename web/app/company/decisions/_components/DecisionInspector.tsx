@@ -409,13 +409,12 @@ function Actions({
 }) {
   const { can } = useMe();
   // Edit is offered while proposed; #370: a role that can never edit (a viewer) does not see
-  // it, and a member the decision does not let in sees it disabled, with why.
-  const editable = d.status === "proposed" && can("update_decision", true);
-  const noEdit = "Only its creator, its approver or an owner edits a proposal";
+  // it; qa4-company-18: nor does a member the decision does not let in (a disabled Edit did nothing).
+  const editable = d.status === "proposed" && can("update_decision", true) && d.can_edit;
   const buttons = (
     <div className="flex flex-wrap gap-2">
       {editable && (
-        <Button onClick={() => setMode("edit")} disabled={!d.can_edit} title={d.can_edit ? undefined : noEdit} aria-expanded={mode === "edit"}>
+        <Button onClick={() => setMode("edit")} aria-expanded={mode === "edit"}>
           Edit
         </Button>
       )}
@@ -425,8 +424,9 @@ function Actions({
         </Button>
       )}
       {d.can_review && (
+        // qa4-company-17: says what it does: look back at how the call turned out.
         <Button onClick={() => setMode("review")} aria-expanded={mode === "review"}>
-          Review
+          Review the outcome
         </Button>
       )}
       {d.can_reassign && (
@@ -445,7 +445,6 @@ function Actions({
   return (
     <InspectorSection label="Actions" testId="decision-actions">
       {buttons}
-      {editable && !d.can_edit && <p className="mt-2 text-sm text-text2">{noEdit}</p>}
       {mode === "edit" && <EditForm d={d} people={people} onDone={done} onCancel={() => setMode(null)} />}
       {mode === "decide" && <DecideForm d={d} onDone={done} onCancel={() => setMode(null)} />}
       {mode === "review" && <ReviewForm d={d} onDone={done} onCancel={() => setMode(null)} />}
@@ -785,12 +784,14 @@ function ReassignForm({ d, people, onDone, onCancel }: { d: Decision; people: Pe
   // qa-company-29: someone else than the approver now, nobody picked to begin with.
   const approvers = people.filter((p) => hasRole(p.role, "approver") && p.id !== d.approver_id);
   const [approver, setApprover] = useState("");
+  // qa4-company-12: the submit says who it goes to, so it never repeats the row's Reassign.
+  const chosen = approvers.find((p) => p.id === approver);
   const [reason, setReason] = useState("");
   const { busy, error, setError, run } = useSubmit(onDone);
   return (
     <FormShell
       name="Reassign"
-      submit="Reassign"
+      submit={`Reassign to ${chosen ? personName(chosen) : "the new approver"}`}
       ready={!!approver}
       busy={busy}
       error={error}
@@ -819,12 +820,13 @@ function ReassignForm({ d, people, onDone, onCancel }: { d: Decision; people: Pe
 }
 
 function WithdrawForm({ d, onDone, onCancel }: { d: Decision; onDone: Done; onCancel: () => void }) {
+  // qa4-company-12: the submit names the decision ("Withdraw D-5"), never a second bare Withdraw.
   const [reason, setReason] = useState("");
   const { busy, error, setError, run } = useSubmit(onDone);
   return (
     <FormShell
       name="Withdraw"
-      submit="Withdraw"
+      submit={`Withdraw ${d.ref}`}
       danger
       busy={busy}
       error={error}

@@ -284,6 +284,13 @@ function Decisions() {
   const inspector = detail ? (
     <DecisionInspector key={detail.id} decision={detail} people={people} onChanged={changed} autoDecide={params.get("act") === "decide"} />
   ) : null;
+  // qa4-company-15: beside the list the inspector's column stays while nothing is open, so the
+  // filter chips keep their place when a kind with no decisions is picked.
+  const besideList = inspector ?? (
+    <Panel testId="decision-inspector-empty">
+      <p className="px-4 py-8 text-center text-[15px] text-text2">{listQ.data && rows.length === 0 ? "No decision to show." : "Pick a decision to see it here."}</p>
+    </Panel>
+  );
   const setClass = (v: ClassFilter) => setParams({ class: v === (run ? "checkpoint" : "judgement") ? null : v, d: null });
   const select = (d: DecisionSummary) => {
     setParams({ d: String(d.number) });
@@ -302,7 +309,7 @@ function Decisions() {
         }
       />
       {listQ.error && <ErrorNote>{listQ.error}</ErrorNote>}
-      <Split inspector={!phone ? inspector : undefined}>
+      <Split inspector={!phone ? besideList : undefined}>
         <Panel
           title="Decisions"
           count={listQ.data ? (total !== null && total !== String(rows.length) ? `${rows.length} of ${total}` : rows.length) : undefined}
@@ -437,6 +444,17 @@ function Decisions() {
                     : cls === "all"
                       ? "No decisions here yet."
                       : `No ${clsLabel}.`}
+                  {/* qa4-company-16: a checkpoint still waiting is in the Inbox, not here. */}
+                  {!(hiding.length > 0 || q) && cls === "checkpoint" && (
+                    <>
+                      {" "}
+                      A run checkpoint shows here once it is approved or sent back; one still waiting is in the{" "}
+                      <Link href="/inbox" className="font-medium text-accent-ink hover:underline">
+                        Inbox
+                      </Link>
+                      .
+                    </>
+                  )}
                 </p>
               )}
               {/* qa-company-10: the Kind filter alone hides every row: one step back to all kinds. */}
