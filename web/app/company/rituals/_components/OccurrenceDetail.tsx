@@ -31,6 +31,15 @@ type Block = { key: string; title: string; as_of?: string; rows: Row[] };
 
 const NOTES_MAX = 10_000;
 
+/** The dot between the header's items (qa4-company-23). */
+function Sep() {
+  return (
+    <span aria-hidden="true" data-testid="occurrence-meta-sep">
+      ·
+    </span>
+  );
+}
+
 /**
  * An occurrence: its header (title, local time, length, attendees, state), the pre-read
  * blocks as cards in the kind's order, Oracle's summary, and, after the meeting, the
@@ -106,17 +115,26 @@ export function OccurrenceDetail({ id }: { id: string }) {
           </Chip>
         </div>
       </div>
-      <p className="mb-3 flex flex-wrap gap-x-3 text-sm text-text2" data-testid="occurrence-meta">
+      {/* qa4-company-23: a dot between the items, so date, length, attendees and zone do not run together. */}
+      <p className="mb-3 flex flex-wrap gap-x-2 text-sm text-text2" data-testid="occurrence-meta">
         <span className="tnum" title={zoneTime(occ.due_at, occ.timezone)}>
           {localTime(occ.due_at)}
         </span>
+        <Sep />
         <span>{occ.duration_min} min</span>
+        <Sep />
         <span>
           {occ.attendee_ids.length} {occ.attendee_ids.length === 1 ? "attendee" : "attendees"}
         </span>
+        <Sep />
         {/* qa-company-21: the zone named once; the times on the page are in it. */}
         <span data-testid="occurrence-zone">Times are in {zoneName(zone)}</span>
-        {sharedAsOf && <span data-testid="occurrence-as-of">Data as of {sharedAsOf}</span>}
+        {sharedAsOf && (
+          <>
+            <Sep />
+            <span data-testid="occurrence-as-of">Data as of {sharedAsOf}</span>
+          </>
+        )}
       </p>
       <div className="flex flex-col gap-3">
         {occ.kind === "baseline_rebuild" ? (
