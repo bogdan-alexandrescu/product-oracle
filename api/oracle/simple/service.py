@@ -673,7 +673,7 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
     codes: dict[str, str] = {}
     keys: dict[uuid.UUID, str] = {}
     if fids:
-        codes = await _short_codes(db)
+        codes = await _short_codes(db, names=False)  # real codes only: no names needed
         keys = dict(
             (await db.execute(select(Entity.id, Entity.key).where(Entity.id.in_(fids)))).all()
         )
