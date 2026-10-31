@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ds/Icon";
 import { askWith } from "@/components/hop/open-state";
 import { toast } from "@/components/ds/Toast";
+import { meetingMoment } from "@/components/simple/FlowVisual";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -89,17 +90,21 @@ export function useQuestionActions(onDone: () => unknown, sessionId?: string | n
   return { busy, decide, nameDecider, undo };
 }
 
-/** "Ask Oracle" on a question: Simple's Ask panel opens with the question in its box. */
+/**
+ * "Ask Oracle" on a question: Simple's Ask panel opens with the question in its box, in words
+ * (qa4-simple-home-2: no code), asked as a question so Oracle answers it.
+ */
 export function askAbout(q: Question) {
-  askWith(`${q.code} ${q.title} in ${q.prd.title}: what should we decide?${q.recommendation ? ` ${recommendsLine(q)}.` : ""}`);
+  askWith(`What should we decide on ${q.title}, in ${q.prd.title}${q.recommendation ? `, where the recommendation is ${q.recommendation}` : ""}?`);
 }
 
 /**
  * qa-simple-home-4: who recommends what, said one way wherever a question shows (Home's row,
- * Decisions, a meeting's agenda, the walk): "<document title> recommends".
+ * Decisions, a meeting's agenda, the walk), naming the document; qa4-simple-home-31: the
+ * document is where it is recommended, never a person giving advice ("Recommended in <title>").
  */
-export const recommendsLabel = (q: Question): string => `${q.prd.title} recommends`;
-/** "<document title> recommends: <answer>"; null when the document recommends nothing yet. */
+export const recommendsLabel = (q: Question): string => `Recommended in ${q.prd.title}`;
+/** "Recommended in <document title>: <answer>"; null when the document recommends nothing yet. */
 export const recommendsLine = (q: Question): string | null => (q.recommendation ? `${recommendsLabel(q)}: ${q.recommendation}` : null);
 
 /** "Late · due Fri Oct 23" in the late tone, "Due Fri Nov 13" quiet: a chip, as the mock-up draws it. */
@@ -140,9 +145,11 @@ const CHIP_ON = "!border-solid !border-accent !bg-accent-soft !text-accent-ink";
 
 /**
  * The question's answers as chips: the recommended one first (qa-simple-home-6: it stays offered
- * while the others show), its alternatives, and "Something else…" (a text field and Decide).
+ * while the others show) unless the row's own "as recommended" button is beside them
+ * (qa4-simple-home-14: `withRecommended` false), its alternatives, and "Something else…" (a text
+ * field and Decide).
  */
-export function AnotherAnswer({ q, busy, onPick }: { q: Question; busy: boolean; onPick: (a: Answer) => void }) {
+export function AnotherAnswer({ q, busy, onPick, withRecommended = true }: { q: Question; busy: boolean; onPick: (a: Answer) => void; withRecommended?: boolean }) {
   const [other, setOther] = useState(false);
   const [text, setText] = useState("");
   const verb = q.can.decide ? "Decide" : "Propose";
@@ -150,7 +157,7 @@ export function AnotherAnswer({ q, busy, onPick }: { q: Question; busy: boolean;
     <div data-testid="question-answers" className="mt-1.5 flex flex-col">
       <span className="simple-meta">Another answer:</span>
       <div role="group" aria-label={`Answers for ${q.code}`} className="simple-chips">
-        {q.recommendation && (
+        {q.recommendation && withRecommended && (
           <button type="button" aria-pressed={false} disabled={busy} data-testid="question-answer-recommended" className="simple-chip" onClick={() => onPick({ option: "recommended" })}>
             {q.recommendation} (recommended)
           </button>
@@ -288,7 +295,7 @@ export function QuestionRow({
 }: {
   q: Question;
   mode: Mode;
-  /** Simple's Home (qa-simple-home-13): names, no codes; the code stays in the title's tooltip. */
+  /** Simple's Home (qa-simple-home-13): the title without its code; the code stays in the title's tooltip. */
   plain?: boolean;
   actions: ReturnType<typeof useQuestionActions>;
   as?: "li" | "div";
@@ -338,7 +345,8 @@ export function QuestionRow({
   }, [open]);
   const done = q.column === "decided" || mode === "decided";
   const recommended = !!q.recommendation && writes && !done;
-  const at = q.decided_at ? formatInZone(q.decided_at, zone, { hour: "numeric", minute: "2-digit" }) : null;
+  // qa4-simple-decide-19: a meeting's one moment format ("Fri Oct 30, 8:18 PM"), no zone letters: the meeting names its zone.
+  const at = q.decided_at ? meetingMoment(q.decided_at, zone) : null;
   // qa-simple-decide-44: the answer itself, not "as recommended".
   const here = [`Decided in this meeting${q.chosen ? `: ${q.chosen}` : ""}`, q.decided_by?.name, at].filter(Boolean).join(" · ");
   const another = (label: string) => (
@@ -420,7 +428,8 @@ export function QuestionRow({
             <span className="simple-meta">
               <DueLabel q={q} />
               {q.due_label && q.blocks ? " · " : ""}
-              {plain && q.blocks ? plainBlocks(q.blocks) : q.blocks?.label}
+              {/* qa4-simple-decide-10: plain words on every row (Home, Decisions, a meeting's agenda), never "M1: F-03". */}
+              {q.blocks ? plainBlocks(q.blocks) : null}
             </span>
           )
         )}
@@ -451,6 +460,7 @@ export function QuestionRow({
             <AnotherAnswer
               q={q}
               busy={busy}
+              withRecommended={!recommended}
               onPick={(a) => {
                 setOpen(null);
                 void decide(q, a);

@@ -141,10 +141,15 @@ export function companyDayIso(at: string | Date): string {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
-/** "2026-10-12 13:00 PDT": `at` in the Company time zone, as oracle.company_time.stamp (#463). */
+/**
+ * "Oct 12, 2026, 1:00 PM PDT": `at` in the Company time zone, month first, as
+ * oracle.company_time.stamp writes it (e2e-pdf-export, 2026-10-30; #463 for the zone).
+ */
 export function companyStamp(at: string | Date): string {
   const p = companyParts(at);
-  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute} ${p.timeZoneName}`;
+  const month = new Intl.DateTimeFormat("en-US", { timeZone: companyZone(), month: "short" }).format(new Date(at));
+  const hour = Number(p.hour);
+  return `${month} ${Number(p.day)}, ${p.year}, ${hour % 12 || 12}:${p.minute} ${hour < 12 ? "AM" : "PM"} ${p.timeZoneName}`;
 }
 
 /** "Oct 12": the Company time zone's day at `at`, as the API words a day in text it writes (#463). */

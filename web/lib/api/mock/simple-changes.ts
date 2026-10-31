@@ -72,6 +72,8 @@ export interface SimpleChangesCtx {
   names: Record<string, string>;
   /** Person id -> role (D-a: whether a track owner decides). */
   roles?: Record<string, Role>;
+  /** The company's confirmed goals (the baseline's), as the API lists them for suggestions (qa4-simple-home-4). */
+  companyGoals?: { id: string; key: string; title: string }[];
 }
 
 const IDLE_MS = 30 * 60_000;

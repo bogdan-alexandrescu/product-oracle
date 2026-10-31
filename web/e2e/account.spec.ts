@@ -103,12 +103,12 @@ test("api tokens: every kind, filter by kind and member, revoke with confirm", a
     await expect(page.locator(`[data-testid="token-row"][data-kind="${kind}"]`).first()).toBeVisible();
   }
   await expect(tokenRow(page, "agent-track")).toContainText("admin@example.com");
-  await expect(tokenRow(page, "ci-export")).toContainText("No one (company)");
+  await expect(tokenRow(page, "ci-export")).toContainText("The company");
   await expect(tokenRow(page, "release script")).toContainText("Revoked");
   // Expired, not revoked: its own status, its expiry, and nothing to revoke.
   const expired = tokenRow(page, "staging sync");
   await expect(expired.locator('[data-state="expired"]')).toHaveText("Expired");
-  await expect(expired.getByTestId("token-expiry")).toHaveText("Expired Sep 29, 2026");
+  await expect(expired.getByTestId("token-expiry")).toHaveText("Sep 29, 2026");
   await expect(page.getByRole("button", { name: "Revoke staging sync" })).toHaveCount(0);
   await expect(page.getByTestId("expired-count")).toHaveText("1 expired");
   await expect(tokenRow(page, "agent-track").getByTestId("token-expiry")).toHaveText("Never expires");

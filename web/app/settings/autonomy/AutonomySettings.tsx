@@ -33,6 +33,32 @@ const propsOf = (item: Item) => ((item.limits_schema?.properties ?? {}) as Recor
 /** Whether Act's limits have anything an owner can change; all fixed, they are shown, not edited (qa-settings-34). */
 const limitsEditable = (item: Item) => !!item.limits_schema && Object.values(propsOf(item)).some((p) => !p.fixed);
 
+/** qa4-settings-44: a share between 0 and 1 (a confidence) is asked for as a percent. */
+const isShare = (p: Prop) => p.type === "number" && p.minimum !== undefined && p.maximum !== undefined && p.minimum >= 0 && p.maximum <= 1;
+const pct = (v: number) => Number((v * 100).toFixed(4));
+/** Why a number limit can't be saved as typed, or null: empty, not whole, or out of range. */
+function limitProblem(p: Prop, v: unknown): string | null {
+  // Not touched: the API keeps its default.
+  if (p.fixed || p.type === "array" || p.type === "boolean" || v === undefined) return null;
+  const share = isShare(p);
+  const lo = p.minimum === undefined ? undefined : share ? pct(p.minimum) : p.minimum;
+  const hi = p.maximum === undefined ? undefined : share ? pct(p.maximum) : p.maximum;
+  const unit = share ? " %" : "";
+  const range = lo !== undefined && hi !== undefined ? `from ${lo} to ${hi}${unit}` : lo !== undefined ? `of ${lo}${unit} or more` : hi !== undefined ? `up to ${hi}${unit}` : "";
+  const ask = `Enter a ${p.type === "integer" ? "whole number" : "number"}${range ? ` ${range}` : ""}.`;
+  if (typeof v !== "number" || Number.isNaN(v)) return ask;
+  if (p.type === "integer" && !Number.isInteger(v)) return ask;
+  if ((p.minimum !== undefined && v < p.minimum) || (p.maximum !== undefined && v > p.maximum)) return ask;
+  return null;
+}
+
+/** The steps above a responsibility's ceiling, in words: "Recommend and Act". */
+function lockedLabels(item: Item): string | null {
+  const names = LEVELS.filter((l) => !item.allowed.includes(l.value)).map((l) => l.label);
+  if (!names.length) return null;
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 /**
  * Settings › Autonomy (H11): how far Oracle goes on its own, per responsibility. Everyone
  * reads it; only an owner changes a level, in a sheet that says what changes and asks why.
@@ -119,6 +145,9 @@ export function AutonomySettings() {
 
 function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (level: Level) => void }) {
   const showLimits = item.level === "act" && item.limits_summary;
+  // qa4-settings-45: why a step is locked, said in text (and tied to the locked buttons), not only in a tooltip.
+  const locked = owner ? lockedLabels(item) : null;
+  const lockedId = `autonomy-locked-${item.key}`;
   return (
     <li
       data-testid={`autonomy-row-${item.key}`}
@@ -133,7 +162,7 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
         )}
       </div>
       {owner ? (
-        <Steps item={item} onPick={onPick} />
+        <Steps item={item} onPick={onPick} describedBy={locked ? lockedId : undefined} />
       ) : (
         <Chip kind="acc" data-testid="autonomy-level">
           {LEVELS.find((l) => l.value === item.level)?.label ?? item.level}
@@ -152,6 +181,15 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
           </Button>
         )}
       </p>
+      {locked && (
+        <p id={lockedId} data-testid="autonomy-locked" className="col-span-full flex min-w-0 items-center gap-1.5 text-sm text-text2">
+          <Icon name="lock" size={16} />
+          <span>
+            {locked} {locked.includes(" and ") ? "stay" : "stays"} with people
+            {item.ceiling_reason ? `: ${item.ceiling_reason}` : ""}.
+          </span>
+        </p>
+      )}
     </li>
   );
 }
@@ -165,7 +203,7 @@ const STEP_COLUMNS =
   "grid w-[400px] flex-none grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.4fr)_minmax(0,0.75fr)] max-[600px]:w-full";
 
 /** Observe · Draft · Recommend · Act: one line, steps above the ceiling locked. */
-function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void }) {
+function Steps({ item, onPick, describedBy }: { item: Item; onPick: (level: Level) => void; describedBy?: string }) {
   return (
     <div
       role="group"
@@ -184,6 +222,7 @@ function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void })
             type="button"
             aria-pressed={on}
             disabled={locked}
+            aria-describedby={locked ? describedBy : undefined}
             title={locked ? `Stays with people: ${item.ceiling_reason ?? "above this responsibility's ceiling"}` : undefined}
             onClick={() => !idle && onPick(l.value)}
             className={`flex h-8 min-w-0 items-center justify-center gap-1 border-r border-line px-1 text-sm font-medium whitespace-nowrap last:border-r-0 max-[600px]:gap-0.5 ${
@@ -216,6 +255,10 @@ function ChangeSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editLimits = level === "act" && limitsEditable(item);
+  const problems = editLimits
+    ? Object.fromEntries(Object.entries(props).map(([name, p]) => [name, limitProblem(p, limits[name])]).filter(([, m]) => m))
+    : {};
+  const invalid = Object.keys(problems).length > 0;
 
   async function save() {
     setBusy(true);
@@ -240,7 +283,7 @@ function ChangeSheet({
 
   return (
     <Sheet open dialog title={`Change ${item.title}`} onClose={onClose} testId="autonomy-sheet">
-      <div className="flex w-full flex-col gap-3 px-4 py-3 text-[15px]">
+      <div className="flex w-full flex-col gap-3 px-4 py-3 text-[15px] sm:max-w-[640px]">
         <p data-testid="autonomy-from">
           <span className="font-semibold">Now, {TITLE[item.level]}:</span> {item.levels[item.level]}
         </p>
@@ -278,30 +321,60 @@ function ChangeSheet({
                   })}
                 </div>
               ) : (
-                <Field key={name} label={p.title ?? name}>
-                  <input
-                    type="number"
-                    className={`${INPUT} max-w-40`}
-                    min={p.minimum}
-                    max={p.maximum}
-                    step={p.type === "integer" ? 1 : "any"}
-                    value={limits[name] === undefined || limits[name] === null ? "" : String(limits[name])}
-                    onChange={(e) => setLimits({ ...limits, [name]: e.target.value === "" ? null : Number(e.target.value) })}
-                  />
+                <Field key={name} label={isShare(p) ? `${p.title ?? name} (%)` : (p.title ?? name)}>
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      className={`${INPUT} max-w-40`}
+                      min={isShare(p) ? pct(p.minimum!) : p.minimum}
+                      max={isShare(p) ? pct(p.maximum!) : p.maximum}
+                      step={p.type === "integer" || isShare(p) ? 1 : "any"}
+                      aria-invalid={problems[name] ? true : undefined}
+                      value={
+                        typeof limits[name] === "number" ? String(isShare(p) ? pct(limits[name] as number) : limits[name]) : ""
+                      }
+                      onChange={(e) =>
+                        setLimits({
+                          ...limits,
+                          [name]: e.target.value === "" ? null : isShare(p) ? Number(e.target.value) / 100 : Number(e.target.value),
+                        })
+                      }
+                    />
+                    {isShare(p) && <span className="text-text2">%</span>}
+                  </span>
+                  {problems[name] && (
+                    <span role="alert" data-testid="autonomy-limit-error" className="text-[13px] font-medium text-crit">
+                      {problems[name]}
+                    </span>
+                  )}
                 </Field>
               ),
             )}
           </fieldset>
         )}
-        <Field label="Why">
-          <textarea className={TEXTAREA} rows={3} value={why} onChange={(e) => setWhy(e.target.value)} data-autofocus />
+        {/* qa4-settings-45: Why is required, and says so. */}
+        <Field label="Why (required)">
+          <textarea
+            className={TEXTAREA}
+            rows={3}
+            value={why}
+            required
+            aria-required
+            onChange={(e) => setWhy(e.target.value)}
+            data-autofocus
+          />
         </Field>
+        {!why.trim() && (
+          <p data-testid="autonomy-why-hint" className="-mt-1 text-[13px] text-text2">
+            Say why to save: it is kept with the change.
+          </p>
+        )}
         {error && <Notice tone="error">{error}</Notice>}
         <div className="flex justify-end gap-2 pb-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" disabled={busy || !why.trim()} onClick={() => void save()}>
+          <Button variant="primary" disabled={busy || !why.trim() || invalid} onClick={() => void save()}>
             Save
           </Button>
         </div>

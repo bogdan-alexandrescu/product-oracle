@@ -34,7 +34,7 @@ test("New request: file one with a goal; it shows as New with its goal chip, sel
   const dialog = page.getByRole("dialog", { name: "New request" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel("Channel").locator("option:checked")).toHaveText("In app");
-  await expect(dialog.getByLabel("Requester")).toHaveValue("Admin");
+  await expect(dialog.getByLabel("Asked by")).toHaveValue("Admin");
   await dialog.getByRole("button", { name: "File request" }).click();
   await expect(dialog.getByText("Give the request a title")).toBeVisible();
 
@@ -68,14 +68,14 @@ test("New request: a viewer is not shown it (#370)", async ({ page }) => {
 });
 
 test("New request: only an owner names someone else as the requester", async ({ page }) => {
-  // protects=#329 rule 1 (Requester defaults to the signed-in member; an owner can name
+  // protects=#329 rule 1 (Asked by defaults to the signed-in member; an owner can name
   // someone else); fails_when=a commenter can change it; no_claim=the API check.
   await login(page, "commenter@example.com");
   await openRequests(page);
   await page.getByRole("button", { name: "New request" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New request" });
-  await expect(dialog.getByLabel("Requester")).toHaveValue("Commenter");
-  await expect(dialog.getByLabel("Requester")).not.toBeEditable();
+  await expect(dialog.getByLabel("Asked by")).toHaveValue("Commenter");
+  await expect(dialog.getByLabel("Asked by")).not.toBeEditable();
   await dialog.getByLabel("Title").fill(TITLE);
   await dialog.getByLabel("What it is and why").fill(WHY);
   await dialog.getByRole("button", { name: "File request" }).click();

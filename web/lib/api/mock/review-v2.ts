@@ -29,6 +29,8 @@ export interface ReviewV2Context {
   versions: VersionLike[];
   reviews: ReviewLike[];
   me: { id: string; role: Role };
+  /** The company's members: a campaign's invited count is those with an asked role (oracle.review.collab). */
+  members?: { role: Role; disabled_at?: string | null }[];
   uuid: () => string;
   now: () => string;
   hash: (text: string) => string;
@@ -324,7 +326,10 @@ export async function routeReviewV2(ctx: ReviewV2Context, req: Request, p: strin
       const denied = need("approver");
       if (denied) return denied;
       const input = await body<Schemas["CampaignCreate"]>();
-      const c: Schemas["CampaignOut"] = { id: ctx.uuid(), document_id: doc.id, version_number: input.version ?? latest?.number ?? 1, title: input.title, message: input.message ?? null, due_at: input.due_at ?? null, audience_roles: input.audience_roles ?? ["commenter", "approver", "owner"], status: "open", created_by: ctx.me.id, closed_by: null, closed_at: null, lock_version: 1, created_at: ctx.now(), updated_at: ctx.now(), invited: 0, comments: 0, participants: 0, open_change_requests: 0 };
+      const roles = input.audience_roles ?? ["commenter", "approver", "owner"];
+      // qa4-docs-share-38: as the API counts it, the active members with one of the asked roles.
+      const invited = (ctx.members ?? []).filter((x) => roles.includes(x.role) && !x.disabled_at).length;
+      const c: Schemas["CampaignOut"] = { id: ctx.uuid(), document_id: doc.id, version_number: input.version ?? latest?.number ?? 1, title: input.title, message: input.message ?? null, due_at: input.due_at ?? null, audience_roles: roles, status: "open", created_by: ctx.me.id, closed_by: null, closed_at: null, lock_version: 1, created_at: ctx.now(), updated_at: ctx.now(), invited, comments: 0, participants: 0, open_change_requests: 0 };
       ctx.db.campaigns.unshift(c);
       return json(201, c);
     }

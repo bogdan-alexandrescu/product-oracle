@@ -75,7 +75,7 @@ test.describe("desktop 1440x900", () => {
     await expect(card.getByTestId("card-decisions").getByRole("link", { name: "Send the digest weekly or daily?" })).toBeVisible();
     await expect(card.getByTestId("card-reasons")).not.toContainText("(draft");
     await expect(card.getByTestId("card-reasons")).not.toContainText("F-06");
-    await expect(card.getByTestId("card-needed")).toHaveText("No other items");
+    await expect(card.getByTestId("card-needed")).toHaveText("None");
     await expect(card).not.toContainText(/\b[FD]-\d/);
     const talk = await openTalk(card);
     await expect(talk.getByRole("heading", { name: "Talk about Weekly alert digest", exact: true })).toBeVisible();

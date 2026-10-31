@@ -105,10 +105,16 @@ export default function NewTemplatePage() {
               setKeyError(null);
             }}
             error={keyError}
-            placeholder="launch-brief"
+            placeholder="e.g. launch-brief"
           />
           <Field label="Name">
-            <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Launch brief" required />
+            <input
+              className={`${INPUT} placeholder:italic placeholder:text-text2/70`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Launch brief"
+              required
+            />
           </Field>
           <fieldset className="flex flex-col gap-1.5">
             <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Kind</legend>

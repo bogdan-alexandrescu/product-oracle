@@ -70,6 +70,9 @@ interface SeedItem {
   flow?: Schemas["SimpleFlow"] | null;
   /** S7: notes a merge left on the kept item. */
   notes?: string[];
+  /** meet-chat-right-prd: on its PRD's draft roadmap (a run's items-only roadmap, the PRD not
+   * approved yet), not on the roadmap: only a review meeting's chat on that PRD reads it. */
+  draft_roadmap?: boolean;
 }
 
 interface SimpleDb {
@@ -787,8 +790,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const track = q.get("track");
   const from = q.get("from");
   const to = q.get("to");
+  const onDraft = new Set(db.items.filter((s) => s.draft_roadmap).map((s) => db.ids[s.key]));
   const shown = items.filter(
     (i) =>
+      (q.get("draft_roadmap") === "1" || !onDraft.has(i.id)) &&
       (!q.get("roadmap") || i.roadmap.slug === chosen) &&
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
       (!goal || i.goal?.key === goal || i.goal?.id === goal) &&

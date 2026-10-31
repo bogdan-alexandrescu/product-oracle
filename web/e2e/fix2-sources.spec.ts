@@ -76,7 +76,7 @@ test("Pick sources: an empty Uploads source does not tick it, the build sheet wa
   await expect(page).toHaveURL(/\/home$/);
   await expect(setup(page).getByTestId("panel-count")).toHaveText("3 of 8");
   await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
-  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("1 source read");
+  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("1 source with content");
 
   await row(page, "build_baseline").getByRole("link", { name: "Open" }).click();
   // The estimate reads "$7.00 estimated · below the $50 approval line · starts at once" (qa-onboarding-27).

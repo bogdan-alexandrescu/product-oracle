@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -44,9 +44,16 @@ export function flowSize(flow: Flow): string {
   return `${n} step${n === 1 ? "" : "s"} · ${flow.touches_screen ? "1 screen" : "no screen"}`;
 }
 
-/** "Version 1 · drawn Oct 26, 7:04 PM PT" (the time in the company's zone, with its day). */
-export function flowDrawn(flow: Flow, zone: string): string {
-  return `Version ${flow.version}${flow.made_at ? ` · drawn ${clock(flow.made_at, zone)}` : ""}`;
+/** A review meeting's moment, "Fri Oct 30, 8:18 PM" (as the meeting screen's momentWords): no zone letters, the meeting names its zone. */
+export const meetingMoment = (iso: string, zone: string): string =>
+  `${formatInZone(iso, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+
+/** qa4-simple-decide-19: true inside a review meeting, whose times read as meetingMoment. */
+export const MeetingClock = createContext(false);
+
+/** "Version 1 · drawn Oct 26, 7:04 PM PT" (the time in the company's zone, with its day); in a meeting "drawn Mon Oct 26, 7:04 PM". */
+export function flowDrawn(flow: Flow, zone: string, meeting = false): string {
+  return `Version ${flow.version}${flow.made_at ? ` · drawn ${(meeting ? meetingMoment : clock)(flow.made_at, zone)}` : ""}`;
 }
 
 /** "6 steps · 1 screen · version 1 · drawn 26 Oct, 7:04 PM PT" (the time in the company's zone). */
@@ -288,9 +295,12 @@ export function FlowPanel({
   backLabel,
   inlineComments = false,
   showHint,
+  sectionNames,
 }: {
   subject: FlowSubject;
   documentId?: string;
+  /** The page's own names for the PRD's sections (a one-pager's "What we will build"), for the notes. */
+  sectionNames?: Record<string, string>;
   onClose?: () => void;
   onDrawn?: (flow: Flow) => void;
   /** The owner's pick A: start as the row (the live thumbnail and its states). */
@@ -314,6 +324,7 @@ export function FlowPanel({
   showHint?: boolean;
 }) {
   const zone = useCompanyZone();
+  const meeting = useContext(MeetingClock);
   const phone = usePhone();
   const [view, setView] = useState<null | "opened" | "story">(row || line ? null : "opened");
   const [full, setFull] = useState(false);
@@ -390,17 +401,19 @@ export function FlowPanel({
     if (commenting) setCommenting(false);
     else setFull(false);
   });
-  // qa-simple-prd-p3-22: full screen has one scroller, its own: the page behind it stops
-  // scrolling, so no second scrollbar stands beside the viewer's at the right edge.
+  // qa-simple-prd-p3-22, qa4-simple-prd-30: full screen and the flow's and storyboard's sheets
+  // each have one scroller, their own: the page behind stops scrolling, so no second scrollbar
+  // stands beside the sheet's at the right edge.
+  const sheetOpen = full || (overlay && view !== null);
   useEffect(() => {
-    if (!full) return;
+    if (!sheetOpen) return;
     const html = document.documentElement;
     const was = html.style.overflow;
     html.style.overflow = "hidden";
     return () => {
       html.style.overflow = was;
     };
-  }, [full]);
+  }, [sheetOpen]);
 
   async function post(run: () => Promise<{ data?: Visual; error?: unknown; response: Response }>, after?: () => void) {
     setBusy(true);
@@ -453,13 +466,16 @@ export function FlowPanel({
   const v = q.data;
   const flow = old ?? v.flow;
   const open = v.comments.filter((c) => c.addressed_in === null);
+  // qa4-simple-prd-33: a reader who may not comment (a viewer) is not offered "Comment": the same
+  // panel reads as the flow's comments, notes and versions.
+  const commentWord = v.can_comment ? "Comment" : "See comments";
   const title = (f: Flow, what: string) => (
     <>
       {code ? <><Code code={code} className="mr-0.5 align-[2px]" />{" "}</> : null}
       {name ?? f.title} · {what}
     </>
   );
-  const phoneMeta = (f: Flow) => `${code ? `${code} · ` : ""}${flowDrawn(f, zone).replace(/^V/, code ? "v" : "V")}`;
+  const phoneMeta = (f: Flow) => `${code ? `${code} · ` : ""}${flowDrawn(f, zone, meeting).replace(/^V/, code ? "v" : "V")}`;
   const older = shown !== null ? " (an older version)" : "";
 
   /** The comments, the notes, the versions and Revise: behind the viewer's Comment. */
@@ -517,13 +533,18 @@ export function FlowPanel({
             <li key={a.n}>
               <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-bold text-surface">{a.n}</span>
               {a.note}
-              {(a.section_key || a.requirement) && (
-                <span className="text-text2">
-                  {" "}
-                  · {a.section_key ? `From the PRD: ${capSection(a.section_key)} section` : ""}
-                  {a.section_key && a.requirement ? ", " : ""}
-                  {a.requirement ? <span className="whitespace-nowrap">{`Requirement ${a.requirement}`}</span> : ""}
-                </span>
+              {/* qa4-simple-prd-32: where the page names its sections, the section in those words and no requirement code. */}
+              {a.section_key && sectionNames?.[a.section_key] ? (
+                <span className="text-text2"> · From “{sectionNames[a.section_key]}”</span>
+              ) : (
+                (a.section_key || a.requirement) && (
+                  <span className="text-text2">
+                    {" "}
+                    · {a.section_key ? `From the PRD: ${capSection(a.section_key)} section` : ""}
+                    {a.section_key && a.requirement ? ", " : ""}
+                    {a.requirement ? <span className="whitespace-nowrap">{`Requirement ${a.requirement}`}</span> : ""}
+                  </span>
+                )
               )}
             </li>
           ))}
@@ -561,8 +582,9 @@ export function FlowPanel({
                 ))}
               </select>
             )}
+            {/* qa4-simple-prd-31: named apart from the header's Comment toggle. */}
             <button type="submit" className={BTN} disabled={busy || !text.trim()}>
-              Comment
+              Post comment
             </button>
           </div>
         </form>
@@ -603,7 +625,7 @@ export function FlowPanel({
   // view, after the screen on a phone; elsewhere (qa-simple-prd-p3-22) it opens them full screen.
   const commentButton = inlineComments ? (
     <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-      Comment
+      {commentWord}
     </button>
   ) : (
     <button
@@ -614,7 +636,7 @@ export function FlowPanel({
         setFull(true);
       }}
     >
-      Comment
+      {commentWord}
     </button>
   );
   const exitFull = () => {
@@ -627,8 +649,8 @@ export function FlowPanel({
     <div ref={openedRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · flow`} data-testid="flow-detail" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
       <div className="flex flex-none items-center gap-2.5 border-b border-line px-3 py-2.5">
         <button type="button" data-first className={BTN_GHOST} onClick={() => setView(null)}>
-          <Icon d={ICONS.back} size={18} />
-          Back
+          {/* qa4-simple-prd-30: the flow's sheet closes with "Close", as the storyboard's does. */}
+          Close
         </button>
         <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · flow</h2>
         <button type="button" className={BTN} onClick={() => setFull(true)}>
@@ -673,7 +695,7 @@ export function FlowPanel({
       <div className="flex items-center gap-2.5">
         <h2 className="min-w-0 flex-1 text-[20px] leading-7 font-[650] break-words">{title(f, "flow")}</h2>
         <span className={META} data-testid="flow-drawn">
-          {flowDrawn(f, zone)}
+          {flowDrawn(f, zone, meeting)}
           {older}
         </span>
         {inlineComments && commentButton}
@@ -708,7 +730,7 @@ export function FlowPanel({
           <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
             <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · flow</h2>
             <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-              Comment
+              {commentWord}
             </button>
             <button type="button" className={BTN_SOLID} data-first aria-label="Exit full screen" onClick={exitFull}>
               Exit
@@ -733,11 +755,11 @@ export function FlowPanel({
             )}
             <h2 className="min-w-0 flex-1 text-[21px] leading-7 font-[650] break-words">{title(f, "flow")}</h2>
             <span className={META}>
-              {flowDrawn(f, zone)}
+              {flowDrawn(f, zone, meeting)}
               {older}
             </span>
             <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-              Comment
+              {commentWord}
             </button>
             <button type="button" className={BTN_SOLID} data-first onClick={exitFull}>
               Exit full screen
@@ -793,7 +815,7 @@ export function FlowPanel({
       box={box}
       refEl={storyRef}
       heading={title(f, "storyboard")}
-      meta={flowDrawn(f, zone)}
+      meta={flowDrawn(f, zone, meeting)}
       phoneMeta={phoneMeta(f)}
       onClose={() => setView(null)}
       onScreen={() => {
@@ -863,7 +885,7 @@ export function FlowPanel({
                   {flowSize(v.flow)}
                 </p>
                 <p className={META} data-testid="flow-drawn">
-                  {flowDrawn(v.flow, zone)}
+                  {flowDrawn(v.flow, zone, meeting)}
                 </p>
                 {v.pending && (
                   <p className={META} data-testid="flow-pending">
@@ -909,7 +931,7 @@ export function FlowPanel({
           <div className="flex flex-wrap items-center gap-2.5">
             <h3 className="min-w-0 flex-1 text-[18px] leading-6 font-[650] break-words">User flow: {flow.title}</h3>
             <span className={META} data-testid="flow-drawn">
-              {flowDrawn(flow, zone)}
+              {flowDrawn(flow, zone, meeting)}
               {older}
             </span>
             <button type="button" className={BTN} aria-pressed={view === "story"} onClick={() => setView(view === "story" ? "opened" : "story")}>
@@ -1014,8 +1036,10 @@ function Storyboard({
   }
   const onScreenCard = at >= n;
   const s = steps[Math.min(at, n - 1)];
+  // qa4-simple-prd-30: a sheet from the bottom, as tall as the card and its buttons, not the
+  // whole screen with blank height under them.
   return (
-    <div ref={refEl} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · storyboard`} data-testid="flow-storyboard" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
+    <div ref={refEl} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · storyboard`} data-testid="flow-storyboard" className="fixed inset-x-0 bottom-0 z-[60] flex max-h-dvh flex-col rounded-t-[14px] border-t border-line bg-surface shadow-tip text-[15px] leading-[22px] text-text outline-none">
       <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
         <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · storyboard</h2>
         <button type="button" data-first className={BTN} onClick={onClose}>

@@ -142,7 +142,7 @@ for (const phone of [false, true]) {
           const b = (await opened.boundingBox())!;
           expect(b.y).toBeLessThanOrEqual(1);
           expect(b.height).toBeGreaterThanOrEqual(PHONE.height - 2);
-          await expect(opened.getByRole("button", { name: "Back" })).toBeVisible();
+          await expect(opened.getByRole("button", { name: "Close" })).toBeVisible();
         } else {
           // Across the page: 16 px inside the page, over the roadmap; the card steps out of the way.
           const fit = await opened.evaluate((el) => {
@@ -189,7 +189,7 @@ for (const phone of [false, true]) {
         await tap(opened.getByRole("button", { name: "Full screen" }));
         await tap(page.getByTestId("flow-fullscreen").getByRole("button", { name: "Exit full screen" }));
         await expect(page.getByTestId("flow-fullscreen")).toHaveCount(0);
-        await tap(opened.getByRole("button", { name: phone ? "Back" : "Close" }));
+        await tap(opened.getByRole("button", { name: "Close" }));
         await expect(page.getByTestId("flow-detail")).toHaveCount(0);
         await expect(card).toBeVisible();
         await expect(card).toHaveAttribute("data-flow-open", "false");
@@ -262,7 +262,7 @@ for (const phone of [false, true]) {
         const opened = page.getByTestId("flow-detail");
         await expect(opened.getByRole("heading", { level: 2 })).toHaveText("Finish setup from the checklist · flow");
         await expect(opened.getByTestId("flow-steps")).toContainText("Decision: Invite now or later? New If no: the checklist moves on and asks again tomorrow.");
-        await tap(opened.getByRole("button", { name: phone ? "Back" : "Close" }));
+        await tap(opened.getByRole("button", { name: "Close" }));
         await tap(line.getByRole("button", { name: "Open the storyboard" }));
         const board = page.getByTestId("flow-storyboard");
         if (phone) {

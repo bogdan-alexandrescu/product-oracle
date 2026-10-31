@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, type ReactNode } from "react";
+import { createContext, Fragment, useContext, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds";
 import { formatInZone } from "@/lib/dates";
@@ -12,8 +12,8 @@ import { isSafeHref, parseBlocks, type Block, type Inline } from "@/lib/markdown
  * 2026-10-28): its title, its lines, short labelled lists ("DONE WHEN", "TARGETS"…) and,
  * under them, where it comes from as links ("From the PRD · Roadmap", "Open M2 on the
  * roadmap"). The answer's text is the small markdown Oracle writes (lib/markdown); its
- * `[c:n]` markers are a small raised number (a footnote, drawn by CSS so the line's words stay
- * as written) against the word before them: the cited sources are the links under it.
+ * `[c:n]` markers are a small raised number against the word before them, a link to the source
+ * it cites (none when it has none to open): the cited sources are the links under it.
  */
 
 /** "7:42 PM": a line's time in the company's time zone, with no zone after it. */
@@ -60,7 +60,7 @@ function inline(nodes: Inline[]): ReactNode {
       }
       case "cite": {
         const num = /\d+/.exec(n.key)?.[0];
-        return num ? <sup key={i} aria-hidden data-testid="answer-cite" data-n={num} className="ml-px text-[11px] leading-none font-semibold text-text2 after:content-[attr(data-n)]" /> : null;
+        return num ? <Cite key={i} num={num} /> : null;
       }
       case "code":
         return <code key={i}>{n.v}</code>;
@@ -86,8 +86,29 @@ function inline(nodes: Inline[]): ReactNode {
   });
 }
 
+/** The answer's citations, for its markers. */
+const Cites = createContext<AnswerCite[]>([]);
+
+/**
+ * qa4-simple-home-3: a marker is a link to its own source, named for a screen reader ("Source 1:
+ * Open Goal on the roadmap"); a marker with no source to open shows no number at all.
+ */
+function Cite({ num }: { num: string }) {
+  const cites = useContext(Cites);
+  const c = cites.find((x) => String(x.n) === num);
+  const s = c ? source(c) : null;
+  if (!s?.url) return null;
+  return (
+    <sup className="ml-px text-[11px] leading-none font-semibold">
+      <Link href={s.url} data-testid="answer-cite" data-n={num} aria-label={`Source ${num}: ${s.words}`} title={s.words} className="text-accent-ink hover:underline">
+        {num}
+      </Link>
+    </sup>
+  );
+}
+
 /** The answer's text as the pick draws it: title, lines, labels over short lists. */
-export function AnswerText({ text, live = false }: { text: string; live?: boolean }) {
+export function AnswerText({ text, live = false, cites = [] }: { text: string; live?: boolean; cites?: AnswerCite[] }) {
   const blocks = parseBlocks(live ? text.replace(PARTIAL, "") : text);
   const title = titleOf(blocks[0]);
   const rest = title ? blocks.slice(1) : blocks;
@@ -147,7 +168,11 @@ export function AnswerText({ text, live = false }: { text: string; live?: boolea
         </p>,
       );
   });
-  return <div data-testid="chat-message-body">{out}</div>;
+  return (
+    <Cites.Provider value={cites}>
+      <div data-testid="chat-message-body">{out}</div>
+    </Cites.Provider>
+  );
 }
 
 /** One source under an answer: an icon, its words, a link when it has one. */

@@ -28,7 +28,7 @@ for (const [name, viewport] of [
       if (name === "phone") await checkout.click();
       const inspector = page.getByTestId("home-inspector");
       await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
-      await expect(inspector.getByTestId("stat-open").locator("dt")).toHaveText("Open feedback");
+      await expect(inspector.getByTestId("stat-open").locator("dt")).toHaveText("Your open feedback");
       const legend = inspector.getByTestId("inspector-sections");
       await expect(legend).toContainText("Not reviewed");
       await expect(legend).not.toContainText(/\bOpen\b/);

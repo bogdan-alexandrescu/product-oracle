@@ -43,6 +43,28 @@ export function ModeRoot() {
   return null;
 }
 
+/** qa4-shell-6: the Detailed page switched away from, and the Simple page it opened. */
+const RETURN_KEY = "po-mode-return";
+
+function keepReturn(from: string, to: string) {
+  try {
+    sessionStorage.setItem(RETURN_KEY, JSON.stringify({ from, to }));
+  } catch {
+    // No storage (a private window): the switch opens the matching page as before.
+  }
+}
+
+/** The Detailed page to go back to, when the person is still on the Simple page the switch opened. */
+function takeReturn(pathname: string): string | null {
+  try {
+    const kept = JSON.parse(sessionStorage.getItem(RETURN_KEY) ?? "null") as { from?: string; to?: string } | null;
+    sessionStorage.removeItem(RETURN_KEY);
+    return kept?.from && kept.to === pathname && modeOf(kept.from) === "detailed" ? kept.from : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The [Simple | Detailed] switch (#723, D10) at the top of both rails, and in the phone's More
  * drawer. Shown only while the API says Simple is on. A choice saves the person's mode
@@ -67,7 +89,11 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
     // Typed work on the page (New PRD) asks first (lib/leave-guard).
     leave(() => {
       void saveMode(mode);
-      router.push(switchTarget(pathname, mode, documentHome));
+      const target = switchTarget(pathname, mode, documentHome);
+      // qa4-shell-6: Detailed -> Simple -> Detailed, straight back, returns to the page left.
+      const back = mode === "detailed" ? takeReturn(pathname) : null;
+      if (mode === "simple") keepReturn(`${location.pathname}${location.search}`, target);
+      router.push(back ?? target);
     });
   }
 

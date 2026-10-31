@@ -566,7 +566,7 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   await expect(amber(page).filter({ visible: true }).locator("svg")).toHaveCount(1);
   // The side panel.
   const panel = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
-  await expect(panel).toContainText("Run · delivering decision");
+  await expect(panel).toContainText("Run · Delivering decision");
   await expect(panel).not.toContainText("waiting for review");
   // The runs list: the row's chip.
   await page.getByTestId("nav-runs").click();
@@ -589,7 +589,7 @@ test("fix-work review: a check that could not read some runs says so on a run th
   await openRuns(page);
   await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   // The run's own page first: until it opens, the list's five statuses are on screen.
-  await expect(page.getByRole("heading", { level: 1, name: /^Team onboarding PRD/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Team onboarding · Baseline to PRD/ })).toBeVisible();
   await expect(status(page)).toHaveText("Waiting for review");
   await page.getByRole("button", { name: "Refresh progress" }).click();
   const result = page.getByTestId("tick-result");

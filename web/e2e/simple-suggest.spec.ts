@@ -28,7 +28,7 @@ async function signIn(page: Page, email: string, path = "/simple") {
 }
 
 const toastWith = (page: Page, text: string | RegExp): Locator => page.getByRole("status").filter({ hasText: text });
-const retentionButton = (page: Page) => page.getByRole("button", { name: "Suggestions for Grow retention", exact: true });
+const retentionButton = (page: Page) => page.getByRole("button", { name: /^(Suggestions|Oracle is suggesting) for Grow retention(, \d+ waiting)?$/ });
 
 async function openDrawer(page: Page): Promise<Locator> {
   await retentionButton(page).click();

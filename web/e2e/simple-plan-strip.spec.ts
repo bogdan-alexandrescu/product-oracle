@@ -61,7 +61,7 @@ for (const phone of [false, true]) {
           await expect(strip.getByTestId("plan-strip-label")).toHaveText(["Milestone M1 · 12 roadmap items", "Milestone M2 · 5 roadmap items", "Milestone M3 · 3 roadmap items", "No milestone · 2 roadmap items"]);
           await expect(strip.getByTestId("plan-strip-row").first()).toContainText("Nov 20");
           await expect(strip.getByTestId("plan-strip-today")).toHaveCount(1);
-          await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 commitment with no milestone ends after Jan");
+          await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 roadmap item with no milestone ends after Jan");
           // One page: no bar per roadmap item.
           await expect(strip).not.toContainText("Setup step 1");
           await expect(strip.getByTestId("plan-strip-more")).toHaveCount(0);

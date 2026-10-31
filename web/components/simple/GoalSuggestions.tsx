@@ -247,9 +247,10 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
               </Button>
             )}
             {s.flow && (
-              <button type="button" aria-expanded={wide} onClick={() => setWide(!wide)} className="font-semibold text-accent-ink hover:underline" data-testid="flow-open">
+              // qa4-simple-plan-17: a button like its neighbours (ghost), not a bare label.
+              <Button variant="ghost" aria-expanded={wide} onClick={() => setWide(!wide)} data-testid="flow-open">
                 {wide ? "Hide the flow" : "Show the flow"}
-              </button>
+              </Button>
             )}
           </span>
         )}
@@ -291,7 +292,7 @@ function LooksLike({ m, merges, busy, onMerge }: { m: GoalSuggestion["looks_like
     <p className="mt-1 flex flex-wrap items-center gap-x-2 text-warn" data-testid="suggestion-looks-like">
       <span>
         Looks like{" "}
-        <Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold underline" data-testid="looks-like-link">
+        <Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold text-accent-ink underline" data-testid="looks-like-link">
           {`${m.code} ${m.title}`.trim()}
         </Link>
       </span>
@@ -329,7 +330,8 @@ export function SuggestionsButton({ goal, api: a, onOpen, className = "", label 
       type="button"
       data-testid="goal-suggestions-open"
       data-goal={state.goal.key}
-      aria-label={`Suggestions for ${state.goal.title}`}
+      // qa4-simple-plan-20: the name starts with the words shown, and says the count.
+      aria-label={`${state.pending ? "Oracle is suggesting" : label} for ${state.goal.title}${!state.pending && n ? `, ${n} waiting` : ""}`}
       onClick={() => onOpen(state.goal)}
       className={`simple-small rounded-lg border border-line bg-surface px-3 py-1.5 font-semibold text-accent-ink hover:bg-surface2 ${className}`}
     >

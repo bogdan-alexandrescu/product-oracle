@@ -83,6 +83,9 @@ class VersionWarning(BaseModel):
     @model_validator(mode="after")
     def _stored_before_396(self) -> "VersionWarning":
         message, refs = wording.legacy(self.message)
+        if self.code == "locked_section_changed":
+            # qa4-docs-21: the keys it named stay in section_keys only.
+            message = wording.legacy_locked(message)
         if refs or message != self.message:
             self.message, self.refs = message, {**refs, **self.refs}
         return self

@@ -25,7 +25,7 @@ const box = async (l: Locator) => (await l.boundingBox())!;
 test("qa-work-4: a run paused over budget names its estimate and limit together, in the banner and the panel", async ({ page }) => {
   await openRun(page, "team-workspaces");
   await expect(page.getByTestId("run-overrun-held")).toHaveText(
-    "Spent $14.20, past its limit. Estimate $9.00, limit $13.50 (150%). The PRD review is held until you resume it. Resuming allows up to $4.50 more; Cancel run stops it.",
+    "Spent $14.20, past its limit. Estimate $9.00, limit $13.50 (150%). The PRD review is held until you resume it. Resuming lets it spend up to $18.70 in total, $4.50 more. Cancel run stops it.",
   );
   const section = inspector(page).getByTestId("run-cost-section");
   await expect(section.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");

@@ -205,7 +205,7 @@ export function PlanTable({
       header: "Goal",
       width: "128px",
       wrap: true,
-      // prod-4: the first goal in full (its name on two lines), "+N" for the rest, named on hover.
+      // prod-4: the first goal in full (its name on two lines), "+N goals" for the rest, named on hover.
       cell: (i) => {
         const goals = i.goal_ids.map((id) => tags.get(id)).filter((g): g is GoalView => !!g);
         const [first, ...rest] = goals;
@@ -216,7 +216,8 @@ export function PlanTable({
                 <CodeChip kind="goal" entityId={first.id} title={first.title} proposed={first.proposed} wrap />
                 {rest.length > 0 && (
                   <span data-testid="plan-goal-more" title={rest.map((g) => namedText(g)).join(", ")} className="tnum flex-none text-sm font-semibold text-text2">
-                    +{rest.length}
+                    {/* qa4-plan-25: says what the number counts, on a phone (no hover) too. */}
+                    +{rest.length} {rest.length === 1 ? "goal" : "goals"}
                   </span>
                 )}
               </>

@@ -17,6 +17,10 @@ const ONE_TITLE_ROW =
 export default function SettingsLayout({ children }: { children: ReactNode }) {
   return (
     <Page className={ONE_TITLE_ROW}>
+      {/* qa4-shell-13: the section's name above every Settings page's own title (a phone's page picker says it there). */}
+      <p data-testid="settings-eyebrow" className="-mb-2 pt-3 text-[13px] leading-4 font-semibold text-text2 max-[600px]:hidden">
+        Settings
+      </p>
       <PageTabsProvider
         tabs={
           <Suspense fallback={<div className="h-12" />}>

@@ -5,6 +5,7 @@ read (oracle.mcp.scopes)."""
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -195,6 +196,21 @@ async def list_competitors(db: AsyncSession, include_archived: bool) -> list[Com
     return [await _out(db, c, zone) for c in await db.scalars(q)]
 
 
+def _website(value: str | None) -> str | None:
+    """An alternative's website, trimmed: blank is none; anything else must be an
+    https:// address with a host and no spaces, the way watched pages are."""
+    url = (value or "").strip()
+    if not url:
+        return None
+    try:
+        parts = urlsplit(url)
+    except ValueError as e:
+        raise MarketError(422, "website: only https:// addresses can be added") from e
+    if parts.scheme.lower() != "https" or not parts.hostname or any(c.isspace() for c in url):
+        raise MarketError(422, "website: only https:// addresses can be added")
+    return url
+
+
 async def create_competitor(
     db: AsyncSession, principal: Principal, body: CompetitorCreate
 ) -> CompetitorOut:
@@ -204,7 +220,7 @@ async def create_competitor(
     aliases = _aliases(body.aliases)
     await _name_free(db, name)
     c = Competitor(
-        name=name, kind=body.kind, website=(body.website or "").strip() or None,
+        name=name, kind=body.kind, website=_website(body.website),
         description=(body.description or "").strip() or None, aliases=aliases,
         created_by=principal.id,
     )  # fmt: skip
@@ -231,7 +247,7 @@ async def update_competitor(
     if data.get("kind") is not None:
         c.kind = data["kind"]
     if "website" in data:
-        c.website = (data["website"] or "").strip() or None
+        c.website = _website(data["website"])
     if "description" in data:
         c.description = (data["description"] or "").strip() or None
     if data.get("aliases") is not None:

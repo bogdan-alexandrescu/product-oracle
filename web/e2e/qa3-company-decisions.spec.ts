@@ -129,9 +129,10 @@ test.describe("desktop", () => {
     const pick = form.getByLabel("New approver");
     await expect(pick).toHaveValue("");
     await expect(pick.locator("option", { hasText: APPROVER })).toHaveCount(0);
-    const submit = form.getByRole("button", { name: "Reassign", exact: true });
-    await expect(submit).toBeDisabled();
+    // qa4-company-12: the submit names who it goes to.
+    await expect(form.getByRole("button", { name: "Reassign to the new approver" })).toBeDisabled();
     await pick.selectOption({ label: "Admin · admin@example.com" });
+    const submit = form.getByRole("button", { name: "Reassign to Admin" });
     await expect(submit).toBeEnabled();
     await form.getByLabel("Reason").fill("Approver is away this week");
     await submit.click();

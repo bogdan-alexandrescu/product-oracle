@@ -8,7 +8,8 @@ const MESSAGE = "Allowlist at most 100 channels: edit this source to sync it aga
 test("settings › sources: a source needing attention shows why, refuses to sync, and Edit puts it right", async ({ page }) => {
   await login(page);
   await page.goto("/settings/sources");
-  await expect(page.getByTestId("sources-attention")).toHaveText("1 needs attention");
+  // qa4-settings-6: with Product docs (lost access) and Drive folders (reconnect to choose files).
+  await expect(page.getByTestId("sources-attention")).toHaveText("3 need attention");
 
   const row = page.getByRole("listitem", { name: LEGACY });
   const badge = row.locator('[data-kind="warn"]').filter({ hasText: "Needs attention" });
@@ -38,7 +39,7 @@ test("settings › sources: a source needing attention shows why, refuses to syn
   await expect(row.getByRole("status")).toHaveText("Channels saved.");
   await expect(row).toContainText("Active");
   await expect(row.getByTestId("needs-attention")).toHaveCount(0);
-  await expect(page.getByTestId("sources-attention")).toHaveCount(0);
+  await expect(page.getByTestId("sources-attention")).toHaveText("2 need attention");
   await row.getByRole("button", { name: "Sync now" }).click();
   await expect(row.getByRole("status")).toContainText("Synced:");
 });

@@ -661,3 +661,42 @@ def test_a_refusal_keeps_the_headers_of_the_error_it_replaces():
     resp = asyncio.run(handler(None, refused))
     assert resp.status_code == 429 and resp.headers["Retry-After"] == "5"
     assert resp.body == b'{"detail":"busy","refs":{"run":"' + ID.encode() + b'"}}'
+
+
+async def test_the_changed_approved_sections_warning_names_no_section_key(client):
+    """protects=qa4-docs-21 the version page's banner "Sections approved in v1 changed in
+    this version:" followed by each section's heading (a link the page builds from
+    ``section_keys``); fails_when=the message lists the sections by their keys ("...: scope")
+    or an old stored message still does; no_claim=which sections lock (test_import.py)."""
+    from tests.fixtures import seed_auth
+    from tests.legacy.helpers import add_feedback, fixture, import_md, user_cookie
+
+    tenant_id, auth = await seed_auth()
+    v1 = await import_md(client, auth, fixture("legacy_prd_v1.md"))
+    assert v1.status_code == 201, v1.text
+    approver = await user_cookie(tenant_id, "approver")
+    resp = await client.put(
+        "/v1/documents/legacy-onboarding/versions/1/sections/req-invite/review",
+        json={"verdict": "approved"},
+        headers=approver,
+    )
+    assert resp.status_code == 200
+    # The feedback the second draft resolves.
+    await add_feedback(tenant_id, v1.json()["document_id"])
+    v2 = await import_md(client, auth, fixture("legacy_prd_v2.md"))
+    assert v2.status_code == 201, v2.text
+    [warning] = v2.json()["warnings"]
+    assert warning["code"] == "locked_section_changed"
+    assert warning["section_keys"] == ["req-invite"]
+    assert warning["message"] == "Sections approved in v1 changed in this version:"
+    read = (await client.get("/v1/documents/legacy-onboarding/versions/2", headers=auth)).json()
+    assert read["warnings"][0]["message"] == "Sections approved in v1 changed in this version:"
+
+    # The wording stored before reads the same, its keys left in section_keys.
+    old = VersionWarning(
+        code="locked_section_changed",
+        message="sections approved in version 3 changed: scope, roles",
+        section_keys=["roles", "scope"],
+    )
+    assert old.message == "Sections approved in v3 changed in this version:"
+    assert old.section_keys == ["roles", "scope"]

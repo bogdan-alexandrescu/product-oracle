@@ -24,7 +24,7 @@ import { failedAt, formatDateTime } from "@/lib/format";
 import { baseName, CompareBar } from "./CompareBar";
 import { HORIZONS, needsAttention, toItemRow, type ItemRow } from "./item-row";
 import { ChangeChips, ItemHistory, WhatChanged } from "./ItemChanges";
-import { CHANGED, useItemsDiff, type Compare } from "./useItemsDiff";
+import { CHANGED, changeChips, useItemsDiff, type Compare, type ItemChange } from "./useItemsDiff";
 
 type Filter = "all" | "changed" | "attention";
 
@@ -111,8 +111,10 @@ export function DraftRoadmapPane({
   const pathname = usePathname();
   const params = useSearchParams();
   const compare: Compare = params.get("compare") === "approved" ? "approved" : "previous";
-  // Asked again once the draft's items are (re)stored; nothing to ask before.
-  const { diff, byKey, ghosts } = useItemsDiff(doc, n, compare, status === "ready" ? (data?.ready_at ?? "ready") : null);
+  // Asked again once the draft's items are (re)stored; nothing to ask before. qa4-docs-47:
+  // while it builds again the last build's items stay, and so does what they are compared with.
+  const stamp = status === "ready" ? (data?.ready_at ?? "ready") : data?.items.length && data.ready_at ? data.ready_at : null;
+  const { diff, byKey, ghosts } = useItemsDiff(doc, n, compare, stamp);
   const compared = !!diff?.base;
   const changed = diff?.summary ? [...CHANGED].reduce((sum, k) => sum + (diff.summary?.[k] ?? 0), 0) : 0;
   const asked = params.get("filter");
@@ -172,11 +174,13 @@ export function DraftRoadmapPane({
       : filter === "changed"
         ? (r: ItemRow) => CHANGED.has(byKey.get(r.key)?.change ?? "unchanged")
         : undefined;
+  // qa4-docs-5: a filter shows some items: say how many, and that # is each one's place in the whole list.
+  const showing = filterFn ? rows.filter((r) => filterFn(r)).length : rows.length;
   const decorate = (r: ItemRow) =>
     r.ghost ? { "data-testid": "roadmap-item-ghost", "data-change": "dropped" } : { "data-change": byKey.get(r.key)?.change };
   const columns: Column<ItemRow>[] = [
     ...(compared
-      ? [{ key: "change", header: "Change", width: "190px", phone: "meta" as const, cell: (r: ItemRow) => <ChangeChips change={byKey.get(r.key)} /> }]
+      ? [{ key: "change", header: "Change", width: "190px", phone: "meta" as const, cell: (r: ItemRow) => <ChangeCell change={byKey.get(r.key)} /> }]
       : []),
     {
       key: "check",
@@ -185,7 +189,8 @@ export function DraftRoadmapPane({
       phone: "meta",
       cell: (r) => {
         const own = byItem.get(r.key) ?? [];
-        if (!own.length) return <span className="text-text2">—</span>;
+        // qa4-docs-48: on a phone an unlabelled "—" reads as a second dash after Depends on.
+        if (!own.length) return <span className="text-text2 max-[600px]:hidden">—</span>;
         return (
           <span data-testid="draft-roadmap-chips" className="inline-flex min-w-0 flex-wrap items-center gap-1">
             {[...new Set(own.map((p) => problemLabel(p.code)))].map((label) => (
@@ -204,7 +209,7 @@ export function DraftRoadmapPane({
       phone: "meta",
       cell: (r) => {
         const key = items.find((i) => i.item_key === r.key)?.prd.section_key;
-        if (!key) return <span className="text-text2">—</span>;
+        if (!key) return <span className="text-text2 max-[600px]:hidden">—</span>;
         return (
           <Link
             href={sectionHref(doc, n, key)}
@@ -302,6 +307,11 @@ export function DraftRoadmapPane({
               { value: "attention", label: "Needs attention", count: attention },
             ]}
           />
+          {showing < rows.length && (
+            <p data-testid="items-filter-note" className="tnum text-sm text-text2">
+              Showing {showing} of {rows.length} items · # is each item&apos;s place in the full list
+            </p>
+          )}
           <Panel>
             <ItemsTable
               rows={shownRows}
@@ -321,6 +331,12 @@ export function DraftRoadmapPane({
       </Sheet>
     </div>
   );
+}
+
+/** An item's change chips; an unchanged item's "—" is left out on a phone (qa4-docs-48). */
+function ChangeCell({ change }: { change?: ItemChange }) {
+  if (change && !changeChips(change).length) return <span className="text-text2 max-[600px]:hidden">—</span>;
+  return <ChangeChips change={change} />;
 }
 
 /** The derivation's status, in the words of each state, with what an approver can do about it. */
@@ -350,13 +366,16 @@ function StatusRow({
   let copy: ReactNode;
   let act: ReactNode = null;
   switch (data.status) {
+    // qa4-docs-47: plain words, and a rebuild says the table is the last build until it ends.
     case "queued":
-      copy = "Queued. Oracle starts deriving within a minute.";
+      copy = data.items.length
+        ? "Building again: starts within a minute. The table shows the last build until the new one is ready."
+        : "Queued. Oracle starts building within a minute.";
       break;
     case "running":
       copy = (
         <>
-          Deriving roadmap items from v{n} · started {ago(data.requested_at)}
+          Building roadmap items from v{n} · started {ago(data.requested_at)}
           {data.run_id && (
             <>
               {" · "}
@@ -365,6 +384,7 @@ function StatusRow({
               </Link>
             </>
           )}
+          {data.items.length > 0 && " · the table shows the last build until the new one is ready"}
         </>
       );
       break;
@@ -454,14 +474,19 @@ function AutoSwitch({ doc, initial }: { doc: string; initial: boolean }) {
     }
   };
   return (
-    <div data-testid="draft-roadmap-auto" className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-text">
-        <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
-        Refresh this roadmap whenever a new PRD version is drafted
-      </label>
-      <InfoTip label="refreshing with each new version" side="bottom" align="start">
-        About $5.50 per draft at standard depth. Runs in the background.
-      </InfoTip>
+    <div data-testid="draft-roadmap-auto" className="flex flex-col gap-1">
+      {/* qa4-docs-48: the info icon stays beside its label on a phone; the label wraps instead. */}
+      <div className="flex min-w-0 items-center gap-x-2">
+        <label className="flex min-h-10 min-w-0 items-center gap-2 text-sm font-medium text-text">
+          <input type="checkbox" className="size-4 flex-none accent-[var(--accent)]" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
+          <span data-testid="draft-roadmap-auto-label">Refresh this roadmap whenever a new PRD version is drafted</span>
+        </label>
+        <span className="flex-none">
+          <InfoTip label="refreshing with each new version" side="bottom" align="start">
+            About $5.50 per draft at standard depth. Runs in the background.
+          </InfoTip>
+        </span>
+      </div>
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );

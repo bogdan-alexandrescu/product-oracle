@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { toast } from "@/components/ds/Toast";
 import { ChatCard } from "@/components/simple/chat/ChatCard";
-import { recommendsLine, type Question } from "@/components/simple/questions/Questions";
+import { recommendsLine, type Answer, type Question } from "@/components/simple/questions/Questions";
 import { api, unwrap } from "@/lib/api/client";
 import { askSay, askThread, PENDING_POLL_MS, undoCard, walk, type ChatCard as Card, type ChatMessage, type WalkStep } from "@/lib/api/simple-chat";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
@@ -179,20 +179,26 @@ export function Walk({ onDone }: { onDone: () => void }) {
     }
   }
 
-  /** A PRD's question decided as recommended (decide_question): applied with Undo, or proposed to its decider. */
-  async function answer(q: Question) {
+  /**
+   * A PRD's question decided (decide_question) as recommended, or (qa4-simple-home-1) in the
+   * person's own typed words: applied with Undo, or proposed to its decider. Never a chat.
+   */
+  async function answer(q: Question, a: Answer = { option: "recommended" }): Promise<boolean> {
     setBusy(true);
     try {
       const r = await unwrap(
-        api.POST("/v1/simple/changes", { body: { op: "decide_question", target: { decision_id: q.id }, before: { status: "proposed" }, after: { option: "recommended" } } }),
+        api.POST("/v1/simple/changes", { body: { op: "decide_question", target: { decision_id: q.id }, before: { status: "proposed" }, after: a } }),
       );
       const c = r.change;
-      toast({ message: c.status === "proposed" ? `Sent to ${q.decider?.name ?? "the owners"} to decide` : `Decided ${q.code}: ${q.recommendation}` });
+      const words = "answer" in a ? a.answer : q.recommendation;
+      toast({ message: c.status === "proposed" ? `Sent to ${q.decider?.name ?? "the owners"} to decide` : `Decided ${q.title}: ${words}` });
       invalidateWaiting();
       waitingChanged();
       next({ step: at, change: c.status === "applied" && c.can_undo ? c.id : undefined });
+      return true;
     } catch (e) {
       toast({ message: detail(e) });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -215,7 +221,9 @@ export function Walk({ onDone }: { onDone: () => void }) {
   const skipped = [...lastOf.values()].filter((d) => d.skipped).map((d) => steps?.[d.step]).filter((s): s is Step => !!s);
   const left = joinAnd(
     [
-      count(skipped.filter((s) => s.kind === "decision" || s.kind === "agenda_decision").length, "decision", "decisions"),
+      // qa4-simple-home-9: a meeting's agenda item is not one of Home's decisions: counted apart.
+      count(skipped.filter((s) => s.kind === "decision").length, "decision", "decisions"),
+      count(skipped.filter((s) => s.kind === "agenda_decision").length, "meeting agenda item", "meeting agenda items"),
       count(skipped.filter((s) => s.kind === "broken_link").length, "broken link", "broken links"),
       count(skipped.filter((s) => s.kind === "proposal").length, "proposal", "proposals"),
     ].filter((x) => !x.startsWith("0 ")),
@@ -340,10 +348,48 @@ export function Walk({ onDone }: { onDone: () => void }) {
               </div>
             </div>
           )}
-          <TypeInstead hint={TYPE_HINT[step.kind]} />
+          {step.kind === "decision" ? (
+            // qa4-simple-home-1, -33: a typed answer is the decision's answer, recorded on it (no chat);
+            // a decision the reader cannot answer here has only "Open the decision".
+            step.question &&
+            (step.question.can.decide || step.question.can.propose) && (
+              <TypeAnswer hint={TYPE_HINT.decision} verb={step.question.can.decide ? "Decide" : "Propose"} busy={busy} onAnswer={(t) => answer(step.question!, { answer: t })} />
+            )
+          ) : (
+            <TypeInstead hint={TYPE_HINT[step.kind]} />
+          )}
         </div>
       )}
     </section>
+  );
+}
+
+/** qa4-simple-home-1: a decision answered in the person's own words, recorded as its answer. */
+function TypeAnswer({ hint, verb, busy, onAnswer }: { hint: string; verb: string; busy: boolean; onAnswer: (text: string) => Promise<boolean> }) {
+  const [text, setText] = useState("");
+  return (
+    <div className="flex flex-col gap-2" data-testid="walk-type">
+      <form
+        className="flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const t = text.trim();
+          if (t) void onAnswer(t).then((ok) => ok && setText(""));
+        }}
+      >
+        <input
+          aria-label={hint}
+          value={text}
+          maxLength={500}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={hint}
+          className="h-10 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 text-text"
+        />
+        <button type="submit" className="simple-button" disabled={busy || !text.trim()}>
+          {verb}
+        </button>
+      </form>
+    </div>
   );
 }
 

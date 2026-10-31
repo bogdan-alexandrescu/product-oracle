@@ -16,7 +16,7 @@ import { expect, test, type Page } from "./test";
  *
  * Card walk-track-headline (P11): protects = a plan approved a week ago whose items an earlier
  * rule marked stale only because the PRD got a new version reads the one item stale by its
- * own rule, in plain words ("At risk: 1 of N items need attention (1 may be out of date)"),
+ * own rule, in plain words ("At risk: 1 of N items needs attention (may be out of date)"),
  * never "N of N items need attention" nor the word "stale"; fails_when = every item counts as
  * needing attention; no_claim = the per-item marking on a new PRD version (the API's tests).
  */
@@ -62,7 +62,7 @@ for (const phone of [false, true]) {
         await expect(track).toBeVisible();
         await expect(track.getByTestId("track-health")).toHaveText("At risk");
         const headline = track.getByText(/^At risk: /);
-        await expect(headline).toHaveText(/^At risk: (1 of \d+ items need|the item needs) attention \(1 may be out of date\)\./);
+        await expect(headline).toHaveText(/^At risk: (1 of \d+ items needs|the item needs) attention \(may be out of date\)\./);
         await expect(headline).not.toContainText("stale");
         const text = (await headline.textContent()) ?? "";
         const all = /(\d+) of (\d+) items/.exec(text);

@@ -108,7 +108,7 @@ for (const [where, use] of [
      */
     test("a goal with no suggestions shows no chip", async ({ page }) => {
       await openBoard(page);
-      await expect(group(page, "now", "Grow retention").getByTestId("goal-suggestions-open")).toContainText("✦1");
+      await expect(group(page, "now", "Grow retention").getByTestId("goal-suggestions-open")).toContainText("✦ 1 suggested feature");
       await expect(group(page, "now", "Faster activation").getByTestId("goal-suggestions-open")).toHaveCount(0);
     });
   });

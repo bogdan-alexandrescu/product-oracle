@@ -6,6 +6,7 @@ import { Button, Chip, CodeChip, confirmInPage, DataTable, InfoTip, Panel, type 
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
 import { named, namedText, type Named } from "@/lib/codes";
 import { formatPercent } from "@/lib/format";
+import { assess, goalViews, type GoalView } from "@/app/home/_goals";
 import { goalTree } from "@/lib/goal-tree";
 
 import type { AddKind } from "./AddItem";
@@ -142,41 +143,53 @@ function TitleButton({
   );
 }
 
+/** Spaces that must not break: "≥ 45%" and "Jun 30" stay on one line (qa4-plan-50). */
+export const keepTogether = (text: string) => text.replace(/([≥≤<>=]) /g, "$1\u00a0").replace(/([A-Z][a-z]{2}) (\d)/g, "$1\u00a0$2");
+
 /**
- * Progress in words (qa-plan-2), in one form (qa-plan-35): how far along the way to the target,
- * and from what it is measured, so it squares with the value and target Plan shows. With a
- * start: "50% of the way from 31% to ≥ 45%"; without one: "78% of the way to ≥ 12%"; a
- * parent: "60% of the way to target, from subgoals".
+ * Progress in words, in Plan's one method (qa4-plan-42): the distance to the target in the
+ * goal's unit, as Plan and Home show it ("2.6 pts to go", "Target met"), with the value it is
+ * measured from ("9.4% now"). A parent without its own value: "60% of the way to target, from
+ * subgoals". Only a goal Plan cannot measure falls back to its share of the way.
  */
-export function progressWords(g: EntityOut): { value: string; words: string; tip: string } | null {
+export function progressWords(g: EntityOut, view?: GoalView): { value: string; words: string; tip: string } | null {
   const p = g.progress;
-  if (p?.value == null) return null;
-  const pct = formatPercent(p.value);
   const a = g.attrs ?? {};
   const unit = typeof a.unit === "string" && a.unit ? a.unit : null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const [start, current, target] = [num(a.start), num(a.current), num(a.target)];
   const fig = (v: number) => (unit && unit !== "count" ? figure(v, unit) : String(v));
   const goal = typedTarget(a)?.short ?? (target != null ? fig(target) : "target");
+  // In the cell, "≥ 45%" never breaks after its sign; the tip keeps plain spaces.
+  const shown = keepTogether(goal);
+  if (p?.source !== "subgoals" && view) {
+    const d = assess(view);
+    if (d.state === "togo" || d.state === "met" || d.state === "short") {
+      const now = view.currentText ? `${view.currentText} now` : "";
+      return { value: d.text, words: now ? `(${now.replace(" now", "\u00a0now")})` : "", tip: `${now ? `${now}, ` : ""}target ${goal}: ${d.text}` };
+    }
+  }
+  if (p?.value == null) return null;
+  const pct = formatPercent(p.value);
   if (p.source === "subgoals") {
-    return { value: pct, words: `of the way to ${goal}, from subgoals`, tip: `${pct} of the way to ${goal}, rolled up from its subgoals` };
+    return { value: pct, words: `of the way to ${shown}, from subgoals`, tip: `${pct} of the way to ${goal}, rolled up from its subgoals` };
   }
   const now = current != null ? `; ${fig(current)} now` : "";
   if (start != null && target != null && start !== target) {
     return {
       value: pct,
-      words: `of the way from ${fig(start)} to ${goal}`,
+      words: `of the way from ${fig(start)} to ${shown}`,
       tip: `${pct} of the way from ${fig(start)} (start) to ${goal}${now}`,
     };
   }
-  return { value: pct, words: `of the way to ${goal}`, tip: `${pct} of the way to ${goal}${now}` };
+  return { value: pct, words: `of the way to ${shown}`, tip: `${pct} of the way to ${goal}${now}` };
 }
 
 /** The goals interview's button, in plain words (qa-plan-40): "Ask Oracle to sharpen 2 goals". */
 export const sharpenLabel = (n: number) => `Ask Oracle to sharpen ${n} ${n === 1 ? "goal" : "goals"}`;
 
-/** Fill from text's button and its question's action (qa-plan-40): "Read targets from 1 goal's text". */
-export const fillLabel = (n: number) => `Read targets from ${n} ${n === 1 ? "goal's" : "goals'"} text`;
+/** Fill from text's button and its question's action, saying what it does (qa4-plan-52): "Fill targets from the goal's wording (1)". */
+export const fillLabel = (n: number) => `Fill targets from the ${n === 1 ? "goal's" : "goals'"} wording (${n})`;
 
 /** Fill from text's question: which goals it saves to, and what it reads. */
 function fillAsk(goals: EntityOut[]) {
@@ -226,6 +239,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
   const coverage = new Map((trace?.goals ?? []).map((g) => [g.id, g]));
   const owners = useOwners(goals.map((g) => g.attrs?.owner).filter((x): x is string => typeof x === "string"));
   const toFill = fillable(goals);
+  // qa4-plan-42: each goal as Plan reads it, so Progress gives Plan's distance to go.
+  const views = new Map(goalViews(graph.entities).map((v) => [v.id, v]));
 
   const productOf = new Map<string, string>();
   for (const e of graph.edges) {
@@ -353,7 +368,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       key: "metric",
       header: "Metric",
       width: "150px",
-      hideOnPhone: true,
+      // A phone keeps it, labelled, as it keeps Owner and Horizon (qa4-plan-43).
+      phoneLabel: "Metric",
       // Kept at a laptop's width: Weight and Features go first (under 1320 px), Metric only beside
       // a drawer (under 1000 px). A long metric wraps rather than taking the goal's name's room.
       narrow: "mid",
@@ -387,12 +403,12 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       wrap: true,
       phoneLabel: "Progress",
       cell: (g) => {
-        const p = progressWords(g);
+        const p = progressWords(g, views.get(g.id));
         return p ? (
           <span data-attr="progress" data-source={g.progress?.source} className="tnum" title={p.tip}>
-            {/* What the number is and what it is measured from (qa-plan-43, qa-plan-2):
-                "50% of the way from 31% to ≥ 45%", "78% of the way to ≥ 12%" (qa-plan-35). */}
-            {p.value} <span className="text-sm text-text2">{p.words}</span>
+            {/* Plan's figure and what it is measured from (qa4-plan-42): "2.6 pts to go (9.4% now)";
+                a parent's roll-up: "60% of the way to target, from subgoals". */}
+            <span className="whitespace-nowrap">{p.value}</span> <span className="text-sm text-text2">{p.words}</span>
           </span>
         ) : (
           <span data-attr="progress" className="text-text2">
@@ -407,15 +423,16 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       // "Medium · Jun 30" whole: a second line rather than an ellipsis (qa-plan-23).
       width: "120px",
       wrap: true,
-      hideOnPhone: true,
+      phoneLabel: "Horizon",
       // A drawer beside the table drops Horizon, Owner and Confidence before the goal's name (qa-plan-3).
       narrow: "mid",
       cell: (g) => {
         const h = horizonLabel(g.attrs ?? {});
         if (!h) return <TextFallback attr="horizon" text={g.attrs?.horizon_text ?? g.attrs?.horizon} />;
         return (
+          // It may break after the "·", never inside the date (qa4-plan-50).
           <span data-attr="horizon" className="tnum" title={h}>
-            {h}
+            {keepTogether(h)}
           </span>
         );
       },
@@ -424,7 +441,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       key: "owner",
       header: "Owner",
       width: "120px",
-      hideOnPhone: true,
+      phoneLabel: "Owner",
       narrow: "mid",
       cell: (g) => <OwnerName id={g.attrs?.owner} owners={owners} />,
     },
@@ -869,8 +886,9 @@ function FeatureRow({
             className="line-clamp-2 max-w-full break-words whitespace-normal max-[600px]:font-medium"
           />
           <LockMark entity={feature} meId={meId} />
+          {/* A phone keeps Proposed beside the name too (qa4-plan-43). */}
           {feature.status === "proposed" && (
-            <span className="flex-none max-[600px]:hidden">
+            <span className="flex-none">
               <Chip kind="warn">Proposed</Chip>
             </span>
           )}
@@ -901,7 +919,7 @@ function FeatureRow({
           >
             <span className="max-[600px]:hidden">{e ? <LinkCell edge={e} low={low} /> : <Dot />}</span>
             {e && (
-              <span className="hidden items-center gap-1.5 rounded-goal border border-line py-0.5 pr-2 pl-0.5 max-[600px]:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-goal border border-line py-0.5 pr-2 pl-1.5 max-[600px]:inline-flex">
                 <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} code={codes.get(g.id)} proposed={g.status === "proposed"} wrap />
                 <ContributionPips value={contributionOf(e.attrs)} proposed={e.status === "proposed"} />
               </span>

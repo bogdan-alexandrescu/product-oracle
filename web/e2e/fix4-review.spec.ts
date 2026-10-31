@@ -168,7 +168,7 @@ test.describe("desktop", () => {
     await openReview(page);
     const runUrl = page.url().replace(/\/review\/.*$/, "");
     const back = page.getByTestId("review-back");
-    await expect(back).toHaveText("Saved addresses PRD · Baseline to PRD");
+    await expect(back).toHaveText("Saved addresses · Baseline to PRD");
     await expect(back.locator("svg")).toHaveCount(1);
     await expect(page.locator("main")).not.toContainText("Runs /");
     await back.click();

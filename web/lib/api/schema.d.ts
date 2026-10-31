@@ -12871,7 +12871,8 @@ export interface paths {
         put?: never;
         /**
          * Undo Simple Chat Card
-         * @description Undo the change an applied card made (its author, in its session).
+         * @description Undo the change an applied card made: whoever its Apply would let apply it now (403
+         *     with the reason otherwise; ``ChatCardOut.can_undo``).
          */
         post: operations["undo_simple_chat_card"];
         delete?: never;
@@ -17834,6 +17835,11 @@ export interface components {
             dependent_ids: string[];
             /** May With Dependents */
             may_with_dependents?: ("apply" | "propose") | null;
+            /**
+             * Can Undo
+             * @default false
+             */
+            can_undo: boolean;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
@@ -17973,6 +17979,14 @@ export interface components {
             ask_only: boolean;
             /** Ended */
             ended: boolean;
+            /** Ended At */
+            ended_at?: string | null;
+            ended_by?: components["schemas"]["SimplePersonRef"] | null;
+            /**
+             * Ended By Itself
+             * @default false
+             */
+            ended_by_itself: boolean;
         };
         /** ChatStopOut */
         ChatStopOut: {
@@ -23118,6 +23132,8 @@ export interface components {
             summary: string;
             /** Author Id */
             author_id?: string | null;
+            /** Author Name */
+            author_name?: string | null;
             anchor?: components["schemas"]["TextQuoteSelector"] | null;
             /** Verdict */
             verdict?: ("approved" | "changes_requested" | "rejected") | null;
@@ -24206,6 +24222,11 @@ export interface components {
             status: "pass" | "warning" | "critical" | "not_applicable";
             /** Rationale */
             rationale: string;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
             /** Rater Id */
             rater_id?: string | null;
             /**
@@ -33217,6 +33238,11 @@ export interface components {
             date: string | null;
             /** Verified */
             verified: boolean;
+            /**
+             * At Risk
+             * @default false
+             */
+            at_risk: boolean;
         };
         /** ReportPeriod */
         ReportPeriod: {
@@ -37163,6 +37189,10 @@ export interface components {
             state: "active" | "expired" | "revoked";
             /** Revoked At */
             revoked_at?: string | null;
+            /** Revoked By */
+            revoked_by?: string | null;
+            /** Revoked By Name */
+            revoked_by_name?: string | null;
             /** Revoked Reason */
             revoked_reason?: string | null;
             /** Allow Download */
@@ -38429,6 +38459,11 @@ export interface components {
             minutes: components["schemas"]["SimpleMinutes"] | null;
             /** Decisions */
             decisions: components["schemas"]["SimpleDecisionRow"][];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["SimpleMeetingNote"][];
             delivery?: components["schemas"]["SimpleDelivery"] | null;
             /**
              * Can Retry Delivery
@@ -39706,12 +39741,24 @@ export interface components {
              */
             flow_steps: string[];
         };
+        /** SimpleStartMember */
+        SimpleStartMember: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Can Change */
+            can_change: boolean;
+        };
         /** SimpleStartOptions */
         SimpleStartOptions: {
             /** Prds */
             prds: components["schemas"]["SimpleStartPrd"][];
             /** Members */
-            members: components["schemas"]["SimplePersonRef"][];
+            members: components["schemas"]["SimpleStartMember"][];
             /**
              * Length Min
              * @default 60
@@ -43450,6 +43497,10 @@ export interface components {
             title: string;
             /** Kind */
             kind: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Wrote */
+            wrote?: string | null;
         };
         /**
          * TriageDailyIn

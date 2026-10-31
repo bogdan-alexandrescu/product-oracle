@@ -95,7 +95,8 @@ test("impact: past 15 outputs, a category still finds its upstream once names ar
   const graph = page.getByRole("region", { name: "Lineage" });
   // Give the document and section names (loaded after the first paint) time to settle before
   // the grouped nodes' edges are read, so the two lists this item keeps in step are both named.
-  await expect(graph.getByText("Scope", { exact: true }).first()).toBeVisible();
+  // A version's sections read as it numbers them ("4. Scope", qa4-docs-44, #996).
+  await expect(graph.getByText(/^(\d+\. )?Scope$/).first()).toBeVisible();
   const group = graph.getByTestId("lineage-group").filter({ hasText: "Wireframe" });
   await expect(group).toBeVisible();
   await group.click();

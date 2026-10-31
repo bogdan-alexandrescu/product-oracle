@@ -389,3 +389,42 @@ async def test_direct_ops_in_a_meeting_for_owner_and_decider(client):
             assert r.status_code == 200 and r.json()["card"]["status"] == "applied", (who, line)
             assert (await undo(client, w, who, c["id"])).status_code == 200, (who, line)
     assert (await get(client, w, mid))["notes"] == []
+
+
+async def test_undo_takes_the_rights_apply_takes(client):
+    """qa4-simple-decide-1: Undo of an applied card takes the same rule as its Apply. A
+    viewer reads the owner's applied note and change with ``can_undo`` false and is refused
+    (403, the note stays); so is a commenter the presenter mode leaves out; the owner who
+    applied them reads ``can_undo`` true and undoes both."""
+    w = await world()
+    mid = (await start(client, w, "owner", attendee_ids=[uid(w, x) for x in (
+        "commenter", "viewer")]))["id"]  # fmt: skip
+    note = await one_card(client, w, "owner", "note: keep reminders quiet on weekends", mid)
+    assert (await apply(client, w, "owner", note["id"])).status_code == 200
+    cut = (await say(client, w, "owner", "cut Cut A", mid))["cards"][0]
+    r = await apply(client, w, "owner", cut["id"])
+    assert r.status_code == 200 and r.json()["card"]["status"] == "applied", r.text
+    r = await client.put(f"{MEETINGS}/{mid}/chat/mode", json={"change_mode": "presenter"},
+                         headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+
+    async def cards(who: str) -> dict[str, dict]:
+        r = await client.get(f"{MEETINGS}/{mid}/chat", headers=w.ctx.as_(who))
+        assert r.status_code == 200, r.text
+        return {c["id"]: c for m in r.json()["messages"] for c in m["cards"]}
+
+    for who in ("viewer", "commenter"):
+        seen = await cards(who)
+        assert not seen[note["id"]]["can_undo"] and not seen[cut["id"]]["can_undo"], who
+        for c in (note, cut):
+            assert (await undo(client, w, who, c["id"])).status_code == 403, (who, c["op"])
+    assert [n["text"] for n in (await get(client, w, mid, "owner"))["notes"]] == [
+        "keep reminders quiet on weekends"
+    ]
+    seen = await cards("owner")
+    assert seen[note["id"]]["can_undo"] and seen[cut["id"]]["can_undo"]
+    for c in (note, cut):
+        r = await undo(client, w, "owner", c["id"])
+        assert r.status_code == 200 and r.json()["status"] == "undone", r.text
+        assert r.json()["can_undo"] is False
+    assert (await get(client, w, mid, "owner"))["notes"] == []

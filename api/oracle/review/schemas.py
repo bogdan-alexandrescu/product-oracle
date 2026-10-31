@@ -116,6 +116,9 @@ class FeedbackItemOut(ORM):
     summary: str
     # Who raised it (a user id or an API token id); null on older items without one.
     author_id: uuid.UUID | None = None
+    # qa4-docs-39: their name, as every reader sees it (the member's name, else from the
+    # email; an API token's name); null when there is no author.
+    author_name: str | None = None
     # Copied from the comment / verdict so the agent track needs no extra calls.
     anchor: TextQuoteSelector | None = None
     verdict: Verdict | None = None

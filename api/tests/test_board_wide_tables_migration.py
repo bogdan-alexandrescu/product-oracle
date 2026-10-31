@@ -32,12 +32,13 @@ def _migration():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0094_generation_checks"]
+    assert script.get_heads() == ["0095_chat_read_answered_at"]
 
 
 def test_the_new_css_is_the_packaged_theme():
     m = _migration()
-    assert m.NEW_CSS == (BUILTIN_DIR / "themes" / "roadmap-board.css").read_text("utf-8")
+    # Later rules are appended after it (qa4-docs-share-5's phone rule).
+    assert (BUILTIN_DIR / "themes" / "roadmap-board.css").read_text("utf-8").startswith(m.NEW_CSS)
     assert "section-wide" in m.NEW_CSS and "section-wide" not in m.OLD_CSS
 
 

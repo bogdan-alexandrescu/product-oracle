@@ -58,7 +58,7 @@ test("qa-shell-1: signing in straight after signing out, without reopening sign-
 const TITLES: [string, string][] = [
   ["/requests", "All requests · Requests · Product Oracle"],
   ["/requests/themes", "Themes · Requests · Product Oracle"],
-  ["/settings/templates/new", "New template · Templates · Product Oracle"],
+  ["/settings/templates/new", "New template · Templates · Settings · Product Oracle"],
   ["/plan/dates", "Dates · Plan · Product Oracle"],
   ["/plan/documents", "Roadmap documents · Plan · Product Oracle"],
 ];

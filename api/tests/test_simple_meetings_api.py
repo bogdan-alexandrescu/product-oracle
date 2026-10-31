@@ -175,6 +175,35 @@ async def test_start_permissions(client, who, code):
     assert r.status_code == 200 and uid(w, "commenter") in [a["id"] for a in r.json()["attendees"]]
 
 
+async def test_start_sheet_says_who_may_change_things(client):
+    """qa4-simple-decide-14: each member on the start sheet carries ``can_change``, so
+    "Presenter plus one or two people" offers only people whose role may change things (a
+    viewer never may, in any mode)."""
+    w = await world()
+    r = await client.get(f"{MEETINGS}/options", params={"prd": PRD}, headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    can = {x["id"]: x["can_change"] for x in r.json()["members"]}
+    assert can[uid(w, "viewer")] is False
+    for who in ("owner", "approver", "commenter", "decider"):
+        assert can[uid(w, who)] is True, who
+
+
+async def test_decisions_page_meeting_lists_its_comments(client):
+    """qa4-simple-decide-32: the Decisions page's meeting card lists the comments made in the
+    meeting, as its minutes do; an open question stays in the minutes' own list."""
+    w = await world()
+    m = await start(client, w)
+    r = await client.post(f"{MEETINGS}/{m['id']}/comments", json={"text": "Keep the beta"},
+                          headers=w.ctx.as_("approver"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    [g] = r.json()["meetings"]
+    assert [(n["kind"], n["text"], n["by_name"]) for n in g["notes"]] == [
+        ("comment", "Keep the beta", "approver@example.com")
+    ]
+
+
 async def test_every_action_is_a_meeting_decision(client):
     w = await world()
     m = await start(client, w)
@@ -205,12 +234,14 @@ async def test_every_action_is_a_meeting_decision(client):
     assert [n["text"] for n in comment_out["notes"] if n["kind"] == "comment"] == ["Keep the beta"]
     rows = await meeting_decisions(w)
     titles = [d.title for d in rows]
+    # qa4-simple-decide-12: a move says where to; an accepted or declined proposal says whose.
+    who = w.ctx.users["commenter"].name or w.ctx.users["commenter"].email
     assert titles == [
         "Renamed Edit_Title A",
-        "Proposed: Moved Change_Horizon A",
-        "Accepted: Moved Change_Horizon A",
+        "Proposed: Moved Change_Horizon A to Next",
+        f"Accepted {who}'s proposal: Moved Change_Horizon A to Next",
         "Proposed: Cut Cut A",
-        "Declined: Cut Cut A",
+        f"Declined {who}'s proposal: Cut Cut A",
         "Undone: Renamed Edit_Title A",
     ]
     assert "Comment: Keep the beta" not in titles
@@ -571,3 +602,38 @@ async def test_meeting_option_title_carries_the_day_and_live(client):
     live_words = company_time.date_in_words(company_time.day(live["started_at"]))
     assert options[ended["id"]] == f"Ended review · {ended_words}"
     assert options[live["id"]] == f"Live review · {live_words} · live"
+
+
+async def test_decisions_page_reads_comment_authors_once(client, monkeypatch):
+    """qa5-simple-decide-rest review: the Decisions page names every meeting's comment
+    authors in one read of the people (meetings._names), not one per meeting."""
+    names = meetings._names
+    calls: list[set] = []
+
+    async def counted(db, ids):
+        if ids:  # an empty set reads nothing
+            calls.append(set(ids))
+        return await names(db, ids)
+
+    async def name_reads(n: int) -> int:
+        w = await world()
+        for i in range(n):
+            m = await start(client, w)
+            r = await client.post(f"{MEETINGS}/{m['id']}/comments", json={"text": f"Note {i}"},
+                                  headers=w.ctx.as_("approver"))  # fmt: skip
+            assert r.status_code == 201, r.text
+            await end(client, w, m["id"])
+        calls.clear()
+        monkeypatch.setattr(meetings, "_names", counted)
+        try:
+            r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
+        finally:
+            monkeypatch.setattr(meetings, "_names", names)
+        assert r.status_code == 200, r.text
+        groups = r.json()["meetings"]
+        assert len(groups) == n
+        assert all([x["by_name"] for x in g["notes"]] == ["approver@example.com"] for g in groups)
+        return len(calls)
+
+    one, three = await name_reads(1), await name_reads(3)
+    assert three == one, (one, three)

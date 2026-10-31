@@ -7,6 +7,8 @@ import { Button } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { addMonths, todayIn, useCompanyZone } from "@/lib/dates";
+import { useFlowCost } from "@/lib/flow-cost";
+import { formatMoney } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
 
 import { Modal } from "./Modal";
@@ -23,7 +25,7 @@ function titleOf(question: string): string {
  * New pricing memo (H9; approvers and owners): the question and the evidence window (the
  * last six months by default, in the Company time zone), then Draft with Oracle: the memo
  * starts from the pricing options memo template and Oracle's pricing_memo run writes it at
- * standard depth. The estimate is in the run's details only (P3d).
+ * standard depth. qa4-company-32: the dialog says what the run costs, as New update does.
  */
 export function NewPricingMemo({ onClose }: { onClose: () => void }) {
   const router = useRouter();
@@ -33,6 +35,9 @@ export function NewPricingMemo({ onClose }: { onClose: () => void }) {
   const [to, setTo] = useState(today);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // qa4-company-32: the run's cost from the flow catalog (each step's roles at standard depth,
+  // as the run's estimate counts them), and who approves it over the approval threshold.
+  const cost = useFlowCost("pricing_memo");
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -91,13 +96,19 @@ export function NewPricingMemo({ onClose }: { onClose: () => void }) {
           Oracle drafts the memo from pricing interviews, win and loss records and the sources: the options, the evidence and a research plan. It never
           decides a price; the pricing owner does, in the decision log. Owners and approvers see it.
         </p>
+        {cost && (
+          <p className="text-sm text-text" data-testid="pricing-memo-cost">
+            The draft is one Oracle run of about <span className="tnum font-semibold">{formatMoney(cost.usd)}</span>.
+            {cost.over && ` Over ${formatMoney(cost.threshold)}, an owner approves the cost before it runs.`}
+          </p>
+        )}
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="flex justify-end gap-2 border-t border-line pt-3">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? "Drafting…" : "Draft with Oracle"}
+            {busy ? "Drafting…" : cost ? `Draft with Oracle · ${formatMoney(cost.usd)}` : "Draft with Oracle"}
           </Button>
         </div>
       </form>

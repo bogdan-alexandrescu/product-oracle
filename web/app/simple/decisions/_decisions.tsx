@@ -24,7 +24,7 @@ type View = "list" | "board" | "meetings";
 /** qa-simple-decide-35: the lead follows the view. */
 const LEADS: Record<View, string> = {
   list: "What waits for you, soonest first. Then every decision, beside the meeting that took it.",
-  board: "The PRDs' questions by where they stand: needing input, recommended, decided.",
+  board: "The PRDs' questions by where they stand: missing a decider or a recommendation, recommended, decided.",
   meetings: "Every decision, beside the meeting that took it, newest meeting first.",
 };
 
@@ -100,7 +100,8 @@ export function SimpleDecisions() {
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap gap-3 max-[600px]:w-full" role="group" aria-label="Filters">
+        {/* qa4-simple-decide-35: the filters wrap among themselves, so the view switch keeps its place beside them when Ask Oracle narrows the page. */}
+        <div className="flex min-w-0 flex-1 flex-wrap gap-3 max-[600px]:w-full" role="group" aria-label="Filters">
           <Filter label="PRD" value={prd} options={d?.prds ?? []} onChange={(v) => set("prd", v)} all="All PRDs" />
           <Filter label="Goal" value={goal} options={d?.goals ?? []} onChange={(v) => set("goal", v)} all="All goals" />
           <Filter label="Meeting" value={meeting} options={d?.meeting_options ?? []} onChange={(v) => set("meeting", v)} all="All meetings" />
@@ -149,7 +150,7 @@ export function SimpleDecisions() {
           <span>
             {d.approvals_waiting === 1 ? "1 approval for Oracle's own work waits" : `${d.approvals_waiting} approvals for Oracle's own work wait`} in your Inbox. They are not product decisions, so they are not listed or counted here.{" "}
             <Link href="/inbox" className="font-[650] text-accent-ink hover:underline">
-              Open the Inbox (it leaves Simple)
+              Open the Inbox in Detailed
             </Link>
           </span>
         </p>
@@ -197,7 +198,8 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
         <span aria-hidden className="simple-ico">
           <Icon name="flag" size={20} stroke={1.7} />
         </span>
-        <h2 className="simple-h2 min-w-0 flex-1">{label}</h2>
+        {/* qa4-simple-decide-35: the card's title keeps one line; the source line wraps under it instead. */}
+        <h2 className="simple-h2 flex-1 whitespace-nowrap">{label}</h2>
         {count > 0 && (
           <span data-testid={`${testId}-count`} className="simple-count tnum">
             {count}
@@ -250,10 +252,13 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
 }
 
 const COLUMNS: { key: Question["column"]; title: string; tab: string }[] = [
-  { key: "needs_input", title: "Needs input", tab: "Needs input" },
+  // qa4-simple-decide-8: the column holds questions with no decider or no recommendation yet
+  // (some have a recommendation), so it says that, not "Needs input".
+  { key: "needs_input", title: "Missing a decider or a recommendation", tab: "Missing" },
   { key: "recommended", title: "Recommended", tab: "Recommended" },
   // qa-simple-decide-21: the Board holds the PRDs' questions; decisions taken elsewhere are under By meeting.
-  { key: "decided", title: "Decided questions", tab: "Decided" },
+  // qa4-simple-decide-9: the phone's tab says so too, so its count does not contradict the List's decisions.
+  { key: "decided", title: "Decided questions", tab: "Decided questions" },
 ];
 
 /** Two columns (901-1599 px): Needs input over Decided on the left, Recommended down the right (its extra height goes to the second row). */
@@ -271,7 +276,7 @@ function Board({ questions, actions }: { questions: Question[]; actions: Actions
     <div data-testid="questions-board" className="flex flex-col gap-3">
       <div className="hidden max-[600px]:block">
         {/* qa-simple-decide-4: short tab names that fit a 390 px phone (the column's own heading is the long one). */}
-        <Seg label="Column" value={tab} onChange={setTab} className="min-w-0 [&>button]:min-w-0 [&>button]:px-1.5" items={COLUMNS.map((c) => ({ value: c.key, label: c.tab, count: of(c.key).length, testId: `board-tab-${c.key}` }))} />
+        <Seg label="Column" value={tab} onChange={setTab} className="min-w-0 [&>button]:min-w-0 [&>button]:px-1.5 [&>button]:whitespace-normal" items={COLUMNS.map((c) => ({ value: c.key, label: c.tab, count: of(c.key).length, testId: `board-tab-${c.key}` }))} />
       </div>
       {/* qa-simple-decide-22: two wider columns from 901 px, three from 1600 px; qa-simple-decide-13:
           with two, Decided questions sits straight under Needs input (no gap beside Recommended);
@@ -285,13 +290,17 @@ function Board({ questions, actions }: { questions: Question[]; actions: Actions
               {/* qa-simple-decide-33: on a phone the tab above already names the column and its count. */}
               <header className="flex items-center gap-3 max-[600px]:hidden">
                 <h2 className="simple-h2 min-w-0 flex-1">{c.title}</h2>{" "}
-                <span className="simple-count tnum">{of(c.key).length}</span>
+                {/* qa4-simple-decide-38: done items need nothing from you: a neutral count. */}
+                <span data-testid={`board-${c.key}-count`} className={`simple-count tnum ${c.key === "decided" ? "simple-count-quiet" : ""}`}>
+                  {of(c.key).length}
+                </span>
               </header>
               {of(c.key).length === 0 ? (
                 <p className="simple-meta">None.</p>
               ) : (
                 <ul>
-                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} />)}
+                  {/* qa4-simple-decide-6: someone else's question says for whom here too, as on the List. */}
+                  {of(c.key).map((x) => <QuestionRow key={x.id} q={x} mode={c.key} actions={actions} forOthers />)}
                 </ul>
               )}
             </section>
@@ -332,7 +341,11 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
           <Link href={`/simple/meetings/${m.id}`} className={LINK}>{m.title}</Link>
         </h2>
         {/* qa-simple-decide-11: two reviews of one PRD told apart by their day and "live". */}
-        <span className="simple-meta" data-testid="meeting-group-when">{[momentWords(m.started_at, zone, true), m.status === "live" ? "live" : null, m.prd.title].filter(Boolean).join(" · ")}</span>
+        {/* qa4-simple-decide-21: the PRD's name only when the title does not already say it, with or
+            without the kind word its document's title may carry ("Usage alerts PRD", qa4-simple-prd-28). */}
+        <span className="simple-meta" data-testid="meeting-group-when">
+          {[momentWords(m.started_at, zone, true), m.status === "live" ? "live" : null, m.title.includes(m.prd.title.replace(/\s+PRD$/, "")) ? null : m.prd.title].filter(Boolean).join(" · ")}
+        </span>
       </div>
       {minutes?.summary && <p>{minutes.summary}</p>}
       {filtered && (
@@ -381,6 +394,18 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
           <ul className="list-disc pl-5">{minutes.waits.map((w, i) => <li key={i}>{w.what}{w.on.length ? ` · on ${w.on.map((p) => p.name).join(", ")}` : ""}</li>)}</ul>
         </div>
       )}
+      {/* qa4-simple-decide-32: the notes and comments the meeting's minutes list. */}
+      {(["note", "comment"] as const).map((kind) => {
+        const notes = (g.notes ?? []).filter((n) => n.kind === kind);
+        return notes.length > 0 && (
+          <div key={kind}>
+            <h3 className="text-[18px] leading-[26px] font-[650]">{kind === "note" ? "Notes" : "Comments"}</h3>
+            <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid={`meeting-group-${kind}s`}>
+              {notes.map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+            </ul>
+          </div>
+        );
+      })}
       <h3 className="text-[18px] leading-[26px] font-[650]">Decisions</h3>
       {g.decisions.length ? <Rows rows={g.decisions} /> : <p className="simple-meta">None.</p>}
     </section>

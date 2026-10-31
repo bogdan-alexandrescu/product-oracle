@@ -44233,7 +44233,7 @@
           "simple"
         ],
         "summary": "Undo Simple Chat Card",
-        "description": "Undo the change an applied card made (its author, in its session).",
+        "description": "Undo the change an applied card made: whoever its Apply would let apply it now (403\nwith the reason otherwise; ``ChatCardOut.can_undo``).",
         "operationId": "undo_simple_chat_card",
         "security": [
           {
@@ -59100,6 +59100,11 @@
               }
             ],
             "title": "May With Dependents"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo",
+            "default": false
           }
         },
         "type": "object",
@@ -59488,6 +59493,33 @@
           "ended": {
             "type": "boolean",
             "title": "Ended"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "ended_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended_by_itself": {
+            "type": "boolean",
+            "title": "Ended By Itself",
+            "default": false
           }
         },
         "type": "object",
@@ -73743,6 +73775,17 @@
             ],
             "title": "Author Id"
           },
+          "author_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Name"
+          },
           "anchor": {
             "anyOf": [
               {
@@ -76629,6 +76672,14 @@
           "rationale": {
             "type": "string",
             "title": "Rationale"
+          },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
           },
           "rater_id": {
             "anyOf": [
@@ -101101,6 +101152,11 @@
           "verified": {
             "type": "boolean",
             "title": "Verified"
+          },
+          "at_risk": {
+            "type": "boolean",
+            "title": "At Risk",
+            "default": false
           }
         },
         "type": "object",
@@ -112386,6 +112442,29 @@
             ],
             "title": "Revoked At"
           },
+          "revoked_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By"
+          },
+          "revoked_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By Name"
+          },
           "revoked_reason": {
             "anyOf": [
               {
@@ -115586,6 +115665,14 @@
             "type": "array",
             "title": "Decisions"
           },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingNote"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
           "delivery": {
             "anyOf": [
               {
@@ -118729,6 +118816,30 @@
         "title": "SimpleSlice",
         "description": "plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;\nan item in one milestone has one slice, F-05). Its dates are Oracle's placement inside\nthe milestone by the PRD's order words (``estimated``)."
       },
+      "SimpleStartMember": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "can_change"
+        ],
+        "title": "SimpleStartMember"
+      },
       "SimpleStartOptions": {
         "properties": {
           "prds": {
@@ -118740,7 +118851,7 @@
           },
           "members": {
             "items": {
-              "$ref": "#/components/schemas/SimplePersonRef"
+              "$ref": "#/components/schemas/SimpleStartMember"
             },
             "type": "array",
             "title": "Members"
@@ -129550,6 +129661,29 @@
           "kind": {
             "type": "string",
             "title": "Kind"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "wrote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wrote"
           }
         },
         "type": "object",

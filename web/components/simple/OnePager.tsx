@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button, LinkButton } from "@/components/ds";
-import { clock, FlowPanel } from "@/components/simple/FlowVisual";
+import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
@@ -15,6 +15,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { downloadedNote } from "@/lib/export-note";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type View = Schemas["OnePagerOut"];
@@ -92,7 +93,7 @@ const TINT: Record<Line["state"], string> = {
  * API's can_* fields. Inside a review meeting (S8, `sessionId`), its line edits and decisions
  * go through the meeting's session and become the meeting's decisions.
  */
-export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; sessionId?: string; refresh?: string; onChanged?: () => void }) {
+export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onChanged }: { doc: string; sessionId?: string; meetingDecisionIds?: string[]; refresh?: string; onChanged?: () => void }) {
   const q = useQuery(`simple-one-pager|${doc}`, () =>
     unwrap(api.GET("/v1/simple/one-pagers/{doc}", { params: { path: { doc } } })),
   );
@@ -143,6 +144,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const [presenting, setPresenting] = useState(false);
   // e2e-pdf-export: what the download says ("PDF downloaded", and its pages past one).
   const [saved, setSaved] = useDownloadNote();
+  // qa4-simple-prd-23: Export PDF says it is working while the file is made.
+  const [exporting, setExporting] = useState(false);
   // qa-simple-prd-24: leaving full screen (Esc) ends presenting too.
   useEffect(() => {
     const on = () => {
@@ -196,6 +199,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     const box = document.getElementById(`edit-${editing}`) as HTMLTextAreaElement | null;
     box?.focus();
     box?.select();
+    // qa4-simple-prd-16: the editor and its Save / Cancel come into view.
+    box?.closest("form")?.scrollIntoView?.({ block: "nearest" });
   }, [editing]);
   // qa-simple-prd-16: Escape closes a line's sources, unless a dialog over them takes it.
   useEffect(() => {
@@ -216,6 +221,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   }, []);
   useLayoutEffect(() => placeNotes(margin.current));
   const phone = usePhone();
+  const meId = useMe().me?.user_id ?? null;
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {
@@ -251,6 +257,9 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     numbers.set(l.id, i + 1);
     words.set(l.id, quoteLine(l.metric ? l.metric.name : l.text));
   });
+  // qa4-simple-prd-32: a flow's note names its section as this page does (the block it reads under).
+  const sectionNames: Record<string, string> = Object.fromEntries(v.sections.map((s) => [s.key, s.heading]));
+  v.blocks.forEach((b) => b.lines.forEach((l) => l.source_keys.forEach((k) => (sectionNames[k] = b.title))));
 
   async function act(run: () => Promise<unknown>) {
     setBusy(true);
@@ -291,19 +300,24 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
 
   async function exportPdf() {
     setError(null);
+    setExporting(true);
     try {
       const call = api.GET("/v1/simple/one-pagers/{doc}/pdf", { params: { path: { doc } }, parseAs: "blob" });
       const blob = (await unwrap(call)) as Blob;
-      const name = `${v.document.title.replace(/[\\/:*?"<>|]+/g, " ").trim()} v${v.version} one-pager.pdf`;
+      // qa4-simple-prd-23: the file says which text it holds when a working draft waits.
+      const name = `${v.document.title.replace(/[\\/:*?"<>|]+/g, " ").trim()} v${v.version}${draftShown ? (v.published_at ? " published" : " last version") : ""} one-pager.pdf`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = name;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setSaved(downloadedNote("PDF", (await call).response, "shorten it to fit one"));
+      const note = downloadedNote("PDF", (await call).response, "shorten it to fit one");
+      setSaved(draftShown ? note.replace("PDF downloaded", `PDF downloaded · version ${v.version}, without the working draft's changes`) : note);
     } catch (e) {
       setError(errorMessage(e));
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -340,13 +354,28 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const heldChecks = v.needs_look.filter((x) => x.kind === "check");
   const prdLooks = v.needs_look.filter((x) => x.kind !== "check");
   const startWhy = v.decider ? `Ask ${v.decider.name} or an owner to start a review` : "Ask an owner to start a review";
+  // qa4-simple-prd-26: a reader who can take no part in a review (no edit, no proposal) sees no Start review.
+  const startShown = !sessionId && (v.can_start || v.can_edit || v.can_propose);
+  // qa4-simple-prd-2: on a phone the reason is its own line under the buttons, over nothing.
+  const startWhyLine = startShown && !v.can_start && (
+    <span
+      id="start-review-why"
+      data-testid="start-review-why"
+      className={phone ? "basis-full text-[13px] leading-[17px] text-text2" : "absolute top-full right-0 z-[1] mt-1 w-max max-w-[240px] text-right text-[13px] leading-[17px] text-text2"}
+    >
+      {startWhy}
+    </span>
+  );
   const actions = presenting ? (
     <button type="button" className={btn(phone)} onClick={stopPresenting}>Stop presenting</button>
   ) : (
     <>
       <button type="button" className={btn(phone)} onClick={present}>{!phone && <Glyph d={PRESENT} />}Present</button>
-      <button type="button" className={btn(phone)} onClick={exportPdf}>{!phone && <Glyph d={PDF} />}Export PDF</button>
-      {!sessionId && (
+      <button type="button" className={`${btn(phone)} disabled:cursor-wait disabled:opacity-60`} onClick={exportPdf} disabled={exporting} aria-busy={exporting}>
+        {!phone && <Glyph d={PDF} />}
+        {exporting ? "Exporting…" : "Export PDF"}
+      </button>
+      {startShown && (
         // qa-simple-prd-p3-28: the reason sits under the disabled button, not in the row.
         <span className="relative inline-flex">
           <button
@@ -359,20 +388,19 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           >
             {!phone && <Glyph d={REVIEW} />}Start review
           </button>
-          {!v.can_start && (
-            <span id="start-review-why" data-testid="start-review-why" className="absolute top-full right-0 z-[1] mt-1 w-max max-w-[240px] text-right text-[13px] leading-[17px] text-text2">
-              {startWhy}
-            </span>
-          )}
+          {!phone && startWhyLine}
         </span>
       )}
       {/* qa-simple-prd-p3-28: the four actions in one style; in a meeting it opens in a new tab (qa-simple-decide). */}
       <Link className={`${btn(phone)} ${phone ? TAP44 : ""}`} href={`/documents/${v.document.slug}`} {...(sessionId ? { target: "_blank", rel: "noopener" } : {})}>
-        Open the detailed view{sessionId ? " (new tab)" : ""}
+        {/* qa4-simple-prd-34: it says it leaves Simple for Detailed. */}
+        Open in Detailed{sessionId ? " (new tab)" : ""}
       </Link>
+      {phone && startWhyLine}
     </>
   );
-  const toast = <DownloadNote note={saved} className="simple-noprint" />;
+  // qa4-simple-prd-23: with a working draft waiting, the note says the file is the version without it.
+  const toast = <DownloadNote note={saved} className="simple-noprint max-w-[min(420px,calc(100vw-2rem))]" />;
 
   return (
     <div
@@ -385,7 +413,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
         <div role="status" aria-label="Working draft" className="simple-noprint flex flex-wrap items-center gap-3 border-b border-[var(--simple-rule)] bg-[var(--simple-edited)] px-4 py-2 text-base">
           <strong>Working draft</strong>
           <span>· {v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}</span>
-          <span>· published v{v.draft.base_version ?? v.version} stays live until approved</span>
+          {/* qa4-simple-prd-3: a PRD never published is not called published. */}
+          <span>{v.published_at ? `· published v${v.draft.base_version ?? v.version} stays live until approved` : `· nothing is published until approved; others read v${v.draft.base_version ?? v.version}`}</span>
           {v.draft.decider_approved && (v.draft.waiting_on.length > 0 || v.draft.blocked_by.length > 0) && (
             <span>· Approved in {v.draft.approved_in ?? "the meeting"} · not yet published: {heldWords(v.draft)}</span>
           )}
@@ -409,7 +438,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       )}
       {!draftShown && v.changes_in_review > 0 && !presenting && (
         <div role="status" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
-          {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · you read the published version
+          {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · {v.published_at ? "you read the published version" : `you read version ${v.version}, not published yet`}
         </div>
       )}
       {/* oracle.simple.quality: Oracle's build failed its checks twice; the API names them to owners only. */}
@@ -435,7 +464,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       )}
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
-      <div className={`mx-auto flex max-w-[1180px] flex-col gap-5 px-12 pt-[26px] max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
+      {/* qa4-simple-prd-5: presenting, the header sits over the page's own centred column. */}
+      <div className={`mx-auto flex ${presenting && !planShown ? "max-w-[852px] px-4 max-[767px]:px-4" : sessionId ? "max-w-[1180px] px-0" : "max-w-[1180px] px-12 max-[767px]:px-4"} flex-col gap-5 pt-[26px] max-[767px]:gap-3.5 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
         <PrdHeader
           inMeeting={!!sessionId}
           v={v}
@@ -463,12 +493,14 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           margin stay under it inside a review meeting, and whenever there is something to review
           (a working draft, changes in review or margin notes; BGD 2026-10-28), so the people
           Remind sends here can read and decide them. */}
+      {/* qa4-simple-decide-26/27: in a meeting the stage pads the page once; the card, its title and actions share one left edge. */}
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
-      <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
-        <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
-          {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} />}
+      <div className={`mx-auto grid gap-6 py-6 ${sessionId && !presenting ? "px-0" : "px-4"} ${presenting ? "max-w-[852px]" : "max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]"}`} data-testid="one-pager-columns">
+        <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId && !presenting ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
+          {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} />}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
-            <section key={b.key} aria-label={b.title} className="mt-5">
+            // qa4-simple-prd-21: the first section starts at the card's own top padding.
+            <section key={b.key} aria-label={b.title} className="mt-5 first:mt-0">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
               {b.kind === "timeline" ? (
                 <div className="mt-2" aria-label="Timeline strip">
@@ -560,6 +592,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                                 // qa-simple-prd-p3-1: hidden, a touch on it opens nothing. qa-simple-prd-p3-25: on a desktop it
                                 // always sits in the room kept at the line's end, so showing it moves no words.
                                 data-edit-for={l.id}
+                                // qa4-simple-prd-35: one Tab stop per line, its words; the keyboard edits from the line's sources (Enter on it).
+                                tabIndex={-1}
                                 className={`simple-noprint flex-none text-sm whitespace-nowrap underline focus:opacity-100 max-md:min-h-11 max-md:min-w-11 max-md:px-3 ${
                                   tapped === l.id
                                     ? "opacity-100 max-md:static md:absolute md:top-0 md:right-0"
@@ -597,7 +631,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                           // The flows review (2026-10-30: only once a flow exists or is being drawn): a bet's flow is the same row as a roadmap card's
                           // (the live thumbnail and its states), opened in place.
                           <div className="simple-noprint" aria-label={`User flow of ${words.get(l.id)}`} role="group">
-                            <FlowPanel row subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} openLabel={`Flow for ${words.get(l.id)}`} />
+                            <FlowPanel row subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} openLabel={`Flow for ${words.get(l.id)}`} sectionNames={sectionNames} />
                           </div>
                         )}
                         {l.decisions.length > 0 && (
@@ -632,17 +666,32 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                               );
                             })}
                             {l.decisions.length > 0 && <p className="mb-2 text-sm text-text2">Decided in {l.decisions.map((d) => `D-${d.number} ${d.title}`).join(", ")}</p>}
+                            {(v.can_edit || v.can_propose) && !presenting && (
+                              <button
+                                type="button"
+                                className="mr-3 text-sm underline"
+                                onClick={() => {
+                                  setOpen(null);
+                                  setDiscarding(false);
+                                  setEditing(l.id);
+                                  setDraftText(l.words ?? l.full ?? l.text);
+                                }}
+                              >
+                                {v.can_edit ? "Edit this line" : "Propose wording"}
+                              </button>
+                            )}
                             <Link className="underline" href={`/documents/${v.document.slug}#${l.source_keys[0]}`}>Open the detailed view</Link>
                             <button type="button" className="ml-3 text-sm underline" onClick={() => setOpen(null)}>Close</button>
                           </div>
                         )}
                       </div>
                       {/* Phone: the margin notes move under their line. */}
-                      <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
+                      <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />)}</div>
                     </li>
                   ))}
                   {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">{b.missing ? "Not in the PRD yet" : "Not written yet"}</li>}
-                  {b.key === "problem" && (
+                  {/* qa4-simple-prd-12: said once: not again when the problem's own words already name them. */}
+                  {b.key === "problem" && !(b.who && b.lines.some((l) => norm(l.full ?? l.text).includes(norm(b.who!)))) && (
                     // 2026-10-30: who has the problem, from the PRD's users or personas section.
                     <li className="list-none px-2 text-base" data-testid="problem-who">
                       {b.who ? `Who has it: ${b.who}` : "Who has it is not in the PRD yet"}
@@ -658,10 +707,19 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           {v.notes.length === 0 && <p className="text-sm font-semibold uppercase tracking-wide text-text-faint">Changes and proposals</p>}
           {[...v.notes].sort((a, b) => (numbers.get(a.line_id) ?? 0) - (numbers.get(b.line_id) ?? 0)).map((n) => (
             <div key={n.change_id} data-note-for={n.line_id} data-change={n.change_id} className="absolute inset-x-0">
-              <MarginNote {...{ n, quote: words.get(n.line_id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide }} />
+              <MarginNote {...{ n, quote: words.get(n.line_id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />
             </div>
           ))}
-          {v.notes.length === 0 && <p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>}
+          {/* qa4-simple-decide-25: in a meeting, once its edits are published, the margin says where they went;
+              only when this meeting decided a line, not an earlier one. */}
+          {v.notes.length === 0 &&
+            (sessionId && v.blocks.some((b) => b.lines.some((l) => l.decisions.some((d) => meetingDecisionIds.includes(d.id)))) ? (
+              <p className="mt-1 text-base text-text2" data-testid="margin-published">
+                No changes waiting. Version {v.version} is published; “Decided in” under a line links to the decision that changed it.
+              </p>
+            ) : (
+              <p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>
+            ))}
         </aside>
       </div>
       )}
@@ -669,9 +727,10 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   );
 }
 
+const norm = (x: string) => x.replace(/…$/, "").replace(/[.\s]+$/, "").replace(/\s+/g, " ").trim().toLowerCase();
+
 /** A section's row the line was read from: the same words, or the line's words start it. */
 function isSource(row: string, l: Line): boolean {
-  const norm = (x: string) => x.replace(/…$/, "").replace(/\s+/g, " ").trim().toLowerCase();
   const r = norm(row);
   const w = norm(l.metric ? l.metric.name : (l.full ?? l.text));
   return !!r && !!w && (r === w || r.startsWith(w) || w.startsWith(r) || r.includes(w));
@@ -713,7 +772,8 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
       {!phone && (
         <div className="flex items-center gap-2.5">
           {!presenting && !inMeeting && <BackLink />}
-          <span className="flex-1" />
+          {/* qa4-simple-decide-26: in a meeting the actions start at the card's left edge, not over the margin. */}
+          {!inMeeting && <span className="flex-1" />}
           {actions}
         </div>
       )}
@@ -786,7 +846,7 @@ function placeNotes(el: HTMLElement | null) {
 }
 
 function MarginNote({
-  n, quote: line, busy, diff, setDiff, wide, setWide, undo, decide,
+  n, quote: line, busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting,
 }: {
   n: Note;
   quote: string;
@@ -797,13 +857,19 @@ function MarginNote({
   setWide: (id: string | null) => void;
   undo: (n: Note) => void;
   decide: (n: Note, a: "accept" | "decline") => void;
+  meId: string | null;
+  inMeeting: boolean;
 }) {
   const zone = useCompanyZone();
+  // qa4-simple-decide-19: in a meeting, its one moment format ("Fri Oct 30, 8:18 PM"); the meeting names the zone.
+  const when = (at: string) => (inMeeting ? meetingMoment(at, zone) : clock(at, zone));
   // The note names its line by the words it had (they stay put while the line changes).
   const quote = quoteLine(n.before) || line;
   const widened = wide === n.change_id;
   const shown = diff === n.change_id;
   const words = wordDiff(n.before, n.after);
+  // qa4-simple-prd-17/20: the signed-in person is always "You", in the past tense like a change.
+  const who = n.by === meId || n.can_undo ? "You" : n.by_name;
   // Escape closes the note's flow dialog, as the page's other dialogs.
   useEffect(() => {
     if (!widened) return;
@@ -822,8 +888,8 @@ function MarginNote({
     >
       <p>
         {n.kind === "change"
-          ? `${n.can_undo ? "You" : n.by_name} changed ${quote} · ${clock(n.at, zone)}${n.meeting_title ? `, in ${n.meeting_title}` : n.in_meeting ? ", in the meeting" : ""}`
-          : `${n.can_undo ? "You propose" : `${n.by_name} proposes`} new wording for ${quote} · ${clock(n.at, zone)}`}
+          ? `${who} changed ${quote} · ${when(n.at)}${n.meeting_title ? `, in ${n.meeting_title}` : n.in_meeting ? ", in the meeting" : ""}`
+          : `${who} proposed new wording for ${quote} · ${when(n.at)}`}
       </p>
       {/* qa-simple-prd-35: a proposal shows its words at once. */}
       {n.kind === "proposal" && <p className="mt-1 text-[15px]" data-testid="proposal-words">“{n.after}”</p>}
@@ -832,7 +898,7 @@ function MarginNote({
         {n.can_undo && <Button disabled={busy} onClick={() => undo(n)}>{n.kind === "proposal" ? "Withdraw" : "Undo"}</Button>}
         {n.can_decide && <Button variant="primary" disabled={busy} onClick={() => decide(n, "accept")}>Accept</Button>}
         {n.can_decide && <Button disabled={busy} onClick={() => decide(n, "decline")}>Decline</Button>}
-        <button type="button" className="text-sm underline" aria-expanded={shown} onClick={() => setDiff(shown ? null : n.change_id)}>See before/after</button>
+        <button type="button" className="text-sm underline" aria-expanded={shown} onClick={() => setDiff(shown ? null : n.change_id)}>{shown ? "Hide before/after" : "See before/after"}</button>
         {n.adds_feature && (
           <button type="button" aria-label={`Flow for ${quote}`} className="h-8 w-12 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] text-xs" onClick={() => setWide(widened ? null : n.change_id)}>
             {n.flow ? "Flow" : "⋯"}
@@ -847,14 +913,17 @@ function MarginNote({
           {n.sections.map((s) => {
             const was = plainLines(s.before).map((x) => x.text);
             const now = plainLines(s.after).map((x) => x.text);
-            const gone = was.filter((x) => !now.includes(x));
-            const added = now.filter((x) => !was.includes(x));
+            // qa4-simple-prd-18: the line's own before and after are said once, above; a section
+            // box shows only what else changed in it.
+            const own = (x: string, y: string) => norm(x) === norm(y) || norm(x).startsWith(norm(y));
+            const gone = was.filter((x) => !now.includes(x) && !own(x, n.before));
+            const added = now.filter((x) => !was.includes(x) && !own(x, n.after));
+            if (!gone.length && !added.length) return null;
             return (
               <div key={s.key} className="rounded border border-[var(--simple-rule)] p-2">
                 <p className="font-semibold">In “{s.heading}”</p>
                 {gone.map((x, i) => <p key={`g${i}`}><del>{x}</del></p>)}
                 {added.map((x, i) => <p key={`a${i}`}><ins>{x}</ins></p>)}
-                {!gone.length && !added.length && <p>No other change</p>}
               </div>
             );
           })}
@@ -877,17 +946,42 @@ function MarginNote({
  * "Needs a look" (2026-10-30): a quiet note for the PRD's owners (the API sends the items to
  * them only) naming what to look at and where. One list any of the one-pager's checks can add to.
  */
-export function NeedsALook({ items }: { items: Schemas["OnePagerLook"][] }) {
+export function NeedsALook({ items, blocks = [], sections = [] }: { items: Schemas["OnePagerLook"][]; blocks?: View["blocks"]; sections?: View["sections"] }) {
+  // qa4-simple-prd-11: each item names the page's own section (not the PRD's heading) and takes
+  // the reader to the first line it concerns.
+  const at = (x: Schemas["OnePagerLook"]) => {
+    const hits = blocks.flatMap((b) => b.lines.filter((l) => l.source_keys.some((k) => x.source_keys.includes(k))).map((l) => ({ block: b.title, line: l.id })));
+    const names = [...new Set(hits.map((h) => h.block))];
+    const prd = x.source_keys.length ? x.source_keys.map((k) => sections.find((s) => s.key === k)?.heading ?? null).filter((h): h is string => !!h) : [];
+    return { names, line: hits[0]?.line ?? null, prd: prd.length ? prd : x.where };
+  };
+  const go = (line: string) => {
+    const el = document.querySelector<HTMLElement>(`[data-line="${line}"]`);
+    el?.scrollIntoView({ block: "center" });
+    el?.querySelector<HTMLElement>('[data-testid="one-pager-line-text"]')?.focus({ preventScroll: true });
+  };
   return (
     <section aria-label="Needs a look" className="simple-noprint mb-4 rounded border border-dashed border-[var(--simple-rule)] px-3 py-2 text-sm text-text2">
       <h2 className="font-semibold">Needs a look</h2>
       <ul className="mt-1 space-y-1">
-        {items.map((x, i) => (
-          <li key={i} data-kind={x.kind}>
-            {x.text}
-            {x.where.length > 0 && <span className="text-text-faint"> In: {x.where.join(", ")}</span>}
-          </li>
-        ))}
+        {items.map((x, i) => {
+          const w = at(x);
+          return (
+            <li key={i} data-kind={x.kind}>
+              {x.text}
+              {w.names.length > 0 && w.line ? (
+                <>
+                  {" "}
+                  <button type="button" className="text-text-faint underline" data-testid="needs-look-go" onClick={() => go(w.line!)}>
+                    In: {w.names.join(", ")}
+                  </button>
+                </>
+              ) : (
+                w.prd.length > 0 && <span className="text-text-faint"> In the PRD, not on this page: {w.prd.join(", ")}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

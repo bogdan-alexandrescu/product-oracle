@@ -165,6 +165,7 @@ def _sample(kind: str, theme: Theme) -> ExportVersion:
         theme=theme,
         theme_source="preview",
         all_sections=list(sections),
+        dates_in_words=True,
     )
 
 

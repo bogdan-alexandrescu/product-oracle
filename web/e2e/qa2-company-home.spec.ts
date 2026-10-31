@@ -110,12 +110,12 @@ test.describe("at 1440", () => {
     await openHome(page);
     const invite = page.getByTestId("setup-row-invite");
     await expect(invite).toHaveAttribute("data-done", "true");
-    await expect(invite.getByTestId("setup-status")).toHaveText(/^\d+ people · 2 invited$/);
+    await expect(invite.getByTestId("setup-status")).toHaveText(/^\d+ people · 1 invited$/);
     await expect(invite.getByTestId("setup-action")).toHaveText("Change");
     const build = page.getByTestId("setup-row-build_baseline");
     await expect(build).toHaveAttribute("data-done", "true");
     await expect(build.getByTestId("setup-action")).toHaveText("Review");
-    await expect(build.getByTestId("setup-action")).toHaveAttribute("href", "/baseline");
+    await expect(build.getByTestId("setup-action")).toHaveAttribute("href", "/baseline?from=setup");
     // A step still to do keeps Open.
     await expect(page.getByTestId("setup-row-connect").getByTestId("setup-action")).toHaveText("Open");
   });

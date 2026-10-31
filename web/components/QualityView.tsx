@@ -141,6 +141,16 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   const reportsQ = useQuery(`quality-reports|${versionId}`, () =>
     versionId ? unwrap(api.GET("/v1/evaluation-reports", { params: { query: { version_id: versionId } } })) : Promise.resolve(undefined),
   );
+  // qa4-docs-42: the opening section that carries the document's title reads as the
+  // Introduction, as the Document tab names it.
+  const docTitle = d?.title?.trim();
+  const sections = useMemo(
+    () =>
+      (versionQ.data?.sections ?? []).map((s, i) =>
+        i === 0 && s.level === 1 && docTitle && s.heading.trim() === docTitle ? { ...s, heading: "Introduction" } : s,
+      ),
+    [versionQ.data, docTitle],
+  );
   const jobs = useMemo(() => [...(jobsQ.data ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)), [jobsQ.data]);
   const reports = reportsQ.data;
 
@@ -433,7 +443,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
       owner={ownerOf(item.owner_id)}
       draft={draftOf(item.key)}
       onDraft={(dr) => setDrafts((prev) => ({ ...prev, [item.key]: dr }))}
-      sections={versionQ.data?.sections ?? []}
+      sections={sections}
       nameOf={nameOf}
       busy={busy === "rate"}
       onSubmit={() => submit(item)}
@@ -493,6 +503,12 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   );
 
   const done = latestJob && latestJob.id === watched && latestJob.status === "succeeded" ? latestJob : null;
+  // qa4-docs-15: a queued or running review says so in the banner, with when it was asked or started.
+  const activeLine = active
+    ? active.status === "running"
+      ? `Oracle is reviewing v${n}, started ${when(active.started_at ?? active.created_at, zone)}. This page updates when it ends.`
+      : `Oracle will review v${n} shortly; asked at ${when(active.created_at, zone)}. This page updates when it ends.`
+    : null;
 
   return (
     <Page>
@@ -553,7 +569,14 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
                 </>
               )
             )}
+            {activeLine && (
+              <span className="mt-1 block font-semibold" data-testid="job-active">
+                {activeLine}
+              </span>
+            )}
           </Notice>
+        ) : activeLine ? (
+          <Notice testId="job-active">{activeLine}</Notice>
         ) : (
           readiness && <Notice testId="no-model-review">No model review for v{n} yet.{mayQueue ? "" : " An approver can queue one."}</Notice>
         )}
@@ -824,6 +847,7 @@ function CriterionInspector({
                   <span className="text-[13px] text-text2">{zoneDay(h.created_at, zone)}</span>
                 </span>
                 <p>{h.rationale}</p>
+                {tags(h.section_keys ?? [])}
               </Said>
             ))}
           </dl>
@@ -852,6 +876,8 @@ function CriterionInspector({
               <span className="text-[13px] text-text2">{zoneDay(mine.created_at, zone)}</span>
             </span>
             <p className="break-words">{mine.rationale}</p>
+            {/* qa4-docs-42: the sections picked with the rating. */}
+            {tags(mine.section_keys ?? [])}
             {mayRate && <p className="text-[13px] text-text2">Submit again to change your rating.</p>}
           </div>
         )}

@@ -52,10 +52,10 @@ async function endOne(page: Page) {
   await page.getByRole("button", { name: "Add comment" }).click();
   // qa-simple-decide-1/2: a comment shows under its box, not among the decisions.
   await expect(page.getByTestId("meeting-comment")).toContainText("Ship the checklist first");
-  await expect(page.getByRole("region", { name: "All decisions" })).not.toContainText("Ship the checklist first");
+  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).not.toContainText("Ship the checklist first");
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
-  await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
+  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();

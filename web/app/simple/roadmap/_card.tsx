@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
+import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
 import { useScreenSubject } from "@/lib/screen-subject";
@@ -22,6 +23,7 @@ import {
   type Change,
   type Flag,
   type Item,
+  yearSpan,
 } from "./_lib";
 
 /** What a change asks the engine, built by the page and sent through `act`. */
@@ -200,9 +202,14 @@ export function Callout({
   before?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const words = useRef<HTMLSpanElement>(null);
   const [left, setLeft] = useState(Math.max(4, x));
   useLayoutEffect(() => {
-    const w = ref.current?.offsetWidth ?? 0;
+    // qa4-simple-roadmap-24: the callout's whole width, its words uncut (a cut reason's
+    // overflow added back), so a callout too wide for the room right of its bar flips left of
+    // it whole rather than staying right with its sentence cut at the chart's edge.
+    const span = words.current;
+    const w = Math.min((ref.current?.offsetWidth ?? 0) + (span ? Math.max(0, span.scrollWidth - span.clientWidth) : 0), Math.max(160, maxX - 8));
     // Right of the bar when it fits; else left of the bar; else slid inside, never past either edge.
     if (x + w + 4 <= maxX) setLeft(Math.max(4, x));
     else if (before != null && before - w >= 4) setLeft(before - w);
@@ -214,12 +221,17 @@ export function Callout({
       data-testid="broken-callout"
       data-item={item.key}
       style={{ left, top: y + 3, minHeight: h - 6, maxWidth: Math.max(160, maxX - 8) }}
-      className="pointer-events-none absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 [&_button]:pointer-events-auto"
+      className="pointer-events-none absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 focus-within:z-20 hover:z-20 [&_button]:pointer-events-auto"
     >
       {/* fix4 review (qa-simple-roadmap-6): a phone has no hover for a cut reason's full
-       * words, so there the reason wraps inside the callout instead. */}
+       * words, so there the reason wraps inside the callout instead. qa4-simple-roadmap-24: on
+       * a desktop the reason takes the callout's room (no 360 px cap); one still cut at the
+       * chart's edge wraps whole on hover or keyboard focus. */}
       <span
-        className={`min-w-0 text-sm text-crit ${compact ? "max-w-[220px] leading-[18px] break-words" : "max-w-[360px] truncate"}`}
+        ref={words}
+        tabIndex={compact ? undefined : 0}
+        data-testid="broken-callout-reason"
+        className={`min-w-0 text-sm text-crit ${compact ? "max-w-[220px] leading-[18px] break-words" : "pointer-events-auto truncate rounded outline-none hover:whitespace-normal focus:whitespace-normal focus-visible:ring-2 focus-visible:ring-crit"}`}
         title={flag.reason}
       >
         ⚠ {flag.reason}
@@ -285,7 +297,7 @@ export function SuggestionPopover({
       className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
     >
       <p className="text-sm font-semibold">
-        Oracle suggests {shortDay(s.start_date)} – {shortDay(s.end_date)}
+        Oracle suggests {yearSpan(s.start_date, s.end_date)}
       </p>
       <p className="mt-1 text-sm text-text2">{s.basis}</p>
       {editing ? (
@@ -346,10 +358,11 @@ export function SuggestionPopover({
   );
 }
 
-function names(ids: string[], items: Map<string, Item>): string {
+function names(ids: string[], items: Map<string, Item>, empty = "Nothing"): string {
   const t = ids.map((id) => items.get(id)?.title).filter(Boolean);
   // fix4 qa-simple-roadmap-42: empty values read like "No owner yet", capitalised.
-  return t.length ? t.join(", ") : "No other items";
+  // qa4-simple-roadmap-42: "Nothing" / "None", not "No other items".
+  return t.length ? t.join(", ") : empty;
 }
 
 const OP_WORDS: Record<string, string> = {
@@ -415,7 +428,8 @@ export function LooksLike({
                 )
               }
             >
-              Merge
+              {/* qa4-simple-roadmap-39: says what happens: the draft goes into that item. */}
+              Merge into {m.title}
             </Button>
           )}
         </div>
@@ -607,6 +621,15 @@ export function FloatingCard({
     };
   }, [item.id, onTalkCards]);
   const waiting = talkCards && talkCards.id === item.id ? talkCards.cards.filter((c) => c.status === "open") : [];
+  // qa4-simple-roadmap-41: the red flags on the roadmap now; the talk's change cards list only the ones a change brings.
+  const known = useMemo(
+    () => new Set([...items.values()].flatMap((i) => i.flags.filter((f) => f.state === "red").map((f) => flagKey(i.id, f.kind, f.subject)))),
+    [items],
+  );
+  // qa4-simple-roadmap-13: a cut item sits below the line; its old date and milestone flags
+  // (and their fixes) no longer apply. Only "others still depend on it" stays.
+  const cut = item.status === "cut";
+  const flags = cut ? item.flags.filter((f) => f.kind === "cut_with_dependents") : item.flags;
   useScreenSubject(
     { kind: "roadmap_item", subject: { item_id: item.id, key: item.key } },
     item.title,
@@ -747,6 +770,11 @@ export function FloatingCard({
           Oracle is drafting…
         </p>
       )}
+      {cut && (
+        <p className="mt-1 text-sm text-text2" data-testid="item-cut">
+          Cut: it sits below the line, out of the plan
+        </p>
+      )}
       {item.merged_into && (
         <p className="mt-1 text-sm text-text2" data-testid="item-merged">
           Merged into {item.merged_into.title}
@@ -797,9 +825,7 @@ export function FloatingCard({
                         style={{ background: milestoneInk(x.milestone) }}
                       />
                       <span>
-                        <b className="font-semibold">
-                          {x.code} {x.name}
-                        </b>
+                        <b className="font-semibold">{x.name}</b>
                         <span className="block text-sm text-text2">
                           {x.milestone} {x.milestone_name}
                           {x.start_date && x.end_date
@@ -847,12 +873,12 @@ export function FloatingCard({
           <dt className="text-text2">Depends on</dt>
           <dd data-testid="card-depends">{names(item.depends_on, items)}</dd>
           <dt className="text-text2">Needed by</dt>
-          <dd data-testid="card-needed">{names(item.needed_by, items)}</dd>
+          <dd data-testid="card-needed">{names(item.needed_by, items, "None")}</dd>
         </dl>
         <div>
-          {item.flags.length > 0 && (
+          {flags.length > 0 && (
             <section className="mt-3 space-y-1" data-testid="card-flags">
-              {item.flags.map((f) => (
+              {flags.map((f) => (
                 <div key={`${f.kind}-${f.subject}`}>
                   <FlagLine flag={f} />
                   {f.state === "red" && (
@@ -1038,7 +1064,7 @@ export function FloatingCard({
   );
 
   const talkPanel = (
-    <ItemTalk itemId={item.id} about={about} phone={phone} onCards={onTalkCards} />
+    <ItemTalk itemId={item.id} about={about} phone={phone} onCards={onTalkCards} known={known} />
   );
 
   return (

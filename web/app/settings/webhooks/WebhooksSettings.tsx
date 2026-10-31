@@ -114,6 +114,7 @@ export function WebhooksSettings() {
                 select(null);
                 void hooksQ.reload();
               }}
+              onDelivered={() => void hooksQ.reload()}
             />
           )
         }

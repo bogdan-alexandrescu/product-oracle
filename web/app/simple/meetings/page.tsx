@@ -93,7 +93,7 @@ function Meetings() {
               {q.data.live.map((m) => (
                 <li key={m.id} className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    <strong>{m.title}</strong> · started {when(m.started_at)} by {m.presenter.name} · {m.decisions} {m.decisions === 1 ? "decision" : "decisions"}
+                    <strong>{m.title}</strong> · started <span className="whitespace-nowrap">{when(m.started_at)}</span> by {m.presenter.name} · {m.decisions} {m.decisions === 1 ? "decision" : "decisions"}
                   </span>
                   <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>Join</Link>
                 </li>
@@ -106,23 +106,25 @@ function Meetings() {
               {upcoming.map((o) => (
                 <li key={o.occurrence_id ?? `${o.ritual_id}|${o.due_at}`} data-testid="meetings-upcoming-row" className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    <strong>{o.ritual_title}</strong> · {when(o.due_at)} · {o.length_min} min · {o.attendees.map((a) => a.name).join(", ")}
+                    {/* qa4-simple-decide-34: a time and "Pre-read" never break across lines on a phone. */}
+                    <strong>{o.ritual_title}</strong> · <span className="whitespace-nowrap">{when(o.due_at)}</span> · {o.length_min} min · {o.attendees.map((a) => a.name).join(", ")}
                     {/* qa-simple-decide-37: its pre-read and agenda before it starts. */}
                     {o.occurrence_id ? (
                       <>
                         {" · "}
                         <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/meetings?pre_read=${o.occurrence_id}`} data-testid="meetings-pre-read-link">
-                          Pre-read and agenda
+                          <span className="whitespace-nowrap">Pre-read</span> and agenda
                         </Link>
                       </>
                     ) : (
-                      <span className="simple-small"> · Pre-read not ready yet</span>
+                      <span className="simple-small"> · <span className="whitespace-nowrap">Pre-read</span> not ready yet</span>
                     )}
                   </span>
                   {o.meeting_id ? (
                     <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/meetings/${o.meeting_id}`}>Open</Link>
                   ) : o.can_start ? (
-                    <Button onClick={() => setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o })}>Start review</Button>
+                    // qa4-simple-decide-39: each row's Start review names its review for a screen reader.
+                    <Button aria-label={`Start review: ${o.ritual_title}`} onClick={() => setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o })}>Start review</Button>
                   ) : null}
                 </li>
               ))}
@@ -133,8 +135,11 @@ function Meetings() {
             <ul className="space-y-3">
               {q.data.past.map((m) => (
                 <li key={m.id} className="space-y-1">
-                  <p>
-                    <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>{m.title}</Link> · {when(m.ended_at ?? m.started_at)} · {m.decisions} {m.decisions === 1 ? "decision" : "decisions"}
+                  {/* qa4-simple-decide-7: the start, labelled, as Decisions dates a meeting by its start;
+                      qa4-simple-decide-21: the count once, the minutes' summary says it when sent. */}
+                  <p data-testid="meetings-past-row">
+                    <Link className={`${LINK} ${TAP}`} href={`/simple/meetings/${m.id}`}>{m.title}</Link> · started <span className="whitespace-nowrap">{when(m.started_at)}</span>
+                    {!m.summary && ` · ${m.decisions} ${m.decisions === 1 ? "decision" : "decisions"}`}
                   </p>
                   {m.summary ? <p className="simple-small">{m.summary}</p> : <p className="simple-small">Minutes not sent yet.</p>}
                   <Link className={`${LINK} ${TAP}`} href={`/simple/decisions?meeting=${m.id}`} data-testid="meetings-its-decisions">Its decisions</Link>

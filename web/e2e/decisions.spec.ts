@@ -79,7 +79,7 @@ test("a commenter proposes but never decides; one option is refused before it is
   const dialog = page.getByRole("dialog", { name: "Propose decision" });
   await dialog.getByLabel("Decision", { exact: true }).fill("Offer annual billing at launch");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Annual at launch");
-  await dialog.getByRole("button", { name: "Remove option 2" }).click();
+  // qa4-company-8: Remove is gone at two options; the second is left empty.
   await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
   await dialog.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(dialog).toContainText("Add at least two options");

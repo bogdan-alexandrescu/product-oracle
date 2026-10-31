@@ -16,6 +16,9 @@ class TrashItem(BaseModel):
     title: str
     # A document's kind (prd, roadmap, spec, update, ...), "intake", or a run's flow.
     kind: str
+    # qa4-docs-26: a run in the delete dialog, in words: when it ran and what it wrote.
+    created_at: datetime | None = None
+    wrote: str | None = None
 
 
 class DependentsOut(BaseModel):

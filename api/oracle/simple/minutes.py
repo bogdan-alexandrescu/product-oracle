@@ -110,7 +110,9 @@ async def record(
     from oracle.simple.models import SimpleActionItem
 
     out = Record()
-    key = f"screen:/simple/meetings/{m.id}"
+    from oracle.simple.chat import meeting_key
+
+    key = meeting_key(m.id)
     rows = await db.scalars(
         select(DiscussionMessage)
         .join(Discussion, Discussion.id == DiscussionMessage.discussion_id)

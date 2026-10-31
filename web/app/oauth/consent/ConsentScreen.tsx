@@ -30,12 +30,13 @@ const ROLE_LABEL: Record<ConsentRequest["user_role"], string> = {
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 /**
- * Where the browser returns, in words (qa-settings-41): a loopback address is "an app on this
- * computer", its host and port only in the title; any other host as it is.
+ * Where the browser returns, in words (qa-settings-41, qa4-settings-40): a loopback address is
+ * the client "on this computer", by its name, its host and port only in the title; any other
+ * host as it is.
  */
-function returnPlace(host: string): { text: string; title?: string } {
+function returnPlace(host: string, client: string): { text: string; title?: string } {
   const name = host.replace(/:\d+$/, "").toLowerCase();
-  return LOOPBACK.has(name) ? { text: "an app on this computer", title: host } : { text: host };
+  return LOOPBACK.has(name) ? { text: `${client || "the app"} on this computer`, title: host } : { text: host };
 }
 
 /**
@@ -87,9 +88,10 @@ export function ConsentScreen() {
     }
   }
 
-  const back = returnPlace(detail?.redirect_host ?? "");
+  const back = returnPlace(detail?.redirect_host ?? "", detail?.client_name ?? "");
+  // qa4-settings-40: the title names the client asking, not the protocol.
   return (
-    <AuthCard title="Connect an MCP client">
+    <AuthCard title={detail ? `Let ${detail.client_name} use Product Oracle?` : "Connect an app"}>
       {error && (
         <>
           <Notice tone="error">{error}</Notice>
@@ -148,7 +150,7 @@ export function ConsentScreen() {
             </span>
             <InfoTip label="Consent" align="end">
               The name is the one the client gave itself. After you decide, your browser returns to {back.text}.
-              Approve only if you just started this from an MCP client you trust. Access lasts until it is revoked or
+              Approve only if you just started this from an app you trust. Access lasts until it is revoked or
               unused for 30 days.
             </InfoTip>
           </div>

@@ -132,8 +132,8 @@ test("owner picker: an owner is sent to the invite form; an approver gets the li
 // no_claim: no model call is made in the mock either; proposals on locked goals are pytest's.
 test("Fill from text: the result notice, and early churn's target becomes < 8%", async ({ page }) => {
   await openBaseline(page);
-  await page.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
-  await page.getByRole("alertdialog", { name: "Read targets from 1 goal's text" }).getByRole("button", { name: "Read targets from 1 goal's text" }).click();
+  await page.getByRole("button", { name: "Fill targets from the goal's wording (1)" }).click();
+  await page.getByRole("alertdialog", { name: "Fill targets from the goal's wording (1)" }).getByRole("button", { name: "Fill targets from the goal's wording (1)" }).click();
   await expect(page.getByRole("status")).toContainText("1 goal filled.");
   const churn = page.getByTestId("goal-g.early-churn");
   await expect(churn.locator('[data-attr="target"]')).toHaveText("< 8%");

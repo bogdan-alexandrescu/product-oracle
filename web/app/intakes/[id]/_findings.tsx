@@ -81,7 +81,19 @@ export function FindingsTab({ intakeId, author, version }: { intakeId: string; a
       {!q.data ? (
         !q.error && <Loading />
       ) : q.data.length === 0 ? (
-        <Empty>No findings from private sources</Empty>
+        // qa4-work-9: what the tab is for and what to do next, not only that it is empty.
+        <Empty testId="findings-empty">
+          {author ? (
+            <>
+              Oracle has found nothing in your own sources yet.
+              <br />
+              When Oracle reads the brief with sources only you can see, what it finds shows here and you choose who else sees it. To add some, use Pin new sources in the brief&apos;s Actions menu, then read the brief again.
+            </>
+          ) : (
+            // The role note above says who shares them.
+            "No findings shared with you yet."
+          )}
+        </Empty>
       ) : (
         <ul className="flex min-w-0 flex-col gap-2">
           {q.data.map((f) => (

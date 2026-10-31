@@ -1,7 +1,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { Chip } from "@/components/ds/Chip";
-import { Page, PageHeader } from "@/components/ds/Layout";
+import { Button as DsButton } from "@/components/ds/Button";
+import { Notice, Page, PageHeader } from "@/components/ds/Layout";
 import type { FeedbackStatus, Verdict } from "@/lib/api/client";
 import { DOC_STATUS_LABEL, STATUS_LABEL, VERDICT_LABEL } from "@/lib/format";
 
@@ -136,6 +137,23 @@ export function ErrorNote({ children }: { children: ReactNode }) {
     <p role="alert" className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit">
       {children}
     </p>
+  );
+}
+
+/**
+ * qa4-shell-3: a page's read that failed: a plain sentence ("Couldn't load your PRDs."), the
+ * server's words under it, and Try again; the same on every list. Shown in place of the list,
+ * never beside its empty state or counts (qa4-shell-2), with the page's spacing below
+ * (qa4-shell-21).
+ */
+export function LoadError({ what, error, onRetry }: { what: string; error: string; onRetry: () => void }) {
+  return (
+    <div className="mb-4">
+      <Notice tone="error" testId="load-error" action={<DsButton onClick={onRetry}>Try again</DsButton>}>
+        <span className="block">Couldn&apos;t load {what}.</span>
+        {error && <span className="block font-normal">{error}</span>}
+      </Notice>
+    </div>
   );
 }
 

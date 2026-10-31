@@ -11,7 +11,8 @@ decider apply, approvers and commenters propose), so a card can never do what a 
 could not. Discard writes nothing.
 
 **Threads** are Oracle's discussions (G1): one shared thread per meeting (subject the
-meeting's screen, private to its attendees), and one per person for the Ask panel. The
+meeting's screen, keyed ``meeting_chat:<id>`` apart from Oracle's Ask panel on that page,
+private to its attendees), and one per person for the Ask panel. The
 person's line and Oracle's reply are discussion messages; the cards hang off the reply
 (``simple_chat_cards``). Oracle's reply here is deterministic (no model call), so it costs
 no llm budget.
@@ -45,8 +46,10 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision, DecisionReview
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
+from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
-from oracle.simple import change_words, changes, constraints, drafts, service, targets
+from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
+from oracle.simple import change_words, changes, constraints, dates, drafts, service, targets
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
 from oracle.simple.schemas import (
@@ -243,6 +246,88 @@ class Reply:
         self.no_change = False
 
 
+# The most of a meeting PRD's text the reader is given (its start; a PRD runs a few pages).
+PRD_TEXT = 12000
+
+
+@dataclass
+class MeetingPrd:
+    """meet-chat-right-prd: what a meeting's chat reads: the meeting's PRD (``number``: its
+    version under review, else its newest) and its items: on its roadmap, or, while that
+    version is not approved, on the version's draft roadmap (a run's items-only roadmap,
+    that version's own when it is ready); ``text``: that version's markdown."""
+
+    document: Document
+    number: int | None
+    approved: bool
+    draft: bool
+    ids: set[uuid.UUID]
+    text: str = ""
+
+    def source(self) -> str:
+        n = f" (draft {self.number})" if self.number else ""
+        where = "its draft roadmap" if self.draft else "its roadmap"
+        return f"From {self.document.title}{n} and {where}"
+
+
+def _draft_entry(read: service.Read, prd: Document, row: RoadmapItem) -> service.Entry:
+    """A draft-roadmap item as an entry: it has no roadmap, so its PRD stands in (its
+    decider decides it)."""
+    window = read.windows.get(row.horizon, read.windows["now"])
+    return service.Entry(
+        row=row, roadmap=prd, prd=prd, track=None, goal=None, window=window,
+        resolved=dates.resolve(service._candidates(row, [], {}, {}), window),
+        status=service._status(row, [], set()), milestone=service._milestone(row, None, {}),
+    )  # fmt: skip
+
+
+async def meeting_prd(db: AsyncSession, read: service.Read, rules: Any) -> MeetingPrd | None:
+    """The meeting's PRD and its items, added to ``read`` when they are on a draft roadmap
+    (None: no meeting, or a meeting module that names no PRD)."""
+    from oracle.review.models import DocumentReviewPolicy
+    from oracle.roadmap import draft_items
+
+    prd_id = getattr(rules, "prd_document_id", None) if rules is not None else None
+    prd = await db.get(Document, prd_id) if prd_id is not None else None
+    if prd is None:
+        return None
+    newest = await db.scalar(
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id == prd.id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    # The version under review is the newest; its number is named even when its own draft
+    # roadmap is not ready yet and an older version's draft gives the items.
+    number = newest.number if newest is not None else None
+    text = newest.markdown[:PRD_TEXT] if newest is not None else ""
+    approved = newest is not None and newest.approved_at is not None
+    on_roadmap = [e for e in read.entries if e.row.prd_document_id == prd.id
+                  and e.row.draft_roadmap_id is None]  # fmt: skip
+    got = None
+    if newest is not None:
+        own = await db.scalar(select(DraftRoadmap).where(
+            DraftRoadmap.prd_version_id == newest.id, DraftRoadmap.status == "ready"))  # fmt: skip
+        got = (own, await draft_items.draft_items(db, own)) if own is not None else None
+    got = got or await draft_items.latest_ready(db, prd.id)
+    if got is None or (approved and on_roadmap):
+        return MeetingPrd(prd, number, approved, False, {e.row.id for e in on_roadmap}, text)
+    _, rows = got
+    known = read.by_id()
+    drafts_ = [known.get(r.id) or _draft_entry(read, prd, r) for r in rows]
+    await service._prd_headings(db, [e for e in drafts_ if e.row.id not in known])
+    read.entries += [e for e in drafts_ if e.row.id not in known]
+    if prd.id not in read.deciders:
+        read.deciders[prd.id] = await db.scalar(
+            select(DocumentReviewPolicy.decider_id).where(
+                DocumentReviewPolicy.document_id == prd.id
+            )
+        )
+    keys = {e.row.item_key for e in drafts_}
+    ids = {e.row.id for e in drafts_} | {e.row.id for e in on_roadmap if e.row.item_key not in keys}
+    return MeetingPrd(prd, number, approved, True, ids, text)
+
+
 class Ctx:
     """What Oracle reads to answer one line: the plan as the asker sees it."""
 
@@ -267,6 +352,8 @@ class Ctx:
         # roadmap-talk: the item whose talk this is ("it"), the company's goals.
         self.item: service.Entry | None = None
         self.talk_goals: list[Any] = []
+        # meet-chat-right-prd: a meeting's chat reads only the meeting's PRD.
+        self.prd: MeetingPrd | None = None
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -274,6 +361,13 @@ class Ctx:
         self.page_document = await chat_actions.page_document(self.db, self.page)
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
+        self.prd = await meeting_prd(self.db, self.read, self.meeting)
+        if self.prd is not None:
+            # The plan's milestones of the meeting's PRD only (never another PRD's M1).
+            tracks = set(await self.db.scalars(
+                select(ProductTrack.id).where(ProductTrack.prd_document_id == self.prd.document.id)
+            ))  # fmt: skip
+            self.read.milestones = [m for m in self.read.milestones if m.track_id in tracks]
         from oracle.simple import plan
 
         views = await plan.views(self.db, {e.prd.id for e in self.read.entries if e.prd})
@@ -294,6 +388,8 @@ class Ctx:
 
     def entries(self) -> list[service.Entry]:
         assert self.read is not None
+        if self.prd is not None:
+            return [e for e in self.read.entries if e.row.id in self.prd.ids]
         return [e for e in self.read.entries if e.row.draft_roadmap_id is None]
 
     def find(self, text: str) -> service.Entry | Reply:
@@ -837,7 +933,9 @@ async def set_mode(
 
 
 async def rules_out(db: AsyncSession, principal: Any, rules: Any) -> ChatRulesOut:
-    ids = {rules.presenter_id, *(rules.change_people or [])}
+    by_itself = bool(getattr(rules, "ended_by_itself", False))
+    ended_by = getattr(rules, "ended_by", None) if rules.ended and not by_itself else None
+    ids = {rules.presenter_id, *(rules.change_people or []), *([ended_by] if ended_by else [])}
     names = await _names(db, ids)
     me = _me(principal)
     bar = meeting_bar(principal, rules)
@@ -849,6 +947,10 @@ async def rules_out(db: AsyncSession, principal: Any, rules: Any) -> ChatRulesOu
                                   name=names.get(rules.presenter_id, "someone")),
         is_presenter=me == rules.presenter_id, may_apply=bar is None,
         ask_only=not has_role(principal.role, "commenter"), ended=bool(rules.ended),
+        ended_at=getattr(rules, "ended_at", None) if rules.ended else None,
+        ended_by=SimplePersonRef(id=ended_by, name=names.get(ended_by, "someone"))
+        if ended_by else None,
+        ended_by_itself=bool(rules.ended) and by_itself,
     )  # fmt: skip
 
 
@@ -873,11 +975,20 @@ def page_of(page: str | None) -> str:
     return path if path == "/simple" or path.startswith("/simple/") else "/simple"
 
 
+def meeting_key(meeting_id: Any) -> str:
+    """A meeting chat's own subject key (meet-chat-own-key): never the meeting page's screen
+    key, which Oracle's Ask panel on that page uses for its own discussion."""
+    return f"meeting_chat:{meeting_id}"
+
+
 def _key(meeting_id: uuid.UUID | None, me: uuid.UUID, page: str | None = None) -> tuple[str, str]:
-    """A meeting's one shared thread; else the person's Ask thread on one page (the walk:
-    a thread per person and page, so a page shows only its own lines; the old per-person
-    thread, ``/simple/ask/<me>``, stays readable but is no page's)."""
-    path = f"/simple/meetings/{meeting_id}" if meeting_id else f"/simple/ask/{me}{page_of(page)}"
+    """A meeting's one shared thread (its subject the meeting's page, its key its own); else
+    the person's Ask thread on one page (the walk: a thread per person and page, so a page
+    shows only its own lines; the old per-person thread, ``/simple/ask/<me>``, stays readable
+    but is no page's)."""
+    if meeting_id:
+        return f"/simple/meetings/{meeting_id}", meeting_key(meeting_id)
+    path = f"/simple/ask/{me}{page_of(page)}"
     return path, f"screen:{path}"
 
 
@@ -1006,7 +1117,9 @@ async def thread(
             messages.append(ChatMessageOut(
                 id=m.id, author_kind="person" if person else "oracle", author_id=m.author_id,
                 author_name=names.get(m.author_id, "someone") if person else "Oracle",  # type: ignore[arg-type]
-                body=body, at=m.created_at, kind=kind,  # type: ignore[arg-type]
+                body=body,
+                at=(r.answered_at if r is not None and r.answered_at else m.created_at),
+                kind=kind,  # type: ignore[arg-type]
                 cards=by_msg.get(m.id, []), reply_to=m.reply_to, choices=choices,
                 picked=r.picked if r is not None else None, retry=kind == "failed",
                 source=_talk().source_label(m.citations),
@@ -1329,6 +1442,15 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             context["meeting"]["under_discussion"] = (nxt if live else None) or getattr(
                 prd, "title", None
             )
+        if c.prd is not None:
+            # meet-chat-right-prd: the PRD the meeting reviews, its version under review,
+            # and where its items come from (``items`` are its items only).
+            context["meeting"].update({
+                "prd": c.prd.document.title, "prd_version": c.prd.number,
+                "prd_text": c.prd.text,
+                "approved": c.prd.approved,
+                "items_from": "draft roadmap" if c.prd.draft else "roadmap",
+            })  # fmt: skip
     else:
         context["page"] = read.page
         if c.item is not None:
@@ -1363,6 +1485,23 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         "today": c.today.isoformat(),
         "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
     }
+
+
+_TOKEN = re.compile(r"\s*\[(?:c|l):\d+\]")
+_ISO_DAY = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+
+
+def plain(text: str) -> str:
+    """The reader's words as people read them: no raw citation tokens ([c:5]), days month
+    first ("Dec 1, 2026"), never ISO."""
+
+    def day(m: re.Match) -> str:
+        try:
+            return _day_words(date(int(m[1]), int(m[2]), int(m[3])), True)
+        except ValueError:
+            return m[0]
+
+    return _ISO_DAY.sub(day, _TOKEN.sub("", text))
 
 
 def _grounded(c: Ctx, said: str) -> bool:
@@ -1456,10 +1595,10 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
                    for i, (ch, card) in zip(items, built, strict=True)]  # fmt: skip
         if not choices:
             return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
-        question = str(clarify.get("question") or "Which one?")[:200]
+        question = plain(str(clarify.get("question") or "Which one?"))[:200]
         return Reply("question", question, choices=[*choices, NEITHER])
     if isinstance(said, str) and said.strip() and _grounded(c, said):
-        return Reply("answer", said.strip()[:1500])
+        return Reply("answer", plain(said.strip())[:1500])
     if ask_box:
         return Reply("ask", "Asking Oracle…")
     reply = Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
@@ -1492,13 +1631,35 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
         # As the mock's question branch: only a line the reader saw nothing to change in;
         # a change it could not build keeps its own reply.
         reply = Reply("note", MEETING_ASK)
+        await _keep_question(s, principal, read.meeting_id, read.line)
     msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
+    # Oracle's line is dated when Oracle wrote it, not when the line was asked; kept on its
+    # read, never as the line's edited_at (a discussion view would call it "edited").
+    read.answered_at = datetime.now(UTC)
     if reply.kind == "answer" and isinstance(answer, dict):
         msg.citations = _talk().source_of(c, answer.get("source"))
+        if not msg.citations and c.prd is not None:
+            # A meeting's answer names where it comes from: the meeting's PRD.
+            msg.citations = [{"kind": "simple_source", "label": c.prd.source()}]
     read.choices = _jsonable(reply.choices)
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()
     return {"kind": reply.kind, "cards": len(reply.cards), "choices": len(reply.choices)}
+
+
+async def _keep_question(
+    db: AsyncSession, principal: Any, meeting_id: uuid.UUID, line: str
+) -> None:
+    """A kept question is the meeting's open question at once (its "Notes so far", then the
+    minutes' open questions, which list each question once); an ended meeting keeps none."""
+    meetings = _module(MEETINGS)
+    if meetings is None or not hasattr(meetings, "add_note"):
+        return
+    try:
+        async with db.begin_nested():
+            await meetings.add_note(db, principal, meeting_id, "question", line)
+    except getattr(meetings, "MeetingError", ()):
+        pass
 
 
 async def _read_of(
@@ -1681,6 +1842,18 @@ def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
     return None
 
 
+def _undo_bar(principal: Any, card: SimpleChatCard, rules: Any, read_: service.Read) -> str | None:
+    """qa4-simple-decide-1: why the caller may not undo an applied card (None: they may).
+    The rule its Apply takes (the meeting's change mode, the viewer's bar); an engine card
+    also needs the caller to decide its item, unless they applied it themselves."""
+    bar = _card_bar(principal, card, rules)
+    if bar is not None or card.op in _actions().DIRECT_OPS or card.decided_by == _me(principal):
+        return bar
+    if not _decides(principal, card, read_):
+        return "Only someone who may change this item undoes it"
+    return None
+
+
 def _as_if(card: SimpleChatCard, read_: service.Read, overlays: dict) -> dict:
     """The reader's overlays with the card's item fields applied (the constraint check)."""
     if card.op not in CARD_OPS_ON_ITEMS or card.item_id is None:
@@ -1742,6 +1915,8 @@ async def cards_out(
         return []
     overlays = await drafts.overlays_for(db, principal)
     read_ = await service.load(db, overlays)
+    # A meeting's cards may be on its PRD's draft-roadmap items (meet-chat-right-prd).
+    await meeting_prd(db, read_, rules)
     names = await _names(db, {c.decided_by for c in cards if c.decided_by})
     outs: list[ChatCardOut] = []
     for c in cards:
@@ -1777,7 +1952,15 @@ async def cards_out(
         bar = None
         if c.status == "open":
             bar = _card_bar(principal, c, rules)
-            if bar is None:
+            if bar is None and e is not None and _on_draft(e):
+                # A draft-roadmap item has no change engine: its decider applies, no proposal.
+                if c.op not in DRAFT_ITEM_OPS:
+                    bar = DRAFT_ITEM_WAITS
+                elif not _decides(principal, c, read_):
+                    bar = DRAFT_ITEM_BAR
+                else:
+                    may = "apply"
+            elif bar is None:
                 decides = (await _adds_directly(db, principal, c, read_) if c.op == "add_item"
                            else _decides(principal, c, read_))  # fmt: skip
                 may = "apply" if decides else "propose"
@@ -1800,6 +1983,7 @@ async def cards_out(
             correct=correct if c.status == "open" else None,
             dependents=[x.row.title for x in waiting], dependent_ids=[x.row.id for x in waiting],
             may_with_dependents=may_all,  # type: ignore[arg-type]
+            can_undo=c.status == "applied" and _undo_bar(principal, c, rules, read_) is None,
         ))  # fmt: skip
     return outs
 
@@ -1851,6 +2035,9 @@ async def apply(
         await db.flush()
     if card.op in _actions().DIRECT_OPS:
         return await _apply_direct(db, principal, card_id, rules, fix)
+    row = await db.get(RoadmapItem, card.item_id) if card.item_id is not None else None
+    if row is not None and row.draft_roadmap_id is not None:
+        return await _apply_draft_item(db, principal, card_id, rules, fix)
     if fix is not None:
         fixes = (await one(db, principal, card, rules)).fixes
         if fix >= len(fixes):
@@ -1946,6 +2133,55 @@ async def rebase(db: AsyncSession, card_id: uuid.UUID, detail: Any) -> None:
     await db.commit()
 
 
+DRAFT_ITEM_OPS = ("move_dates", "change_horizon", "edit_title", "cut", "restore")
+DRAFT_ITEM_BAR = "Only the PRD's decider or an owner changes its draft roadmap"
+DRAFT_ITEM_WAITS = "This item is on the PRD's draft roadmap: that change waits for its approval"
+
+
+def _on_draft(e: service.Entry) -> bool:
+    return e.row.draft_roadmap_id is not None
+
+
+async def _apply_draft_item(
+    db: AsyncSession, principal: Any, card_id: uuid.UUID, rules: Any, fix: int | None
+) -> tuple[ChatCardOut, SimpleChangeResult | None]:
+    """meet-chat-right-prd: a card on an item of the meeting PRD's draft roadmap (a run's
+    items-only roadmap, before the PRD is approved). It has no roadmap, so no working draft
+    for the change engine: its decider's Apply writes the item itself, in one transaction
+    with the card, as a meeting decision."""
+    if fix is not None:
+        raise ChatError(422, "fix: one of the card's fixes")
+    card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
+    if card is None or card.status != "open":
+        raise ChatError(409, f"This card is {card.status if card else 'gone'} already")
+    if card.op not in DRAFT_ITEM_OPS:
+        raise ChatError(409, DRAFT_ITEM_WAITS)
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    await meeting_prd(db, read_, rules)
+    if not _decides(principal, card, read_):
+        raise ChatError(403, DRAFT_ITEM_BAR)
+    row = await db.get(RoadmapItem, card.item_id, with_for_update=True, populate_existing=True)
+    assert row is not None
+    if changes.read(row, list(card.before), card.target) != card.before:
+        raise ChatError(409, "This item changed since the card was made: ask again")
+    changes.write(row, card.after, card.target)
+    card.status = "applied"
+    card.decided_by, card.decided_at = _me(principal), company_time.now()
+    meetings = _module(MEETINGS)
+    if rules is not None and meetings is not None:
+        try:
+            card.decision_id = await meetings.record_meeting_decision(
+                db, principal, rules.meeting_id, card.summary,
+                [{"kind": "roadmap_item", "id": str(row.id)}], [],
+            )  # fmt: skip
+        except getattr(meetings, "MeetingError", ()) as e:
+            raise ChatError(e.status, e.detail) from e
+    await audit.record(db, principal, "simple_chat.draft_item_applied", "roadmap_item", row.id,
+                       {"op": card.op, "before": card.before, "after": card.after})  # fmt: skip
+    await db.commit()
+    return await one(db, principal, card, rules), None
+
+
 async def _apply_direct(
     db: AsyncSession, principal: Any, card_id: uuid.UUID, rules: Any, fix: int | None
 ) -> tuple[ChatCardOut, SimpleChangeResult | None]:
@@ -1981,9 +2217,25 @@ async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatC
 
 async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCardOut:
     card, rules = await _get(db, principal, card_id)
+    if card.status == "applied":
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+        bar = _undo_bar(principal, card, rules, read_)
+        if bar is not None:
+            raise ChatError(403, bar)
     if card.status == "applied" and card.op in _actions().DIRECT_OPS:
         await _actions().undo(db, principal, card, rules)
         card.status = "undone"
+        await db.commit()
+        return await one(db, principal, card, rules)
+    row = await db.get(RoadmapItem, card.item_id, with_for_update=True) if card.item_id else None
+    if card.status == "applied" and row is not None and row.draft_roadmap_id is not None:
+        # A draft-roadmap item's card (meet-chat-right-prd): its values go back.
+        if changes.read(row, list(card.after), card.target) != card.after:
+            raise ChatError(409, "This item changed since: undo works only on the card's change")
+        changes.write(row, card.before, card.target)
+        card.status = "undone"
+        if card.decision_id is not None:
+            await _reverse(db, principal, card.decision_id)
         await db.commit()
         return await one(db, principal, card, rules)
     if card.status != "applied" or card.change_id is None:

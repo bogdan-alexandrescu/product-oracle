@@ -139,6 +139,8 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
   const live = !ctx.readOnly;
   const onChanged = () => ctx.onChanged(item.id);
   const openSuggestion = !!item.suggestion && item.suggestion.status === "open" && item.status === "open";
+  // qa4-docs-39: who raised it, by name, to everyone else ("You" to its author).
+  const author = item.author_name || "Reviewer";
 
   const card = (d: SuggestionDecisionState | null) => {
     const deciding = !!d && ctx.canDecide && live;
@@ -213,8 +215,11 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
 
         {comment ? (
           <div data-testid="comment" data-comment-id={comment.id} className={`mt-2 flex items-start gap-2.5 ${comment.resolved_at ? "opacity-80" : ""}`}>
-            <Avatar name={mine ? "You" : "Reviewer"} initials={mine ? "Me" : "R"} tone={mine ? "me" : "default"} />
+            <Avatar name={mine ? "You" : author} initials={mine ? "Me" : undefined} tone={mine ? "me" : "default"} />
             <div className="min-w-0 flex-1">
+              <p className="text-[13px] leading-4 font-semibold text-text2" data-testid="feedback-author">
+                {mine ? "You" : author}
+              </p>
               {placed && (
                 <button
                   type="button"
@@ -250,10 +255,10 @@ function FeedbackCard({ entry, ctx }: { entry: FeedbackEntry; ctx: Ctx }) {
           </div>
         ) : general ? (
           <div className="mt-2 flex items-start gap-2.5">
-            <Avatar name={generalMine ? "You" : "Reviewer"} initials={generalMine ? "Me" : "R"} tone={generalMine ? "me" : "default"} />
+            <Avatar name={generalMine ? "You" : author} initials={generalMine ? "Me" : undefined} tone={generalMine ? "me" : "default"} />
             <div className="min-w-0 flex-1">
               <p className="text-[13px] leading-4 font-semibold text-text2" data-testid="feedback-author">
-                {generalMine ? "You" : "Reviewer"}
+                {generalMine ? "You" : author}
               </p>
               <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">{item.summary}</p>
               <p className="tnum mt-1 text-[13px] text-text2">{formatDateTime(item.created_at)}</p>
