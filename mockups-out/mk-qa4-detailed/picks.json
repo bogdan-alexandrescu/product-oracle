@@ -1,0 +1,214 @@
+{
+  "title": "Detailed pages that squeeze, surprise or repeat",
+  "subtitle": "Four fixes on the Detailed pages: held rewrites, starting a paid run, filing a request, and two Settings pages. Each proposal is built in the app with invented data.",
+  "decisions": [
+    {
+      "code": "QD1",
+      "name": "Held rewrites",
+      "question": "Where do held rewrites open so that neither they nor the outline and review panel get squeezed into tiny scroll boxes?",
+      "common": "Held rewrites opens from the same button with its count. Each rewrite shows the section, what the agent changed in green, a Reason box, and Accept and Reject. Accepting makes a new version and the count drops by one.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "A drawer on top",
+          "recommended": true,
+          "what": "Held rewrites opens as a drawer from the right, over the page, at the full height of the window. The outline, section and review panel stay as they are behind it. On a phone it fills the screen.",
+          "why": "The rewrites get the whole height of the window and the page behind keeps its layout, so nothing is squeezed. It fits a short job you open, do, and close, and it works the same on a phone.",
+          "plus": "Nothing on the page moves. Closing the drawer puts you back where you were.",
+          "cost": "The drawer covers the section text, so you cannot read the section and its rewrite side by side.",
+          "frames": [
+            {"file": "qd1-a-rest.html", "caption": "At rest: version 2 with 4 held rewrites waiting, shown on the Held rewrites button."},
+            {"file": "qd1-a-open.html", "caption": "Held rewrites opens as a drawer at full height; each rewrite has room for its text, Reason and Accept."},
+            {"file": "qd1-a-mid.html", "caption": "A reason is typed for the first rewrite, Goal trace."},
+            {"file": "qd1-a-result.html", "caption": "After Accept: version 3 opens on Goal trace, and the button now says 3 held rewrites."},
+            {"file": "qd1-a-open-1512.html", "caption": "At 1512 wide the drawer is the same width; the page behind keeps its three panels."},
+            {"file": "qd1-a-open-390.html", "caption": "On a phone the drawer fills the screen, one rewrite after another."}
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "The page scrolls",
+          "recommended": false,
+          "what": "The outline, section and review panel keep a usable height and the page itself scrolls. Held rewrites opens as a full-width panel under the toolbar, above the three panels.",
+          "plus": "Nothing covers anything; every part has its full size.",
+          "cost": "Held rewrites pushes the outline and review panel down the page, so you scroll to get back to them.",
+          "frames": [
+            {"file": "qd1-b-open.html", "caption": "Held rewrites opens full width under the toolbar, above the outline and section."},
+            {"file": "qd1-b-scrolled.html", "caption": "Scrolled down: the outline, section and review panel keep their full height below it."},
+            {"file": "qd1-b-open-1512.html", "caption": "At 1512 wide, scrolled to the panels, the rewrites are off screen above."}
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "In the review column",
+          "recommended": false,
+          "what": "Held rewrites takes the place of the review panel on the right, at the full height of the window, until you close it. The outline and section stay where they are.",
+          "plus": "You read the section and its rewrite side by side.",
+          "cost": "The review column is narrow, so long rewrites wrap into many lines, and the review panel is hidden while it is open.",
+          "frames": [
+            {"file": "qd1-c-open.html", "caption": "Held rewrites replaces the review panel on the right; the outline and section stay."},
+            {"file": "qd1-c-mid.html", "caption": "A reason is typed for Goal trace; the narrow column wraps the rewrite onto many lines."},
+            {"file": "qd1-c-open-1512.html", "caption": "At 1512 wide the column is a little wider but the rewrite still wraps."}
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QD2",
+      "name": "Starting a paid run",
+      "question": "How does a person start a run that costs money, seeing its estimate first, the same way for every button that starts one?",
+      "common": "The estimate comes from the same numbers the run page shows. A run over the $50 limit waits for an owner, as it does now. Every button that starts a paid run works the same way.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Confirm in a dialog",
+          "recommended": true,
+          "what": "The button ends in \"…\" and opens a dialog: what the run does in three steps, the cost of each part, the total, and a button that says the price, \"Start for $14.50\". Over the limit the button says \"Approve $58.00 and start\" for an owner.",
+          "why": "Money is spent only after a person has seen the price on the button they press. One dialog can serve every action that starts a run, so people learn it once.",
+          "plus": "The steps and the cost of each part are shown, so it is clear what you pay for.",
+          "cost": "One more click for every run, even cheap ones.",
+          "frames": [
+            {"file": "qd2-a-rest.html", "caption": "At rest: the Usage alerts track with \"Draft roadmap from this track…\"."},
+            {"file": "qd2-a-open.html", "caption": "The dialog shows what the run does, what each part costs, and Start for $14.50."},
+            {"file": "qd2-a-result.html", "caption": "After Start: the run page opens, running, with $14.50 estimated."},
+            {"file": "qd2-a-over-1512.html", "caption": "Over the limit, at 1512 wide: Owner approves, and the button says Approve $58.00 and start."}
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "A strip on the card",
+          "recommended": false,
+          "what": "The button opens a short strip on the track card itself: the estimate and time in one line, then Start for $14.50 and Cancel. Nothing covers the page.",
+          "plus": "Lighter than a dialog; you stay with the track you were reading.",
+          "cost": "No cost of each part. On a page with many cards the strip is easy to miss or leave open.",
+          "frames": [
+            {"file": "qd2-b-open.html", "caption": "The strip opens on the card: about $14.50, about 10 minutes, Start for $14.50 and Cancel."},
+            {"file": "qd2-b-over-1512.html", "caption": "Over the limit, at 1512 wide: the strip says an owner approves, and the button says Approve $58.00 and start."}
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Start, then cancel",
+          "recommended": false,
+          "what": "The button starts the run at once, as now, then says what it costs, with Cancel run free for the first minute.",
+          "plus": "No extra click; fast for people who start runs every day.",
+          "cost": "The price is seen only after the run has started; a person who misses the note pays.",
+          "frames": [
+            {"file": "qd2-c-open.html", "caption": "Pressed: the run has started; a note gives about $14.50, with Cancel run and Open run."},
+            {"file": "qd2-c-result.html", "caption": "After Cancel run: Run cancelled. Nothing was charged."},
+            {"file": "qd2-c-over-1512.html", "caption": "Over the limit, at 1512 wide: the run waits for an owner, $58.00 is over the $50 limit."}
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QD3",
+      "name": "New request and File as request",
+      "question": "Should New request and File as request be one form or two, and where is each reached?",
+      "common": "A request has the same fields however it is made: title, what it is and why, goal, requester, channel, and customer or team. A filed request shows in All requests.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "One form, two doors",
+          "recommended": true,
+          "what": "New request and File as request open the same form. From a found item it is filled in from the source and says what filing shares; from New request it is blank.",
+          "why": "One form to learn and keep up. The found item fills in what it can, and the person still checks it before filing.",
+          "plus": "Customer or team is on every request, however it is made.",
+          "cost": "Filing a found item takes a form, not one click.",
+          "frames": [
+            {"file": "qd3-a-rest.html", "caption": "At rest: Oracle found 4 possible requests, each with File as request."},
+            {"file": "qd3-a-open.html", "caption": "File as request opens the form filled in from the support thread, with what filing shares."},
+            {"file": "qd3-a-mid.html", "caption": "Customer is picked and the title is changed to \"Reorder last week's basket in one click\"."},
+            {"file": "qd3-a-result.html", "caption": "After File request: a note says it was filed, and 3 found items are left."},
+            {"file": "qd3-a-new.html", "caption": "New request opens the same form, blank."},
+            {"file": "qd3-a-open-1512.html", "caption": "At 1512 wide the form is the same size, over the requests page."},
+            {"file": "qd3-a-open-390.html", "caption": "On a phone the same form fills the screen."}
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Start from a found item",
+          "recommended": false,
+          "what": "There is one way in, New request. Its form starts with \"Start from\": a blank request or one of the items Oracle found.",
+          "plus": "Only one button, and found items can also be reached from the form.",
+          "cost": "Found items are one step further away; the found list keeps its own button, so there are still two ways to file one.",
+          "frames": [
+            {"file": "qd3-b-open.html", "caption": "New request opens with Start from: a blank request."},
+            {"file": "qd3-b-mid.html", "caption": "Start from \"Found: Pick a delivery slot\" fills in the title, what they asked and the channel."},
+            {"file": "qd3-b-result.html", "caption": "After File request: Pick a delivery slot is selected in All requests, now 13."},
+            {"file": "qd3-b-open-1512.html", "caption": "At 1512 wide the form, starting from the first found item."}
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "File at once",
+          "recommended": false,
+          "what": "A found item has File it, which files it at once with what was found and opens it on the right to change. New request keeps its own form.",
+          "plus": "The fastest way to file a found item: one click, and Undo.",
+          "cost": "Two ways to make a request with different fields; a filed item can miss its description until someone edits it.",
+          "frames": [
+            {"file": "qd3-c-rest.html", "caption": "At rest: each found item has File it."},
+            {"file": "qd3-c-result.html", "caption": "After File it: the request is filed and open on the right, with Undo in the note."}
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QD4",
+      "name": "Webhook log and new template",
+      "question": "How should Settings show a webhook's delivery log, and how does a person make a new template without writing Markdown?",
+      "common": "The delivery log keeps its Status and Event filters and its times in Company time. A new template keeps its name, kind, theme and when to suggest it, and its key is made from the name.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Cards and fields",
+          "recommended": true,
+          "what": "Each delivery is a two-line card that fits the side panel: what happened in words, then the time, HTTP code and time taken. A new template is made from fields: one row per section with its heading, its guide and \"In the brief\"; the Markdown is one click away under Edit as Markdown.",
+          "why": "Both fit the space they have and use words, not codes. People who know Markdown can still use it; others never need to.",
+          "plus": "The log reads in words, and the cards stack well on a phone.",
+          "cost": "Cards show fewer deliveries on screen than a table, and the number of tries is only shown when you open a delivery.",
+          "frames": [
+            {"file": "qd4-a-log.html", "caption": "The Deploy notifier's delivery log as cards in the side panel."},
+            {"file": "qd4-a-log-row.html", "caption": "A run started delivery that failed with 500 is opened: what was sent, the reply, and Redeliver."},
+            {"file": "qd4-a-log-1512.html", "caption": "At 1512 wide the cards keep the same two lines."},
+            {"file": "qd4-a-log-390.html", "caption": "On a phone the same cards fill the width."},
+            {"file": "qd4-a-tpl.html", "caption": "New template: sections as fields, with the details on the right."},
+            {"file": "qd4-a-tpl-mid.html", "caption": "Named Launch brief, and a fourth section, Support readiness, is added."},
+            {"file": "qd4-a-tpl-markdown.html", "caption": "Edit as Markdown shows the same template as text, checked as valid."},
+            {"file": "qd4-a-tpl-result.html", "caption": "After Create template: the Launch brief template page, version 1."},
+            {"file": "qd4-a-tpl-390.html", "caption": "On a phone the section fields stack one under another."}
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Wide log, copy a template",
+          "recommended": false,
+          "what": "The side panel shows a summary of the log with Open the delivery log, which opens the whole log in a wide window with room for every column. A new template starts as a copy of an existing one that you name and then change on its own page.",
+          "plus": "The full log has every column at a readable width; a copy is never blank.",
+          "cost": "One more click to see any delivery. A copy still means changing the Markdown on its page.",
+          "frames": [
+            {"file": "qd4-b-log.html", "caption": "The side panel shows 14 deliveries, 7 failed or retrying, with Open the delivery log."},
+            {"file": "qd4-b-log-open.html", "caption": "The whole log in a wide window: when, event, status, HTTP code, time taken and tries."},
+            {"file": "qd4-b-log-row.html", "caption": "A delivery is opened from the wide log."},
+            {"file": "qd4-b-tpl.html", "caption": "New template: pick the template closest to what you need."},
+            {"file": "qd4-b-tpl-mid.html", "caption": "One-pager is picked and the copy named Launch brief."},
+            {"file": "qd4-b-tpl-result.html", "caption": "After Make the copy: Launch brief opens as version 1, its text copied from One-pager."}
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Fewer columns, Markdown kept",
+          "recommended": false,
+          "what": "The log keeps a table but only three columns that fit the panel: when, event and status. A new template keeps the Markdown box, with a short note on what each part means, and the key is made from the name.",
+          "plus": "The smallest change from today.",
+          "cost": "Times are cut short and events show their codes, not words. A new template still needs Markdown with front matter.",
+          "frames": [
+            {"file": "qd4-c-log.html", "caption": "The delivery log in three columns; times are cut short and events show as codes."},
+            {"file": "qd4-c-log-1512.html", "caption": "At 1512 wide the columns are no wider; the codes still wrap."},
+            {"file": "qd4-c-tpl.html", "caption": "New template keeps the Markdown, with a note on what each part means and the key made from the name."}
+          ]
+        }
+      ]
+    }
+  ]
+}
