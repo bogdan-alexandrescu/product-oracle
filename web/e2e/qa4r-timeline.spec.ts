@@ -33,29 +33,34 @@ test.describe("desktop", () => {
   test("qa4-27: no milestone, key date or Today line runs through a label at the top of the Timeline", async ({ page }) => {
     await open(page);
     const chart = timeline(page);
-    await expect(chart.locator('[data-testid="key-date-label"], [data-testid="milestone-end-label"], [data-testid="track-milestone"] text').first()).toBeVisible();
-    const strikes = await chart.locator('svg[data-testid="chart-svg"]').evaluate((svg) => {
-      const lines = [...svg.querySelectorAll<SVGLineElement>('[data-testid="today-line"], [data-testid="milestone-end-line"], [data-testid="key-date-marker"] line')];
-      const labels = [...svg.querySelectorAll<SVGTextElement>('[data-testid="milestone-end-label"], [data-testid="key-date-label"], [data-testid="track-milestone"] text')];
-      const out: string[] = [];
-      for (const t of labels) {
-        const b = t.getBBox();
-        // (A track's label sits in a translated group: its box in the chart's own pixels.)
-        const m = t.getCTM();
-        const s = (svg as unknown as SVGGraphicsElement).getCTM();
-        const dx = m && s ? m.e - s.e : 0;
-        const dy = m && s ? m.f - s.f : 0;
-        const [x0, x1, y0, y1] = [b.x + dx + 1, b.x + dx + b.width - 1, b.y + dy + 1, b.y + dy + b.height - 1];
-        for (const l of lines) {
-          const x = Number(l.getAttribute("x1"));
-          const top = Math.min(Number(l.getAttribute("y1")), Number(l.getAttribute("y2")));
-          const bottom = Math.max(Number(l.getAttribute("y1")), Number(l.getAttribute("y2")));
-          if (x > x0 && x < x1 && top < y1 && bottom > y0) out.push(`${l.getAttribute("data-testid") ?? "key date line"} through "${t.textContent}"`);
+    // Each grouping draws its own marks (a milestone's end under Milestone, a track's under Track).
+    for (const group of ["goal", "track", "prd", "milestone"]) {
+      await page.getByTestId(`group-${group}`).click();
+      await expect(chart).toHaveAttribute("data-lanes", group);
+      await expect(chart.locator('[data-testid="key-date-label"], [data-testid="milestone-end-label"], [data-testid="track-milestone"] text').first()).toBeVisible();
+      const strikes = await chart.locator('svg[data-testid="chart-svg"]').evaluate((svg) => {
+        const lines = [...svg.querySelectorAll<SVGLineElement>('[data-testid="today-line"], [data-testid="milestone-end-line"], [data-testid="key-date-marker"] line')];
+        const labels = [...svg.querySelectorAll<SVGTextElement>('[data-testid="milestone-end-label"], [data-testid="key-date-label"], [data-testid="track-milestone"] text')];
+        const out: string[] = [];
+        for (const t of labels) {
+          const b = t.getBBox();
+          // (A track's label sits in a translated group: its box in the chart's own pixels.)
+          const m = t.getCTM();
+          const s = (svg as unknown as SVGGraphicsElement).getCTM();
+          const dx = m && s ? m.e - s.e : 0;
+          const dy = m && s ? m.f - s.f : 0;
+          const [x0, x1, y0, y1] = [b.x + dx + 1, b.x + dx + b.width - 1, b.y + dy + 1, b.y + dy + b.height - 1];
+          for (const l of lines) {
+            const x = Number(l.getAttribute("x1"));
+            const top = Math.min(Number(l.getAttribute("y1")), Number(l.getAttribute("y2")));
+            const bottom = Math.max(Number(l.getAttribute("y1")), Number(l.getAttribute("y2")));
+            if (x > x0 && x < x1 && top < y1 && bottom > y0) out.push(`${l.getAttribute("data-testid") ?? "key date line"} through "${t.textContent}"`);
+          }
         }
-      }
-      return out;
-    });
-    expect(strikes).toEqual([]);
+        return out;
+      });
+      expect(strikes, `Group by ${group}`).toEqual([]);
+    }
   });
 
   test("qa4-26: Oracle's dotted date suggestion for Welcome video fits inside the Timeline", async ({ page }) => {
@@ -95,7 +100,23 @@ test.describe("desktop", () => {
   test("qa4-47: the Timeline's bars come in reading order: lane by lane, row by row, left to right", async ({ page }) => {
     await open(page);
     const chart = timeline(page);
-    await expect(chart.locator('g[data-testid="bar"]').first()).toBeVisible();
+    // Every grouping reads lane by lane (the packing's date order once jumped across rows).
+    for (const group of ["track", "prd", "milestone", "goal"]) {
+      await page.getByTestId(`group-${group}`).click();
+      await expect(chart).toHaveAttribute("data-lanes", group);
+      await expect(chart.locator('g[data-testid="bar"]').first()).toBeVisible();
+      const seen = await chart.evaluate((root) => {
+        const lanes = [...root.querySelectorAll<HTMLElement>('[data-testid="chart-labels"] [data-lane]')].map((l) => l.dataset.lane);
+        return [...root.querySelectorAll<SVGGElement>('g[data-testid="bar"][tabindex="0"]')].map((g) => ({
+          item: g.dataset.item!,
+          lane: lanes.indexOf(g.dataset.lane),
+          row: Number(g.dataset.row),
+          x: Number(g.dataset.x0),
+        }));
+      });
+      const inOrder = [...seen].sort((a, b) => a.lane - b.lane || a.row - b.row || a.x - b.x);
+      expect(seen.map((o) => o.item), `Group by ${group}`).toEqual(inOrder.map((o) => o.item));
+    }
     const order = await chart.evaluate((root) => {
       const lanes = [...root.querySelectorAll<HTMLElement>('[data-testid="chart-labels"] [data-lane]')].map((l) => l.dataset.lane);
       return [...root.querySelectorAll<SVGGElement>('g[data-testid="bar"][tabindex="0"]')].map((g) => ({
