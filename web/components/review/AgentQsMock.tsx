@@ -1,7 +1,7 @@
 "use client";
 
 // MOCK-HOOK: the whole file. Mock-ups only (mk-agentqs, decision AQ1): where a run agent's
-// questions are asked. `?aq1=a|b|c|d` picks the proposal, `&aqs=rest|open|mid|done` the state,
+// questions are asked. `?aq1=a|b|c|d` picks the proposal, `&aqs=rest|open|mid|next|done` the state,
 // `&aqn=many` the hard case (eleven questions, some long).
 
 import { createContext, useContext, useState, type ReactNode } from "react";
@@ -17,7 +17,7 @@ import {
 } from "@/lib/api/mock/agent-questions";
 
 export type AqVariant = "a" | "b" | "c" | "d";
-type AqState = "rest" | "open" | "mid" | "done";
+type AqState = "rest" | "open" | "mid" | "next" | "done";
 
 function readParams(): { variant: AqVariant | null; state: AqState; many: boolean } {
   if (typeof window === "undefined") return { variant: null, state: "rest", many: false };
@@ -26,7 +26,7 @@ function readParams(): { variant: AqVariant | null; state: AqState; many: boolea
   const s = p.get("aqs");
   return {
     variant: v === "a" || v === "b" || v === "c" || v === "d" ? v : null,
-    state: s === "open" || s === "mid" || s === "done" ? s : "rest",
+    state: s === "open" || s === "mid" || s === "next" || s === "done" ? s : "rest",
     many: p.get("aqn") === "many",
   };
 }
@@ -61,9 +61,11 @@ function initial() {
     picked[FOCUS] = "build";
     note[FOCUS] = "The checkout team owns it from Nov 16";
   }
-  if (state === "done") {
+  if (state === "done" || state === "next") {
     const q = qs.find((x) => x.id === FOCUS)!;
     q.answer = { option: "build", by: "you", at: "just now", note: "The checkout team owns it from Nov 16" };
+    // c: the saved card stays open under its row, so who answered and where it goes are seen.
+    if (variant === "c") opened = FOCUS;
   }
   return { variant, many, qs, picked, note, opened, state };
 }
@@ -221,6 +223,14 @@ export function QuestionCard({ q, compact = false, showAbout = true, big = false
       ) : (
         <p className="text-[13px] text-text2">
           Not answered by the time you decide: {AGENT_QS_NEXT_STEP} goes with the agent&apos;s pick.
+          {open && !big && s.variant === "a" && (
+            <>
+              {" "}
+              <button type="button" className="font-semibold text-accent-ink underline" onClick={() => s.setOpened(null)}>
+                Hide why
+              </button>
+            </>
+          )}
           {!open && !big && (
             <>
               {" "}
@@ -252,13 +262,16 @@ export function AgentQsTop() {
         </span>
         <span className="text-[13px] text-text2">Answer here before you decide; each answer goes to {AGENT_QS_NEXT_STEP} with the decision.</span>
       </div>
-      <div className="grid grid-cols-2 gap-2 max-[900px]:grid-cols-1">
+      <div className="grid grid-cols-2 items-start gap-2 max-[900px]:grid-cols-1">
         {open.map((q) => (
           <QuestionCard key={q.id} q={q} compact />
         ))}
       </div>
       {done.length > 0 && (
-        <div className="mt-2 grid grid-cols-2 gap-2 max-[900px]:grid-cols-1">
+        <h3 className="mt-3 mb-1 text-sm font-semibold text-text2">Answered</h3>
+      )}
+      {done.length > 0 && (
+        <div className="grid grid-cols-2 items-start gap-2 max-[900px]:grid-cols-1">
           {done.map((q) => (
             <QuestionCard key={q.id} q={q} />
           ))}
@@ -316,6 +329,13 @@ export function AgentQsSetLine() {
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-semibold">About the whole set</span>
         <AgentQsSetChip ids={qs.map((q) => q.id)} />
+        {qs
+          .filter((q) => q.answer)
+          .map((q) => (
+            <span key={q.id} className="text-[13px] text-text2" data-testid="aq-set-who">
+              {optionLabel(q, q.answer!.option)} · by {q.answer!.by} · {q.answer!.at}
+            </span>
+          ))}
         <span className="text-[13px] text-text2">Questions about one feature are on its row.</span>
       </div>
       {open && (
@@ -374,16 +394,19 @@ export function AgentQsGate() {
   const [shut, setShut] = useState(() => readParams().state === "done");
   if (!s || s.variant !== "d") return null;
   const open = s.qs.filter((q) => !q.answer && !skipped.includes(q.id));
-  const total = s.qs.length;
+  // Questions someone else answered before are not asked again, nor counted.
+  const earlier = s.qs.filter((q) => q.answer && q.answer.by !== "you");
+  const asks = s.qs.filter((q) => !earlier.includes(q));
+  const total = asks.length;
   if (shut || open.length === 0) {
     const mine = s.qs.filter((q) => q.answer?.by === "you").length;
     const left = s.qs.filter((q) => !q.answer).length;
-    const others = s.qs.filter((q) => q.answer && q.answer.by !== "you").length;
+    const others = earlier.map((q) => `${q.answer!.by} (${q.answer!.at})`).join(", ");
     return (
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-panel border border-line bg-surface px-3 py-2 text-sm" data-testid="aq-gate-done">
         <span aria-hidden className="text-pass">✓</span>
         <span>
-          <b className="font-semibold">Agents&apos; questions:</b> {mine} answered by you{others ? `, ${others} earlier by others` : ""}{left ? `, ${left} left to the agent's pick` : ""}. They go to{" "}
+          <b className="font-semibold">Agents&apos; questions:</b> {mine} answered by you{others ? `, ${earlier.length} earlier by ${others}` : ""}{left ? `, ${left} left to the agent's pick` : ""}. They go to{" "}
           {AGENT_QS_NEXT_STEP} with your decision.
         </span>
         <button type="button" className="font-semibold text-accent-ink underline" onClick={() => setShut(false)}>
@@ -393,7 +416,7 @@ export function AgentQsGate() {
     );
   }
   const q = s.qs.find((x) => x.id === s.opened && !x.answer) ?? open[0];
-  const index = s.qs.indexOf(q) + 1;
+  const index = asks.indexOf(q) + 1;
   return (
     <div className="fixed inset-0 z-40 grid grid-cols-1 place-items-center bg-black/40 p-4 max-[600px]:items-end max-[600px]:p-0" data-testid="aq-gate">
       <div role="dialog" aria-modal aria-label="Before you open this stop" className="flex max-h-[90vh] w-full max-w-[640px] min-w-0 flex-col gap-3 overflow-auto rounded-panel bg-surface p-5 shadow-xl max-[600px]:rounded-b-none">
@@ -404,12 +427,20 @@ export function AgentQsGate() {
           </span>
         </div>
         <p className="text-sm text-text2">
-          The agents of {AGENT_QS_RUN} · {AGENT_QS_STOP} asked {total} questions. Answer each, or leave it to the agent&apos;s pick; then the stop opens.
+          The agents of {AGENT_QS_RUN} · {AGENT_QS_STOP} asked {s.qs.length} questions: {total} for you
+          {earlier.length > 0 && <>, {earlier.length} answered earlier by {Array.from(new Set(earlier.map((x) => x.answer!.by))).join(" and ")}</>}. Answer each, or leave it to the agent&apos;s pick; then the stop opens.
         </p>
-        <div className="flex gap-1" aria-hidden>
-          {s.qs.map((x) => (
-            <span key={x.id} className={`h-1.5 flex-1 rounded-full ${x.answer ? "bg-pass" : x.id === q.id ? "bg-accent" : "bg-line-strong"}`} />
-          ))}
+        <div className="flex flex-col gap-1">
+          <div className="flex gap-1" aria-hidden>
+            {asks.map((x) => (
+              <span key={x.id} className={`h-1.5 flex-1 rounded-full ${x.answer ? "bg-pass" : x.id === q.id ? "bg-accent" : "bg-line-strong"}`} />
+            ))}
+          </div>
+          <span className="flex flex-wrap gap-x-3 text-[12px] text-text2">
+            <span><span aria-hidden className="mr-1 inline-block h-1.5 w-3 rounded-full bg-pass" />Answered</span>
+            <span><span aria-hidden className="mr-1 inline-block h-1.5 w-3 rounded-full bg-accent" />This one</span>
+            <span><span aria-hidden className="mr-1 inline-block h-1.5 w-3 rounded-full bg-line-strong" />Still to come</span>
+          </span>
         </div>
         <QuestionCard q={q} big />
         <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
@@ -433,23 +464,25 @@ export function AgentQsInbox() {
   return (
     <div className="px-4 pt-3" data-testid="aq-inbox">
       <h3 className="mb-1 flex items-baseline gap-2 text-sm font-semibold">
-        Questions from run agents <span className="tnum font-normal text-text2">{openCount(s.qs)}</span>
+        Questions from run agents <span className="tnum font-normal text-text2">{openCount(s.qs)} open</span>
+        <span className="text-[13px] font-normal text-text2">Not counted in “waiting” above: each is settled with its stop’s decision, not on its own.</span>
       </h3>
       <div role="table" aria-label="Questions from run agents" className="rounded-panel border border-line">
-        {s.qs.map((q) => {
+        {[...s.qs.filter((q) => !q.answer), ...s.qs.filter((q) => q.answer)].map((q) => {
           const open = s.opened === q.id;
           return (
             <div key={q.id} role="row" className="border-b border-line last:border-b-0">
-              <div className="grid grid-cols-[minmax(0,1fr)_190px_210px_auto] items-center gap-3 px-3 py-2 max-[600px]:flex max-[600px]:flex-wrap max-[600px]:gap-1">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_190px_auto] items-center gap-3 px-3 py-2 max-[600px]:flex max-[600px]:flex-wrap max-[600px]:gap-1">
                 <span role="cell" className="min-w-0 max-[600px]:basis-full">
-                  <span className="block truncate text-sm font-medium max-[600px]:whitespace-normal" title={q.question}>
+                  <span className="block text-sm font-medium" title={q.question}>
                     {q.question}
                   </span>
                   <span className="text-[13px] text-text2">
                     {roleWord(q)} · About {about(q)}
+                    {q.answer && <> · Goes to {AGENT_QS_NEXT_STEP} with the stop&apos;s decision</>}
                   </span>
                 </span>
-                <span role="cell" className="min-w-0 truncate text-[13px] text-text2">
+                <span role="cell" className="min-w-0 text-[13px] whitespace-nowrap text-text2 max-[600px]:whitespace-normal">
                   {AGENT_QS_RUN} · {AGENT_QS_STOP}
                 </span>
                 <span role="cell" className="text-[13px]">

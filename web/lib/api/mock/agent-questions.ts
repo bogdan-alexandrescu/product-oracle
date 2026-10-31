@@ -1,24 +1,24 @@
 // MOCK-HOOK: the whole file. Mock-ups only (mk-agentqs, decision AQ1): the questions a run's
-// agents asked the owner at the Saved addresses feature-set stop, invented people and text.
+// agents asked the owner at the Saved addresses feature-set stop, invented people and text. // MOCK-HOOK
 
-/** One option an agent offered. */
+/** One option an agent offered. */ // MOCK-HOOK
 export type AgentOption = { key: string; label: string; detail: string }; // MOCK-HOOK
 
-/** A question an agent (analyst, architect) asked during a run step. */
+/** A question an agent (analyst, architect) asked during a run step. */ // MOCK-HOOK
 export type AgentQuestion = { // MOCK-HOOK
   id: string; // MOCK-HOOK
   role: "analyst" | "architect"; // MOCK-HOOK
-  /** The feature it concerns, or null for the whole set. */
+  /** The feature it concerns, or null for the whole set. */ // MOCK-HOOK
   feature: string | null; // MOCK-HOOK
   question: string; // MOCK-HOOK
-  /** Why the agent asks: what it could not find. */
+  /** Why the agent asks: what it could not find. */ // MOCK-HOOK
   why: string; // MOCK-HOOK
   options: AgentOption[]; // MOCK-HOOK
   recommended: string; // MOCK-HOOK
   answer: { option: string; by: string; at: string; note?: string } | null; // MOCK-HOOK
 }; // MOCK-HOOK
 
-/** Where answers go: the step after this stop, which reads them with the decision. */
+/** Where answers go: the step after this stop, which reads them with the decision. */ // MOCK-HOOK
 export const AGENT_QS_NEXT_STEP = "Design"; // MOCK-HOOK
 export const AGENT_QS_STOP = "Feature set"; // MOCK-HOOK
 export const AGENT_QS_RUN = "Saved addresses PRD"; // MOCK-HOOK
@@ -79,7 +79,7 @@ const BASE: AgentQuestion[] = [ // MOCK-HOOK
   }, // MOCK-HOOK
 ]; // MOCK-HOOK
 
-/** The hard case: a long run whose agents asked many questions, some long. */
+/** The hard case: a long run whose agents asked many questions, some long. */ // MOCK-HOOK
 const MORE: AgentQuestion[] = [ // MOCK-HOOK
   ["analyst", "address-labels", "Are labels free text, or a fixed list (Home, Work, Other)?", "free", "Free text", "fixed", "A fixed list"], // MOCK-HOOK
   ["architect", "pick-address", "Show the saved addresses as a list or as a single picker with the last one used already chosen, given that most shoppers on phones have exactly one address?", "picker", "One picker, last used chosen", "list", "A list of every address"], // MOCK-HOOK
@@ -102,12 +102,12 @@ const MORE: AgentQuestion[] = [ // MOCK-HOOK
   answer: i === 2 ? { option: a as string, by: "Tomás Reyes", at: "Oct 17, 11:40" } : null, // MOCK-HOOK
 })); // MOCK-HOOK
 
-/** The questions for a mock-up: `many` adds the hard case's seven more. */
+/** The questions for a mock-up: `many` adds the hard case's seven more. */ // MOCK-HOOK
 export function agentQuestions(many: boolean): AgentQuestion[] { // MOCK-HOOK
   return many ? [...BASE, ...MORE] : BASE; // MOCK-HOOK
 } // MOCK-HOOK
 
-/** Feature titles of the scope-review set, for a question's "About". */
+/** Feature titles of the scope-review set, for a question's "About". */ // MOCK-HOOK
 export const AGENT_QS_FEATURES: Record<string, string> = { // MOCK-HOOK
   "saved-addresses": "Saved addresses", // MOCK-HOOK
   "address-lookup": "Address lookup", // MOCK-HOOK
