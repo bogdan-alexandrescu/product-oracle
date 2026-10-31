@@ -120,6 +120,33 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
     expect(await chip(oracle)).toBe(await chip(mine));
   });
 
+  /* qa4-simple-plan-22 (review): a row only a dependency moved names it, not "the moves below it". */
+  test("compare with Oracle names the row that needs a row pulled up", async ({ page }) => {
+    await setUp(page);
+    await open(page);
+    const pin = async (code: string, to: number, reason: string) => {
+      const label = (await page.locator(`[data-testid="prio-row"][data-code="${code}"]`).getByRole("button", { name: /^Drag / }).getAttribute("aria-label"))!;
+      const name = label.replace(/^Drag (.*) to reorder$/, "$1");
+      await dragRow(page, name, to);
+      const dialog = page.getByRole("dialog", { name: `Why move ${name}` });
+      await dialog.getByLabel(/Reason/).fill(reason);
+      await dialog.getByRole("button", { name: "Move" }).click();
+      await expect(dialog).toHaveCount(0);
+    };
+    // Alert history export up to #1, then the row that needs it to #2; then the export goes back.
+    await pin("alert-export", 0, "Two large customers asked for it");
+    await expect(page.getByTestId("prio-row").first()).toHaveAttribute("data-code", "alert-export");
+    await pin("alert-sso", 1, "Sales needs it for the November deals");
+    await expect(page.getByTestId("prio-row").nth(1)).toHaveAttribute("data-code", "alert-sso");
+    await page.locator('[data-testid="prio-row"][data-code="alert-export"]').getByTestId("prio-back-to-oracle").click();
+    await expect(page.locator('[data-testid="prio-row"][data-code="alert-export"]').getByTestId("prio-override")).toHaveCount(0);
+
+    await page.getByRole("switch", { name: "Compare with Oracle" }).click();
+    const oracle = page.getByRole("region", { name: "Oracle's order" });
+    const sso = (await oracle.locator('[data-code="alert-sso"]').locator("span.font-medium").textContent())!.trim();
+    await expect(oracle.locator('[data-code="alert-export"]').getByTestId("oracle-why")).toHaveText(`Yours: #2 (pulled up to come before ${sso}, which needs it)`);
+  });
+
   /* qa4-simple-plan-8: the side list marks a row a dependency holds back and a row a person moved. */
   test("value / effort's side list says why a score is out of order", async ({ page }) => {
     await setUp(page);
