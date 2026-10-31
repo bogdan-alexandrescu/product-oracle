@@ -197,7 +197,7 @@ async def test_html_citations_are_numbered_sources_in_the_appendix(client, fx):
         "#product thread on drop-off</a>"
     ) in src1
     assert "Most users abandon at the shipping step" in src1
-    assert "slack" in src1 and "retrieved 2026-10-16 06:10 PDT" in src1
+    assert "slack" in src1 and "retrieved Oct 16, 2026, 6:10 AM PDT" in src1
 
     # A non-http(s) ref is shown as text, never as a link.
     src3 = appendix[appendix.index('id="src-3"') : appendix.index('id="src-4"')]
@@ -211,7 +211,7 @@ async def test_html_version_banner(client, fx):
     banner = _text(html[html.index("<header") : html.index("</header>")])
     assert "Version 2" in banner
     assert "Approved" in banner
-    assert "2026-10-17 02:30 PDT" in banner
+    assert "Oct 17, 2026, 2:30 AM PDT" in banner
     assert "status-approved" in html
 
     # Older, unapproved version: superseded, dated by import time.
@@ -219,7 +219,7 @@ async def test_html_version_banner(client, fx):
     banner = _text(banner[banner.index("<header") : banner.index("</header>")])
     assert "Version 1" in banner
     assert "Superseded" in banner
-    assert "imported 2026-10-16 07:01 PDT" in banner
+    assert "imported Oct 16, 2026, 7:01 AM PDT" in banner
 
 
 async def test_html_is_self_contained_and_escapes_raw_html(client, fx):
@@ -282,7 +282,7 @@ async def test_pdf_is_valid_and_matches_html(client, fx):
     # Banner, every section heading, body text, footnotes with excerpts and refs.
     for expected in [
         "Version 2",
-        "2026-10-17 02:30 PDT",
+        "Oct 17, 2026, 2:30 AM PDT",
         *(heading.split(" {#")[0] for _, _, heading, _ in SECTIONS),
         "Intro paragraph for the redesign.",
         "Who owns the carrier contract?",
@@ -336,12 +336,12 @@ async def test_markdown_is_stored_markdown_with_banner_after_front_matter(client
     banner = body[front_matter_end:].splitlines()[0]
     assert banner.startswith("<!-- Product Oracle export:") and banner.endswith("-->")
     assert "version 1" in banner and "status superseded" in banner
-    assert "imported 2026-10-16 07:01 PDT" in banner
+    assert "imported Oct 16, 2026, 7:01 AM PDT" in banner
     # Nothing else changed.
     assert body.replace(banner + "\n", "", 1) == V1_MARKDOWN
 
     v2 = (await _export(client, fx, "md", n=2)).text
-    assert "status approved" in v2 and "approved 2026-10-17 02:30 PDT" in v2
+    assert "status approved" in v2 and "approved Oct 17, 2026, 2:30 AM PDT" in v2
 
 
 def test_markdown_banner_without_front_matter():

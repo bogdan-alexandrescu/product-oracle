@@ -34,7 +34,7 @@ from oracle.auth.service import (
 )
 from oracle.config import get_settings
 from oracle.db import dispose_engine
-from oracle.models import Tenant
+from oracle.models import PLACEHOLDER_NAME, Tenant
 from oracle.modules.service import ensure_seeded
 from oracle.templates.defaults import ensure_default_template
 from oracle.tenancy import tenant_session, unscoped_session
@@ -57,7 +57,7 @@ class SeedResult:
 
 async def seed(
     *,
-    tenant_name: str = "Example Co",
+    tenant_name: str = PLACEHOLDER_NAME,
     email: str | None = None,
     password: str | None = None,
     token_name: str = "agent-track",
@@ -161,7 +161,7 @@ async def _main(args: argparse.Namespace) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument("--tenant-name", default="Example Co")
+    p.add_argument("--tenant-name", default=PLACEHOLDER_NAME)
     p.add_argument("--email", default=default_email())
     p.add_argument("--password", default=os.environ.get("ORACLE_ADMIN_PASSWORD"))
     p.add_argument("--token-name", default="agent-track")

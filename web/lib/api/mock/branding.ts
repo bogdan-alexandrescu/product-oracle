@@ -54,7 +54,7 @@ const logoOut = (l: StoredLogo | null): BrandLogo | null => (l ? { ...l, url: `/
 
 export function brandingOut(b: BrandingDb, role: Role): BrandingOut {
   return {
-    display_name: b.display_name,
+    display_name: exportName(b),
     logo: logoOut(b.logo),
     logo_dark: logoOut(b.logo_dark),
     accent: b.accent,
@@ -127,6 +127,7 @@ function validate(input: Partial<BrandingIn> | null): { ok: BrandingIn } | { det
   if (!input || typeof input !== "object") return { detail: "Send the branding" };
   const name = typeof input.display_name === "string" ? input.display_name.trim() : "";
   if (!name || name.length > BRANDING_LIMITS.name) return { detail: `The display name must be 1 to ${BRANDING_LIMITS.name} characters` };
+  if (name === SEED_PLACEHOLDER_NAME) return { detail: STAND_IN };
   const disclaimer = typeof input.public_disclaimer === "string" ? input.public_disclaimer.trim() : "";
   if (!disclaimer || disclaimer.length > BRANDING_LIMITS.disclaimer) return { detail: `The public disclaimer must be 1 to ${BRANDING_LIMITS.disclaimer} characters` };
   const mark = input.oracle_mark ?? true;
@@ -202,9 +203,24 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&
 export function brandHeaderHtml(b: BrandingDb, background = "#ffffff"): string {
   const logo = b.logo_dark && darkBackground(background) ? b.logo_dark : b.logo;
   const bytes = logo ? b.assets[logo.sha256] : undefined;
-  const img = bytes ? `<img class="brand-logo" src="data:image/png;base64,${bytes}" alt="${esc(b.display_name)}" height="40">` : "";
-  return `<header class="brand-header">${img}<span class="brand-name">${esc(b.display_name)}</span></header>`;
+  const name = exportName(b);
+  const img = bytes ? `<img class="brand-logo" src="data:image/png;base64,${bytes}" alt="${esc(name)}" height="40">` : "";
+  if (!img && !name) return "";
+  return `<header class="brand-header">${img}${name ? `<span class="brand-name">${esc(name)}</span>` : ""}</header>`;
 }
+
+/**
+ * The name Branding shows and an export prints (as the API's oracle.branding.brand_name): the
+ * saved display name, else the company's, never the seed's placeholder (none is printed then).
+ */
+export function exportName(b: BrandingDb): string {
+  return b.display_name === SEED_PLACEHOLDER_NAME ? "" : b.display_name;
+}
+
+/** The API seed's stand-in company name (oracle.models.PLACEHOLDER_NAME). */
+export const SEED_PLACEHOLDER_NAME = "Example Co";
+/** PUT /v1/branding's refusal of the placeholder (oracle.branding.STAND_IN). */
+const STAND_IN = "“Example Co” is a stand-in name. Type your company's name.";
 
 /** The accent mapped onto the export's tokens, when one is set. */
 export function brandStyleHtml(b: BrandingDb): string {

@@ -126,6 +126,7 @@ test("qa-settings-14: a bad accent is reported once, next to its field", async (
   await login(page);
   await page.goto("/settings/company");
   const card = page.getByTestId("branding-panel");
+  await card.getByLabel("Display name").fill("Northwind Labs");
   await card.getByLabel("Accent").fill("#zzz");
   await card.getByRole("button", { name: "Save branding" }).click();
   await expect(card.getByRole("alert")).toHaveCount(1);

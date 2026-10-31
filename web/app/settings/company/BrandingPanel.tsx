@@ -325,8 +325,19 @@ export function BrandingPanel() {
                 </div>
                 <p className="text-[13px] text-text2">PNG, JPEG or WebP, at most 512 KB and 2,000 × 2,000 px. Shown at most 40 px high.</p>
                 <Field label="Display name">
-                  <input className={`${INPUT} max-w-96`} maxLength={BRANDING_LIMITS.name} value={form.name} onChange={(e) => set({ name: e.target.value })} />
+                  <input
+                    className={`${INPUT} max-w-96`}
+                    maxLength={BRANDING_LIMITS.name}
+                    placeholder="Your company's name"
+                    value={form.name}
+                    onChange={(e) => set({ name: e.target.value })}
+                  />
                 </Field>
+                {!brand.display_name && (
+                  <p data-testid="brand-name-hint" className="-mt-2 text-[13px] text-text2">
+                    Exports print no company name until you add one.
+                  </p>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <Field label="Accent">
                     <span className="flex items-center gap-2">
@@ -383,7 +394,7 @@ export function BrandingPanel() {
             ) : (
               <dl className="grid grid-cols-[160px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[15px] max-[600px]:grid-cols-1">
                 <dt className="font-semibold">Display name</dt>
-                <dd>{brand.display_name}</dd>
+                <dd>{brand.display_name || "None yet"}</dd>
                 <dt className="font-semibold">Accent</dt>
                 <dd>{brand.accent ?? "Oracle's own"}</dd>
                 <dt className="font-semibold">Public disclaimer</dt>

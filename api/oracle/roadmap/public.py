@@ -197,11 +197,10 @@ def content_hash(page: PublicPage) -> str:
 
 
 async def company_name(db: AsyncSession) -> str:
-    from oracle.models import Tenant
-    from oracle.tenancy import current_tenant
+    """The company's name, "Our" when it has none or only the seed's placeholder."""
+    from oracle.branding import export_name
 
-    tenant = await db.get(Tenant, current_tenant(db))
-    return tenant.name if tenant is not None else "Our"
+    return await export_name(db) or "Our"
 
 
 async def _items(db: AsyncSession, version: DocumentVersion) -> list[RoadmapItem]:

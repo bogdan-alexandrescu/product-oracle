@@ -28,7 +28,7 @@ from oracle.authz import has_role, require_role
 from oracle.docs.schemas import Audience
 from oracle.export import offload, present
 from oracle.export.deck import build_deck, render_deck_html, theme_class
-from oracle.export.pdf import PdfUnavailable, html_to_pdf
+from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
 from oracle.export.render import (
     ExportVersion,
     NoBrief,
@@ -197,7 +197,10 @@ async def export_version(
     return Response(
         content=content,
         media_type=MEDIA_TYPES[fmt],
-        headers={"Content-Disposition": f'attachment; filename="{ev.filename_stem}.{fmt}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{ev.filename_stem}.{fmt}"',
+            **overflow_headers(content),
+        },
     )
 
 

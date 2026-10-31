@@ -263,9 +263,9 @@ LATE = datetime(2026, 10, 12, 20, 0, tzinfo=UTC)  # Oct 13, 09:00 NZDT in Auckla
 
 
 def test_the_helper_words_a_moment_with_the_zones_short_name():
-    assert company_time.stamp(LATE, AUCKLAND) == "2026-10-13 09:00 NZDT"
-    assert company_time.stamp(LATE, "America/Los_Angeles") == "2026-10-12 13:00 PDT"
-    assert company_time.stamp(LATE.replace(tzinfo=None), AUCKLAND) == "2026-10-13 09:00 NZDT"
+    assert company_time.stamp(LATE, AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
+    assert company_time.stamp(LATE, "America/Los_Angeles") == "Oct 12, 2026, 1:00 PM PDT"
+    assert company_time.stamp(LATE.replace(tzinfo=None), AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
     assert company_time.day_first_in_words(LATE, AUCKLAND) == "13 Oct"
     assert company_time.day_first_in_words(LATE, "America/Los_Angeles") == "12 Oct"
 
@@ -331,7 +331,7 @@ async def test_the_served_review_yaml_names_the_company_day(client):
 def test_the_export_dates_are_the_company_time_with_its_short_name():
     from oracle.export import render
 
-    assert render._format_dt(LATE, AUCKLAND) == "2026-10-13 09:00 NZDT"
+    assert render._format_dt(LATE, AUCKLAND) == "Oct 13, 2026, 9:00 AM NZDT"
     assert render._format_dt(None, AUCKLAND) == ""
 
 
@@ -339,7 +339,7 @@ def test_the_ritual_pre_read_is_due_in_the_company_time():
     from oracle.rituals import blocks
 
     md = blocks.markdown("Weekly product review", LATE, [], AUCKLAND)
-    assert "Due 2026-10-13 09:00 NZDT" in md.splitlines()
+    assert "Due Oct 13, 2026, 9:00 AM NZDT" in md.splitlines()
     assert "UTC" not in md
 
 
@@ -508,7 +508,8 @@ def test_the_version_reports_name_the_company_time():
 
     doc = Document(slug="saved-addresses", title="Saved addresses PRD", kind="prd")
     md = jobs.reports_markdown(doc, _reports(), AUCKLAND)
-    assert "Product Oracle · saved-addresses · version 2 · generated 2026-10-13 09:00 NZDT" in md
+    stamp = "generated Oct 13, 2026, 9:00 AM NZDT"
+    assert f"Product Oracle · saved-addresses · version 2 · {stamp}" in md
     assert "- Invite funnel, October, file, added 2026-10-13" in md
     assert "UTC" not in md
 
@@ -543,7 +544,7 @@ async def test_the_reports_download_names_the_company_time(client):
         f"/v1/documents/{SLUG}/versions/1/reports/export", headers=ctx.as_("viewer")
     )
     assert resp.status_code == 200, resp.text
-    assert "· generated 2026-10-13 09:00 NZDT" in resp.text
+    assert "· generated Oct 13, 2026, 9:00 AM NZDT" in resp.text
     assert "added 2026-10-13" in resp.text
     assert "UTC" not in resp.text
 

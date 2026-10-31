@@ -105,14 +105,6 @@ body.orientation-landscape { max-width: 76rem; }
   }
 }
 
-.fit-warning {
-  margin: 0 0 1rem;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid #b42318;
-  color: #8a1c13;
-  font: bold 9pt var(--font-heading);
-}
-
 /* Table of contents */
 .toc { margin: 0 0 1.5rem; padding: 0.6rem 0.9rem; background: var(--color-surface); font: 9.5pt/1.5 var(--font-heading); }
 .toc h2 { margin: 0 0 0.3rem; font-size: 10pt; border: none; padding: 0; }

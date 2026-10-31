@@ -167,7 +167,8 @@ async def test_the_pre_read_has_the_kinds_blocks_and_markdown(client, ctx, at):
     assert md.status_code == 200 and md.headers["content-type"].startswith("text/markdown")
     assert "# Monthly roadmap refresh" in md.text and "## Date slips" in md.text
     # Due in the Company time zone (America/Los_Angeles by default), labelled (#463).
-    assert re.search(r"^Due \d{4}-\d\d-\d\d \d\d:\d\d P[DS]T$", md.text, re.M), md.text
+    due = r"^Due [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d\d [AP]M P[DS]T$"
+    assert re.search(due, md.text, re.M), md.text
 
 
 async def test_the_feature_gated_kinds_have_their_blocks(client, ctx, at):

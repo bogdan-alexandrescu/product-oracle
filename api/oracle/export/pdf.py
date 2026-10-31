@@ -7,7 +7,9 @@ on a machine without those libraries; a PDF request there gets ``PdfUnavailable`
 The renderer fetches nothing over the network or from disk: themes are company
 supplied, so only ``data:`` URLs load. A theme that asks for a one-page fit
 (``<meta name="oracle-page-fit" content="one_page">``) is checked after layout; an
-overflowing document is rendered again with a visible warning at the top.
+overflowing document is returned as laid out, its page count on the result
+(:attr:`Pdf.overflow`) for the person exporting, never printed in the document
+(e2e-pdf-export, 2026-10-30).
 """
 
 import re
@@ -54,7 +56,6 @@ def _url_fetcher():
 
 
 _PAGE_FIT = re.compile(r'<meta name="oracle-page-fit" content="one_page">')
-_BODY_OPEN = re.compile(r"<body[^>]*>")
 
 
 def _document(html: str):
@@ -64,21 +65,28 @@ def _document(html: str):
     return weasyprint.HTML(string=html, base_url=str(HERE), url_fetcher=_url_fetcher()).render()
 
 
-def fit_warning(pages: int) -> str:
-    return (
-        f'<p class="fit-warning" role="alert">This document is meant to fit one page but '
-        f"runs to {pages} pages. Shorten it, or pick a theme without a page limit.</p>"
-    )
+class Pdf(bytes):
+    """A PDF's bytes; ``overflow`` is its page count when a one-page theme runs past its
+    page (else 0), told to the person exporting (:func:`overflow_headers`)."""
+
+    overflow: int = 0
 
 
-def html_to_pdf(html: str) -> bytes:
+OVERFLOW_HEADER = "X-Oracle-Overflow-Pages"
+
+
+def overflow_headers(content: object) -> dict[str, str]:
+    """The response header saying a one-page export runs to more pages (none when it fits)."""
+    pages = getattr(content, "overflow", 0)
+    return {OVERFLOW_HEADER: str(pages)} if pages else {}
+
+
+def html_to_pdf(html: str) -> Pdf:
     document = _document(html)
+    out = Pdf(document.write_pdf())
     if _PAGE_FIT.search(html) and len(document.pages) > 1:
-        m = _BODY_OPEN.search(html)
-        if m:
-            warned = html[: m.end()] + fit_warning(len(document.pages)) + html[m.end() :]
-            document = _document(warned)
-    return document.write_pdf()
+        out.overflow = len(document.pages)
+    return out
 
 
 def page_count(html: str) -> int:
