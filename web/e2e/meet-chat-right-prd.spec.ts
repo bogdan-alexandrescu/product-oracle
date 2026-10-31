@@ -38,6 +38,17 @@ async function say(chat: Locator, text: string): Promise<Locator> {
   return last;
 }
 
+/** Starts a review of Guided setup from the meetings page; its meeting's id. */
+async function startGuidedSetup(page: Page): Promise<string> {
+  await page.goto("/simple/meetings");
+  await tap(page.getByRole("button", { name: "Start review" }).first());
+  const sheet = page.getByRole("dialog", { name: "Start a review" });
+  await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
+  await tap(sheet.getByRole("button", { name: "Start", exact: true }));
+  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+  return /\/simple\/meetings\/([^/?#]+)/.exec(page.url())![1];
+}
+
 for (const phone of [false, true]) {
   const where = phone ? "phone" : "desktop";
   test.describe(where, () => {
@@ -76,13 +87,7 @@ for (const phone of [false, true]) {
       // fails_when: the chat only says "The meeting has ended", or shows an ISO date
       // no_claim: a meeting that ended by itself (api tests)
       await meeting(page);
-      await page.goto("/simple/meetings");
-      await tap(page.getByRole("button", { name: "Start review" }).first());
-      const sheet = page.getByRole("dialog", { name: "Start a review" });
-      await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-      await tap(sheet.getByRole("button", { name: "Start", exact: true }));
-      await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-      const id = /\/simple\/meetings\/([^/?#]+)/.exec(page.url())![1];
+      const id = await startGuidedSetup(page);
       await tap(page.getByRole("button", { name: "End meeting" }));
       await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
       await expect(page.getByTestId("end-screen")).toBeVisible();
@@ -90,6 +95,18 @@ for (const phone of [false, true]) {
       const ended = page.getByTestId("meeting-chat").getByTestId("chat-ended");
       await expect(ended).toContainText(/Ended by \S.*, [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2}/);
       await expect(ended).not.toContainText(/\d{4}-\d{2}-\d{2}/);
+    });
+
+    test(`a meeting left idle says it ended by itself (${where})`, async ({ page }) => {
+      // protects: a live meeting with nothing done past its idle time (4 hours) ends by itself, and its chat reads "Ended by itself after its time ran out, <Mon d, yyyy, h:mm>"
+      // fails_when: the mock never ends a meeting by itself (it stays live, or reads "Ended by <presenter>")
+      // no_claim: the meeting page's own end screen
+      await meeting(page);
+      const id = await startGuidedSetup(page);
+      await page.clock.fastForward("04:01:00");
+      await page.goto(`/simple/meetings/${id}/chat`);
+      const ended = page.getByTestId("meeting-chat").getByTestId("chat-ended");
+      await expect(ended).toContainText(/Ended by itself after its time ran out, [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2}/);
     });
   });
 }
