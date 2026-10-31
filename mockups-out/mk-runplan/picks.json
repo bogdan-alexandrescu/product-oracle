@@ -1,0 +1,260 @@
+{
+  "title": "A run's new features and dated items in the plan",
+  "subtitle": "A Baseline to PRD run for Saved addresses proposes 6 new features; a run for Saved carts has dated 6 items after the engineering dates stop. Pick how the order stop ranks the new features (RP1) and where Simple shows the dates before the PRD is approved (RP2). Every frame is the real app on mock data; switch with ?rp1=a|b|c|d or ?rp2=a|b|c|d, plus &open=1, &phase=mid, &done=1.",
+  "decisions": [
+    {
+      "code": "RP1",
+      "name": "How a run's new features get ranked",
+      "question": "How should the run's Priority order stop rank the features its PRD adds, which the baseline does not have yet?",
+      "common": "The order stop is Detailed › Priorities with the run's order (Live #, Δ, Approve order, Request changes). Today the PRD's 6 new features sit at the bottom unranked, by key, at 0% confidence, and only join the baseline if someone accepts the run's proposals, which nothing asks for. Every proposal names them as new in this PRD and says what happens to them.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Scored with the rest",
+          "recommended": true,
+          "what": "The order stop scores the new features from the run's feature set and ranks them among the baseline's features, each with a 'New in this PRD' chip. A line above the table says approving the order adds them to the baseline as proposed. One decision, at the stop that already exists.",
+          "why": "The order stop is the one place someone is already asked to decide; ranking the PRD's own features there closes the gap with no new step, and approving it is the 'accept' that nothing asks for today.",
+          "plus": "No extra step; the order is whole the first time; the person approving sees exactly where each new feature lands.",
+          "cost": "Approving the order also changes the baseline, a side effect some will miss; new features are scored from the run's feature set only, with no evidence yet (the inspector shows it).",
+          "frames": [
+            {
+              "file": "frames/rp1-a-rest.html",
+              "caption": "At rest: the run's order with the 6 new features ranked in, each marked 'New in this PRD'; the line above says approving adds them to the baseline."
+            },
+            {
+              "file": "frames/rp1-a-open.html",
+              "caption": "A new feature opened: its score comes from the run's feature set, 50% confidence and no evidence yet. This is the cost."
+            },
+            {
+              "file": "frames/rp1-a-done.html",
+              "caption": "After Approve order: saved for the PRD, and the 6 new features joined the baseline as proposed."
+            },
+            {
+              "file": "frames/rp1-a-rest-1512.html",
+              "caption": "Hard case at 1512: 11 rows, the longest name wraps to five lines beside the open inspector."
+            },
+            {
+              "file": "frames/rp1-a-rest-390.html",
+              "caption": "Phone 390: each row card carries the 'New in this PRD' chip under its name."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Accept them first",
+          "recommended": false,
+          "what": "The order stop asks first: a band names the PRD's new features and holds Approve order until each is accepted or left out. Accepted features join the baseline as proposed and the run re-scores the order with them.",
+          "plus": "Nothing joins the baseline without someone choosing it; a weak idea can be left out before it is ranked.",
+          "cost": "A second decision before the real one, and a re-score wait; Approve order is greyed out until it is done.",
+          "frames": [
+            {
+              "file": "frames/rp1-b-rest.html",
+              "caption": "At rest: the band says Saved addresses adds 6 features; Approve order is held until they are dealt with."
+            },
+            {
+              "file": "frames/rp1-b-open.html",
+              "caption": "Review opened: all 6 listed with goal, reach and why, each ticked."
+            },
+            {
+              "file": "frames/rp1-b-mid.html",
+              "caption": "Mid-way: Address labels and notes unticked and marked 'Left out'; the button now reads Accept 5 and rank them."
+            },
+            {
+              "file": "frames/rp1-b-done.html",
+              "caption": "After Accept 5: the order is re-scored with the 5 accepted features; the left-out one stays in the PRD only."
+            },
+            {
+              "file": "frames/rp1-b-open-1512.html",
+              "caption": "Hard case at 1512: the review list pushes the order itself below the fold. This is the cost."
+            },
+            {
+              "file": "frames/rp1-b-open-390.html",
+              "caption": "Phone 390: the list scrolls under the band; Accept and Cancel sit at its foot."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Separate group, Rank them",
+          "recommended": false,
+          "what": "The order stays the baseline's. Under it, a 'Proposed by this PRD' group lists the new features unscored, with a Rank them action that scores them from the run's feature set and places them in the order, which then needs approving again.",
+          "plus": "The approver sees the baseline's order untouched first, and ranks the new ones on purpose; they stay proposed in the baseline until the PRD is approved.",
+          "cost": "Easy to approve the order without ever pressing Rank them; the group sits below the table, out of sight at 1440 and 1512.",
+          "frames": [
+            {
+              "file": "frames/rp1-c-rest.html",
+              "caption": "At rest: under the order, 'Proposed by this PRD' lists 6 features as Not scored, with Rank them."
+            },
+            {
+              "file": "frames/rp1-c-open.html",
+              "caption": "Rank them pressed: it asks to confirm and says the order must be approved again."
+            },
+            {
+              "file": "frames/rp1-c-mid.html",
+              "caption": "Mid-way: scoring the 6 features from the run's feature set."
+            },
+            {
+              "file": "frames/rp1-c-done.html",
+              "caption": "Result: the 6 ranked into the order, marked 'New in this PRD'; they stay proposed in the baseline."
+            },
+            {
+              "file": "frames/rp1-c-rest-1512.html",
+              "caption": "Hard case at 1512: the group is below the fold; Approve order is right there at the top. This is the cost."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Unranked until approved",
+          "recommended": false,
+          "what": "The order ranks the baseline's features only. A 'Not ranked yet' group says plainly the new features are ranked once the PRD is approved and they join the baseline; no action here. The next order after approval ranks them.",
+          "plus": "No side effects and nothing new to learn; the words replace today's silent 0% rows.",
+          "cost": "The PRD's own features have no rank while it is being decided, so its plan cannot be checked against them until a later order.",
+          "frames": [
+            {
+              "file": "frames/rp1-d-rest.html",
+              "caption": "At rest: 'Not ranked yet' lists the 6 as After approval and says why."
+            },
+            {
+              "file": "frames/rp1-d-done.html",
+              "caption": "Later: once Saved addresses is approved, the next order ranks them with the rest."
+            },
+            {
+              "file": "frames/rp1-d-rest-1512.html",
+              "caption": "Hard case at 1512: the order approved here has none of the PRD's own features in view. This is the cost."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "RP2",
+      "name": "Where a draft PRD's dated items show in Simple",
+      "question": "Where should a not-yet-approved PRD's dated items, from the run's draft roadmap, show in Simple?",
+      "common": "After the engineering dates stop the run has a draft roadmap of the PRD's items with dates (here Saved carts, 6 items, Nov to May). Today it shows only in Detailed › PRD › Roadmap tab; the Simple roadmap's PRD filter does not list the PRD and the meeting's Roadmap step says 'No roadmap items for this PRD yet.' Drafts are hatched wherever they show.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Draft layer on roadmap",
+          "recommended": false,
+          "what": "The Simple roadmap gets a draft layer: the PRD's dated items in a hatched band above the chart, with a Show drafts switch, and the PRD filter lists it as 'Saved carts (draft)'.",
+          "plus": "Planners see the draft against the whole roadmap, and the filter no longer hides the PRD.",
+          "cost": "Unapproved dates sit beside approved ones and the band has its own months, which do not line up with the chart below; on a phone the list pushes the roadmap down.",
+          "frames": [
+            {
+              "file": "frames/rp2-a-rest.html",
+              "caption": "At rest: 'Saved carts · draft' with 6 hatched items over the roadmap, Show drafts on."
+            },
+            {
+              "file": "frames/rp2-a-open.html",
+              "caption": "A draft item opened: its dates, owner, and 'joins the roadmap when the PRD is approved'."
+            },
+            {
+              "file": "frames/rp2-a-done.html",
+              "caption": "Result of picking 'Saved carts (draft)' in the PRD filter: only its draft shows; the chart says nothing matches, as nothing is approved."
+            },
+            {
+              "file": "frames/rp2-a-rest-1512.html",
+              "caption": "Hard case at 1512: two timelines on one page with different scales. This is the cost."
+            },
+            {
+              "file": "frames/rp2-a-rest-390.html",
+              "caption": "Phone 390: the draft list comes before the roadmap's own chart."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "One-pager timeline only",
+          "recommended": false,
+          "what": "The PRD's one-pager shows the draft in its Timeline, hatched and marked 'Draft dates: not approved'. Nowhere else changes until the PRD is approved.",
+          "plus": "The draft stays with the PRD it belongs to; the shared roadmap only ever shows approved dates.",
+          "cost": "The review meeting's Roadmap step and the roadmap still show nothing of it.",
+          "frames": [
+            {
+              "file": "frames/rp2-b-rest.html",
+              "caption": "At rest: the one-pager's Timeline with 6 hatched draft items."
+            },
+            {
+              "file": "frames/rp2-b-open.html",
+              "caption": "A draft bar picked: its card with dates, owner and what approval does."
+            },
+            {
+              "file": "frames/rp2-b-cost.html",
+              "caption": "Cost: in the review meeting the Roadmap step still says 'No roadmap items for this PRD yet.'"
+            },
+            {
+              "file": "frames/rp2-b-rest-1512.html",
+              "caption": "At 1512: the same Timeline with a bar picked; short bars cut their names."
+            },
+            {
+              "file": "frames/rp2-b-rest-390.html",
+              "caption": "Phone 390: the Timeline turns into a dashed vertical list."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Meeting step as draft",
+          "recommended": true,
+          "what": "The review meeting's Roadmap step shows the run's draft: hatched items, each marked Draft with Change dates and Leave out, and an Approve these dates action that puts them on the roadmap.",
+          "why": "The review meeting is where the PRD is decided, and its Roadmap step is where today's 'No roadmap items' is plainly wrong; showing the draft there gets the dates looked at and approved by the people in the room.",
+          "plus": "The dates get decided where people already meet; changes during the meeting stay draft until approved.",
+          "cost": "Outside a meeting nobody sees the draft; approving the dates is a second approval next to the PRD's own; on a phone the bars are too short for names.",
+          "frames": [
+            {
+              "file": "frames/rp2-c-rest.html",
+              "caption": "At rest: the Roadmap step shows Saved carts' draft, hatched, each item marked Draft."
+            },
+            {
+              "file": "frames/rp2-c-mid.html",
+              "caption": "Mid-way: 'Turn a cart into a quote' moved to May, still draft."
+            },
+            {
+              "file": "frames/rp2-c-open.html",
+              "caption": "Approve these 6 dates opened: it asks to confirm, and says the PRD still needs its own approval."
+            },
+            {
+              "file": "frames/rp2-c-done.html",
+              "caption": "Result: the dates approved in the meeting; the 6 items are on the roadmap, solid."
+            },
+            {
+              "file": "frames/rp2-c-rest-1512.html",
+              "caption": "At 1512: the same step with the meeting chat beside it."
+            },
+            {
+              "file": "frames/rp2-c-rest-390.html",
+              "caption": "Phone 390: names on the bars are cut to a few letters; the list below carries them. This is the cost."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Nowhere, said plainly",
+          "recommended": false,
+          "what": "No dates show in Simple until the PRD is approved, but every place says so: the roadmap, the one-pager's Timeline and the meeting's Roadmap step each say the run dated 6 items and they show once the PRD is approved.",
+          "plus": "Simple only ever shows approved dates, and nothing claims there are none.",
+          "cost": "Nobody in Simple can see the draft dates before approving the PRD; they have to go to Detailed.",
+          "frames": [
+            {
+              "file": "frames/rp2-d-rest.html",
+              "caption": "The roadmap: one line says Saved carts is not approved yet and its 6 dated items show once it is."
+            },
+            {
+              "file": "frames/rp2-d-onepager.html",
+              "caption": "The one-pager's Timeline says the same in place of 'No roadmap items yet'."
+            },
+            {
+              "file": "frames/rp2-d-meeting.html",
+              "caption": "The meeting's Roadmap step says the run dated 6 items; they join the roadmap when the PRD is approved."
+            },
+            {
+              "file": "frames/rp2-d-rest-1512.html",
+              "caption": "At 1512: the line is easy to miss above a full roadmap. This is the cost."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

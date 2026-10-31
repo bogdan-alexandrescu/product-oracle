@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Button, LinkButton } from "@/components/ds";
 import { clock, FlowPanel } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { MkOnePagerDraft, useMk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
@@ -219,6 +220,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   }, []);
   useLayoutEffect(() => placeNotes(margin.current));
   const phone = usePhone();
+  const mk = useMk(); // MOCK-HOOK
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) {
@@ -331,7 +333,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   }
   const notesFor = (id: string) => v.notes.filter((n) => n.line_id === id);
   const plan = planNow ?? planQ.data ?? null;
-  const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0;
+  const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0 && !mk.rp2; // MOCK-HOOK: a draft PRD shows no approved plan
   const summary = docQ.data ?? null;
   // qa-simple-prd-18: a draft whose changes were all undone shows no banner.
   const draftShown = !!v.draft && (v.draft.changes > 0 || v.draft.status === "submitted");
@@ -459,7 +461,13 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
         <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
           {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} />}
-          {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
+          {mk.rp2 && ( // MOCK-HOOK
+            <section aria-label="Timeline" className="mt-5"> {/* MOCK-HOOK */}
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">Timeline</h2> {/* MOCK-HOOK */}
+              <div className="mt-2">{(mk.rp2 === "b" || mk.rp2 === "d") ? <MkOnePagerDraft mk={mk} phone={phone} /> : <p className="text-base text-text-faint">No roadmap items yet</p>}</div> {/* MOCK-HOOK */}
+            </section> // MOCK-HOOK
+          )} {/* MOCK-HOOK */}
+          {v.blocks.filter((b) => !(planShown && b.kind === "timeline") && !(mk.rp2 && b.kind === "timeline") /* MOCK-HOOK */).map((b) => (
             <section key={b.key} aria-label={b.title} className="mt-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
               {b.kind === "timeline" ? (

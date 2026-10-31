@@ -13,6 +13,8 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { displayZone, plainClock } from "@/lib/dates";
 import { useMe } from "@/lib/me";
+import { MK_PRD } from "@/lib/api/mock/mk-runplan"; // MOCK-HOOK
+import { MkRoadmapDraft, useMk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
@@ -527,6 +529,7 @@ function DecisionTray({
 
 export function SimpleRoadmap() {
   const { me, can } = useMe();
+  const mk = useMk(); // MOCK-HOOK
   const phone = usePhone();
   // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>)
   // or to one roadmap (?roadmap=<id or slug>).
@@ -1031,7 +1034,7 @@ export function SimpleRoadmap() {
       {readable.length > 1 && (
         <Select label="Roadmap" all="All roadmaps" testId="filter-roadmap" value={data.roadmap?.id ?? ""} options={readable.map((r) => [r.roadmap.id, r.roadmap.title])} onChange={pickRoadmap} />
       )}
-      <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => pickFilter("prd", prd)} />
+      <Select label="PRD" value={f.prd} options={mk.rp2 === "a" ? [...seen.prd, [MK_PRD.slug, `${MK_PRD.title} (draft)`]] : mk.rp2 === "d" ? [...seen.prd, [MK_PRD.slug, `${MK_PRD.title} (not approved yet)`]] : seen.prd} /* MOCK-HOOK */ onChange={(prd) => pickFilter("prd", prd)} />
       <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
       <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
       <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setRange(from, f.to)} testId="filter-from" />
@@ -1156,6 +1159,7 @@ export function SimpleRoadmap() {
         {!phone && actions}
         {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
       </header>
+      <MkRoadmapDraft mk={mk} phone={phone} /> {/* MOCK-HOOK */}
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
       </p>

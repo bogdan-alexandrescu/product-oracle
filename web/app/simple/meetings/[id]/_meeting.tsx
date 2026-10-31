@@ -1,5 +1,7 @@
 "use client";
 
+import { MkMeetingDraft, useMk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
+import { MK_PRD } from "@/lib/api/mock/mk-runplan"; // MOCK-HOOK
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -113,9 +115,12 @@ function useAct(reload: () => Promise<unknown>) {
   return { busy, error, act };
 }
 
-function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
+function LiveScreen({ m: real, reload }: { m: Meeting; reload: () => Promise<unknown> }) { // MOCK-HOOK
+  const mkUrl = useMk(); // MOCK-HOOK
+  const m = mkUrl.rp2 ? { ...real, title: `Review: ${MK_PRD.title}`, prd: { ...real.prd, title: MK_PRD.title } } : real; // MOCK-HOOK: the review is of the draft PRD
   const zone = useCompanyZone();
-  const [step, setStep] = useState(0);
+  const mk = useMk(); // MOCK-HOOK
+  const [step, setStep] = useState(mk.step ?? 0); // MOCK-HOOK
   const [people, setPeople] = useState(false);
   const [notApproved, setNotApproved] = useState<Meeting["not_approved"]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -379,6 +384,8 @@ const HORIZONS = ["now", "next", "later"] as const;
 
 function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const zone = useCompanyZone();
+  const mk = useMk(); // MOCK-HOOK
+  const mkItems = mk.rp2 ? [] : null; // MOCK-HOOK: the draft PRD has no approved items
   const q = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
   const { busy, error, act } = useAct(async () => {
     await q.reload();
@@ -392,13 +399,13 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
     });
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
-  const items = q.data.items;
+  const items = mkItems ?? q.data.items; // MOCK-HOOK
   return (
     <section aria-label="Roadmap slice" className="simple-card">
       <h2 className="simple-h2">{m.prd.title} on the roadmap</h2>
       {said && <p role="status" className="simple-small">{said}</p>}
       {error && <ErrorNote>{error}</ErrorNote>}
-      {items.length === 0 && <p className="simple-small">No roadmap items for this PRD yet.</p>}
+      {mk.rp2 === "c" || mk.rp2 === "d" ? <MkMeetingDraft mk={mk} canChange={m.can.change} /> /* MOCK-HOOK */ : items.length === 0 && <p className="simple-small">No roadmap items for this PRD yet.</p>}
       <ul className="mt-2 divide-y divide-line">
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">

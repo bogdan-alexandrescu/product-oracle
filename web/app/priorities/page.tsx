@@ -29,6 +29,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { usePhone } from "@/components/ds/page-info";
+import { MkOrderNotes, MkProposedGroup, NewChip, mkApproveHeld, mkRows, useMk, type Mk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
@@ -788,7 +789,7 @@ const STATUS_TEXT = { saved: "Saved", proposed: "Proposed", discarded: "Discarde
  * Run mode's band (C8): whose order this is and where it stands, and the priority stop's
  * decision (the checkpoint decide route): Approve order, or Request changes with a note.
  */
-function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }) {
+function SnapshotBand({ c, onDecided, mk }: { c: CompareOut; onDecided: () => void; mk?: Mk /* MOCK-HOOK */ }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -796,7 +797,7 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
   const doc = snap.document;
   const prd = doc ? prdName(doc) : null;
   const deciding = snap.status === "proposed" && cp?.status === "pending";
-  const blocked = cp?.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
+  const blocked = (mk && mkApproveHeld(mk)) /* MOCK-HOOK */ ?? (cp?.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null);
 
   async function decide(decision: "approved" | "changes_requested") {
     if (!run || !cp) return;
@@ -899,6 +900,7 @@ export default function PrioritiesPage() {
 function Priorities() {
   // Run mode (C8): /priorities?snapshot=<id> shows a run's order next to the live ranking.
   const snapshotId = useSearchParams().get("snapshot");
+  const mk = useMk(); // MOCK-HOOK
   const [compareKey, setCompareKey] = useState(0);
   const cq = useQuery(
     `priority-compare|${snapshotId}|${compareKey}`,
@@ -908,10 +910,12 @@ function Priorities() {
         : Promise.resolve(null),
     { keepPrevious: true },
   );
-  const cmp = snapshotId ? (cq.data ?? null) : null;
+  const cmpLive = snapshotId ? (cq.data ?? null) : null; // MOCK-HOOK
+  const mkDecided = mk.done && (mk.rp1 === "a" || mk.rp1 === "d"); // MOCK-HOOK
+  const cmp = cmpLive && mkDecided ? { ...cmpLive, snapshot: { ...cmpLive.snapshot, status: "saved" as const }, checkpoint: cmpLive.checkpoint && { ...cmpLive.checkpoint, status: "approved" } } : cmpLive; // MOCK-HOOK
   const [chosen, setMethod] = useState<Method>("goal_weighted");
   const method: Method = cmp?.snapshot.method ?? chosen;
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(mk.sel); // MOCK-HOOK
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Schemas["PrioritySnapshotOut"] | null>(null);
@@ -948,7 +952,7 @@ function Priorities() {
   // Run mode: the run's order, each row its live RankedFeature at the run's rank.
   const stored = new Map(cmp?.snapshot.ranking.map((f) => [f.key, f]) ?? []);
   const runRows = cmp?.rows.map((c) => ({ ...(stored.get(c.key) ?? placeholder(c, method)), rank: c.run_rank }));
-  const rows = cmp ? runRows : r?.features;
+  const rows = cmp ? mkRows(runRows, mk, method) /* MOCK-HOOK */ : r?.features;
   const features = rows ?? [];
   // The selected feature, else the top of the ranking.
   const current = features.find((f) => f.key === selected) ?? features[0];
@@ -1087,6 +1091,7 @@ function Priorities() {
             data-testid="feature-name"
           >
             {f.title}
+            {f.key.startsWith("N-") && <span className="ml-2 inline-block align-middle"><NewChip k={f.key} /></span> /* MOCK-HOOK */}
           </button>
         );
       },
@@ -1316,6 +1321,7 @@ function Priorities() {
         <TrackRecord />
         {cmp && (
           <SnapshotBand
+            mk={mk} // MOCK-HOOK
             c={cmp}
             onDecided={() => {
               setCompareKey((k) => k + 1);
@@ -1323,6 +1329,8 @@ function Priorities() {
             }}
           />
         )}
+
+        {snapshotId && <MkOrderNotes mk={mk} /> /* MOCK-HOOK */}
 
         <Split inspector={!phone && inspector}>
           <Panel>
@@ -1394,6 +1402,8 @@ function Priorities() {
               rowProps={(f) => ({ "data-testid": `priority-row-${f.key}` })}
             />
           </Panel>
+
+          {snapshotId && <MkProposedGroup mk={mk} /> /* MOCK-HOOK */}
 
           {goals.length > 0 && (
             <Panel title="By goal" count={<PlainCount n={goals.length} />}>
