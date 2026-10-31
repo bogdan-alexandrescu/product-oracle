@@ -93,7 +93,7 @@ const TINT: Record<Line["state"], string> = {
  * API's can_* fields. Inside a review meeting (S8, `sessionId`), its line edits and decisions
  * go through the meeting's session and become the meeting's decisions.
  */
-export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; sessionId?: string; refresh?: string; onChanged?: () => void }) {
+export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onChanged }: { doc: string; sessionId?: string; meetingDecisionIds?: string[]; refresh?: string; onChanged?: () => void }) {
   const q = useQuery(`simple-one-pager|${doc}`, () =>
     unwrap(api.GET("/v1/simple/one-pagers/{doc}", { params: { path: { doc } } })),
   );
@@ -710,9 +710,10 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
               <MarginNote {...{ n, quote: words.get(n.line_id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />
             </div>
           ))}
-          {/* qa4-simple-decide-25: in a meeting, once its edits are published, the margin says where they went. */}
+          {/* qa4-simple-decide-25: in a meeting, once its edits are published, the margin says where they went;
+              only when this meeting decided a line, not an earlier one. */}
           {v.notes.length === 0 &&
-            (sessionId && v.blocks.some((b) => b.lines.some((l) => l.decisions.length > 0)) ? (
+            (sessionId && v.blocks.some((b) => b.lines.some((l) => l.decisions.some((d) => meetingDecisionIds.includes(d.id)))) ? (
               <p className="mt-1 text-base text-text2" data-testid="margin-published">
                 No changes waiting. Version {v.version} is published; “Decided in” under a line links to the decision that changed it.
               </p>

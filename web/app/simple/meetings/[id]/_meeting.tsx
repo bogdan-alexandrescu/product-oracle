@@ -325,6 +325,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               <OnePager
                 doc={m.prd.slug}
                 sessionId={m.session_id}
+                meetingDecisionIds={m.meeting_decisions.map((d) => d.id)}
                 refresh={`${m.meeting_decisions.length}|${m.drafts.map((d) => `${d.status}-${d.waiting_on.length}-${d.changes}`).join()}`}
                 onChanged={() => void reload()}
               />
