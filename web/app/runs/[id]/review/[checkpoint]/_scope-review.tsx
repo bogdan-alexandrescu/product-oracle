@@ -611,10 +611,13 @@ function YourCall({ f, scope, review, mode, ops, ui }: { f: Feature; scope: Scop
   if (f.edited) return done(changeText(f), () => ops.patch(f, { revert: true }));
   const open = openReasons(f);
   if (open.length) return <FixButtons fixes={fixesFor(open[0], f, scope, mode, ops, ui)} />;
-  // A call per reason: the row's Undo takes back all of them.
+  // A call per reason: the row's Undo takes back all of them, one after another, so the last
+  // reload reads them all gone.
   const answers = actionsOn(review, f.key).filter((a) => a.state === "staged" && (a.kind === "accept" || a.kind === "waive"));
   if (answers.length)
-    return done(answers.every((a) => a.kind === "waive") ? "Waived" : "Included", () => Promise.all(answers.map((a) => ops.removeAction(a.id))).then(() => undefined));
+    return done(answers.every((a) => a.kind === "waive") ? "Waived" : "Included", () =>
+      answers.reduce<Promise<void>>((prev, a) => prev.then(() => ops.removeAction(a.id)), Promise.resolve()),
+    );
   // Fixed elsewhere (a dependency included again): Undo puts that row back.
   const fixedBy = scope.features.filter((d) => f.depends_on.includes(d.key) && d.edited);
   if (fixedBy.length) return done("Fixed", () => Promise.all(fixedBy.map((d) => ops.patch(d, { revert: true }))).then(() => undefined));

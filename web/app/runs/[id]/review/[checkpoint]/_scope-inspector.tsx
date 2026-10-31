@@ -475,6 +475,17 @@ export function ScopeInspector({
   const kept = staged.some((a) => a.kind === "accept") && !f.reasons.some((r) => !r.answered && r.severity !== "blocking");
   const undecided = f.needs_you && !f.edited && !kept;
   const proposed = proposedText(f.decision);
+  // Include on a feature the set includes that only a blocking reason holds: say what to do.
+  const [blockedOn, setBlockedOn] = useState<string | null>(null);
+  const onlyBlocked = f.decision === "include" && !kept && f.reasons.some((r) => !r.answered && r.severity === "blocking") && !f.reasons.some((r) => !r.answered && r.severity !== "blocking");
+  // Undo of one reason: a call staged before each reason had its own may answer others too; they stay kept.
+  const undoReason = async (answer: (typeof staged)[number], code: string) => {
+    if (answer.kind === "accept" && answer.field == null) {
+      const covered = f.reasons.filter((r) => r.answered && r.severity !== "blocking" && (!answer.answers.length || answer.answers.includes(r.code)));
+      for (const r of covered) if (r.code !== code) await ops.act({ item_key: f.key, kind: "accept", answers: [r.code] });
+    }
+    await ops.removeAction(answer.id);
+  };
   return (
     <Inspector
       eyebrow="Feature · selected"
@@ -515,7 +526,7 @@ export function ScopeInspector({
                     <p className="mt-1.5 flex items-center gap-1.5 text-sm text-pass">
                       ✓ {answer.kind === "waive" ? `Waived: ${((answer.value ?? {}) as { reason?: string }).reason ?? answer.note ?? ""}` : "Included"}
                       {mode === "approver" && (
-                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void ops.removeAction(answer.id)}>
+                        <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => void undoReason(answer, r.code)}>
                           Undo
                         </Button>
                       )}
@@ -556,8 +567,15 @@ export function ScopeInspector({
             { value: "exclude", label: "Leave out", disabled: mode !== "approver" },
             { value: "defer", label: "Defer to a later PRD", disabled: mode !== "approver" },
           ]}
-          onChange={(v) => (v === "exclude" ? ui.leaveOut(f) : v === "include" ? void includeFeature(mode, ops, f) : void setDecision(mode, ops, f, v))}
+          onChange={(v) =>
+            v === "exclude" ? ui.leaveOut(f) : v === "include" ? (onlyBlocked ? setBlockedOn(f.key) : void includeFeature(mode, ops, f)) : void setDecision(mode, ops, f, v)
+          }
         />
+        {onlyBlocked && blockedOn === f.key && (
+          <p className="mt-1.5 text-sm text-text2" role="status" data-testid="include-blocked">
+            Fix what blocks it first, above.
+          </p>
+        )}
         {mode !== "approver" && (
           <p className="mt-1.5 text-sm text-text2" data-testid="who-decides">
             {mode === "commenter" ? "An approver decides; you can suggest a change." : "An approver decides."}
