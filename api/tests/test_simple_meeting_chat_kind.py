@@ -75,9 +75,9 @@ async def test_a_change_request_in_a_meeting_gets_the_readers_reply(
         assert out.ran == 0, line
         await chat_of(client, ctx, "decider", mid)
         await read(ctx, actions(act("move_dates", item=w.ids["Bulk import"],
-                                    start_date="2026-12-01")))  # fmt: skip
+                                    when="2026-12-01")))  # fmt: skip
         m = (await chat_of(client, ctx, "decider", mid))[-1]
-        assert m["kind"] in ("cards", "question"), m
+        assert m["kind"] in ("cards", "question"), (m["kind"], m["body"])
         assert m["kind"] == "question" or len(m["cards"]) == 1
     assert fake.calls == 0
     assert not [p for p in await oracle_prompts(ctx) if p and p.startswith("discussion_reply")]

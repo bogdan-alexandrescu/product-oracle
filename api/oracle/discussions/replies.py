@@ -433,12 +433,28 @@ def _listen(reply_id: uuid.UUID) -> tuple[asyncio.Queue, str] | None:
 # --- running a reply --------------------------------------------------------------------
 
 
+def _not_simple_chat() -> Any:
+    """A message outside every Simple chat (a person's Ask chat on a page, a meeting's
+    chat): those are answered by the Simple chat reader only (oracle.simple.chat's
+    ``chat_reader`` job), whose pending line waits here as a ``pending`` Oracle message
+    too (meet-chat-kind)."""
+    return DiscussionMessage.discussion_id.not_in(
+        select(Discussion.id).where(
+            Discussion.origin == "panel", Discussion.subject_key.like("screen:/simple/%")
+        )
+    )
+
+
 async def claim(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> bool:
     """Take a ``pending`` reply to run it; False when someone else has."""
     async with tenant_session(tenant_id) as db:
         got = await db.scalar(
             update(DiscussionMessage)
-            .where(DiscussionMessage.id == reply_id, DiscussionMessage.status == "pending")
+            .where(
+                DiscussionMessage.id == reply_id,
+                DiscussionMessage.status == "pending",
+                _not_simple_chat(),
+            )
             .values(
                 status="streaming",
                 stream_lease_until=func.now() + LEASE,
@@ -993,6 +1009,7 @@ async def run_pending(
                     DiscussionMessage.status == "pending",
                     DiscussionMessage.author_kind == "oracle",
                     DiscussionMessage.created_at < func.now() - PENDING_GRACE,
+                    _not_simple_chat(),
                 )
                 .order_by(DiscussionMessage.created_at)
                 .limit(limit)

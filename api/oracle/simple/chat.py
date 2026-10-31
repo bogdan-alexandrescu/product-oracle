@@ -34,7 +34,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, get_args
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +53,7 @@ from oracle.simple.schemas import (
     ChatCardOut,
     ChatChoiceOut,
     ChatFix,
+    ChatKind,
     ChatMessageOut,
     ChatRulesOut,
     ChatStopOut,
@@ -72,6 +73,7 @@ VISUALS = "oracle.simple.visuals"
 ENGINE = "oracle.simple.chat"
 READER_JOB = "chat_reader"
 DEAD = ("failed", "cancelled")
+KINDS = frozenset(get_args(ChatKind))
 FLOW_OPS = ("add_feature_ask", "add_item_task")
 CARD_OPS_ON_ITEMS = ("move_dates", "change_horizon", "set_milestone", "edit_title", "cut")
 VIEWER_NOTE = "Viewers ask questions here; ask the presenter to make a change."
@@ -993,6 +995,10 @@ async def thread(
             person = m.author_kind == "person"
             r = reads.get(m.id)
             kind, body = "request" if person else (m.prompt or "note"), m.body
+            if kind not in KINDS:
+                # Not a chat kind (a discussion reply left here before meet-chat-kind): its
+                # body reads as an answer, so one stray line never takes the chat down.
+                kind = "answer"
             if kind == "pending" and r is not None and jobs.get(r.job_id) in DEAD:  # type: ignore[arg-type]
                 kind, body = "failed", COULD_NOT_READ
             choices = [ChatChoiceOut(index=i, label=c["label"])
