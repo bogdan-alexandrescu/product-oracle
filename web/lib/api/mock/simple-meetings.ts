@@ -683,6 +683,20 @@ async function body(req: Request): Promise<Record<string, unknown>> {
  */
 export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], run: (r: Request) => Promise<Response | null>): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
+  // qa4-simple-decide-16 (changes_router.undo_simple_change): undoing a change made in a live
+  // meeting is that meeting's decision too, "Undone: <what it did>".
+  if (p[4] === "undo") {
+    const m = db.meetings.find((x) => x.status === "live" && db.decisions.some((d) => d.meeting_id === x.id && d.change_ids.includes(p[3]!)));
+    if (!m) return null;
+    const res = await run(req);
+    if (!res || !res.ok) return res;
+    const c = ((await res.clone().json()) as Schemas["SimpleChangeResult"]).change;
+    m.last_change_at = iso(mockNowMs());
+    const [words, subjects] = describe(ctx, c);
+    const prd = prds(ctx).find((x) => x.slug === m.prd)!;
+    record(db, ctx, m, `${c.status === "declined" ? "Withdrawn" : "Undone"}: ${words}`, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
+    return res;
+  }
   const isCreate = p.length === 3;
   const verb = p[4] === "accept" ? "Accepted" : p[4] === "decline" ? "Declined" : null;
   if (!isCreate && !verb) return null;
@@ -909,6 +923,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
       const whole = !!prd && !goal && m.prd === prd.slug;
       return {
         meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)),
+        // qa4-simple-decide-32 (as decisions_page): the meeting's notes and comments, as its minutes list them.
+        notes: (m.notes ?? []).filter((n) => n.kind === "note" || n.kind === "comment"),
         delivery: m.minutes_state === "sent" ? deliveryOut(ctx, m) : null, can_retry_delivery: mayRetry(ctx, m),
       };
     }),
@@ -1000,7 +1016,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
         starters: [...new Set([...(x.decider ? [x.decider] : []), ...owners(ctx)])].map((i) => ref(ctx, i)),
         default_attendee_ids: [...new Set([ctx.me.id, ...(x.decider ? [x.decider] : []), ...x.reviewers])],
       })),
-      members: ctx.members.map((x) => ({ id: x.id, name: x.name })),
+      // qa4-simple-decide-14: as the API, whether the role may change things (not a viewer).
+      members: ctx.members.map((x) => ({ id: x.id, name: x.name, can_change: x.role !== "viewer" })),
       length_min: occ?.length_min ?? 60,
       occurrence: occ,
     };
