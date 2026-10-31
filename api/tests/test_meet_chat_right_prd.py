@@ -154,6 +154,13 @@ async def test_a_move_gets_a_card_for_the_meeting_prds_item(client):
     m = await last(client, w, mid)
     assert m["cards"][0]["status"] == "applied"
     assert m["cards"][0]["decision_id"]
+    # Undo puts the item's dates back.
+    r = await client.post(f"/v1/simple/chat/cards/{card['id']}/undo",
+                          headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        row = await s.get(RoadmapItem, uuid.UUID(ids[FIRST]))
+        assert row.start_date == date(2026, 11, 2)
 
 
 async def test_a_cut_gets_a_card_and_an_unclear_item_a_question(client):

@@ -1405,6 +1405,11 @@ class ChatRulesOut(BaseModel):
     may_apply: bool
     ask_only: bool
     ended: bool
+    # meet-chat-right-prd: when the meeting ended and who ended it, or ``ended_by_itself``
+    # (its time ran out with nobody ending it).
+    ended_at: dt.datetime | None = None
+    ended_by: SimplePersonRef | None = None
+    ended_by_itself: bool = False
 
 
 class ChatThreadOut(BaseModel):
