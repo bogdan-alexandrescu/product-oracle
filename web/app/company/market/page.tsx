@@ -52,8 +52,10 @@ function Market() {
   const setParams = useSetParams();
   const { can, capsReady, capsError } = useMe();
   const [adding, setAdding] = useState(false);
-  // qa-company-20: an empty list shows its own Add button, so the header drops its one.
-  const [noAlternatives, setNoAlternatives] = useState(false);
+  // qa-company-20: an empty list shows its own Add button, so the header drops its one. Null
+  // while the list loads: the header's Add waits for it, so the tab strip is not swapped for
+  // one with the button and then back when the list comes back empty.
+  const [noAlternatives, setNoAlternatives] = useState<boolean | null>(null);
   // qa-company-43: the header's Add alternative shows on the alternatives' own sub-tabs too
   // (Change log, Positioning), unless there is none yet: then the empty list's button is the one.
   // Read again on each of those sub-tabs, so one added on Alternatives counts on the Change log;
@@ -88,7 +90,7 @@ function Market() {
         status={capsReady && !mayWrite ? <ViewOnly /> : undefined}
         action={
           mayWrite &&
-          (tab === "alternatives" ? !noAlternatives : (tab === "changes" || tab === "positioning") && !!competitors.data?.length) && (
+          (tab === "alternatives" ? noAlternatives === false : (tab === "changes" || tab === "positioning") && !!competitors.data?.length) && (
             <Button variant="primary" icon="plus" onClick={addAlternative}>
               Add alternative
             </Button>
