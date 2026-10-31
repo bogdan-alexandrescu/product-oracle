@@ -92,7 +92,7 @@ for (const phone of [false, true]) {
       await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
       await expect(page.getByTestId("end-screen")).toBeVisible();
       await page.goto(`/simple/meetings/${id}/chat`);
-      const ended = page.getByTestId("meeting-chat").getByTestId("chat-ended");
+      const ended = page.getByTestId("meeting-chat").getByTestId("chat-ended-by");
       await expect(ended).toContainText(/Ended by \S.*, [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2}/);
       await expect(ended).not.toContainText(/\d{4}-\d{2}-\d{2}/);
     });
@@ -105,7 +105,7 @@ for (const phone of [false, true]) {
       const id = await startGuidedSetup(page);
       await page.clock.fastForward("04:01:00");
       await page.goto(`/simple/meetings/${id}/chat`);
-      const ended = page.getByTestId("meeting-chat").getByTestId("chat-ended");
+      const ended = page.getByTestId("meeting-chat").getByTestId("chat-ended-by");
       await expect(ended).toContainText(/Ended by itself after its time ran out, [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2}/);
     });
   });

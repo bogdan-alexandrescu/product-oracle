@@ -126,7 +126,7 @@ export function MeetingChat({
           {/* qa-simple-decide-10: the presenter's control states the setting; everyone else reads the line. */}
           {!(rulesControl && rules.is_presenter && !rules.ended) && <p className="simple-small" data-testid="chat-rules">
             Who changes things: <strong>{rulesLine(rules)}</strong>
-            {rules.ended && <span data-testid="chat-ended"> · {endedWords(rules, zone)}</span>}
+            {rules.ended && <span data-testid="chat-ended-by"> · {endedWords(rules, zone)}</span>}
           </p>}
           {rulesControl && rules.is_presenter && !rules.ended && <ModeControl meetingId={meetingId} rules={rules} onSaved={(r) => setThread((t) => (t ? { ...t, rules: r } : t))} />}
           {/* Review minor: the hint is the "Everyone except viewers" rule's own, as the start sheet's. */}
