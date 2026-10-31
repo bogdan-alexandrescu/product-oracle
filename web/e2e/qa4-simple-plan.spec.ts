@@ -113,6 +113,9 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
 
     await page.getByRole("switch", { name: "Compare with Oracle" }).click();
     const yours = page.getByRole("region", { name: "Your order" });
+    // The compare view draws after the switch: its rows are there before they are read (a list
+    // of locators taken at once does not wait for them).
+    await expect(yours.getByTestId("prio-row").first()).toBeVisible();
     const lefts: number[] = [];
     for (const r of await yours.getByTestId("prio-row").all()) {
       const t = (await r.getByTestId("prio-title").boundingBox())!;
