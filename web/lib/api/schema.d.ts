@@ -37147,6 +37147,10 @@ export interface components {
             state: "active" | "expired" | "revoked";
             /** Revoked At */
             revoked_at?: string | null;
+            /** Revoked By */
+            revoked_by?: string | null;
+            /** Revoked By Name */
+            revoked_by_name?: string | null;
             /** Revoked Reason */
             revoked_reason?: string | null;
             /** Allow Download */

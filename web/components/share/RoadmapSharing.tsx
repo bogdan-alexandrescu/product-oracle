@@ -638,10 +638,10 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
       cell: (l) => (
         <span className="block">
           <span data-testid="share-state">{STATE_LABEL[l.state]}</span>
-          {/* qa4-docs-share-30: when it was revoked and why, in the row. */}
+          {/* qa4-docs-share-30: when it was revoked, by whom and why, in the row. */}
           {l.state === "revoked" && (
             <span data-testid="share-revoked" className="block text-[13px] text-text2">
-              {[l.revoked_at ? formatDate(l.revoked_at) : null, l.revoked_reason ? `Reason: ${l.revoked_reason}` : null].filter(Boolean).join(" · ")}
+              {[l.revoked_at ? formatDate(l.revoked_at) : null, l.revoked_by_name ? `by ${l.revoked_by_name}` : null, l.revoked_reason ? `Reason: ${l.revoked_reason}` : null].filter(Boolean).join(" · ")}
             </span>
           )}
         </span>

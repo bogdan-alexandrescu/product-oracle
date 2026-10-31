@@ -59,10 +59,11 @@ type Refusal =
   | { kind: "other"; message: string };
 
 /**
- * The "To approve" rows: every text with an Approve button (qa4-docs-share-47: one on an item
- * that serves no goal too), and each goal-serving item with no text yet to write.
+ * The "To approve" rows: as the API's not_ready counts them, every draft or changed text and
+ * each item with no text yet, on items that serve a goal (an item that serves no goal is left
+ * out whatever its text, so it waits for a goal, not for approval).
  */
-const toApprove = (r: Row) => r.state === "draft" || r.state === "changed" || (r.state === "missing" && r.left_out_reason !== "no_goal");
+const toApprove = (r: Row) => r.left_out_reason !== "no_goal" && (r.state === "draft" || r.state === "changed" || r.state === "missing");
 
 /** qa4-docs-share-9: where an item's feature is linked to a confirmed goal (Baseline's Flagged tab). */
 const GOALS_HREF = "/baseline?tab=flagged";

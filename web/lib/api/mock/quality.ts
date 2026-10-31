@@ -388,9 +388,21 @@ type Purpose = Schemas["ReadinessDashboard"]["purpose"];
 /**
  * qa4-docs-share-11: as the API's rule (criteria.blocker_feasibility) reads the blockers linked
  * to the document, never "No blocker is recorded" beside an open one: an unresolved blocker
- * with an option or experiment but none chosen is a warning, a settled one passes.
+ * with an option or experiment but none chosen is a warning, a settled one passes. As the API
+ * too, a critical blocker with no workable mitigation (no compliant option left and no planned,
+ * running or succeeded experiment) is critical.
  */
-function feasibility(gate: { status: Status; evidence_ids: string[] }): Rule {
+function feasibility(ctx: QualityContext, gate: { status: Status; evidence_ids: string[] }): Rule {
+  const stuck = (id: string) =>
+    !ctx.v2.blocker_options.some((o) => o.blocker_id === id && o.compliance === "compliant" && o.status !== "rejected") &&
+    !ctx.v2.feasibility_experiments.some((x) => x.blocker_id === id && ["planned", "running", "succeeded"].includes(x.status));
+  if (gate.status === "critical" && gate.evidence_ids.some(stuck))
+    return [
+      "critical",
+      "A critical blocker has no workable mitigation: no compliant option and no feasibility experiment. Advisory here; a critical blocker is held by the Critical blockers check.",
+      ["risks"],
+      gate.evidence_ids,
+    ];
   return gate.status === "critical" || gate.status === "warning"
     ? [
         "warning",
@@ -419,7 +431,7 @@ function dashboard(
       c.key === BLOCKERS_KEY
         ? [gate.status, gate.rationale, [], gate.evidence_ids]
         : c.key === "blocker_feasibility" && !RULES_BY_SLUG[v.slug] && gate.status !== "not_applicable"
-          ? feasibility(gate)
+          ? feasibility(ctx, gate)
           : rules[c.key];
     const mf = model && ctx.v2.evaluation_findings.find((f) => f.report_id === model.id && f.criterion === c.key);
     const human = humans.flatMap((r) =>

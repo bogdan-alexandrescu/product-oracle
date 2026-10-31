@@ -7,6 +7,7 @@ import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicke
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
+import { todayIn, useCompanyZone } from "@/lib/dates";
 import { formatDay, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -61,17 +62,16 @@ function Tick({ checked, onChange }: { checked: boolean; onChange: (on: boolean)
 /** A picked due date (YYYY-MM-DD) as the API's due_at: 17:00 UTC that day, shown back as that day. */
 const dueAt = (day: string) => (day ? `${day}T17:00:00Z` : null);
 
-/** Today on this browser's calendar as YYYY-MM-DD: the earliest due date a form takes (qa4-docs-share-12, -34). */
-function today(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Today on the company's calendar as YYYY-MM-DD: the earliest due date a form takes (qa4-docs-share-12, -34). */
+function useToday(): string {
+  return todayIn(useCompanyZone());
 }
 
 /** Why a form refuses a due date before today. */
 const PAST_DUE = "Pick today or a later day for the due date.";
 
 /** qa4-docs-share-36: an open campaign whose due day has passed reads Overdue. */
-const pastDue = (at: string | null | undefined) => !!at && at.slice(0, 10) < today();
+const pastDue = (at: string | null | undefined, today: string) => !!at && at.slice(0, 10) < today;
 
 /** The names of the people with these ids, loaded once per set of ids. */
 function usePeople(ids: readonly (string | null | undefined)[]): Map<string, Person> {
@@ -442,6 +442,7 @@ function AssignmentForm({
   const [owner, setOwner] = useState<string[]>(state.owner_id ? [state.owner_id] : []);
   const [reviewers, setReviewers] = useState<string[]>(state.reviewer_ids ?? []);
   const [due, setDue] = useState(state.due_at ? state.due_at.slice(0, 10) : "");
+  const today = useToday();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // After a 409: the row the form was built from, until the reloaded row arrives (Save waits for it).
@@ -460,7 +461,7 @@ function AssignmentForm({
   async function save(e: FormEvent) {
     e.preventDefault();
     // qa4-docs-share-34: a new due date before today is refused (a saved one may stay as it is).
-    if (due && due < today() && due !== (state.due_at ?? "").slice(0, 10)) {
+    if (due && due < today && due !== (state.due_at ?? "").slice(0, 10)) {
       setError(PAST_DUE);
       return;
     }
@@ -495,7 +496,7 @@ function AssignmentForm({
       <PeopleField label="Reviewers" addLabel="Add a reviewer" ids={reviewers} people={people} onChange={setReviewers} empty="None" />
       <label className={`${FIELD_LABEL} max-w-48`}>
         Due date
-        <input type="date" value={due} min={today()} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
+        <input type="date" value={due} min={today} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
       </label>
       {error && <InlineError>{error}</InlineError>}
       {changed && <ChangedNote was={changed.was} now={changed.now} people={people} />}
@@ -536,6 +537,7 @@ function ChangedNote({ was, now, people }: { was: SectionState; now: SectionStat
 export function Campaigns({ doc }: { doc: string }) {
   const { can } = useMe();
   const canEdit = can("create_review_campaign");
+  const today = useToday();
   const q = useQuery(`campaigns|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/campaigns", { params: { path: { doc } } })));
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -597,10 +599,10 @@ export function Campaigns({ doc }: { doc: string }) {
             <Chip kind={c.status === "open" ? "now" : "na"}>{c.status === "open" ? "Open" : "Closed"}</Chip>
             <span className="tnum text-sm text-text2">
               v{c.version_number} · {c.comments} comment{c.comments === 1 ? "" : "s"} · {c.participants} of {c.invited} took part
-              {c.due_at && !(c.status === "open" && pastDue(c.due_at)) ? ` · due ${formatDay(c.due_at)}` : ""}
+              {c.due_at && !(c.status === "open" && pastDue(c.due_at, today)) ? ` · due ${formatDay(c.due_at)}` : ""}
             </span>
             {/* qa4-docs-share-36: an open campaign past its due date says so. */}
-            {c.due_at && c.status === "open" && pastDue(c.due_at) && <Chip kind="warn">{`Overdue ${formatDay(c.due_at)}`}</Chip>}
+            {c.due_at && c.status === "open" && pastDue(c.due_at, today) && <Chip kind="warn">{`Overdue ${formatDay(c.due_at)}`}</Chip>}
             <span className="flex-1" />
             {canEdit && (
               // qa-docs-30: what the action does to the campaign, not a bare Close.
@@ -623,13 +625,14 @@ function CampaignForm({ doc, onDone, onCancel }: { doc: string; onDone: () => Pr
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [due, setDue] = useState("");
+  const today = useToday();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function send(e: FormEvent) {
     e.preventDefault();
     // qa4-docs-share-12: a due date before today is refused.
-    if (due && due < today()) {
+    if (due && due < today) {
       setError(PAST_DUE);
       return;
     }
@@ -664,7 +667,7 @@ function CampaignForm({ doc, onDone, onCancel }: { doc: string; onDone: () => Pr
       </label>
       <label className={`${FIELD_LABEL} max-w-48`}>
         Due date (optional)
-        <input type="date" value={due} min={today()} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
+        <input type="date" value={due} min={today} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
       </label>
       {error && <InlineError>{error}</InlineError>}
       <div className="flex flex-wrap items-center gap-2">
