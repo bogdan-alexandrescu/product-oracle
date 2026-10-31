@@ -127,7 +127,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
             </Dialog> // MOCK-HOOK
           )} {/* MOCK-HOOK */}
         </div> // MOCK-HOOK
-      ) : q.error ? (
+      ) : q.error ? ( // MOCK-HOOK
         <Notice tone="error">{q.error}</Notice>
       ) : (
         <DataTable
