@@ -12,8 +12,16 @@ import { useQuery } from "@/lib/use-query";
 
 type TechBrief = Schemas["TechBriefOut"];
 
-const KIND: Record<string, string> = { module: "Module", api: "API", data_model: "Data model", flag: "Flag", job: "Job" };
-const CHANGE: Record<string, string> = { new: "New", change: "Change", remove: "Remove" };
+/** qa4-docs-share-46: a touch's kind and change read as one phrase ("Changes an existing module"). */
+const KIND: Record<string, string> = { module: "module", api: "API", data_model: "data model", flag: "flag", job: "job" };
+const ARTICLE: Record<string, string> = { module: "a", api: "an", data_model: "a", flag: "a", job: "a" };
+function touchText(kind: string, change: string): string {
+  const what = KIND[kind] ?? sentence(kind).toLowerCase();
+  if (change === "new") return `Adds ${ARTICLE[kind] ?? "a"} new ${what}`;
+  if (change === "change") return `Changes an existing ${what}`;
+  if (change === "remove") return `Removes ${ARTICLE[kind] ?? "a"} ${what}`;
+  return `${sentence(change)} · ${what}`;
+}
 const LEVEL: Record<string, ChipKind> = { low: "na", medium: "warn", high: "crit" };
 
 const sentence = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
@@ -83,8 +91,7 @@ function Touches({ b }: { b: TechBrief }) {
               <thead className="text-[13px] text-text2">
                 <tr>
                   <th className="py-1 pr-3 font-semibold">Area</th>
-                  <th className="py-1 pr-3 font-semibold">Kind</th>
-                  <th className="py-1 pr-3 font-semibold">Change</th>
+                  <th className="py-1 pr-3 font-semibold">What changes</th>
                   <th className="py-1 font-semibold">In the code map</th>
                 </tr>
               </thead>
@@ -92,8 +99,7 @@ function Touches({ b }: { b: TechBrief }) {
                 {b.touches.map((t, i) => (
                   <tr key={`${t.area}-${i}`} className="border-t border-line align-top">
                     <td className="py-1.5 pr-3 break-words">{t.area}</td>
-                    <td className="py-1.5 pr-3">{KIND[t.kind] ?? t.kind}</td>
-                    <td className="py-1.5 pr-3">{CHANGE[t.change] ?? t.change}</td>
+                    <td className="py-1.5 pr-3">{touchText(t.kind, t.change)}</td>
                     <td className="py-1.5 break-words">{t.ref ? refName(t.ref) : <span className="text-text2">Not mapped</span>}</td>
                   </tr>
                 ))}
@@ -105,10 +111,8 @@ function Touches({ b }: { b: TechBrief }) {
               <li key={`${t.area}-${i}`} className="border-t border-line py-2 first:border-t-0 first:pt-0">
                 <p className="font-semibold break-words">{t.area}</p>
                 <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[14px]">
-                  <dt className="whitespace-nowrap text-text2">Kind</dt>
-                  <dd>{KIND[t.kind] ?? t.kind}</dd>
-                  <dt className="whitespace-nowrap text-text2">Change</dt>
-                  <dd>{CHANGE[t.change] ?? t.change}</dd>
+                  <dt className="whitespace-nowrap text-text2">What changes</dt>
+                  <dd>{touchText(t.kind, t.change)}</dd>
                   <dt className="whitespace-nowrap text-text2">In the code map</dt>
                   <dd className="break-words">{t.ref ? refName(t.ref) : <span className="text-text2">Not mapped</span>}</dd>
                 </dl>
