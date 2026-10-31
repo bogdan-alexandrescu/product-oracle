@@ -9,7 +9,7 @@ a warning (never refused).
 from oracle.docs import named_codes
 from oracle.docs.parser import parse_draft
 from oracle.jobs import prompting
-from oracle.runs import flows
+from oracle.runs import flows, workflow
 from oracle.tenancy import tenant_session
 from tests.review_v2_helpers import DOC, DRAFT, person, replace, setup
 
@@ -132,6 +132,42 @@ def test_a_name_in_brackets_after_its_code_names_it():
         f"G-B Faster first week is not expected to move at M3 {MILESTONE}."
     )
     assert spliced.unnamed == ["M3"]
+
+
+def test_a_bracket_or_colon_names_a_code_only_when_it_holds_a_name():
+    """e2e-draft-codes review: a reference, a number or another code after the code is no
+    name; a capital or a number then words is."""
+    for body in (
+        "F-28 (see below) ships first.",
+        "G1 (40%) is the target.",
+        "R1 (M3) waits.",
+        "G1: 40% is the target.",
+    ):
+        assert named_codes.findings(body).unnamed[:1] in (["F-28"], ["G1"], ["R1"]), body
+    for body in (
+        "F-28 (Retire the legacy deploy path) ships first.",
+        f"M3 ({MILESTONE}) is next.",
+        f"M3: {MILESTONE} is next.",
+    ):
+        assert named_codes.findings(body).unnamed == [], body
+
+
+def test_a_run_of_codes_alone_is_sent_back_as_a_run_not_as_unnamed_codes():
+    """e2e-draft-codes review: the lead line says which rule the draft breaks."""
+    md = replace(DRAFT, "Teams miss shared deadlines.", "Teams miss deadlines: G-4, G-5, G-6.")
+    warnings = named_codes.check(parse_draft(md).sections)
+    assert [w.code for w in warnings] == ["codes_not_listed"]
+    [lead, line] = workflow.code_name_findings(
+        "prd.md", [w.message for w in warnings], [w.code for w in warnings]
+    )
+    assert "without their names" not in lead
+    assert "in a row instead of a list" in lead and "prd.md" in lead
+    [lead, *_] = workflow.code_name_findings("prd.md", ["x"], ["unnamed_code"])
+    assert "without their names" in lead and "in a row" not in lead
+    [lead, *_] = workflow.code_name_findings(
+        "prd.md", ["x", "y"], ["unnamed_code", "codes_not_listed"]
+    )
+    assert "without their names" in lead and "in a row instead of a list" in lead
 
 
 def test_the_prompt_puts_a_prose_name_in_brackets():

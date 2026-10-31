@@ -376,6 +376,13 @@ async def test_a_draft_with_unnamed_codes_goes_back_to_the_writer_first(client, 
     assert run["draft_rejected"] is None and run["sent_back"] is None
     assert seg["attempts"][-1]["note_by"] == "Oracle"
     assert any("Oracle sent" in n and "back to the writer" in n for n in run["notes"])
+    # e2e-draft-codes review: the note reads as one plain sentence (no stray ", and,").
+    [note] = [n for n in run["notes"] if "Oracle sent" in n]
+    assert "uses codes without their names, so Oracle sent" in note
+    assert note.endswith(
+        "if it still uses codes without their names, the import says which codes and "
+        "prd_review waits in the Inbox."
+    ), note
     [event] = await _audit(tenant_id, "run.draft_sent_back")
     assert event.actor == "oracle" and event.data["findings"] == findings
 
