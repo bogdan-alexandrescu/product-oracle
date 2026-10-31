@@ -1086,11 +1086,20 @@ async def restore_agenda(db: AsyncSession, meeting_id: uuid.UUID, agenda: dict) 
     await db.flush()
 
 
-async def _notes_out(db: AsyncSession, m: SimpleMeeting) -> list:
+def _note_authors(ms: list[SimpleMeeting]) -> set[uuid.UUID]:
+    return {uuid.UUID(n["by"]) for m in ms for n in m.notes or [] if n.get("by")}
+
+
+async def _notes_out(
+    db: AsyncSession, m: SimpleMeeting, names: dict[uuid.UUID, str] | None = None
+) -> list:
+    """The meeting's notes, each with its author's name; a page of meetings passes the
+    names it read once for all of them (``_note_authors``)."""
     from oracle.simple.schemas import SimpleMeetingNote
 
     notes = list(m.notes or [])
-    names = await _names(db, {uuid.UUID(n["by"]) for n in notes if n.get("by")})
+    if names is None:
+        names = await _names(db, _note_authors([m]))
     return [
         SimpleMeetingNote(
             id=n["id"],
@@ -2120,7 +2129,7 @@ async def decisions_page(
         q = q.order_by(Decision.number.desc()).limit(200)
         others = [d for d in await db.scalars(q) if keep(d)]
     names = await _names(db, {d.approver_id for lst in links.values() for _, d in lst}
-                         | {d.approver_id for d in others})  # fmt: skip
+                         | {d.approver_id for d in others} | _note_authors(shown_ms))  # fmt: skip
     flows = await decided_flows(db, [x for m in shown_ms for x in links[m.id]])
     groups = []
     for b, m in zip(await briefs(db, shown_ms), shown_ms, strict=True):
@@ -2132,7 +2141,7 @@ async def decisions_page(
             minutes=await _named(db, minutes) if minutes else None,
             decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
-            notes=[n for n in await _notes_out(db, m) if n.kind in ("note", "comment")],
+            notes=[n for n in await _notes_out(db, m, names) if n.kind in ("note", "comment")],
             delivery=await delivery_out(db, m) if m.minutes_state == "sent" else None,
             can_retry_delivery=m.minutes_state == "sent" and may_retry(principal, m),
         ))  # fmt: skip
