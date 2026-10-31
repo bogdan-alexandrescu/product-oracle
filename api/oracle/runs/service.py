@@ -677,7 +677,7 @@ async def _pending_titles(db: AsyncSession, runs: list[Run]) -> dict[uuid.UUID, 
             ProductIntake.id.in_(set(wanted.values()))
         )
     )
-    titles = dict(rows.tuples().all())
+    titles: dict[uuid.UUID, str] = {i: t for i, t in rows.all()}
     return {run_id: titles[i] for run_id, i in wanted.items() if titles.get(i)}
 
 
