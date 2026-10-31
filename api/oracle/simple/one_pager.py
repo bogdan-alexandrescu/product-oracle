@@ -47,7 +47,7 @@ from oracle import audit, company_time, safe_yaml
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs import visibility
-from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.docs.models import Citation, Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack
 from oracle.simple import drafts, one_pager_checks, plan_strip, quality
@@ -60,6 +60,7 @@ from oracle.simple.models import (
     SimpleSession,
     SimpleVisual,
 )
+from oracle.simple.one_pager_checks import resolved
 from oracle.simple.schemas import (
     OnePagerBlock,
     OnePagerDraft,
@@ -339,7 +340,8 @@ def _tidy(
     by an older build loses its broken word; one that is its source fact whole stays), and
     its whole text when it is shortened (as stored, else its own source fact, else its prose
     sections' sentences)."""
-    text = " ".join(_uncomment(text).split())
+    text = " ".join(resolved(_uncomment(text)).split())
+    full = resolved(full) if full else full
     own = _own_fact(text, sources)
     if len(text) >= LINE_MAX and not text.endswith("…") and own != text:
         text = (text.rsplit(" ", 1)[0] if " " in text else text).rstrip(",;:") + "…"
@@ -355,7 +357,7 @@ def _tidy(
 
 def _listed(sec: Section) -> bool:
     """Whether a section's facts are its bullets or table rows (one line each), not prose."""
-    rows, rest = _tables(_uncomment(sec.body_md or ""))
+    rows, rest = _tables(_uncomment(resolved(sec.body_md or "")))
     return bool(rows) or any(_BULLET.match(line) for line in rest)
 
 
@@ -447,8 +449,9 @@ def _unpiped(text: str) -> str:
 
 
 def _facts(sec: Section) -> list[str]:
-    """A section's bullets and its tables' body rows (one line each), else its sentences."""
-    rows, rest = _tables(_uncomment(sec.body_md or ""))
+    """A section's bullets and its tables' body rows (one line each), else its sentences; its
+    citations resolved as the PRD's PDF resolves them (never a ``[c:id]`` on a line)."""
+    rows, rest = _tables(_uncomment(resolved(sec.body_md or "")))
     bullets = [_plain(m.group(1)) for line in rest if (m := _BULLET.match(line))]
     facts = [b for b in (_unpiped(x) for x in bullets) if b and not template_only(b)]
     facts += [x for x in (_row_line(c) for _, c in rows) if x and not template_only(x)]
@@ -513,6 +516,17 @@ def extract(specs: tuple[Spec, ...], mapped: dict[str, list[Section]]) -> list[d
     return out
 
 
+def _metric(raw: Any) -> OnePagerMetric | None:
+    """A stored line's metric as it reads: its citations resolved (a quick read stored
+    before that rule keeps them)."""
+    if not raw:
+        return None
+    m = OnePagerMetric.model_validate(raw)
+    m.name, m.to = resolved(m.name).strip() or m.name, resolved(m.to).strip() or m.to
+    m.from_ = resolved(m.from_).strip() if m.from_ else m.from_
+    return m
+
+
 def _numbered(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for b in blocks:
         for i, line in enumerate(b["lines"], 1):
@@ -538,7 +552,7 @@ def clean_answer(
         for raw in (given.get(spec.key) or {}).get("lines") or []:
             if not isinstance(raw, dict):
                 continue
-            text = _unpiped(" ".join(_uncomment(str(raw.get("text") or "")).split()))
+            text = _unpiped(" ".join(resolved(_uncomment(str(raw.get("text") or ""))).split()))
             keys = [str(k) for k in raw.get("source_keys") or [] if str(k) in allowed]
             if not text or not keys or template_only(text):
                 continue
@@ -549,9 +563,9 @@ def clean_answer(
             m = raw.get("metric")
             if spec.kind == "metrics" and isinstance(m, dict) and m.get("name") and m.get("to"):
                 line["metric"] = {
-                    "name": str(m["name"])[:120],
-                    "from": str(m.get("from") or "")[:40],
-                    "to": str(m["to"])[:40],
+                    "name": resolved(str(m["name"])).strip()[:120],
+                    "from": resolved(str(m.get("from") or "")).strip()[:40],
+                    "to": resolved(str(m["to"])).strip()[:40],
                 }
             lines.append(line)
         lines = lines[: spec.max_lines]
@@ -825,6 +839,27 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
             )
     await s.flush()
     return {"built": True, "sections_hash": h}
+
+
+async def _writing(db: AsyncSession, b: Built) -> bool:
+    """The page is Oracle's quick read while its ``one_pager`` job, queued or running, writes
+    it (the page says so in one line)."""
+    from oracle.jobs.models import LlmJob
+
+    if b.row.built_by != "extract" or b.row.held:
+        return False
+    return bool(
+        await db.scalar(
+            select(LlmJob.id)
+            .where(
+                LlmJob.document_id == b.document.id,
+                LlmJob.version_id == b.version.id,
+                LlmJob.kind == "one_pager",
+                LlmJob.status.in_(("queued", "running")),
+            )
+            .limit(1)
+        )
+    )
 
 
 async def _lines_in_use(db: AsyncSession, document: Document) -> bool:
@@ -1259,7 +1294,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
                     continue  # a template's guidance in a one-pager built before this rule
                 srcs = [x for x in b.sections if x.section_key in line["source_keys"]]
                 text, full = _tidy(text, spec.max_words, line.get("full"), srcs)
-            metric = OnePagerMetric.model_validate(line["metric"]) if line.get("metric") else None
+            metric = _metric(line.get("metric"))
             if edited and spec.kind == "metrics":
                 metric = metric_of(text)  # the edited words' numbers, never the published
             lines.append(
@@ -1310,7 +1345,11 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
     # Reads clearly (2026-10-30): who has it, measures, codes with names, footnotes; the
     # "Needs a look" items for the PRD's owners. After the flows: a flow still keyed by a
     # bet's words is found by the words before codes got their names.
-    looks = one_pager_checks.annotate(blocks, b.sections)
+    cites = {
+        c.cite_key: (c.title or c.ref, c.excerpt)
+        for c in await db.scalars(select(Citation).where(Citation.version_id == b.version.id))
+    }
+    looks = one_pager_checks.annotate(blocks, b.sections, cites)
     slice_ = await service.build(db, principal, prd=str(document.id))
     items = [
         OnePagerItem(
@@ -1370,6 +1409,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         span_start=span[0] if span else None,
         span_end=span[1] if span else None,
         built_by="oracle" if owner_reads else b.row.built_by,
+        writing=not owner_reads and await _writing(db, b),
         built_at=b.row.built_at,  # type: ignore[arg-type]
         blocks=[*blocks, timeline.model_copy(update={"lines": []})],
         timeline=items,
@@ -2067,7 +2107,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
             else:
                 pub_text = line.text
             text = escape(pub_text)
-            m = OnePagerMetric.model_validate(pub["metric"]) if pub and pub.get("metric") else None
+            m = _metric(pub.get("metric")) if pub else None
             m = m if pub else line.metric
             if m:
                 span = f"{escape(m.from_ or '—')} → {escape(m.to)}"

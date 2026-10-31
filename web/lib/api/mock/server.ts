@@ -155,7 +155,7 @@ import {
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
-import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -5573,7 +5573,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   // "one-pager-no-owner": the PRD was imported by a service token (no owner yet).
   // "one-pager-needs-look": Oracle's build failed its checks twice (oracle.simple.quality).
   // "one-pager-not-in-prd": Oracle marked a block the PRD lacks "Not in the PRD yet".
-  db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
+  // "one-pager-run-prd": a run's Goal-traced PRD, its lines cited, while Oracle writes the page.
+  // "one-pager-quick-read": the same PRD, its one_pager job failed: the quick read stays.
+  db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
+    ? seedRunPrdOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-quick-read"
+    ? { ...seedRunPrdOnePager(), writing: false, quickRead: true }
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
     ? seedNeedsLookOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-not-in-prd"
     ? seedNotInPrdOnePager()

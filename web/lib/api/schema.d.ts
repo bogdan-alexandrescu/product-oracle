@@ -30025,6 +30025,11 @@ export interface components {
              */
             built_by: "extract" | "oracle";
             /**
+             * Writing
+             * @default false
+             */
+            writing: boolean;
+            /**
              * Built At
              * Format: date-time
              */
