@@ -13,7 +13,8 @@ per feature, and its text fields are data, never instructions.
 
 Format (``version: 1``)::
 
-    code_map: {used: true, repos: [{repo, commit, as_of}]}   # used: false without a map
+    code_map: {used: true, repos: [{repo, commit, as_of}],   # used: false without a map
+               unmapped: [<repo>]}       # repositories the features touch that no map covers
     features:
       - feature: <a key of feature_set.yaml>
         title, approach, size (xs | s | m | l | xl), size_why
@@ -28,7 +29,7 @@ Format (``version: 1``)::
 from collections.abc import Collection
 from typing import Any, Literal
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from oracle import safe_yaml
 
@@ -67,6 +68,8 @@ class Problem(BaseModel):
     message: str
     # The feature key the problem is about; None for the file as a whole.
     feature: str | None = None
+    # unknown_ref: the id cited (the Engineering check groups its lines by it).
+    ref: str | None = Field(default=None, exclude=True)
 
 
 class Touch(BaseModel):
@@ -101,6 +104,9 @@ class RepoRef(BaseModel):
 class CodeMapUse(BaseModel):
     used: bool
     repos: list[RepoRef] = []
+    # Repositories the features touch that none of the run's maps covers: their work is
+    # described under assumptions.
+    unmapped: list[str] = []
 
 
 class Brief(BaseModel):
@@ -129,8 +135,10 @@ class BriefsInvalid(ValueError):
         super().__init__("; ".join(f"[{p.code}] {p.message}" for p in problems))
 
 
-def _p(code: ProblemCode, message: str, feature: str | None = None) -> Problem:
-    return Problem(code=code, message=message, feature=feature)
+def _p(
+    code: ProblemCode, message: str, feature: str | None = None, ref: str | None = None
+) -> Problem:
+    return Problem(code=code, message=message, feature=feature, ref=ref)
 
 
 def _text(value: Any) -> bool:
@@ -231,6 +239,8 @@ def _check(
         else:
             for j, repo in enumerate(repos):
                 out += _shape(repo, REPO_FIELDS, f"code_map.repos[{j}]", None)
+        if not _list_of(cm.get("unmapped", []), str):
+            out.append(_p("bad_entry", "code_map.unmapped must be a list of text"))
     features = data.get("features")
     if not _list_of(features, dict):
         return [*out, _p("bad_entry", "features must be a list of briefs")]
@@ -321,7 +331,7 @@ def _check(
             elif known_ids is None or ref not in known_ids:
                 out.append(
                     _p("unknown_ref", f"{rw}: {ref!r} is not in the code map this run used",
-                       key)
+                       key, ref)
                 )  # fmt: skip
         if not used and not shape and not entry.get("assumptions"):
             out.append(

@@ -2844,6 +2844,11 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
+            *(
+                await eng_check.run_architect_lines(db, run)
+                if flows.BRIEFS_FILE in _flow(run).segment(segment.name).outputs
+                else []
+            ),
             *await eng_dates.prompt_lines(db, run, segment.name),
             *_regenerate_note(run, hidden),
         ],
