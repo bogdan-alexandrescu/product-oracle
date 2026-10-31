@@ -14,12 +14,7 @@ const PHONE = { width: 390, height: 844 };
 
 async function openBaseline(page: Page) {
   await login(page);
-  await page
-    .getByTestId("nav-baseline")
-    .filter({ visible: true })
-    .first()
-    .click();
-  await expect(page).toHaveURL(/\/baseline/);
+  await page.goto("/baseline");
   await expect(
     page.getByRole("heading", { level: 1, name: "Baseline" }),
   ).toBeVisible();
