@@ -10,8 +10,8 @@ import { login } from "./helpers";
 const rows = (page: Page) => page.getByTestId("run-row");
 const inspector = (page: Page) => page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
 
-async function openRun(page: Page, name: string) {
-  await login(page);
+async function openRun(page: Page, name: string, signedIn = false) {
+  if (!signedIn) await login(page);
   await page.goto("/runs");
   await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
   await rows(page).filter({ hasText: name }).getByRole("link").first().click();
@@ -44,7 +44,7 @@ test.describe("desktop", () => {
     await expect(inspector(page)).toContainText("Run · Awaiting cost approval");
     await expect(inspector(page)).not.toContainText("Run · awaiting cost approval");
 
-    await openRun(page, "Team onboarding");
+    await openRun(page, "Team onboarding", true);
     await expect(inspector(page)).toContainText("Checkpoint · Waiting");
     await expect(inspector(page)).not.toContainText("Checkpoint · waiting");
   });
