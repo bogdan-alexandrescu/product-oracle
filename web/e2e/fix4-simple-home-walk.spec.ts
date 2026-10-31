@@ -62,7 +62,8 @@ test("qa-simple-home-3 and qa-simple-home-8: Skip is the one way on, and the typ
   const total = await startWalk(page);
   const kinds = await skipAll(page, total, async (kind) => {
     await expect(step(page).getByRole("button", { name: "Next" })).toHaveCount(0);
-    const box = step(page).getByLabel("Or type what to do");
+    // qa4-simple-home-1: a decision's box is its answer, labelled by its hint.
+    const box = step(page).getByTestId("walk-type").getByRole("textbox");
     const hint = (await box.getAttribute("placeholder"))!;
     expect(hint).not.toContain("Q2");
     if (kind === "decision") expect(hint).toBe("Or type your answer");
@@ -84,7 +85,8 @@ test("qa-simple-home-4: Home's decision row and the walk say '<document> recomme
   await signIn(page, "simple-home");
   const row = page.getByTestId("home-question").filter({ hasText: "Reminder default time" });
   const rec = row.locator(".simple-rec");
-  await expect(rec).toHaveText("Guided setup recommends: 9:00 in each person's zone");
+  // qa4-simple-home-31: the document is where it is recommended, not a person advising.
+  await expect(rec).toHaveText("Recommended in Guided setup: 9:00 in each person's zone");
   const words = (await rec.textContent())!.trim();
   await startWalk(page);
   while ((await step(page).getAttribute("data-kind")) !== "decision") await tap(page.getByRole("button", { name: "Skip" }));
@@ -128,11 +130,11 @@ test("qa-simple-home-6: Another answer keeps the recommended answer offered and 
   await expect(ask).toHaveAttribute("class", askClass!);
   const after = (await column.boundingBox())!;
   expect(Math.abs(after.width - before.width)).toBeLessThanOrEqual(1);
-  // The recommended answer is a chip beside the others, and decides.
+  // qa4-simple-home-14: the chips are the other answers only (Decide as recommended stays beside them), and decide.
   const answers = row.getByRole("group", { name: /^Answers for / });
-  await expect(answers.getByRole("button")).toHaveText(["9:00 in each person's zone (recommended)", "Noon", "Let each person pick", "Something else…"]);
-  await answers.getByRole("button", { name: "9:00 in each person's zone (recommended)" }).click();
-  await expect(page.getByText("Decided Q5: 9:00 in each person's zone")).toBeVisible();
+  await expect(answers.getByRole("button")).toHaveText(["Noon", "Let each person pick", "Something else…"]);
+  await answers.getByRole("button", { name: "Noon" }).click();
+  await expect(page.getByText("Decided Q5: Noon")).toBeVisible();
 });
 
 test("qa-simple-home-28: Another answer closes on Escape or a click elsewhere; the chosen chip shows chosen", async ({ page }) => {
@@ -190,7 +192,8 @@ test("qa-simple-home-7: skipping every step ends by saying what is left, and sta
   await signIn(page, "simple-home");
   const total = await startWalk(page);
   const kinds = await skipAll(page, total);
-  const decisions = kinds.filter((k) => k === "decision" || k === "agenda_decision").length;
+  // qa4-simple-home-9: a meeting agenda item is counted apart from the decisions.
+  const decisions = kinds.filter((k) => k === "decision").length;
   const broken = kinds.filter((k) => k === "broken_link").length;
   const finished = page.getByTestId("walk-finished");
   await expect(finished).not.toContainText("That is everything");

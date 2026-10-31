@@ -47,7 +47,12 @@ export function tone(c: number | null | undefined): "pass" | "warn" | "crit" | "
   if (c == null) return "na";
   return c >= 0.7 ? "pass" : c >= 0.4 ? "warn" : "crit";
 }
-export const score = (c: number | null | undefined) => (c == null ? "—" : c.toFixed(2));
+/** qa4-docs-18: a link's confidence in the legend's words ("Strong"), never a bare decimal. */
+export const strength = (c: number | null | undefined) => (c == null ? "—" : c >= 0.7 ? "Strong" : c >= 0.4 ? "Medium" : "Weak");
+/** "Strong link", "Medium link", "Weak link" (or "—" with no score). */
+export const score = (c: number | null | undefined) => (c == null ? "—" : `${strength(c)} link`);
+/** For labels: "strong link", or "no score". */
+export const linkStrength = (c: number | null | undefined) => (c == null ? "no score" : score(c).toLowerCase());
 
 /** Rejected and superseded items are left out of exports (greyed here). */
 export const leftOut = (t: SectionLinkTarget) => t.status === "rejected" || t.status === "superseded";

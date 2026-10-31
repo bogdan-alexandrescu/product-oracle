@@ -44,17 +44,27 @@ export function Positioning() {
           {data.updated_by_name ? ` by ${data.updated_by_name}` : ""}
         </p>
       )}
-      <div className="grid grid-cols-2 gap-px bg-line max-[900px]:grid-cols-1">
-        {FIELDS.map((f) => (
-          <Field
-            key={f.key}
-            field={f}
-            data={data}
-            suggestions={data.suggestions.filter((s) => s.field === f.key)}
-            canEdit={can("update_positioning")}
-            canDecide={can("accept_positioning_suggestion")}
-            onChanged={set}
-          />
+      {/* qa4-company-37: two columns that grow on their own, so a card being edited grows its
+          column only and leaves no tall empty neighbour. On a narrow screen the columns give way
+          (display: contents) and the cards stand in their own order, one under another. */}
+      <div data-testid="positioning-grid" className="grid grid-cols-2 gap-px bg-line max-[900px]:flex max-[900px]:flex-col">
+        {[0, 1].map((col) => (
+          <div key={col} className="flex flex-col divide-line bg-surface min-[901px]:divide-y max-[900px]:contents">
+            {FIELDS.map((f, i) =>
+              i % 2 === col ? (
+                <Field
+                  key={f.key}
+                  order={i}
+                  field={f}
+                  data={data}
+                  suggestions={data.suggestions.filter((s) => s.field === f.key)}
+                  canEdit={can("update_positioning")}
+                  canDecide={can("accept_positioning_suggestion")}
+                  onChanged={set}
+                />
+              ) : null,
+            )}
+          </div>
         ))}
       </div>
     </Panel>
@@ -62,6 +72,7 @@ export function Positioning() {
 }
 
 function Field({
+  order,
   field,
   data,
   suggestions,
@@ -69,6 +80,8 @@ function Field({
   canDecide,
   onChanged,
 }: {
+  /** Its place among the six, the order it stands in on a narrow screen. */
+  order: number;
   field: (typeof FIELDS)[number];
   data: PositioningOut;
   suggestions: Suggestion[];
@@ -125,7 +138,12 @@ function Field({
     });
 
   return (
-    <section data-testid="positioning-field" data-field={field.key} className="flex min-w-0 flex-col gap-2 bg-surface px-4 py-3 [overflow-wrap:anywhere] max-[600px]:px-3">
+    <section
+      data-testid="positioning-field"
+      data-field={field.key}
+      style={{ order }}
+      className="flex min-w-0 flex-col gap-2 bg-surface px-4 py-3 [overflow-wrap:anywhere] max-[600px]:px-3"
+    >
       <div className="flex items-center gap-2">
         <h3 className="font-display text-[17px] font-bold">{field.title}</h3>
         <span className="flex-1" />
@@ -148,6 +166,7 @@ function Field({
             {single ? field.title : `${field.title}, one per line`}
             <textarea className={`${INPUT} min-h-24`} value={text} onChange={(e) => setText(e.target.value)} />
           </label>
+          {field.key === "alternatives" && <ListedAlternatives text={text} onAdd={setText} />}
           <div className="flex gap-2">
             <Button variant="solid" disabled={busy} onClick={save}>
               Save
@@ -202,6 +221,29 @@ function Field({
       ))}
       {error && <ErrorNote>{error}</ErrorNote>}
     </section>
+  );
+}
+
+/**
+ * qa4-company-37: editing Competitive alternatives offers the alternatives listed on the
+ * Alternatives tab that are not lines yet, to start from; Add them puts them in as lines.
+ */
+function ListedAlternatives({ text, onAdd }: { text: string; onAdd: (text: string) => void }) {
+  const list = useQuery("competitors", () => unwrap(api.GET("/v1/competitors")));
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const have = new Set(lines.map((l) => l.toLowerCase()));
+  const missing = (list.data ?? []).map((c) => c.name).filter((n) => !have.has(n.toLowerCase()));
+  if (missing.length === 0) return null;
+  return (
+    <div data-testid="listed-alternatives" className="flex flex-wrap items-center gap-2 text-sm text-text2">
+      <span className="min-w-0">Listed on Alternatives: {missing.join(", ")}</span>
+      <Button variant="ghost" icon="plus" onClick={() => onAdd([...lines, ...missing].join("\n"))}>
+        Add them
+      </Button>
+    </div>
   );
 }
 

@@ -55,8 +55,9 @@ export function ProposeDialog({
   const [informed, setInformed] = useState<string[]>([]);
   const [links, setLinks] = useState<Links>({ entity_ids: [], evidence_ids: [], subjects: subject ? [subject] : [] });
   const [error, setError] = useState<string | null>(null);
-  // A missing field's note sits under that field, which is marked invalid, scrolled to and focused.
-  const [invalid, setInvalid] = useState<{ field: Field; note: string } | null>(null);
+  // A missing field's note sits under that field, which is marked invalid; qa4-company-9: every
+  // missing field is marked at once, and the first is scrolled to and focused.
+  const [invalid, setInvalid] = useState<Partial<Record<Field, string>>>({});
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   // qa-company-46: the page under the dialog does not scroll, so only the dialog's own
@@ -70,29 +71,34 @@ export function ProposeDialog({
     };
   }, []);
 
-  function flag(field: Field, note: string) {
+  function flag(notes: Partial<Record<Field, string>>) {
     setError(null);
-    setInvalid({ field, note });
-    // After the render that marks it: scroll the field into view and put the cursor in it.
+    setInvalid(notes);
+    const first = FIELDS.find((f) => notes[f]);
+    // After the render that marks them: scroll the first into view and put the cursor in it.
     requestAnimationFrame(() => {
-      const el = form.current?.querySelector<HTMLElement>(`[data-field="${field}"]`);
+      const el = form.current?.querySelector<HTMLElement>(`[data-field="${first}"]`);
       el?.scrollIntoView({ block: "center" });
       el?.focus({ preventScroll: true });
     });
   }
-  const noteOf = (field: Field) => (invalid?.field === field ? invalid.note : null);
+  const noteOf = (field: Field) => invalid[field] ?? null;
+  const clear = (field: Field) => setInvalid((all) => (all[field] ? { ...all, [field]: undefined } : all));
 
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const filled = options.filter((o) => o.label.trim());
-    if (!title.trim()) return flag("title", "Write the decision in one sentence");
-    if (filled.length < 2) return flag("options", "Add at least two options");
-    if (!approver) return flag("approver", "Name the approver");
+    const notes: Partial<Record<Field, string>> = {
+      ...(!title.trim() ? { title: "Write the decision in one sentence" } : {}),
+      ...(filled.length < 2 ? { options: "Add at least two options" } : {}),
+      ...(!approver ? { approver: "Name the approver" } : {}),
+    };
+    if (Object.keys(notes).length > 0) return flag(notes);
     setBusy(true);
     setError(null);
-    setInvalid(null);
+    setInvalid({});
     const body: Schemas["DecisionCreate"] = {
       title: title.trim(),
       question: question.trim() || null,
@@ -144,7 +150,7 @@ export function ProposeDialog({
                 aria-describedby={noteOf("title") ? "propose-note-title" : undefined}
                 onChange={(e) => {
                   setTitle(e.target.value);
-                  if (invalid?.field === "title") setInvalid(null);
+                  clear("title");
                 }}
                 placeholder="e.g. Offer annual billing at launch"
               />
@@ -159,7 +165,7 @@ export function ProposeDialog({
             options={options}
             setOptions={(next) => {
               setOptions(next);
-              if (invalid?.field === "options") setInvalid(null);
+              clear("options");
             }}
             note={noteOf("options")}
           />
@@ -176,7 +182,7 @@ export function ProposeDialog({
                   aria-describedby={noteOf("approver") ? "propose-note-approver" : undefined}
                   onChange={(e) => {
                     setApprover(e.target.value);
-                    if (invalid?.field === "approver") setInvalid(null);
+                    clear("approver");
                   }}
                 >
                   <option value="">Choose the approver</option>
@@ -216,6 +222,8 @@ export function ProposeDialog({
 }
 
 type Field = "title" | "options" | "approver";
+/** The form's required fields, top to bottom: the first missing one takes the cursor. */
+const FIELDS: Field[] = ["title", "options", "approver"];
 
 /** The note under a field that needs filling in, read with the field (aria-describedby). */
 export function FieldNote({ id, note }: { id: string; note: string | null }) {
@@ -248,6 +256,16 @@ export function optionsOf(drafts: Draft[], before: DecisionOption[] = []): Decis
   });
 }
 
+/**
+ * qa4-company-10: each option card's examples go with its own label example (Monthly only is
+ * "Billed each month", never the yearly one).
+ */
+const EXAMPLES = [
+  { label: "Annual at launch", summary: "Yearly plans from the first day", cost: "A month of rework" },
+  { label: "Monthly only", summary: "Billed each month", cost: "Lower revenue up front" },
+];
+const example = (i: number) => EXAMPLES[i] ?? { label: "Another way", summary: "What this option does", cost: "What it costs to undo" };
+
 /** Two to six options: a label, a summary, pros and cons one a line, the cost if wrong. */
 export function OptionsEditor({
   options,
@@ -278,18 +296,27 @@ export function OptionsEditor({
               value={o.label}
               maxLength={200}
               onChange={(e) => set(i, { label: e.target.value })}
-              placeholder={i === 0 ? "e.g. Annual at launch" : i === 1 ? "e.g. Monthly only" : "e.g. Another way"}
+              placeholder={`e.g. ${example(i).label}`}
             />
-            <Button variant="ghost" aria-label={`Remove option ${i + 1}`} onClick={() => setOptions((all) => all.filter((_, j) => j !== i))}>
-              Remove
-            </Button>
+            {/* qa4-company-8: two options at the least, so Remove shows only above two. */}
+            {options.length > 2 && (
+              <Button variant="ghost" aria-label={`Remove option ${i + 1}`} onClick={() => setOptions((all) => all.filter((_, j) => j !== i))}>
+                Remove
+              </Button>
+            )}
           </div>
-          <input aria-label={`Option ${i + 1} summary`} className={FIELD} value={o.summary} onChange={(e) => set(i, { summary: e.target.value })} placeholder="Summary, e.g. Yearly plans from the first day" />
+          <input
+            aria-label={`Option ${i + 1} summary`}
+            className={FIELD}
+            value={o.summary}
+            onChange={(e) => set(i, { summary: e.target.value })}
+            placeholder={`Summary, e.g. ${example(i).summary}`}
+          />
           <div className="grid grid-cols-2 gap-1.5 max-[600px]:grid-cols-1">
             <textarea aria-label={`Option ${i + 1} pros`} className={FIELD} rows={2} value={o.pros} onChange={(e) => set(i, { pros: e.target.value })} placeholder="Pros, one a line" />
             <textarea aria-label={`Option ${i + 1} cons`} className={FIELD} rows={2} value={o.cons} onChange={(e) => set(i, { cons: e.target.value })} placeholder="Cons, one a line" />
           </div>
-          <input aria-label={`Option ${i + 1} cost if wrong`} className={FIELD} value={o.cost} onChange={(e) => set(i, { cost: e.target.value })} placeholder="Cost if wrong, e.g. A month of rework" />
+          <input aria-label={`Option ${i + 1} cost if wrong`} className={FIELD} value={o.cost} onChange={(e) => set(i, { cost: e.target.value })} placeholder={`Cost if wrong, e.g. ${example(i).cost}`} />
         </div>
       ))}
       {options.length < 6 && (

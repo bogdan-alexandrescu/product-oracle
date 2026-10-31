@@ -48,7 +48,7 @@ async function oneChange(box: Locator, text: string, summary: string, ...lines: 
   await say(box, text);
   await expect(box.getByTestId("chat-message-body").filter({ hasText: text }).last()).toBeVisible();
   const line = last(box);
-  await expect(line.getByTestId("chat-message-body")).toHaveText("I understood one change:");
+  await expect(line.getByTestId("chat-message-body")).toHaveText("I understood one change.");
   const card = line.getByTestId("chat-card");
   await expect(card).toHaveCount(1);
   await expect(card.getByTestId("chat-card-summary")).toHaveText(summary);
@@ -87,7 +87,7 @@ for (const [phone, dark] of [
 
       await say(chat, "push Delivery pipeline v2 to next quarter and make Commenter own it");
       const two = last(chat);
-      await expect(two.getByTestId("chat-message-body")).toHaveText("I understood two changes:");
+      await expect(two.getByTestId("chat-message-body")).toHaveText("I understood two changes.");
       await expect(two.getByTestId("chat-card")).toHaveCount(2);
       await expect(two.getByTestId("chat-card").nth(0)).toContainText("Move Delivery pipeline v2 to");
       await expect(two.getByTestId("chat-card").nth(1).getByTestId("chat-card-summary")).toHaveText("Make Commenter the owner of Delivery pipeline v2");

@@ -106,7 +106,7 @@ test("the Plan header's Alignment report opens the latest report", async ({ page
   await login(page);
   await page.goto("/roadmap");
   await page.getByRole("link", { name: "Latest report" }).click();
-  await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+$/);
+  await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+\?latest$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
 });
 
@@ -118,7 +118,7 @@ test("the Plan header's Alignment report opens the latest report when clicked be
   await login(page);
   await page.goto("/roadmap");
   await page.getByRole("link", { name: "Latest report" }).click();
-  await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+$/);
+  await expect(page).toHaveURL(/\/plan\/reports\/[0-9a-f-]+\?latest$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
 });
 

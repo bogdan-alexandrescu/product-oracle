@@ -117,6 +117,18 @@ export function EvidenceChip({ e }: { e: Schemas["EvidenceChip"] }) {
 export type NameOf = (key: string) => string;
 
 /**
+ * Who made a change, by name (qa4-plan-15): the API names a person by their email; the
+ * page reads their name from the people list, else the email's words ("First Last").
+ */
+export type WhoOf = (by: string) => { name: string; email: string | null };
+
+/** A person's name, their email on hover. */
+export function Who({ by, who }: { by: string; who: WhoOf }) {
+  const p = who(by);
+  return <span title={p.email ?? undefined}>{p.name}</span>;
+}
+
+/**
  * Words for a change: "Moved above Saved addresses" / "Pinned at #1". The feature it moved
  * above by its name: the API's own title for it (the object form's `title`) over a lookup by key, which only works while the key is still in the
  * ranking shown; either way, never the bare key.
@@ -136,19 +148,20 @@ export function changeLabel(
 }
 
 /** The chips on an overridden or held row. */
-export function RowChips({ f, name }: { f: RankedFeature; name: NameOf }) {
+export function RowChips({ f, name, who }: { f: RankedFeature; name: NameOf; who: WhoOf }) {
   const o = f.override;
+  const by = o ? who(o.by).name : "";
   return (
     <>
       {/* Short on one line in the Flags column; who and why in the tooltip (qa-plan-49). */}
       {o && (
         <Chip
           kind="acc"
-          title={`${o.kind === "move" ? "Moved" : `Pinned #${o.position}`} by ${o.by}${o.reason ? `: ${o.reason}` : ""}`}
+          title={`${o.kind === "move" ? "Moved" : `Pinned #${o.position}`} by ${by}${o.reason ? `: ${o.reason}` : ""}`}
           data-testid="override-chip"
         >
           {o.kind === "move" ? "Moved" : `Pinned #${o.position}`}
-          <span className="sr-only"> by {o.by}</span>
+          <span className="sr-only"> by {by}</span>
         </Chip>
       )}
       {f.held_below && (
@@ -570,6 +583,7 @@ export function YourChange({
   onRemove,
   onMoveToo,
   name,
+  who,
 }: {
   f: RankedFeature;
   o: OverrideOut | undefined;
@@ -577,6 +591,7 @@ export function YourChange({
   onRemove: (id: string) => void;
   onMoveToo: (prerequisite: string) => void;
   name: NameOf;
+  who: WhoOf;
 }) {
   if (!f.override && !f.held_below) return null;
   return (
@@ -590,7 +605,7 @@ export function YourChange({
             </p>
             <p>“{f.override.reason}”</p>
             <p className="text-text2">
-              {f.override.by}
+              <Who by={f.override.by} who={who} />
               {f.override.created_at && <> · {formatDateTime(f.override.created_at)}</>}
             </p>
             {o && (
@@ -647,9 +662,11 @@ export function ChangesPanel({
   reloadKey,
   features,
   canChange = false,
+  who,
 }: {
   reloadKey: number;
   features: RankedFeature[];
+  who: WhoOf;
   /** Who can move and pin: the empty list says how (qa-plan-20). */
   canChange?: boolean;
 }) {
@@ -704,14 +721,14 @@ export function ChangesPanel({
             <span className="text-text2">{changeLabel(o, (k) => title(k, k))}</span>
             <span className="min-w-0 [overflow-wrap:anywhere]">“{o.reason}”</span>
             <span className="text-text2">
-              {o.created_by.name} · {formatDateTime(o.created_at)}
+              <Who by={o.created_by.name} who={who} /> · {formatDateTime(o.created_at)}
             </span>
             {o.kept_after_pushback && <Chip kind="warn">kept after pushback</Chip>}
             {o.no_longer_applies && <Chip kind="na">no longer applies</Chip>}
             {o.removed_at && (
               <Chip kind="na" title={o.removed_reason ?? undefined}>
                 {o.replaced_by ? "replaced" : "removed"}
-                {o.removed_by ? ` by ${o.removed_by.name}` : ""}
+                {o.removed_by ? ` by ${who(o.removed_by.name).name}` : ""}
               </Chip>
             )}
           </li>

@@ -8,7 +8,8 @@ import { Button, DataTable, Icon, LinkButton, Notice, Panel, toast, useFocusTrap
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { dateBlocksOf } from "@/components/PublishView";
-import { formatDate, formatDateTime, formatShortDate, plural } from "@/lib/format";
+import { formatDate, formatDateTime, formatShortDate, plural, zoneName } from "@/lib/format";
+import { formatInZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -301,14 +302,15 @@ function NotPublished({ doc, n, onClose, onPublished }: { doc: string; n: number
     return (
       <div role="status" className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
         <p className="font-semibold" data-testid="share-not-published">
-          v{n} can&apos;t be published yet: {plural(dates.length, "date")} {dates.length === 1 ? "is" : "are"} not backed by a confirmed schedule.
+          v{n} can&apos;t be published yet: {plural(dates.length, "date")} {dates.length === 1 ? "has" : "have"} no date source yet.
         </p>
         <ul className="my-1 list-disc pl-5" data-testid="share-blocks">
           {dates.map((b) => (
             <li key={b.id}>{b.title}</li>
           ))}
         </ul>
-        <p>Record a schedule basis for each date on Plan › Dates, or ask the engineering lead to. Then publish v{n}.</p>
+        {/* qa4-docs-share-18: the words Plan › Dates uses (Add a date source). */}
+        <p>Add a date source for each date on Plan › Dates, or ask the engineering lead to. Then publish v{n}.</p>
         {/* qa-docs-16: the way to fix it, as buttons, not only words. */}
         <div className="mt-2 flex flex-wrap gap-2">
           <LinkButton variant="primary" href="/plan/dates" onClick={onClose}>
@@ -380,22 +382,31 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
   const ids = { audience: useId(), label: useId(), expires: useId(), download: useId(), passcode: useId(), why: useId() };
   // qa-docs-20: a disabled Create link says why.
   // qa-docs-69: the reason sits under the field it is about, as a sentence.
-  const why: { field: "audience" | "label" | "passcode"; text: string } | null = !label.trim()
-    ? { field: "label", text: "Add a label first." }
-    : blockedPublic
-      ? { field: "audience", text: !ownerPublic ? "Only an owner can share the public version." : "Check the public text first." }
-      : passcode.length > 0 && passcode.length < 8
-        ? { field: "passcode", text: "The passcode needs at least 8 characters." }
-        : null;
+  // qa4-docs-share-23: a missing label is said only once Create link was tried without one.
+  const [tried, setTried] = useState(false);
+  const labelRef = useRef<HTMLInputElement>(null);
+  const missingLabel = !label.trim();
+  const blocker: { field: "audience" | "passcode"; text: string } | null = blockedPublic
+    ? { field: "audience", text: !ownerPublic ? "Only an owner can share the public version." : "Check the public text first." }
+    : passcode.length > 0 && passcode.length < 8
+      ? { field: "passcode", text: "The passcode needs at least 8 characters." }
+      : null;
+  const why: { field: "audience" | "label" | "passcode"; text: string } | null =
+    blocker ?? (tried && missingLabel ? { field: "label", text: "Add a label first." } : null);
   const whyNote = (field: "audience" | "label" | "passcode") =>
     pub && why?.field === field ? (
-      <p id={ids.why} data-testid="create-why" className="mt-1 text-sm font-medium text-text">
+      <p id={ids.why} data-testid="create-why" role={field === "label" ? "alert" : undefined} className="mt-1 text-sm font-medium text-text">
         {why.text}
       </p>
     ) : null;
 
   const create = async () => {
     if (!pub) return;
+    if (missingLabel) {
+      setTried(true);
+      labelRef.current?.focus();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -435,7 +446,7 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
           {/* qa-docs-16: with nothing to create, the sheet only closes. */}
           <Button onClick={onClose}>{pub ? "Cancel" : "Close"}</Button>
           {pub && (
-            <Button variant="primary" disabled={busy || !!why} aria-describedby={why ? ids.why : undefined} onClick={create}>
+            <Button variant="primary" disabled={busy || !!blocker} aria-describedby={why ? ids.why : undefined} onClick={create}>
               Create link
             </Button>
           )}
@@ -483,12 +494,14 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
               Label <span className="font-normal">(required)</span>
             </label>
             <input
+              ref={labelRef}
               id={ids.label}
               className={INPUT}
               maxLength={120}
               required
               aria-required="true"
-              aria-describedby={`${ids.label}-hint`}
+              aria-invalid={why?.field === "label" ? true : undefined}
+              aria-describedby={why?.field === "label" ? `${ids.label}-hint ${ids.why}` : `${ids.label}-hint`}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
             />
@@ -578,12 +591,15 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
     { key: "by", header: "Created by", width: "120px", phone: "hide", cell: (l) => l.created_by_name ?? "A member" },
     {
       key: "expires",
-      header: "Expires",
+      header: "Ends",
       width: "120px",
       phone: "meta",
+      // qa4-docs-share-28: a phone row names its numbers ("Ends Nov 13, 2026 · Views 6").
+      // qa4-docs-share-30: a revoked link no longer runs to its end date.
+      phoneLabel: "Ends",
       cell: (l) => (
         <span data-testid="share-expires" className="tnum">
-          {formatDate(l.expires_at)}
+          {l.state === "revoked" && l.revoked_at ? formatDate(l.revoked_at) : formatDate(l.expires_at)}
         </span>
       ),
     },
@@ -593,6 +609,7 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
       width: "90px",
       align: "right",
       phone: "meta",
+      phoneLabel: "Views",
       cell: (l) => (
         <span className="tnum" title={`${l.distinct_browsers} distinct browser${l.distinct_browsers === 1 ? "" : "s"}`}>
           <span data-testid="share-views">{l.views}</span>
@@ -617,9 +634,16 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
       header: "State",
       width: "90px",
       phone: "meta",
+      wrap: true,
       cell: (l) => (
-        <span data-testid="share-state" title={l.revoked_reason ?? undefined}>
-          {STATE_LABEL[l.state]}
+        <span className="block">
+          <span data-testid="share-state">{STATE_LABEL[l.state]}</span>
+          {/* qa4-docs-share-30: when it was revoked, by whom and why, in the row. */}
+          {l.state === "revoked" && (
+            <span data-testid="share-revoked" className="block text-[13px] text-text2">
+              {[l.revoked_at ? formatDate(l.revoked_at) : null, l.revoked_by_name ? `by ${l.revoked_by_name}` : null, l.revoked_reason ? `Reason: ${l.revoked_reason}` : null].filter(Boolean).join(" · ")}
+            </span>
+          )}
         </span>
       ),
     },
@@ -668,7 +692,11 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
   return (
     <Panel
       title="Share links"
-      count={links.filter((l) => l.state === "active").length}
+      count={(() => {
+        // qa4-docs-share-30: the count matches the rows listed.
+        const active = links.filter((l) => l.state === "active").length;
+        return active === links.length ? active : `${active} active · ${links.length} total`;
+      })()}
       tools={
         can("revoke_all_share_links") && links.some((l) => l.state === "active") ? (
           <Button onClick={() => setDialog({ kind: "revoke-all" })}>
@@ -680,7 +708,7 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!q.data && !q.error && <Loading />}
       {q.data && (
-        <DataTable label="Share links" testId="share-links" columns={columns} rows={links} rowKey={(l) => l.id} empty="No links yet. Use Share above to create one." />
+        <DataTable label="Share links" testId="share-links" columns={columns} rows={links} rowKey={(l) => l.id} empty="No links yet. Use Share a link above to make one." />
       )}
       {dialog?.kind === "log" && <ViewLog link={dialog.link} onClose={() => close(false)} />}
       {dialog?.kind === "extend" && <Extend link={dialog.link} onClose={close} />}
@@ -709,8 +737,16 @@ function useAct(onDone: () => void) {
   return { busy, error, run };
 }
 
+/** Days each expiry runs from now. */
+const EXPIRY_DAYS: Record<Expiry, number> = { "24h": 1, "7d": 7, "14d": 14, "30d": 30, "90d": 90 };
+
 function Extend({ link, onClose }: { link: Link_; onClose: (changed: boolean) => void }) {
-  const [expires, setExpires] = useState<Expiry>("14d");
+  // qa4-docs-share-7: each choice names the day it ends on; one that would end the link
+  // sooner than it ends now is not offered, so Extend never shortens a link.
+  const [now] = useState(() => Date.now());
+  const endOf = (x: Expiry) => new Date(now + EXPIRY_DAYS[x] * 86_400_000).toISOString();
+  const longer = (x: Expiry) => Date.parse(endOf(x)) > Date.parse(link.expires_at);
+  const [expires, setExpires] = useState<Expiry>(() => (longer("14d") ? "14d" : (EXPIRIES.find((x) => longer(x.key))?.key ?? "90d")));
   const id = useId();
   const act = useAct(() => onClose(true));
   return (
@@ -722,7 +758,7 @@ function Extend({ link, onClose }: { link: Link_; onClose: (changed: boolean) =>
           <Button onClick={() => onClose(false)}>Cancel</Button>
           <Button
             variant="primary"
-            disabled={act.busy}
+            disabled={act.busy || !longer(expires)}
             onClick={() => act.run(() => unwrap(api.PATCH("/v1/share-links/{link_id}", { params: { path: { link_id: link.id } }, body: { expires_in: expires } })))}
           >
             Extend
@@ -739,11 +775,14 @@ function Extend({ link, onClose }: { link: Link_; onClose: (changed: boolean) =>
         </label>
         <select id={id} className={INPUT} value={expires} onChange={(e) => setExpires(e.target.value as Expiry)}>
           {EXPIRIES.map((x) => (
-            <option key={x.key} value={x.key}>
-              {x.label} from now
+            <option key={x.key} value={x.key} disabled={!longer(x.key)}>
+              {x.label} from now · {longer(x.key) ? `ends ${formatDate(endOf(x.key))}` : "would end it sooner"}
             </option>
           ))}
         </select>
+        <p className={HINT} data-testid="extend-new-end">
+          {longer(expires) ? `The link will end on ${formatDate(endOf(expires))}.` : `This would end the link before ${formatDate(link.expires_at)}.`}
+        </p>
       </div>
       {act.error && <ErrorNote>{act.error}</ErrorNote>}
     </Modal>
@@ -824,7 +863,7 @@ function Revoke({ link, onClose }: { link: Link_; onClose: (changed: boolean) =>
         </>
       }
     >
-      <p>{link.label} stops working on its next request. Revoking can&apos;t be undone; make a new link instead.</p>
+      <p>{link.label} stops working right away. Revoking can&apos;t be undone; make a new link instead.</p>
       <div>
         <label htmlFor={id} className={LABEL}>
           Reason (optional)
@@ -874,6 +913,8 @@ function ViewLog({ link, onClose }: { link: Link_; onClose: () => void }) {
   const q = useQuery(`share-views|${link.id}`, () => unwrap(api.GET("/v1/share-links/{link_id}/views", { params: { path: { link_id: link.id } } })));
   const v = q.data;
   const most = Math.max(1, ...(v?.days ?? []).map((d) => d.views));
+  const downloads = (v?.entries ?? []).filter((e) => e.kind !== "page").length;
+  const pages = (v?.views ?? 0) - downloads;
   return (
     <Modal title={`View log: ${link.label}`} onClose={onClose} footer={<Button onClick={onClose}>Done</Button>}>
       <p className="text-text2">Counts browsers, not people. Oracle never records who opened a link.</p>
@@ -881,8 +922,10 @@ function ViewLog({ link, onClose }: { link: Link_; onClose: () => void }) {
       {!v && !q.error && <Loading />}
       {v && (
         <>
-          <p>
-            {v.views} view{v.views === 1 ? "" : "s"} ·{" "}
+          {/* qa4-docs-share-27: page views and downloads counted apart, as the rows list them. */}
+          <p data-testid="view-counts">
+            {plural(pages, "page view")}
+            {downloads > 0 && ` · ${plural(downloads, "download")}`} ·{" "}
             <span data-testid="distinct-browsers">
               {v.distinct_browsers} browser{v.distinct_browsers === 1 ? "" : "s"}
             </span>
@@ -891,14 +934,16 @@ function ViewLog({ link, onClose }: { link: Link_; onClose: () => void }) {
             <ul aria-label="Views per day" className="space-y-1">
               {v.days.map((d) => (
                 <li key={d.day} data-testid="view-day" className="flex items-center gap-2 text-sm">
-                  <span className="tnum w-24 flex-none">{formatDate(`${d.day}T12:00:00Z`)}</span>
+                  <span className="tnum w-24 flex-none">{formatDate(d.day)}</span>
                   <span className="h-2.5 rounded bg-accent" style={{ width: `${(d.views / most) * 100}%`, maxWidth: "60%" }} aria-hidden />
                   <span className="tnum">{d.views}</span>
                 </li>
               ))}
             </ul>
           )}
-          <p className="text-sm text-text2">Times in {v.zone} (Company time zone).</p>
+          <p className="text-sm text-text2" data-testid="view-zone">
+            Days and times in {zoneName(v.zone)}, the Company time zone.
+          </p>
           {v.entries.length === 0 ? (
             <p>Nobody has opened this link yet.</p>
           ) : (
@@ -914,7 +959,7 @@ function ViewLog({ link, onClose }: { link: Link_; onClose: () => void }) {
               <tbody>
                 {v.entries.map((e, i) => (
                   <tr key={i} data-testid="view-entry" className="border-t border-line">
-                    <td className="tnum py-1">{formatDateTime(e.viewed_at)}</td>
+                    <td className="tnum py-1">{formatInZone(e.viewed_at, v.zone, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</td>
                     <td className="py-1">{e.kind === "page" ? "Page" : "Download"}</td>
                     <td className="py-1">{e.browser_family ?? "Other"}</td>
                     <td className="py-1">{e.country ?? "—"}</td>

@@ -91,7 +91,9 @@ test("documents and runs by name, never by slug", () => {
   expect(docLabel({ title: "Q4 update", kind: "update" })).toBe("Q4 update");
   const run = { flow_title: "Roadmap items for a PRD draft", document_slug: "usage-alerts", document_kind: "prd" as const };
   expect(runLabel(run, "Usage alerts PRD")).toBe("Usage alerts PRD · Roadmap items for a PRD draft");
-  expect(runLabel(run)).toBe("Usage alerts PRD · Roadmap items for a PRD draft");
+  expect(runLabel(run)).toBe("Usage alerts · Roadmap items for a PRD draft");
+  // The run never adds a kind word to the document's own title.
+  expect(runLabel({ ...run, document_title: "Example test · Saved carts" })).toBe("Example test · Saved carts · Roadmap items for a PRD draft");
   expect(runLabel({ flow_title: "Build the baseline", document_slug: null })).toBe("Build the baseline");
 });
 

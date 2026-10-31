@@ -1,7 +1,7 @@
 import { Chip, Icon, InfoTip, type ChipKind } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatMoney, formatMoneyOf } from "@/lib/format";
-import { runLabel } from "@/lib/labels";
+import { docLabel, runLabel } from "@/lib/labels";
 import { useQuery } from "@/lib/use-query";
 
 export type RunOut = Schemas["RunOut"];
@@ -243,7 +243,8 @@ export function runDocName(run: Pick<RunSummary, "flow_title" | "document_slug" 
   if (!run.document_slug) return null;
   const label = runLabel(run);
   const tail = ` · ${run.flow_title}`;
-  return label.endsWith(tail) ? label.slice(0, -tail.length) : label;
+  // The document as the app names it ("Usage alerts PRD"); the run's own title keeps the title as written.
+  return docLabel({ title: label.endsWith(tail) ? label.slice(0, -tail.length) : label, kind: run.document_kind });
 }
 
 /** What a run is for, in a list or a heading: its document, else its flow. */

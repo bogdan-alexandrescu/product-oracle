@@ -377,6 +377,27 @@ async def test_guessing_is_locked_out_per_link_and_per_client(client, ctx):
     assert resp.status_code == 429
 
 
+async def test_a_revoked_link_names_who_revoked_it(client, ctx):
+    """protects=qa4-docs-share-30: a revoked row says who revoked it; fails_when=the link
+    out has no revoked_by or its name; no_claim=the web page."""
+    await seed_roadmap(ctx, publish=True)
+    made = (await create(client, ctx, "owner")).json()
+    assert made["link"]["revoked_by"] is None and made["link"]["revoked_by_name"] is None
+    resp = await client.post(
+        f"/v1/share-links/{made['link']['id']}/revoke", json={"reason": "sent to the wrong list"},
+        headers=ctx.as_("owner"),
+    )  # fmt: skip
+    out = resp.json()
+    assert out["revoked_by"] == out["created_by"]
+    assert out["revoked_by_name"] and out["revoked_by_name"] == out["created_by_name"]
+    listed = (await client.get(LINKS, headers=ctx.as_("owner"))).json()
+    row = next(x for x in listed if x["id"] == out["id"])
+    assert (row["revoked_by"], row["revoked_by_name"]) == (
+        out["revoked_by"],
+        out["revoked_by_name"],
+    )
+
+
 async def test_unknown_expired_and_revoked_answer_the_same_before_the_passcode(client, ctx):
     """protects=criterion 9 with Q5: an ended link and a guess are told apart by nobody
     who lacks the passcode; a holder of an open cookie sees "This link has ended" (410);

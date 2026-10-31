@@ -66,7 +66,7 @@ test("a reviewer leaves whole-draft feedback through Discuss and the approver se
   await expect(openFeedback(page)).toHaveText(String(before + 1));
   await expect(general(page)).toHaveText(/^General\s*1$/);
   await general(page).click();
-  await expect(items(page).filter({ hasText: REMARK }).getByTestId("feedback-author")).toHaveText("Reviewer");
+  await expect(items(page).filter({ hasText: REMARK }).getByTestId("feedback-author")).toHaveText("Commenter");
 
   await page.goto("/inbox");
   const row = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: REMARK });

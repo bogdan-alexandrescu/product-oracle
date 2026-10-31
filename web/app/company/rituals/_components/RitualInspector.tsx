@@ -46,6 +46,31 @@ function Field({ label, wide, children }: { label: string; wide?: boolean; child
   );
 }
 
+/** A whole number in [min, max] from a field's text, else null. */
+function wholeIn(text: string, min: number, max: number): number | null {
+  const n = Number(text);
+  return text.trim() !== "" && Number.isInteger(n) && n >= min && n <= max ? n : null;
+}
+
+/** qa4-company-19: the length and lead time checks, in the app's words, shown under each field. */
+export function scheduleErrors(duration: string, prep: string, interval?: number): { duration?: string; prep?: string; interval?: string } {
+  const out: { duration?: string; prep?: string; interval?: string } = {};
+  if (wholeIn(duration, 5, 480) === null) out.duration = "Use a length from 5 to 480 minutes.";
+  if (wholeIn(prep, 0, 168) === null) out.prep = "Use a lead time from 0 to 168 hours.";
+  if (interval !== undefined && wholeIn(String(interval), 2, 12) === null) out.interval = "Use 2 to 12 weeks.";
+  return out;
+}
+
+/** A field's problem, right under it. */
+function FieldNote({ id, children }: { id: string; children?: string }) {
+  if (!children) return null;
+  return (
+    <span id={id} data-testid={id} className="text-[13px] font-medium text-crit">
+      {children}
+    </span>
+  );
+}
+
 /** A schedule from the picker's preset and fields. */
 function withPreset(s: Schedule, preset: Preset): Schedule {
   if (preset === "every_2_weeks") return { ...s, freq: "every_n_weeks", interval: 2 };
@@ -102,6 +127,8 @@ export function RitualInspector({
   const [attendees, setAttendees] = useState<string[]>(ritual.attendee_ids);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // qa4-company-19: the field checks show once Save was pressed, then follow the typing.
+  const [tried, setTried] = useState(false);
   const occurrencesQ = useQuery(`ritual-occurrences|${ritual.id}|${ritual.lock_version}`, () =>
     unwrap(api.GET("/v1/rituals/{ritual_id}/occurrences", { params: { path: { ritual_id: ritual.id }, query: { limit: 20 } } })),
   );
@@ -208,6 +235,7 @@ export function RitualInspector({
   }
 
   const weekField = preset === "monthly" || preset === "quarterly" || preset === "yearly";
+  const problems = tried ? scheduleErrors(duration, prep, preset === "every_n_weeks" ? schedule.interval : undefined) : {};
   return (
     <Inspector
       {...head}
@@ -237,8 +265,12 @@ export function RitualInspector({
         <form
           aria-label="Schedule"
           className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1"
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
+            setTried(true);
+            const bad = scheduleErrors(duration, prep, preset === "every_n_weeks" ? schedule.interval : undefined);
+            if (Object.keys(bad).length > 0) return;
             void save();
           }}
         >
@@ -253,7 +285,17 @@ export function RitualInspector({
           </Field>
           {preset === "every_n_weeks" && (
             <Field label="Every N weeks">
-              <input type="number" min={2} max={12} className={INPUT} value={schedule.interval} onChange={(e) => set({ interval: Number(e.target.value) })} />
+              <input
+                type="number"
+                min={2}
+                max={12}
+                className={INPUT}
+                value={schedule.interval}
+                aria-invalid={problems.interval ? true : undefined}
+                aria-describedby={problems.interval ? "ritual-error-interval" : undefined}
+                onChange={(e) => set({ interval: Number(e.target.value) })}
+              />
+              <FieldNote id="ritual-error-interval">{problems.interval}</FieldNote>
             </Field>
           )}
           {weekField && (
@@ -312,14 +354,36 @@ export function RitualInspector({
           <p className="col-span-2 self-center text-sm text-text2 max-[600px]:col-span-1">
             Company time zone: <span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>{" "}
             <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
-              Change
+              {zoneDefault ? "Set it" : "Change"}
             </Link>
           </p>
           <Field label="Length (minutes)">
-            <input type="number" min={5} max={480} required className={INPUT} value={duration} onChange={(e) => setDuration(e.target.value)} />
+            <input
+              type="number"
+              min={5}
+              max={480}
+              required
+              className={INPUT}
+              value={duration}
+              aria-invalid={problems.duration ? true : undefined}
+              aria-describedby={problems.duration ? "ritual-error-duration" : undefined}
+              onChange={(e) => setDuration(e.target.value)}
+            />
+            <FieldNote id="ritual-error-duration">{problems.duration}</FieldNote>
           </Field>
           <Field label="Pre-read lead time (hours)">
-            <input type="number" min={0} max={168} required className={INPUT} value={prep} onChange={(e) => setPrep(e.target.value)} />
+            <input
+              type="number"
+              min={0}
+              max={168}
+              required
+              className={INPUT}
+              value={prep}
+              aria-invalid={problems.prep ? true : undefined}
+              aria-describedby={problems.prep ? "ritual-error-prep" : undefined}
+              onChange={(e) => setPrep(e.target.value)}
+            />
+            <FieldNote id="ritual-error-prep">{problems.prep}</FieldNote>
           </Field>
           {/* Names, as the table's Owner column has them; the email second (qa-company-26/28). */}
           <Field label="Owner" wide>
@@ -378,12 +442,20 @@ export function RitualInspector({
               <Button
                 variant="danger"
                 disabled={busy}
-                onClick={() =>
-                  act(async () => {
+                onClick={async () => {
+                  // qa4-company-1: Delete asks first, naming the ritual; its past pre-reads go with it.
+                  const yes = await confirmInPage({
+                    action: "Delete ritual",
+                    title: `Delete ${ritual.title}?`,
+                    message: `Delete ${ritual.title} and its past pre-reads? This cannot be undone.`,
+                    destructive: true,
+                  });
+                  if (!yes) return;
+                  await act(async () => {
                     await unwrap(api.DELETE("/v1/rituals/{ritual_id}", path));
                     await onChanged();
-                  })
-                }
+                  });
+                }}
               >
                 Delete
               </Button>

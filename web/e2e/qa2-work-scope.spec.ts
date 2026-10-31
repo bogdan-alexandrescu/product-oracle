@@ -137,7 +137,7 @@ test.describe("desktop", () => {
     [COMMENTER, "a commenter", "An approver decides; you can suggest a change."],
     [VIEWER, "a viewer", "An approver decides."],
   ] as const) {
-    test(`rirs-13: ${who} sees Needs a decision and a read-only decision with who decides`, async ({ page }) => {
+    test(`rirs-13: ${who} sees Needs a decision and no decision control, with who decides`, async ({ page }) => {
       await seeded(page, "scope-review", email);
       await openReview(page);
       await expect(page.getByRole("button", { name: /^Needs a decision/ })).toBeVisible();
@@ -145,7 +145,8 @@ test.describe("desktop", () => {
       await expect(page.getByRole("columnheader", { name: "Needs a decision because" })).toBeVisible();
       await row(page, "Address labels").getByTestId("feature-title").click();
       const decision = inspector(page).getByRole("group", { name: "Decision" });
-      for (const name of ["Include", "Leave out", "Defer to a later PRD"]) await expect(decision.getByRole("button", { name, exact: true })).toBeDisabled();
+      // qa4-work-45: no decision buttons the person cannot use.
+      await expect(decision).toHaveCount(0);
       await expect(inspector(page).getByTestId("who-decides")).toHaveText(note);
       await expect(inspector(page)).not.toContainText("Needs you because");
     });
@@ -197,7 +198,7 @@ test.describe("phone", () => {
   test("rirs-24: the run's full name shows on the page, wrapped", async ({ page }) => {
     await seeded(page, "feature-set");
     await openReview(page);
-    const name = page.getByRole("link", { name: "Saved addresses PRD · Baseline to PRD", exact: true });
+    const name = page.getByRole("link", { name: "Saved addresses · Baseline to PRD", exact: true });
     await expect(name).toHaveAttribute("data-testid", "review-back");
     await expect(name).toBeVisible();
     expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

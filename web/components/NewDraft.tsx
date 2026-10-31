@@ -642,7 +642,8 @@ function RecommendationInspector({
   const selectedIsCompany = !!company && company.template === templateKey && (company.theme ?? null) === (themeKey ?? null);
 
   return (
-    <div data-testid="recommendation-panel" aria-live="polite" className={live.pending ? "opacity-70" : ""}>
+    // Production minors 22: a fresh recommendation on its way never greys the card (it read as disabled).
+    <div data-testid="recommendation-panel" aria-live="polite" aria-busy={live.pending || undefined}>
       <Inspector
         label="Recommendation"
         eyebrow="Recommended"
@@ -1228,7 +1229,15 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
             <ErrorNote>
               <span data-testid="new-prd-missing">
                 To continue,{" "}
-                {[titleProblem && "give it a title", problemProblem && "say what problem it solves"].filter(Boolean).join(" and ")}.
+                {[
+                  titleProblem && "give it a title",
+                  // qa4-docs-54: a problem that is there but too short asks for more, not for one.
+                  problemProblem &&
+                    (problemLength === 0 ? "say what problem it solves" : `say a bit more about the problem (at least ${PROBLEM_MIN} characters)`),
+                ]
+                  .filter(Boolean)
+                  .join(" and ")}
+                .
               </span>
             </ErrorNote>
           )}

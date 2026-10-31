@@ -257,8 +257,10 @@ test("regenerate a roadmap: inputs, estimate and a note, then the result is the 
   await dialog.getByLabel("Note to the agents (optional)").fill("Keep the alert thresholds in Now.");
   await dialog.getByRole("button", { name: "Estimate" }).click();
   const inputs = dialog.getByTestId("regenerate-inputs");
-  await expect(inputs).toContainText("Usage alerts roadmap (usage-alerts-roadmap), its latest version");
-  await expect(inputs).toContainText("Usage alerts PRD (usage-alerts), its latest approved version");
+  // qa4-docs-23: by title and version number, never a slug.
+  await expect(inputs).toContainText("Usage alerts roadmap, latest version (v1)");
+  await expect(inputs).toContainText(/Usage alerts PRD, approved version \(v\d+\)/);
+  await expect(inputs).not.toContainText("usage-alerts");
   await expect(dialog.getByTestId("regenerate-estimate")).toHaveText("$6.00");
   // A changed note makes the estimate stale.
   await dialog.getByLabel("Note to the agents (optional)").fill("Keep the alert thresholds in Now. Add the digest.");

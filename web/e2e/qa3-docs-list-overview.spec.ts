@@ -148,8 +148,9 @@ test.describe("desktop", () => {
     const specs = page.getByTestId("engineering-specs");
     await expect(briefs).toContainText("Early shipping cost: technical brief");
     await expect(specs).not.toContainText("Early shipping cost: technical brief");
-    await expect(specs.getByTestId("engineering-spec")).toHaveCount(0);
-    await expect(specs.getByTestId("engineering-specs-empty")).toContainText("under Tech briefs");
+    // qa4-docs-8: only the full engineering spec is under Engineering specs.
+    await expect(specs.getByTestId("engineering-spec")).toHaveCount(1);
+    await expect(specs.getByTestId("engineering-spec")).toContainText("Early shipping cost: engineering spec");
     // The two feature briefs and the requested technical brief, all in one card.
     await expect(briefs.getByRole("listitem")).toHaveCount(3);
   });
@@ -161,6 +162,8 @@ test.describe("desktop", () => {
     const end = campaign.getByRole("button", { name: "End campaign Company-wide feedback" });
     await expect(end).toHaveText("End campaign");
     await end.click();
+    // qa4-docs-14: ending an open campaign asks first.
+    await page.getByTestId("end-campaign-dialog").getByRole("button", { name: "End campaign" }).click();
     await expect(campaign).toContainText("Closed");
     await expect(campaign.getByRole("button", { name: "Reopen Company-wide feedback" })).toBeVisible();
   });

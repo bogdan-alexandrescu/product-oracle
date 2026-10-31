@@ -70,12 +70,12 @@ test("suggestion cards: classification, duplicates, edit and accept, and a pushb
   await expect(pushback).toContainText("Oracle pushes back");
   await expect(pushback).toContainText("Confirmed goal: Team adoption");
   await expect(pushback.getByRole("link", { name: "Roles research notes" })).toHaveAttribute("href", /roles-research/);
-  await customItem.getByRole("button", { name: "Keep my call" }).click();
-  const accept = customItem.getByRole("button", { name: "Accept anyway" });
+  await customItem.getByRole("button", { name: "Accept anyway" }).click();
+  const accept = customItem.getByRole("button", { name: "Accept against the advice" });
   await expect(accept).toBeDisabled();
-  await customItem.getByLabel(/Why keep your call/).fill("Two design partners need a billing-only role.");
+  await customItem.getByLabel(/Why accept against the advice/).fill("Two design partners need a billing-only role.");
   await accept.click();
-  await expect(custom).toContainText("Kept the call: Two design partners need a billing-only role.");
+  await expect(custom).toContainText("Accepted against the advice: Two design partners need a billing-only role.");
 });
 
 test("take Oracle's advice: the suggestion is dismissed and the feedback declined", async ({ page }) => {

@@ -227,9 +227,18 @@ async def resolve(db: AsyncSession, root_type: str, root: Any) -> Resolved:
 def preview(resolved: Resolved) -> dict[str, Any]:
     """What the delete dialog lists."""
     rows = [r for r in resolved.rows() if r is not resolved.root]
+    titles = {d.id: d.title for d in resolved.documents}
+
+    def item(row: Any) -> dict[str, Any]:
+        # qa4-docs-26: a run says when it ran and which document it wrote.
+        if isinstance(row, Run):
+            return {**describe(row), "created_at": row.created_at,
+                    "wrote": titles.get(row.document_id)}  # fmt: skip
+        return describe(row)
+
     return {
         "root": describe(resolved.root),
-        "items": [describe(r) for r in rows],
+        "items": [item(r) for r in rows],
         "published": resolved.published,
         "working_runs": [str(r.id) for r in resolved.runs if r.status in WORKING],
     }

@@ -129,7 +129,7 @@ test("a run that finished with no document: an Inbox row says why and what to do
   await noRowInTheInbox(page);
   await page.goto("/documents/guest-checkout");
   const again = page.getByTestId("version-inspector").getByTestId("version-imported-again");
-  await expect(again).toHaveText(/^imported again by .+ on \d{4}-\d{2}-\d{2} \d{2}:\d{2} \S+$/);
+  await expect(again).toHaveText(/^imported again by .+ on [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M \S+$/);
 });
 
 test("the No document row clears itself once a later run imports the document", async ({ page }) => {

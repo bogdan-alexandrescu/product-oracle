@@ -25,6 +25,8 @@ const VERDICTS: { value: Verdict; label: string; needs?: string }[] = [
 const VERDICT_WORDS: Record<Verdict, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
 const VERDICT_KIND = { feasible: "pass", feasible_with_changes: "warn", not_feasible: "crit" } as const;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+/** qa4-work-54: what a brief written without a code map means, in an owner's words. */
+const NO_CODE_MAP = "Oracle could not read the code, so this approach is a guess";
 
 /** The feature's actions in the shared draft, staged first. */
 function actionsOf(review: Review, key: string): Action[] {
@@ -65,6 +67,9 @@ export function EngReview({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(review.note ?? "");
   const [sending, setSending] = useState(false);
+  // Answers being typed, by feature and question: kept here, above the inspector, so a verdict
+  // or size saved meanwhile (or another feature selected) never empties a box being typed in.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const pending = cp.status === "pending";
   const stages = pending && review.can_stage;
   // Choices from whoever does not stage are suggestions a decider stages (AC6). Train N (owner
@@ -74,13 +79,16 @@ export function EngReview({
   const decides = pending && review.can_decide;
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
 
-  async function write(call: () => Promise<Review>) {
+  /** Saves one choice; true once it is saved (a failed save keeps what was typed). */
+  async function write(call: () => Promise<Review>): Promise<boolean> {
     setError(null);
     setBusy(true);
     try {
       onReview(await call());
+      return true;
     } catch (e) {
       setError(errorMessage(e));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -123,8 +131,16 @@ export function EngReview({
   // Only who can decide: the engineering lead once one is named, else the stop's role.
   const waitsFor = cp.lead_stop ? "Waits for the engineering lead" : `Waits for an ${cp.approver_role}`;
 
-  const tally = `${decided} of ${check.features.length} decided${blockingQuestions ? ` · ${plural(blockingQuestions, "blocking question")}` : ""}`;
-  const approveWhy = !gateOpen ? "Give each feature a verdict and answer each blocking question first" : null;
+  // Every briefs problem is file-level (oracle.engineering.check): nothing to decide, only Send back.
+  const unreadable = check.problems.length > 0;
+  const tally = unreadable
+    ? "The briefs could not be read"
+    : `${decided} of ${check.features.length} decided${blockingQuestions ? ` · ${plural(blockingQuestions, "blocking question")}` : ""}`;
+  const approveWhy = unreadable
+    ? "Send the briefs back to the architect to write them again"
+    : !gateOpen
+      ? "Give each feature a verdict and answer each blocking question first"
+      : null;
 
   return (
     <Page className="pb-0">
@@ -170,12 +186,15 @@ export function EngReview({
               key={feature.key}
               feature={feature}
               codeMap={check.code_map_used}
+              titleOf={(key) => check.features.find((x) => x.key === key)?.title ?? key.replace(/^f\./, "").replace(/[-_]+/g, " ")}
               acts={actionsOf(review, feature.key)}
               stages={stages}
               suggests={suggests}
               busy={busy}
               onAct={act}
               onStage={stage}
+              drafts={drafts}
+              onDraft={(qid, text) => setDrafts((all) => ({ ...all, [`${feature.key}:${qid}`]: text }))}
               onAsk={(text) => {
                 setNote((n) => (n.trim() ? `${n.trim()}\n${text}` : text));
                 setSending(true);
@@ -201,7 +220,7 @@ export function EngReview({
               const blocking = f.questions.filter((q) => q.blocking).length;
               const reasons = reasonsOf(f.key);
               const confirm = [
-                !check.code_map_used ? "No code map: approach rests on assumptions" : null,
+                !check.code_map_used ? NO_CODE_MAP : null,
                 f.depends_on.some((d) => notFeasible.has(d)) ? "Depends on a feature judged not feasible" : null,
               ].filter((x): x is string => !!x);
               return (
@@ -215,8 +234,8 @@ export function EngReview({
                   }`}
                 >
                   <button type="button" className="min-w-0 text-left font-semibold hover:underline" onClick={() => setSelected(f.key)}>
+                    {/* qa4-work-53: the feature's name only; its key is never shown. */}
                     {f.title}
-                    <span className="ml-1.5 font-mono text-sm font-normal text-text2">{f.key}</span>
                   </button>
                   <span className="min-w-0 text-text2">{f.approach}</span>
                   <span data-testid="brief-verdict">
@@ -225,9 +244,7 @@ export function EngReview({
                         {VERDICT_WORDS[v.verdict]}
                       </Chip>
                     ) : (
-                      <Button variant="ghost" onClick={() => setSelected(f.key)} aria-label={`Decide ${f.title}`}>
-                        Decide
-                      </Button>
+                      <span className="text-sm text-text2">Not decided</span>
                     )}
                   </span>
                   <span className="tnum font-semibold" data-testid="brief-size">
@@ -280,15 +297,17 @@ export function EngReview({
           {decides && (
             <>
               <Button
-                variant="ghost"
+                variant="secondary"
                 disabled={busy || (sending && !note.trim())}
                 onClick={() => (sending ? void decide("changes_requested") : setSending(true))}
               >
                 Send back to architect
               </Button>
-              <Button variant="primary" disabled={busy || !gateOpen} title={approveWhy ?? undefined} onClick={() => void decide("approved")}>
-                Approve
-              </Button>
+              {!unreadable && (
+                <Button variant="primary" disabled={busy || !gateOpen} title={approveWhy ?? undefined} onClick={() => void decide("approved")}>
+                  Approve
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -306,22 +325,29 @@ export function EngReview({
 function BriefInspector({
   feature: f,
   codeMap,
+  titleOf,
   acts,
   stages,
   suggests,
   busy,
   onAct,
   onStage,
+  drafts,
+  onDraft,
   onAsk,
 }: {
   feature: Feature;
   codeMap: boolean;
+  titleOf: (key: string) => string;
   acts: Action[];
   stages: boolean;
   suggests: boolean;
   busy: boolean;
-  onAct: (body: ActIn) => Promise<void>;
-  onStage: (id: string) => Promise<void>;
+  onAct: (body: ActIn) => Promise<boolean>;
+  onStage: (id: string) => Promise<boolean>;
+  /** The answers being typed, by `${feature}:${question}` (kept by the screen, never reset by a save). */
+  drafts: Record<string, string>;
+  onDraft: (questionId: string, text: string) => void;
   onAsk: (text: string) => void;
 }) {
   const writes = stages || suggests;
@@ -329,7 +355,9 @@ function BriefInspector({
   const current = verdict?.value as { verdict: Verdict; note?: string | null } | undefined;
   const [picking, setPicking] = useState<Verdict | null>(null);
   const [text, setText] = useState("");
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  // The answered questions whose box is open again (Edit).
+  const [editing, setEditing] = useState<Record<string, boolean>>({});
+  const draftOf = (qid: string) => drafts[`${f.key}:${qid}`] ?? "";
   const size = (edit(acts, "size")?.value as string | undefined) ?? f.size;
   const need = VERDICTS.find((v) => v.value === picking)?.needs;
   const suggestions = acts.filter((a) => a.state === "suggested");
@@ -348,8 +376,8 @@ function BriefInspector({
     <Inspector eyebrow="Feature · selected" title={f.title} label={`Brief: ${f.title}`} testId="brief-inspector">
       <InspectorSection label="Approach">
         <p>{f.approach}</p>
-        <p className="mt-1.5 text-sm text-text2">{codeMap ? "Code map used" : "No code map: assumptions"}</p>
-        {f.depends_on.length > 0 && <p className="mt-1.5 text-sm text-text2">Depends on {f.depends_on.join(", ")}</p>}
+        <p className="mt-1.5 text-sm text-text2">{codeMap ? "Oracle read the code for this approach" : NO_CODE_MAP}</p>
+        {f.depends_on.length > 0 && <p className="mt-1.5 text-sm text-text2">Depends on {f.depends_on.map(titleOf).join(", ")}</p>}
       </InspectorSection>
 
       <InspectorSection label="Feasibility">
@@ -382,7 +410,7 @@ function BriefInspector({
                 variant="primary"
                 disabled={busy || !text.trim()}
                 onClick={() => {
-                  void onAct({ item_key: f.key, kind: "edit", field: "verdict", value: { verdict: picking, note: text.trim() } }).then(() => setPicking(null));
+                  void onAct({ item_key: f.key, kind: "edit", field: "verdict", value: { verdict: picking, note: text.trim() } }).then((saved) => saved && setPicking(null));
                 }}
               >
                 Save verdict
@@ -415,6 +443,7 @@ function BriefInspector({
         <ul className="space-y-3">
           {f.questions.map((q) => {
             const answer = edit(acts, `answer:${q.id}`);
+            const open = writes && (!answer || editing[q.id]);
             return (
               <li key={q.id} data-testid="brief-question">
                 <p>
@@ -425,32 +454,55 @@ function BriefInspector({
                   )}
                   {q.question}
                 </p>
-                {answer && (
+                {answer && !open && (
                   <p className="mt-1 text-sm" data-testid="answer">
                     {String(answer.value)}{" "}
                     <span className="text-text2">
                       {answer.state === "suggested" ? "Suggested" : "Answered"} by {answer.updated_by?.name ?? answer.created_by?.name ?? "someone"}
                     </span>
+                    {writes && (
+                      <>
+                        {" · "}
+                        <button
+                          type="button"
+                          className="text-accent hover:underline"
+                          aria-label={`Edit the answer: ${q.question}`}
+                          onClick={() => {
+                            onDraft(q.id, String(answer.value));
+                            setEditing((all) => ({ ...all, [q.id]: true }));
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </>
+                    )}
                   </p>
                 )}
-                {writes && (
+                {open && (
                   <div className="mt-1.5 flex gap-1.5">
                     <input
                       className={`${INPUT} h-9`}
                       aria-label={`Answer: ${q.question}`}
-                      value={answers[q.id] ?? ""}
-                      onChange={(e) => setAnswers((all) => ({ ...all, [q.id]: e.target.value }))}
+                      value={draftOf(q.id)}
+                      onChange={(e) => onDraft(q.id, e.target.value)}
                     />
                     <Button
-                      disabled={busy || !(answers[q.id] ?? "").trim()}
+                      disabled={busy || !draftOf(q.id).trim()}
                       onClick={() =>
-                        void onAct({ item_key: f.key, kind: "edit", field: `answer:${q.id}`, value: (answers[q.id] ?? "").trim() }).then(() =>
-                          setAnswers((all) => ({ ...all, [q.id]: "" })),
-                        )
+                        void onAct({ item_key: f.key, kind: "edit", field: `answer:${q.id}`, value: draftOf(q.id).trim() }).then((saved) => {
+                          if (!saved) return;
+                          onDraft(q.id, "");
+                          setEditing((all) => ({ ...all, [q.id]: false }));
+                        })
                       }
                     >
                       Answer
                     </Button>
+                    {answer && (
+                      <Button variant="ghost" onClick={() => setEditing((all) => ({ ...all, [q.id]: false }))}>
+                        Cancel
+                      </Button>
+                    )}
                   </div>
                 )}
               </li>
@@ -458,7 +510,7 @@ function BriefInspector({
           })}
         </ul>
         {stages && (
-          <Button variant="ghost" className="mt-2" onClick={() => onAsk(`${f.title}: `)}>
+          <Button className="mt-2" onClick={() => onAsk(`${f.title}: `)}>
             Ask the architect
           </Button>
         )}

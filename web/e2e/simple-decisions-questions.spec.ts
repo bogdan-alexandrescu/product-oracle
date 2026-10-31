@@ -56,8 +56,8 @@ for (const phone of [false, true]) {
         await expect(first).toContainText("Q5 Reminder default time");
         await expect(first.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
         await expect(first.getByTestId("question-due")).toHaveAttribute("data-late", "true");
-        await expect(first).toContainText("Blocks M1: F-03 Health log");
-        await expect(first).toContainText("Guided setup recommends: 9:00 in each person's zone");
+        await expect(first).toContainText("Blocks Health log, first milestone");
+        await expect(first).toContainText("Recommended in Guided setup: 9:00 in each person's zone");
         await expect(mine.getByTestId("question-row").nth(1).getByTestId("question-due")).toHaveText("Due Mon Oct 26");
         await mine.getByRole("button", { name: "Show 4 more" }).click();
         await expect(mine.getByTestId("question-row")).toHaveCount(9);
@@ -71,7 +71,7 @@ for (const phone of [false, true]) {
         await expect(region(page, "Review: Usage alerts")).toBeVisible();
         // Ask Oracle opens Simple's Ask panel with the question in its box.
         await row(page, "Q5").getByRole("button", { name: "Ask Oracle" }).click();
-        await expect(page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true })).toHaveValue(/^Q5 Reminder default time in Guided setup: what should we decide\?/);
+        await expect(page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true })).toHaveValue(/^What should we decide on Reminder default time, in Guided setup/);
       });
 
       /**
@@ -88,7 +88,7 @@ for (const phone of [false, true]) {
         const needs = page.getByTestId("board-needs_input");
         const recommended = page.getByTestId("board-recommended");
         const decided = page.getByTestId("board-decided");
-        await expect(needs).toContainText("Needs input 3");
+        await expect(needs).toContainText("Missing a decider or a recommendation 3");
         if (phone) {
           await expect(needs).toBeVisible();
           await expect(recommended).toBeHidden();
@@ -243,11 +243,11 @@ for (const phone of [false, true]) {
         const due = region(page, "On the agenda");
         await expect(due.getByTestId("question-row").first()).toContainText("Q5 Reminder default time");
         await expect(due.getByTestId("question-row").first()).toContainText("Late · due Fri Oct 16");
-        await expect(due.getByTestId("question-row").first()).toContainText("Blocks M1: F-03 Health log");
+        await expect(due.getByTestId("question-row").first()).toContainText("Blocks Health log, first milestone");
         // The PRD's open questions, whoever decides them (Q7 is the approver's), not only mine.
         await expect(due.locator('[data-code="Q7"]')).toContainText("Q7 Legal input on health notes");
         await due.getByTestId("question-row").first().getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(region(page, "All decisions")).toContainText("Decided Q5 Reminder default time: 9:00 in each person's zone");
+        await expect(region(page, "Decisions in this meeting")).toContainText("Q5 Reminder default time");
         const q5 = due.locator('[data-code="Q5"]');
         await expect(q5.getByTestId("question-decided")).toContainText("Decided in this meeting: 9:00 in each person's zone · Admin ·");
         await q5.getByRole("button", { name: "Undo" }).click();

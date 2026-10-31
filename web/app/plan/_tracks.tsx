@@ -703,6 +703,8 @@ function MilestoneForm({
               <SegmentedControl<Horizon>
                 label="Horizon"
                 size="sm"
+                // qa4-plan-18: the segments share the field's width, never bunched left in a wide box.
+                fill
                 value={horizon}
                 onChange={setHorizon}
                 items={HORIZONS.map((h) => ({
@@ -762,6 +764,8 @@ function MilestoneForm({
                 <SegmentedControl<MilestoneStatus>
                   label="Milestone status"
                   size="sm"
+                  // qa4-plan-18: the segments share the field's width, never bunched left in a wide box.
+                  fill
                   value={status}
                   onChange={setStatus}
                   items={(["planned", "done", "dropped"] as const).map((s) => ({

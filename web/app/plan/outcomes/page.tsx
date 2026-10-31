@@ -81,12 +81,15 @@ function stateOf(o: Outcome): State {
 const figure = (v: number | null | undefined, unit?: string | null) =>
   v == null ? null : `${v}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`;
 
-/** "38% → 42% by Dec 31", from the typed figures when there are any. */
-function predicted(p: Prediction): string {
+/** "38% → 42% by Dec 31", from the typed figures when there are any; `by: false` leaves the date out. */
+function predicted(p: Prediction, by = true): string {
   const from = figure(p.baseline_value, p.unit) ?? p.baseline;
   const to = figure(p.predicted_value, p.unit) ?? p.predicted;
-  return `${from ? `${from} → ` : ""}${to}${p.by ? ` by ${formatDate(p.by)}` : ""}`;
+  return `${from ? `${from} → ` : ""}${to}${by && p.by ? ` by ${formatDate(p.by)}` : ""}`;
 }
+
+/** The table's Due: the check date, else the prediction's own date. */
+const dueOf = (o: Outcome) => o.assess_due_on ?? o.prediction.by ?? null;
 
 /** "41% on Jan 4": Oracle's reading or the last assessment's. */
 function actual(o: Outcome): string | null {
@@ -176,24 +179,26 @@ function Outcomes() {
     rows.find((o) => o.id === selected) ??
     shown[0];
 
+  // qa4-plan-47: the item, its goal, the prediction and the actual wrap rather than cut
+  // mid-word; the goal gives way first when an inspector leaves the table narrow; the
+  // prediction leaves out its date when Due shows the same one.
   const columns: Column<Outcome>[] = [
     {
       key: "item",
       header: "Item",
       phone: "title",
-      cell: (o) => (
-        <span className="truncate font-semibold" title={o.title}>
-          {o.title}
-        </span>
-      ),
+      wrap: true,
+      cell: (o) => <span className="font-semibold">{o.title}</span>,
     },
     {
       key: "goal",
       header: "Goal",
       width: "170px",
       hideOnPhone: true,
+      narrow: "laptop",
+      wrap: true,
       cell: (o) => (
-        <span className="truncate text-text2">
+        <span className="text-text2">
           {goals.get(o.goal_id) ?? "Goal"}
         </span>
       ),
@@ -201,19 +206,23 @@ function Outcomes() {
     {
       key: "predicted",
       header: "Predicted",
-      width: "190px",
+      width: "160px",
       hideOnPhone: true,
+      wrap: true,
       cell: (o) => (
-        <span className="tnum truncate">{predicted(o.prediction)}</span>
+        <span className="tnum" data-testid="outcome-predicted">
+          {predicted(o.prediction, o.prediction.by !== dueOf(o))}
+        </span>
       ),
     },
     {
       key: "actual",
       header: "Actual",
-      width: "130px",
+      width: "120px",
       hideOnPhone: true,
+      wrap: true,
       cell: (o) => (
-        <span className="tnum truncate text-text2">{actual(o) ?? "—"}</span>
+        <span className="tnum text-text2">{actual(o) ?? "—"}</span>
       ),
     },
     {
@@ -226,17 +235,16 @@ function Outcomes() {
     {
       key: "due",
       header: "Due",
-      width: "100px",
+      width: "128px",
       phone: "meta",
-      cell: (o) => (
-        <span className="tnum text-text2" data-testid="outcome-due">
-          {o.assess_due_on
-            ? formatDate(o.assess_due_on)
-            : o.prediction.by
-              ? formatDate(o.prediction.by)
-              : "—"}
-        </span>
-      ),
+      cell: (o) => {
+        const due = dueOf(o);
+        return (
+          <span className="tnum whitespace-nowrap text-text2" data-testid="outcome-due">
+            {due ? formatDate(due) : "—"}
+          </span>
+        );
+      },
     },
   ];
 
@@ -271,7 +279,8 @@ function Outcomes() {
           </InfoTip>
         }
         status={
-          q.data && (
+          // qa4-plan-35: no "0 outcomes" chip beside the empty state that already says so.
+          q.data && rows.length > 0 && (
             <>
               <Chip kind="acc">
                 {rows.length} {rows.length === 1 ? "outcome" : "outcomes"}
@@ -701,7 +710,8 @@ function OutcomeInspector({
       )}
       <InspectorSection label="Prediction">
         <p className="tnum text-sm">
-          Predicted {figure(p.baseline_value, p.unit) ?? p.baseline ?? "?"} →{" "}
+          {/* qa4-plan-48: an unknown starting value said in words, never a bare "?". */}
+          Predicted {figure(p.baseline_value, p.unit) ?? p.baseline ?? "from today's value (not measured yet)"} →{" "}
           {figure(p.predicted_value, p.unit) ?? p.predicted}
           {now ? ` · Now ${now}` : ""}
         </p>
@@ -932,7 +942,7 @@ function TrackOutcomeForm({
   onCancel,
   onTracked,
 }: {
-  goals: { id: string; title: string }[];
+  goals: { id: string; title: string; attrs?: Record<string, unknown> }[];
   tracked: Set<string | null | undefined>;
   onCancel: () => void;
   onTracked: (o: Outcome) => Promise<void>;
@@ -945,10 +955,17 @@ function TrackOutcomeForm({
   const [goalId, setGoalId] = useState("");
   const [effect, setEffect] = useState("");
   const [metric, setMetric] = useState("");
+  // qa4-plan-48: the Metric follows the picked goal's own metric until the person types one.
+  const [metricTyped, setMetricTyped] = useState(false);
   const [by, setBy] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const item = items.find((i) => i.id === itemId);
+  function pickGoal(id: string) {
+    setGoalId(id);
+    const own = goals.find((g) => g.id === id)?.attrs?.metric;
+    if (!metricTyped) setMetric(typeof own === "string" ? own : "");
+  }
 
   async function save() {
     if (!item) return;
@@ -1017,7 +1034,7 @@ function TrackOutcomeForm({
               const first = next?.goal_ids.find((g) =>
                 goals.some((x) => x.id === g),
               );
-              if (first) setGoalId(first);
+              if (first) pickGoal(first);
             }}
           >
             <option value="">
@@ -1035,7 +1052,7 @@ function TrackOutcomeForm({
           <select
             className={FIELD}
             value={goalId}
-            onChange={(e) => setGoalId(e.target.value)}
+            onChange={(e) => pickGoal(e.target.value)}
           >
             <option value="">Choose a goal</option>
             {goals.map((g) => (
@@ -1061,7 +1078,10 @@ function TrackOutcomeForm({
             className={FIELD}
             value={metric}
             maxLength={300}
-            onChange={(e) => setMetric(e.target.value)}
+            onChange={(e) => {
+              setMetric(e.target.value);
+              setMetricTyped(true);
+            }}
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">

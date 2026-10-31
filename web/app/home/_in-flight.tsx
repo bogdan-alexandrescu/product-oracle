@@ -173,6 +173,12 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
   ];
 }
 
+/**
+ * qa4-company-52: a section not reviewed yet is a filled grey swatch, as the others are filled;
+ * an outlined square read as a checkbox one could tick.
+ */
+const NOT_REVIEWED = "bg-line-strong";
+
 const VERDICT_BAR: Record<string, string> = {
   approved: "bg-pass",
   changes_requested: "bg-warn",
@@ -271,7 +277,9 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
         { label: "Approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
         // qa-shell-22: the PRD's open review feedback (the Inbox's count), as the review panel names it;
         // the Sections legend below counts sections not yet reviewed, another thing.
-        { label: "Open feedback", value: openItems ?? 0, testId: "stat-open" },
+        // qa4-company-53: the Inbox counts the feedback waiting on the signed-in person, so the
+        // label says it is theirs (an owner and a viewer read different numbers for one PRD).
+        { label: "Your open feedback", value: openItems ?? 0, testId: "stat-open" },
       ]}
     >
       <InspectorSection testId="inspector-journey" label={`Journey: step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}, ${JOURNEY_STEPS[REVIEW_STEP - 1]}`}>
@@ -285,7 +293,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
             <span className="flex flex-wrap items-center gap-2.5 font-medium text-text">
               <Legend cls="bg-pass" label="Approved" n={approved} />
               <Legend cls="bg-warn" label="Changes" n={count("changes_requested") + count("rejected")} />
-              <Legend cls="bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]" label="Not reviewed" n={count(null)} />
+              <Legend cls={NOT_REVIEWED} label="Not reviewed" n={count(null)} />
             </span>
           }
         >
@@ -295,7 +303,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
                 key={s.section_key}
                 title={`${s.heading}${s.verdict ? ` · ${s.verdict.verdict.replace("_", " ")}` : ""}`}
                 className={`h-2.5 min-w-1 flex-1 rounded-[3px] ${
-                  s.verdict ? VERDICT_BAR[s.verdict.verdict] : "bg-surface2 shadow-[inset_0_0_0_1px_var(--line-strong)]"
+                  s.verdict ? VERDICT_BAR[s.verdict.verdict] : NOT_REVIEWED
                 }`}
               />
             ))}

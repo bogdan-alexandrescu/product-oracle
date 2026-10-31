@@ -132,15 +132,18 @@ function ThemeInspector({ t }: { t: Theme }) {
           title={`${t.name} preview`}
           testId="theme-inspector-preview"
           height="h-[26rem]"
+          // Laid out narrower than a full page, so the narrow inspector shows the type at a
+          // readable size rather than as a tiny thumbnail (qa4-settings-18).
+          pageWidth={540}
         />
       </InspectorSection>
       <InspectorSection label="Colours">
         <Swatches t={t} size={28} />
       </InspectorSection>
-      <InspectorSection label="Facts">
+      {/* Only names: the internal key is not shown to people (qa4-settings-17). */}
+      <InspectorSection label="Details">
         <InspectorRow value={t.tokens.page ? `${t.tokens.page.size} · ${t.tokens.page.orientation === "landscape" ? "Landscape" : "Portrait"}` : "—"}>Page</InspectorRow>
         <InspectorRow value={formatDate(t.updated_at)}>Updated</InspectorRow>
-        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {t.description && (
         <InspectorSection label="Description">

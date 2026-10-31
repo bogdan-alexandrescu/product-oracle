@@ -313,12 +313,15 @@ type ChipProps = {
  */
 export function CodeChip({
   wrap = false,
+  whole = false,
   codeOnly = false,
   testId = "code-chip",
   ...p
 }: ChipProps & {
   /** The name wraps onto two lines instead of being cut on one. */
   wrap?: boolean;
+  /** The name wraps onto as many lines as it needs, between words, never cut (qa5-plan-at-risk). */
+  whole?: boolean;
   /** Only the code (none when there is no code): the caller draws the name beside it. */
   codeOnly?: boolean;
   testId?: string;
@@ -340,7 +343,7 @@ export function CodeChip({
           {!codeOnly && (
             <span
               data-testid="code-name"
-              className={`min-w-0 font-medium ${wrap ? "line-clamp-2" : "truncate"} ${p.proposed && !n.code ? "text-warn" : ""}`}
+              className={`min-w-0 font-medium ${whole ? "break-words" : wrap ? "line-clamp-2" : "truncate"} ${p.proposed && !n.code ? "text-warn" : ""}`}
             >
               {label}
             </span>

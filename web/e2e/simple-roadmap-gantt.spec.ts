@@ -185,11 +185,13 @@ for (const phone of [false, true]) {
         await expect(card.getByTestId("card-milestone")).toHaveText("M1 Prove it, M2 Scale volume");
         const rows = card.getByTestId("card-slice");
         await expect(rows).toHaveCount(2);
-        await expect(rows.nth(0)).toContainText("F-05a Team invites");
+        // qa4-simple-roadmap-32: the slice by its name, no feature code.
+        await expect(rows.nth(0)).toContainText("Team invites, part 1 of 2");
+        await expect(rows.nth(0)).not.toContainText("F-05a");
         await expect(rows.nth(0)).toContainText("M1 Prove it");
         await expect(rows.nth(0)).toContainText(/9 Nov – 27 Nov|Nov 9 – Nov 27/);
         await expect(rows.nth(0)).toContainText("3 engineer-weeks");
-        await expect(rows.nth(1)).toContainText("F-05b Team invites");
+        await expect(rows.nth(1)).toContainText("Team invites");
         await expect(rows.nth(1)).toContainText("M2 Scale volume");
         await expect(rows.nth(1)).toContainText("2 engineer-weeks");
         await card.getByRole("button", { name: "Close" }).click();
@@ -216,7 +218,7 @@ for (const phone of [false, true]) {
         const tray = page.getByTestId("decision-tray");
         const row = tray.getByTestId("tray-date").filter({ hasText: "Self-serve checkout:" });
         await expect(row).toHaveCount(1);
-        await expect(row.locator("span").first()).toHaveText(/^Self-serve checkout: (Dec 14 – Jan 22|14 Dec – 22 Jan)$/);
+        await expect(row.locator("span").first()).toHaveText(/^Self-serve checkout: Dec 14, 2026 – Jan 22, 2027$/);
         const parts = row.getByTestId("tray-date-slice");
         await expect(parts).toHaveCount(2);
         await expect(parts.nth(0)).toHaveAttribute("data-slice", "F-11a");

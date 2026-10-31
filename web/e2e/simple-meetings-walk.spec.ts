@@ -81,7 +81,7 @@ async function endOne(page: Page) {
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
-  await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
+  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();
@@ -210,8 +210,9 @@ for (const phone of [false, true]) {
         await page.getByLabel("New wording for").fill("A checklist that names the next step");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(bar).toContainText("1 change");
-        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
-        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
+        await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
+        await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (published)");
         await expect(onePager).toContainText("Version 4");
         await expect(onePager).not.toContainText("Version 3");
         await expect(page.getByRole("status", { name: "Working draft" })).toHaveCount(0);
@@ -234,14 +235,15 @@ for (const phone of [false, true]) {
         await expect(otherPager).toContainText("Version 3");
         await expect(other.getByRole("status", { name: "Working draft" })).toContainText("1 change");
         await page.bringToFront();
-        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
-        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
+        await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
+        await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (published)");
         await other.bringToFront();
         await other.clock.runFor(6_000);
         await expect(otherPager).toContainText("Version 4");
         await expect(other.getByRole("status", { name: "Working draft" })).toHaveCount(0);
         await expect(otherPager).toContainText("A checklist that names the next step");
-        await expect(other.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
+        await expect(other.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (published)");
       });
 
       test("A viewer reads Upcoming and Home's next review with no Start; Home says if its pre-read is ready", async ({ page }) => {

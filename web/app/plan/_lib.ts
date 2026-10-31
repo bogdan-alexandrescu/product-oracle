@@ -46,10 +46,19 @@ export function engineeringLine(i: PlanItem): string {
   return engineeringParts(i).filter(Boolean).join(" · ") || "—";
 }
 
+/**
+ * qa4-plan-30: an issue as the row names it: a GitHub reference ("acme/app#418") is "Issue 418",
+ * a tracker key ("ENG-402") stays as it is. The inspector gives the whole reference and its link.
+ */
+export function issueName(ref: string): string {
+  const m = /^[\w.-]+\/[\w.-]+#(\d+)$/.exec(ref);
+  return m ? `Issue ${m[1]}` : ref;
+}
+
 /** The Engineering cell's two parts, [issue, date], each "" when there is none. */
 export function engineeringParts(i: PlanItem): [string, string] {
   const e = i.engineering;
-  const keys = e.records.map((r) => r.external_ref);
+  const keys = e.records.map((r) => issueName(r.external_ref));
   let issue = "";
   if (keys.length) issue = keys[0] + (keys.length > 1 ? ` +${keys.length - 1}` : "");
   else if (i.origin === "approved" && i.horizon !== "later") issue = "Untracked";

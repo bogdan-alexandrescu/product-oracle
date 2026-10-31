@@ -87,18 +87,18 @@ for (const [width, height] of [
     await expect(docRow.getByTestId("staged-row-label")).toHaveText("3 changes staged for draft 6");
   });
 
-  test("pushback: Accept asks why you keep your call, sends nothing without a reason, then stages it", async ({ page }) => {
+  test("pushback: Accept asks why you accept it anyway, sends nothing without a reason, then stages it", async ({ page }) => {
     await suggestions(page);
     await inbox(page);
     const roles = row(page, ROLES);
     await roles.getByRole("button", { name: "Accept", exact: true }).click();
-    const why = roles.getByLabel("Why keep your call?");
+    const why = roles.getByLabel("Oracle pushed back. Why accept anyway?");
     await expect(why).toBeVisible();
     // Required: Accept without a reason says so and calls nothing (the API's own refusal reads
     // "Oracle pushed back on this feedback…").
     await roles.getByRole("button", { name: "Accept", exact: true }).click();
-    await expect(roles.getByTestId("inbox-action-error")).toHaveText("Say why you keep your call.");
-    await expect(roles.getByLabel("Why keep your call?")).toBeFocused();
+    await expect(roles.getByTestId("inbox-action-error")).toHaveText("Say why you accept it.");
+    await expect(roles.getByLabel("Oracle pushed back. Why accept anyway?")).toBeFocused();
     await expect(row(page, ROLES)).toHaveCount(1);
 
     await why.fill("Big teams in the pilot need custom roles from day one.");

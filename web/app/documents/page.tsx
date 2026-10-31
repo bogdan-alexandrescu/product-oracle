@@ -27,7 +27,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
-import { ErrorNote } from "@/components/ui";
+import { LoadError } from "@/components/ui";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
 import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
@@ -344,32 +344,63 @@ export default function DocumentsPage() {
   const ideasQ = useQuery("documents|ideas", loadIdeas);
   const [view, setView] = useState<"prds" | "ideas">("prds");
   const ideaCount = ideasQ.data?.length ?? 0;
+  // qa-docs-44: where ideas come from, and the way to start one.
+  const ideasEmpty = (
+    <span data-testid="ideas-empty" className="inline-block max-w-prose whitespace-normal">
+      No ideas waiting. An idea is a brief for a PRD: write one with{" "}
+      {canPropose ? (
+        <Link href="/documents/new?kind=prd" className="font-medium text-accent-ink hover:underline">
+          New PRD
+        </Link>
+      ) : (
+        "New PRD"
+      )}
+      , or turn a customer request into one from{" "}
+      <Link href="/requests" className="font-medium text-accent-ink hover:underline">
+        Requests
+      </Link>
+      .
+    </span>
+  );
   const columns = docColumns(sort, setSort, names);
   // On a phone a tapped row opens its PRD, but the arrow keys (Home, End, Space) only move
   // the selection: the keydown that selects is caught before the row's own handler.
   const byKey = useRef(false);
 
+  const header = (
+    <PageHeader
+      title="PRDs"
+      info={
+        <InfoTip label="PRDs">
+          Every PRD and the briefs (Ideas) waiting to become one. Roadmaps live under Plan. Open a PRD to read its
+          versions, review it and publish it.
+        </InfoTip>
+      }
+      status={capsReady ? <RoleBadge /> : undefined}
+      action={
+        // #370: a commenter writes the brief, an approver drafts; a viewer has no New PRD.
+        canPropose && (
+          <LinkButton href="/documents/new?kind=prd" variant="primary" icon="plus">
+            New PRD
+          </LinkButton>
+        )
+      }
+    />
+  );
+  // qa4-shell-2: a failed read is the error and Try again only: no switch counts, no empty list.
+  // A failed reload after a good one keeps the rows under the error.
+  if (q.error && !q.data)
+    return (
+      <Page>
+        {header}
+        <LoadError what="your PRDs" error={q.error} onRetry={() => void q.reload()} />
+      </Page>
+    );
+
   return (
     <Page>
-      <PageHeader
-        title="PRDs"
-        info={
-          <InfoTip label="PRDs">
-            Every PRD and the briefs (Ideas) waiting to become one. Roadmaps live under Plan. Open a PRD to read its
-            versions, review it and publish it.
-          </InfoTip>
-        }
-        status={capsReady ? <RoleBadge /> : undefined}
-        action={
-          // #370: a commenter writes the brief, an approver drafts; a viewer has no New PRD.
-          canPropose && (
-            <LinkButton href="/documents/new?kind=prd" variant="primary" icon="plus">
-              New PRD
-            </LinkButton>
-          )
-        }
-      />
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {header}
+      {q.error && <LoadError what="your PRDs" error={q.error} onRetry={() => void q.reload()} />}
       {names.failed && (
         <p data-testid="template-names-failed" role="status" className="mb-3 text-[13px] text-text2">
           {NAMES_FAILED}
@@ -382,8 +413,9 @@ export default function DocumentsPage() {
           value={view}
           onChange={setView}
           items={[
-            { value: "prds", label: "PRDs", count: q.data ? all.length : null },
-            { value: "ideas", label: "Ideas", count: ideasQ.data?.length ?? null, title: "Briefs waiting to be drafted" },
+            // qa4-shell-18: no count on either side until both lists have loaded.
+            { value: "prds", label: "PRDs", count: q.data && ideasQ.data ? all.length : null },
+            { value: "ideas", label: "Ideas", count: q.data && ideasQ.data ? ideasQ.data.length : null, title: "Briefs waiting to be drafted" },
           ]}
         />
         {view === "prds" && inReview > 0 && (
@@ -402,35 +434,24 @@ export default function DocumentsPage() {
       </div>
       {view === "ideas" ? (
         <Panel>
-          {ideasQ.error && <ErrorNote>{ideasQ.error}</ErrorNote>}
-          <DataTable
-            label="Ideas"
-            testId="ideas-table"
-            columns={IDEA_COLUMNS}
-            rows={ideasQ.data}
-            loading={ideasQ.loading}
-            rowKey={(d) => d.intake.id}
-            onActivate={(k) => router.push(`/intakes/${k}`)}
-            empty={
-              // qa-docs-44: where ideas come from, and the way to start one.
-              <span data-testid="ideas-empty" className="inline-block max-w-prose whitespace-normal">
-                No ideas waiting. An idea is a brief for a PRD: write one with{" "}
-                {canPropose ? (
-                  <Link href="/documents/new?kind=prd" className="font-medium text-accent-ink hover:underline">
-                    New PRD
-                  </Link>
-                ) : (
-                  "New PRD"
-                )}
-                , or turn a customer request into one from{" "}
-                <Link href="/requests" className="font-medium text-accent-ink hover:underline">
-                  Requests
-                </Link>
-                .
-              </span>
-            }
-            rowProps={() => ({ "data-testid": "idea-row" })}
-          />
+          {ideasQ.error ? (
+            <LoadError what="the ideas" error={ideasQ.error} onRetry={() => void ideasQ.reload()} />
+          ) : ideasQ.data?.length === 0 ? (
+            // qa4-docs-27: no ideas, no table header: only the empty state and its links.
+            <p className="px-4 py-8 text-center text-text2">{ideasEmpty}</p>
+          ) : (
+            <DataTable
+              label="Ideas"
+              testId="ideas-table"
+              columns={IDEA_COLUMNS}
+              rows={ideasQ.data}
+              loading={ideasQ.loading}
+              rowKey={(d) => d.intake.id}
+              onActivate={(k) => router.push(`/intakes/${k}`)}
+              empty={ideasEmpty}
+              rowProps={() => ({ "data-testid": "idea-row" })}
+            />
+          )}
         </Panel>
       ) : (
         <Split

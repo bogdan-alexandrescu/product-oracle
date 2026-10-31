@@ -44,7 +44,8 @@ test("evidence: the owner reads the coverage matrix and links a target to an uns
   await expect(page.getByTestId("evidence-matrix").getByText("Baseline items")).toBeVisible();
   await expect(page.getByTestId("evidence-matrix").getByText("Draft citations")).toBeVisible();
   await expect(cell(page, "Usage export", "goal-trace")).toHaveAttribute("data-stale", "true");
-  await expect(cell(page, "Guided setup", "scope")).toContainText("Tests");
+  // qa4-docs-18: the cell says how strong the link is; its kind is in the cell's label.
+  await expect(cell(page, "Guided setup", "scope").getByRole("button")).toHaveAttribute("aria-label", /: Tests, /);
   // The per-section totals, in words: links and citations.
   await expect(page.getByTestId("evidence-totals").locator('td[data-section="metrics"]')).toHaveText("0 links, 0 citations");
 
@@ -63,7 +64,7 @@ test("evidence: the owner reads the coverage matrix and links a target to an uns
   await expect(page.getByText("Link added.")).toBeVisible();
   await expect(insp.getByTestId("evidence-link")).toHaveCount(2);
   await expect(column(page, "metrics")).not.toHaveAttribute("data-gap", "true");
-  await expect(cell(page, "Guided setup", "metrics")).toContainText("Impl");
+  await expect(cell(page, "Guided setup", "metrics").getByRole("button")).toHaveAttribute("aria-label", /: Implements, /);
 });
 
 test("evidence: past 6 sections the matrix scrolls inside its panel, never the page", async ({ page }) => {
@@ -256,7 +257,8 @@ test("evidence: a section counts as unsupported only when nothing under it is su
   await cell(page, "Guided setup", "scope").getByRole("button").click();
   const select = page.getByRole("complementary", { name: "Guided setup" }).getByRole("form", { name: "Link to another section" }).getByLabel("Section");
   await expect(select.locator("option", { hasText: "5. Proposed flow" })).toHaveText("5. Proposed flow");
-  await expect(select.locator("option", { hasText: "Checkout redesign PRD" })).toHaveText("Checkout redesign PRD");
+  // qa4-docs-42: the opening section reads as the Introduction, not the PRD's title.
+  await expect(select.locator("option", { hasText: "Introduction" })).toHaveText("Introduction");
   await expect(select.locator("option", { hasText: "5.1 Cart review" })).toHaveText("5.1 Cart review · unsupported");
 
   // The section view and its "No links or citations" filter follow the same rule.
@@ -265,7 +267,7 @@ test("evidence: a section counts as unsupported only when nothing under it is su
   const table = page.getByRole("grid", { name: "Sections" });
   await expect(table.getByRole("row", { name: /5\.1 Cart review/ })).toBeVisible();
   await expect(table.getByRole("row", { name: /5\. Proposed flow/ })).toHaveCount(0);
-  await expect(table.getByRole("row", { name: /Checkout redesign PRD/ })).toHaveCount(0);
+  await expect(table.getByRole("row", { name: /Introduction/ })).toHaveCount(0);
 });
 
 test("evidence: the note on rendered pages shows once on a desktop", async ({ page }) => {

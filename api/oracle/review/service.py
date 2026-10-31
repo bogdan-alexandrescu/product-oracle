@@ -188,6 +188,23 @@ async def section_layer(session: AsyncSession, version_id: uuid.UUID, key: str) 
     )
 
 
+async def author_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """qa4-docs-39: each author's name as people read it: a member's (display_name), else
+    an API token's name."""
+    from oracle.auth.models import ApiToken, User
+    from oracle.members.names import display_name
+
+    if not ids:
+        return {}
+    rows = await session.execute(select(User.id, User.email, User.name).where(User.id.in_(ids)))
+    out = {uid: display_name(email, name) for uid, email, name in rows}
+    if rest := ids - set(out):
+        tokens = select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(rest))
+        rows = await session.execute(tokens)
+        out.update({tid: name for tid, name in rows})
+    return out
+
+
 async def feedback_out(
     session: AsyncSession, items: Sequence[FeedbackItem]
 ) -> list[FeedbackItemOut]:
@@ -218,6 +235,7 @@ async def feedback_out(
     staged = await staged_suggestions(session, [i.id for i in items])
     notes = await oracle_notes(session, items)
     latest = await latest_numbers(session, {i.document_id for i in items})
+    authors = await author_names(session, {i.author_id for i in items if i.author_id})
     intakes: dict[uuid.UUID, uuid.UUID | None] = {}
     if question_ids := {i.intake_question_id for i in items if i.intake_question_id}:
         from oracle.v2.models import StakeholderQuestion
@@ -246,6 +264,7 @@ async def feedback_out(
                 section_key=item.section_key,
                 summary=item.summary,
                 author_id=item.author_id,
+                author_name=authors.get(item.author_id) if item.author_id else None,
                 anchor=TextQuoteSelector(**anchor) if anchor else None,
                 verdict=verdicts.get(item.section_review_id) if item.section_review_id else None,
                 status=item.status,

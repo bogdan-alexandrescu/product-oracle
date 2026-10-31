@@ -205,12 +205,14 @@ async def test_every_action_is_a_meeting_decision(client):
     assert [n["text"] for n in comment_out["notes"] if n["kind"] == "comment"] == ["Keep the beta"]
     rows = await meeting_decisions(w)
     titles = [d.title for d in rows]
+    # qa4-simple-decide-12: a move says where to; an accepted or declined proposal says whose.
+    who = w.ctx.users["commenter"].name or w.ctx.users["commenter"].email
     assert titles == [
         "Renamed Edit_Title A",
-        "Proposed: Moved Change_Horizon A",
-        "Accepted: Moved Change_Horizon A",
+        "Proposed: Moved Change_Horizon A to Next",
+        f"Accepted {who}'s proposal: Moved Change_Horizon A to Next",
         "Proposed: Cut Cut A",
-        "Declined: Cut Cut A",
+        f"Declined {who}'s proposal: Cut Cut A",
         "Undone: Renamed Edit_Title A",
     ]
     assert "Comment: Keep the beta" not in titles

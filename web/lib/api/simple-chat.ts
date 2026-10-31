@@ -68,6 +68,8 @@ export type ChatCard = {
   dependent_ids?: string[];
   /** Review major: what "Cut it and its dependents" does for the reader (apply only when they decide every item it cuts). */
   may_with_dependents?: "apply" | "propose" | null;
+  /** qa4-simple-decide-1: an applied card the reader may undo (its Apply's rule). */
+  can_undo?: boolean;
 };
 
 export type ChangeWords = { before: string; after: string };
@@ -118,6 +120,10 @@ export type ChatRules = {
   may_apply: boolean;
   ask_only: boolean;
   ended: boolean;
+  /** meet-chat-right-prd: when it ended and who ended it, or by itself once its time ran out. */
+  ended_at?: string | null;
+  ended_by?: PersonRef | null;
+  ended_by_itself?: boolean;
 };
 
 /** `understood`: false when Oracle's plan reader did not know the last line (with only_understood, nothing was written). */

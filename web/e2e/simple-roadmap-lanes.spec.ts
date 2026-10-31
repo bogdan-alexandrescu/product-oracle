@@ -58,7 +58,7 @@ for (const scheme of ["light", "dark"] as const) {
      * rows of Faster activation), pieces one after the other share a row (Setup failure alerts
      * and Setup error report); the month row, the week row with the Today pill, each milestone's
      * end a flag "M1 ends Nov 27" with a dashed line, the year-end break hatched, the legend in
-     * the card (M1, M2, M3, PM-owned, Today, Holidays, slices of one feature) and the Group by's
+     * the card (M1, M2, M3, No engineering work, Today, Holidays, One bar per part of a feature) and the Group by's
      * hint; fails_when = a lane, a count, the PM-owned lane, a colour, the connector, the
      * stacking, a flag or a legend entry is missing or wrong; no_claim = pixels.
      */
@@ -104,7 +104,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(ends.nth(0).getByTestId("milestone-end-line")).toHaveAttribute("stroke-dasharray", /\d/);
       await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
       const legend = page.getByTestId("simple-chart").getByTestId("legend");
-      for (const words of ["M1", "M2", "M3", "PM-owned, no engineering", /^Today \w{3} \d+$/, "Holidays Dec 28 – Jan 1, 2027", "slices of one feature"])
+      for (const words of ["M1", "M2", "M3", "No engineering work", /^Today \w{3} \d+$/, "Holidays Dec 28 – Jan 1, 2027", "One bar per part of a feature"])
         await expect(legend.getByTestId("legend-item").filter({ hasText: words })).toHaveCount(1);
       await expect(page.getByTestId("lanes-hint")).toHaveText("Pieces stack inside a lane when they run at once");
       const w = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -190,16 +190,16 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("today-pill")).toHaveText("Today");
       await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
       await expect(phoneLane(page, "Reliability")).toHaveAttribute("data-open", "true");
-      await expect(phoneLane(page, "Reliability").getByTestId("lane-open-chip")).toHaveText("open below");
+      await expect(phoneLane(page, "Reliability").getByTestId("lane-open-chip")).toHaveText("Listed below");
       const list = page.getByTestId("lane-list");
       await expect(list).toContainText("Reliability");
-      await expect(list.getByTestId("lane-list-count")).toHaveText("5 items, up to 1 at once");
+      await expect(list.getByTestId("lane-list-count")).toHaveText("5 items");
       await expect(list.getByTestId("lane-row")).toHaveCount(5);
-      await expect(list.getByTestId("lane-row").first()).toContainText(/F-03\s*Setup failure alerts\s*Nov 2 – Nov 13/);
+      await expect(list.getByTestId("lane-row").first()).toContainText(/^Setup failure alerts\s*Nov 2 – Nov 13/);
 
       await phoneLane(page, "Growth").click();
       await expect(phoneLane(page, "Growth")).toHaveAttribute("aria-expanded", "true");
-      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items, up to 1 at once");
+      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items");
       await expect(list.getByTestId("lane-row")).toHaveCount(6);
       await list.locator('[data-testid="lane-row"][data-code="F-05b"]').click();
       const card = page.getByTestId("floating-card");

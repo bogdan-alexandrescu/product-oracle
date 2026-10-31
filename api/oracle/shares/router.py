@@ -116,6 +116,9 @@ class ShareLinkOut(BaseModel):
     expires_at: datetime
     state: Literal["active", "expired", "revoked"]
     revoked_at: datetime | None = None
+    # Who revoked it (qa4-docs-share-30); none when it was revoked on its own.
+    revoked_by: uuid.UUID | None = None
+    revoked_by_name: str | None = None
     revoked_reason: str | None = None
     allow_download: bool
     views: int
@@ -265,7 +268,13 @@ async def _outs(db, links: list[ShareLink]) -> list[ShareLinkOut]:
     )
     users = {
         u.id: display_name(u.email, u.name)
-        for u in await db.scalars(select(User).where(User.id.in_({x.created_by for x in links})))
+        for u in await db.scalars(
+            select(User).where(
+                User.id.in_(
+                    {x.created_by for x in links} | {x.revoked_by for x in links if x.revoked_by}
+                )
+            )
+        )
     }
     out = []
     for link in links:
@@ -289,6 +298,8 @@ async def _outs(db, links: list[ShareLink]) -> list[ShareLinkOut]:
                 expires_at=link.expires_at,
                 state=service.state(link),  # type: ignore[arg-type]
                 revoked_at=link.revoked_at,
+                revoked_by=link.revoked_by,
+                revoked_by_name=users.get(link.revoked_by) if link.revoked_by else None,
                 revoked_reason=link.revoked_reason,
                 allow_download=link.allow_download,
                 views=link.views,

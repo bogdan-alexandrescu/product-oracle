@@ -2,11 +2,13 @@
 
 import { useId, useState, type FormEvent } from "react";
 
+import { ConfirmDialog } from "@/components/account/ConfirmDialog";
 import { Button, Chip, Icon, Panel, Sheet } from "@/components/ds";
 import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
+import { todayIn, useCompanyZone } from "@/lib/dates";
 import { formatDay, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -32,6 +34,13 @@ const SOURCE_LABEL: Record<Policy["source"], string> = {
   default: "Default policy",
 };
 
+/** qa4-docs-share-33: what the pill means, beside it. */
+const SOURCE_HINT: Record<Policy["source"], string> = {
+  document: "These settings were saved for this document.",
+  company: "Nothing is set for this document yet, so the company's settings apply. Saving sets them for this document.",
+  default: "Nothing is set for this document yet, so the standard settings apply. Saving sets them for this document.",
+};
+
 /**
  * qa-docs-18: the sheet's own tick box, on the app's tokens (a hairline box, the accent and a
  * check when ticked, the focus ring), not the browser's; still a real checkbox for keys and readers.
@@ -53,6 +62,17 @@ function Tick({ checked, onChange }: { checked: boolean; onChange: (on: boolean)
 
 /** A picked due date (YYYY-MM-DD) as the API's due_at: 17:00 UTC that day, shown back as that day. */
 const dueAt = (day: string) => (day ? `${day}T17:00:00Z` : null);
+
+/** Today on the company's calendar as YYYY-MM-DD: the earliest due date a form takes (qa4-docs-share-12, -34). */
+function useToday(): string {
+  return todayIn(useCompanyZone());
+}
+
+/** Why a form refuses a due date before today. */
+const PAST_DUE = "Pick today or a later day for the due date.";
+
+/** qa4-docs-share-36: an open campaign whose due day has passed reads Overdue. */
+const pastDue = (at: string | null | undefined, today: string) => !!at && at.slice(0, 10) < today;
 
 /** The names of the people with these ids, loaded once per set of ids. */
 function usePeople(ids: readonly (string | null | undefined)[]): Map<string, Person> {
@@ -90,6 +110,7 @@ function PeopleField({
 }) {
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Map<string, Person>>(new Map());
+  const addId = useId();
   const nameOf = (id: string) => picked.get(id)?.name ?? people.get(id)?.name ?? "Someone";
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
@@ -112,22 +133,35 @@ function PeopleField({
           </span>
         ))}
         {!readOnly && (
-          <Button variant="ghost" icon="plus" onClick={() => setPicking((x) => !x)} aria-expanded={picking}>
+          <Button id={addId} variant="ghost" icon="plus" onClick={() => setPicking((x) => !x)} aria-expanded={picking}>
             {addLabel}
           </Button>
         )}
       </div>
       {picking && (
-        <PersonPicker
-          autoFocus
-          approversOnly={approversOnly}
-          exclude={ids}
-          onPick={(p) => {
-            setPicked((m) => new Map(m).set(p.user_id, p));
-            onChange(single ? [p.user_id] : [...ids, p.user_id]);
+        // qa4-docs-share-1: Escape closes the picker alone (the sheet around it stays open with
+        // its picks) and focus goes back to the button that opened it.
+        <div
+          data-own-escape
+          onKeyDown={(e) => {
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            e.stopPropagation();
             setPicking(false);
+            document.getElementById(addId)?.focus();
           }}
-        />
+        >
+          <PersonPicker
+            autoFocus
+            approversOnly={approversOnly}
+            exclude={ids}
+            onPick={(p) => {
+              setPicked((m) => new Map(m).set(p.user_id, p));
+              onChange(single ? [p.user_id] : [...ids, p.user_id]);
+              setPicking(false);
+            }}
+          />
+        </div>
       )}
     </div>
   );
@@ -225,6 +259,9 @@ function PolicyForm({
       <div className="flex flex-wrap items-center gap-2">
         <Chip kind={draft.source === "document" ? "acc" : "na"}>{SOURCE_LABEL[draft.source]}</Chip>
         {!canEdit && <Chip kind="line">View only</Chip>}
+        <span className="text-sm text-text2" data-testid="policy-source-hint">
+          {SOURCE_HINT[draft.source]}
+        </span>
         <span className="text-sm text-text2">The decider and reviewers must be approvers or owners.</span>
       </div>
       <PeopleField
@@ -297,7 +334,8 @@ function PolicyForm({
       )}
       {error && <InlineError>{error}</InlineError>}
       {canEdit && (
-        <div className="flex flex-wrap items-center gap-2">
+        // qa4-docs-share-33: Save and Cancel stay in view at the panel's foot while the settings scroll.
+        <div data-testid="policy-actions" className="sticky bottom-0 -mx-4 -mb-4 flex flex-wrap items-center gap-2 border-t border-line bg-surface px-4 py-3">
           <Button type="submit" variant="primary" disabled={saving}>
             {saving ? "Saving…" : "Save review settings"}
           </Button>
@@ -333,7 +371,7 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
               <span className="flex-1" />
               {canEdit && (
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   aria-label={`Edit owner and reviewers of ${s.heading}`}
                   aria-expanded={editing === s.section_key}
                   onClick={() => setEditing((k) => (k === s.section_key ? null : s.section_key))}
@@ -361,6 +399,7 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
                     Reviewer {people.get(id)?.name ?? "…"}
                   </Chip>
                 ))}
+                {/* The API's overdue: past its due date and not approved yet (an approved section is not overdue). */}
                 {s.due_at && <Chip kind={s.overdue ? "warn" : "line"}>{`${s.overdue ? "Overdue" : "Due"} ${formatDay(s.due_at)}`}</Chip>}
               </div>
             )}
@@ -369,11 +408,17 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
         {open.length > 0 && (
           <li data-testid="unassigned-sections" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 px-4 py-2.5">
             <span className="min-w-0 text-text2">
-              {open.length === states.length ? `${plural(open.length, "section")}, no owner yet` : `${plural(open.length, "more section")} with no owner`}
+              {/* qa4-docs-share-13: once they are listed, the line says so instead of "more". */}
+              {unfolded
+                ? `${plural(open.length, "section")} with no owner, listed above`
+                : open.length === states.length
+                  ? `${plural(open.length, "section")}, no owner yet`
+                  : `${plural(open.length, "more section")} with no owner`}
             </span>
             <span className="flex-1" />
-            <Button variant="ghost" aria-expanded={unfolded} onClick={() => setUnfolded((u) => !u)}>
-              {unfolded ? "Hide" : canEdit ? "Assign" : "Show"}
+            {/* qa4-docs-share-13: the button says what it does: it lists the sections (each then has Edit). */}
+            <Button variant="secondary" aria-expanded={unfolded} onClick={() => setUnfolded((u) => !u)}>
+              {unfolded ? "Hide" : `Show ${plural(open.length, "section")}${canEdit ? " to assign" : ""}`}
             </Button>
           </li>
         )}
@@ -398,6 +443,7 @@ function AssignmentForm({
   const [owner, setOwner] = useState<string[]>(state.owner_id ? [state.owner_id] : []);
   const [reviewers, setReviewers] = useState<string[]>(state.reviewer_ids ?? []);
   const [due, setDue] = useState(state.due_at ? state.due_at.slice(0, 10) : "");
+  const today = useToday();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // After a 409: the row the form was built from, until the reloaded row arrives (Save waits for it).
@@ -415,6 +461,11 @@ function AssignmentForm({
 
   async function save(e: FormEvent) {
     e.preventDefault();
+    // qa4-docs-share-34: a new due date before today is refused (a saved one may stay as it is).
+    if (due && due < today && due !== (state.due_at ?? "").slice(0, 10)) {
+      setError(PAST_DUE);
+      return;
+    }
     setSaving(true);
     setError(null);
     setChanged(null);
@@ -440,12 +491,13 @@ function AssignmentForm({
   }
 
   return (
-    <form onSubmit={save} className="flex min-w-0 flex-col gap-3 rounded-button border border-line bg-surface2 p-3">
+    // noValidate: a past due date gets the form's own plain words, not the browser's bubble.
+    <form onSubmit={save} noValidate className="flex min-w-0 flex-col gap-3 rounded-button border border-line bg-surface2 p-3">
       <PeopleField label="Owner" addLabel="Choose the owner" ids={owner} people={people} onChange={setOwner} single empty="No owner" />
       <PeopleField label="Reviewers" addLabel="Add a reviewer" ids={reviewers} people={people} onChange={setReviewers} empty="None" />
       <label className={`${FIELD_LABEL} max-w-48`}>
         Due date
-        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
+        <input type="date" value={due} min={today} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
       </label>
       {error && <InlineError>{error}</InlineError>}
       {changed && <ChangedNote was={changed.was} now={changed.now} people={people} />}
@@ -486,11 +538,14 @@ function ChangedNote({ was, now, people }: { was: SectionState; now: SectionStat
 export function Campaigns({ doc }: { doc: string }) {
   const { can } = useMe();
   const canEdit = can("create_review_campaign");
+  const today = useToday();
   const q = useQuery(`campaigns|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/campaigns", { params: { path: { doc } } })));
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The campaign being closed or reopened: its button waits, so a double click sends one change.
   const [toggling, setToggling] = useState<string | null>(null);
+  // qa4-docs-14: an open campaign ends only after a yes (people are still being asked).
+  const [ending, setEnding] = useState<Campaign | null>(null);
 
   async function toggle(c: Campaign) {
     setToggling(c.id);
@@ -547,18 +602,38 @@ export function Campaigns({ doc }: { doc: string }) {
             <Chip kind={c.status === "open" ? "now" : "na"}>{c.status === "open" ? "Open" : "Closed"}</Chip>
             <span className="tnum text-sm text-text2">
               v{c.version_number} · {c.comments} comment{c.comments === 1 ? "" : "s"} · {c.participants} of {c.invited} took part
-              {c.due_at ? ` · due ${formatDay(c.due_at)}` : ""}
+              {c.due_at && !(c.status === "open" && pastDue(c.due_at, today)) ? ` · due ${formatDay(c.due_at)}` : ""}
             </span>
+            {/* qa4-docs-share-36: an open campaign past its due date says so. */}
+            {c.due_at && c.status === "open" && pastDue(c.due_at, today) && <Chip kind="warn">{`Overdue ${formatDay(c.due_at)}`}</Chip>}
             <span className="flex-1" />
             {canEdit && (
               // qa-docs-30: what the action does to the campaign, not a bare Close.
-              <Button variant="ghost" aria-label={`${c.status === "open" ? "End campaign" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => toggle(c)}>
+              <Button variant="secondary" aria-label={`${c.status === "open" ? "End campaign" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => (c.status === "open" ? setEnding(c) : toggle(c))}>
                 {c.status === "open" ? "End campaign" : "Reopen"}
               </Button>
             )}
           </li>
         ))}
       </ul>
+      <ConfirmDialog
+        open={!!ending}
+        testId="end-campaign-dialog"
+        title={ending ? `End ${ending.title}?` : "End campaign?"}
+        subject={ending ? `${ending.participants} of ${ending.invited} took part` : undefined}
+        consequences={[
+          { icon: "x", text: "Nobody else is asked for feedback in it." },
+          { icon: "check", text: "Its comments stay, and you can reopen it." },
+        ]}
+        confirmLabel="End campaign"
+        confirmVariant="solid"
+        onClose={() => setEnding(null)}
+        onConfirm={() => {
+          const c = ending;
+          setEnding(null);
+          if (c) void toggle(c);
+        }}
+      />
     </Panel>
   );
 }
@@ -571,11 +646,17 @@ function CampaignForm({ doc, onDone, onCancel }: { doc: string; onDone: () => Pr
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [due, setDue] = useState("");
+  const today = useToday();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function send(e: FormEvent) {
     e.preventDefault();
+    // qa4-docs-share-12: a due date before today is refused.
+    if (due && due < today) {
+      setError(PAST_DUE);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -594,7 +675,8 @@ function CampaignForm({ doc, onDone, onCancel }: { doc: string; onDone: () => Pr
   }
 
   return (
-    <form onSubmit={send} className="flex min-w-0 flex-col gap-3 border-b border-line bg-surface2 p-4">
+    // noValidate: a past due date gets the form's own plain words, not the browser's bubble (Send waits for a title).
+    <form onSubmit={send} noValidate className="flex min-w-0 flex-col gap-3 border-b border-line bg-surface2 p-4">
       <p className="text-sm text-text2">Everyone who can comment is asked to comment on the latest version. Approval stays with the decider.</p>
       <label className={FIELD_LABEL}>
         Title
@@ -606,7 +688,7 @@ function CampaignForm({ doc, onDone, onCancel }: { doc: string; onDone: () => Pr
       </label>
       <label className={`${FIELD_LABEL} max-w-48`}>
         Due date (optional)
-        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
+        <input type="date" value={due} min={today} onChange={(e) => setDue(e.target.value)} className={`${TEXTAREA} h-9`} />
       </label>
       {error && <InlineError>{error}</InlineError>}
       <div className="flex flex-wrap items-center gap-2">

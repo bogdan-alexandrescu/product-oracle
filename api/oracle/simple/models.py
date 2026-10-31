@@ -547,7 +547,8 @@ class SimpleChatRead(TenantScoped, Base):
     (oracle.simple.chat). ``message_id``: Oracle's line (pending while ``job_id``, the
     ``chat_reader`` job, runs); ``ask_id``: the person's line; ``choices``: a clarify
     question's choices ({label, op, args}; "Neither" last, with no op), ``picked`` the one
-    taken; ``ask_box``: asked in the Ask panel's one box (a plain question goes to Ask)."""
+    taken; ``ask_box``: asked in the Ask panel's one box (a plain question goes to Ask);
+    ``answered_at``: when the reader wrote Oracle's line (its time in the chat)."""
 
     __tablename__ = "simple_chat_reads"
 
@@ -573,6 +574,7 @@ class SimpleChatRead(TenantScoped, Base):
         JSONB, nullable=False, server_default="[]"
     )
     picked: Mapped[int | None] = mapped_column(Integer)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 MEETING_ORIGINS = ("one_pager", "roadmap", "ritual")

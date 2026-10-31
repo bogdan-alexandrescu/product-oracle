@@ -378,6 +378,9 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
   const [revoking, setRevoking] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const acts = useActed();
+  // qa4-settings-38: a role that can't comment writes almost nothing, so say what Write allows it.
+  const { can, capsReady } = useMe();
+  const writeIsNarrow = capsReady && !can("create_comment");
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -488,6 +491,12 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
         <Button type="submit" variant="solid" icon="plus" disabled={pending || !name.trim() || scopes.length === 0}>
           {pending ? "Creating…" : "Create token"}
         </Button>
+        {writeIsNarrow && (
+          <p className="basis-full text-[13px] text-text2" data-testid="write-scope-note">
+            Your role can&apos;t comment on or change documents, so Write only lets a token post in discussions and change your own
+            settings.
+          </p>
+        )}
         {error && (
           <div className="basis-full">
             <Notice tone="error">{error}</Notice>

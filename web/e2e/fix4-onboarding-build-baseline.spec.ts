@@ -76,7 +76,7 @@ test("qa-onboarding-2: Start waits for a source with items, then the first build
   await expect(page).toHaveURL(/\/home$/);
   await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
   // Home's done Pick sources says how many are read (fix4-company).
-  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("1 source read");
+  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("1 source with content");
 
   // 3. Build baseline > Open again: nothing in the way, Start starts the build.
   await openBuildFromSetup(page);

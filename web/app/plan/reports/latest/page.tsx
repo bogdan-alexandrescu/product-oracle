@@ -24,8 +24,9 @@ export default function LatestReportPage() {
   const q = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
   const latest = q.data?.[0]?.id;
   const none = q.data != null && latest == null;
+  // qa4-plan-36: ?latest keeps the Latest report link selected on the report it opened.
   useEffect(() => {
-    if (latest) router.replace(`/plan/reports/${latest}`);
+    if (latest) router.replace(`/plan/reports/${latest}?latest`);
   }, [router, latest]);
   // capsReady too: `can` is false until the capabilities load, so an owner must not be
   // shown the viewer's wording (and no button) for that brief window.
@@ -37,9 +38,9 @@ export default function LatestReportPage() {
       <PageHeader
         title="Plan"
         info={
-          <InfoTip label="Alignment reports" align="start" side="bottom">
+          <InfoTip label="Reports" align="start" side="bottom">
             Each week Oracle reports how the tracks stand against their milestones and posts it to Slack. A report
-            opens from here; the newest is also the Alignment report link.
+            opens from here; the newest is also the Latest report link.
           </InfoTip>
         }
       />

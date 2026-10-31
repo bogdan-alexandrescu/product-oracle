@@ -70,7 +70,7 @@ def test_chains_on_mains_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0024_segment_skipped chains on it; one head.
-    assert script.get_heads() == ["0094_generation_checks"]
+    assert script.get_heads() == ["0095_chat_read_answered_at"]
     assert script.get_revision("0024_segment_skipped").down_revision == REVISION
 
 

@@ -10,7 +10,7 @@ import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { OnTop, Outcome, type Delivery, type EventType, type Webhook } from "./parts";
+import { eventLabel, failureText, OnTop, Outcome, type Delivery, type EventType, type Webhook } from "./parts";
 
 const STATUSES: { value: Delivery["status"]; label: string }[] = [
   { value: "succeeded", label: "Succeeded" },
@@ -38,7 +38,8 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
   );
   const columns: Column<Delivery>[] = [
     { key: "when", header: "When", width: "34%", cell: (d) => <span className="tnum truncate">{formatDateTime(d.last_at ?? d.created_at)}</span> },
-    { key: "event", header: "Event", cell: (d) => <span className="truncate font-mono text-[13px]" title={d.event_id}>{d.event_type}</span> },
+    // qa4-settings-26: the event's plain label, as the form shows it.
+    { key: "event", header: "Event", cell: (d) => <span className="block truncate" title={eventLabel(d.event_type, eventTypes)}>{eventLabel(d.event_type, eventTypes)}</span> },
     { key: "status", header: "Status", width: "88px", cell: (d) => <Outcome d={d} /> },
     {
       key: "http",
@@ -70,10 +71,10 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
         <Field label="Event">
           <select className={SELECT_FIELD} value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">All</option>
-            <option value="webhook.test">webhook.test</option>
+            <option value="webhook.test">{eventLabel("webhook.test", eventTypes)}</option>
             {eventTypes.map((t) => (
               <option key={t.type} value={t.type}>
-                {t.type}
+                {t.label}
               </option>
             ))}
           </select>
@@ -97,6 +98,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
       <OnTop>
         <DeliverySheet
           hook={hook}
+          eventTypes={eventTypes}
           delivery={open}
           onClose={() => setOpen(null)}
           onRedelivered={() => {
@@ -110,7 +112,19 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
   );
 }
 
-function DeliverySheet({ hook, delivery, onClose, onRedelivered }: { hook: Webhook; delivery: Delivery | null; onClose: () => void; onRedelivered: () => void }) {
+function DeliverySheet({
+  hook,
+  eventTypes,
+  delivery,
+  onClose,
+  onRedelivered,
+}: {
+  hook: Webhook;
+  eventTypes: EventType[];
+  delivery: Delivery | null;
+  onClose: () => void;
+  onRedelivered: () => void;
+}) {
   const { can } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +157,7 @@ function DeliverySheet({ hook, delivery, onClose, onRedelivered }: { hook: Webho
     <Sheet open title="Delivery" onClose={onClose} testId="delivery-sheet">
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-2 text-[15px]">
-          <span className="font-mono text-[13px]">{d.event_type}</span>
+          <span className="font-semibold">{eventLabel(d.event_type, eventTypes)}</span>
           <Outcome d={d} />
           <span className="text-text2">
             {formatDateTime(d.last_at ?? d.created_at)} · Company time · attempt {d.attempts}
@@ -162,7 +176,9 @@ function DeliverySheet({ hook, delivery, onClose, onRedelivered }: { hook: Webho
           </pre>
         </section>
         <section>
-          <h3 className="mb-1 text-[13px] font-semibold text-text2">Response{d.http_status != null ? ` · HTTP ${d.http_status}` : d.error ? ` · ${d.error}` : ""}</h3>
+          <h3 className="mb-1 text-[13px] font-semibold text-text2">
+            Response{d.http_status != null ? ` · HTTP ${d.http_status}` : d.error ? ` · ${failureText(d, d.host ?? hook.host)}` : ""}
+          </h3>
           {/* Text only: a receiver's answer is never rendered as HTML. */}
           <pre className={pre} data-testid="delivery-response">
             {d.response_excerpt ?? "No response"}

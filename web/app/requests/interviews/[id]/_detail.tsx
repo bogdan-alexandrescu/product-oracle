@@ -258,7 +258,8 @@ function transcriptEmpty(iv: InterviewOut, name: string): string {
     case "invited":
       return iv.link_opened_at
         ? `${name} opened the link but hasn't answered yet.`
-        : `${name} hasn't opened the link yet. Send it to them if you haven't.`;
+        : // qa4-docs-share-63: the link can't be shown again, so a link never sent is replaced, not sent.
+          `${name} hasn't opened the link yet.${iv.can_manage ? " If you didn't send it, make a new link." : ""}`;
     case "in_progress":
       return `${name} has started but hasn't answered yet.`;
     case "expired":

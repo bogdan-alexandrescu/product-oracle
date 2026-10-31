@@ -159,7 +159,7 @@ for (const scheme of ["light", "dark"] as const) {
       await login(page);
       await page.goto("/documents/checkout-redesign/v/2");
       await page.getByRole("link", { name: "Impact", exact: true }).click();
-      await expect(page.getByText("Preview: nothing has been marked stale.")).toBeVisible();
+      await expect(page.getByText("Preview: v2 marks nothing stale.")).toBeVisible();
       const header = page.locator("header[data-page-header]").filter({ visible: true });
       await expect(header.getByText("Preview", { exact: true })).toHaveCount(0);
     });

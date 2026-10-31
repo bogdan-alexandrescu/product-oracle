@@ -69,10 +69,11 @@ test("members: removing the approver previews what it ends and hands everything 
   await expect(memberRow(page, "approver@example.com")).toHaveAttribute("data-status", "disabled");
 
   const inspector = await openMember(page, "approver@example.com");
-  const held = inspector.getByTestId("member-responsibilities");
+  // qa4-settings-12: nothing held reads once.
+  const held = inspector.getByTestId("member-holds");
   await expect(held).toContainText("Still assigned");
-  await expect(held).toContainText("Nothing assigned");
-  await expect(held.getByTestId("responsibility-row")).toHaveCount(0);
+  await expect(held).toContainText("holds nothing: no approvals and no responsibilities");
+  await expect(inspector.getByTestId("responsibility-row")).toHaveCount(0);
 });
 
 test("members: a removed member's Still assigned sections are handed to the commenter", async ({ page }) => {
@@ -105,7 +106,7 @@ test("members: demoting the approver asks first, and Cancel keeps Approver; a pr
   const dialog = page.getByTestId("role-dialog");
   await expect(dialog.getByRole("heading", { name: "Change Approver to Commenter?" })).toBeVisible();
   await expect(dialog.getByTestId("preview-lapses")).toContainText("3 section approvals and 1 version approval");
-  await expect(dialog.getByTestId("preview-needs-holder")).toContainText("Decides document reviews needs Approver");
+  await expect(dialog.getByTestId("preview-needs-holder")).toContainText("Approver can no longer decide 1 document review.");
   // Sections and questions need commenter: the approver keeps them as a commenter.
   await expect(dialog.getByTestId("preview-needs-holder")).not.toContainText("Owns document sections");
   await dialog.getByRole("button", { name: "Cancel" }).click();

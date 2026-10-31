@@ -87,7 +87,7 @@ for (const scheme of ["light", "dark"] as const) {
       const pdf = (await page.getByRole("button", { name: "Export PDF" }).boundingBox())!;
       expect(Math.abs(present.height - pdf.height)).toBeLessThan(1);
       await expect(page.getByRole("button", { name: "Present" }).locator("svg")).toHaveCount(1);
-      const detailed = page.getByRole("link", { name: "Open the detailed view" }).first();
+      const detailed = page.getByRole("link", { name: "Open in Detailed" }).first();
       await expect(detailed).toHaveCSS("font-size", "15px");
       const link = (await detailed.boundingBox())!;
       expect(DESKTOP.width - (link.x + link.width)).toBeGreaterThan(24);
@@ -108,7 +108,7 @@ for (const scheme of ["light", "dark"] as const) {
       const paper = page.getByTestId("one-pager");
       await expect(paper).toHaveAttribute("data-presenting", "true");
       for (const name of ["Export PDF", "Start review"]) await expect(page.getByRole("button", { name })).toHaveCount(0);
-      await expect(paper.getByRole("link", { name: "Open the detailed view" })).toHaveCount(0);
+      await expect(paper.getByRole("link", { name: "Open in Detailed" })).toHaveCount(0);
       await expect(paper.getByRole("link", { name: "One-pagers" })).toHaveCount(0);
       // Esc out of full screen: the browser says so with fullscreenchange.
       await page.evaluate(async () => {
@@ -118,11 +118,10 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(paper).not.toHaveAttribute("data-presenting", "true");
     });
 
-    test("a viewer reads why Start review is not theirs and sees no empty margin (qa-10, 34)", async ({ page }) => {
+    test("a viewer sees no Start review and no empty margin (qa-10, 34, qa4-simple-prd-26)", async ({ page }) => {
       await open(page, "viewer@example.com");
-      const start = page.getByRole("button", { name: "Start review" });
-      await expect(start).toBeDisabled();
-      await expect(page.getByText("Ask an owner to start a review")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+      await expect(page.getByText("Ask an owner to start a review")).toHaveCount(0);
       await expect(page.getByText(/No changes yet/)).toBeHidden();
     });
 
@@ -142,7 +141,7 @@ for (const scheme of ["light", "dark"] as const) {
       await bet.getByRole("button", { name: "Propose wording for “Invite suggestions from the admin's" }).click();
       await page.getByLabel("New wording for").fill("Invite suggestions from shared contacts");
       await page.getByRole("button", { name: "Propose", exact: true }).click();
-      const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "You propose new wording" });
+      const note = page.getByRole("note").filter({ visible: true }).filter({ hasText: "You proposed new wording" });
       await expect(note.getByTestId("proposal-words")).toHaveText("“Invite suggestions from shared contacts”");
     });
 
@@ -178,7 +177,7 @@ test.describe("One-pagers list and the planned PRD", () => {
     await login(page);
     await page.goto("/simple");
     await page.locator('nav[aria-label="Simple"]:visible').getByRole("link", { name: "One-pagers" }).click();
-    await expect(page.getByText(/its plan and timeline/)).toBeVisible();
+    await expect(page.getByText("Open a PRD to read it on one page, change its wording or start a review.")).toBeVisible();
     const row = page.getByTestId("one-pager-row").filter({ hasText: "Guided setup" });
     await expect(row).toContainText("Approved");
     await expect(row).not.toContainText("Draft");

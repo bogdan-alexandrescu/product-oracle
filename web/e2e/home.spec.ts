@@ -20,7 +20,7 @@ test("Home: goals show current over target, distance to go, confidence and trend
   // I3: distance to go in the goal's own unit, never a percentage of target.
   await expect(g1.getByTestId("goal-to-go")).toHaveText("7 pts to go");
   // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
-  await expect(g1.getByRole("img", { name: "No confidence" })).toBeVisible();
+  await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
   // The trend comes from the goal's recorded revisions, with the target dashed.
   await expect(g1.getByTestId("goal-trend").locator("line[data-target='45']")).toHaveCount(1);
   await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
@@ -85,19 +85,19 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
   await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
 
-  // A run: its segments and what comes next.
-  const onboarding = flights.filter({ hasText: "Team onboarding PRD" });
+  // A run: its segments and what comes next. Named by its document's own title and its flow (#979).
+  const onboarding = flights.filter({ hasText: "Team onboarding · Baseline to PRD" });
   await onboarding.click();
   await expect(onboarding).toHaveAttribute("aria-selected", "true");
   await expect(inspector).toContainText("selected");
-  await expect(inspector.getByRole("heading", { name: /^Team onboarding PRD/ })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: /^Team onboarding · Baseline to PRD/ })).toBeVisible();
   await expect(inspector.getByTestId("inspector-next")).toContainText("Confirm the baseline");
   await expect(inspector.getByTestId("stat-segments")).toContainText("1/4");
 
   // Keyboard: ArrowUp moves the selection back up the table.
   await page.keyboard.press("ArrowUp");
-  await expect(flights.filter({ hasText: "Usage alerts v2 PRD" })).toHaveAttribute("aria-selected", "true");
-  await expect(inspector.getByRole("heading", { name: /^Usage alerts v2 PRD/ })).toBeVisible();
+  await expect(flights.filter({ hasText: "Usage alerts v2 · Baseline to PRD" })).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByRole("heading", { name: /^Usage alerts v2 · Baseline to PRD/ })).toBeVisible();
 });
 
 test("Home on a phone: stacked blocks under the phone header, inspector below, no sideways scroll", async ({ page }) => {

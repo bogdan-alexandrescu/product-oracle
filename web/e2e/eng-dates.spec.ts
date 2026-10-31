@@ -40,7 +40,7 @@ test("inbox and accept: the lead's row counts the Now items and dates to decide,
   // protects=the Inbox summary and Review of an eng_dates stop, and Accept as a staged choice; fails_when=the row miscounts, Review opens the run page, or Accept leaves the row "Decide" or the tally unmoved; no_claim=the API's D9 summaries (api tests).
   await openDatesAsLead(page);
   await expect(bar(page).getByTestId("dates-tally")).toHaveText("0 of 3 decided · 3 to decide");
-  await expect(row(page, "shipping-step").getByTestId("date-proposed")).toHaveText("Nov 30 · est-shipping-step");
+  await expect(row(page, "shipping-step").getByTestId("date-proposed")).toHaveText("Nov 30 · Estimate: shipping step");
   await expect(row(page, "shipping-step").getByTestId("date-reasons")).toHaveText("Date not decided yet");
   await expect(row(page, "cart-review").getByTestId("date-proposed")).toContainText("No date proposed");
   await expect(row(page, "cart-review").getByTestId("date-reasons")).toHaveText("");
@@ -76,7 +76,7 @@ test("change: the dialog opens pre-filled from the proposal and saves another ba
   await dialog.getByRole("button", { name: "Save date" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(row(page, "saved-addresses").getByTestId("date-decision")).toHaveText("Changed");
-  await expect(row(page, "saved-addresses").getByTestId("date-proposed")).toContainText("Now Dec 18 · ENG-412");
+  await expect(row(page, "saved-addresses").getByTestId("date-proposed")).toContainText("Now Dec 18 · Estimate: ENG-412");
 });
 
 test("no date: a reason is required before it saves", async ({ page }) => {
@@ -116,7 +116,7 @@ test("next and later: only in the collapsed read-only group, with no date action
   await openDatesAsLead(page);
   for (const key of ["guest-checkout", "saved-cards", "gift-wrap"]) await expect(row(page, key)).toHaveCount(0);
   const others = page.getByTestId("dates-others");
-  await expect(others.locator("summary")).toHaveText("Next 2 · Later 1 · no dates (O4 Roadmap shape)");
+  await expect(others.locator("summary")).toHaveText("Next 2 · Later 1 (Next and Later items have no dates)");
   await expect(others.getByTestId("dates-other").first()).toBeHidden();
   await others.locator("summary").click();
   await expect(others.getByTestId("dates-other")).toHaveCount(3);

@@ -25,6 +25,7 @@ import {
   PageHeader,
   Panel,
   Split,
+  ViewOnly,
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
@@ -192,7 +193,8 @@ export function MembersSettings() {
   if (ready && (canManage || canInvite)) return <OwnerView selfId={me?.user_id ?? null} manage={canManage} />;
   return (
     <>
-      <PageHeader title="Members" info={pageTip} />
+      {/* qa4-settings-36: the same View only chip as every other read-only Settings page. */}
+      <PageHeader title="Members" status={ready ? <ViewOnly /> : undefined} info={pageTip} />
       {ready && (
         <Split inspector={<RolesInspector />}>
           <RoleNote />
@@ -246,7 +248,7 @@ function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?
         <div data-testid="roles-engineering-lead">
           <InspectorRow
             value={
-              leads != null ? (
+              leads ? (
                 <span className="tnum" data-testid="engineering-lead-count">
                   {leads}
                 </span>
@@ -257,7 +259,14 @@ function RolesSection({ members, label = "Roles" }: { members?: Member[]; label?
               {/* The row keeps the words "Engineering lead" for a screen reader; the heading shows them. */}
               <span>
                 <span className="sr-only">Engineering lead: </span>
-                {leads != null ? "People named" : "Any commenter or above can carry it"}
+                {/* qa4-settings-14: nobody named reads as words, not "People named 0". */}
+                {leads == null ? (
+                  "Any commenter or above can carry it"
+                ) : leads === 0 ? (
+                  <span data-testid="engineering-lead-none">Nobody named yet. Pick who carries engineering checks.</span>
+                ) : (
+                  "People named"
+                )}
               </span>
               <InfoTip label="the engineering lead" align="start">
                 {LEAD_TIP}
@@ -677,9 +686,12 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       // qa-shell-28: on a phone your own card shows your role and status only, on one line.
       return (
         <span className="flex flex-col gap-1 max-[600px]:contents">
-          <Chip kind="line" className="hidden max-[600px]:inline-flex" data-testid="own-role">
-            {ROLE_LABEL[m.role]}
-          </Chip>
+          {/* qa4-settings-9: phone only. The wrapper hides it: the Chip's own inline-flex beats a `hidden` passed to it. */}
+          <span className="hidden max-[600px]:contents">
+            <Chip kind="line" data-testid="own-role">
+              {ROLE_LABEL[m.role]}
+            </Chip>
+          </span>
           <span className="contents max-[600px]:hidden">
             {lastOwner ? (
               <Unavailable reason="You are the only owner. Make someone else owner first." testId="role-unavailable">
@@ -699,9 +711,17 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       );
     }
     return (
-      <span className="flex flex-col gap-1">
+      // qa4-settings-21: on a phone the select and its lead box sit on one centred line, so the
+      // Status pill beside them lines up (a column made the cell tall and the pill floated).
+      <span className="flex flex-col gap-1 max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-3">
         {/* Its own width, not the cell's (qa-shell-5): the browser sizes a select to its longest role and its arrow. */}
-        <RoleSelect value={m.role} label={`Role for ${m.email}`} disabled={saving === m.id} onChange={(role) => changeRole(m, role)} className="self-start" />
+        <RoleSelect
+          value={m.role}
+          label={`Role for ${m.email}`}
+          disabled={saving === m.id}
+          onChange={(role) => changeRole(m, role)}
+          className="self-start max-[600px]:self-center"
+        />
         {phoneLead(m)}
       </span>
     );
@@ -788,8 +808,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
           </span>
           <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
             {/* A5: the name in bold (the one name rule, as everyone's People list), the email under it;
-                opens the member inspector. Both wrap, never mid-word (an email at its @ or a dot):
-                the chips sit under them. On a phone the button is a 44 px target. */}
+                opens the member inspector. The name wraps; the email stays on one line (qa4-settings-10),
+                cut with an ellipsis if it must be, the full address on hover. The chips sit under them.
+                On a phone the button is a 44 px target. */}
             <button
               type="button"
               data-testid="member-open"
@@ -800,8 +821,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 {personName(m)}
               </span>
               {personName(m) !== m.email && (
-                <span data-testid="member-email" title={m.email} className="text-[13px] font-normal text-text2">
-                  <Email email={m.email} />
+                // Not `truncate`: on a phone the table undoes that class and wraps anywhere.
+                <span data-testid="member-email" title={m.email} className="block max-w-full overflow-hidden text-[13px] font-normal text-ellipsis whitespace-nowrap text-text2">
+                  {m.email}
                 </span>
               )}
             </button>
@@ -814,9 +836,9 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 )}
                 {/* On a phone the Eng lead column hides; this chip says it instead. */}
                 {m.engineering_lead && (
-                  <Chip kind="acc" className="hidden max-[600px]:inline-flex">
-                    Eng lead
-                  </Chip>
+                  <span className="hidden max-[600px]:contents">
+                    <Chip kind="acc">Eng lead</Chip>
+                  </span>
                 )}
               </span>
             )}
@@ -1197,20 +1219,24 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 </span>
               )}
               <FindPerson value={find} onChange={setFind} />
-              {/* Under 1100 px the invite form sits below this table: a way down to it. */}
-              {!inspected && (
-                <a
-                  href={`#${INVITE_FORM}`}
-                  onClick={(e) => {
-                    e.preventDefault();
+              {/* Under 1100 px the invite form sits below this table: a way down to it. While a
+                  member's panel is open (it stands in the form's place) it shows at every width and
+                  closes the panel first (qa4-settings-11). */}
+              <a
+                href={`#${INVITE_FORM}`}
+                data-testid="invite-someone"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (inspected) setInspecting(null);
+                  requestAnimationFrame(() => {
                     emailRef.current?.scrollIntoView({ block: "center" });
                     emailRef.current?.focus({ preventScroll: true });
-                  }}
-                  className="hidden min-h-11 items-center text-sm font-semibold text-accent-ink hover:underline max-[1100px]:inline-flex"
-                >
-                  Invite someone
-                </a>
-              )}
+                  });
+                }}
+                className={`min-h-11 items-center text-sm font-semibold text-accent-ink hover:underline ${inspected ? "inline-flex" : "hidden max-[1100px]:inline-flex"}`}
+              >
+                Invite someone
+              </a>
             </span>
           }
         >

@@ -7,7 +7,7 @@ import { Button, Inspector, InspectorRow, InspectorSection, Sheet } from "@/comp
 import { ErrorNote } from "@/components/ui";
 import { Field, INPUT } from "@/app/settings/_components/fields";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
@@ -27,11 +27,14 @@ export function WebhookInspector({
   eventTypes,
   onChanged,
   onDeleted,
+  onDelivered,
 }: {
   hook: Webhook;
   eventTypes: EventType[];
   onChanged: (hook: Webhook) => void;
   onDeleted: () => void;
+  /** A delivery was added here (a test, a redelivery): the list's Last delivery reads again (qa4-settings-27). */
+  onDelivered?: () => void;
 }) {
   const { can } = useMe();
   const [busy, setBusy] = useState(false);
@@ -45,6 +48,10 @@ export function WebhookInspector({
   const [version, setVersion] = useState(0);
   const path = { params: { path: { webhook_id: hook.id } } };
   const labels = new Map(eventTypes.map((t) => [t.type, t.label]));
+  const delivered = () => {
+    setVersion((v) => v + 1);
+    onDelivered?.();
+  };
 
   async function run<T>(call: () => Promise<T>, after: (out: T) => void) {
     setBusy(true);
@@ -90,7 +97,9 @@ export function WebhookInspector({
         <InspectorRow value={<span data-testid="secret-hint">…{hook.secret_hint}</span>}>Signing secret</InspectorRow>
         <InspectorRow value={<span className="font-normal text-text2">{formatDateTime(hook.secret_rotated_at)}</span>}>Secret made</InspectorRow>
         <InspectorRow value={hook.created_by.name}>Created by</InspectorRow>
-        <InspectorRow value={hook.api_version}>API version</InspectorRow>
+        {/* qa4-settings-28: the payload's version as a day, with what it means. */}
+        <InspectorRow value={<span data-testid="payload-format">{formatDate(hook.api_version)}</span>}>Payload format</InspectorRow>
+        <p className="mb-2 text-[13px] leading-[18px] text-text2">The layout of the JSON Oracle sends, named by the day it was set.</p>
         <InspectorRow value={<span data-testid="approvers-content">{hook.include_approvers_content ? "On" : "Off"}</span>}>Owners-and-approvers content</InspectorRow>
         <div className="mt-2 text-[13px] leading-[18px] text-text2">
           {hook.event_types.length} event{hook.event_types.length === 1 ? "" : "s"}:{" "}
@@ -107,7 +116,7 @@ export function WebhookInspector({
       {can("update_webhook") && (
         <InspectorSection label="Actions">
           <div className="flex flex-col gap-3">
-            <TestEvent hook={hook} onSent={() => setVersion((v) => v + 1)} />
+            <TestEvent hook={hook} onSent={delivered} />
             <div className="flex flex-wrap gap-2">
               {can("rotate_webhook_secret") && (
                 <Button disabled={busy} onClick={() => setAsking("rotate")}>
@@ -146,7 +155,7 @@ export function WebhookInspector({
         </InspectorSection>
       )}
       <InspectorSection label="Delivery log">
-        <DeliveryLog hook={hook} eventTypes={eventTypes} version={version} onChanged={() => setVersion((v) => v + 1)} />
+        <DeliveryLog hook={hook} eventTypes={eventTypes} version={version} onChanged={delivered} />
       </InspectorSection>
 
       <ConfirmDialog
@@ -209,7 +218,7 @@ export function WebhookInspector({
           {secret && (
             <div className="flex flex-col gap-4 p-4">
               <SecretOnce secret={secret} />
-              <TestEvent hook={hook} onSent={() => setVersion((v) => v + 1)} />
+              <TestEvent hook={hook} onSent={delivered} />
               <div className="flex justify-end">
                 <Button variant="primary" onClick={() => setSecret(null)}>
                   Done

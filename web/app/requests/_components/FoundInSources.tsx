@@ -6,7 +6,7 @@ import { Button, Chip, Notice, Panel, SegmentedControl, useFocusTrap } from "@/c
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { plural } from "@/lib/format";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { errorMessage, type Query } from "@/lib/use-query";
 
 type Candidate = Schemas["CandidateOut"];
 type Channel = Candidate["channel"];
@@ -32,13 +32,11 @@ const SHARING =
 /**
  * Found in your sources (C1, decision S6): possible requests Oracle's triage spotted in the
  * signed-in person's own sources. Only they see them, and only while some are open. Each is
- * filed as a request (filing shares the item in full) or dismissed. `refresh` changes when a
- * triage run ends, so new finds show.
+ * filed as a request (filing shares the item in full) or dismissed. `found` is the screen's
+ * read of them (GET /v1/request-candidates?status=open), read again when a triage run ends, so
+ * new finds show; the screen waits for it before drawing (qa4-work-13).
  */
-export function FoundInSources({ refresh }: { refresh: string }) {
-  const q = useQuery(`request-candidates:${refresh}`, () =>
-    unwrap(api.GET("/v1/request-candidates", { params: { query: { status: "open" } } })),
-  );
+export function FoundInSources({ found: q }: { found: Query<Candidate[]> }) {
   const [filing, setFiling] = useState<Candidate | null>(null);
   const [filed, setFiled] = useState<Schemas["RequestOut"] | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -357,7 +357,7 @@ const CARTS_V1: SectionSeed[] = [
     level: 2,
     heading: "Summary",
     body:
-      "We will let signed-in shoppers save a cart and pick it up on any device. It serves G2 (retention). We ask you to approve the beta scope.\n\n" +
+      "We will let signed-in shoppers save a cart and pick it up on any device. It serves the retention goal. We ask you to approve the beta scope.\n\n" +
       "```notes\nOpen with how many carts are lost when a session ends.\n```",
   },
   { key: "goal-trace", level: 2, heading: "Goal trace", body: "- **G2 (retention)**: more repeat orders within 30 days." },

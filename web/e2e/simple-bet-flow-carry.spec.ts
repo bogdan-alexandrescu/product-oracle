@@ -84,7 +84,7 @@ for (const [where, viewport, phone] of [
       const opened = page.getByTestId("flow-detail");
       await expect(opened.getByRole("heading", { level: 2 })).toHaveText("Finish setup from the checklist · flow");
       await expect(opened.getByTestId("flow-steps")).toContainText("Invite now or later?");
-      await tap(opened.getByRole("button", { name: phone ? "Back" : "Close" }));
+      await tap(opened.getByRole("button", { name: "Close", exact: true }));
       await tap(row.getByRole("button", { name: "Open the storyboard" }));
       const board = page.getByTestId("flow-storyboard");
       await expect(board).toHaveAccessibleName("Finish setup from the checklist · storyboard");
