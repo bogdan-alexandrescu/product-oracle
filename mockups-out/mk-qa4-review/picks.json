@@ -1,0 +1,378 @@
+{
+  "title": "Submitting, reviewing, presenting and publishing a PRD",
+  "subtitle": "Four choices from QA pass 4 (simple one-pagers and sharing), drawn in the real app with invented people and PRDs. Each frame is the app at that moment.",
+  "decisions": [
+    {
+      "code": "QV1",
+      "name": "Sending edits for approval",
+      "question": "How does an owner send edits for approval, pick who approves, and tell that apart from a review meeting?",
+      "common": "Every proposal names the reviewer by name, not by role (\"waiting on Rae Okafor\"), keeps published v3 live until approval, and keeps Remind after sending. None of them sends without the owner seeing who gets it, except C.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Ask first, in a dialog",
+          "recommended": true,
+          "what": "The draft bar's button says \"Send for approval…\" and opens a short dialog: the changes being sent (old words struck, new words in bold), who approves (the PRD's required reviewer, already there) and \"+ Add a reviewer\". The header's button says \"Start a review meeting\", so the two read as two different things. After sending, the bar names everyone it waits on.",
+          "why": "It fixes both findings in the place the owner already looks: the button that sends is the one that asks, the owner sees what goes and to whom, and the meeting button says it is a meeting. It costs one more click than today.",
+          "plus": "The owner checks the changes before they go; picking reviewers is where sending is; on a phone it is a full-screen sheet.",
+          "cost": "One more click to send; a new dialog; the API has to take extra reviewers when a draft is sent.",
+          "frames": [
+            {
+              "file": "frames/qv1-a-rest.html",
+              "caption": "At rest: the draft bar says \"Send for approval…\"; the header says \"Start a review meeting\"."
+            },
+            {
+              "file": "frames/qv1-a-open.html",
+              "caption": "Send for approval… opens the dialog: the 2 changes and who approves, Rae Okafor, required for this PRD."
+            },
+            {
+              "file": "frames/qv1-a-mid.html",
+              "caption": "\"+ Add a reviewer\" lists people to add, with their email."
+            },
+            {
+              "file": "frames/qv1-a-result.html",
+              "caption": "After adding Lee Park and pressing Send for approval: the bar says \"Sent for approval · waiting on Rae Okafor, Lee Park\", with Remind. Undo has left the change card."
+            },
+            {
+              "file": "frames/qv1-a-many-1512.html",
+              "caption": "Hard case at 1512: four people added; the bar still fits on one line."
+            },
+            {
+              "file": "frames/qv1-a-open-390.html",
+              "caption": "Phone: the dialog fills the screen, Send for approval at the bottom."
+            },
+            {
+              "file": "frames/qv1-a-result-390.html",
+              "caption": "Phone, after sending: the bar wraps to four short lines above the title."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "One Review menu",
+          "recommended": false,
+          "what": "The header has one \"Review\" menu with two items, each with a line saying what it does: \"Ask for approval\" (send your changes to reviewers) and \"Hold a review meeting\". The draft bar loses its button and points to the menu. Asking opens a strip under the bar to pick reviewers, then Send.",
+          "plus": "One place for everything about review; each choice says what it does; no dialog over the page.",
+          "cost": "Sending is two steps away and hidden in a menu; the draft bar only points to it; on a phone the menu covers the header buttons.",
+          "frames": [
+            {
+              "file": "frames/qv1-b-rest.html",
+              "caption": "At rest: the draft bar says \"to send, use Review › Ask for approval\"; the header has a Review menu."
+            },
+            {
+              "file": "frames/qv1-b-open.html",
+              "caption": "Review opens: Ask for approval, or Hold a review meeting, each with what it does."
+            },
+            {
+              "file": "frames/qv1-b-mid.html",
+              "caption": "Ask for approval opens a strip under the bar: Rae Okafor is required, Lee Park added."
+            },
+            {
+              "file": "frames/qv1-b-result.html",
+              "caption": "After Send: the bar says \"Sent for approval · waiting on Rae Okafor, Lee Park\"."
+            },
+            {
+              "file": "frames/qv1-b-many-1512.html",
+              "caption": "Hard case at 1512: four people added in the strip, before Send."
+            },
+            {
+              "file": "frames/qv1-b-open-390.html",
+              "caption": "Phone: the menu spans the screen and covers the header's buttons."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Clearer words only",
+          "recommended": false,
+          "what": "Only the words change: the bar's button says \"Send edits for approval\" with \"goes to Rae Okafor at once\" beside it, and the header says \"Start a review meeting\". Pressing it sends at once, as today.",
+          "plus": "No new screen; the smallest change; the two buttons no longer read as one.",
+          "cost": "No chance to check the changes or add a reviewer; a slip sends at once and cannot be taken back; the bar gets longer on a phone.",
+          "frames": [
+            {
+              "file": "frames/qv1-c-rest.html",
+              "caption": "At rest: \"Send edits for approval · goes to Rae Okafor at once\" in the bar; \"Start a review meeting\" in the header."
+            },
+            {
+              "file": "frames/qv1-c-result-1512.html",
+              "caption": "Hard case at 1512, after one press: sent at once to Rae Okafor; nobody else could be added."
+            },
+            {
+              "file": "frames/qv1-c-rest-390.html",
+              "caption": "Phone: the bar takes four lines before the title."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QV2",
+      "name": "Seeing changes in review",
+      "question": "What do viewers and commenters see of changes in review, and how does someone asked for feedback get to it?",
+      "common": "Readers still read the published words in the page; the bar still says how many changes are in review. Frames show the viewer (one-pager) and the commenter (the PRD's overview in Detailed).",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "See the changes list",
+          "recommended": true,
+          "what": "The bar \"3 changes in review\" gets a \"See the 3 changes\" button that opens a list under it: each change's part of the page, old words struck and new words in bold, who made it and who it waits on. On the PRD's overview, each open feedback campaign gets a \"Give feedback\" button to where people comment.",
+          "why": "Readers learn what is coming without the page mixing published and unapproved words, and someone asked for feedback has a way in from the place they land.",
+          "plus": "The page stays the published version; one tap shows everything; same list on a phone.",
+          "cost": "The API must send readers the old and new words of changes in review (today it sends only a count); a long list pushes the page down.",
+          "frames": [
+            {
+              "file": "frames/qv2-a-rest.html",
+              "caption": "Viewer, at rest: \"3 changes in review · you read the published version\" with See the 3 changes."
+            },
+            {
+              "file": "frames/qv2-a-open.html",
+              "caption": "Opened: the two edits and the commenter's proposal, each with who made it and who it waits on."
+            },
+            {
+              "file": "frames/qv2-a-open-1512.html",
+              "caption": "Hard case at 1512: the list sits full width over the page."
+            },
+            {
+              "file": "frames/qv2-a-open-390.html",
+              "caption": "Phone: the opened list fills most of the first screen; the title comes after it."
+            },
+            {
+              "file": "frames/qv2-a-overview.html",
+              "caption": "Commenter on the PRD's overview: Company-wide feedback has a Give feedback button."
+            },
+            {
+              "file": "frames/qv2-a-overview-result.html",
+              "caption": "Give feedback opens v2 with its feedback, where the commenter comments."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Marked in the page",
+          "recommended": false,
+          "what": "Lines with a change in review get a dashed mark under them, \"Change in review · see it\", which opens the old and new words in place. On the overview, an \"Asked of you\" box sits at the top of Feedback campaigns with one \"Give your feedback\" button.",
+          "plus": "Each change shows where it is; nothing to look for elsewhere; the overview says plainly what is asked of you.",
+          "cost": "The page carries marks for readers too; changes in long pages are easy to miss; the same API change as A.",
+          "frames": [
+            {
+              "file": "frames/qv2-b-rest.html",
+              "caption": "Viewer, at rest: the bar says the changes are marked below."
+            },
+            {
+              "file": "frames/qv2-b-open.html",
+              "caption": "Tapping the mark under the checklist line opens its old and new words, who edited it and who it waits on."
+            },
+            {
+              "file": "frames/qv2-b-open-1512.html",
+              "caption": "Hard case at 1512, all marks open: each change sits under its own line, down the whole page."
+            },
+            {
+              "file": "frames/qv2-b-open-390.html",
+              "caption": "Phone: the opened change sits under its line, between the flow and the next line."
+            },
+            {
+              "file": "frames/qv2-b-overview.html",
+              "caption": "Commenter on the overview: \"Asked of you · Company-wide feedback, due Oct 26\" with Give your feedback."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Say when it lands",
+          "recommended": false,
+          "what": "No list: the bar says the changes are waiting for approval and will show here once approved, with \"Tell me when it is published\". The overview is left as it is.",
+          "plus": "No API change; readers never see words that may not be approved.",
+          "cost": "Readers still cannot see what is changing; a commenter asked for feedback still has no way in from the overview.",
+          "frames": [
+            {
+              "file": "frames/qv2-c-rest.html",
+              "caption": "Viewer, at rest: \"3 changes to this PRD are waiting for approval. You will see them here once approved.\""
+            },
+            {
+              "file": "frames/qv2-c-result-1512.html",
+              "caption": "Hard case at 1512, after Tell me when it is published: the button says \"We will tell you\"."
+            },
+            {
+              "file": "frames/qv2-c-rest-390.html",
+              "caption": "Phone: the bar takes three lines."
+            },
+            {
+              "file": "frames/qv2-c-overview.html",
+              "caption": "Commenter on the overview: the campaign row is still plain text, nothing to press."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QV3",
+      "name": "Presenting a PRD with edits",
+      "question": "When an owner presents a PRD with unapproved edits and proposals, what does the audience see?",
+      "common": "Every proposal shows a line over the presented page saying what it is. Frames are the owner's page with 2 unapproved edits and a commenter's proposal.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Ask what to present",
+          "recommended": true,
+          "what": "When there is a working draft, Present asks: \"Published v3 · what everyone has approved\" or \"Working draft · with your 2 changes, not yet approved\". Either way the page is shown clean, with no editing colours, and a line at the top says which it is.",
+          "why": "The owner decides on purpose, the audience is told what they are looking at, and nobody sees half-finished yellow and blue marks.",
+          "plus": "Works for a team walk-through of the draft and for a board showing the approved page.",
+          "cost": "One more click before presenting when there is a draft.",
+          "frames": [
+            {
+              "file": "frames/qv3-a-rest.html",
+              "caption": "At rest: Present has a ▾ because there is a working draft."
+            },
+            {
+              "file": "frames/qv3-a-open.html",
+              "caption": "Present asks: Published v3, or the Working draft with 2 changes not yet approved."
+            },
+            {
+              "file": "frames/qv3-a-result.html",
+              "caption": "Working draft picked: the page is shown clean, with \"Showing the working draft · 2 changes not yet approved\" on top."
+            },
+            {
+              "file": "frames/qv3-a-published-1512.html",
+              "caption": "Hard case at 1512, Published v3 picked: the old words are back and the top line says \"Showing published v3\"."
+            },
+            {
+              "file": "frames/qv3-a-open-390.html",
+              "caption": "Phone: the choice opens under Present."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Always the published page",
+          "recommended": false,
+          "what": "Present always shows the published version, clean, with \"Showing published v3 · 2 changes in review are not shown\" on top. To show the draft, it has to be approved first.",
+          "plus": "Nothing unapproved ever reaches an audience; no new choice.",
+          "cost": "An owner cannot walk the team through the draft they are working on.",
+          "frames": [
+            {
+              "file": "frames/qv3-b-result.html",
+              "caption": "Present pressed: the published words, clean, with the top line saying 2 changes are not shown."
+            },
+            {
+              "file": "frames/qv3-b-result-1512.html",
+              "caption": "Hard case at 1512: \"A mobile setup flow\" shows its published words; the edit is not there."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Draft with a key",
+          "recommended": false,
+          "what": "Present keeps today's draft with its yellow and blue marks and adds a key over the page: yellow is edited, not yet approved; blue is proposed by a commenter.",
+          "plus": "No new choice; the audience sees exactly where the PRD is moving.",
+          "cost": "Unapproved words still go to the audience; the key sits at the top and scrolls away while the colours stay.",
+          "frames": [
+            {
+              "file": "frames/qv3-c-result.html",
+              "caption": "Present pressed: the draft with \"Showing the working draft\" and the key to the colours."
+            },
+            {
+              "file": "frames/qv3-c-result-1512.html",
+              "caption": "Hard case at 1512, scrolled down: yellow and blue lines with the key gone off the top."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QV4",
+      "name": "Publishing and sharing a roadmap",
+      "question": "What does \"Publish\" mean, and how does Share show what still blocks a link?",
+      "common": "Every proposal shows everything that blocks sharing at once, each with a way to fix it. Frames are the owner on Usage alerts roadmap v1 (Publish page and Share roadmap).",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "One Publish step",
+          "recommended": true,
+          "what": "Publish v1 approves the version and makes it ready to share in one go, and says so. Share roadmap lists what is left as a short checklist, each with a fix link (Plan › Dates, Publish page). After publishing, the Publish page offers Share a link.",
+          "why": "One word, one meaning: after Publish there is nothing else to do before sharing, and Share never surprises the owner with a second step.",
+          "plus": "Fewest steps; the checklist is short; Publish and Share point at each other.",
+          "cost": "Approving and publishing can no longer be done apart (an approved but not yet shared version goes away).",
+          "frames": [
+            {
+              "file": "frames/qv4-a-rest.html",
+              "caption": "Publish page: \"Publish v1 approves it and makes it ready to share, in one step\"."
+            },
+            {
+              "file": "frames/qv4-a-open.html",
+              "caption": "Publish v1 asks first; the list ends with \"v1 ready to share as a link\"."
+            },
+            {
+              "file": "frames/qv4-a-result.html",
+              "caption": "After Publish: Published v1, \"You can share it as a link now\", and Share a link."
+            },
+            {
+              "file": "frames/qv4-a-share.html",
+              "caption": "Share a link opens the link form straight away: v1 is published and ready."
+            },
+            {
+              "file": "frames/qv4-a-blockers-1512.html",
+              "caption": "Hard case at 1512, nothing done yet: both things left, each with its fix link."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Approve, then Publish",
+          "recommended": false,
+          "what": "Two clearly different words: the Publish page becomes Approve v1 (\"step 2 of 3\"), and Share roadmap shows three steps (Dates set, Approved, Published), all at once, with the current step's button in it.",
+          "plus": "Keeps approval and sharing apart for teams who approve long before they share; every step is in view.",
+          "cost": "Three steps to a link; two places to act; the page is still called Publish in the menu.",
+          "frames": [
+            {
+              "file": "frames/qv4-b-rest.html",
+              "caption": "The page is now Approve v1, saying it is step 2 of 3."
+            },
+            {
+              "file": "frames/qv4-b-open.html",
+              "caption": "Share roadmap: Dates set is done, Approved is next with Approve v1, Published waits."
+            },
+            {
+              "file": "frames/qv4-b-mid.html",
+              "caption": "After Approve v1: Published is next, with Publish v1 for sharing."
+            },
+            {
+              "file": "frames/qv4-b-result.html",
+              "caption": "After publishing: all three steps done and the link form below."
+            },
+            {
+              "file": "frames/qv4-b-blockers-1512.html",
+              "caption": "Hard case at 1512, nothing done yet: step 1 needs dates, with Fix in Plan › Dates."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Share does it all",
+          "recommended": false,
+          "what": "Share roadmap lists what is left and has one button, \"Approve, publish and share v1\", that does all of it and makes the link. The Publish page says sharing also publishes.",
+          "plus": "One press from nothing to a link.",
+          "cost": "Approving hides inside a share button, so a version can be approved without anyone meaning to; dates still need a fix first.",
+          "frames": [
+            {
+              "file": "frames/qv4-c-rest.html",
+              "caption": "Publish page: \"Sharing a link also publishes\", with Share a link next to Publish v1."
+            },
+            {
+              "file": "frames/qv4-c-open.html",
+              "caption": "Share roadmap: dates are done; approve and publish are done by the button, after a label."
+            },
+            {
+              "file": "frames/qv4-c-result.html",
+              "caption": "After Approve, publish and share v1: the link and its passcode, shown once."
+            },
+            {
+              "file": "frames/qv4-c-blockers-1512.html",
+              "caption": "Hard case at 1512, dates missing: the button waits and says to pick where dates come from first."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -114,7 +114,7 @@ export function Qv1ReviewMenu({ btnClass, changes, canStart, open, setOpen, onAs
         Review ▾
       </button>
       {open && (
-        <div role="menu" className="absolute top-full right-0 z-20 mt-1 w-[320px] rounded-md border border-line-strong bg-surface p-1 shadow-md">
+        <div role="menu" className="absolute top-full right-0 z-20 mt-1 w-[320px] max-md:fixed max-md:right-4 max-md:left-4 max-md:top-auto max-md:w-auto rounded-md border border-line-strong bg-surface p-1 shadow-md">
           <button role="menuitem" type="button" disabled={changes === 0} className="block w-full rounded px-3 py-2 text-left hover:bg-[var(--simple-edited)] disabled:opacity-60" onClick={onAsk}>
             <span className="block font-semibold">Ask for approval</span>
             <span className="block text-sm text-text2">{changes > 0 ? `Send your ${changes} ${changes === 1 ? "change" : "changes"} to reviewers to approve` : "No changes to send yet"}</span>
