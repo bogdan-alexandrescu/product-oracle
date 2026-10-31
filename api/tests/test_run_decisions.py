@@ -11,8 +11,9 @@ import uuid
 from dataclasses import replace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
+from oracle.auth.models import User
 from oracle.mcp.curated import CURATED
 from oracle.runs import flows
 from oracle.runs.models import Checkpoint
@@ -51,6 +52,7 @@ FIELDS = {
     "status",
     "decided_at",
     "decided_by_role",
+    "decided_by_name",
     "via",
     "note",
     "edits",
@@ -103,6 +105,15 @@ async def at(client, auth, run_id: str, kind: str) -> dict:
     return run
 
 
+async def named(tenant_id, role: str, email: str, name: str) -> dict[str, str]:
+    """A member with a name, signed in."""
+    headers = await as_user(tenant_id, role, email)
+    async with tenant_session(tenant_id) as s:
+        await s.execute(update(User).where(User.email == email).values(name=name))
+        await s.commit()
+    return headers
+
+
 async def mint(tenant_id, run_id: str) -> str:
     async with tenant_session(tenant_id) as s:
         raw = await mint_run_token(s, uuid.UUID(run_id), ["read:baseline"], ttl_seconds=600)
@@ -118,11 +129,11 @@ def review_of(result) -> list[dict]:
 # --------------------------------------------------------------------------- REST
 
 
-async def test_decided_checkpoints_in_segment_then_decided_order_and_no_names(
+async def test_decided_checkpoints_in_segment_then_decided_order_and_who_decided(
     client, owner, runtime
 ):
     tenant_id, auth = owner
-    approver = await as_user(tenant_id, "approver", "pat.approver@example.com")
+    approver = await named(tenant_id, "approver", "pat.approver@example.com", "Pat Example")
     viewer = await as_user(tenant_id, "viewer")
     run = await started(client, auth)
     run = await at(client, auth, run["id"], "baseline_confirm")
@@ -144,25 +155,30 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_no_names(
     first, second, third = body
     assert first["decided_at"] <= second["decided_at"]
     assert first["note"] == "Name the owner of G1" and first["decided_by_role"] == "approver"
+    assert first["decided_by_name"] == second["decided_by_name"] == "Pat Example"
     assert third == {
         **third,
         "segment_title": "Feature set, dependencies and design",
         "decided_by_role": "owner",
+        # The seeded owner decided with their API token: the token's name.
+        "decided_by_name": "agent-track",
         "via": "oracle",
         "note": NOTE,
         "edits": None,
         "review": None,
         "delivered": True,
-        "summary": f"Feature set · approved by an owner · note: {NOTE}",
+        "summary": f"Feature set · approved by agent-track, an owner · note: {NOTE}",
     }
-    assert second["summary"] == "Baseline · approved by an approver · note: Good enough"
+    assert second["summary"] == (
+        "Baseline · approved by Pat Example, an approver · note: Good enough"
+    )
     assert first["summary"] == (
-        "Baseline · changes requested by an approver · note: Name the owner of G1"
+        "Baseline · changes requested by Pat Example, an approver · note: Name the owner of G1"
     )
     # The pending Engineering check is absent.
     assert pending(run)["kind"] == "eng_review"
     assert all(d["kind"] != "eng_review" for d in body)
-    # No member's name, email or id reaches the list.
+    # The person is named (their name, not their email); no id reaches the list.
     raw = json.dumps(body)
     assert "pat.approver" not in raw and "@" not in raw
     for cp in run["checkpoints"]:
@@ -182,6 +198,7 @@ async def test_skipped_checkpoints_are_listed_and_a_run_without_decisions_is_emp
     assert skipped["kind"] == "baseline_confirm" and skipped["status"] == "skipped"
     assert skipped["note"] == "Turned off when the run started."
     assert skipped["decided_by_role"] is None and skipped["via"] == "oracle"
+    assert skipped["decided_by_name"] is None
     assert skipped["summary"] == "Baseline · skipped · note: Turned off when the run started."
 
 
@@ -217,7 +234,8 @@ async def test_a_run_token_reads_its_own_runs_decisions_filtered(client, owner, 
     run = await at(client, auth, run["id"], "baseline_confirm")
     run = await decide(client, auth, run, note="ok baseline")
     run = await at(client, auth, run["id"], "feature_set")
-    run = await decide(client, auth, run, note=NOTE)
+    robin = await named(tenant_id, "approver", "robin@example.com", "Robin Example")
+    run = await decide(client, robin, run, note=NOTE)
     other = await started(client, auth)
     other = await at(client, auth, other["id"], "baseline_confirm")
     await decide(client, auth, other, note="the other run's note")
@@ -236,6 +254,12 @@ async def test_a_run_token_reads_its_own_runs_decisions_filtered(client, owner, 
         assert "the other run's note" not in json.dumps(everything)
         only = review_of(await c.call_tool("get_checkpoint_review", {"kind": "feature_set"}))
         assert [d["kind"] for d in only] == ["feature_set"] and only[0]["note"] == NOTE
+        # The agents read who decided: the person's name beside their role.
+        assert only[0]["decided_by_name"] == "Robin Example"
+        assert only[0]["decided_by_role"] == "approver"
+        assert only[0]["summary"] == (
+            f"Feature set · approved by Robin Example, an approver · note: {NOTE}"
+        )
         by_seq = review_of(await c.call_tool("get_checkpoint_review", {"seq": 1}))
         assert [d["kind"] for d in by_seq] == ["baseline_confirm"]
         for args in ({"seq": 0}, {"seq": "1; x"}, {"seq": True}, {"kind": 3}):
@@ -330,8 +354,11 @@ async def test_a_held_console_approval_is_absent_until_an_approver_confirms_it(
     [d] = await decisions(client, auth, run["id"])
     assert d["checkpoint_id"] == cp["id"] and d["status"] == "approved"
     assert d["via"] == "swarmcloud_console" and d["decided_by_role"] == "viewer"
-    assert "viewer.console" not in json.dumps(d)
-    assert d["summary"].startswith("Baseline · approved by a viewer in SwarmCloud's console")
+    # A member without a name is named by their email.
+    assert d["decided_by_name"] == "viewer.console@example.com"
+    assert d["summary"].startswith(
+        "Baseline · approved by viewer.console@example.com, a viewer in SwarmCloud's console"
+    )
 
 
 async def test_a_counted_console_answer_is_listed_as_the_consoles(client, owner, swarmcloud):
