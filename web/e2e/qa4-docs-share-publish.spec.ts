@@ -61,7 +61,8 @@ test.describe("desktop", () => {
     // As the API's rule: the seeded critical blocker's one option is rejected and its experiment fails.
     await login(page);
     await page.goto("/baseline?tab=blockers");
-    await page.getByTestId("blocker-row").filter({ hasText: "The address lookup service allows 100 requests a minute per company" }).click();
+    const lookup = page.getByTestId("blocker-row").filter({ hasText: "The address lookup service allows 100 requests a minute per company" });
+    await lookup.click();
     const insp = page.getByTestId("blocker-inspector");
     const option = insp.getByTestId("blocker-option").filter({ hasText: "Batch address lookups within the published quota" });
     await option.getByRole("button", { name: "Reject" }).click();
@@ -77,7 +78,14 @@ test.describe("desktop", () => {
     await end.getByLabel("Outcome").selectOption("failed");
     await end.getByLabel("Result").fill("Calls fell by a tenth only");
     await end.getByRole("button", { name: "Save result" }).click();
-    await expect(x).toContainText("Failed");
+    // The form closes (its Outcome list names Failed too), and the row reads Failed.
+    await expect(end).toHaveCount(0);
+    await expect(x.getByText("Failed", { exact: true })).toBeVisible();
+    // Both are kept: they still read so after a reload.
+    await page.reload();
+    await lookup.click();
+    await expect(x.getByText("Failed", { exact: true })).toBeVisible();
+    await expect(option).toContainText("Rejected");
 
     await page.goto("/documents/checkout-redesign/publish");
     await expect(page.getByTestId("publish-readiness")).toBeVisible();
