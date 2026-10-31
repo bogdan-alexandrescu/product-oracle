@@ -145,8 +145,9 @@ interface DiffableSection {
 
 /**
  * Section-level diff keyed by section id, in the order of the target version, with
- * removed sections placed after the section that preceded them. A section counts as
- * moved when it is outside the longest run of sections that kept their relative order.
+ * removed sections placed after the nearest section that preceded them and did not move.
+ * A section counts as moved when it is outside the longest run of sections that kept
+ * their relative order.
  */
 export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Schemas["SectionDiff"][] {
   const fromByKey = new Map(from.map((s) => [s.section_key, s]));
@@ -198,9 +199,11 @@ export function sectionDiff(from: DiffableSection[], to: DiffableSection[]): Sch
       // The older version's states for a removed section (as the API).
       spec_states: f.spec_states ?? [],
     };
-    // Insert after the closest preceding section (from the source order) still in the output.
+    // Insert after the closest preceding section (from the source order) still in the output
+    // that did not move, as the API does (qa4-docs-49: a removed last section stays last).
     let at = 0;
     for (let k = idx - 1; k >= 0; k--) {
+      if (moved.has(from[k].section_key)) continue;
       const pos = out.findIndex((d) => d.section_key === from[k].section_key);
       if (pos >= 0) {
         at = pos + 1;

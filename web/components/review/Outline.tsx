@@ -396,35 +396,30 @@ export function OutlineList({
   );
 }
 
-/** "N of M reviewed" and a bar; with `noun`, "N of M brief sections reviewed". */
+/**
+ * "N of M sections reviewed" and a bar (qa4-docs-35: one wording in Brief, Full and without a
+ * brief); compact (the switcher strip), "N of M reviewed" in words, not a bare "N/M" (qa4-docs-36).
+ */
 export function ReviewProgress({
   reviewed,
   total,
   compact = false,
-  noun,
+  noun = "sections",
 }: {
   reviewed: number;
   total: number;
   compact?: boolean;
   noun?: string;
 }) {
-  const what = noun ? `${noun} reviewed` : "reviewed";
+  const what = `${noun} reviewed`;
   return (
     <div
-      className={`flex min-w-0 flex-col gap-1 ${compact ? "w-24" : ""}`}
+      className={`flex flex-col gap-1 ${compact ? "min-w-24" : "min-w-0"}`}
       data-testid="review-progress"
       title={compact ? `${reviewed} of ${total} ${what}` : undefined}
     >
-      <span className="tnum text-[13px] leading-4 font-semibold text-text2">
-        {compact ? (
-          <>
-            <b className="font-bold text-text">{reviewed}</b>/{total} <span className="sr-only">{what}</span>
-          </>
-        ) : (
-          <>
-            <b className="font-bold text-text">{reviewed}</b> of {total} {what}
-          </>
-        )}
+      <span className={`tnum text-[13px] leading-4 font-semibold text-text2 ${compact ? "whitespace-nowrap" : ""}`}>
+        <b className="font-bold text-text">{reviewed}</b> of {total} {compact ? "reviewed" : what}
       </span>
       <span
         role="progressbar"

@@ -135,15 +135,19 @@ function Questions({ b }: { b: TechBrief }) {
         <p className="text-text2">No questions</p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {b.questions.map((q) => (
-            <li key={q.id} data-testid={`brief-question-${q.id}`}>
-              <p className="font-semibold">
-                {q.question} {q.blocking && <Chip kind="crit">Blocking</Chip>}
-              </p>
-              {q.why && <p className="text-text2">Why: {readerText(q.why, b.questions)}</p>}
-              <p>{answers.get(q.id) ? <>Answer: {readerText(answers.get(q.id)!, b.questions)}</> : <span className="text-text2">Not answered at the Engineering check</span>}</p>
-            </li>
-          ))}
+          {b.questions.map((q) => {
+            const answer = answers.get(q.id);
+            return (
+              <li key={q.id} data-testid={`brief-question-${q.id}`}>
+                <p className="font-semibold">
+                  {/* qa4-docs-53: an answered question no longer blocks. */}
+                  {q.question} {q.blocking && (answer ? <Chip kind="na">Was blocking · answered</Chip> : <Chip kind="crit">Blocking</Chip>)}
+                </p>
+                {q.why && <p className="text-text2">Why: {readerText(q.why, b.questions)}</p>}
+                <p>{answer ? <>Answer: {readerText(answer, b.questions)}</> : <span className="text-text2">Not answered yet</span>}</p>
+              </li>
+            );
+          })}
         </ul>
       )}
     </Block>

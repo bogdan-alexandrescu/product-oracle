@@ -171,9 +171,17 @@ function OnPublish({ n }: { n: number }) {
   );
 }
 
+/** #370: whether the caller holds the company's acceptance role for a blocker's risk (owner by default). */
+function useCanAcceptRisk(): boolean {
+  const { can } = useMe();
+  const policy = useRiskPolicy();
+  // POST accept-risk; for a blocker that gates publishing the handler asks for the
+  // company's acceptance role too (its per-item role, owner): an approver passes when it is theirs.
+  return can("accept_blocker_risk", policy.role !== "owner");
+}
+
 /** Accept a blocker's risk: the company's acceptance role (B4, owners by default); hidden from anyone else. */
 function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: string) => void }) {
-  const { can } = useMe();
   const policy = useRiskPolicy();
   const onAuth = useAuthRedirect();
   const [open, setOpen] = useState(false);
@@ -185,9 +193,7 @@ function AcceptRisk({ blocker, onDone }: { blocker: Strategy; onDone: (message: 
   const review = picked ?? addDays(today, Math.max(1, Math.min(30, policy.maxDays - 1)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // #370: POST accept-risk; for a blocker that gates publishing the handler asks for the
-  // company's acceptance role too (its per-item role, owner): an approver passes when it is theirs.
-  const canAccept = can("accept_blocker_risk", policy.role !== "owner");
+  const canAccept = useCanAcceptRisk();
 
   if (!canAccept) return null;
 
@@ -275,6 +281,8 @@ function BlockInspector({
   onChanged: (message: string) => void;
 }) {
   const why = block.blocker?.gate.rationale ?? block.check?.rationale;
+  // qa4-docs-40: no Risk heading over nothing for someone who cannot accept a risk.
+  const canAccept = useCanAcceptRisk();
   return (
     <Inspector
       testId="publish-inspector"
@@ -314,7 +322,7 @@ function BlockInspector({
           </div>
         </InspectorSection>
       )}
-      {block.blocker && (
+      {block.blocker && canAccept && (
         <InspectorSection label="Risk" testId="block-risk">
           <AcceptRisk key={block.id} blocker={block.blocker} onDone={onChanged} />
         </InspectorSection>
@@ -430,10 +438,8 @@ function AdvisoryRow({ item, index }: { item: Item; index: number }) {
     >
       <b className="tnum font-semibold text-text2">{index}</b>
       <span className="min-w-0 py-2 break-words">{item.title}</span>
-      <Chip kind={s.kind}>
-        {item.status === "pass" && <Icon name="check" size={16} />}
-        {s.label}
-      </Chip>
+      {/* qa4-docs-41: every status the same: its word in its colour, no icon on one only. */}
+      <Chip kind={s.kind}>{s.label}</Chip>
     </li>
   );
 }

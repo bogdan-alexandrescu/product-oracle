@@ -28,13 +28,14 @@ import {
   KINDS,
   PRECISIONS,
   kindLabel,
-  kindShort,
   layerLabel,
   leftOut,
+  linkStrength,
   pivot,
   score,
   sourceLabel,
   staleCount,
+  strength,
   targetEyebrow,
   targetKey,
   targetTitle,
@@ -200,7 +201,9 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
     );
   }
 
-  const sections = data.sections;
+  // qa4-docs-42: the opening section that carries the document's title reads as the
+  // Introduction, as the Document tab names it.
+  const sections = data.sections.map((s) => (s.level === 1 && title && s.heading.trim() === title.trim() ? { ...s, heading: "Introduction" } : s));
   if (only && sections.length === 0) {
     return (
       <Panel testId="evidence-no-section">
@@ -601,7 +604,8 @@ function MatrixCell({ row, section, label, onPick, on = false }: { row: MatrixRo
   const ls = row.links.get(section);
   const first = ls?.[0];
   const stale = !!ls?.some((l) => !l.current);
-  const text = first ? `${kindShort(first.kind)} ${score(first.target.confidence)}` : "cited";
+  // qa4-docs-18: the legend's words, not a kind code and a decimal; the kind is in the label.
+  const text = first ? (first.target.confidence == null ? "Unscored" : strength(first.target.confidence)) : "cited";
   const more = ls && ls.length > 1 ? ` +${ls.length - 1}` : "";
   const inner = (
     <Cell tone={first ? tone(first.target.confidence) : "cit"} stale={stale} on={on}>
@@ -614,7 +618,8 @@ function MatrixCell({ row, section, label, onPick, on = false }: { row: MatrixRo
   return (
     <button
       type="button"
-      aria-label={`${row.title} in ${label}: ${first ? `${kindLabel(first.kind)} ${score(first.target.confidence)}` : "cited"}${stale ? ", stale" : ""}`}
+      aria-label={`${row.title} in ${label}: ${first ? `${kindLabel(first.kind)}, ${linkStrength(first.target.confidence)}` : "cited"}${stale ? ", stale" : ""}`}
+      title={first ? `${kindLabel(first.kind)}, ${linkStrength(first.target.confidence)}${ls && ls.length > 1 ? `, and ${ls.length - 1} more` : ""}` : "Cited by the draft"}
       onClick={(e) => {
         e.stopPropagation();
         onPick();
@@ -963,7 +968,9 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
       cell: (s) => {
         const w = weakest(s);
         if (gaps.has(s.section_key)) return <Chip kind="crit" className="border border-dashed border-crit">unsupported</Chip>;
-        if (!s.links.length) return <span className="text-sm text-text2">citations only</span>;
+        // qa4-docs-13: "citations only" only when it has citations; a heading with nothing of its
+        // own is supported by its subsections (else it would be unsupported above).
+        if (!s.links.length) return <span className="text-sm text-text2">{s.citations.length ? "citations only" : "in subsections"}</span>;
         return <Chip kind={tone(w)}>{w == null ? "no score" : score(w)}</Chip>;
       },
     },
@@ -1042,7 +1049,7 @@ function SectionInspector(props: Shared & { section: SectionEvidence; doc: strin
       stats={[
         { label: "Links", value: s.links.length },
         { label: "Citations", value: s.citations.length },
-        { label: "Weakest", value: w == null ? "—" : score(w), tone: w != null && w < 0.4 ? "crit" : undefined },
+        { label: "Weakest", value: w == null ? "—" : strength(w), tone: w != null && w < 0.4 ? "crit" : undefined },
       ]}
     >
       {result && (
@@ -1252,7 +1259,9 @@ function SideScroll({ children }: { children: ReactNode }) {
           <span
             aria-hidden
             data-testid="evidence-scroll-shadow"
-            className="pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-linear-to-l from-[color-mix(in_srgb,var(--color-text)_18%,transparent)] to-transparent"
+            // qa4-docs-56: the cut column fades out into the panel (solid at the edge) rather than
+            // being sliced mid-word; the line at the edge still says more is there.
+            className="pointer-events-none absolute inset-y-0 right-0 z-20 w-20 border-r-2 border-[color-mix(in_srgb,var(--color-text)_18%,transparent)] bg-linear-to-l from-surface via-surface/80 to-transparent"
           />
         )}
       </div>

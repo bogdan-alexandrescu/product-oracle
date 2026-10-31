@@ -118,7 +118,7 @@ test("feedback items: long text collapsed, Accept, Edit and accept, Dismiss, and
   // Dismiss asks for an optional reason first.
   const third = item(page, "f-36");
   await third.getByRole("button", { name: "Dismiss", exact: true }).click();
-  await third.getByRole("button", { name: "Dismiss suggestion" }).click();
+  await third.getByRole("button", { name: "Dismiss, keep feedback open" }).click();
   await expect(third.getByTestId("suggestion")).toContainText("Dismissed");
 
   // Go to §f-36 opens that section here.

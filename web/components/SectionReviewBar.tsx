@@ -19,6 +19,9 @@ const ACTIONS: { verdict: Verdict; label: string; icon: IconName }[] = [
  */
 const NOTE_REQUIRED: Record<Verdict, boolean> = { approved: false, changes_requested: true, rejected: true };
 
+/** qa4-docs-32: the send button under the note, not a second "Request changes" under the first. */
+const SUBMIT_LABEL: Record<Verdict, string> = { approved: "Approve", changes_requested: "Send request", rejected: "Reject" };
+
 /** Per-section verdict: approve, or request changes / reject with a note saying what should change. */
 export function SectionReviewBar({
   heading,
@@ -181,7 +184,7 @@ export function SectionReviewBar({
               disabled={saving || needsNote}
               data-testid="verdict-submit"
             >
-              {saving ? "Saving…" : ACTIONS.find((a) => a.verdict === draft)!.label}
+              {saving ? "Saving…" : SUBMIT_LABEL[draft]}
             </Button>
             <Button variant="ghost" onClick={() => setDraft(null)}>
               Cancel

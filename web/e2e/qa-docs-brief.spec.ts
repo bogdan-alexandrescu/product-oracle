@@ -112,8 +112,8 @@ test("qa-docs-36: the tech brief names modules and the PRD in words; the rail ma
   const back = page.locator("[data-page-header]").getByRole("link", { name: "Checkout redesign PRD v2" });
   await expect(back).toHaveAttribute("href", "/documents/checkout-redesign");
 
-  // An unanswered question says where it was left open.
-  await expect(page.getByTestId("brief-question-q2")).toContainText("Not answered at the Engineering check");
+  // An unanswered question says so in plain words (qa4-docs-53).
+  await expect(page.getByTestId("brief-question-q2")).toContainText("Not answered yet");
 
   // qa-docs-65: the rail marks PRDs here too.
   await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");

@@ -94,12 +94,13 @@ test.describe("desktop", () => {
 
   test("qa-docs-13: each review count says what it counts", async ({ page }) => {
     await openVersion(page, CARTS);
-    // qa-docs-5: the panel counts what the outline counts, in Brief and in Full.
-    await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed, brief sections");
+    // qa-docs-5: the panel counts what the outline counts, in Brief and in Full; qa4-docs-35:
+    // in one wording in both.
+    await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed");
     await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/8/);
-    await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/\d+ of 8 brief sections reviewed/);
+    await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/\d+ of 8 sections reviewed/);
     await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
-    await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed, all sections");
+    await expect(panel(page).getByTestId("stat-reviewed")).toContainText("Reviewed");
     await expect(panel(page).getByTestId("stat-reviewed")).toContainText(/\d+\/20/);
     await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/\d+ of 20 sections reviewed/);
   });
@@ -192,7 +193,7 @@ test.describe("desktop", () => {
       rows.push((await page.getByRole("group", { name }).getByRole("button").allInnerTexts()).map((t) => t.trim()));
     }
     expect(rows).toEqual([
-      ["PDF", "HTML", "MD"],
+      ["PDF", "HTML", "Markdown (.md)"],
       ["PDF", "HTML"],
       ["PDF", "PPTX"],
     ]);

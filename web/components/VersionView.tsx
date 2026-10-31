@@ -956,7 +956,6 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     openKey,
     openCounts,
     closed: readOnly,
-    noun: hasBrief ? (view === "brief" ? "brief sections" : "sections") : undefined,
     onSelect: (key: string) => {
       select(key);
       setSheet(null);
@@ -1034,12 +1033,11 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       version={version}
       doc={doc}
       n={n}
-      // qa-docs-13, qa-docs-5: the head counts the sections shown, as the outline does; with a
-      // brief it says which ("brief sections" in Brief, "all sections" in Full).
+      // qa-docs-13, qa-docs-5: the head counts the sections shown, as the outline does;
+      // qa4-docs-35: "Reviewed" in every view, so the card keeps one row.
       stats={{
         reviewed: reviewedShown,
         total: shownSections.length,
-        reviewedLabel: hasBrief ? (view === "brief" ? "Reviewed, brief sections" : "Reviewed, all sections") : undefined,
         locked: lockedCount,
         lockedLabel: version?.approved_at ? "Locked" : "Approved",
         openFeedback,
@@ -1563,9 +1561,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
             data-testid="phone-sections"
             className="flex h-11 min-w-0 items-center justify-center gap-2 rounded-button border border-line-strong px-3 text-[15px] font-semibold text-text"
           >
-            <span className="truncate">Sections</span>
-            <span className="tnum flex-none text-text2">
-              · {openIdx + 1}/{shownSections.length}
+            {/* qa4-docs-37: the open section's place, in words: "N/M" elsewhere counts reviews. */}
+            <span className="tnum truncate">
+              Section {openIdx + 1} <span className="text-text2">of {shownSections.length}</span>
             </span>
           </button>
           <button
@@ -1584,7 +1582,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         <SectionsSheetBody
           {...outlineProps}
           filter={sheetFilter}
-          header={<ReviewProgress reviewed={reviewedShown} total={shownSections.length} noun={outlineProps.noun} />}
+          header={<ReviewProgress reviewed={reviewedShown} total={shownSections.length} />}
         />
       </Sheet>
       <Sheet open={sheet === "review"} title="Review" onClose={() => setSheet(null)} testId="sheet-review">

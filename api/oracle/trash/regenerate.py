@@ -117,7 +117,9 @@ async def estimate(
     flow = FLOWS.get(document.kind)
     if flow is None:
         raise Invalid(f"no flow regenerates a {document.kind}: edit it instead")
-    inputs = [f"{document.title} ({document.slug}), its latest version"]
+    # qa4-docs-23: inputs by their titles and version numbers, never a slug.
+    latest = await _latest(db, document)
+    inputs = [f"{document.title}, latest version" + (f" (v{latest.number})" if latest else "")]
     oracle_knobs = {"regenerate_note": note} if note else None
     if document.kind == "spec":
         from oracle.specs import service as specs_service
@@ -137,7 +139,7 @@ async def estimate(
         if document.kind == "roadmap":
             prd, version = await _source_of(db, document)
             body["source"] = prd.slug
-            inputs.append(f"{prd.title} ({prd.slug}), its latest approved version")
+            inputs.append(f"{prd.title}, approved version (v{version.number})")
         run_id = await runs_service.create_run(
             db, principal, RunCreate(**body), oracle_knobs=oracle_knobs
         )

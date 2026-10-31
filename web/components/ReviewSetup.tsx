@@ -2,6 +2,7 @@
 
 import { useId, useState, type FormEvent } from "react";
 
+import { ConfirmDialog } from "@/components/account/ConfirmDialog";
 import { Button, Chip, Icon, Panel, Sheet } from "@/components/ds";
 import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
@@ -491,6 +492,8 @@ export function Campaigns({ doc }: { doc: string }) {
   const [error, setError] = useState<string | null>(null);
   // The campaign being closed or reopened: its button waits, so a double click sends one change.
   const [toggling, setToggling] = useState<string | null>(null);
+  // qa4-docs-14: an open campaign ends only after a yes (people are still being asked).
+  const [ending, setEnding] = useState<Campaign | null>(null);
 
   async function toggle(c: Campaign) {
     setToggling(c.id);
@@ -552,13 +555,31 @@ export function Campaigns({ doc }: { doc: string }) {
             <span className="flex-1" />
             {canEdit && (
               // qa-docs-30: what the action does to the campaign, not a bare Close.
-              <Button variant="ghost" aria-label={`${c.status === "open" ? "End campaign" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => toggle(c)}>
+              <Button variant="ghost" aria-label={`${c.status === "open" ? "End campaign" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => (c.status === "open" ? setEnding(c) : toggle(c))}>
                 {c.status === "open" ? "End campaign" : "Reopen"}
               </Button>
             )}
           </li>
         ))}
       </ul>
+      <ConfirmDialog
+        open={!!ending}
+        testId="end-campaign-dialog"
+        title={ending ? `End ${ending.title}?` : "End campaign?"}
+        subject={ending ? `${ending.participants} of ${ending.invited} took part` : undefined}
+        consequences={[
+          { icon: "x", text: "Nobody else is asked for feedback in it." },
+          { icon: "check", text: "Its comments stay, and you can reopen it." },
+        ]}
+        confirmLabel="End campaign"
+        confirmVariant="solid"
+        onClose={() => setEnding(null)}
+        onConfirm={() => {
+          const c = ending;
+          setEnding(null);
+          if (c) void toggle(c);
+        }}
+      />
     </Panel>
   );
 }

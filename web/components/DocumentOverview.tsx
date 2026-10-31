@@ -3,7 +3,7 @@
 import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
@@ -66,7 +66,27 @@ export function assignableSections(states: SectionState[], title: string): Secti
   });
 }
 
-function versionColumns(doc: string, kind: string | null | undefined, latest: number | null | undefined): Column<VersionSummary>[] {
+type Warning = VersionSummary["warnings"][number];
+
+/**
+ * A version's warning as a person reads it (qa4fix-docs): "Sections approved in v1 changed
+ * in this version:" goes on to name those sections by heading, as the version page does.
+ */
+export function warningText(w: Warning, headings: Map<string, string>): string {
+  const keys = w.section_keys ?? [];
+  if (w.code !== "locked_section_changed" || keys.length === 0) return w.message;
+  const named = keys.flatMap((k) => headings.get(k) ?? []);
+  const other = keys.length - named.length;
+  const parts = other ? [...named, plural(other, named.length ? "other section" : "section")] : named;
+  return `${w.message} ${parts.join(", ")}`;
+}
+
+function versionColumns(
+  doc: string,
+  kind: string | null | undefined,
+  latest: number | null | undefined,
+  headings: Map<string, string>,
+): Column<VersionSummary>[] {
   return [
     {
       key: "number",
@@ -91,7 +111,7 @@ function versionColumns(doc: string, kind: string | null | undefined, latest: nu
             <Chip kind="now">Latest</Chip>
           ) : null}
           {v.warnings.length > 0 && (
-            <Chip kind="warn" title={v.warnings.map((w) => w.message).join("\n")}>
+            <Chip kind="warn" title={v.warnings.map((w) => warningText(w, headings)).join("\n")}>
               {plural(v.warnings.length, "warning")}
             </Chip>
           )}
@@ -131,11 +151,13 @@ function VersionInspector({
   kind,
   v,
   latest,
+  headings,
 }: {
   doc: string;
   kind: string | null | undefined;
   v: VersionSummary;
   latest: number | null | undefined;
+  headings: Map<string, string>;
 }) {
   const { can } = useMe();
   return (
@@ -192,7 +214,7 @@ function VersionInspector({
           <ul className="flex flex-col gap-2">
             {v.warnings.map((w, i) => (
               <li key={i} className="rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
-                {w.message}
+                {warningText(w, headings)}
               </li>
             ))}
           </ul>
@@ -373,6 +395,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
       : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n: latest } } })),
   );
   const states = assignableSections(statesQ.data?.sections ?? [], d?.title ?? "");
+  // A warning names the sections it is about by heading.
+  const headings = useMemo(() => new Map((statesQ.data?.sections ?? []).map((s) => [s.section_key, s.heading])), [statesQ.data]);
   const names = useTemplateNames();
   // F5 lane 3: the PRD's requested specs, split by depth between Tech briefs and Engineering specs (qa-docs-29).
   const specsQ = useSpecs(d?.kind === "prd" ? doc : null);
@@ -441,12 +465,12 @@ export function DocumentOverview({ doc }: { doc: string }) {
               </p>
             )}
             {d.kind === "roadmap" && <RoadmapSharing d={d} />}
-            <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} /> : undefined}>
+            <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} headings={headings} /> : undefined}>
               <Panel title="Versions" count={versions.length}>
                 <DataTable
                   label="Versions"
                   testId="versions-table"
-                  columns={versionColumns(doc, d.kind, d.latest_version)}
+                  columns={versionColumns(doc, d.kind, d.latest_version, headings)}
                   rows={versions}
                   rowKey={(v) => String(v.number)}
                   selected={selected ? String(selected.number) : null}

@@ -405,7 +405,7 @@ function dashboard(
     const human = humans.flatMap((r) =>
       ctx.v2.evaluation_findings
         .filter((f) => f.report_id === r.id && f.criterion === c.key)
-        .map((f) => ({ status: f.status, rationale: f.rationale, rater_id: r.created_by, report_id: r.id, created_at: r.created_at })),
+        .map((f) => ({ status: f.status, rationale: f.rationale, section_keys: f.section_keys ?? [], rater_id: r.created_by, report_id: r.id, created_at: r.created_at })),
     );
     return {
       key: c.key, title: c.title, question: c.question, hard: c.hard, status, rationale,

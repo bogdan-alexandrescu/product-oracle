@@ -38,7 +38,8 @@ test("a brief shows its approach, touches with code map refs, risks, answered qu
 
   const question = page.getByTestId("brief-question-q1");
   await expect(question).toContainText("Can quotes be cached for ten minutes?");
-  await expect(question).toContainText("Blocking");
+  // qa4-docs-53: answered, it no longer blocks.
+  await expect(question).toContainText("Was blocking · answered");
   await expect(question).toContainText("Yes, prices change at most hourly");
 
   await expect(page.getByTestId("brief-size")).toContainText("M");

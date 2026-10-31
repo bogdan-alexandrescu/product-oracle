@@ -47,14 +47,24 @@ export function MilestoneCell({ row }: { row: ItemRow }) {
   const m = row.milestone;
   const unbacked = row.unbacked ?? [];
   if ((!m || (!m.name && !m.date && !m.refused_date)) && unbacked.length === 0) return <span className="text-text2">—</span>;
+  // qa4-docs-3: dates month first; a refused date's chip wraps under it, whole, never cut.
   return (
-    <span className={`inline-flex min-w-0 max-w-full items-center gap-1.5 ${unbacked.length ? "flex-wrap" : ""}`}>
+    <span className={`inline-flex min-w-0 max-w-full items-center gap-x-1.5 gap-y-1 ${unbacked.length || m?.refused_date ? "flex-wrap" : ""}`}>
       {m?.name && <span className="truncate">{m.name}</span>}
-      {m?.date && (m.date_removed ? <s className="tnum flex-none text-text2" title="Date removed">{m.date}</s> : <span className="tnum flex-none text-text2">{m.date}</span>)}
+      {m?.date &&
+        (m.date_removed ? (
+          <s className="tnum flex-none text-text2" title="Date removed">
+            {formatDate(m.date)}
+          </s>
+        ) : (
+          <span className="tnum flex-none text-text2">{formatDate(m.date)}</span>
+        ))}
       {m?.refused_date && (
         <>
-          <s className="tnum flex-none text-text2">{m.refused_date}</s>
-          <Chip kind="warn" title={m.refused ?? undefined}>
+          <s data-testid="refused-date" className="tnum flex-none text-text2">
+            {formatDate(m.refused_date)}
+          </s>
+          <Chip kind="warn" title={m.refused ?? undefined} className="flex-none">
             {refusedLabel(row.horizon)}
           </Chip>
         </>
@@ -129,12 +139,23 @@ export function ItemsTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, filter, groupBy, groupOrder],
   );
+  // qa4-docs-5: a group's items shown, of all it holds when a filter hides some, and the
+  // dropped items drawn in it, so the header matches the rows and the summary above.
   const counts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of shown) if (!r.ghost) m.set(groupOf(r), (m.get(groupOf(r)) ?? 0) + 1);
-    return m;
+    const tally = (list: ItemRow[], pick: (r: ItemRow) => boolean) => {
+      const m = new Map<string, number>();
+      for (const r of list) if (pick(r)) m.set(groupOf(r), (m.get(groupOf(r)) ?? 0) + 1);
+      return m;
+    };
+    return { shown: tally(shown, (r) => !r.ghost), all: tally(rows, (r) => !r.ghost), dropped: tally(shown, (r) => !!r.ghost) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, groupBy]);
+  }, [shown, rows, groupBy]);
+  const countLabel = (g: string) => {
+    const n = counts.shown.get(g) ?? 0;
+    const all = counts.all.get(g) ?? 0;
+    const dropped = counts.dropped.get(g) ?? 0;
+    return `${n}${all !== n ? ` of ${all}` : ""}${dropped ? ` · ${dropped} dropped` : ""}`;
+  };
 
   const columns: Column<ItemRow>[] = [
     { key: "position", header: "#", width: "44px", align: "right", phone: "hide", className: "tnum text-text2", cell: (r) => (r.ghost ? "" : r.position + 1) },
@@ -147,7 +168,7 @@ export function ItemsTable({
     },
     { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => (r.horizon ? <HorizonChip horizon={r.horizon} plain={plainHorizons} /> : <span className="text-text2">—</span>) },
     // qa-docs-66: on a phone a row's "—" says what it is.
-    { key: "milestone", header: "Milestone", width: "172px", phone: "meta", phoneLabel: "Milestone", wrap: rows.some((r) => r.unbacked?.length), cell: (r) => <MilestoneCell row={r} /> },
+    { key: "milestone", header: "Milestone", width: "172px", phone: "meta", phoneLabel: "Milestone", wrap: rows.some((r) => r.unbacked?.length || r.milestone?.refused_date), cell: (r) => <MilestoneCell row={r} /> },
     { key: "confidence", header: "Confidence", width: "104px", phone: "meta", phoneLabel: "Confidence", cell: (r) => <Confidence value={r.confidence} /> },
     {
       key: "depends_on",
@@ -203,7 +224,7 @@ export function ItemsTable({
           <>
             {/* qa-docs-62: a phone's header is a flex row, which drops the space: the gap keeps it. */}
             <span className="inline-flex items-baseline gap-1.5">
-              {horizonLabel(g)} <span className="tnum font-sans text-sm font-semibold text-text2">{counts.get(g) ?? 0}</span>
+              {horizonLabel(g)} <span className="tnum font-sans text-sm font-semibold text-text2">{countLabel(g)}</span>
             </span>
           </>
         )
