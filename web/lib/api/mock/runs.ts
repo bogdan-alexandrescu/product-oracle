@@ -2440,7 +2440,7 @@ export function seedStoredRefusalRun(db: RunsDb, ctx: Omit<RunsContext, "db">, e
 
 /** The note the API records when it renews a run's key for a step parked mcp_credential_expired (SwarmCloud #2498). */
 export const KEY_RENEWED_NOTE =
-  "Key renewed at 2026-10-21 03:10 PDT: the step started after its key expired while it waited in SwarmCloud's queue";
+  "Key renewed at Oct 21, 2026, 3:10 AM PDT: the step started after its key expired while it waited in SwarmCloud's queue";
 
 /**
  * The "key-renewed" scenario: a SwarmCloud feedback loop on checkout-redesign whose first step waited in
