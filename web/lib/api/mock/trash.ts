@@ -29,7 +29,7 @@ export interface TrashVersion {
   number: number;
   created_at: string;
   approved_at?: string | null;
-  source?: { document_id: string } | null;
+  source?: { document_id: string; version?: number } | null;
 }
 
 /** One delete and the rows it took (put back as they were on Restore). */
@@ -170,10 +170,12 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
     if (leaf === "regenerate/estimate") {
       const runId = ctx.uuid();
       ctx.db.estimates[runId] = { slug: doc.slug, flow, note: body.note ?? null };
-      const inputs = [`${doc.title} (${doc.slug}), its latest version`];
-      const source = latestVersion(ctx, doc)?.source;
+      // qa4-docs-23, as oracle.trash.regenerate.estimate: titles and version numbers, never a slug.
+      const latest = latestVersion(ctx, doc);
+      const inputs = [`${doc.title}, latest version${latest ? ` (v${latest.number})` : ""}`];
+      const source = latest?.source;
       const prd = source ? ctx.documents.find((d) => d.id === source.document_id) : undefined;
-      if (prd) inputs.push(`${prd.title} (${prd.slug}), its latest approved version`);
+      if (prd) inputs.push(`${prd.title}, approved version${source?.version != null ? ` (v${source.version})` : ""}`);
       const estimate = doc.kind === "prd" ? 18 : 6;
       const out: Schemas["RegenerateEstimateOut"] = {
         run_id: runId, document_slug: doc.slug, kind: doc.kind, flow, inputs, estimate_usd: estimate,
@@ -238,7 +240,12 @@ export async function routeTrash<D extends TrashDocument, V extends TrashVersion
   // and it is a PRD (enough for the second confirmation in the dialog).
   const published = docs.some((d) => d.kind === "prd" && ctx.versions.some((v) => v.document_id === d.id && v.approved_at));
   if (isDependents) {
-    const out: Schemas["DependentsOut"] = { root, items, published, working_runs: working.map((r) => r.id) };
+    // qa4-docs-26, as oracle.trash.service.preview: a run says when it ran and what it wrote.
+    const said = items.map((i) => {
+      const r = i.type === "run" ? runs.find((x) => x.id === i.id) : undefined;
+      return r ? { ...i, created_at: r.created_at, wrote: docs.find((d) => d.slug === r.document_slug)?.title ?? null } : i;
+    });
+    const out: Schemas["DependentsOut"] = { root, items: said, published, working_runs: working.map((r) => r.id) };
     return json(200, out);
   }
   if (working.length) return json(409, { detail: `A run is still working on this (${working[0].flow}, ${working[0].status}): cancel it first` });

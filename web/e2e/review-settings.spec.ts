@@ -100,6 +100,8 @@ test("an approver asks for feedback, then ends and reopens the campaign (qa-docs
   await expect(row).toContainText("v2");
 
   await row.getByRole("button", { name: "End campaign Pilot clinic read-through" }).click();
+  // qa4-docs-14: an open campaign ends after a yes.
+  await page.getByTestId("end-campaign-dialog").getByRole("button", { name: "End campaign" }).click();
   await expect(row).toContainText("Closed");
   await row.getByRole("button", { name: "Reopen Pilot clinic read-through" }).click();
   await expect(row).toContainText("Open");
@@ -282,6 +284,8 @@ test("a double click on Close closes the campaign once, with no conflict", async
     new MutationObserver(() => (w.wasDisabled ||= el.hasAttribute("disabled"))).observe(el, { attributes: true });
   });
   await close.dblclick();
+  // qa4-docs-14: the double click opens one confirm; its yes sends the change.
+  await page.getByTestId("end-campaign-dialog").getByRole("button", { name: "End campaign" }).click();
   await expect(row).toContainText("Closed");
   // While the change was in flight the button waited, so the second click sent nothing.
   expect(await page.evaluate(() => (window as unknown as { wasDisabled?: boolean }).wasDisabled)).toBe(true);

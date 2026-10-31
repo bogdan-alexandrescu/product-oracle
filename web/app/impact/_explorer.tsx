@@ -269,9 +269,13 @@ function intro(report: Report, source: ImpactSource, subject: SubjectWords): str
   if (!report.preview) return "Recorded: this change marked these outputs Potentially stale.";
   if (source.kind === "entity") return `What if ${report.subject.title ?? subject.title} changed? Preview only; nothing is marked stale.`;
   const n = source.kind === "version" ? source.n : null;
-  return `Preview: nothing has been marked stale. The lines show what each output was built from in earlier versions${
-    n ? `; v${n} changed the sections in the middle column` : ""
-  }.`;
+  // qa4-docs-9: the preview marks nothing, but an output an earlier change already marked
+  // stale shows as such here; say so rather than "nothing has been marked stale".
+  const already = report.affected.filter((o) => o.freshness === "potentially_stale").length;
+  const lead = already
+    ? `Preview: ${n ? `v${n}` : "this change"} marks nothing stale. ${already === 1 ? "1 output was" : `${already} outputs were`} already marked stale by an earlier change.`
+    : "Preview: nothing has been marked stale.";
+  return `${lead} The lines show what each output was built from in earlier versions${n ? `; v${n} changed the sections in the middle column` : ""}.`;
 }
 
 function LoadingBoard() {
@@ -334,6 +338,12 @@ function Lineage({
         if (source.kind === "change" && v && up.document_slug === v.slug && u.kind === "section") {
           const built = up.version_number != null && up.version_number !== v.n ? `Outputs were built on v${up.version_number}` : undefined;
           m.set(u.key, { ...u, sub: `Section of ${names.doc(v.slug)} v${v.n}`, builtOn: built });
+        } else if (source.kind === "version" && u.kind === "section" && up.document_slug === source.doc && up.section_key) {
+          // qa4-docs-44: on a version's Impact the middle column is what that version changed:
+          // "7. Success metrics", "Section changed in v2"; the version the outputs were built on
+          // is said on hover.
+          const built = up.version_number != null && up.version_number !== source.n ? `Outputs were built on v${up.version_number}` : undefined;
+          m.set(u.key, { ...u, label: names.heading(up.section_key, source.doc, source.n), sub: `Section changed in v${source.n}`, builtOn: built });
         } else m.set(u.key, u);
       }
     }

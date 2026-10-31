@@ -20,6 +20,8 @@ export type Names = {
   doc: (slug: string) => string;
   /** "Success metrics": a section's heading without its number; the key in words until known. */
   section: (key: string, slug?: string | null, n?: number | null) => string;
+  /** "7. Success metrics": a version's section heading as that version numbers it (qa4-docs-44). */
+  heading: (key: string, slug: string, n: number) => string;
   /** Server text with section keys and slugs in it, in words. */
   words: (text: string) => string;
 };
@@ -55,10 +57,10 @@ function wanted(report: Report | undefined, extra?: string | null): { slugs: str
   return { slugs: [...slugs].sort(), versions: [...versions.values()].sort((a, b) => a[0].localeCompare(b[0]) || a[1] - b[1]) };
 }
 
-type Loaded = { docs: Record<string, string>; headings: Record<string, string>; byKey: Record<string, string> };
+type Loaded = { docs: Record<string, string>; headings: Record<string, string>; full: Record<string, string>; byKey: Record<string, string> };
 
 async function loadNames(slugs: string[], versions: [string, number][]): Promise<Loaded> {
-  const out: Loaded = { docs: {}, headings: {}, byKey: {} };
+  const out: Loaded = { docs: {}, headings: {}, full: {}, byKey: {} };
   await Promise.all([
     ...slugs.map(async (slug) => {
       try {
@@ -74,6 +76,7 @@ async function loadNames(slugs: string[], versions: [string, number][]): Promise
         for (const s of v.sections) {
           const h = bareHeading(s.heading);
           out.headings[`${slug}@${n}#${s.section_key}`] = h;
+          out.full[`${slug}@${n}#${s.section_key}`] = s.heading.trim() || h;
           out.byKey[s.section_key] ??= h;
         }
       } catch {
@@ -101,10 +104,11 @@ export function useNames(report: Report | undefined, extraSlug?: string | null):
   const { slugs, versions } = wanted(report, extraSlug);
   const key = `impact-names|${slugs.join(",")}|${versions.map(([s, n]) => `${s}@${n}`).join(",")}`;
   const q = useQuery(key, () => loadNames(slugs, versions), { keepPrevious: true });
-  const loaded = q.data ?? { docs: {}, headings: {}, byKey: {} };
+  const loaded = q.data ?? { docs: {}, headings: {}, full: {}, byKey: {} };
   const doc = (slug: string) => loaded.docs[slug] ?? slugWords(slug);
   const section = (k: string, slug?: string | null, n?: number | null) =>
     (slug && n != null ? loaded.headings[`${slug}@${n}#${k}`] : undefined) ?? loaded.byKey[k] ?? slugWords(k);
+  const heading = (k: string, slug: string, n: number) => loaded.full[`${slug}@${n}#${k}`] ?? section(k, slug, n);
   const words = (text: string) => {
     // "(flow prd_to_roadmap)" is the run's flow id: the sentence already says what it is.
     let t = text.replace(/ \(flow [\w-]+\)/g, "");
@@ -118,10 +122,10 @@ export function useNames(report: Report | undefined, extraSlug?: string | null):
     }
     return t.charAt(0).toUpperCase() + t.slice(1);
   };
-  return { doc, section, words };
+  return { doc, section, heading, words };
 }
 
-const slugOnly: Names = { doc: slugWords, section: (k) => slugWords(k), words: (t) => t };
+const slugOnly: Names = { doc: slugWords, section: (k) => slugWords(k), heading: (k) => slugWords(k), words: (t) => t };
 
 /** The report's names, for the explorer's parts (ImpactExplorer provides them). */
 export const NamesContext = createContext<Names>(slugOnly);

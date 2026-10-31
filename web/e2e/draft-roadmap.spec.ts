@@ -89,14 +89,14 @@ test("an approver's Derive again shows Queued, and after two ticks the page show
   await expect(rows(page)).toHaveCount(4);
   await status(page).getByRole("button", { name: "Build again" }).click();
   await expect(status(page)).toHaveAttribute("data-status", "queued");
-  await expect(status(page)).toHaveText("Queued. Oracle starts deriving within a minute.");
+  await expect(status(page)).toHaveText("Building again: starts within a minute. The table shows the last build until the new one is ready.");
   // No Derive while it is queued; the current items stay.
   await expect(status(page).getByRole("button")).toHaveCount(0);
   await expect(rows(page)).toHaveCount(4);
 
   await tick(page);
   await expect(status(page)).toHaveAttribute("data-status", "running", { timeout: 15_000 });
-  await expect(status(page)).toContainText("Deriving roadmap items from v1 · started");
+  await expect(status(page)).toContainText("Building roadmap items from v1 · started");
   await expect(status(page).getByRole("link", { name: "Open run" })).toHaveAttribute("href", /^\/runs\/[0-9a-f-]+$/);
   await tick(page);
   await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });

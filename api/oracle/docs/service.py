@@ -1312,8 +1312,7 @@ async def import_draft(
                 warnings.append(
                     VersionWarning(
                         code="locked_section_changed",
-                        message="sections approved in version "
-                        f"{previous.number} changed: {', '.join(changed)}",
+                        message=wording.locked_section_changed(previous.number),
                         section_keys=changed,
                     )
                 )

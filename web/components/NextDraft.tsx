@@ -29,6 +29,9 @@ type Choice = { engine: Plan["engine"]; suggestion_ids: string[]; feedback_ids: 
 /** `?build=1` on a document page (the Inbox's "Build draft" action) opens the sheet. */
 export const BUILD_PARAM = "build";
 
+/** qa4-docs-2: why Build waits while the agents' run on the document is under way. */
+const RUN_UNDER_WAY = "A run is under way; build once it ends.";
+
 const building = (status?: string | null) => status === "queued" || status === "running";
 
 /**
@@ -76,6 +79,22 @@ export function BuildDraftButton({ doc }: { doc: string }) {
     : job?.status === "succeeded"
       ? `Draft ${data.next_version} ready`
       : `Build draft ${data.next_version}`;
+  // qa4-docs-2: nothing left to stage while the agents' run is under way: the button says
+  // why it waits instead of opening a sheet with nothing to tick.
+  if (!count && !job && data.agents_run) {
+    return (
+      <Button
+        variant="secondary"
+        icon="doc"
+        disabled
+        title={RUN_UNDER_WAY}
+        aria-label={`${label}: ${RUN_UNDER_WAY}`}
+        data-testid="build-draft"
+      >
+        {label}
+      </Button>
+    );
+  }
   // The agents need no Refinement job: only a text-only build is switched off.
   if (refinementOff && !job && !data.agent_items.length) {
     return (
@@ -498,7 +517,7 @@ function PickStep({
         <>
           <span className="mr-auto flex min-w-0 flex-col gap-0.5 text-sm" aria-live="polite">
             <span className="font-semibold text-text" data-testid="engine-line">
-              {plan ? engineLine(plan, next) : chosen ? "…" : "Tick at least one item."}
+              {agentsRun ? RUN_UNDER_WAY : plan ? engineLine(plan, next) : chosen ? "…" : "Tick at least one item."}
             </span>
             {plan?.engine === "agents" && plan.estimate_usd != null && (
               <span className="tnum text-text2" data-testid="run-estimate">

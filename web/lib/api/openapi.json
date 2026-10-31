@@ -73727,6 +73727,17 @@
             ],
             "title": "Author Id"
           },
+          "author_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Name"
+          },
           "anchor": {
             "anyOf": [
               {
@@ -129529,6 +129540,29 @@
           "kind": {
             "type": "string",
             "title": "Kind"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "wrote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wrote"
           }
         },
         "type": "object",

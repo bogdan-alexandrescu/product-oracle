@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, Chip } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
@@ -58,15 +58,37 @@ export function HeldRewritesPanel({
   onClose: () => void;
 }) {
   const ordered = [...rows.filter((p) => p.status === "open"), ...rows.filter((p) => p.status !== "open")];
+  // qa4-docs-33: Escape closes it, as it closes every dialog and menu: from inside it, from
+  // its Held rewrites button, or from the page; not while a dialog, a menu or another
+  // field has the key.
+  const ref = useRef<HTMLElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const t = e.target instanceof Element ? e.target : null;
+      const inside = !!t && !!ref.current?.contains(t);
+      if (!inside && t?.closest('[role="dialog"], [role="menu"], input, textarea, select, [contenteditable="true"]')) return;
+      close.current();
+    };
+    // On window: a menu's or a sheet's own Escape (on document) runs first and takes it.
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   return (
-    <section aria-label="Held rewrites" data-testid="held-rewrites" className="mb-4 rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
+    <section ref={ref} aria-label="Held rewrites" data-testid="held-rewrites" className="mb-4 rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
       <div className="flex items-center gap-2">
         <h2 className="font-display text-lg leading-6 font-bold text-text">Held rewrites</h2>
         <Button variant="ghost" className="ml-auto" onClick={onClose}>
           Close
         </Button>
       </div>
-      <p className="text-sm text-text2">An agent draft rewrote these approved sections. The approved text was kept until someone decides.</p>
+      {/* qa4-docs-7: they were approved in an earlier version, not (yet) in the one shown. */}
+      <p className="text-sm text-text2" data-testid="held-intro">
+        An agent draft rewrote these sections after they were approved in an earlier version. The approved text was kept until
+        someone decides.
+      </p>
       {ordered.length === 0 && <p className="mt-2 text-sm text-text2">No held rewrites.</p>}
       <ul className="mt-2 flex flex-col gap-2">
         {ordered.map((p) => (
@@ -147,8 +169,8 @@ function HeldRewrite({
   return (
     <li className="rounded-button border border-line bg-surface2 px-3 py-2.5" data-testid="held-rewrite">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="min-w-0 truncate font-semibold text-text">{heading}</p>
-        <span className="font-mono text-[13px] text-text2">#{patch.section_key}</span>
+        {/* qa4-docs-22: the section by its name only, no anchor. */}
+        <p className="min-w-0 truncate font-semibold text-text" data-testid="held-heading">{heading}</p>
         {patch.action === "remove" && <Chip kind="crit">Removes the section</Chip>}
         {!isOpen && <Chip kind={patch.status === "accepted" ? "pass" : "na"}>{DECIDED[patch.status as keyof typeof DECIDED]}</Chip>}
       </div>

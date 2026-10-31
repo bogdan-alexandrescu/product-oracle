@@ -1323,6 +1323,11 @@ function specActorName(db: Db, id: string): string | null {
   return m ? displayName(m.email, m.name) : null;
 }
 
+/** qa4-docs-39: a feedback item with its author's name, as the API's feedback_out (author_names). */
+function withAuthorName<T extends { author_id?: string | null }>(db: Db, f: T): T & { author_name: string | null } {
+  return { ...f, author_name: f.author_id ? specActorName(db, f.author_id) : null };
+}
+
 /**
  * A3 "eng-review" scenario: the default company with commenter@example.com named engineering
  * lead, and a run waiting at an Engineering review stop (./runs.ts).
@@ -1783,7 +1788,7 @@ function seed(): Db {
   ver("team-workspaces", 2).warnings = [
     {
       code: "locked_section_changed",
-      message: "Sections approved in v1 changed in this version: scope",
+      message: "Sections approved in v1 changed in this version:",
       section_keys: ["scope"],
       refs: {},
     },
@@ -5940,7 +5945,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       .filter((f) => !version || f.raised_on_version === Number(version))
       // As the API: by the version raised on, then age.
       .sort((a, b) => a.raised_on_version - b.raised_on_version || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
-      .map((f) => withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null));
+      .map((f) => withAuthorName(db, withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null)));
     return json(200, items);
   }
 
@@ -5990,7 +5995,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     const text = (input.body ?? "").trim();
     if (!text || input.body.length > 4000) return json(422, { detail: "Feedback needs 1 to 4,000 characters" });
     const f = addGeneralFeedback(db, llm, doc, v, me.id, input.body, input.severity ?? null);
-    return json(201, withSuggestion(db.llm, f));
+    return json(201, withAuthorName(db, withSuggestion(db.llm, f)));
   }
   if (sub === "sections" && p[7] === "review" && m === "PUT") {
     if (!v.sections.some((s) => s.section_key === p[6])) return notFound("Section");
@@ -6056,7 +6061,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (sub === "resolution-report") {
     const items = db.feedback
       .filter((f) => f.document_id === doc.id && f.raised_on_version < v.number)
-      .map((f) => withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null));
+      .map((f) => withAuthorName(db, withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null)));
     const counts: Record<string, number> = {};
     for (const f of items) counts[f.status] = (counts[f.status] ?? 0) + 1;
     return json(200, { document_id: doc.id, version: v.number, items, counts });

@@ -90,7 +90,7 @@ test("sections: reviewing the open section marks it in the outline and counts it
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
   const count = sectionStrip(page).getByTestId("review-progress");
-  await expect(count).toHaveText(/\d+ of 11 reviewed/);
+  await expect(count).toHaveText(/\d+ of 11 sections reviewed/);
   const before = Number((await count.innerText()).match(/(\d+) of/)![1]);
   const users = await openSection(page, "users");
   await expect(stripItem(page, "users")).toHaveAttribute("data-state", "none");
@@ -100,7 +100,7 @@ test("sections: reviewing the open section marks it in the outline and counts it
   await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
   await expect(stripItem(page, "users")).toHaveAttribute("data-state", "approved");
-  await expect(count).toHaveText(`${before + 1} of 11 reviewed`);
+  await expect(count).toHaveText(`${before + 1} of 11 sections reviewed`);
   // The reviewed section stays open.
   await expect(section(page, "users")).toBeVisible();
   await expect(stripItem(page, "users")).toHaveAttribute("aria-current", "true");

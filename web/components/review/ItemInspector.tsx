@@ -133,7 +133,7 @@ export function ItemInspector({
               {m.name && <p className="font-medium">{m.name}</p>}
               {m.date && (
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
-                  {m.date_removed ? <s className="tnum text-text2">{m.date}</s> : <span className="tnum font-semibold">{m.date}</span>}
+                  {m.date_removed ? <s className="tnum text-text2">{formatDate(m.date)}</s> : <span className="tnum font-semibold">{formatDate(m.date)}</span>}
                   {m.verified !== false && !m.date_removed && <Chip kind="pass">verified</Chip>}
                   {milestoneAction}
                 </p>
@@ -158,7 +158,7 @@ export function ItemInspector({
               )}
               {m.refused_date && (
                 <p className="mt-1 flex flex-col gap-1 text-sm">
-                  <s className="tnum text-text2">{m.refused_date}</s>
+                  <s className="tnum text-text2">{formatDate(m.refused_date)}</s>
                   <span className="font-medium text-warn">{REFUSED_TEXT[row.horizon === "now" ? "now" : "other"]}</span>
                 </p>
               )}

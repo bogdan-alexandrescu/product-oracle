@@ -10,6 +10,7 @@ import { Button, Icon, Notice, toast, useFocusTrap } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
+import { formatDay } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
@@ -41,6 +42,12 @@ export function itemKind(i: TrashItem): string {
 /** "Usage alerts PRD and 2 more": a Trash entry in a line. */
 export function entryText(root: TrashItem, items: TrashItem[]): string {
   return items.length ? `${root.title} and ${items.length} more` : root.title;
+}
+
+/** qa4-docs-26: "The run of Oct 17 that wrote Early shipping cost: engineering spec". */
+function runText(r: TrashItem, root: string): string {
+  const day = r.created_at ? ` of ${formatDay(r.created_at)}` : "";
+  return `The run${day} that wrote ${r.wrote ?? root}`;
 }
 
 /** Undo (= Restore) right after a delete, from the toast. */
@@ -211,6 +218,7 @@ export function DeleteDialog({
   }, []);
   const working = (deps?.working_runs.length ?? 0) > 0;
   const runs = deps?.items.filter((i) => i.type === "run") ?? [];
+  const root = deps?.root.title ?? title;
   const ready = !!deps && !working && (!deps.published || external);
 
   async function submit() {
@@ -235,8 +243,9 @@ export function DeleteDialog({
       testId="delete-dialog"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} data-autofocus>
-            Back
+          {/* qa4-docs-25: nothing to go back to: the way out is Cancel. */}
+          <Button variant="secondary" onClick={onClose} data-autofocus>
+            Cancel
           </Button>
           <Button variant="danger" disabled={!ready || busy} title={working ? "Cancel the run first" : undefined} onClick={submit}>
             Move to Trash
@@ -262,16 +271,13 @@ export function DeleteDialog({
                       <span className="min-w-0 break-words">{i.title}</span>
                     </li>
                   ))}
-                {runs.length > 0 && (
-                  // qa-docs-43: the runs in words, not by their flow's internal name (that is on hover).
-                  <li data-testid="delete-runs" className="min-w-0 break-words" title={runs.map((r) => r.title).join("\n")}>
-                    {runs.length === 1 && deps.items.length === 1
-                      ? "The draft run that created it"
-                      : runs.length === 1
-                        ? "The draft run that created one of these"
-                        : `The ${runs.length} draft runs that created these`}
+                {runs.map((r) => (
+                  // qa-docs-43: the runs in words, not by their flow's internal name.
+                  // qa4-docs-26: each run by its day and the document it wrote.
+                  <li key={r.id} data-testid="delete-run" className="min-w-0 break-words">
+                    {runText(r, root)}
                   </li>
-                )}
+                ))}
               </ul>
             </>
           )}
@@ -361,13 +367,19 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
       testId="regenerate-dialog"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
-            Back
+          {/* qa4-docs-24: why Start run waits. */}
+          {!estimate && !draft && (
+            <span data-testid="regenerate-hint" className="mr-auto self-center text-sm text-text2">
+              Estimate the cost first
+            </span>
+          )}
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
           </Button>
           <Button onClick={runEstimate} disabled={busy}>
             Estimate
           </Button>
-          <Button variant="solid" disabled={!estimate || busy} onClick={start}>
+          <Button variant="solid" disabled={!estimate || busy} title={!estimate ? "Estimate the cost first" : undefined} onClick={start}>
             Start run
           </Button>
         </>
@@ -403,7 +415,7 @@ function RegenerateDialog({ doc, onClose }: { doc: ArtifactDoc; onClose: () => v
           </ul>
           <p className="mt-2 flex items-center justify-between border-t border-line pt-1.5 font-semibold">
             Estimate
-            <span className="tnum font-mono" data-testid="regenerate-estimate">
+            <span className="tnum" data-testid="regenerate-estimate">
               {usd(estimate.estimate_usd)}
             </span>
           </p>

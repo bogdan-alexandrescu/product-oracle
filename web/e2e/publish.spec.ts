@@ -145,21 +145,21 @@ test("accept risk: an approver cannot read the settings, so the owner default st
   await setCompanySetting(page, "blocker_risk_acceptance_role", "approver");
   await asRole(page, "approver");
   await openPublish(page, "online-deposits");
-  // #370: a control the role cannot use is hidden, with no role note.
-  const risk = inspector(page).getByTestId("block-risk");
-  await expect(risk).toBeVisible();
-  await expect(risk.getByRole("button", { name: "Accept risk" })).toHaveCount(0);
-  await expect(risk).not.toContainText("Only an owner");
+  // #370: a control the role cannot use is hidden, with no role note (qa4-docs-40: and no empty Risk section).
+  await expect(inspector(page)).toBeVisible();
+  await expect(inspector(page).getByTestId("block-risk")).toHaveCount(0);
+  await expect(inspector(page).getByRole("button", { name: "Accept risk" })).toHaveCount(0);
+  await expect(inspector(page)).not.toContainText("Only an owner");
 });
 
 for (const role of ["approver", "viewer"] as const) {
   test(`accept risk: ${role}s are not offered it (#370)`, async ({ page }) => {
     await asRole(page, role);
     await openPublish(page, "online-deposits");
-    const risk = inspector(page).getByTestId("block-risk");
-    await expect(risk).toBeVisible();
-    await expect(risk.getByRole("button", { name: "Accept risk" })).toHaveCount(0);
-    await expect(risk).not.toContainText("Only an owner");
+    await expect(inspector(page)).toBeVisible();
+    await expect(inspector(page).getByTestId("block-risk")).toHaveCount(0);
+    await expect(inspector(page).getByRole("button", { name: "Accept risk" })).toHaveCount(0);
+    await expect(inspector(page)).not.toContainText("Only an owner");
   });
 }
 

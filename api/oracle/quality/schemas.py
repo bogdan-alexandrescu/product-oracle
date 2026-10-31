@@ -65,6 +65,8 @@ class ModelView(BaseModel):
 class HumanView(BaseModel):
     status: FindingStatus
     rationale: str
+    # The sections the person named with their rating (qa4-docs-42).
+    section_keys: list[str] = []
     rater_id: uuid.UUID | None = None
     report_id: uuid.UUID
     created_at: datetime

@@ -17,7 +17,8 @@ const GROUPS = [
     formats: [
       { format: "pdf", label: "PDF" },
       { format: "html", label: "HTML" },
-      { format: "md", label: "MD" },
+      // qa4-docs-31: the format by its name, not a bare "MD".
+      { format: "md", label: "Markdown (.md)" },
     ],
   },
   {

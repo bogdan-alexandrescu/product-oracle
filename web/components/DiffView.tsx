@@ -329,7 +329,7 @@ function DiffItems({ doc, kind, from, to }: { doc: string; kind: "prd" | "roadma
       tools={
         <>
           {diff?.base && (
-            <Toggle label="Unchanged" name="Show unchanged items" checked={showUnchanged} onChange={setShowUnchanged} />
+            <Toggle label="Show unchanged" name="Show unchanged items" checked={showUnchanged} onChange={setShowUnchanged} />
           )}
           {/* Nothing to open until the items are drafted (qa-docs-28). */}
           {diff && <LinkButton href={open}>Open items</LinkButton>}
@@ -399,10 +399,12 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
   const fromN = from ?? (toN != null ? Math.max(1, toN - 1) : undefined);
   // G7 3.3: the panel is about this document (the version compared to).
   useScreenSubject(docQ.data && toN != null ? { kind: "document", subject: { document_id: docQ.data.id, version: toN } } : null, docQ.data?.title);
+  // qa4-docs-10: one version on both sides has nothing to compare.
+  const same = fromN != null && fromN === toN;
   const ready = fromN != null && toN != null;
 
   const diffQ = useQuery(`diff|${doc}|${fromN}|${toN}`, async () =>
-    ready
+    ready && !same
       ? unwrap(api.GET("/v1/documents/{doc}/diff", { params: { path: { doc }, query: { from: fromN, to: toN } } }))
       : undefined,
   );
@@ -430,7 +432,14 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
                 <span aria-hidden className="w-10 flex-none text-sm font-semibold text-text2 sm:hidden">
                   From
                 </span>
-                <VersionSwitcher doc={doc} versions={versions} current={fromN} label="From" hrefFor={(f) => href(f, toN)} />
+                {/* qa4-docs-10: picking the other side's version swaps the two. */}
+                <VersionSwitcher
+                  doc={doc}
+                  versions={versions}
+                  current={fromN}
+                  label="From"
+                  hrefFor={(f) => (f === toN ? href(toN, fromN) : href(f, toN))}
+                />
               </div>
               <span aria-hidden className="text-text2 max-sm:hidden">
                 →
@@ -439,7 +448,13 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
                 <span aria-hidden className="w-10 flex-none text-sm font-semibold text-text2 sm:hidden">
                   To
                 </span>
-                <VersionSwitcher doc={doc} versions={versions} current={toN} label="To" hrefFor={(t) => href(fromN, t)} />
+                <VersionSwitcher
+                  doc={doc}
+                  versions={versions}
+                  current={toN}
+                  label="To"
+                  hrefFor={(t) => (t === fromN ? href(toN, fromN) : href(fromN, t))}
+                />
               </div>
             </div>
           </>
@@ -447,8 +462,9 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
       </DocToolbar>
       <Page>
         <PageHeader
-          title={ready ? `Changes from v${fromN} to v${toN}` : "Compare versions"}
+          title={ready && !same ? `Changes from v${fromN} to v${toN}` : "Compare versions"}
           status={
+            !same &&
             diffQ.data && (
               <span data-testid="diff-summary" className="flex flex-wrap items-center gap-2">
                 {SUMMARY.filter(([k]) => counts[k] > 0).map(([k, kind]) => (
@@ -479,8 +495,8 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
             <Empty>Pick two versions</Empty>
           </Panel>
         )}
-        {ready && !diffQ.data && !diffQ.error && <Loading label="Computing diff…" />}
-        {diffQ.data && (
+        {ready && !same && !diffQ.data && !diffQ.error && <Loading label="Computing diff…" />}
+        {!same && diffQ.data && (
           <div className="flex flex-col gap-3">
             {(docQ.data?.kind === "prd" || docQ.data?.kind === "roadmap") && fromN !== toN && (
               <DiffItems doc={doc} kind={docQ.data.kind} from={fromN!} to={toN!} />
@@ -493,7 +509,7 @@ export function DiffView({ doc, from, to }: { doc: string; from?: number; to?: n
                   {showLayer && (
                     <Toggle label="Brief only" name="Brief sections only" checked={briefOnly} onChange={setBriefOnly} />
                   )}
-                  <Toggle label="Unchanged" name="Show unchanged sections" checked={showUnchanged} onChange={setShowUnchanged} />
+                  <Toggle label="Show unchanged" name="Show unchanged sections" checked={showUnchanged} onChange={setShowUnchanged} />
                   <InfoTip label="the diff">
                     Sections are matched by key across versions. Unchanged sections stay hidden until you show them;
                     a moved section changed position.

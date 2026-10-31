@@ -138,8 +138,11 @@ export function ConfirmStep({
   const fatal = preview?.problems.filter((p) => p.fatal) ?? [];
   const missing = preview?.modules.filter((m) => m.included && m.missing_information.length).flatMap((m) => m.missing_information.map((x) => `${m.title}: ${x}`)) ?? [];
   const trimmed = reason.trim();
-  const ready = !!preview && preview.valid && trimmed.length >= 1 && trimmed.length <= 2000 && !busy;
-  const label = status === "confirmed" ? `Confirm revision ${next}` : "Save working draft";
+  // qa4-docs-16: the same modules as the revision in force are no new revision (unless the
+  // company policy changed since: a new revision is how a PRD takes it up).
+  const same = !!diff && !!data.current && !diff.material && !diff.reordered && !data.policy_changed_at;
+  const ready = !!preview && preview.valid && !same && trimmed.length >= 1 && trimmed.length <= 2000 && !busy;
+  const label = same ? "Nothing changed" : status === "confirmed" ? `Confirm revision ${next}` : "Save working draft";
   const titleOf = titler(preview?.modules, before);
 
   async function submit() {
@@ -304,6 +307,11 @@ export function ConfirmStep({
             <p className="tnum mt-1 text-right text-[13px] text-text2">{reason.length} / 2000</p>
           </div>
           <p className="text-sm text-text2">{data.head_revision != null ? `Starts from revision ${data.head_revision}, the newest.` : "No revision yet: this is the first."}</p>
+          {same && (
+            <p data-testid="confirm-nothing-changed" className="text-sm text-text2">
+              Nothing changed: these are the modules of revision {data.current!.number}. Add, remove or move a module first.
+            </p>
+          )}
           {fatal.length > 0 && <Notice tone="error">Can’t confirm: fix the problems above first.</Notice>}
           {refused.length > 0 && (
             <div role="alert" className="rounded-button bg-crit-bg px-3 py-2">
@@ -360,7 +368,7 @@ export function PublishStep({
     }
   }
   return (
-    <Modal title={`Publish revision ${revision}`} eyebrow="Pin the composition to an approved version" phone={phone} onClose={onClose}>
+    <Modal title={`Pin revision ${revision} to an approved version`} eyebrow="Publish the composition" phone={phone} onClose={onClose}>
       <div className="space-y-3 px-5 py-4 text-[15px] max-[600px]:px-4">
         <p className="text-sm text-text2">The published composition is pinned to the version and never changed afterwards.</p>
         <div>

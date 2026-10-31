@@ -101,7 +101,7 @@ test("Items lists the version's items grouped by horizon, one line each", async 
   await expect(await cell(page, behaviour, "Item")).toHaveText("Behaviour");
   await expect(await cell(page, behaviour, "Horizon")).toHaveText("Now");
   await expect(await cell(page, behaviour, "Milestone")).toContainText("Beta");
-  await expect(await cell(page, behaviour, "Milestone")).toContainText("2026-11-30");
+  await expect(await cell(page, behaviour, "Milestone")).toContainText("Nov 30, 2026");
   await expect((await cell(page, behaviour, "Milestone")).locator("s")).toHaveCount(0);
   await expect(await cell(page, behaviour, "Confidence")).toHaveText("High", { useInnerText: true });
   await expect(await cell(page, behaviour, "Depends on")).toHaveText("—", { useInnerText: true });
@@ -145,7 +145,7 @@ test("selecting a row opens the item inspector", async ({ page }) => {
   await expect(insp.getByTestId("item-rank")).toContainText("Why rank 1");
   await expect(insp.getByTestId("item-rank")).toContainText("activation weight 3 x contribution 2");
   // The date rests on the verified ENG-412 estimate.
-  await expect(insp.getByTestId("item-milestone")).toContainText("2026-11-30");
+  await expect(insp.getByTestId("item-milestone")).toContainText("Nov 30, 2026");
   await expect(insp.getByTestId("item-milestone")).toContainText("verified");
   await expect(insp.getByTestId("item-milestone")).toContainText("ENG-412");
   const fromPrd = insp.getByTestId("item-prd").getByRole("link");
@@ -174,7 +174,7 @@ test("a date whose basis was withdrawn shows struck through as Date unverified",
   await withdrawBasis(page, "ENG-412");
   await page.reload();
   const milestone = await cell(page, row(page, "item-behaviour"), "Milestone");
-  await expect(milestone.locator("s")).toHaveText("2026-11-30");
+  await expect(milestone.locator("s")).toHaveText("Nov 30, 2026");
   const mark = milestone.getByText("Date unverified", { exact: true });
   await expect(mark).toBeVisible();
   await expect(mark).toHaveAttribute("title", /verified estimate, capacity or commitment/);

@@ -344,6 +344,24 @@ export default function DocumentsPage() {
   const ideasQ = useQuery("documents|ideas", loadIdeas);
   const [view, setView] = useState<"prds" | "ideas">("prds");
   const ideaCount = ideasQ.data?.length ?? 0;
+  // qa-docs-44: where ideas come from, and the way to start one.
+  const ideasEmpty = (
+    <span data-testid="ideas-empty" className="inline-block max-w-prose whitespace-normal">
+      No ideas waiting. An idea is a brief for a PRD: write one with{" "}
+      {canPropose ? (
+        <Link href="/documents/new?kind=prd" className="font-medium text-accent-ink hover:underline">
+          New PRD
+        </Link>
+      ) : (
+        "New PRD"
+      )}
+      , or turn a customer request into one from{" "}
+      <Link href="/requests" className="font-medium text-accent-ink hover:underline">
+        Requests
+      </Link>
+      .
+    </span>
+  );
   const columns = docColumns(sort, setSort, names);
   // On a phone a tapped row opens its PRD, but the arrow keys (Home, End, Space) only move
   // the selection: the keydown that selects is caught before the row's own handler.
@@ -403,34 +421,22 @@ export default function DocumentsPage() {
       {view === "ideas" ? (
         <Panel>
           {ideasQ.error && <ErrorNote>{ideasQ.error}</ErrorNote>}
-          <DataTable
-            label="Ideas"
-            testId="ideas-table"
-            columns={IDEA_COLUMNS}
-            rows={ideasQ.data}
-            loading={ideasQ.loading}
-            rowKey={(d) => d.intake.id}
-            onActivate={(k) => router.push(`/intakes/${k}`)}
-            empty={
-              // qa-docs-44: where ideas come from, and the way to start one.
-              <span data-testid="ideas-empty" className="inline-block max-w-prose whitespace-normal">
-                No ideas waiting. An idea is a brief for a PRD: write one with{" "}
-                {canPropose ? (
-                  <Link href="/documents/new?kind=prd" className="font-medium text-accent-ink hover:underline">
-                    New PRD
-                  </Link>
-                ) : (
-                  "New PRD"
-                )}
-                , or turn a customer request into one from{" "}
-                <Link href="/requests" className="font-medium text-accent-ink hover:underline">
-                  Requests
-                </Link>
-                .
-              </span>
-            }
-            rowProps={() => ({ "data-testid": "idea-row" })}
-          />
+          {ideasQ.data?.length === 0 ? (
+            // qa4-docs-27: no ideas, no table header: only the empty state and its links.
+            <p className="px-4 py-8 text-center text-text2">{ideasEmpty}</p>
+          ) : (
+            <DataTable
+              label="Ideas"
+              testId="ideas-table"
+              columns={IDEA_COLUMNS}
+              rows={ideasQ.data}
+              loading={ideasQ.loading}
+              rowKey={(d) => d.intake.id}
+              onActivate={(k) => router.push(`/intakes/${k}`)}
+              empty={ideasEmpty}
+              rowProps={() => ({ "data-testid": "idea-row" })}
+            />
+          )}
         </Panel>
       ) : (
         <Split

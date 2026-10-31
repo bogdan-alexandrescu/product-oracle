@@ -124,7 +124,7 @@ test.describe("desktop", () => {
     const goal = await openSection(page, "goal-trace");
     const gbar = goal.getByTestId("review-bar");
     await gbar.getByRole("group", { name: "Verdict for Goal trace" }).getByRole("button", { name: "Request changes" }).click();
-    await expect(gbar.getByTestId("verdict-submit")).toHaveText("Request changes");
+    await expect(gbar.getByTestId("verdict-submit")).toHaveText("Send request");
     await expect(gbar.getByTestId("verdict-submit")).toBeDisabled();
     // One hint for the one thing the button waits for.
     await expect(gbar.getByTestId("verdict-save-hint")).toHaveText("Write a note first: the writer sees it");
@@ -141,7 +141,7 @@ test.describe("desktop", () => {
     expect(deckPdf.x).toBe(pdf.x);
     const [html, briefHtml] = await Promise.all([b("Export HTML"), b("Export brief HTML")]);
     expect(briefHtml.x).toBe(html.x);
-    const [md, pptx] = await Promise.all([b("Export MD"), b("Export deck PPTX")]);
+    const [md, pptx] = await Promise.all([b("Export Markdown (.md)"), b("Export deck PPTX")]);
     expect(pptx.x).toBe(md.x);
     expect(pptx.width).toBe(md.width);
 

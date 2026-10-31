@@ -23107,6 +23107,8 @@ export interface components {
             summary: string;
             /** Author Id */
             author_id?: string | null;
+            /** Author Name */
+            author_name?: string | null;
             anchor?: components["schemas"]["TextQuoteSelector"] | null;
             /** Verdict */
             verdict?: ("approved" | "changes_requested" | "rejected") | null;
@@ -24195,6 +24197,11 @@ export interface components {
             status: "pass" | "warning" | "critical" | "not_applicable";
             /** Rationale */
             rationale: string;
+            /**
+             * Section Keys
+             * @default []
+             */
+            section_keys: string[];
             /** Rater Id */
             rater_id?: string | null;
             /**
@@ -43434,6 +43441,10 @@ export interface components {
             title: string;
             /** Kind */
             kind: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Wrote */
+            wrote?: string | null;
         };
         /**
          * TriageDailyIn

@@ -162,8 +162,12 @@ export function CompositionView({ doc }: { doc: string }) {
     const selected = all.find((m) => m.key === picked) ?? null;
     const count = (f: Filter) => all.filter((m) => matches(m, f)).length;
     const titleOf = titler(all, data.working?.modules, data.current?.modules, data.recommendation?.modules, preview?.modules);
-    // The place in the order (1, 2, 3 …) of each included module, not the API's 10, 20 … steps.
-    const place = new Map([...all].filter((m) => m.included).sort((a, b) => a.order - b.order).map((m, i) => [m.key, i + 1]));
+    // The place (1, 2, 3 …) of each included module, not the API's 10, 20 … steps, in the
+    // order the table reads, groups included (qa4-docs-50).
+    const place = new Map(all.filter((m) => m.included).map((m, i) => [m.key, i + 1]));
+    // qa4-docs-50: under a Required/Suggested/Optional heading (or filter) the Selection column
+    // would only repeat it; "When it applies" then shows under the module's name.
+    const showSelection = filter === "excluded" || filter === "problems";
     const detail = (m: Module, bare: boolean) => (
       <ModuleDetail
         m={m}
@@ -204,11 +208,14 @@ export function CompositionView({ doc }: { doc: string }) {
               )}
               {m.condition_error && <Chip kind="warn">Condition problem</Chip>}
             </span>
+            {!showSelection && selectionInWords(m) !== SELECTION_LABEL[m.selection] && (
+              <span className="text-sm text-text2">{selectionInWords(m)}</span>
+            )}
             {m.required_review_role === "owner" && <span className="text-sm text-text2">Owner review</span>}
           </span>
         ),
       },
-      { key: "selection", header: "Selection", width: "110px", wrap: true, cell: (m) => selectionInWords(m) },
+      ...(showSelection ? ([{ key: "selection", header: "Selection", width: "110px", wrap: true, cell: (m) => selectionInWords(m) }] satisfies Column<Module>[]) : []),
       {
         key: "decided",
         header: "Why",
@@ -433,7 +440,10 @@ export function CompositionView({ doc }: { doc: string }) {
           data && (
             <>
               <Button onClick={loadPreview}>Preview recommendation</Button>
-              {mayPublish && data.current?.status === "confirmed" && <Button onClick={() => setPublishing(true)}>Publish revision {data.current.number}</Button>}
+              {mayPublish && data.current?.status === "confirmed" && (
+                // qa4-docs-16: the revision is already in force; publishing pins it to an approved version.
+                <Button onClick={() => setPublishing(true)}>Pin revision {data.current.number} to an approved version</Button>
+              )}
               {mayConfirm && (
                 // qa-docs-30: the button says what it does; the dialog it opens names the revision.
                 <Button variant="primary" onClick={() => setConfirming(true)}>

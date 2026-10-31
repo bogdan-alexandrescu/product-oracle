@@ -183,8 +183,8 @@ async def dashboard(
         seen.add((f.criterion, r.created_by))
         human.setdefault(f.criterion, []).append(
             HumanView(
-                status=f.status, rationale=f.rationale, rater_id=r.created_by, report_id=r.id,
-                created_at=r.created_at,
+                status=f.status, rationale=f.rationale, section_keys=f.section_keys,
+                rater_id=r.created_by, report_id=r.id, created_at=r.created_at,
             )
         )  # fmt: skip
 

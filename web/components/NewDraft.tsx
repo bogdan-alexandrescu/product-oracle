@@ -1228,7 +1228,15 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
             <ErrorNote>
               <span data-testid="new-prd-missing">
                 To continue,{" "}
-                {[titleProblem && "give it a title", problemProblem && "say what problem it solves"].filter(Boolean).join(" and ")}.
+                {[
+                  titleProblem && "give it a title",
+                  // qa4-docs-54: a problem that is there but too short asks for more, not for one.
+                  problemProblem &&
+                    (problemLength === 0 ? "say what problem it solves" : `say a bit more about the problem (at least ${PROBLEM_MIN} characters)`),
+                ]
+                  .filter(Boolean)
+                  .join(" and ")}
+                .
               </span>
             </ErrorNote>
           )}
