@@ -4502,9 +4502,9 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     "address-book-export": [],
     "address-sharing": [],
   };
-  // Bulk edit is new and low in confidence as well as blocked: both kept with one call staged
+  // Bulk edit is new and a likely duplicate as well as blocked: both kept with one call staged
   // before each reason had its own (field-less, answering both), as an older draft holds it.
-  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1, { "bulk-edit": ["new_feature", "low_confidence"] });
+  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1, { "bulk-edit": ["new_feature", "duplicate_of_existing"] });
   const approver = (ctx.members ?? []).find((x) => x.email === "approver@example.com");
   if (approver) {
     db.drafts![held.cp.id] = {
@@ -4517,7 +4517,7 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
           kind: "accept",
           field: null,
           value: null,
-          answers: ["new_feature", "low_confidence"],
+          answers: ["new_feature", "duplicate_of_existing"],
           note: null,
           state: "staged",
           created_by: approver.id,

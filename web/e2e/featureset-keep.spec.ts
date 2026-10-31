@@ -113,7 +113,7 @@ test("a feature kept for every reason to confirm shows Include chosen while it i
   const inspector = page.getByTestId("scope-inspector");
   await expect(inspector).toContainText("Bulk edit");
   await expect(inspector.getByTestId("reason-new_feature")).toContainText("✓ Included");
-  await expect(inspector.getByTestId("reason-low_confidence")).toContainText("✓ Included");
+  await expect(inspector.getByTestId("reason-duplicate_of_existing")).toContainText("✓ Included");
   await expect(inspector.getByText("Blocking", { exact: true })).toBeVisible();
   const include = inspector.getByRole("group", { name: "Decision" }).getByRole("button", { name: "Include" });
   await expect(include).toHaveAttribute("aria-pressed", "true");
@@ -161,8 +161,8 @@ test("Undo of one reason kept by an older call for two keeps the other", async (
   await expect(inspector.getByTestId("reason-new_feature")).toContainText("✓ Included");
   await inspector.getByTestId("reason-new_feature").getByRole("button", { name: "Undo" }).click();
   await expect(inspector.getByTestId("reason-new_feature")).not.toContainText("✓ Included");
-  await expect(inspector.getByTestId("reason-low_confidence")).toContainText("✓ Included");
+  await expect(inspector.getByTestId("reason-duplicate_of_existing")).toContainText("✓ Included");
   const chips = bar(page).getByTestId("staged-chip").filter({ hasText: "Bulk edit" });
   await expect(chips).toHaveCount(1);
-  await expect(chips).toContainText("included · low confidence");
+  await expect(chips).toContainText("included · duplicate");
 });
