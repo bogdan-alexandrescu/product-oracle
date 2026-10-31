@@ -26,7 +26,9 @@ for (const [name, viewport] of [
       await login(page);
       await page.goto(CARTS);
       await expect(page.getByTestId("document-sections")).toBeVisible();
-      await page.getByTestId("version-toolbar").getByRole("button", { name: "Export", exact: true }).click();
+      // A phone keeps the version's actions behind More.
+      if (name === "phone") await page.getByTestId("version-more").click();
+      await page.getByRole("button", { name: "Export", exact: true }).click();
       const pdf = page.getByRole("button", { name: "Export PDF", exact: true });
       const download = page.waitForEvent("download");
       await pdf.click();
