@@ -121,7 +121,7 @@ export function dateBlocksOf(marks: DateMark[] | undefined, headings: Map<string
       return {
         id: `${m.section_key}:${m.text}`,
         title: `${formatDate(m.date)}${heading ? ` in “${heading}”` : ""}: ${
-          m.status === "withdrawn" ? "its schedule basis was withdrawn" : "not backed by a confirmed schedule"
+          m.status === "withdrawn" ? "its date source was withdrawn" : "not backed by a confirmed schedule"
         }`,
         kind: "Unconfirmed date",
         href: "/plan/dates",

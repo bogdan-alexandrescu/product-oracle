@@ -173,7 +173,7 @@ test.describe("desktop", () => {
     await page.goto(path);
     await page.getByLabel("Passcode").fill(code);
     await page.getByRole("button", { name: "Open" }).click();
-    const note = page.getByRole("alert");
+    const note = page.getByRole("alert").filter({ hasText: /\S/ });
     await expect(note).toContainText("The passcode may be wrong, or the link may have ended.");
     await expect(note).not.toContainText("That passcode did not open a link");
   });

@@ -17,7 +17,7 @@ const KIND: Record<string, string> = { module: "module", api: "API", data_model:
 const ARTICLE: Record<string, string> = { module: "a", api: "an", data_model: "a", flag: "a", job: "a" };
 function touchText(kind: string, change: string): string {
   const what = KIND[kind] ?? sentence(kind).toLowerCase();
-  if (change === "new") return `Adds ${ARTICLE[kind] ?? "a"} new ${what}`;
+  if (change === "new") return `Adds a new ${what}`;
   if (change === "change") return `Changes an existing ${what}`;
   if (change === "remove") return `Removes ${ARTICLE[kind] ?? "a"} ${what}`;
   return `${sentence(change)} · ${what}`;

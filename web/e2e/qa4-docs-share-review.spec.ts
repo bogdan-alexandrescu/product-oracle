@@ -89,7 +89,7 @@ test("qa4-docs-share-36: an open campaign past its due date is marked Overdue", 
   await page.goto(PRD);
   const row = page.getByTestId("campaigns").getByRole("listitem").filter({ hasText: "Company-wide feedback" });
   await expect(row).toContainText("Overdue Oct 26");
-  await expect(row).not.toContainText("due Oct 26");
+  await expect(row).not.toContainText(/\bdue Oct 26/);
 });
 
 test("qa4-docs-share-37: the cards' equal actions share one button style", async ({ page }) => {
