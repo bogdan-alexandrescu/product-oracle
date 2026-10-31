@@ -135,7 +135,7 @@ test("13b: an approver adds an output metric linked to a goal, tests its query a
   await sheet.getByLabel("Title").fill("Setup completion rate");
   await sheet.getByLabel("What it counts").fill("Accounts that finish setup within 7 days of signing up");
   await sheet.getByLabel("Kind").selectOption("output");
-  await sheet.getByLabel("Unit", { exact: true }).fill("%");
+  await sheet.getByLabel("Unit", { exact: true }).selectOption("%");
   await sheet.getByLabel("Good direction").selectOption("up");
   // Grow paid conversion already has a metric; Raise activation is free and in %.
   await expect(sheet.getByLabel("Goal").locator("option")).toHaveText(["No goal", "Raise activation"]);
@@ -283,9 +283,10 @@ test("the Goal select and what Save sends agree: a goal of another unit is dropp
   const sheet = page.getByRole("dialog", { name: "Add metric" });
   await sheet.getByLabel("Title").fill("Activated accounts");
   await sheet.getByLabel("What it counts").fill("Accounts that finish setup within 7 days");
-  await sheet.getByLabel("Unit", { exact: true }).fill("%");
+  await sheet.getByLabel("Unit", { exact: true }).selectOption("%");
   await sheet.getByLabel("Goal").selectOption({ label: "Raise activation" });
-  await sheet.getByLabel("Unit", { exact: true }).fill("accounts");
+  await sheet.getByLabel("Unit", { exact: true }).selectOption({ label: "Count of…" });
+  await sheet.getByLabel("Count of what", { exact: true }).fill("accounts");
   await expect(sheet.getByLabel("Goal")).toHaveValue("");
   await sheet.getByLabel("Owner").selectOption({ label: "Approver" });
   await sheet.getByLabel("Source").selectOption("manual");

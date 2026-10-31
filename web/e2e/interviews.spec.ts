@@ -152,7 +152,9 @@ test("customer completes an interview", async ({ page, context }) => {
 
   await context.clearCookies();
   await page.goto(LINK);
-  await expect(page.getByTestId("interview-refused")).toContainText("This link has already been used");
+  // qa4-docs-share-61: this browser finished it, so it is thanked; the link still takes no more answers.
+  await expect(page.getByTestId("interview-refused")).toHaveText("You've finished this interview, thank you.");
+  await expect(page.getByTestId("interview-input")).toHaveCount(0);
 });
 
 test("criterion 14: the finished interview and its requests, as a member", async ({ page }) => {

@@ -129,28 +129,31 @@ test("Propose decision: a missing field is marked invalid, focused, and its note
   const propose = dialog.getByRole("button", { name: "Propose", exact: true });
 
   await propose.click();
+  // qa4-company-9: every missing field is marked at once; the cursor goes to the first.
   const title = dialog.getByRole("textbox", { name: /^Decision/ });
+  const first = dialog.getByLabel("Option 1", { exact: true });
+  const approver = dialog.getByLabel("Approver", { exact: true });
   await expect(title).toHaveAttribute("aria-invalid", "true");
   await expect(title).toBeFocused();
   await expect(title).toHaveAccessibleDescription("Write the decision in one sentence");
+  await expect(first).toHaveAttribute("aria-invalid", "true");
+  await expect(first).toHaveAccessibleDescription("Add at least two options");
+  await expect(approver).toHaveAttribute("aria-invalid", "true");
+  await expect(approver).toHaveAccessibleDescription("Name the approver");
 
+  // Filling a field clears its own note only.
   await title.fill("Offer annual billing at launch");
   await expect(title).not.toHaveAttribute("aria-invalid", "true");
-  await propose.click();
-  const first = dialog.getByLabel("Option 1", { exact: true });
   await expect(first).toHaveAttribute("aria-invalid", "true");
-  await expect(first).toBeFocused();
-  await expect(first).toHaveAccessibleDescription("Add at least two options");
-
   await first.fill("Annual at launch");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Monthly only");
+  await expect(dialog.getByText("Add at least two options")).toHaveCount(0);
   await propose.click();
-  const approver = dialog.getByLabel("Approver", { exact: true });
   await expect(approver).toHaveAttribute("aria-invalid", "true");
   await expect(approver).toBeFocused();
   await expect(approver).toBeInViewport();
   await expect(approver).toHaveAccessibleDescription("Name the approver");
-  // One note at a time, next to its field: the others are gone.
+  // Only the missing field's note is left, next to it.
   await expect(dialog.getByText("Write the decision in one sentence")).toHaveCount(0);
   await expect(dialog.getByText("Add at least two options")).toHaveCount(0);
 });

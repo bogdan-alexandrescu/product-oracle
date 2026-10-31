@@ -212,7 +212,7 @@ test.describe("QA pass 3: simple-plan, the Ranked list", () => {
     await open(page);
     const locked = page.getByTestId("prio-locked");
     if ((await locked.count()) > 0) {
-      await expect(locked.first()).toContainText("You can't move this one");
+      await expect(locked.first()).toContainText("Only people with access to this feature's roadmap can move it");
       const lockedRow = locked.first().locator("xpath=ancestor::li[1]");
       await expect(lockedRow.getByTestId("prio-no-handle")).toHaveCount(1);
       const rankX = await page.getByTestId("prio-rank").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));

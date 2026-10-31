@@ -28,7 +28,7 @@ const STATUS: Record<Basis["status"], { label: string; kind: ChipKind }> = {
 function forLabel(b: Basis, itemTitle: (prd: string, key: string) => string | undefined): string {
   if (b.item_key) return `Item: ${itemTitle(b.prd_document_id, b.item_key) ?? b.item_key}`;
   if (b.tracker_key) return `Items of ${b.tracker_key}`;
-  return "Whole PRD";
+  return "The whole PRD";
 }
 
 /** F3 Plan › Dates: every schedule basis, grouped by PRD, with Verify, Reject and Withdraw. */
@@ -36,8 +36,10 @@ export function DatesTab() {
   const bases = useQuery("schedule-bases", () => unwrap(api.GET("/v1/schedule-bases")));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const rights = useDateRights();
-  // The items' titles, so For names an item as people know it (not its key).
-  const plan = useQuery("plan|approved|basis", () => unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })));
+  // The items' titles, so Applies to names an item as people know it (not its key).
+  // Every row's title, a draft's too: a roadmap still in review has no approved rows, and a
+  // basis on one of its items is named, never shown by its key (qa4-plan-3).
+  const plan = useQuery("plan|all|basis", () => unwrap(api.GET("/v1/plan", { params: { query: { scope: "all" } } })));
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [picked, setPicked] = useState<Filter | null>(null);
   const [dialog, setDialog] = useState<{ kind: "record" } | { kind: "withdraw" | "reject"; basis: Basis } | null>(null);
@@ -88,11 +90,12 @@ export function DatesTab() {
     },
     {
       key: "date",
-      header: "Supports",
+      // qa4-plan-32: plain headers: the date the source supports, and what it applies to.
+      header: "Date",
       phone: "meta",
       cell: (b) => formatDay(b.supports_date),
     },
-    { key: "for", header: "For", phone: "meta", wrap: true, cell: (b) => forLabel(b, itemTitle) },
+    { key: "for", header: "Applies to", phone: "meta", wrap: true, cell: (b) => forLabel(b, itemTitle) },
     {
       key: "status",
       header: "Status",

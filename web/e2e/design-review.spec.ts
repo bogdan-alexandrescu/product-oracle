@@ -38,12 +38,13 @@ test("an approver opens the flow from the tech brief: sandboxed canvas, Approve 
   await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
   const frame = canvas(page).locator("iframe");
   await expect(frame).toHaveAttribute("sandbox", "");
-  await expect(frame).toHaveAttribute("title", /checkout-flow\.svg/);
+  await expect(frame).toHaveAttribute("title", "Checkout with an early quote");
   await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator("svg")).toBeVisible();
   await expect(canvas(page)).toContainText("Checkout with an early quote");
 
   const panel = inspector(page);
-  await expect(panel).toContainText("Potentially stale");
+  // qa4-docs-share-42: the status pills show once, in the page header; the panel names the staleness on its own line.
+  await expect(panel).toContainText("May be stale");
   await expect(page.getByTestId("stale-notice").filter({ visible: true })).toContainText('Section "5.2 Shipping step" changed in Checkout redesign PRD');
   await expect(panel.getByRole("button", { name: "Approve" })).toBeDisabled();
   await expect(page.getByTestId("stale-notice").filter({ visible: true }).getByRole("link", { name: "Open the tech brief" })).toHaveAttribute("href", BRIEF);
@@ -104,7 +105,7 @@ test("a viewer reads the review without composer or verdicts", async ({ page }) 
   await login(page, "viewer@example.com");
   await openFlow(page);
   const panel = inspector(page);
-  await expect(panel).toContainText("You can read this review. Commenting needs the commenter role.");
+  await expect(panel).toContainText("You can read this review.");
   await expect(panel.getByRole("textbox")).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Approve" })).toHaveCount(0);
@@ -123,8 +124,8 @@ test("wireframes: switch screens, compare 2-4 side by side, see the sanitised no
   await expect(files.getByRole("button", { name: "Cart 1" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator(".oracle-annotations")).toContainText("1. The quote shows before the address step.");
   await files.getByRole("button", { name: "Cart 2" }).click();
-  await expect(canvas(page).locator("iframe")).toHaveAttribute("title", /cart-2\.html/);
-  await expect(page.getByTestId("sanitised").filter({ visible: true })).toContainText("Sanitised");
+  await expect(canvas(page).locator("iframe")).toHaveAttribute("title", "Cart 2");
+  await expect(page.getByTestId("sanitised").filter({ visible: true })).toContainText("A part that isn't allowed was removed from Cart 2 for safety.");
 
   // B's compare: every screen side by side.
   await page.getByRole("button", { name: "Side by side" }).click();
@@ -177,7 +178,7 @@ test("on a slow network, the review waits for the role's capabilities: it never 
   await page.goto(`/specs/${SPEC_ID}/design/${WIRE}`);
   // What the inspector says the moment it shows, not once it has settled.
   await inspector(page).waitFor();
-  expect(await inspector(page).textContent()).toContain("viewing as owner");
+  expect(await inspector(page).textContent()).not.toContain("read only");
   await expect(inspector(page).getByRole("button", { name: "Approve" })).toBeEnabled();
 });
 

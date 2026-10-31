@@ -36,6 +36,13 @@ export interface MetricsContext {
   uuid: () => string;
   companyTimezone: () => string;
   goals: () => Goal[];
+  /** A linked output's weekly value written to its goal as a measurement on the week's Sunday (null removes it); the goal's current follows its latest. */
+  readIntoGoal?: (goalId: string, day: string, value: number | null, note: string, metricId: string) => void;
+}
+
+/** qa4-company-4: an output linked to a goal writes each weekly value to it (oracle.metrics.pull._goal_measurement, link_goal). */
+function toGoal(ctx: MetricsContext, m: Metric, week: string, value: number | null) {
+  if (m.goal_id && m.kind === "output") ctx.readIntoGoal?.(m.goal_id, addDays(week, 6), value, `Weekly value from ${m.title}`, m.id);
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -338,7 +345,11 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
       }; // prettier-ignore
       db.metrics.push(x);
       // A PostHog metric reads its last 12 complete weeks at once.
-      if (x.query) for (const v of readQuery(x.query, week, 12)) db.values.push({ ...v, metric_id: x.id, source: "posthog", definition_version: 1, note: null, recorded_by: null, recorded_at: t });
+      if (x.query)
+        for (const v of readQuery(x.query, week, 12)) {
+          db.values.push({ ...v, metric_id: x.id, source: "posthog", definition_version: 1, note: null, recorded_by: null, recorded_at: t });
+          toGoal(ctx, x, v.week_start, v.value);
+        }
       return json(201, metricOut(ctx, db, x));
     }
     if (p[2] === "test" && p.length === 3 && m === "POST") {
@@ -386,6 +397,7 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
       const [v] = readQuery(x.query, week, 1);
       db.values = db.values.filter((y) => !(y.metric_id === x.id && y.week_start === week));
       db.values.push({ ...v, metric_id: x.id, source: "posthog", definition_version: x.definition_version, note: null, recorded_by: null, recorded_at: now().toISOString() });
+      toGoal(ctx, x, week, v.value);
       Object.assign(x, { status: "active", last_error: null, last_pulled_at: now().toISOString() });
       return json(200, metricOut(ctx, db, x));
     }
@@ -400,11 +412,13 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
         db.values = db.values.filter((y) => !(y.metric_id === x.id && y.week_start === day));
         const row: Value = { metric_id: x.id, week_start: day, value: input.value, source: x.source, definition_version: x.definition_version, note: input.note ?? null, recorded_by: ctx.me.id, recorded_at: now().toISOString() };
         db.values.push(row);
+        toGoal(ctx, x, day, input.value);
         return json(200, valueOut(row));
       }
       if (m === "DELETE") {
         if (!approver) return notApprover();
         db.values = db.values.filter((y) => !(y.metric_id === x.id && y.week_start === day));
+        toGoal(ctx, x, day, null);
         return new Response(null, { status: 204 });
       }
     }

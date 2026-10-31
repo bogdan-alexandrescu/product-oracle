@@ -58,20 +58,20 @@ test("add and triage: add a gap by hand, set its fields, defer and reopen it", a
   const row = gapRow(page, "Is gift wrapping out of scope");
   await expect(row).toContainText("Non-goals");
   await expect(row).toContainText("High");
-  await expect(row).toContainText("Section: Scope non goals");
+  await expect(row).toContainText("PRD section: Scope non goals");
 
-  await row.getByRole("button", { name: "Triage" }).click();
+  await row.getByRole("button", { name: "Set importance and owner" }).click();
   const triage = row.getByTestId("gap-triage");
   await triage.getByLabel("Importance").selectOption("medium");
   await triage.getByLabel("Sections").fill("scope.non_goals, launch.rollout");
-  await triage.getByLabel("Stop condition").fill("The team names what the first release leaves out.");
+  await triage.getByLabel("Closed when").fill("The team names what the first release leaves out.");
   await triage.getByRole("button", { name: "Choose an owner" }).click();
   await triage.getByRole("option", { name: /Approver/ }).click();
   await triage.getByRole("button", { name: "Save" }).click();
   await expect(triage).toHaveCount(0);
   await expect(row).toContainText("Medium");
   await expect(row).toContainText("Launch rollout");
-  await expect(row).toContainText("Stop when: The team names what the first release leaves out.");
+  await expect(row).toContainText("Closed when: The team names what the first release leaves out.");
   await expect(row).toContainText("Owner: Approver");
 
   await row.getByRole("button", { name: "Defer" }).click();
@@ -84,7 +84,7 @@ test("lowering a critical gap's importance below owner is refused with the API's
   await login(page, "approver@example.com");
   await openTab(page, "Gaps");
   const row = gapRow(page, "Security and privacy");
-  await row.getByRole("button", { name: "Triage" }).click();
+  await row.getByRole("button", { name: "Set importance and owner" }).click();
   await row.getByTestId("gap-triage").getByLabel("Importance").selectOption("low");
   await row.getByTestId("gap-triage").getByRole("button", { name: "Save" }).click();
   await expect(row.getByTestId("gap-triage")).toContainText("Lowering a critical gap's importance needs an owner");
@@ -152,7 +152,7 @@ test("roles: a viewer sees no gap or proposal controls, only who acts", async ({
   await login(page, "viewer@example.com");
   await openTab(page, "Gaps");
   await expect(gaps(page).getByRole("button", { name: "Add a gap" })).toHaveCount(0);
-  await expect(gaps(page).getByTestId("gaps-role-note")).toContainText("A commenter adds gaps and asks for research; an approver triages them");
+  await expect(gaps(page).getByTestId("gaps-role-note")).toContainText("A commenter adds gaps and asks for research; an approver sorts them");
   const row = gapRow(page, "Effort and cost");
   await expect(row).toBeVisible();
   await expect(row.getByRole("button")).toHaveCount(0);
@@ -176,10 +176,10 @@ test("roles: a viewer sees no gap or proposal controls, only who acts", async ({
 test("roles: a commenter adds a gap and asks for research, and sees no triage or accept", async ({ page }) => {
   await login(page, "commenter@example.com");
   await openTab(page, "Gaps");
-  await expect(gaps(page).getByTestId("gaps-role-note")).toContainText("An approver triages gaps");
+  await expect(gaps(page).getByTestId("gaps-role-note")).toContainText("An approver sorts gaps");
   await expect(gaps(page).getByRole("button", { name: "Add a gap" })).toBeEnabled();
   const row = gapRow(page, "Alternatives");
-  await expect(row.getByRole("button", { name: "Triage" })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Set importance and owner" })).toHaveCount(0);
   await expect(row.getByRole("button", { name: "Defer" })).toHaveCount(0);
   await row.getByRole("button", { name: "Research this" }).click();
   await expect(row).toContainText("Research proposed");

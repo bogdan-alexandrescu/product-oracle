@@ -20,6 +20,11 @@ type Origin = Schemas["SimpleMeetingIn"]["origin"] & string;
 
 const LENGTHS = [15, 30, 45, 60, 90, 120];
 
+/** qa4-simple-decide-19: the Meetings page's day and time ("Mon Nov 2, 9:00 AM", as its momentWords),
+ * no zone letters: the page lead names the zone. Local, so the sheet does not pull in a page's module. */
+const moment = (at: string, zone: string) =>
+  `${formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+
 /** The design system's form controls (qa-simple-prd-46, qa-simple-decide): a box or dot in the
  * accent (CHECK) and Simple's select (SimpleSelect), never the browser's bare ones. */
 const CHOICE = "flex min-h-8 cursor-pointer items-center gap-2.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-text2";
@@ -93,7 +98,15 @@ function Body({ prd, occurrence, ritual, origin, prefer, from, onClose }: { prd?
   );
   const live = useQuery("simple-meetings", () => unwrap(api.GET("/v1/simple/meetings")));
   if (q.loading && !q.data) return <Loading />;
-  if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
+  // qa4-simple-prd-1: never a bare server message: why the review cannot start here, and what to do.
+  if (q.error || !q.data)
+    return (
+      <ErrorNote>
+        {prd && (!q.error || /no such|not found/i.test(q.error))
+          ? "This PRD can't be reviewed: it was deleted or you can't read it. Close this and start the review from Meetings."
+          : "The review's details didn't load. Close this and try again."}
+      </ErrorNote>
+    );
   return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} prefer={prefer} from={from} live={live.data?.live ?? []} onClose={onClose} />;
 }
 
@@ -112,9 +125,12 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
   const { me } = useMe();
   // qa-simple-decide-35: someone besides the presenter attends.
   const others = people.filter((id) => id !== me?.user_id);
+  // qa4-simple-decide-14: only attendees whose role may change things can be picked (never a viewer).
+  const changers = others.filter((id) => options.members.find((m) => m.id === id)?.can_change);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const liveOne = chosen ? live.find((m) => m.prd.slug === chosen.document.slug) : undefined;
+  const missing = others.length === 0 ? "Tick at least one attendee besides you." : mode === "named" && named.length === 0 ? "Pick who may change things." : null;
   const name = (id: string) => options.members.find((m) => m.id === id)?.name ?? "someone";
 
   function pick(next: string) {
@@ -141,6 +157,9 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
           attendee_ids: people, change_mode: mode, change_people: mode === "named" ? named : [], length_min: length,
         },
       }));
+      // qa4-simple-decide-17: the sheet closes as it leaves; the page left behind stays mounted
+      // (hidden), and an open sheet there would still count as a modal (the toasts move to the top).
+      onClose();
       router.push(`/simple/meetings/${m.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -153,7 +172,8 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
     <div className="space-y-4">
       {occ && (
         <p data-testid="start-occurrence">
-          <strong>{occ.ritual_title}</strong> · {formatInZone(occ.due_at, zone, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+          {/* qa4-simple-decide-19: the one day-and-time format of Meetings ("Mon Nov 2, 9:00 AM"), no zone letters: the page lead names the zone. */}
+          <strong>{occ.ritual_title}</strong> · {moment(occ.due_at, zone)}
         </p>
       )}
       <section aria-label="What is reviewed">
@@ -183,7 +203,7 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
               ? "You can't start a review of this PRD. Ask its decider to start it."
               : `Only ${chosen.starters.map((s) => s.name).join(", ")} can start this review.`}
           </p>
-          {liveOne && <Button variant="primary" onClick={() => router.push(`/simple/meetings/${liveOne.id}`)}>Join</Button>}
+          {liveOne && <Button variant="primary" onClick={() => { onClose(); router.push(`/simple/meetings/${liveOne.id}`); }}>Join</Button>}
         </div>
       ) : (
         <>
@@ -199,11 +219,6 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
                 </label>
               ))}
             </div>
-            {others.length === 0 && (
-              <p role="status" className="simple-small text-crit" data-testid="start-no-attendees">
-                Pick at least one attendee besides you.
-              </p>
-            )}
             {/* qa-simple-decide-36: say what else the list changes. */}
             {occ && <p className="simple-small">The people ticked here also attend the next reviews of {occ.ritual_title}.</p>}
           </fieldset>
@@ -212,16 +227,25 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
             {/* fix4 qa-simple-roadmap-23: each choice explained in one line. */}
             <p className="simple-small" data-testid="start-change-mode-help">Who may move dates and edit the plan by asking the review&apos;s chat; everyone else can still comment.</p>
             {([["everyone", "Everyone except viewers"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
-              <label key={v} className={CHOICE}>
-                <input type="radio" className={CHECK} name="change-mode" checked={mode === v} onChange={() => setMode(v)} />
-                {label}
-              </label>
+              <div key={v}>
+                <label className={CHOICE}>
+                  <input type="radio" className={CHECK} name="change-mode" checked={mode === v} onChange={() => setMode(v)} aria-describedby={v === "everyone" ? "start-everyone-hint" : undefined} />
+                  {label}
+                </label>
+                {/* qa4-simple-decide-5: what "Everyone except viewers" really lets each person do. */}
+                {v === "everyone" && (
+                  <p id="start-everyone-hint" className="simple-small ml-6" data-testid="start-everyone-hint">
+                    Owners and each item&apos;s decider apply; others propose.
+                  </p>
+                )}
+              </div>
             ))}
             {mode === "named" && (
               <div className="ml-6 mt-1" aria-label="Who else changes things">
                 {/* qa-simple-decide-26: the list is the attendees ticked above; empty, it says so. */}
                 {others.length === 0 && <p className="simple-small" data-testid="start-named-empty">Tick attendees above to pick them here.</p>}
-                {others.map((id) => (
+                {others.length > 0 && changers.length === 0 && <p className="simple-small" data-testid="start-named-empty">Viewers can&apos;t change things; tick someone else above.</p>}
+                {changers.map((id) => (
                   <label key={id} className={CHOICE}>
                     <input type="checkbox" className={CHECK} checked={named.includes(id)} disabled={!named.includes(id) && named.length >= 2} onChange={() => toggleNamed(id)} />
                     {name(id)}
@@ -238,8 +262,14 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
           </label>
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
+            {/* qa4-simple-decide-13: beside a greyed-out Start, what is missing. */}
+            {missing && (
+              <p id="start-missing" role="status" className="simple-small mr-auto text-crit" data-testid="start-missing">
+                {missing}
+              </p>
+            )}
             <Button variant="secondary" className="h-10 px-4" onClick={onClose} disabled={busy}>Cancel</Button>
-            <Button variant="primary" disabled={busy || others.length === 0 || (mode === "named" && named.length === 0)} onClick={start}>Start</Button>
+            <Button variant="primary" disabled={busy || !!missing} aria-describedby={missing ? "start-missing" : undefined} onClick={start}>Start</Button>
           </div>
         </>
       )}

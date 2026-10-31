@@ -695,6 +695,16 @@ function createOverride(st: LaneFState, me: string, input: Schemas["OverrideCrea
   };
   const after = applyOverrides(base, [...inputs.filter((i) => i.feature !== f.key), change]);
   const row = after.features.find((x) => x.key === f.key)!;
+  // As the API (qa4-plan-2): a move that leaves the order as it is is refused, not logged.
+  const same = after.features.map((x) => x.key).join() === before.features.map((x) => x.key).join();
+  if (input.kind === "move" && !row.held_below && !inputs.some((i) => i.feature === f.key) && same) {
+    const needs = after.features.filter((x) => x.held_below === f.key).map((x) => x.title);
+    return json(422, {
+      detail: needs.length
+        ? `This move leaves ${f.title} where it is: ${needs.join(", ")} ${needs.length === 1 ? "depends" : "depend"} on it and would move down with it, so nothing was saved`
+        : `This move leaves ${f.title} where it is, so nothing was saved`,
+    });
+  }
   const messages = pushbackRules(before.features, after.features, f.key);
   let check: { status: ReasonCheckRow["status"]; ms: number | null };
   if (!input.confirm) {
@@ -1520,7 +1530,7 @@ export function previewHtml(t: Tokens, css: string, kind: Kind): string {
           ["Goal trace", "Moves G1: raise first-order completion by removing a late surprise in checkout."],
           ["Problem", "Buyers leave checkout when the total changes late in the flow."],
           ["Solution", "Show the shipping cost in the cart, before checkout starts."],
-          ["Sources and data points", "c1: funnel export, September. c2: customer interview 07."],
+          ["Sources and data points", "Checkout funnel report, September. Customer interview notes, week 7."],
         ]
       : [
           ["Now", "Shipping cost in the cart (G1) · Saved addresses (G1)"],
@@ -1788,7 +1798,7 @@ export function nothingWritten(db: Db, doc: { template?: string | null; template
   return sections.every((s) => !s.body_md.trim() || bodies.get(s.section_key) === s.body_md);
 }
 
-function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Response {
+function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"], who?: { id: string; name: string }): Response {
   const t = st.templates.find((x) => x.key === input.template);
   if (!t) return notFound("Template");
   if (t.kind !== input.kind) {
@@ -1862,8 +1872,9 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
     warnings: [],
     // #255: as the API, the skeleton has no content yet.
     notes: [{ code: "template_only", message: "the template's skeleton, with no content yet", section_keys: [], refs: {} }],
-    imported_by: "4a1c8e6f-2d93-4b57-9e0a-c3f6d81b2a75",
-    imported_by_name: "API token draft-picker",
+    // As the API (importer_names): the person who started it, by name; never a token's name.
+    imported_by: who?.id ?? "4a1c8e6f-2d93-4b57-9e0a-c3f6d81b2a75",
+    imported_by_name: who?.name ?? "An integration",
     approved_at: null,
     approval_lapses: [],
     brief_source: briefKeys.size ? "draft" : "none",
@@ -1961,6 +1972,11 @@ function compare(db: Db, snap: SnapshotRow): Schemas["CompareOut"] {
   };
 }
 
+/** A built-in template's name by key (the intake summary's chosen template; the intake mock has no lane-f state). */
+export function templateNameOf(key: string | null | undefined): string | null {
+  return key ? (TEMPLATE_SEEDS.find((t) => t.key === key)?.name ?? null) : null;
+}
+
 function state(db: Db, scenario?: string | null): LaneFState {
   db.lane_f ??= seeded("lane-f", () => seedState(scenario));
   return db.lane_f;
@@ -1987,6 +2003,8 @@ export async function laneF(
   m: string,
   role?: Schemas["Me"]["role"],
   scenario?: string | null,
+  /** The signed-in person (qa4-company-7): a started draft is theirs, by name, as the API's. */
+  who?: { id: string; name: string },
 ): Promise<Response | null> {
   const area = p[1];
   if (!["priorities", "templates", "themes", "drafts"].includes(area)) return null;
@@ -2257,7 +2275,7 @@ export async function laneF(
     // As the API (MIN_STARTER_ROLE): a vision or a product strategy is an owner's to start.
     const words = input.kind === "vision" ? "a vision" : input.kind === "strategy" ? "a product strategy" : null;
     if (words && role !== "owner") return json(403, { detail: `Only an owner can start ${words}` });
-    return startDraft(db, st, input);
+    return startDraft(db, st, input, who);
   }
   return notFound("Route");
 }

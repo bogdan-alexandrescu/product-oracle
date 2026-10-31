@@ -34,6 +34,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
 import { formatDateTime, isHttpUrl, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
+import { displayName } from "@/lib/names";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -47,6 +48,7 @@ import {
   YourChange,
   type Draft,
   type NameOf,
+  type WhoOf,
 } from "./_components/overrides";
 import {
   confidencePercent,
@@ -203,7 +205,7 @@ type RankReason = { label: string; detail?: string; title: string; flag?: string
  * Why a row sits where its score alone would not put it (a higher score below it, or a lower
  * one above it): its own reason, in words, for the row itself. None when it is in score order.
  */
-function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] {
+function rankReasons(f: RankedFeature, features: RankedFeature[], who: WhoOf): RankReason[] {
   const at = features.findIndex((x) => x.key === f.key);
   const s = (x: RankedFeature) => x.score ?? -Infinity;
   const outOfOrder =
@@ -256,7 +258,7 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
   }
   // A person moved or pinned a lower-scored feature above it (qa-plan-20): that says who,
   // beside any reason of its own, never left to read as a dependency's doing.
-  const moved = (x: RankedFeature) => `${x.title} (moved by ${x.override!.by})`;
+  const moved = (x: RankedFeature) => `${x.title} (moved by ${who(x.override!.by).name})`;
   const higher = features.slice(0, at).filter((x) => s(x) < s(f));
   const movedAbove = higher.filter((x) => !!x.override).map(moved);
   if (out.length === 0) {
@@ -955,6 +957,13 @@ function Priorities() {
   const inspectorId = "priority-inspector";
   const anyOverride = withChanges && features.some((f) => f.override);
   const nameOf: NameOf = (key) => featureName(features, key);
+  // qa4-plan-15: who made a change by name, from the people list; the email on hover.
+  const people = useQuery("priorities|people", () => unwrap(api.GET("/v1/people", { params: { query: { limit: 500 } } })));
+  const who: WhoOf = (by) => {
+    const p = people.data?.find((x) => x.email === by);
+    if (p) return { name: p.name, email: p.email };
+    return by.includes("@") ? { name: displayName(by), email: by } : { name: by, email: null };
+  };
 
   async function afterChange(notice: string | null) {
     setChanged(notice);
@@ -1094,7 +1103,10 @@ function Priorities() {
     {
       key: "goal",
       header: "Goal",
-      width: "112px",
+      // Wide enough that a goal's code and a word of its name share a line: a name wraps
+      // between words, never inside one ("Scalin g"); no wider, so the Feature column keeps its
+      // room beside the docked inspector and an approver's move column (qa-plan-5).
+      width: "128px",
       // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
       wrap: true,
       cell: (f) =>
@@ -1152,7 +1164,9 @@ function Priorities() {
       header: "Depends on",
       width: "104px",
       hideOnPhone: true,
-      narrow: "laptop",
+      // qa4-plan-1: with the Oracle # column it gives way under 1000 px (the inspector shows
+      // it), so the Feature column keeps room for whole words.
+      narrow: anyOverride ? "mid" : "laptop",
       wrap: true,
       cell: (f) => {
         const text = f.depends_on.map((k) => featureName(features, k)).join(", ");
@@ -1174,29 +1188,28 @@ function Priorities() {
         // check's problems first (blocking red, advisory amber), every flag in the count.
         // Otherwise a row out of score order says why first (qa-plan-20).
         const changed = withChanges && (!!f.override || !!f.held_below);
-        const reasons = changed || cmp ? [] : rankReasons(f, features);
+        const reasons = changed || cmp ? [] : rankReasons(f, features, who);
         const told = new Set(reasons.map((r) => r.flag).filter(Boolean));
         const flags = sortFlags(f.flags).filter((x) => !told.has(x));
         const shown = changed || cmp || reasons.length > 0 ? 0 : 1;
         const rest = flags.slice(shown);
         return (
-          // On the selected row (accent-soft) a blue chip keeps a chip of its own: the card
-          // surface with an accent edge, never the row's blue (qa-plan-48).
+          // A blue chip is the card surface with an accent edge, never the selected row's blue
+          // (qa-plan-48), and the same on every row: one look per flag (qa4-plan-9).
           <span
             data-testid="row-flags"
-            className={`flex flex-wrap items-center gap-1.5 py-0.5 ${
-              current?.key === f.key ? "[&_[data-kind=acc]]:bg-surface! [&_[data-kind=acc]]:shadow-[inset_0_0_0_1px_var(--accent)]" : ""
-            }`}
+            className="flex flex-wrap items-center gap-1.5 py-0.5 [&_[data-kind=acc]]:bg-surface! [&_[data-kind=acc]]:shadow-[inset_0_0_0_1px_var(--accent)]"
           >
             {byKey.get(f.key)?.problems.map((p) => (
               <ProblemChip key={p.code} p={p} />
             ))}
-            {changed && <RowChips f={f} name={nameOf} />}
+            {changed && <RowChips f={f} name={nameOf} who={who} />}
             {/* One short chip per label, the full sentence in its tooltip (qa-plan-49). */}
             {mergeReasons(reasons).map((r) => (
               <Chip
                 key={r.label}
-                kind={r.flag === "moved_for_dependency" ? "acc" : "warn"}
+                // One colour per label (qa4-plan-9): Ranked higher is blue whatever the reason.
+                kind={r.label === "Ranked higher" ? "acc" : "warn"}
                 title={`${r.label}${r.detail ?? ""}. ${r.title}`}
                 data-testid="rank-reason"
               >
@@ -1258,6 +1271,7 @@ function Priorities() {
             onRemove={(id) => void removeChange(id)}
             onMoveToo={moveToo}
             name={nameOf}
+            who={who}
           />
         )
       }
@@ -1281,12 +1295,8 @@ function Priorities() {
           {saving ? "Saving…" : "Save snapshot"}
         </Button>
       </div>
-      {saved && (
-        <Notice tone="pass">
-          Snapshot saved: {METHOD_LABEL[saved.method]} ranking of {plural(saved.feature_count, "feature")}, top{" "}
-          {saved.top.slice(0, 3).map((k) => featureText(features, k)).join(", ")}.
-        </Notice>
-      )}
+      {/* Short: the new row in the list below says what was saved (qa4-plan-14). */}
+      {saved && <Notice tone="pass">Snapshot saved.</Notice>}
       {saveError && <Notice tone="error">{saveError}</Notice>}
     </div>
   );
@@ -1299,7 +1309,8 @@ function Priorities() {
           counts && (
             <>
               {capsReady && !canSnapshot && !canOverride && <ViewOnly />}
-              <Chip kind="acc">{counts.features} ranked</Chip>
+              {/* The run's order lists its own features, not the whole live ranking. */}
+              <Chip kind="acc">{cmp ? `${features.length} in the run's order` : `${counts.features} ranked`}</Chip>
               {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
               {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
               {counts.in_cycles > 0 && <Chip kind="warn">{counts.in_cycles} in a cycle</Chip>}
@@ -1410,9 +1421,17 @@ function Priorities() {
                     key: "count",
                     header: "Ranked features",
                     width: "180px",
-                    hideOnPhone: true,
+                    // On a phone the count stays, as words beside the top rank (qa4-plan-17).
+                    phone: "meta",
                     cell: (g) => (
-                      <Meter value={g.count} max={features.length} showMax={false} label={`${g.count} ranked features`} />
+                      <>
+                        <div className="max-[600px]:hidden">
+                          <Meter value={g.count} max={features.length} showMax={false} label={`${g.count} ranked features`} />
+                        </div>
+                        <span className="tnum hidden max-[600px]:inline" data-testid="goal-ranked">
+                          {g.count} ranked
+                        </span>
+                      </>
                     ),
                   },
                   { key: "top", header: "Top rank", width: "96px", align: "right", phoneLabel: "Top", cell: (g) => <span className="tnum">#{g.top}</span> },
@@ -1425,7 +1444,7 @@ function Priorities() {
 
           <Snapshots reloadKey={snapshotsKey} features={features} save={saveControls} />
 
-          <ChangesPanel reloadKey={changesKey} features={features} canChange={canChange} />
+          <ChangesPanel reloadKey={changesKey} features={features} canChange={canChange} who={who} />
         </Split>
         {phone && current && (
           <Sheet open={sheet} title={current.title} onClose={() => setSheet(false)} testId="priority-sheet">

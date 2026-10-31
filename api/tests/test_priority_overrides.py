@@ -384,6 +384,28 @@ async def test_a_pin_is_held_below_its_prerequisite(client):
     assert "held_by_dependency" in held["flags"] and held["held_below"] == "address-lookup"
 
 
+async def test_a_move_that_leaves_the_order_as_it_is_is_refused(client):
+    """protects=qa4-plan-2 a saved move changes the order; fails_when=a move that a
+    dependent drags back to the same order is stored and logged as 'Moved above';
+    no_claim=pins (a pin at its own rank holds it there)."""
+    ctx = await make_ctx()
+    ids = await _baseline(ctx)
+    # One-click needs address-lookup: moving address-lookup below one-click drags it along.
+    resp = await _create(
+        client,
+        ctx,
+        feature_id=str(ids["address-lookup"]),
+        kind="move",
+        above_feature_id=str(ids["bulk-edit"]),
+    )
+    assert resp.status_code == 422, resp.text
+    assert "leaves Address lookup where it is" in resp.json()["detail"]
+    assert "One click depends on it" in resp.json()["detail"]
+    async with tenant_session(ctx.tenant_id) as s:
+        assert (await s.scalars(select(PriorityOverride))).all() == []
+    assert [r["key"] for r in await _ranking(client, ctx)] == FORMULA
+
+
 async def test_a_second_override_replaces_the_first_and_remove_ends_it(client):
     ctx = await make_ctx()
     ids = await _baseline(ctx)
@@ -748,7 +770,7 @@ def _run(sql: str, **params):
 
 def test_the_chain_ends_here_after_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0094_generation_checks"]
+    assert script.get_heads() == ["0095_chat_read_answered_at"]
     assert script.get_revision(REVISION).down_revision == "0022_priority_snapshot_runs"
 
 

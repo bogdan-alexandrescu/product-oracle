@@ -50,8 +50,9 @@ test.describe("FlowVisual full screen", () => {
     expect(stepsBox.x + stepsBox.width).toBeLessThanOrEqual(panelBox.x + 1);
 
     // qa-simple-roadmap-31: plain words, not the internal "PRD §ar"/"requirement" reference.
-    await expect(panel.getByTestId("flow-annotations")).toContainText("From the PRD: Build section");
-    await expect(panel.getByTestId("flow-annotations")).toContainText("Requirement R1");
+    // qa4-simple-prd-32: the section as the one-pager names it, with no requirement code.
+    await expect(panel.getByTestId("flow-annotations")).toContainText("From “What we will build”");
+    await expect(panel.getByTestId("flow-annotations")).not.toContainText("Requirement R1");
     await expect(page.locator("body")).not.toContainText("PRD §");
     await expect(page.locator("body")).not.toContainText("requirement R1");
 

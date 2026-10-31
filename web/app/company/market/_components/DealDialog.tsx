@@ -27,6 +27,16 @@ type Form = {
 
 const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
 
+/** qa4-company-34: the word after a required field's label, as Add metric's. */
+function Required() {
+  return (
+    <span aria-hidden="true" className="font-normal text-text2">
+      {" "}
+      (required)
+    </span>
+  );
+}
+
 /**
  * Add or edit one win or loss record (H9): the result, the account as given (no contact
  * details), the day it was decided (not after today in the Company time zone) and the main
@@ -90,6 +100,7 @@ export function DealDialog({ deal, alternatives, onClose, onSaved }: { deal: Dea
   return (
     <Modal id="deal-title" title={deal ? "Edit win or loss" : "Add win or loss"} testId="deal-dialog" onClose={onClose}>
       <form className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4" onSubmit={submit} noValidate>
+        <p className="text-[13px] text-text2">Fields marked (required) must be filled in.</p>
         <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
           <label className={LABEL}>
             Result
@@ -102,13 +113,19 @@ export function DealDialog({ deal, alternatives, onClose, onSaved }: { deal: Dea
             </select>
           </label>
           <label className={LABEL}>
-            Decided on
-            <input type="date" className={INPUT} value={f.decided_on} max={today} onChange={(e) => set("decided_on", e.target.value)} />
+            <span>
+              Decided on
+              <Required />
+            </span>
+            <input type="date" className={INPUT} aria-required="true" value={f.decided_on} max={today} onChange={(e) => set("decided_on", e.target.value)} />
           </label>
         </div>
         <label className={LABEL}>
-          Account
-          <input className={INPUT} value={f.account} maxLength={120} placeholder="Account 14" onChange={(e) => set("account", e.target.value)} />
+          <span>
+            Account
+            <Required />
+          </span>
+          <input className={INPUT} value={f.account} maxLength={120} placeholder="e.g. Acme Ltd" aria-required="true" onChange={(e) => set("account", e.target.value)} />
         </label>
         <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
           <label className={LABEL}>
@@ -138,7 +155,10 @@ export function DealDialog({ deal, alternatives, onClose, onSaved }: { deal: Dea
           </label>
         </div>
         <label className={LABEL}>
-          Main reason
+          <span>
+            Main reason
+            <Required />
+          </span>
           <select className={INPUT} value={f.reason} onChange={(e) => set("reason", e.target.value as Reason)}>
             {(Object.keys(REASONS) as Reason[]).map((r) => (
               <option key={r} value={r}>

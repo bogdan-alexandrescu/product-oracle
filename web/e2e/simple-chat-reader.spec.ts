@@ -84,9 +84,9 @@ for (const [phone, dark] of [
       const chat = await meeting(page, EMAILS.owner);
       if (dark) await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       await say(chat, "can we push Delivery pipeline v2 out a quarter");
-      await expect(chat.getByTestId("chat-pending").or(chat.getByText("I understood one change:"))).toBeVisible();
+      await expect(chat.getByTestId("chat-pending").or(chat.getByText("I understood one change."))).toBeVisible();
       await expect(last(chat)).toHaveAttribute("data-kind", "cards");
-      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change:");
+      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change.");
       await expect(chat.getByTestId("chat-pending")).toHaveCount(0);
       const moved = card(chat, "Move Delivery pipeline v2 to Apr 11");
       await expect(moved).toHaveCount(1);
@@ -96,7 +96,7 @@ for (const [phone, dark] of [
 
       // chat-join: the owner half is chat-actions' set_owner, a second card.
       await say(chat, "push Delivery integrity and release safety to next quarter and make Commenter own it");
-      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood two changes:");
+      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood two changes.");
       await expect(last(chat).getByTestId("chat-card")).toHaveCount(2);
       await expect(last(chat).getByTestId("chat-card").first()).toContainText("Move Delivery integrity and release safety to Jan 1");
       await expect(last(chat).getByTestId("chat-card").last()).toContainText("Make Commenter the owner of Delivery integrity and release safety");
@@ -110,7 +110,7 @@ for (const [phone, dark] of [
       const chat = await meeting(page, EMAILS.owner);
       await say(chat, "push Delivery pipeline v2 to next quarter and cut Delivery integrity and release safety");
       const line = last(chat);
-      await expect(line.getByTestId("chat-message-body")).toHaveText("I understood two changes:");
+      await expect(line.getByTestId("chat-message-body")).toHaveText("I understood two changes.");
       await expect(line.getByTestId("chat-card")).toHaveCount(2);
       await expect(card(line, "Move Delivery pipeline v2 to")).toHaveCount(1);
       await expect(card(line, "Cut Delivery integrity and release safety")).toHaveCount(1);
@@ -120,7 +120,7 @@ for (const [phone, dark] of [
 
       await say(chat, "push Delivery pipeline v2 out a quarter and push it to next quarter");
       const two = last(chat);
-      await expect(two.getByTestId("chat-message-body")).toHaveText("I understood two changes:");
+      await expect(two.getByTestId("chat-message-body")).toHaveText("I understood two changes.");
       await expect(two.getByTestId("chat-card")).toHaveCount(2);
       await tap(two.getByRole("button", { name: "Apply all" }));
       const said = two.getByRole("status").filter({ hasText: "Applied 1 of 2." });
@@ -139,7 +139,7 @@ for (const [phone, dark] of [
       const choices = asked.getByRole("group", { name: "Choices" });
       await expect(choices.getByRole("button")).toHaveText(["Delivery integrity and release safety", "Delivery pipeline v2", "Neither"]);
       await tap(choices.getByRole("button", { name: "Delivery pipeline v2" }));
-      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change:");
+      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change.");
       await expect(last(chat).getByTestId("chat-card")).toContainText("Move Delivery pipeline v2 to Jan 1");
       await expect(chat.locator('[data-testid="chat-message"][data-author="person"]').last().getByTestId("chat-message-body")).toHaveText("Delivery pipeline v2");
       for (const b of await choices.getByRole("button").all()) await expect(b).toBeDisabled();
@@ -169,7 +169,7 @@ for (const [phone, dark] of [
       await expect(last(chat)).toHaveAttribute("data-kind", "failed");
       await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I couldn't read that just now.");
       await tap(last(chat).getByRole("button", { name: "Retry" }));
-      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change:");
+      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change.");
       await expect(last(chat).getByRole("button", { name: "Retry" })).toHaveCount(0);
       await expect(card(chat, "Move Delivery pipeline v2 to Jan 1")).toHaveCount(1);
     });

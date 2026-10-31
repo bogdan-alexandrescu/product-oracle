@@ -1370,6 +1370,8 @@ class ChatCardOut(BaseModel):
     # Review major: what "Cut it and its dependents" does for the reader: "apply" when they
     # decide every item it cuts, "propose" when not, None when they may not (``why_not``).
     may_with_dependents: Literal["apply", "propose"] | None = None
+    # qa4-simple-decide-1: an applied card the reader may undo (Apply's own rule).
+    can_undo: bool = False
 
 
 class ChatChoiceOut(BaseModel):
@@ -1408,6 +1410,11 @@ class ChatRulesOut(BaseModel):
     may_apply: bool
     ask_only: bool
     ended: bool
+    # meet-chat-right-prd: when the meeting ended and who ended it, or ``ended_by_itself``
+    # (its time ran out with nobody ending it).
+    ended_at: dt.datetime | None = None
+    ended_by: SimplePersonRef | None = None
+    ended_by_itself: bool = False
 
 
 class ChatThreadOut(BaseModel):
@@ -1737,9 +1744,15 @@ class SimpleStartPrd(BaseModel):
     default_attendee_ids: list[uuid.UUID]
 
 
+class SimpleStartMember(SimplePersonRef):
+    # qa4-simple-decide-14: whether this person's role may change things in a review's
+    # chat in any mode (a viewer never may), so the sheet offers only them.
+    can_change: bool
+
+
 class SimpleStartOptions(BaseModel):
     prds: list[SimpleStartPrd]
-    members: list[SimplePersonRef]
+    members: list[SimpleStartMember]
     length_min: int = 60
     occurrence: SimpleUpcomingMeeting | None = None
 
@@ -1800,6 +1813,8 @@ class SimpleMeetingGroup(BaseModel):
     meeting: SimpleMeetingBrief
     minutes: SimpleMinutes | None
     decisions: list[SimpleDecisionRow]
+    # qa4-simple-decide-32: the meeting's notes and comments, as its minutes list them.
+    notes: list[SimpleMeetingNote] = []
     # How the sent minutes went out (email, Slack), and whether the caller may Retry.
     delivery: SimpleDelivery | None = None
     can_retry_delivery: bool = False

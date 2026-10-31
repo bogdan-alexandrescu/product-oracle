@@ -119,9 +119,9 @@ test.describe("desktop", () => {
     await open(page, "simple-plan", "dark");
     await page.getByTestId("format-gantt").click();
     await expect(bar(page, "setup-ideas")).toBeVisible();
-    // No bar body is outlined in the dark accent any more; undated ones use the line token.
+    // No bar body is outlined in the dark accent any more; undated ones use the bar-outline token (qa4-simple-roadmap-6).
     await expect(page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--accent)"]')).toHaveCount(0);
-    expect(await page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--line-strong)"]').count()).toBeGreaterThan(0);
+    expect(await page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--simple-bar-outline)"]').count()).toBeGreaterThan(0);
   });
 });
 

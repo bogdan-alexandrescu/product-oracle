@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
@@ -28,8 +28,19 @@ function line(read: AiRead, openGaps: number, asked: number): string {
   if (read.state === "failed") return read.error?.message ?? "Oracle's read failed. The rules read stands.";
   // rirs-29: plain words, not "inferences" and "gaps". qa-work-3: the open gaps are the Gaps
   // tab's count (the rules read's and Oracle's), not only those this read added.
+  // qa4-work-8: no "0 things"; what Oracle assumed is said to be seen by the author only.
   const added = read.added ?? { items: 0, gaps: 0 };
-  return `${plural(added.items, "thing Oracle assumed", "things Oracle assumed")} (private to you), ${plural(openGaps, "open gap")}`;
+  const assumed = added.items === 0 ? "Oracle assumed nothing" : `Oracle assumed ${plural(added.items, "thing")} (only you see ${added.items === 1 ? "it" : "them"})`;
+  const gaps = openGaps === 0 ? "no gaps open" : `${plural(openGaps, "gap")} still open`;
+  return `${assumed}; ${gaps}`;
+}
+
+/** qa4-work-9: what a read the person just started found, said once it is done. */
+function doneNote(read: AiRead): string {
+  const added = read.added ?? { items: 0, gaps: 0 };
+  if (added.items === 0 && added.gaps === 0) return "Oracle read the brief: nothing new found.";
+  const found = [added.items > 0 ? plural(added.items, "new assumption") : null, added.gaps > 0 ? plural(added.gaps, "new gap") : null].filter(Boolean);
+  return `Oracle read the brief: ${found.join(" and ")}.`;
 }
 
 /** The day the read started or finished, as the line ends with it (never split: qa-onboarding-40). */
@@ -69,6 +80,8 @@ export function ReadLine({
   onPoll: () => void;
 }) {
   const live = LIVE.has(read.state);
+  // qa4-work-9: a read this person started: "Reading…" until it is back, then what it found.
+  const [started, setStarted] = useState(false);
   useEffect(() => {
     if (!live) return;
     const timer = window.setInterval(onPoll, POLL_MS);
@@ -119,11 +132,19 @@ export function ReadLine({
           <Button
             disabled={busy || refused !== null}
             title={refused ?? "Oracle reads the brief and its sources again"}
-            onClick={onRead}
+            onClick={() => {
+              setStarted(true);
+              onRead();
+            }}
           >
-            {label}
+            {started && busy ? "Reading…" : label}
           </Button>
         </span>
+      )}
+      {started && !busy && read.state === "done" && (
+        <p data-testid="intake-read-done" role="status" className="basis-full text-sm font-medium text-text">
+          {doneNote(read)}
+        </p>
       )}
       {/* qa-docs-86: one plain line on what each Oracle button does. */}
       {(showButton || mayDraft) && (

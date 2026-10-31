@@ -127,7 +127,14 @@ export function AnswerQuestion({
       </label>
       {error && <InlineError>{error}</InlineError>}
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button variant="solid" icon="check" disabled={busy !== null} onClick={() => send("answer")}>
+        {/* qa4-work-4: nothing to send until something is written. */}
+        <Button
+          variant="solid"
+          icon="check"
+          disabled={busy !== null || !body.trim()}
+          title={body.trim() ? undefined : "Write your answer first"}
+          onClick={() => send("answer")}
+        >
           {busy === "answer" ? "Sending…" : "Send answer"}
         </Button>
         {paths.has("dont_know") && (

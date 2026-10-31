@@ -59,7 +59,7 @@ const COLUMNS: Column<ReportItem>[] = [
   },
 ];
 
-/** Plan › Alignment reports: every report, newest first; owners Generate now. */
+/** Plan › Reports: every report, newest first; owners Generate now. */
 export default function ReportsPage() {
   const q = useQuery("alignment-reports", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 200 } } })));
   const { can } = useMe();
@@ -71,7 +71,7 @@ export default function ReportsPage() {
         title="Plan"
         // qa-plan-11: no back link, the Plan tab strip below leads back, so the title stays put.
         info={
-          <InfoTip label="Alignment reports" align="start" side="bottom">
+          <InfoTip label="Reports" align="start" side="bottom">
             Each week Oracle reports how the tracks stand against their milestones and posts it to Slack. A report
             opens from here; the newest is also the Latest report link.
           </InfoTip>
@@ -111,7 +111,7 @@ export default function ReportsPage() {
             </div>
           ) : (
             <div data-testid="reports-table">
-              <DataTable label="Alignment reports" columns={COLUMNS} rows={q.data} rowKey={(r) => r.id} />
+              <DataTable label="Reports" columns={COLUMNS} rows={q.data} rowKey={(r) => r.id} />
             </div>
           )}
         </Panel>

@@ -49,8 +49,8 @@ const suggestionPath = (id: string) => ({ params: { path: { suggestion_id: id } 
 
 /**
  * A live feedback row's actions (D14): the primary decision on Oracle's suggestion, Decline
- * (not on a duplicate) and Open. Accept on an item Oracle pushed back on asks "Why keep your
- * call?" first (C1b); Decline asks for an optional note, the item's resolution note. An
+ * (not on a duplicate) and Open. Accept on an item Oracle pushed back on asks "Oracle pushed
+ * back. Why accept anyway?" first (C1b); Decline asks for an optional note, the item's resolution note. An
  * error stays on the row. `compact` (Home): the primary action, or Decline, and Open.
  */
 export function InboxActions({
@@ -123,7 +123,7 @@ export function InboxActions({
     const value = text.trim();
     if (mode === "reason") {
       if (!value) {
-        setError("Say why you keep your call.");
+        setError("Say why you accept it.");
         field.current?.focus();
         return;
       }
@@ -162,7 +162,8 @@ export function InboxActions({
   }
 
   if (mode !== "idle") {
-    const label = mode === "reason" ? "Why keep your call?" : "Why? (optional)";
+    // qa4-work-32: the prompt matches the action (it is someone else's comment being accepted).
+    const label = mode === "reason" ? "Oracle pushed back. Why accept anyway?" : "Why? (optional)";
     const verb = mode === "reason" ? "Accept" : "Decline";
     return (
       <form

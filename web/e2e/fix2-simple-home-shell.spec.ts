@@ -220,7 +220,9 @@ test("qa-simple-home-25: the rail shows a person's email in full", async ({ page
   const name = page.getByTestId("simple-person-name");
   await expect(name).toHaveText("viewer@example.com");
   await expect(name).toHaveAttribute("title", "viewer@example.com");
-  expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth && getComputedStyle(el).textOverflow !== "ellipsis")).toBe(true);
+  // Whole, and on one line (qa4-simple-home-20: a longer one is cut with an ellipsis, whole in its tooltip).
+  expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await name.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)))).toBe(1);
   const rail = await box(page.getByTestId("simple-nav"));
   const n = await box(name);
   expect(n.x + n.width).toBeLessThanOrEqual(rail.x + rail.width);

@@ -45,7 +45,7 @@ test("qa-plan-4: Plan's goal cards and the Baseline's Goals table show the same 
   const g2 = plan.getByTestId("home-goal-G2");
   await expect(g1).toContainText("Raise activation");
   // No evidence yet on either goal: no score on Plan either.
-  await expect(g1.getByRole("img", { name: "No confidence" })).toBeVisible();
+  await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
   await expect(g1.getByRole("img", { name: /Confidence 78/ })).toHaveCount(0);
   await expect(g2.getByRole("img", { name: /Confidence 66/ })).toHaveCount(0);
 
@@ -81,13 +81,13 @@ test("qa-plan-7: an open drawer leaves the feature names whole in Feature × goa
   }
 });
 
-// protects=qa-plan-35: every goal's progress reads in one form, "N% of the way … to <target>";
-// fails_when="78% of target" beside "50% of the way from 31%"; no_claim=the roll-up maths.
+// protects=qa-plan-35 (qa4-plan-42): every goal's progress reads in one form, Plan's distance
+// to go; fails_when="78% of target" beside "50% of the way from 31%"; no_claim=the roll-up maths.
 test("qa-plan-35: goal progress reads in one wording", async ({ page }) => {
   await openBaseline(page);
   const progress = (key: string) => goalsTable(page).getByTestId(`goal-${key}`).locator('[data-attr="progress"]');
-  await expect(progress("g.activation")).toHaveText("50% of the way from 31% to ≥ 45%");
-  await expect(progress("g.paid-conversion")).toHaveText("78% of the way to ≥ 12%");
+  await expect(progress("g.activation")).toHaveText("7 pts to go (38% now)");
+  await expect(progress("g.paid-conversion")).toHaveText("2.6 pts to go (9.4% now)");
   await expect(goalsTable(page)).not.toContainText("of target");
 });
 
@@ -162,16 +162,16 @@ test("qa-plan-39: a goal row's Confirm and Add subgoal are one size and aligned"
 // protects=qa-plan-40: the Goals panel's two buttons say what they do in plain words, with the
 // count read as words; fails_when="Interview vague goals (2)" or "Fill goals from text (1 goal)";
 // no_claim=other counts.
-test("qa-plan-40: the Goals buttons read 'Ask Oracle to sharpen 2 goals' and 'Read targets from 1 goal's text'", async ({ page }) => {
+test("qa-plan-40: the Goals buttons read 'Ask Oracle to sharpen 2 goals' and 'Fill targets from the goal's wording (1)'", async ({ page }) => {
   await openBaseline(page);
   const goals = page.getByRole("region", { name: "Goals", exact: true });
   await expect(goals.getByRole("button", { name: "Ask Oracle to sharpen 2 goals" })).toBeVisible();
-  await expect(goals.getByRole("button", { name: "Read targets from 1 goal's text" })).toBeVisible();
+  await expect(goals.getByRole("button", { name: "Fill targets from the goal's wording (1)" })).toBeVisible();
   await expect(goals).not.toContainText("Interview vague goals");
   await expect(goals).not.toContainText("Fill goals from text");
   // Its question asks with the same words.
-  await goals.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
-  const ask = page.getByRole("alertdialog", { name: "Read targets from 1 goal's text" });
+  await goals.getByRole("button", { name: "Fill targets from the goal's wording (1)" }).click();
+  const ask = page.getByRole("alertdialog", { name: "Fill targets from the goal's wording (1)" });
   await expect(ask).toContainText("Cut early churn");
   await ask.getByRole("button", { name: "Back" }).click();
 });

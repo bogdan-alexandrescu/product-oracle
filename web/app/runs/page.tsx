@@ -20,7 +20,7 @@ import {
   type Column,
 } from "@/components/ds";
 import { usePhone } from "@/components/ds/page-info";
-import { ErrorNote } from "@/components/ui";
+import { LoadError } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime, formatShortDate, plural } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
@@ -263,62 +263,66 @@ export default function RunsPage() {
           )
         }
       />
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {/* qa4-shell-2: a failed read is the error and Try again only, not an empty table. */}
       {/* byRoom: the inspector goes below when the Split is too narrow for it and the table,
           as with the Ask panel docked, so the table keeps its button column (its narrow columns
           go first, by the table's width); with the panel closed it sits beside over 1100 px. */}
       {/* qa-work-25: on a phone a row tap opens the run, so the selected-run panel is not shown. */}
-      <Split
-        byRoom
-        inspector={
-          selected && (
-            <div className="max-[600px]:hidden">
-              <RunInspector run={selected} name={runTitle(selected, docs)} />
-            </div>
-          )
-        }
-      >
-        <Panel
-          title="Runs"
-          count={q.data ? runs.length : undefined}
+      {q.error ? (
+        <LoadError what="your runs" error={q.error} onRetry={() => void q.reload()} />
+      ) : (
+        <Split
+          byRoom
+          inspector={
+            selected && (
+              <div className="max-[600px]:hidden">
+                <RunInspector run={selected} name={runTitle(selected, docs)} />
+              </div>
+            )
+          }
         >
-          {q.data && runs.length === 0 ? (
-            <Empty testId="runs-empty">
-              No runs yet.{" "}
-              {can("create_run", true) ? "Start one from Start a run… or from the page it works on." : "Runs show here once an approver starts one."}{" "}
-              <InfoTip label="runs" align="start">
-                Runs turn the baseline into a PRD draft: each one plans the work, gathers evidence from your sources and
-                writes a cited draft for review.
-              </InfoTip>
-            </Empty>
-          ) : (
-            // qa-work-25: on a phone a tap on a row (not its link or button) opens the run.
-            <div
-              className="contents"
-              onClick={(e) => {
-                if (!phone) return;
-                const t = e.target as HTMLElement;
-                if (t.closest("a,button")) return;
-                const key = t.closest<HTMLElement>("tr[data-key]")?.dataset.key;
-                if (key) router.push(`/runs/${key}`);
-              }}
-            >
-              <DataTable
-                label="Runs"
-                testId="runs-table"
-                columns={columns}
-                rows={q.data ? runs : undefined}
-                loading={q.loading}
-                rowKey={(r) => r.id}
-                selected={selected?.id ?? null}
-                onSelect={(k) => setPicked(k)}
-                onActivate={(k) => router.push(`/runs/${k}`)}
-                rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
-              />
-            </div>
-          )}
-        </Panel>
-      </Split>
+          <Panel
+            title="Runs"
+            count={q.data ? runs.length : undefined}
+          >
+            {q.data && runs.length === 0 ? (
+              <Empty testId="runs-empty">
+                No runs yet.{" "}
+                {can("create_run", true) ? "Start one from Start a run… or from the page it works on." : "Runs show here once an approver starts one."}{" "}
+                <InfoTip label="runs" align="start">
+                  Runs turn the baseline into a PRD draft: each one plans the work, gathers evidence from your sources and
+                  writes a cited draft for review.
+                </InfoTip>
+              </Empty>
+            ) : (
+              // qa-work-25: on a phone a tap on a row (not its link or button) opens the run.
+              <div
+                className="contents"
+                onClick={(e) => {
+                  if (!phone) return;
+                  const t = e.target as HTMLElement;
+                  if (t.closest("a,button")) return;
+                  const key = t.closest<HTMLElement>("tr[data-key]")?.dataset.key;
+                  if (key) router.push(`/runs/${key}`);
+                }}
+              >
+                <DataTable
+                  label="Runs"
+                  testId="runs-table"
+                  columns={columns}
+                  rows={q.data ? runs : undefined}
+                  loading={q.loading}
+                  rowKey={(r) => r.id}
+                  selected={selected?.id ?? null}
+                  onSelect={(k) => setPicked(k)}
+                  onActivate={(k) => router.push(`/runs/${k}`)}
+                  rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
+                />
+              </div>
+            )}
+          </Panel>
+        </Split>
+      )}
       {open && <NewRunDialog onClose={() => setOpen(false)} />}
     </Page>
   );

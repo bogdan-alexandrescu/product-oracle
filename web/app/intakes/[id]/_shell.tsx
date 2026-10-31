@@ -19,7 +19,7 @@ import { DraftSheet } from "./_draft-sheet";
 import { FindingsTab } from "./_findings";
 import { GapsTab } from "./_gaps";
 import { IntakeInspector, readiness, readinessTitle } from "./_inspector";
-import { OPEN_GAP, dayMonth, gateReason, statusChip, tally, unknownNote, type Batch, type Summary } from "./_lib";
+import { OPEN_GAP, dayMonth, gateReason, openCriticalCount, statusChip, tally, unknownNote, type Batch, type Summary } from "./_lib";
 import { ProposalsTab } from "./_proposals";
 import { QuestionsTab } from "./_questions";
 import { ReadLine } from "./_read";
@@ -40,8 +40,12 @@ function useIsPhone(): boolean {
   );
 }
 
-/** Every batch asked so far, oldest first. */
-async function loadBatches(intakeId: string, current: number | null | undefined): Promise<Batch[]> {
+/**
+ * Every batch asked so far, oldest first; undefined while the summary (and so the current
+ * batch) is not loaded yet, so the chip and counts never read an empty thread before it.
+ */
+async function loadBatches(intakeId: string, current: number | null | undefined): Promise<Batch[] | undefined> {
+  if (current === undefined) return undefined;
   const numbers = Array.from({ length: current ?? 0 }, (_, i) => i + 1);
   const batches = await Promise.all(
     numbers.map((n) => unwrap(api.GET("/v1/intakes/{intake_id}/question-batch", { params: { path: { intake_id: intakeId }, query: { batch: n } } }))),
@@ -172,7 +176,7 @@ export function BeforeDrafting({ id }: { id: string }) {
   const mayDelete = can("delete_intake");
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
-  const reason = blocked ? gateReason(gate.blocking_gap_ids.length, gate.open_critical) : null;
+  const reason = blocked ? gateReason(gate.blocking_gap_ids.length, openCriticalCount(s)) : null;
   // qa-work-2: the chip and the counts read one tally of the asked questions.
   const status = statusChip(s, tally(s, batchesQ.data ?? undefined));
   const openGaps = s.gaps.filter((g) => OPEN_GAP.has(g.status)).length;
@@ -350,12 +354,42 @@ export function BeforeDrafting({ id }: { id: string }) {
   );
 }
 
-/** The header's way back; rirs-25: at least 24 px tall, so a thumb hits it on a phone. */
+/** The places a brief is opened from that the back link names; anywhere else it leads to PRDs. */
+const CAME_FROM: { path: string; label: string }[] = [{ path: "/inbox", label: "Inbox" }];
+
+/** The entry before this one in the tab's history (the Navigation API), when the browser has it. */
+function previousUrl(): URL | null {
+  const nav = (window as unknown as { navigation?: { currentEntry?: { index: number } | null; entries(): { url: string | null }[] } }).navigation;
+  const index = nav?.currentEntry?.index ?? -1;
+  if (!nav || index < 1) return null;
+  const url = nav.entries()[index - 1]?.url;
+  if (!url) return null;
+  const prev = new URL(url);
+  return prev.origin === window.location.origin ? prev : null;
+}
+
+const noSubscribe = () => () => undefined;
+const placeOf = (href: string, path: string) => href === path || href.startsWith(`${path}/`) || href.startsWith(`${path}?`);
+
+/** The previous entry's path and query when it is one of CAME_FROM, else "". */
+function cameFrom(): string {
+  const prev = previousUrl();
+  const href = prev ? `${prev.pathname}${prev.search}` : "";
+  return href && CAME_FROM.some((p) => placeOf(href, p.path)) ? href : "";
+}
+
+/**
+ * The header's way back; rirs-25: at least 24 px tall, so a thumb hits it on a phone.
+ * qa4-work-10: opened from the Inbox it reads "Inbox" and goes back there; else "PRDs".
+ */
 function BackToPrds() {
+  // The way back as "<href>" when it is a named place, else "" (the server's answer too).
+  const back = useSyncExternalStore(noSubscribe, cameFrom, () => "");
+  const from = back ? { href: back, label: CAME_FROM.find((p) => placeOf(back, p.path))!.label } : null;
   return (
-    <Link href="/documents" data-testid="intake-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
+    <Link href={from?.href ?? "/documents"} data-testid="intake-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
       <Icon name="back" size={16} />
-      PRDs
+      {from?.label ?? "PRDs"}
     </Link>
   );
 }
@@ -380,7 +414,7 @@ function PhoneReadiness({ summary: s, batches, onOpen }: { summary: Summary; bat
         </Chip>
       </div>
       <p className="text-sm text-text2" data-testid="intake-readiness-counts">
-        {counts.open} open · {counts.answered} answered · {s.readiness.open_critical} critical open
+        {counts.open} open · {counts.answered} answered · {openCriticalCount(s)} critical open
       </p>
       {note && <p className="text-[13px] text-text2">{note}</p>}
       <Button className="w-full" onClick={onOpen}>

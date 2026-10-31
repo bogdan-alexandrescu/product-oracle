@@ -24,6 +24,17 @@ export function approvedRoadmaps(items: Schemas["PlanItem"][] | undefined): Plan
   return [...out].map(([slug, version]) => ({ slug, version }));
 }
 
+/**
+ * qa4-plan-3: the roadmaps on the Plan with no approved version, only a draft's rows (each at the
+ * draft's version): the Plan says they are not approved yet, and Edit plan has nothing to edit.
+ */
+export function draftOnlyRoadmaps(items: Schemas["PlanItem"][] | undefined): PlanRoadmap[] {
+  const approved = new Set(approvedRoadmaps(items).map((r) => r.slug));
+  const out = new Map<string, number>();
+  for (const i of items ?? []) if (i.origin === "draft" && !approved.has(i.roadmap.slug)) out.set(i.roadmap.slug, Math.max(i.roadmap.version, out.get(i.roadmap.slug) ?? 0));
+  return [...out].map(([slug, version]) => ({ slug, version }));
+}
+
 /** The roadmap documents by slug: their titles and approval state (qa-plan-17, qa-plan-21). */
 export function useRoadmapDocs(after = ""): Map<string, DocumentSummary> {
   // `after` reads them again (a version approved here changes a document's approved version).
@@ -114,6 +125,9 @@ function Diff({ set }: { set: ChangeSet }) {
   );
 }
 
+/** Up, Down and Defer: one fixed slot each (qa-plan-34). */
+const MOVE_BUTTON = "w-[3.75rem] flex-none px-0 disabled:border-dashed disabled:opacity-40!";
+
 function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary | undefined; onChange: (s: ChangeSet | null) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [cutting, setCutting] = useState<string | null>(null);
@@ -190,10 +204,11 @@ function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary |
                         </option>
                       ))}
                     </select>
-                    {/* qa-plan-34: dimmer than a ghost's own disabled 50%, so ! wins over it. */}
+                    {/* qa-plan-34, qa4-plan-21: outlined buttons like Cut; a disabled one is dimmed with a
+                        dashed outline, so it never reads as plain text or as an enabled one. */}
                     <Button
-                      variant="ghost"
-                      className="w-[3.75rem] flex-none disabled:opacity-40!"
+                      variant="secondary"
+                      className={MOVE_BUTTON}
                       aria-label={`Move ${i.title} up`}
                       disabled={at === 0}
                       title={at === 0 ? `Already first in ${HORIZON_LABEL[h]}` : undefined}
@@ -202,8 +217,8 @@ function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary |
                       Up
                     </Button>
                     <Button
-                      variant="ghost"
-                      className="w-[3.75rem] flex-none disabled:opacity-40!"
+                      variant="secondary"
+                      className={MOVE_BUTTON}
                       aria-label={`Move ${i.title} down`}
                       disabled={at === lane.length - 1}
                       title={at === lane.length - 1 ? `Already last in ${HORIZON_LABEL[h]}` : undefined}
@@ -212,14 +227,14 @@ function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary |
                       Down
                     </Button>
                     {h !== "later" ? (
-                      <Button variant="ghost" className="w-[3.75rem] flex-none" data-testid="edit-defer" onClick={() => add({ op: "defer", key: i.key })}>
+                      <Button variant="secondary" className={MOVE_BUTTON} data-testid="edit-defer" onClick={() => add({ op: "defer", key: i.key })}>
                         Defer
                       </Button>
                     ) : (
                       // Later has nothing to defer to: an empty slot keeps Cut in line.
                       <span data-testid="edit-defer" aria-hidden className="h-8 w-[3.75rem] flex-none" />
                     )}
-                    <Button variant="danger" className="w-[3.75rem] flex-none" onClick={() => (setCutting(i.key), setReason(""))}>
+                    <Button variant="danger" className="w-[3.75rem] flex-none px-0" onClick={() => (setCutting(i.key), setReason(""))}>
                       Cut
                     </Button>
                   </span>
@@ -278,9 +293,10 @@ function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary |
         }}
       >
         <label className="flex flex-col gap-1 text-sm">
-          From Baseline
+          {/* qa4-plan-23: says what the choice is, and that no pick is a new item, not in the baseline. */}
+          Baseline feature
           <select aria-label="Baseline feature" value={feature} onChange={(e) => setFeature(e.target.value)} className="h-8 rounded-lg border border-line-strong bg-surface px-2">
-            <option value="">A new item</option>
+            <option value="">New: not in the baseline</option>
             {(features.data ?? []).map((f) => (
               <option key={f.id} value={f.id}>
                 {f.title}

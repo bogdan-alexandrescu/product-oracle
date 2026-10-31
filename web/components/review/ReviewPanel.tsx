@@ -132,10 +132,11 @@ function sourceRow(c: CitationOut, number: number) {
   return (
     <li key={c.id} className="flex min-h-8 min-w-0 items-center gap-2.5 text-sm max-[639px]:min-h-11">
       <span className="tnum w-5 flex-none text-right font-semibold text-text2">{number}</span>
-      {/* The writer's confidence beside the source, or its note when unscored (text). */}
+      {/* The writer's confidence beside the source in words, or its note when unscored (text);
+          qa4-docs-19: label and title wrap to two lines rather than being cut. */}
       <span
         title={citationSourceLabel(c)}
-        className="max-w-[45%] min-w-0 flex-none truncate text-[13px] font-semibold text-text2"
+        className="line-clamp-2 max-w-[45%] min-w-0 flex-none text-[13px] font-semibold break-words text-text2"
         data-testid="source-label"
       >
         {citationSourceLabel(c)}
@@ -147,13 +148,14 @@ function sourceRow(c: CitationOut, number: number) {
           target="_blank"
           rel="noopener noreferrer"
           title={c.title ?? c.ref}
-          className="min-w-0 truncate font-medium text-text underline-offset-2 hover:underline"
+          data-testid="source-title"
+          className="line-clamp-2 min-w-0 font-medium break-words text-text underline-offset-2 hover:underline"
         >
           {c.title ?? c.ref}
         </a>
       ) : (
         // A baseline item named in free text (source oracle): its ref on hover, no link.
-        <span title={c.ref} className="min-w-0 truncate font-medium text-text">
+        <span title={c.ref} data-testid="source-title" className="line-clamp-2 min-w-0 font-medium break-words text-text">
           {c.title ?? c.ref}
         </span>
       )}

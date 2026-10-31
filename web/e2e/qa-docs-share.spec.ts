@@ -84,7 +84,9 @@ test.describe("desktop", () => {
     expect(await label.getAttribute("placeholder")).toBeNull();
     await expect(sheet.getByText("Label (required)")).toBeVisible();
     const create = sheet.getByRole("button", { name: "Create link" });
-    await expect(create).toBeDisabled();
+    // qa4-docs-share-23: the missing label is said once Create link is tried without one.
+    await expect(sheet.getByTestId("create-why")).toHaveCount(0);
+    await create.click();
     await expect(sheet.getByTestId("create-why")).toHaveText(
       "Add a label first.",
     );

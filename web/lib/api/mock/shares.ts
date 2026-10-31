@@ -101,6 +101,7 @@ type LinkRow = {
   created_at: string;
   expires_at: string;
   revoked_at: string | null;
+  revoked_by: string | null;
   revoked_reason: string | null;
   allow_download: boolean;
   views: number;
@@ -368,7 +369,7 @@ export function seedShares(ctx: Omit<SharesContext, "db" | "me" | "renderAudienc
   const link = (over: Partial<LinkRow>): LinkRow => ({
     id: ctx.uuid(), document_id: doc.id, publication_id: pub.id, audience: "team", label: "", token: randomToken(32), passcode: passcode(),
     passcode_version: 1, failures: 0, locked_until: null, created_by: ownerId, created_at: iso(-3), expires_at: iso(11), revoked_at: null,
-    revoked_reason: null, allow_download: true, views: 0, last_viewed_at: null, inbox_dismissed_at: null, ...over,
+    revoked_by: null, revoked_reason: null, allow_download: true, views: 0, last_viewed_at: null, inbox_dismissed_at: null, ...over,
   });
   const team = link({ label: "Team, all-hands", views: 2, last_viewed_at: iso(-1) });
   db.links.push(team);
@@ -421,6 +422,8 @@ function linkOut(ctx: SharesContext, link: LinkRow): Schemas["ShareLinkOut"] {
     expires_at: link.expires_at,
     state: state(link, at),
     revoked_at: link.revoked_at,
+    revoked_by: link.revoked_by,
+    revoked_by_name: link.revoked_by ? displayName(ctx.members.find((m) => m.id === link.revoked_by)) : null,
     revoked_reason: link.revoked_reason,
     allow_download: link.allow_download,
     views: link.views,
@@ -591,7 +594,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
     if (p[3] === "versions" && p[5] === "public-preview" && m === "GET") {
       const v = pick(Number(p[4]));
       if (!v) return json(404, { detail: "Version not found" });
-      return html(200, renderPublic(review(ctx, doc, v), "Preview: a shared link's page shows when it was shared and when it ends here"));
+      return html(200, renderPublic(review(ctx, doc, v), "On a shared link, this shows when it was shared and when it ends."));
     }
     if (p[3] === "publications" && p[5] === "public-check" && m === "POST") {
       const pub = ctx.publications.find((x) => x.document_id === doc.id && x.number === Number(p[4]));
@@ -639,7 +642,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       const link: LinkRow = {
         id: ctx.uuid(), document_id: doc.id, publication_id: pub.id, audience: input.audience, label: input.label.trim(), token: randomToken(32),
         passcode: generated ? passcode() : input.passcode!, passcode_version: 1, failures: 0, locked_until: null, created_by: me.id, created_at: at,
-        expires_at: new Date(Date.parse(at) + EXPIRY[expires] * 86_400_000).toISOString(), revoked_at: null, revoked_reason: null,
+        expires_at: new Date(Date.parse(at) + EXPIRY[expires] * 86_400_000).toISOString(), revoked_at: null, revoked_by: null, revoked_reason: null,
         allow_download: input.allow_download ?? true, views: 0, last_viewed_at: null, inbox_dismissed_at: null,
       };
       ctx.db.links.push(link);
@@ -650,7 +653,7 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
       const live = ctx.db.links.filter((l) => l.document_id === doc.id && !l.revoked_at);
       const { reason } = await body<{ reason: string }>();
-      for (const l of live) Object.assign(l, { revoked_at: at, revoked_reason: reason, inbox_dismissed_at: at });
+      for (const l of live) Object.assign(l, { revoked_at: at, revoked_by: me.id, revoked_reason: reason, inbox_dismissed_at: at });
       return json(200, { revoked: live.length });
     }
     return null;
@@ -696,17 +699,20 @@ export async function routeShares(ctx: SharesContext, req: Request, p: string[],
       if (refused) return refused;
     }
     const { reason } = await body<{ reason?: string | null }>();
-    if (!link.revoked_at) Object.assign(link, { revoked_at: at, revoked_reason: reason || null });
+    if (!link.revoked_at) Object.assign(link, { revoked_at: at, revoked_by: me.id, revoked_reason: reason || null });
     link.inbox_dismissed_at ??= at;
     return json(200, linkOut(ctx, link));
   }
   if (p[3] === "views" && m === "GET") {
     const rows = ctx.db.views.filter((v) => v.link_id === link.id).sort((a, b) => b.viewed_at.localeCompare(a.viewed_at));
+    // As the API: the Company time zone, and each view's day in it (qa4-docs-share-6).
+    const zone = ctx.zone?.() ?? "America/Los_Angeles";
+    const dayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
     const days = new Map<string, number>();
-    for (const r of rows) days.set(r.viewed_at.slice(0, 10), (days.get(r.viewed_at.slice(0, 10)) ?? 0) + 1);
+    for (const r of rows) days.set(dayOf(r.viewed_at), (days.get(dayOf(r.viewed_at)) ?? 0) + 1);
     const out: Schemas["ShareViewsOut"] = {
       link_id: link.id,
-      zone: "UTC",
+      zone,
       note: VIEW_NOTE,
       views: rows.length,
       distinct_browsers: new Set(rows.map((r) => r.browser_key)).size,
@@ -875,7 +881,7 @@ function record(ctx: SharesContext, link: LinkRow, kind: "page" | "download") {
   const at = ctx.now();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const family = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Other";
-  ctx.db.views.push({ link_id: link.id, viewed_at: at, kind, browser_key: `k:${ctx.db.opened[link.token]?.b ?? "x"}`, browser_family: family, country: null });
+  ctx.db.views.push({ link_id: link.id, viewed_at: at, kind, browser_key: `k:${ctx.db.opened[link.token]?.b ?? "x"}:${family}`, browser_family: family, country: null });
   link.views += 1;
   link.last_viewed_at = at;
 }

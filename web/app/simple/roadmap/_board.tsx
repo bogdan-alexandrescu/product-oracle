@@ -39,19 +39,35 @@ export function LegendKeys({ entries, className = "" }: { entries: LegendEntry[]
   );
 }
 
+/** qa4-simple-roadmap-29: one wording per mark, whichever view's legend names it (the Timeline's
+ * legend in _lanes.tsx says the same words). */
+export const MARK_WORDS = {
+  estimated: "Estimated dates",
+  suggestion: "Dates Oracle suggests (? opens them)",
+  pm: "No engineering work",
+  slices: "One bar per part of a feature",
+} as const;
+
 /** fix4 qa-simple-roadmap-7: the board's legend names the marks its cards draw, and only those shown. */
 export function boardLegend(data: Roadmap, phone: boolean, canDrag: boolean): LegendEntry[] {
   const open = data.items.filter((i) => !closedItem(i));
   const out: LegendEntry[] = [];
   if (canDrag) out.push({ key: "drag", swatch: null, words: `Drag a card to another column${phone ? " (press and hold first)" : ""} to change its horizon` });
   if (open.some((i) => barKind(i) === "estimated"))
-    out.push({ key: "estimated", swatch: <i aria-hidden className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid" />, words: "Estimated dates" });
+    out.push({ key: "estimated", swatch: <i aria-hidden className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid" />, words: MARK_WORDS.estimated });
   if (open.some((i) => barKind(i) === "draft")) out.push({ key: "draft", swatch: <i aria-hidden className={`${LEGEND_SWATCH} border-dashed border-line-strong`} />, words: "Draft" });
   if (data.items.some((i) => brokenLinks(i).length > 0))
     out.push({ key: "broken", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ borderColor: "var(--crit)", borderWidth: 2 }} />, words: "A broken link" });
   if (data.items.some(closedItem)) out.push({ key: "cut", swatch: <i aria-hidden className="inline-block w-[18px] flex-none border-t border-dashed border-line-strong" />, words: "Below the line: cut" });
   return out;
 }
+
+/** qa4-simple-roadmap-8: the lane PM-owned work (no engineering) takes, grouped by goal (the
+ * Timeline's own lane key); it is no goal, so nothing is added or suggested under it. */
+export const PM_LANE = "pm-owned";
+const goalLane = (key: string) => key !== "none" && key !== PM_LANE && !key.startsWith("plan-goal:");
+
+const itemsWords = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 
 const LONG_PRESS_MS = 450;
 /** A held card this close to the screen's top or bottom scrolls the page (px), this far a frame. */
@@ -396,7 +412,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {item.looks_like.length > 0 && (
             <p className="mt-1 text-sm text-warn" data-testid="board-looks-like">
-              Looks like {`${item.looks_like[0].code} ${item.looks_like[0].title}`.trim()}
+              {/* qa4-simple-roadmap-32: the name only, no feature code. */}
+              Looks like {item.looks_like[0].title}
             </p>
           )}
           {red && (
@@ -434,23 +451,25 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           <header className="flex items-baseline gap-2 px-1 pb-2">
             <h2 className="text-lg font-semibold">{c.label}</h2>
             <span className="text-sm text-text2" data-testid="column-window">
-              {boardSpanWords(c.window.start, c.window.end, data.today)}
+              {/* qa4-simple-roadmap-20: a column's window always carries its year, as Next and Later do. */}
+              {spanWords(c.window.start, c.window.end, "")}
             </span>
             {/* fix4 qa-simple-roadmap-32: the cut cards under the line are counted too. */}
             <span className="tnum ml-auto text-sm whitespace-nowrap text-text2" data-testid="column-count">
-              {c.groups.reduce((n, g) => n + g.items.length, 0)}
-              {c.below.length > 0 && ` · ${c.below.length} below the line`}
+              {/* qa4-simple-roadmap-21: plain words ("1 item, 1 cut"). */}
+              {itemsWords(c.groups.reduce((n, g) => n + g.items.length, 0))}
+              {c.below.length > 0 && `, ${c.below.length} cut`}
             </span>
           </header>
           {c.groups.map((g) => (
             <div key={g.key} className="mb-2" data-testid="board-group">
               <h3
                 className="flex items-center gap-1 truncate px-1 pb-1 text-sm font-semibold text-text2"
-                data-add-where={dropTargets && data.group === "goal" && g.key !== "none" ? whereAttr("goal", g.key) : undefined}
+                data-add-where={dropTargets && data.group === "goal" && goalLane(g.key) ? whereAttr("goal", g.key) : undefined}
                 data-add-label={g.title}
               >
                 <span className="min-w-0 flex-1 truncate">{g.title}</span>
-                {onGoal && data.group === "goal" && g.key !== "none" && !!goalSuggestions?.get(g.key) && (
+                {onGoal && data.group === "goal" && goalLane(g.key) && !!goalSuggestions?.get(g.key) && (
                   <button
                     type="button"
                     data-testid="goal-suggestions-open"
@@ -459,7 +478,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
                     onClick={() => onGoal(g.key, g.title)}
                     className="flex h-6 flex-none items-center gap-0.5 rounded-full border border-accent-mid bg-surface px-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-soft"
                   >
-                    ✦<span className="tnum">{goalSuggestions?.get(g.key)}</span>
+                    {/* qa4-simple-roadmap-22: what the count is, in words. */}
+                    ✦ <span className="tnum">{goalSuggestions?.get(g.key)}</span> suggested {goalSuggestions?.get(g.key) === 1 ? "feature" : "features"}
                   </button>
                 )}
               </h3>

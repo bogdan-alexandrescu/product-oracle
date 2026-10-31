@@ -118,7 +118,7 @@ test.describe("desktop", () => {
   test("qa-docs-16: an empty Share links card points to Share above", async ({ page }) => {
     await sharing(page);
     await page.goto("/documents/usage-alerts-roadmap");
-    await expect(page.getByTestId("share-links")).toContainText("No links yet. Use Share above to create one.");
+    await expect(page.getByTestId("share-links")).toContainText("No links yet. Use Share a link above to make one.");
     await expect(page.getByText("Share makes one")).toHaveCount(0);
   });
 

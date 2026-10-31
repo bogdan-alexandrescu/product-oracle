@@ -77,6 +77,8 @@ export interface MeetingsCtx {
   view?: () => "list" | "board" | "meetings" | null;
   /** prd-questions: the decision log's judgement calls waiting for this person (not run approvals). */
   othersWaiting?: () => number;
+  /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
+  documents?: () => { id: string; slug: string; title: string }[];
 }
 
 interface Meeting {
@@ -94,8 +96,12 @@ interface Meeting {
   length_min: number;
   status: "live" | "ended";
   started_at: string;
+  /** Its session's last change (simple_sessions.last_change_at): a change, accept or decline made through it. */
+  last_change_at?: string | null;
   ended_at: string | null;
   ended_by: string | null;
+  /** meet-chat-right-prd review: it ended by itself, idle past MEETING_IDLE (meetings._settle). */
+  ended_by_itself?: boolean;
   minutes: Minutes | null;
   minutes_state: "drafting" | "ready" | "sent" | null;
   /** The minutes job while drafting (meetings._minutes_job). */
@@ -177,10 +183,16 @@ const emailAvailable = () => !flags().includes("no-email");
 function prds(ctx: MeetingsCtx): Prd[] {
   const dana = ctx.members.find((m) => m.email === "dana.decider@example.com");
   const approver = ctx.members.find((m) => m.email === "approver@example.com");
-  return [
-    { slug: "guided-setup", title: "Guided setup", id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver && !flags().includes("no-reviewers") ? [approver.id] : [] },
-    { slug: "usage-alerts", title: "Usage alerts", id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: null, reviewers: [] },
+  const docs = ctx.documents?.() ?? [];
+  // qa4-simple-prd-28: a PRD is named by its document's title, as the API names it.
+  const titled = (slug: string, title: string) => docs.find((d) => d.slug === slug)?.title ?? title;
+  const known: Prd[] = [
+    { slug: "guided-setup", title: titled("guided-setup", "Guided setup"), id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver && !flags().includes("no-reviewers") ? [approver.id] : [] },
+    { slug: "usage-alerts", title: titled("usage-alerts", "Usage alerts"), id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: null, reviewers: [] },
   ];
+  // qa4-simple-prd-1: the API starts a review of any PRD the reader reads, not only these two.
+  const more = docs.filter((d) => !known.some((k) => k.slug === d.slug || k.ids.includes(d.id))).map((d) => ({ slug: d.slug, title: d.title, id: d.id, ids: [d.id], decider: null, reviewers: [] }));
+  return [...known, ...more];
 }
 
 const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === "owner").map((m) => m.id);
@@ -425,6 +437,25 @@ function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Sc
   }];
 }
 
+/** changes.MEETING_IDLE: a meeting's session closes after this long without a change. */
+export const MEETING_IDLE_MS = 4 * 60 * 60_000;
+
+/**
+ * As meetings._settle and the ticker's idle sweep (meetings.end_idle): a live meeting with
+ * no change through its session for MEETING_IDLE_MS (its last change, else its start, as
+ * changes.close_idle; an Approve or a chat decision is no change) ends, with Oracle's quick
+ * minutes, by its presenter, whether or not anyone opened it; its chat then says it ended by
+ * itself (meet-chat-right-prd review, meetings.ended_by_itself).
+ */
+function endIdle(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
+  if (m.status !== "live") return;
+  const last = Date.parse(m.last_change_at ?? m.started_at);
+  if (mockNowMs() - last < MEETING_IDLE_MS) return;
+  Object.assign(m, { status: "ended", ended_at: iso(mockNowMs()), ended_by: m.presenter_id, ended_by_itself: true });
+  m.minutes = extract(ctx, db, m);
+  m.minutes_state = "ready";
+}
+
 /** A "minutes-later" job whose time came: it answers (Oracle's minutes) or fails. */
 function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
   if (!m.minutes_due || m.minutes_state !== "drafting" || mockNowMs() < m.minutes_due.at) return;
@@ -450,10 +481,13 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     change_mode: m.change_mode,
     change_people: m.change_people.map((i) => ref(ctx, i)),
     roadmap_ids: [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))].sort(),
-    meeting_decisions: db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst).map((d) => ({
-      id: d.id, number: d.number, title: d.title, approver: ref(ctx, d.approver_id ?? ""), at: d.at, subjects: d.subjects, change_ids: d.change_ids,
-      flow: decidedFlow(ctx, d),
-    })),
+    // qa4-simple-decide-11 (as questions._write): a question decided in the meeting is the
+    // question's own decision there (its id, number and title), so it keeps its code (Q5).
+    meeting_decisions: db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst).map((d) => {
+      const n = d.question ? Number(d.question.code.replace(/^Q/, "")) : NaN;
+      const own = d.question && Number.isFinite(n) ? { id: stableUuid(`simple-question/${n}`), number: 100 + n, title: d.question.title } : { id: d.id, number: d.number, title: d.title };
+      return { ...own, approver: ref(ctx, d.approver_id ?? ""), at: d.at, subjects: d.subjects, change_ids: d.change_ids, flow: decidedFlow(ctx, d) };
+    }),
     open_decisions: openDecisions(ctx, db, p),
     // The meeting PRD's agenda (questions.due_for): the open questions blocking the soonest
     // one's milestone, whoever decides them, and those decided in this meeting (with Undo).
@@ -609,6 +643,8 @@ const OP_WORDS: Record<string, string> = {
 };
 
 /** A change in words and the subjects it names (as meetings.describe). */
+const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+
 function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
   const subjects: Decision["subjects"] = [];
   let name = "";
@@ -630,6 +666,9 @@ function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
     }
   } else if (!name) name = String(c.after.title ?? c.target.title ?? "");
   const words = OP_WORDS[c.op] ?? c.op.replace(/_/g, " ");
+  // qa4-simple-decide-12 (meetings.describe): a move says where to.
+  const h = HORIZON_TO[String(c.after.horizon)];
+  if (c.op === "change_horizon" && name && h) return [`Moved ${name} to ${h}`, subjects];
   return [`${words} ${name}`.trim(), subjects];
 }
 
@@ -644,6 +683,20 @@ async function body(req: Request): Promise<Record<string, unknown>> {
  */
 export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], run: (r: Request) => Promise<Response | null>): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
+  // qa4-simple-decide-16 (changes_router.undo_simple_change): undoing a change made in a live
+  // meeting is that meeting's decision too, "Undone: <what it did>".
+  if (p[4] === "undo") {
+    const m = db.meetings.find((x) => x.status === "live" && db.decisions.some((d) => d.meeting_id === x.id && d.change_ids.includes(p[3]!)));
+    if (!m) return null;
+    const res = await run(req);
+    if (!res || !res.ok) return res;
+    const c = ((await res.clone().json()) as Schemas["SimpleChangeResult"]).change;
+    m.last_change_at = iso(mockNowMs());
+    const [words, subjects] = describe(ctx, c);
+    const prd = prds(ctx).find((x) => x.slug === m.prd)!;
+    record(db, ctx, m, `${c.status === "declined" ? "Withdrawn" : "Undone"}: ${words}`, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
+    return res;
+  }
   const isCreate = p.length === 3;
   const verb = p[4] === "accept" ? "Accepted" : p[4] === "decline" ? "Declined" : null;
   if (!isCreate && !verb) return null;
@@ -659,8 +712,11 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   if (!res || !res.ok) return res;
   const out = (await res.clone().json()) as Schemas["SimpleChangeResult"];
   const c = out.change;
+  m.last_change_at = iso(mockNowMs());
   const [words, subjects] = describe(ctx, c);
-  const title = verb ? `${verb}: ${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
+  // qa4-simple-decide-12 (meetings.after_change): an accepted or declined proposal says whose.
+  const whose = verb && c.by_name ? `${verb} ${c.by_name}'s proposal: ` : verb ? `${verb}: ` : null;
+  const title = whose ? `${whose}${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
   const prd = prds(ctx).find((x) => x.slug === m.prd)!;
   record(db, ctx, m, title, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
   const line = ctx.onePager.changes.find((x) => x.id === c.id);
@@ -695,7 +751,12 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
   return {
     find(id) {
       const m = find(id);
-      return m ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended" } : null;
+      // As meetings.meeting_rules: an idle meeting ends by itself when its chat is read.
+      if (m) endIdle(open().ctx, meetings(), m);
+      return m
+        ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended",
+            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: !!m.ended_by_itself }
+        : null;
     },
     setMode(id, mode, people) {
       const m = find(id);
@@ -782,8 +843,14 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
     else if (d.status === "working") waits.push({ what: `${d.document.title}: the working draft is not approved yet`, on: [] });
   }
   const made = new Set(db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.change_ids));
+  // qa4-simple-decide-3 (as meetings._waits: every proposal of the meeting's session still
+  // proposed): the chat's Propose in the meeting is the meeting's too. The chat mock makes
+  // its change outside the session, so a proposal on the meeting's PRD made while it ran counts.
+  const ids = new Set(prdItems(ctx, p).map((i) => i.id));
+  const ran = (c: Change) => Date.parse(c.at) >= Date.parse(m.started_at) && (!m.ended_at || Date.parse(c.at) <= Date.parse(m.ended_at));
+  const ofPrd = (c: Change) => ids.has(String(c.target.item_id)) || (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.some((x) => x.id === c.id));
   for (const c of [...(ctx.roadmap.changes ?? []), ...ctx.onePager.changes]) {
-    if (made.has(c.id) && c.status === "proposed") waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
+    if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
   }
   return {
     summary: summary.slice(0, 4000),
@@ -856,12 +923,16 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
       const whole = !!prd && !goal && m.prd === prd.slug;
       return {
         meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)),
+        // qa4-simple-decide-32 (as decisions_page): the meeting's notes and comments, as its minutes list them.
+        notes: (m.notes ?? []).filter((n) => n.kind === "note" || n.kind === "comment"),
         delivery: m.minutes_state === "sent" ? deliveryOut(ctx, m) : null, can_retry_delivery: mayRetry(ctx, m),
       };
     }),
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
-    prds: [...ps].sort((a, b) => a.title.localeCompare(b.title)).map((x) => ({ id: x.slug, title: x.title })),
+    // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
+    prds: [...new Map([...ps.map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
+      .sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ id, title })),
     goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
     // qa-simple-decide-11: the meeting's title carries its day (the company's zone) and,
     // while it is still live, " · live".
@@ -885,6 +956,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   if (method !== "GET" && RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Requires the commenter role" });
   if (!p[3]) {
     if (method === "GET") {
+      for (const m of db.meetings) endIdle(ctx, db, m);
       const all = [...db.meetings].sort((a, b) => (a.started_at < b.started_at ? 1 : -1)).map((m) => brief(ctx, db, m));
       return json(200, { upcoming: upcoming(ctx, db), live: all.filter((m) => m.status === "live"), past: all.filter((m) => m.status === "ended") });
     }
@@ -932,7 +1004,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   }
   if (p[3] === "options" && method === "GET") {
     const prdQ = q.get("prd");
-    const list = prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : ps;
+    // As the API's, every PRD by its title.
+    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : [...ps]).sort((a, b) => a.title.localeCompare(b.title));
     if (prdQ && !list.length) return json(404, { detail: "No such PRD" });
     const occQ = q.get("occurrence");
     const occ = occQ ? upcoming(ctx, db, occQ)[0] : null;
@@ -943,7 +1016,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
         starters: [...new Set([...(x.decider ? [x.decider] : []), ...owners(ctx)])].map((i) => ref(ctx, i)),
         default_attendee_ids: [...new Set([ctx.me.id, ...(x.decider ? [x.decider] : []), ...x.reviewers])],
       })),
-      members: ctx.members.map((x) => ({ id: x.id, name: x.name })),
+      // qa4-simple-decide-14: as the API, whether the role may change things (not a viewer).
+      members: ctx.members.map((x) => ({ id: x.id, name: x.name, can_change: x.role !== "viewer" })),
       length_min: occ?.length_min ?? 60,
       occurrence: occ,
     };
@@ -953,6 +1027,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   if (!m) return json(404, { detail: "No such meeting" });
   const prd = ps.find((x) => x.slug === m.prd)!;
   const ok = () => json(200, one(ctx, db, m));
+  endIdle(ctx, db, m);
   settleLater(ctx, db, m);
   if (!p[4] && method === "GET") return ok();
   if (p[4] === "join" && method === "POST") {
@@ -1113,6 +1188,7 @@ export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Req
     const m = db.meetings.find((x) => x.session_id === sessionId);
     if (!m) return false;
     if (m.status !== "live") return "ended";
+    m.last_change_at = iso(mockNowMs());
     const prd = prds(ctx).find((x) => x.slug === m.prd);
     const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
     if (own) d.question = own;

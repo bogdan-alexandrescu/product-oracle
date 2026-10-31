@@ -23,7 +23,7 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
   await openAccounts(page);
   await expect(page.getByTestId("accounts-summary")).toContainText("4 accounts · 2 available");
   await expect(page.getByTestId("accounts-summary")).toContainText("1 needs a sign-in");
-  await expect(page.getByTestId("refresh-sweep")).toContainText("Last checked");
+  await expect(page.getByTestId("refresh-sweep")).toContainText("Sign-ins checked");
   await expect(page.getByRole("status").filter({ hasText: "old-laptop needs someone to sign in again" })).toBeVisible();
 
   // Measured and current: a plain figure with the window it is about.
@@ -37,7 +37,7 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
   await expect(row(page, "spare").getByTestId("fig-unmeasured")).toHaveText(/—/);
   await expect(row(page, "spare")).not.toContainText("0%");
   await expect(row(page, "spare").getByTestId("clears")).toContainText("Not measured");
-  await expect(row(page, "spare")).toContainText("Never given out");
+  await expect(row(page, "spare")).toContainText("Not used by a job yet");
   await expect(page.getByTestId("accounts-foot")).toContainText("~ is an old reading, not current");
 
   // With nothing chosen, the pane shows the most urgent account.
@@ -74,7 +74,7 @@ test("claude accounts: holders and history tabs load when opened", async ({ page
   await openAccounts(page);
   await row(page, "personal").getByRole("button").click();
   await expect(page.getByTestId("holding-now")).toHaveCount(0);
-  await detail(page).getByRole("tab", { name: "Holding now (1)" }).click();
+  await detail(page).getByRole("tab", { name: "Running now (1)" }).click();
   await expect(page.getByTestId("holding-now")).toContainText("reporting");
   await detail(page).getByRole("tab", { name: "History" }).click();
   const history = page.getByTestId("holding-history");
@@ -91,14 +91,14 @@ test("claude accounts: an owner drains with a reason, refreshes, and removes onl
   await row(page, "personal").getByRole("button").click();
   const pane = detail(page);
 
-  await pane.getByRole("button", { name: "Drain", exact: true }).click();
-  const confirm = pane.getByRole("dialog", { name: "Drain personal?" });
+  await pane.getByRole("button", { name: "Move jobs off", exact: true }).click();
+  const confirm = pane.getByRole("dialog", { name: "Move jobs off personal?" });
   await expect(confirm).toContainText("1 job on it now will be moved off at their next turn.");
-  const go = confirm.getByRole("button", { name: "Drain", exact: true });
+  const go = confirm.getByRole("button", { name: "Move jobs off", exact: true });
   await expect(go).toBeDisabled();
   await confirm.getByLabel("Reason (required)").fill("retiring this laptop");
   await go.click();
-  await expect(row(page, "personal")).toContainText("Draining");
+  await expect(row(page, "personal")).toContainText("Moving jobs off");
   await expect(pane).toContainText("retiring this laptop");
 
   await pane.getByRole("button", { name: "Refresh now" }).click();
@@ -187,7 +187,7 @@ test("claude accounts: other roles read the pool and get no controls", async ({ 
   await row(page, "personal").getByRole("button").click();
   await expect(page.getByTestId("view-only")).toHaveText("View only");
   await expect(detail(page)).not.toContainText("Only an owner changes accounts.");
-  await expect(detail(page).getByRole("button", { name: /^(Make available|Pause|Drain)$/ })).toHaveCount(0);
+  await expect(detail(page).getByRole("button", { name: /^(Make available|Pause|Move jobs off)$/ })).toHaveCount(0);
   await expect(page.getByTestId("fallback").getByRole("button")).toHaveCount(0);
 });
 

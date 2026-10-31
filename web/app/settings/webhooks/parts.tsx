@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { Button, Chip, type ChipKind } from "@/components/ds";
-import { INPUT } from "@/app/settings/_components/fields";
+import { TEXTAREA } from "@/app/settings/_components/fields";
 import type { Schemas } from "@/lib/api/client";
 
 export type Webhook = Schemas["WebhookOut"];
@@ -74,12 +74,48 @@ export function ago(iso: string, now: number = Date.now()): string {
   return `${d} day${d === 1 ? "" : "s"} ago`;
 }
 
-/** "✓ 200", "✕ 500", "✕ connect", "Pending", "Withheld". */
+/** The API's delivery error codes (oracle/webhooks/outbox.py) in a few words, for a chip. */
+const ERROR_SHORT: Record<string, string> = {
+  connect: "No answer",
+  timeout: "Too slow",
+  tls: "Not secure",
+  not_public: "Not public",
+  redirect: "Redirect",
+  too_large: "Too big",
+};
+
+/** "✓ 200", "✕ 500", "✕ No answer", "Pending", "Withheld": never a raw error code (qa4-settings-25). */
 export function outcomeText(d: { status: string; http_status?: number | null; error?: string | null }): string {
   if (d.status === "succeeded") return `✓ ${d.http_status ?? ""}`.trim();
   if (d.status === "pending") return "Pending";
   if (d.status === "withheld") return "Withheld";
-  return `✕ ${d.http_status ?? d.error ?? ""}`.trim();
+  if (d.http_status != null) return `✕ ${d.http_status}`;
+  return `✕ ${(d.error && ERROR_SHORT[d.error]) ?? (d.status === "retrying" ? "Retrying" : "Failed")}`;
+}
+
+/** A failed send in a sentence: "Couldn't reach hooks.example.com", "hooks.example.com answered 500". */
+export function failureText(d: { http_status?: number | null; error?: string | null }, host: string): string {
+  switch (d.error) {
+    case "connect":
+      return `Couldn't reach ${host}`;
+    case "timeout":
+      return `${host} took too long to answer`;
+    case "tls":
+      return `Couldn't make a secure link to ${host}`;
+    case "not_public":
+      return `${host} isn't a public address`;
+    case "redirect":
+      return `${host} sent a redirect; Oracle doesn't follow them`;
+    case "too_large":
+      return "The event was too big to send";
+  }
+  return d.http_status != null ? `${host} answered ${d.http_status}` : `Couldn't send to ${host}`;
+}
+
+/** An event type's plain label, as the New webhook form shows it (qa4-settings-26). */
+export function eventLabel(type: string, eventTypes: EventType[]): string {
+  if (type === "webhook.test") return "Test event";
+  return eventTypes.find((t) => t.type === type)?.label ?? type;
 }
 
 export function Outcome({ d }: { d: { status: string; http_status?: number | null; error?: string | null } }) {
@@ -97,7 +133,7 @@ export function Outcome({ d }: { d: { status: string; http_status?: number | nul
  */
 export function SecretOnce({ secret }: { secret: string }) {
   const [copied, setCopied] = useState(false);
-  async function copy(input: HTMLInputElement | null) {
+  async function copy(input: HTMLTextAreaElement | null) {
     let ok = false;
     try {
       await navigator.clipboard.writeText(secret);
@@ -113,9 +149,17 @@ export function SecretOnce({ secret }: { secret: string }) {
       <label htmlFor="webhook-secret" className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
         Signing secret
       </label>
-      <div className="flex gap-2">
-        <input id="webhook-secret" readOnly value={secret} className={`${INPUT} font-mono text-[13px]`} onFocus={(e) => e.currentTarget.select()} />
-        <Button onClick={(e) => void copy(e.currentTarget.parentElement?.querySelector("input") ?? null)}>{copied ? "Copied" : "Copy"}</Button>
+      <div className="flex items-start gap-2">
+        {/* qa4-settings-29: the whole secret, wrapped, never cut off in a narrow field. */}
+        <textarea
+          id="webhook-secret"
+          readOnly
+          rows={2}
+          value={secret}
+          className={`${TEXTAREA} resize-none font-mono text-[13px] break-all`}
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <Button onClick={(e) => void copy(e.currentTarget.parentElement?.querySelector("textarea") ?? null)}>{copied ? "Copied" : "Copy"}</Button>
       </div>
       <p className="text-sm font-semibold text-warn">Copy it now. Oracle won&apos;t show it again.</p>
     </div>

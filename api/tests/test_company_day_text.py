@@ -161,6 +161,7 @@ EXCEPTIONS = {
     ("metrics/review.py", "variances"): "a metric week's Monday: a calendar date, no time of day",
     ("priorities/service.py", "_cited_as"): "machine field: a citation's ISO date",
     ("roadmap/doc_dates.py", "shown_day"): "a date written in a draft: a calendar date, no time",
+    ("roadmap/draft_items.py", "_day"): "a draft item's date in a check's words: a calendar date",
     ("requests/triage.py", "prompt_lines"): "agent prompt, labelled UTC",
     ("requests/triage.py", "daily_due"): "machine field: the triage_day knob",
     ("requests/triage.py", "daily"): "machine field: the triage_day knob",

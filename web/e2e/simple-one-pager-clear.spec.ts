@@ -27,7 +27,9 @@ const LOOK_PER = "40 paid workspaces per region × 5 regions is 200, but the com
 
 async function readsClearly(page: Page) {
   const problem = page.getByRole("region", { name: "Problem and who has it" });
-  await expect(problem.getByTestId("problem-who")).toHaveText("Who has it: Admins of new teams with fewer than ten people");
+  // qa4-simple-prd-12: the problem's own words already say who has it, so it is not said again.
+  await expect(problem).toContainText("Admins of new teams with fewer than ten people");
+  await expect(problem.getByTestId("problem-who")).toHaveCount(0);
   const outcomes = page.getByRole("region", { name: "Outcomes and how we measure them" });
   await expect(outcomes.locator('[data-line="outcomes-1"]').getByTestId("outcome-measure")).toHaveText(
     "counted as: admins whose first invite is accepted within 7 days · from the product events table",
@@ -56,8 +58,8 @@ for (const phone of [false, true]) {
       const look = page.getByRole("region", { name: "Needs a look" });
       await expect(look).toBeVisible();
       await expect(look.getByRole("listitem")).toHaveText([
-        `${LOOK_COUNT} In: Not this quarter`,
-        `${LOOK_PER} In: Targets`,
+        `${LOOK_COUNT} In the PRD, not on this page: Not this quarter`,
+        `${LOOK_PER} In the PRD, not on this page: Targets`,
       ]);
       const bet = page.locator('[data-line="bets-2"]');
       await expect(page.getByRole("group", { name: /^User flow of “Invite suggestions/ })).toHaveCount(0);

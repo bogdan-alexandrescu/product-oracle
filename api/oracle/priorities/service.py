@@ -693,6 +693,18 @@ def _row(rows: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
     return next((r for r in rows if r["key"] == key), None)
 
 
+def _unmoved(title: str, rows: list[dict[str, Any]], key: str) -> str:
+    """Why a move is refused that would leave the order as it is (nothing to store)."""
+    needs = [r["title"] for r in rows if r.get("held_below") == key]
+    if not needs:
+        return f"This move leaves {title} where it is, so nothing was saved"
+    verb = "depends" if len(needs) == 1 else "depend"
+    return (
+        f"This move leaves {title} where it is: {', '.join(needs)} {verb} on it and "
+        "would move down with it, so nothing was saved"
+    )
+
+
 async def _seen_check(
     db: AsyncSession, principal: Principal, feature: Entity, reason: str
 ) -> AuditEvent | None:
@@ -761,6 +773,13 @@ async def create_override(
     row = _row(after["features"], feature.key)
     preview_rank = row["rank"] if row else None
     held_below = row["held_below"] if row else None
+    if (
+        data.kind == "move"
+        and held_below is None
+        and not any(i.feature == feature.key for i in inputs)
+        and [r["key"] for r in after["features"]] == [r["key"] for r in before["features"]]
+    ):
+        raise InvalidError(_unmoved(feature.title, after["features"], feature.key))
     blockers = {feature.key: await _open_blockers(db, feature)}
     messages = pushback.rules(
         before["features"],

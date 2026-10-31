@@ -20,15 +20,15 @@ test("Sources: each source's confidence beside it, low ones marked, a note when 
   await openTab(page, "Sources");
 
   const github = await sourceRow(page, "Address form loses state on back navigation");
-  await expect(github.getByTestId("source-label")).toHaveText("GitHub · 0.75");
+  await expect(github.getByTestId("source-label")).toHaveText("GitHub · High confidence");
   await expect(github.getByText("Low confidence")).toHaveCount(0);
 
   const slack = await sourceRow(page, "#product thread on checkout drop-off");
-  await expect(slack.getByTestId("source-label")).toHaveText("Slack · 0.82");
+  await expect(slack.getByTestId("source-label")).toHaveText("Slack · High confidence");
 
-  // Low confidence: the score plus the app's low-confidence chip (a warn chip).
+  // Low confidence: the app's low-confidence chip (a warn chip), said once (qa4-docs-19: no raw score).
   const interview = await sourceRow(page, "Customer interview 07");
-  await expect(interview.getByTestId("source-label")).toHaveText("Meeting notes · 0.35");
+  await expect(interview.getByTestId("source-label")).toHaveText("Meeting notes");
   const low = interview.getByTestId("low-confidence");
   await expect(low).toHaveText("Low confidence");
   await expect(low).toHaveClass(/bg-warn-bg/);
@@ -50,13 +50,13 @@ test("citation card: confidence beside the source, low ones marked, the note whe
 
   await problem.getByTestId("cite-c4").hover();
   const card = page.getByRole("tooltip");
-  await expect(card.getByTestId("cite-source")).toContainText("GitHub · 0.75");
+  await expect(card.getByTestId("cite-source")).toContainText("GitHub · High confidence");
   await expect(card.getByTestId("low-confidence")).toHaveCount(0);
 
   await problem.getByTestId("cite-c2").hover();
-  await expect(card.getByTestId("cite-source")).toContainText("Meeting notes · 0.35");
+  await expect(card.getByTestId("cite-source")).toHaveText(/^Meeting notes( · retrieved .*)?$/);
   await expect(card.getByTestId("low-confidence")).toHaveText("Low confidence");
-  await expect(problem.getByTestId("cite-c2")).toHaveAccessibleName(/low confidence 0\.35/);
+  await expect(problem.getByTestId("cite-c2")).toHaveAccessibleName(/low confidence/);
 
   const goal = await openSection(page, "goal-trace");
   await goal.getByTestId("cite-c3").hover();

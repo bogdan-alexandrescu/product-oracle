@@ -104,7 +104,7 @@ test("share a Board link: the address and passcode are shown once; the holder ne
   await expect(holder.getByText("Example Co")).toHaveCount(0);
   await holder.getByLabel("Passcode").fill("wrong-pass-code");
   await holder.getByRole("button", { name: "Open" }).click();
-  await expect(holder.getByText("That passcode did not open a link.")).toBeVisible();
+  await expect(holder.getByText("That did not open the link.")).toBeVisible();
   await holder.getByLabel("Passcode").fill(code);
   await holder.getByRole("button", { name: "Open" }).click();
   const shared = holder.frameLocator('iframe[title="Shared roadmap"]');
@@ -152,7 +152,7 @@ test("the Links table: View log, New passcode and Revoke, and the ended page", a
   await expect(page.getByRole("heading", { name: "Enter the passcode" })).toBeVisible();
   await page.getByLabel("Passcode").fill(code);
   await page.getByRole("button", { name: "Open" }).click();
-  await expect(page.getByText("That passcode did not open a link.")).toBeVisible();
+  await expect(page.getByText("That did not open the link.")).toBeVisible();
   await page.getByLabel("Passcode").fill(fresh);
   await page.getByRole("button", { name: "Open" }).click();
   await expect(page.frameLocator('iframe[title="Shared roadmap"]').getByText(/^Shared with you/)).toBeVisible();

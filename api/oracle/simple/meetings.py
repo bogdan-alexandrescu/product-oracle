@@ -57,8 +57,9 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
+from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import drafts, minutes
+from oracle.simple import change_words, drafts, minutes
 from oracle.simple.models import (
     SimpleChange,
     SimpleDraft,
@@ -94,6 +95,7 @@ from oracle.simple.schemas import (
     SimplePersonRef,
     SimpleSendIn,
     SimpleSlackState,
+    SimpleStartMember,
     SimpleStartOptions,
     SimpleStartPrd,
     SimpleUpcomingMeeting,
@@ -133,6 +135,12 @@ class MeetingRules:
     change_mode: Literal["everyone", "presenter", "named"]
     change_people: list[uuid.UUID]
     ended: bool
+    # meet-chat-right-prd: the meeting's PRD (its chat reads only it), and how it ended:
+    # who ended it, or by itself (its session idle past MEETING_IDLE), and when.
+    prd_document_id: uuid.UUID | None = None
+    ended_at: datetime | None = None
+    ended_by: uuid.UUID | None = None
+    ended_by_itself: bool = False
 
     def may_change(self, user_id: uuid.UUID | None) -> bool:
         """Whether ``user_id`` may change things through the meeting: never once ended;
@@ -157,14 +165,34 @@ def _rules(m: SimpleMeeting) -> MeetingRules:
         change_mode=m.change_mode,  # type: ignore[arg-type]
         change_people=list(m.change_people or []),
         ended=m.status == "ended",
+        prd_document_id=m.prd_document_id,
+        ended_at=m.ended_at,
+        ended_by=m.ended_by,
     )
+
+
+async def ended_by_itself(db: AsyncSession, meeting_id: uuid.UUID) -> bool:
+    """Whether the meeting ended by itself (_settle: its time ran out), not by a person."""
+    return (
+        await db.scalar(
+            select(AuditEvent.id)
+            .where(
+                AuditEvent.action == "simple_meeting.ended_idle", AuditEvent.entity_id == meeting_id
+            )
+            .limit(1)
+        )  # fmt: skip
+    ) is not None
 
 
 async def meeting_rules(db: AsyncSession, meeting_id: uuid.UUID) -> MeetingRules | None:
     m = await db.get(SimpleMeeting, meeting_id)
-    if m is not None:
-        await _settle(db, [m])
-    return _rules(m) if m is not None else None
+    if m is None:
+        return None
+    await _settle(db, [m])
+    rules = _rules(m)
+    if m.status == "ended":
+        rules.ended_by_itself = await ended_by_itself(db, m.id)
+    return rules
 
 
 async def rules_for_session(db: AsyncSession, session_id: uuid.UUID) -> MeetingRules | None:
@@ -366,7 +394,10 @@ async def options(
             raise MeetingError(404, "No such scheduled review")
     return SimpleStartOptions(
         prds=prds,
-        members=[SimplePersonRef(id=u.id, name=names[u.id]) for u in members],
+        members=[
+            SimpleStartMember(id=u.id, name=names[u.id], can_change=has_role(u.role, "commenter"))
+            for u in members
+        ],
         length_min=occ.length_min if occ else DEFAULT_LENGTH,
         occurrence=occ,
     )
@@ -521,6 +552,23 @@ async def _settle(db: AsyncSession, ms: list[SimpleMeeting]) -> None:
         await audit.record(db, None, "simple_meeting.ended_idle", "simple_meeting", m.id, data={})
 
 
+async def end_idle(db: AsyncSession) -> int:
+    """The idle sweep's second step (oracle.ticker.body, after changes.close_idle): every
+    live meeting whose session closed ends with its quick minutes, whether or not anyone
+    opens it again (a meeting whose start never answered its presenter included). The
+    caller commits; how many ended."""
+    ms = list(
+        await db.scalars(
+            select(SimpleMeeting)
+            .join(SimpleSession, SimpleSession.id == SimpleMeeting.session_id)
+            .where(SimpleMeeting.status == "live", SimpleSession.closed_at.is_not(None))
+            .with_for_update(of=SimpleMeeting)
+        )
+    )
+    await _settle(db, ms)
+    return len(ms)
+
+
 def _presenter_or_decider(principal: Any, m: SimpleMeeting, w: PrdWho) -> bool:
     me = _me(principal)
     return me is not None and (
@@ -616,6 +664,10 @@ async def describe(db: AsyncSession, c: SimpleChange) -> tuple[str, list[dict]]:
     elif not name:
         name = str((c.after or {}).get("title") or t.get("title") or "")
     words = drafts.OP_WORDS.get(c.op) or c.op.replace("_", " ").capitalize()
+    if c.op == "change_horizon" and name:
+        # qa4-simple-decide-12: a move says where to ("Moved Sample data import to Later").
+        said = change_words.phrase(c.op, t, c.before or {}, c.after or {}, name)
+        return said[:1].upper() + said[1:], subjects
     return f"{words} {name}".strip(), subjects
 
 
@@ -637,7 +689,11 @@ async def after_change(
     if c is None:
         return None
     title, subjects = await describe(db, c)
-    if verb:
+    if verb in ("Accepted", "Declined") and c.by is not None:
+        # qa4-simple-decide-12: an accepted or declined proposal says whose it was.
+        who = (await _names(db, {c.by})).get(c.by)
+        title = f"{verb} {who}'s proposal: {title}" if who else f"{verb}: {title}"
+    elif verb:
         title = f"{verb}: {title}"
     elif c.status == "proposed":
         title = f"Proposed: {title}"
@@ -2076,6 +2132,7 @@ async def decisions_page(
             minutes=await _named(db, minutes) if minutes else None,
             decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
+            notes=[n for n in await _notes_out(db, m) if n.kind in ("note", "comment")],
             delivery=await delivery_out(db, m) if m.minutes_state == "sent" else None,
             can_retry_delivery=m.minutes_state == "sent" and may_retry(principal, m),
         ))  # fmt: skip

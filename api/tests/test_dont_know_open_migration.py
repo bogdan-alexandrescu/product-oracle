@@ -91,7 +91,7 @@ def _status() -> dict[uuid.UUID, str]:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0094_generation_checks"]
+    assert script.get_heads() == ["0095_chat_read_answered_at"]
 
 
 def test_dont_know_questions_open_again_and_back(scratch_db):

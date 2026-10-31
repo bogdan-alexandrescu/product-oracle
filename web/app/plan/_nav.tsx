@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useSyncExternalStore } from "react";
 
 import { ScrollStrip } from "@/components/ds";
@@ -52,6 +52,11 @@ export function PlanNav() {
   const raw = useSyncExternalStore(noSubscribe, registeredRaw, () => "[]");
   // A registered entry whose page has since landed is not listed twice.
   const extra = useMemo(() => parse(raw).filter((t) => !PLAN_TABS.some((x) => x.key === t.key)), [raw]);
+  // qa4-plan-36: the link actually opened is the one selected: Latest report on the report
+  // it opened (latest/page.tsx adds ?latest), the Reports tab on one opened from the list.
+  // The layout wraps the strip in Suspense, as useSearchParams needs.
+  const viaLatest = useSearchParams().has("latest");
+  const latestOpen = pathname === "/plan/reports/latest" || (viaLatest && pathname.startsWith("/plan/reports/"));
   return (
     <div
       data-testid="plan-bar"
@@ -60,7 +65,7 @@ export function PlanNav() {
       <nav aria-label="Plan" data-testid="plan-tabs" className="min-w-0 flex-auto">
         <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
           {[...PLAN_TABS, ...extra].map((t) => {
-            const on = isOpen(t, pathname);
+            const on = isOpen(t, pathname) && !(t.key === "reports" && latestOpen);
             return (
               <Link
                 key={t.key}
@@ -85,7 +90,7 @@ export function PlanNav() {
         className="ml-auto flex flex-wrap items-center gap-1 max-[600px]:ml-0 max-[600px]:w-full max-[600px]:border-t max-[600px]:border-line max-[600px]:pt-1"
       >
         {PAGE_LINKS.map((l) => {
-          const on = l.href.startsWith("/roadmap/") && (pathname === l.href || pathname.startsWith(`${l.href}/`));
+          const on = l.href === "/plan/reports/latest" ? latestOpen : pathname === l.href || pathname.startsWith(`${l.href}/`);
           return (
             <Link
               key={l.href}

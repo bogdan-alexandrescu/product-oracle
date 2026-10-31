@@ -128,7 +128,7 @@ test("qa-work-16: New request offers the list's goals and a Channel select", asy
   const options = await channel.locator("option").allTextContents();
   for (const c of ["In app", "Support", "Sales", "Slack"]) expect(options).toContain(c);
   await channel.selectOption({ label: "Support" });
-  await dialog.getByLabel("Requester").fill("A buyer");
+  await dialog.getByLabel("Asked by").fill("A buyer");
   await dialog.getByLabel("Title").fill("Pay by invoice");
   await dialog.getByLabel("What it is and why").fill("Finance teams want an invoice, not a card.");
   await dialog.getByRole("button", { name: "File request" }).click();
@@ -161,7 +161,7 @@ test("qa-work-43, qa-work-44, qa-work-45: an interview's page says what to do, w
   await expect(header.getByRole("button", { name: "Withdraw link" })).toBeVisible();
   await expect(page.getByTestId("interview-link-note")).toContainText("can't be shown or copied again");
   await expect(page.getByTestId("interview-link-note")).toContainText("If Ana Lima lost it, use Make a new link; the old link stops working.");
-  await expect(page.getByTestId("interview-transcript-empty")).toHaveText("Ana Lima hasn't opened the link yet. Send it to them if you haven't.");
+  await expect(page.getByTestId("interview-transcript-empty")).toHaveText("Ana Lima hasn't opened the link yet. If you didn't send it, make a new link.");
   await expect(page.getByTestId("interview-snapshot-empty")).toContainText("once Ana Lima finishes the interview");
   await expect(page.getByTestId("interview-requests-empty")).toContainText("once they finish the interview");
   for (const old of ["Nothing said yet", "No snapshot yet", "None yet"]) await expect(page.getByText(old, { exact: true })).toHaveCount(0);

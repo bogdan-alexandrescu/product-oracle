@@ -26,21 +26,13 @@ const selectFits = (select: Locator) =>
     return { whole: box.width + 0.5 >= needs, inCell: box.left >= cell.left - 0.5 && box.right <= cell.right + 0.5 };
   });
 
-/**
- * Each part of an email ("commenter@", "example", ".com") sits on one line: a wrap falls only
- * after the @ or before a dot (the Members page's own Email, the settings lane's, over the shell lane's).
- */
+/** The email sits on one line, never wrapped (qa4-settings-10); if it must be cut, its title holds it whole. */
 const emailWhole = (email: Locator) =>
   email.evaluate((el) => {
-    const parts = [...el.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE);
-    return (
-      parts.length > 1 &&
-      parts.every((p) => {
-        const range = document.createRange();
-        range.selectNodeContents(p);
-        return range.getClientRects().length === 1;
-      })
-    );
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const tops = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top));
+    return tops.every((t) => Math.abs(t - tops[0]) <= 1) && el.getAttribute("title") === el.textContent;
   });
 
 /** The status cell's content stays inside the cell, so it never covers Last sign-in. */
@@ -78,7 +70,7 @@ for (const width of [1440, 1512]) {
         for (const email of ["commenter@example.com", "approver@example.com", "viewer@example.com"]) {
           expect(await selectFits(page.getByLabel(`Role for ${email}`)), email).toEqual({ whole: true, inCell: true });
         }
-        // Emails wrap at the @ if at all, never mid-word.
+        // Emails stay on one line, the whole address on hover.
         const emails = page.getByTestId("member-email");
         await expect(emails.first()).toBeVisible();
         for (const el of await emails.all()) expect(await emailWhole(el), await el.innerText()).toBe(true);

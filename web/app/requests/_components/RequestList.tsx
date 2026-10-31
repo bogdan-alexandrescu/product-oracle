@@ -44,9 +44,12 @@ function notFreeShort(r: Request): string {
   return "Already behind a brief or PRD";
 }
 
-/** rirs-9: on a phone a value wraps at word breaks instead of being cut. */
+/**
+ * rirs-9: on a phone a value is never cut. qa4-work-21: one field per row gives it the card's
+ * width, so a short value stays on one line; only a value longer than that wraps, at word breaks.
+ */
 const PHONE_WRAP = "max-[600px]:whitespace-normal max-[600px]:break-words max-[600px]:overflow-visible";
-/** A chip that wraps on a phone, as Chip's `wrap` does. */
+/** A chip that wraps on a phone only when longer than the card is wide, as Chip's `wrap` does. */
 const PHONE_CHIP_WRAP = "max-[600px]:h-auto max-[600px]:min-h-[26px] max-[600px]:whitespace-normal max-[600px]:rounded-[13px] max-[600px]:py-1 max-[600px]:leading-[18px]";
 
 /** The meta columns, in this order on every row (qa-work-36): state, goal, theme, asker, channel, age. */
@@ -59,13 +62,18 @@ const META_COLS = [
   { key: "age", label: "Age" },
 ] as const;
 
-/** One grid for the meta line and its header, so each field sits in its own column on every row. */
+/**
+ * One grid for the meta line and its header, so each field sits in its own column on every row.
+ * qa4-work-16: State is wide enough for two tags side by side (Disqualified, Unverified), so
+ * rows keep one height. qa4-work-21: on a phone one field per row, its name then its value on
+ * one line, not two cramped columns.
+ */
 const META_GRID =
-  "grid min-w-0 flex-1 grid-cols-[6.5rem_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_5.5rem_3rem] items-center gap-x-3 max-[600px]:grid-cols-2 max-[600px]:gap-y-1.5";
+  "grid min-w-0 flex-1 grid-cols-[14rem_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_5.5rem_3rem] items-center gap-x-3 max-[600px]:grid-cols-1 max-[600px]:gap-y-1.5";
 
 /**
  * The checkbox slot: on every row when ticking is offered, so titles line up (qa-work-35), as
- * wide as its "Start a PRD" header (qa-work-8); 44 px on a phone (qa-work-43).
+ * wide as its "PRD" header (qa-work-8, qa4-work-15); 44 px on a phone (qa-work-43).
  */
 const BOX_SLOT = "mt-1 flex h-6 w-12 flex-none items-center justify-center max-[600px]:mt-0 max-[600px]:-ml-2.5 max-[600px]:size-11";
 
@@ -105,20 +113,23 @@ export function RequestList({
         data-testid="request-list-head"
         className={`flex items-start gap-3 border-b border-line bg-surface2 px-4 py-1.5 text-[13px] leading-4 font-semibold text-text2 ${ticking ? "max-[600px]:px-3" : "max-[600px]:hidden"}`}
       >
-        {/* qa-work-8: the boxes' column says what ticking does. */}
+        {/* qa-work-8, qa4-work-15: the boxes' column says what ticking is for, in a word that fits on one line. */}
         {ticking && (
-          <span data-testid="request-list-head-choose" className="w-12 flex-none text-center max-[600px]:w-auto max-[600px]:text-left">
-            Start a PRD
+          <span
+            data-testid="request-list-head-choose"
+            title="Tick qualified requests to start a PRD from them"
+            className="w-12 flex-none text-center whitespace-nowrap max-[600px]:w-auto max-[600px]:text-left"
+          >
+            PRD
           </span>
         )}
-        {/* qa-work-39: "Request" over the titles (the row's first line), the columns of its second under it. */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1 max-[600px]:hidden">
-          <span data-testid="request-list-head-title">Request</span>
-          <div className={META_GRID}>
-            {META_COLS.map((c) => (
-              <span key={c.key}>{c.label}</span>
-            ))}
-          </div>
+        {/* qa4-work-15: one line of headers, each over its own column's values (the bold title needs none). */}
+        <div data-testid="request-list-head-cols" className={`${META_GRID} max-[600px]:hidden`}>
+          {META_COLS.map((c) => (
+            <span key={c.key} className="truncate">
+              {c.label}
+            </span>
+          ))}
         </div>
       </div>
       <ul className="divide-y divide-line" data-testid="request-list">
@@ -128,7 +139,7 @@ export function RequestList({
           const cells: Record<(typeof META_COLS)[number]["key"], ReactNode> = {
             // rirs-33: Unverified sits with the state, not alone at the end of the title line.
             state: (
-              <span className="flex min-w-0 flex-wrap gap-1">
+              <span data-testid="request-state" className="flex min-w-0 flex-nowrap gap-1 max-[600px]:flex-wrap">
                 <Chip kind={STATE[r.state].kind}>{STATE[r.state].label}</Chip>
                 {!r.verified && (
                   // C3: a customer's own words from an interview are taken as given, not checked.
@@ -220,7 +231,9 @@ export function RequestList({
                 <div className={`${META_GRID} text-sm text-text2`}>
                   {META_COLS.map((c) => (
                     <div key={c.key} data-field={c.key} className="flex min-w-0 items-center gap-1.5">
-                      <span className="sr-only text-[13px] font-semibold text-text2 max-[600px]:not-sr-only max-[600px]:flex-none">{c.label}</span>
+                      <span className="sr-only text-[13px] font-semibold text-text2 max-[600px]:not-sr-only max-[600px]:w-[4.75rem] max-[600px]:flex-none">
+                        {c.label}
+                      </span>
                       {cells[c.key]}
                     </div>
                   ))}

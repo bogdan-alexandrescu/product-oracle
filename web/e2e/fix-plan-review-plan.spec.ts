@@ -53,7 +53,7 @@ test("qa-plan-17: an item's history agrees with the Documents tab about the road
   await openPlan(page);
   await rows(page).filter({ hasText: "Threshold alerts on spend" }).getByTestId("plan-title").click();
   const history = inspector(page).getByTestId("plan-history").getByTestId("plan-history-version");
-  await expect(history).toHaveText(["PRD v1 Now · in a draft"]);
+  await expect(history).toHaveText(["Added to Now in draft 1 from PRD v1"]);
   await expect(history).not.toContainText("approved");
 
   await page.goto("/plan/documents");

@@ -76,7 +76,7 @@ export function expiryText(expiresAt?: string | null): string {
   return `${Date.parse(expiresAt) <= Date.now() ? "Expired" : "Expires"} ${formatDate(expiresAt)}`;
 }
 
-/** A credential's expiry in a table cell; a revoked one's expiry no longer matters, so it reads — (qa-settings-36). */
+/** A credential's expiry in a table cell; a revoked one's expiry no longer matters, so it reads — (qa-settings-36); an expired one reads its date only. */
 export function Expiry({ t }: { t: Pick<ApiToken, "revoked_at" | "expires_at"> }) {
   if (t.revoked_at)
     return (
@@ -86,7 +86,8 @@ export function Expiry({ t }: { t: Pick<ApiToken, "revoked_at" | "expires_at"> }
     );
   return (
     <span className={`tnum ${t.revoked_at ? "text-text2" : "text-text"}`} title={t.expires_at ? formatDateTime(t.expires_at) : undefined} data-testid="token-expiry">
-      {expiryText(t.expires_at)}
+      {/* qa4-settings-39: an expired one's Status already says Expired, so its expiry is just the date. */}
+      {tokenState(t) === "expired" ? formatDate(t.expires_at!) : expiryText(t.expires_at)}
     </span>
   );
 }
@@ -250,7 +251,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       header: "Acts for",
       width: "18%",
       phoneLabel: "For ",
-      cell: (t) => <span className={t.owner_email ? "" : "text-text2"}>{t.owner_email ?? "No one (company)"}</span>,
+      cell: (t) => <span className={t.owner_email ? "" : "text-text2"}>{t.owner_email ?? "The company"}</span>,
     },
     { key: "scopes", header: "Scopes", width: "15%", hideOnPhone: true, wrap: true, cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
     { key: "used", header: "Last used", width: "124px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },

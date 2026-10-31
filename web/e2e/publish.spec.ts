@@ -63,7 +63,8 @@ test("blocked: two blocks, failing hard checks, advisory and a disabled Publish"
   await expect(blocks.nth(0)).toContainText("Critical blocker");
   await expect(blocks.nth(1)).toContainText("Supported third-party operations");
   await expect(blocks.nth(1)).toContainText("Third-party");
-  await expect(blocks.nth(0).getByRole("link", { name: "Resolve" })).toHaveAttribute("href", /\/baseline\?entity=/);
+  // qa4-docs-share-52: Resolve opens the blocker, where the inspector's Open blocker goes.
+  await expect(blocks.nth(0).getByRole("link", { name: "Resolve" })).toHaveAttribute("href", /\/baseline\?tab=blockers&blocker=/);
   await expect(blocks.nth(1).getByRole("link", { name: "Resolve" })).toHaveAttribute(
     "href",
     "/documents/online-deposits/v/3#solution",
@@ -145,21 +146,21 @@ test("accept risk: an approver cannot read the settings, so the owner default st
   await setCompanySetting(page, "blocker_risk_acceptance_role", "approver");
   await asRole(page, "approver");
   await openPublish(page, "online-deposits");
-  // #370: a control the role cannot use is hidden, with no role note.
-  const risk = inspector(page).getByTestId("block-risk");
-  await expect(risk).toBeVisible();
-  await expect(risk.getByRole("button", { name: "Accept risk" })).toHaveCount(0);
-  await expect(risk).not.toContainText("Only an owner");
+  // #370: a control the role cannot use is hidden, with no role note (qa4-docs-40: and no empty Risk section).
+  await expect(inspector(page)).toBeVisible();
+  await expect(inspector(page).getByTestId("block-risk")).toHaveCount(0);
+  await expect(inspector(page).getByRole("button", { name: "Accept risk" })).toHaveCount(0);
+  await expect(inspector(page)).not.toContainText("Only an owner");
 });
 
 for (const role of ["approver", "viewer"] as const) {
   test(`accept risk: ${role}s are not offered it (#370)`, async ({ page }) => {
     await asRole(page, role);
     await openPublish(page, "online-deposits");
-    const risk = inspector(page).getByTestId("block-risk");
-    await expect(risk).toBeVisible();
-    await expect(risk.getByRole("button", { name: "Accept risk" })).toHaveCount(0);
-    await expect(risk).not.toContainText("Only an owner");
+    await expect(inspector(page)).toBeVisible();
+    await expect(inspector(page).getByTestId("block-risk")).toHaveCount(0);
+    await expect(inspector(page).getByRole("button", { name: "Accept risk" })).toHaveCount(0);
+    await expect(inspector(page)).not.toContainText("Only an owner");
   });
 }
 
@@ -311,9 +312,9 @@ test("PRD page: Publish replaces Approve version, for the latest version; roadma
 test("resolve a blocker: opens its baseline item", async ({ page }) => {
   await openPublish(page, "online-deposits");
   await page.getByTestId("block-row").nth(0).getByRole("link", { name: "Resolve" }).click();
-  await expect(page).toHaveURL(/\/baseline\?entity=/);
-  // #304: slugs such as c.same-day-refund are never shown; the inspector is named by the item's title.
-  await expect(page.getByRole("complementary", { name: "Same-day refund rule unanswered" })).toBeVisible();
+  await expect(page).toHaveURL(/\/baseline\?tab=blockers&blocker=/);
+  // #304: slugs such as c.same-day-refund are never shown; the blocker is named by its title.
+  await expect(page.getByTestId("blocker-inspector").getByRole("heading", { name: "Same-day refund rule unanswered" })).toBeVisible();
 });
 
 test.describe("phone", () => {

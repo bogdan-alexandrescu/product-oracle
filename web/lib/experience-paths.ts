@@ -54,6 +54,10 @@ export function switchTarget(pathname: string, to: Mode, documentHome?: string):
     return PAIRS.find(([simple]) => under(pathname, simple))?.[1] ?? DETAILED_HOME;
   }
   const doc = /^\/documents\/([^/]+)/.exec(pathname)?.[1];
+  // qa4-shell-5: a new document of another kind (New roadmap, whose rail lights Plan) opens its list's match.
+  if (doc === "new" && documentHome && documentHome !== "/documents") {
+    return PAIRS.find(([, detailed]) => detailed !== "/documents" && under(documentHome, detailed))?.[0] ?? SIMPLE_HOME;
+  }
   if (doc && doc !== "new") {
     if (!documentHome || documentHome === "/documents") return `/simple/one-pagers/${doc}`;
     // A document page of another kind (a roadmap, a strategy) has no one-pager: its list's match, else Home.

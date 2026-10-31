@@ -52,7 +52,8 @@ async def test_approved_sections_lock_and_a_changed_one_is_flagged_not_refused(c
     assert [(w["code"], w["section_keys"]) for w in v2["warnings"]] == [
         ("locked_section_changed", ["req-invite"])
     ]
-    assert "version 1" in v2["warnings"][0]["message"]
+    # qa4-docs-21: names the version approved; the page follows it with the sections' headings.
+    assert v2["warnings"][0]["message"] == "Sections approved in v1 changed in this version:"
     # The warning is stored with the version; locks do not carry over to v2.
     listed = (await client.get(f"/v1/documents/{DOC}/versions", headers=auth)).json()
     assert listed[1]["warnings"] == v2["warnings"]

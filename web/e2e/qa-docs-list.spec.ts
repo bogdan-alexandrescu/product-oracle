@@ -196,8 +196,9 @@ test.describe("desktop", () => {
       name: "Delete Usage alerts PRD",
     });
     const goes = dialog.getByTestId("delete-dependents");
-    await expect(goes.getByTestId("delete-runs")).toHaveText(
-      /^The (\d+ )?draft runs? that created/,
+    // qa4-docs-26: each run by its day and what it wrote.
+    await expect(goes.getByTestId("delete-run").first()).toHaveText(
+      /^The run of [A-Z][a-z]{2} \d{1,2} that wrote /,
     );
     await expect(goes).not.toContainText("Baseline to PRD");
     await expect(goes).not.toContainText(/Run\s{2}/);

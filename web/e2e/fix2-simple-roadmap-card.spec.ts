@@ -99,7 +99,7 @@ test.describe("desktop 1440x900", () => {
     await expect(card.getByTestId("card-dates")).toContainText("Dates accepted from Oracle");
 
     // Nothing depends on it: plain words, not "Nothing" (an id-less, unexplained word).
-    await expect(card.getByTestId("card-needed")).toHaveText("No other items");
+    await expect(card.getByTestId("card-needed")).toHaveText("None");
 
     // The meeting decision that moved it, with the colon the sentence needs.
     // fix4 qa-simple-roadmap-3: the decision by its title, no "D-4".

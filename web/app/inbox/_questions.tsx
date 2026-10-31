@@ -11,6 +11,20 @@ import { CODE_LIKE, discussionHref, type Need } from "./_needs";
 /** A question answered here: shown in place, with its outcome, until the tab changes; then under Done. */
 type Settled = { q: InboxQuestion; label: string; moved: boolean };
 
+/** A section's outline number ("3. ", "5.2 ") at the start of a heading. */
+const OUTLINE_NUMBER = /^(?:\d+(?:\.\d+)*\.|\d+(?:\.\d+)+)\s+/;
+
+/**
+ * qa4-company-46: a section question's subject reads "<document> · Risks", never with the
+ * heading's outline number ("· 3. Risks"); the number is the document's, not the section's name.
+ */
+function subjectTitle(subject: InboxQuestion["subject"]): string {
+  if (subject.kind !== "document_section") return subject.title;
+  const at = subject.title.lastIndexOf(" · ");
+  if (at < 0) return subject.title;
+  return `${subject.title.slice(0, at)} · ${subject.title.slice(at + 3).replace(OUTLINE_NUMBER, "")}`;
+}
+
 /** Phone width: Answer opens a bottom sheet instead of the row (DataTable's phone layout). */
 const PHONE = "(max-width: 600px)";
 
@@ -19,7 +33,7 @@ const PHONE = "(max-width: 600px)";
  * the subject, Answer (the row expands in place; a sheet on a phone) and Open (the subject).
  * Inbox and Home draw the same rows. `reload` re-reads the questions after an answer.
  */
-export function useQuestionRows(questions: InboxQuestion[], reload: () => Promise<unknown>) {
+export function useQuestionRows(questions: InboxQuestion[], reload: () => Promise<unknown>, onSettled?: (q: InboxQuestion, label: string) => void) {
   const [open, setOpen] = useState<string | null>(null);
   const [sheet, setSheet] = useState<string | null>(null);
   const [settled, setSettled] = useState<ReadonlyMap<string, Settled>>(new Map());
@@ -28,6 +42,7 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
     setSettled((m) => new Map(m).set(q.question.id, { q, label, moved: false }));
     setOpen(null);
     setSheet(null);
+    onSettled?.(q, label);
     // The rail badge re-reads with the reload, as after any Inbox action.
     invalidateWaiting();
     void reload();
@@ -54,7 +69,7 @@ export function useQuestionRows(questions: InboxQuestion[], reload: () => Promis
     const href = q.subject.href;
     // G6: a question asked from a discussion names it, and opens it.
     const from = q.question.discussion_id && q.question.discussion_title ? q.question.discussion_title : null;
-    const context = from ? `From discussion ${from}` : q.subject.title;
+    const context = from ? `From discussion ${from}` : subjectTitle(q.subject);
     const opened = open === q.question.id && !done;
     return {
       key: q.question.id,

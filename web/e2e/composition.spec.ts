@@ -219,8 +219,8 @@ test("a failed load shows the error and Retry reads it again", async ({ page }) 
 
 test("publishing needs an approved version: the API's 409 is shown", async ({ page }) => {
   await openComposition(page, "approver");
-  await page.getByRole("button", { name: "Publish revision 1" }).click();
-  const dialog = page.getByRole("dialog", { name: "Publish revision 1" });
+  await page.getByRole("button", { name: "Pin revision 1 to an approved version" }).click();
+  const dialog = page.getByRole("dialog", { name: "Pin revision 1 to an approved version" });
   await dialog.getByLabel("Approved document version").fill("9");
   await dialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("version 9 is not approved; approve it before publishing");
@@ -277,10 +277,15 @@ test.describe("on a phone", () => {
 
   test("the Confirm step opens as a sheet and confirms", async ({ page }) => {
     await openComposition(page, "approver");
+    // qa4-docs-16: an unchanged composition is no new revision, so stage a change first.
+    await row(page, "economics.value").click();
+    const moduleSheet = page.getByRole("dialog", { name: "Value and cost economics" });
+    await moduleSheet.getByRole("button", { name: "Add to draft" }).click();
+    await moduleSheet.getByRole("button", { name: "Close" }).click();
     await page.getByRole("button", { name: "Use these modules" }).click();
     const sheet = page.getByRole("dialog", { name: "Confirm revision 2" });
-    await expect(sheet.getByTestId("confirm-diff")).toContainText("No change");
-    await sheet.getByLabel("Reason (required)").fill("Re-confirm after the policy review.");
+    await expect(sheet.getByTestId("confirm-diff")).toContainText("Value and cost economics");
+    await sheet.getByLabel("Reason (required)").fill("Value economics after the policy review.");
     await sheet.getByRole("button", { name: "Confirm revision 2", exact: true }).click();
     await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 2 in force");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
