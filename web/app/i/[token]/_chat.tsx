@@ -285,7 +285,7 @@ export function InterviewChat({ token }: { token: string }) {
         <ol aria-label="Conversation" className="flex flex-col gap-3">
           {messages.map((m, i) => {
             // qa-docs-87: a run of messages from one side is one group, named once.
-            const run = i > 0 && messages[i - 1].role === m.role && !skipped.has(i - 1);
+            const run = i > 0 && messages[i - 1].role === m.role;
             return (
               <Fragment key={`${m.at}-${i}`}>
               <li

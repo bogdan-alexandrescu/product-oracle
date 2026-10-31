@@ -29,9 +29,9 @@ test("a brief shows its approach, touches with code map refs, risks, answered qu
 
   const touches = page.getByRole("table", { name: "What it touches" });
   const pricing = touches.getByRole("row", { name: /web\/checkout\/summary/ });
-  await expect(pricing).toContainText("Change");
+  await expect(pricing).toContainText("Changes an existing module"); // qa4-docs-share-46
   await expect(pricing).toContainText("Checkout web");
-  await expect(touches.getByRole("row", { name: /GET \/v1\/quotes/ })).toContainText("New");
+  await expect(touches.getByRole("row", { name: /GET \/v1\/quotes/ })).toContainText("Adds a new API");
 
   await expect(page.getByTestId("brief-risks")).toContainText("Tax rules differ by region");
   await expect(page.getByTestId("brief-risks")).toContainText("High");
