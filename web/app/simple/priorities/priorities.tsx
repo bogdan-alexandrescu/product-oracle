@@ -1656,7 +1656,7 @@ function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compa
 function MkPartHead({ data, makes, n, li = false }: { data: Out; makes: boolean; n: number; li?: boolean }) { // MOCK-HOOK
   const Tag = li ? "li" : "h3"; // MOCK-HOOK
   return ( // MOCK-HOOK
-    <Tag data-testid="mk-part-head" className={`flex flex-wrap items-baseline gap-x-2 ${li ? "pt-2" : "mb-2"} ${makes ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>{/* MOCK-HOOK */}
+    <Tag data-testid="mk-part-head" className={`flex flex-wrap items-baseline gap-x-2 ${li ? "pt-2" : "mb-2"} ${makes || !li ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>{/* MOCK-HOOK */}
       <span className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">{makes ? "Makes" : "Misses"} {lineLabel(data)}</span>{/* MOCK-HOOK */}
       <span className="text-[length:var(--simple-small)] text-text2">{n} {n === 1 ? "feature" : "features"}, in rank order</span>{/* MOCK-HOOK */}
     </Tag> // MOCK-HOOK

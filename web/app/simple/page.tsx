@@ -189,7 +189,7 @@ export default function SimpleHome() {
   useEffect(() => setQp4(new URLSearchParams(window.location.search).get("qp4")), []); // MOCK-HOOK
   const [mkSummary, setMkSummary] = useState<Change | null>(null); // MOCK-HOOK qp4=b: the proposal whose Accept shows its moves first
   const [mkAll, setMkAll] = useState<string | null>(null); // MOCK-HOOK qp4=a: the row whose every move shows
-  const [mkOpenGoal, setMkOpenGoal] = useState<string | null>(null); // MOCK-HOOK qp4=c: the goal card opened in place
+  const [mkOpenGoal, setMkOpenGoal] = useState<string[]>([]); // MOCK-HOOK qp4=c: the goal card opened in place
   const proposes = can("create_simple_change");
   const decidesAll = can("accept_simple_change");
   const reads = !proposes;
@@ -528,11 +528,11 @@ export default function SimpleHome() {
                       <span className="simple-small" data-testid="mk-goal-planned">{(() => { const n = roadmap.data?.items.filter((i) => i.goal?.id === g.id).length ?? 0; return n ? `${n} planned · opens on the roadmap` : "Nothing planned yet"; })()}</span> // MOCK-HOOK
                     )}{/* MOCK-HOOK */}
                     {qp4 === "c" && ( // MOCK-HOOK
-                      <button type="button" aria-expanded={mkOpenGoal === g.id} onClick={() => setMkOpenGoal(mkOpenGoal === g.id ? null : g.id)} className="simple-small self-start font-semibold text-accent-ink underline" data-testid="mk-goal-open">{/* MOCK-HOOK */}
-                        {mkOpenGoal === g.id ? "Hide what's planned" : `What's planned (${roadmap.data?.items.filter((i) => i.goal?.id === g.id).length ?? 0})`}{/* MOCK-HOOK */}
+                      <button type="button" aria-expanded={mkOpenGoal.includes(g.id)} onClick={() => setMkOpenGoal(mkOpenGoal.includes(g.id) ? mkOpenGoal.filter((x) => x !== g.id) : [...mkOpenGoal, g.id])} className="simple-small self-start font-semibold text-accent-ink underline" data-testid="mk-goal-open">{/* MOCK-HOOK */}
+                        {mkOpenGoal.includes(g.id) ? "Hide what's planned" : `What's planned (${roadmap.data?.items.filter((i) => i.goal?.id === g.id).length ?? 0})`}{/* MOCK-HOOK */}
                       </button> // MOCK-HOOK
                     )}{/* MOCK-HOOK */}
-                    {qp4 === "c" && mkOpenGoal === g.id && ( // MOCK-HOOK
+                    {qp4 === "c" && mkOpenGoal.includes(g.id) && ( // MOCK-HOOK
                       <ul className="simple-small flex flex-col gap-0.5" data-testid="mk-goal-items">{/* MOCK-HOOK */}
                         {(roadmap.data?.items.filter((i) => i.goal?.id === g.id) ?? []).map((i) => <li key={i.id}><Link href={`/simple/roadmap?goal=${encodeURIComponent(i.goal?.key ?? "")}`} className="underline">{i.title}</Link> · {calendarDay(i.start.date)} – {calendarDay(i.end.date)}</li>)}{/* MOCK-HOOK */}
                         {!roadmap.data?.items.some((i) => i.goal?.id === g.id) && <li>Nothing planned yet. Ask for suggestions below.</li>}{/* MOCK-HOOK */}
