@@ -262,7 +262,7 @@ for (const v of VIEWS) {
       const b = (await mark(page, "setup-video").boundingBox())!;
       const overlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
       expect(overlap).toBe(0);
-      await expect(mark(page, "alert-export").getByTestId("vxe-code")).toHaveText("AE");
+      await expect(mark(page, "alert-export").getByTestId("vxe-code")).toHaveText("AHE");
       // The median lines say what they are ("middle effort", "middle value"), never under a mark.
       const marks = await page.getByTestId("vxe-point").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
       for (const id of ["vxe-middle-effort", "vxe-middle-value"]) {

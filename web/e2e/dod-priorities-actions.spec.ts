@@ -164,7 +164,7 @@ test.describe("phone", () => {
     await open(page);
     await dragRow(page, "alert-export", 0);
     await giveReason(page, "Two large customers asked for it", "Move");
-    await expect(page.getByText("Moved Alert history export (AE) to rank 1")).toBeVisible();
+    await expect(page.getByText("Moved Alert history export (AHE) to rank 1")).toBeVisible();
     expect((await codes(page))[0]).toBe("alert-export");
     await expect(row(page, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
     await expect(row(page, "alert-export").getByTestId("prio-override")).toContainText("Moved by Admin: “Two large customers asked for it”");
