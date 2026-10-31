@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ds/Icon";
 import { askWith } from "@/components/hop/open-state";
 import { toast } from "@/components/ds/Toast";
+import { meetingMoment } from "@/components/simple/FlowVisual";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -345,9 +346,7 @@ export function QuestionRow({
   const done = q.column === "decided" || mode === "decided";
   const recommended = !!q.recommendation && writes && !done;
   // qa4-simple-decide-19: a meeting's one moment format ("Fri Oct 30, 8:18 PM"), no zone letters: the meeting names its zone.
-  const at = q.decided_at
-    ? `${formatInZone(q.decided_at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(q.decided_at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`
-    : null;
+  const at = q.decided_at ? meetingMoment(q.decided_at, zone) : null;
   // qa-simple-decide-44: the answer itself, not "as recommended".
   const here = [`Decided in this meeting${q.chosen ? `: ${q.chosen}` : ""}`, q.decided_by?.name, at].filter(Boolean).join(" · ");
   const another = (label: string) => (
