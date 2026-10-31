@@ -108,7 +108,7 @@ for (const phone of [false, true]) {
         const meta = page.getByTestId("one-pager-meta");
         await expect(meta).toContainText("Approved");
         await expect(meta).toContainText(phone ? "v3 · Oct 20, 2026" : "Version 3 · Oct 20, 2026");
-        await expect(meta).toContainText("Owner Admin");
+        await expect(meta).toContainText("Owner Avery Stone");
         await expect(meta).toContainText("Nov 2, 2026 → Feb 12, 2027");
         await expect(meta).toContainText("56 engineer-weeks");
         for (const name of ["Present", "Export PDF", "Start review"]) await expect(page.getByRole("button", { name, exact: true })).toBeVisible();

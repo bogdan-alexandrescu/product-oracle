@@ -63,14 +63,14 @@ for (const size of SIZES) {
       await baseline.getByRole("button", { name: "Approve and continue" }).click();
       const items = inspector(page).getByTestId("run-decisions").getByTestId("run-decision");
       await expect(items).toHaveCount(1);
-      await expect(items.nth(0)).toHaveText("The baseline was approved by Admin. Note: Name an owner for every goal.");
+      await expect(items.nth(0)).toHaveText("The baseline was approved by Avery Stone. Note: Name an owner for every goal.");
 
       await page.getByRole("button", { name: "Refresh progress" }).click();
       const featureSet = page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" });
       await featureSet.getByLabel("Note for the agents").fill("Split bulk import into its own feature");
       await featureSet.getByRole("button", { name: "Request changes" }).click();
       await expect(items).toHaveCount(2);
-      await expect(items.nth(1)).toHaveText("Changes were asked for at Feature set and dependencies by Admin. Note: Split bulk import into its own feature.");
+      await expect(items.nth(1)).toHaveText("Changes were asked for at Feature set and dependencies by Avery Stone. Note: Split bulk import into its own feature.");
       const sent = page.getByTestId("sent-review").filter({ visible: true }).first();
       await expect(sent).toContainText("Sent back · Split bulk import into its own feature · View review");
       await expect(sent).not.toContainText("0 entries");

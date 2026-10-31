@@ -57,13 +57,13 @@ for (const phone of [false, true]) {
       await expect(start).toBeDisabled();
       await expect(s.getByTestId("start-missing")).toHaveText("Tick at least one attendee besides you.");
       await expect(start).toHaveAccessibleDescription("Tick at least one attendee besides you.");
-      await s.getByRole("group", { name: "Who attends" }).getByRole("checkbox", { name: "Commenter" }).check();
+      await s.getByRole("group", { name: "Who attends" }).getByRole("checkbox", { name: "Theo Brandt" }).check();
       await expect(s.getByTestId("start-missing")).toHaveCount(0);
       await expect(start).toBeEnabled();
       await tap(s.getByRole("radio", { name: "Presenter plus one or two people" }));
       await expect(start).toBeDisabled();
       await expect(s.getByTestId("start-missing")).toHaveText("Pick who may change things.");
-      await s.getByLabel("Who else changes things").getByRole("checkbox", { name: "Commenter" }).check();
+      await s.getByLabel("Who else changes things").getByRole("checkbox", { name: "Theo Brandt" }).check();
       await expect(s.getByTestId("start-missing")).toHaveCount(0);
       await expect(start).toBeEnabled();
     });

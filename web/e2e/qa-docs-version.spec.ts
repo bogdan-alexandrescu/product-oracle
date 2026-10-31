@@ -177,7 +177,7 @@ test.describe("desktop", () => {
     await expect(form.getByTestId("oracle-rule")).toHaveText("Oracle will reply");
     await visible.getByRole("button", { name: "Only people I pick" }).click();
     await form.getByRole("searchbox", { name: "Find a person" }).fill("approver");
-    await form.getByRole("option", { name: /Approver/ }).click();
+    await form.getByRole("option", { name: /Priya Raman/ }).click();
     await expect(ask).not.toBeChecked();
     await expect(ask).toBeEnabled();
     await expect(form.getByTestId("oracle-rule")).toHaveText("Oracle replies when you @mention it");

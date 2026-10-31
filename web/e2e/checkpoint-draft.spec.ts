@@ -77,7 +77,7 @@ test("a commenter's suggestion shows on the approver's page within one poll", as
   await expect(bar(other).getByRole("button", { name: /^Approve/ })).toHaveCount(0);
 
   // The approver's page reads the draft every 10 s.
-  await expect(budget.getByTestId("suggested-by")).toHaveText(/Suggested by Commenter: Move to Later/, { timeout: 12_000 });
+  await expect(budget.getByTestId("suggested-by")).toHaveText(/Suggested by Theo Brandt: Move to Later/, { timeout: 12_000 });
   await budget.getByRole("button", { name: "Stage" }).click();
   await expect(budget.getByTestId("row-done")).toHaveText(/✓ Moved to Later/);
 });
@@ -101,7 +101,7 @@ test("a decision over a draft that changed since it loaded is refused until I lo
   // The confirm sheet stays open over the bar on a refusal: close it to read why.
   await page.getByTestId("sheet-send-back").getByRole("button", { name: "Cancel" }).click();
   const changed = bar(page).getByTestId("review-changed");
-  await expect(changed).toContainText("The review changed since you loaded it (1 change by Commenter): look again, then decide.");
+  await expect(changed).toContainText("The review changed since you loaded it (1 change by Theo Brandt): look again, then decide.");
   // Nothing was decided: the checkpoint still waits.
   await expect(page.getByTestId("review-status")).toHaveText(/Waiting for you/);
 

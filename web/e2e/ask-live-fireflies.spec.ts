@@ -109,7 +109,7 @@ test("with others in the chat live reads are off, and a chat holding live reads 
   const form = page.getByTestId("start-discussion").filter({ visible: true });
   await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
   await form.getByRole("searchbox", { name: "Find a person" }).fill("approver");
-  await form.getByRole("option", { name: /Approver/ }).click();
+  await form.getByRole("option", { name: /Priya Raman/ }).click();
   await form.getByRole("button", { name: "Start discussion" }).click();
   const shared = page.getByTestId("discussion-thread").filter({ visible: true }).first();
   await expect(shared.getByTestId("discussion-people")).toHaveText("2 people");
@@ -124,7 +124,7 @@ test("with others in the chat live reads are off, and a chat holding live reads 
   await panel(page).getByRole("menuitem", { name: "People" }).click();
   const people = thread(page).getByTestId("discussion-people-list");
   await people.getByRole("searchbox", { name: "Find a person" }).fill("approver");
-  await people.getByRole("option", { name: /Approver/ }).click();
+  await people.getByRole("option", { name: /Priya Raman/ }).click();
   await expect(people.getByRole("alert")).toHaveText(
     "This chat holds what Oracle read from your sources. Use Share as discussion to share an edited summary instead.",
   );

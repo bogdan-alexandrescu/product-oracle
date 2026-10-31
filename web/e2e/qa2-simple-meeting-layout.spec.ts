@@ -25,7 +25,7 @@ async function startReview(page: Page) {
   await tap(page.getByRole("button", { name: "Start review" }).first());
   const s = page.getByRole("dialog", { name: "Start a review" });
   await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await s.getByRole("checkbox", { name: "Commenter" }).check();
+  await s.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await tap(s.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 }
@@ -49,7 +49,7 @@ test.describe("desktop", () => {
     // The one-pager lane's empty margin (qa-simple-prd-34) names what it holds.
     await expect(page.getByRole("region", { name: "Stage" })).toContainText("No changes yet.");
     const box = chat(page);
-    await box.getByRole("textbox", { name: "Message Oracle" }).fill("push Team invite nudges to next quarter and make Commenter own it");
+    await box.getByRole("textbox", { name: "Message Oracle" }).fill("push Team invite nudges to next quarter and make Theo Brandt own it");
     await tap(box.getByRole("button", { name: "Send" }));
     await tap(box.getByRole("button", { name: "Apply all" }));
     // No reload: All decisions lists what the chat changed.

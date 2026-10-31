@@ -12,6 +12,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { FIREFLIES_CONNECTION_ID } from "./fireflies";
+import { newCompany } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID, notionPages } from "./notion";
 
 type ConnectionRow = Schemas["ConnectionOut"];
@@ -298,7 +299,33 @@ function load(): ConnDb {
   } catch {
     // fall through to a fresh state
   }
-  return { connections: [], settings: {} };
+  return { connections: newCompany() ? [] : seedConnections(), settings: {} };
+}
+
+/**
+ * qa5-mock-people: the default company's person has connected GitHub with a token (the
+ * Sources page's "example-org" account) and Notion; Slack, Google Docs and Fireflies are left
+ * for the tests to connect. A new company (the "empty" scenario) starts with none.
+ */
+function seedConnections(): ConnectionRow[] {
+  const row = (id: string, provider: string, account_id: string, account_label: string, scopes: string[], created_at: string, last_used_at: string): ConnectionRow => ({
+    id,
+    provider,
+    auth_mode: "token",
+    account_id,
+    account_label,
+    scopes,
+    status: "active",
+    last_error: null,
+    expires_at: null,
+    last_used_at,
+    created_at,
+    updated_at: created_at,
+  });
+  return [
+    row("c0000000-0000-4000-8000-000000000002", "github", "github-example-org", "example-org", ["repo"], "2026-09-02T10:00:00Z", "2026-10-20T06:00:00Z"),
+    row("c0000000-0000-4000-8000-000000000004", "notion", "notion-example", "Example Notion", [], "2026-09-10T14:30:00Z", "2026-10-19T06:00:00Z"),
+  ];
 }
 
 /** A company setting as the mock stores it (its default when unset). */

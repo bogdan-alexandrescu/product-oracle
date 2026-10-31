@@ -19,7 +19,7 @@ test("members: remove asks in an in-app dialog, then restore lets them sign in a
 
   await page.getByRole("button", { name: "Remove commenter@example.com" }).click();
   // A5: the title names them; the fixed lines gave way to the preview of what this ends.
-  const dialog = page.getByRole("dialog", { name: "Remove Commenter?" });
+  const dialog = page.getByRole("dialog", { name: "Remove Theo Brandt?" });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("commenter@example.com · Commenter");
   for (const line of ["can't sign in", "History keeps their name", "An owner can restore them"]) {
@@ -62,7 +62,7 @@ test("members: removing revokes the member's tokens, and Undo restores them righ
   const row = memberRow(page, "approver@example.com");
   await expect(row.getByTestId("open-tokens")).toHaveText("1");
   await page.getByRole("button", { name: "Remove approver@example.com" }).click();
-  await page.getByRole("dialog", { name: "Remove Approver?" }).getByRole("button", { name: "Remove member" }).click();
+  await page.getByRole("dialog", { name: "Remove Priya Raman?" }).getByRole("button", { name: "Remove member" }).click();
   // Undo sits where Remove was, for about a second.
   await row.getByRole("button", { name: "Undo" }).click();
   await expect(row).toHaveAttribute("data-status", "active");
@@ -82,7 +82,7 @@ test("members: you cannot remove yourself or the last owner, and the control say
   await expect(page.getByRole("tooltip").filter({ hasText: "can't remove yourself" })).toBeVisible();
   await expect(page.getByRole("tooltip").filter({ hasText: "only owner" })).toBeVisible();
   await remove.click({ force: true });
-  await expect(page.getByRole("dialog", { name: "Remove Admin?" })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Remove Avery Stone?" })).toBeHidden();
 
   // With a second owner you are no longer the last one, but still cannot remove yourself.
   await page.getByLabel("Role for approver@example.com").selectOption("owner");

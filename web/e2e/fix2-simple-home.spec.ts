@@ -149,7 +149,7 @@ test("qa-simple-home-14: a toast holds while focus is on its Undo", async ({ pag
 });
 
 test("qa-simple-home-15: since my last visit says my own change as mine and drops it once undone", async ({ page }) => {
-  // fails_when: my change reads "Admin moved ..." or stays as "... · undone" with an undo row
+  // fails_when: my change reads "Avery Stone moved ..." or stays as "... · undone" with an undo row
   await signIn(page, EMAILS.owner);
   await digest(page).getByRole("button", { name: "Move the dependents", exact: true }).click();
   const since = page.getByTestId("home-since");
@@ -178,6 +178,13 @@ test("qa-simple-home-24: one change in review reads 'until it is approved'", asy
 test("qa-simple-home-25 and -36: a viewer with no name is greeted plainly, with no gap for a walk", async ({ page }) => {
   // fails_when: "Good morning, viewer." or an invisible 40 px "Walk me through it" slot for a known viewer
   await signIn(page, EMAILS.viewer);
+  // The mock's viewer has a name: they clear it on My account first.
+  await page.goto("/account");
+  const mine = page.getByRole("form", { name: "Your name" });
+  await mine.getByLabel("Name", { exact: true }).fill("");
+  await mine.getByRole("button", { name: "Save" }).click();
+  await expect(mine.getByRole("button", { name: "Saved" })).toBeVisible();
+  await page.goto("/simple");
   const lead = page.getByTestId("home-greeting").locator(".simple-lead");
   await expect(lead).toHaveText(/^Good (morning|afternoon|evening)\. Here is where the plan stands\.$/);
   await expect(page.getByTestId("home-walk-slot")).toHaveCount(0);

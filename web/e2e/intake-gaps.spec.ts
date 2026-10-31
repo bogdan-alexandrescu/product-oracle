@@ -66,13 +66,13 @@ test("add and triage: add a gap by hand, set its fields, defer and reopen it", a
   await triage.getByLabel("Sections").fill("scope.non_goals, launch.rollout");
   await triage.getByLabel("Closed when").fill("The team names what the first release leaves out.");
   await triage.getByRole("button", { name: "Choose an owner" }).click();
-  await triage.getByRole("option", { name: /Approver/ }).click();
+  await triage.getByRole("option", { name: /Priya Raman/ }).click();
   await triage.getByRole("button", { name: "Save" }).click();
   await expect(triage).toHaveCount(0);
   await expect(row).toContainText("Medium");
   await expect(row).toContainText("Launch rollout");
   await expect(row).toContainText("Closed when: The team names what the first release leaves out.");
-  await expect(row).toContainText("Owner: Approver");
+  await expect(row).toContainText("Owner: Priya Raman");
 
   await row.getByRole("button", { name: "Defer" }).click();
   await expect(row.getByTestId("gap-status")).toHaveText("Deferred");

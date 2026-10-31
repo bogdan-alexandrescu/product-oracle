@@ -24,7 +24,7 @@ async function propose(page: Page) {
   await dialog.getByLabel("Decision", { exact: true }).fill(TITLE);
   await dialog.getByLabel("Option 1", { exact: true }).fill("Annual at launch");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Monthly only");
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Priya Raman · ${APPROVER}` });
   await dialog.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(row(page, TITLE)).toContainText("Proposed");
@@ -68,7 +68,7 @@ test("a withdrawn decision's inspector says who withdrew it, when and why", asyn
   const form = inspector(page).getByRole("form", { name: "Withdraw" });
   await form.getByLabel("Reason").fill("Pricing moved to next quarter");
   await form.getByRole("button", { name: "Withdraw" }).click();
-  const line = `Withdrawn by Commenter, ${today()}: Pricing moved to next quarter`;
+  const line = `Withdrawn by Theo Brandt, ${today()}: Pricing moved to next quarter`;
   await expect(inspector(page).getByTestId("decision-withdrawn")).toHaveText(line);
   await expect(inspector(page).getByRole("button", { name: "Withdraw" })).toHaveCount(0);
 

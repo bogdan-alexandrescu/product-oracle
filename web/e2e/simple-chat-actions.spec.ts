@@ -13,7 +13,7 @@ import { ADMIN, signOut } from "./helpers";
  * screen (S8's live review of Guided setup, started through the UI: the Agenda strip, Notes
  * so far, All decisions) or the plan; Undo takes it back. The Ask panel refuses the
  * meeting-only phrases and records a decision on the page's PRD (the Decisions page). The
- * mock's invented people (Admin the owner, Approver, Commenter, Viewer) and items. Desktop
+ * mock's invented people (Avery Stone the owner, Priya Raman, Theo Brandt, Lena Ortiz) and items. Desktop
  * (1366x820) and phone (390x844), light and dark.
  */
 
@@ -39,7 +39,7 @@ async function startReview(page: Page) {
   await signIn(page, EMAILS.owner, "/simple/prds/guided-setup");
   await tap(page.getByRole("button", { name: "Start review" }));
   const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByRole("checkbox", { name: "Commenter" }).check();
+  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await tap(sheet.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   await expect(page.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
@@ -110,7 +110,7 @@ for (const [phone, dark] of [
       await preview(note, "Adds to the minutes' notes: Ship the checklist copy first");
       await apply(note);
       await expect(notes.getByTestId("meeting-note").filter({ hasText: "Ship the checklist copy first" })).toContainText("Note: Ship the checklist copy first");
-      await expect(notes.getByTestId("meeting-note").first()).toContainText("Admin");
+      await expect(notes.getByTestId("meeting-note").first()).toContainText("Avery Stone");
 
       const q = await understood(chat(page), "open question: Who writes the tour script?", "Add the open question: Who writes the tour script?");
       await preview(q, "Adds to the open questions: Who writes the tour script?");
@@ -166,29 +166,29 @@ for (const [phone, dark] of [
     });
 
     test(`a decision and a new owner and decider from the meeting chat (${where})`, async ({ page }) => {
-      // protects: "decision: …" restates as "Record the decision: …" (Preview: "Decision: … — decided by Admin", "In this meeting's decisions") and Apply adds it under All decisions; "Approver owns Setup checklist" ("Make Approver the owner of Setup checklist", Preview "Owner: … → Approver") makes Approver its owner (Oracle then answers "Approver owns Setup checklist."); "Commenter decides Setup checklist" restates and previews the decider; an unknown person gets the contract's question and no card
+      // protects: "decision: …" restates as "Record the decision: …" (Preview: "Decision: … — decided by Avery Stone", "In this meeting's decisions") and Apply adds it under All decisions; "Priya Raman owns Setup checklist" ("Make Priya Raman the owner of Setup checklist", Preview "Owner: … → Priya Raman") makes Priya Raman its owner (Oracle then answers "Priya Raman owns Setup checklist."); "Theo Brandt decides Setup checklist" restates and previews the decider; an unknown person gets the contract's question and no card
       // fails_when: the decision is missing from All decisions, the owner does not change, a Preview has no description, or an unknown name makes a card
       // no_claim: the roadmap's own owner chip (simple-roadmap specs), the decider's rights after the change
       await startReview(page);
       const decided = page.getByRole("region", { name: "Decisions in this meeting" });
 
       const d = await understood(chat(page), "decision: Keep the checklist to five steps", "Record the decision: Keep the checklist to five steps");
-      await preview(d, "Decision: Keep the checklist to five steps — decided by Admin", "In this meeting's decisions");
+      await preview(d, "Decision: Keep the checklist to five steps — decided by Avery Stone", "In this meeting's decisions");
       await apply(d);
       await expect(d.getByTestId("chat-card-decision")).toHaveText("Recorded as a meeting decision");
       await expect(decided.getByTestId("meeting-decision").filter({ hasText: "Keep the checklist to five steps" })).toBeVisible();
 
-      const own = await understood(chat(page), "Approver owns Setup checklist", "Make Approver the owner of Setup checklist");
-      await preview(own, "Owner: ", "→ Approver");
+      const own = await understood(chat(page), "Priya Raman owns Setup checklist", "Make Priya Raman the owner of Setup checklist");
+      await preview(own, "Owner: ", "→ Priya Raman");
       await apply(own);
       await sayIn(chat(page), "who owns Setup checklist?");
-      await expect(chat(page).locator('[data-testid="chat-message"][data-kind="answer"]').last()).toContainText("Approver owns Setup checklist.");
+      await expect(chat(page).locator('[data-testid="chat-message"][data-kind="answer"]').last()).toContainText("Priya Raman owns Setup checklist.");
 
-      const dec = await understood(chat(page), "Commenter decides Setup checklist", "Make Commenter the decider of Setup checklist");
-      await preview(dec, "Decider: ", "→ Commenter");
+      const dec = await understood(chat(page), "Theo Brandt decides Setup checklist", "Make Theo Brandt the decider of Setup checklist");
+      await preview(dec, "Decider: ", "→ Theo Brandt");
       await apply(dec);
       await sayIn(chat(page), "who decides Setup checklist?");
-      await expect(chat(page).locator('[data-testid="chat-message"][data-kind="answer"]').last()).toContainText("Commenter decides Setup checklist.");
+      await expect(chat(page).locator('[data-testid="chat-message"][data-kind="answer"]').last()).toContainText("Theo Brandt decides Setup checklist.");
 
       const before = await chat(page).getByTestId("chat-card").count();
       await sayIn(chat(page), "Zelda owns Setup checklist");
@@ -201,7 +201,7 @@ for (const [phone, dark] of [
     });
 
     test(`the Ask panel refuses the meeting-only phrases and records a decision on the page (${where})`, async ({ page }) => {
-      // protects: on Ask ("This page", the Guided setup PRD), "note: …" and "skip …" get the contract's note and no card; "decision by Approver: …" restates as "Record the decision: …" (Preview "— decided by Approver", "On the Decisions page") and Apply puts it on the Decisions page
+      // protects: on Ask ("This page", the Guided setup PRD), "note: …" and "skip …" get the contract's note and no card; "decision by Priya Raman: …" restates as "Record the decision: …" (Preview "— decided by Priya Raman", "On the Decisions page") and Apply puts it on the Decisions page
       // fails_when: a meeting-only phrase makes a card outside a meeting, or the applied decision is not on the Decisions page
       // no_claim: Oracle's Ask for other lines (simple-ask-one-box.spec.ts)
       await signIn(page, EMAILS.owner, "/simple/prds/guided-setup");
@@ -215,8 +215,8 @@ for (const [phone, dark] of [
       await expect(thread.locator('[data-testid="chat-message"][data-kind="note"]')).toHaveCount(2);
       await expect(thread.getByTestId("chat-card")).toHaveCount(0);
 
-      const d = await understood(panel, "decision by Approver: Guided setup starts with the checklist", "Record the decision: Guided setup starts with the checklist");
-      await preview(d, "Decision: Guided setup starts with the checklist — decided by Approver", "On the Decisions page");
+      const d = await understood(panel, "decision by Priya Raman: Guided setup starts with the checklist", "Record the decision: Guided setup starts with the checklist");
+      await preview(d, "Decision: Guided setup starts with the checklist — decided by Priya Raman", "On the Decisions page");
       await apply(d);
       await page.goto("/simple/decisions");
       await expect(page.getByRole("region", { name: "Outside meetings" })).toContainText("Guided setup starts with the checklist");
@@ -238,15 +238,15 @@ for (const [phone, dark] of [
     });
 
     test(`an approver's "owns" proposes; a viewer in a meeting gets no card (${where})`, async ({ page }) => {
-      // protects: an approver's "Approver owns In-app tour" on Ask is a card whose button is Propose (they do not decide that item) and Apply proposes it to the owners ("Proposed to Admin by Approver"); a viewer's "note: …" and "Admin owns …" in a meeting chat get the viewers' note and no card
+      // protects: an approver's "Priya Raman owns In-app tour" on Ask is a card whose button is Propose (they do not decide that item) and Apply proposes it to the owners ("Proposed to Avery Stone by Priya Raman"); a viewer's "note: …" and "Avery Stone owns …" in a meeting chat get the viewers' note and no card
       // fails_when: the approver's card applies, or a viewer gets a card
       // no_claim: accepting the proposal (simple-deciders.spec.ts covers proposals' accept)
       await chatScenario(page);
       await signIn(page, EMAILS.approver, "/simple/roadmap");
       const panel = await openAsk(page, phone);
-      const card = await understood(panel, "Approver owns In-app tour", "Make Approver the owner of In-app tour");
+      const card = await understood(panel, "Priya Raman owns In-app tour", "Make Priya Raman the owner of In-app tour");
       await tap(card.getByRole("button", { name: "Propose" }));
-      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by you");
+      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Avery Stone by you");
       await expect(card.getByRole("button", { name: "Undo" })).toHaveCount(0);
 
       // The viewer, in a tab of their own (each tab keeps its own sign-in; the account menu is in the desktop rail).
@@ -261,7 +261,7 @@ for (const [phone, dark] of [
       await expect(tab.locator('[data-testid="chat-rules"], [data-testid="chat-mode"]').first()).toBeVisible();
       await sayIn(chat(tab), "note: Ship the checklist copy first");
       await expect(chat(tab).locator('[data-testid="chat-message"][data-kind="note"]').last()).toContainText("Viewers ask questions here");
-      await sayIn(chat(tab), "Admin owns Setup checklist");
+      await sayIn(chat(tab), "Avery Stone owns Setup checklist");
       await expect(chat(tab).locator('[data-testid="chat-message"][data-kind="note"]')).toHaveCount(2);
       await expect(chat(tab).getByTestId("chat-card")).toHaveCount(0);
     });

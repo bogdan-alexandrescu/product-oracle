@@ -89,7 +89,7 @@ test("share a Board link: the address and passcode are shown once; the holder ne
   const row = links.getByRole("row").filter({ hasText: "Board, October meeting" });
   await expect(row).toContainText("Board");
   await expect(row).toContainText("v1");
-  await expect(row).toContainText("Admin");
+  await expect(row).toContainText("Avery Stone");
   await expect(row.getByTestId("share-state")).toHaveText("Active");
   await expect(row.getByTestId("share-views")).toHaveText("0");
   // The token is gone: no Copy on the row.

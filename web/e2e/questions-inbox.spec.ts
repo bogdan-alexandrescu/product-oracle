@@ -5,7 +5,7 @@ import { login, openSection, openTab } from "./helpers";
 /*
  * C2 Questions to people: every open question reaches a named person, who answers it from
  * the Inbox. The "questions" mock scenario is the default company plus an "Oracle asks"
- * question on an intake with no PRD (asked of admin), an "Approver asks" question on a PRD
+ * question on an intake with no PRD (asked of admin), a "Priya Raman asks" question on a PRD
  * section (asked of admin) and a question delegated to approver@example.com.
  *
  * Test cards:
@@ -63,7 +63,7 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
   const row = questionRow(page, CLINIC);
   await expect(row).toContainText("Oracle asks");
   await expect(row).toContainText("Before drafting · Clinic waitlist");
-  await expect(questionRow(page, TIERS)).toContainText("Approver asks");
+  await expect(questionRow(page, TIERS)).toContainText("Priya Raman asks");
   await expect(questionRow(page, TIERS)).toContainText("Checkout redesign PRD · Success metrics");
   // The pending access request (A5, #203 part 3) counts too.
   await expect(badge(page)).toHaveText("13");
@@ -116,8 +116,8 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   const form = page.getByTestId("answer-question");
   await form.getByRole("button", { name: /^Ask someone/ }).click();
   await form.getByLabel("Find a person").fill("appr");
-  await form.getByRole("option", { name: /Approver/ }).click();
-  await expect(questionRow(page, TIERS)).toContainText("Asked Approver ✓");
+  await form.getByRole("option", { name: /Priya/ }).click();
+  await expect(questionRow(page, TIERS)).toContainText("Asked Priya Raman ✓");
   // The "I don't know" question still counts in Needs you (owner 2026-10-29): open until a real answer.
   await expect(badge(page)).toHaveText("11");
 
@@ -133,7 +133,7 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   await signOut(page);
   await login(page, "approver@example.com");
   await openInbox(page);
-  await expect(questionRow(page, TIERS)).toContainText("Approver asks");
+  await expect(questionRow(page, TIERS)).toContainText("Priya Raman asks");
   await expect(questionRow(page, DELEGATED)).toHaveCount(1);
 });
 
@@ -147,21 +147,21 @@ test("ask a teammate on a section: Waiting on them, then their answer on the Fee
   await page.getByRole("menuitem", { name: /Ask a teammate/ }).click();
   const ask = page.getByTestId("ask-teammate");
   await ask.getByLabel("Find a person").fill("comm");
-  await ask.getByRole("option", { name: /Commenter/ }).click();
+  await ask.getByRole("option", { name: /Theo/ }).click();
   await ask.getByLabel("Question").fill(question);
   await ask.getByLabel("Why (optional)").fill("The rollout plan depends on it");
   await ask.getByRole("button", { name: "Ask" }).click();
-  await expect(ask).toContainText("Asked Commenter");
+  await expect(ask).toContainText("Asked Theo Brandt");
 
   await openTab(page, "Feedback");
   const asked = page.getByTestId("section-questions").filter({ visible: true }).getByTestId("section-question").filter({ hasText: question });
-  await expect(asked).toContainText("Waiting on Commenter");
+  await expect(asked).toContainText("Waiting on Theo Brandt");
 
   await signOut(page);
   await login(page, "commenter@example.com");
   await openInbox(page);
   const row = questionRow(page, question);
-  await expect(row).toContainText("Admin asks");
+  await expect(row).toContainText("Avery Stone asks");
   await row.getByRole("button", { name: "Answer" }).click();
   await page.getByTestId("answer-question").getByLabel("Your answer").fill(reply);
   await page.getByTestId("answer-question").getByRole("button", { name: "Send answer" }).click();
@@ -174,7 +174,7 @@ test("ask a teammate on a section: Waiting on them, then their answer on the Fee
   await openTab(page, "Feedback");
   const answered = page.getByTestId("section-questions").filter({ visible: true }).getByTestId("section-question").filter({ hasText: question });
   await expect(answered).toContainText(reply);
-  await expect(answered).toContainText("Commenter");
+  await expect(answered).toContainText("Theo Brandt");
   await expect(answered).not.toContainText("Waiting on");
 });
 
@@ -207,9 +207,9 @@ test("private finding: Ask someone is refused until it is shared, and the questi
   const form = page.getByTestId("answer-question");
   await form.getByRole("button", { name: /^Ask someone/ }).click();
   await form.getByLabel("Find a person").fill("appr");
-  await form.getByRole("option", { name: /Approver/ }).click();
+  await form.getByRole("option", { name: /Priya/ }).click();
   await expect(form).toContainText("Share this finding first to ask someone else");
-  await expect(row).not.toContainText("Asked Approver ✓");
+  await expect(row).not.toContainText("Asked Priya Raman ✓");
   await expect(badge(page)).toHaveText(before!);
 
   // Still mine after a reload (under Open, as a question already opened); the approver is

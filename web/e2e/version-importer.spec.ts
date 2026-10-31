@@ -19,7 +19,7 @@ test("each version names who imported it, with no id even in a tooltip (qa-docs-
   await page.goto("/documents/online-deposits");
   const by = page.getByTestId("version-inspector").getByTestId("version-importer");
   for (const [n, name] of [
-    [1, "Approver"],
+    [1, "Priya Raman"],
     [2, "An integration"],
     [3, "Oracle"],
   ] as const) {

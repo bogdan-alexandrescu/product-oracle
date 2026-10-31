@@ -39,13 +39,13 @@ async function meetings(page: Page) {
   await expect(page.getByRole("region", { name: "Upcoming" })).toBeVisible();
 }
 
-/** The owner starts a review of Guided setup with Commenter too; the live meeting screen. */
+/** The owner starts a review of Guided setup with Theo Brandt too; the live meeting screen. */
 async function startReview(page: Page) {
   await meetings(page);
   await tap(page.getByRole("button", { name: "Start review" }).first());
   const s = sheet(page);
   await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await s.getByRole("checkbox", { name: "Commenter" }).check();
+  await s.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await tap(s.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 }
@@ -133,7 +133,7 @@ for (const phone of [false, true]) {
         // The live review is listed under Live only.
         await expect(page.getByRole("region", { name: "Live" })).toContainText("Review: Guided setup");
         await expect(page.getByRole("region", { name: "Upcoming" }).getByRole("link", { name: "Open" })).toHaveCount(0);
-        // qa-simple-decide-8: no Start review that ends in "Only Admin can start"; the reason stands in its place.
+        // qa-simple-decide-8: no Start review that ends in "Only Avery Stone can start"; the reason stands in its place.
         await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
         await expect(page.getByTestId("meetings-start-why")).toBeVisible();
       });
@@ -163,8 +163,8 @@ test.describe("desktop · the live meeting", () => {
     await expect(chat(page).getByRole("textbox", { name: "Message Oracle" })).toBeInViewport();
 
     // Absent: "away" with a grey dot, never struck through.
-    await page.getByRole("button", { name: "Mark Approver away" }).click();
-    const away = page.getByLabel("Attendees").locator("li", { hasText: "Approver" });
+    await page.getByRole("button", { name: "Mark Priya Raman away" }).click();
+    const away = page.getByLabel("Attendees").locator("li", { hasText: "Priya Raman" });
     await expect(away.getByTestId("attendee-away")).toBeVisible();
     expect(await away.evaluate((el) => getComputedStyle(el).textDecorationLine)).not.toContain("line-through");
 

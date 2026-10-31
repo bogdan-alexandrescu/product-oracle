@@ -89,7 +89,7 @@ for (const phone of [false, true]) {
       await say(ask, "rename Setup checklist to First-run checklist");
       const card = ask.getByTestId("chat-card").filter({ hasText: "Rename Setup checklist" });
       await tap(card.getByRole("button", { name: "Propose" }));
-      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by you");
+      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Avery Stone by you");
 
       await say(ask, "feature ask from Rosa Imani: Snooze alerts for a day");
       const askCard = ask.getByTestId("chat-card").filter({ hasText: "New feature ask from Rosa Imani: Snooze alerts for a day" });

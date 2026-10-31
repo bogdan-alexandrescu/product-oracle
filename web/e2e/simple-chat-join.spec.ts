@@ -85,12 +85,12 @@ for (const [phone, dark] of [
       const chat = await meeting(page, EMAILS.owner);
       if (dark) await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
-      await say(chat, "push Delivery pipeline v2 to next quarter and make Commenter own it");
+      await say(chat, "push Delivery pipeline v2 to next quarter and make Theo own it");
       const two = last(chat);
       await expect(two.getByTestId("chat-message-body")).toHaveText("I understood two changes.");
       await expect(two.getByTestId("chat-card")).toHaveCount(2);
       await expect(two.getByTestId("chat-card").nth(0)).toContainText("Move Delivery pipeline v2 to");
-      await expect(two.getByTestId("chat-card").nth(1).getByTestId("chat-card-summary")).toHaveText("Make Commenter the owner of Delivery pipeline v2");
+      await expect(two.getByTestId("chat-card").nth(1).getByTestId("chat-card-summary")).toHaveText("Make Theo Brandt the owner of Delivery pipeline v2");
       await tap(two.getByRole("button", { name: "Apply all" }));
       await expect(two.locator('[data-testid="chat-card"][data-status="applied"]')).toHaveCount(2);
 
@@ -107,7 +107,7 @@ for (const [phone, dark] of [
       // no_claim: a viewer's questions (simple-chat.spec.ts)
       const chat = await meeting(page, EMAILS.viewer);
       for (const text of [
-        "push Delivery pipeline v2 to next quarter and make Commenter own it",
+        "push Delivery pipeline v2 to next quarter and make Theo own it",
         "we decided to keep Delivery integrity and release safety in M3",
         "note that legal must review the PII rules",
         "let's do Delivery pipeline v2 next",

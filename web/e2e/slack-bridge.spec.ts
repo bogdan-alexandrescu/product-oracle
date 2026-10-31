@@ -152,7 +152,7 @@ test("a reply from the mirrored Slack thread appears with via Slack", async ({ p
   await openDiscussion(page, MIRRORED_TITLE);
   const fromSlack = thread(page).getByTestId("discussion-message").filter({ hasText: "Weekly. Daily digests would be noise for most teams." });
   await expect(fromSlack).toHaveCount(1);
-  await expect(fromSlack).toContainText("Commenter");
+  await expect(fromSlack).toContainText("Theo Brandt");
   await expect(fromSlack.getByTestId("via-slack")).toHaveText("via Slack");
   const fromOracle = thread(page).getByTestId("discussion-message").filter({ hasText: "Daily digests or weekly?" });
   await expect(fromOracle.getByTestId("via-slack")).toHaveCount(0);

@@ -80,7 +80,7 @@ test("a commenter proposes but never decides; one option is refused before it is
   await dialog.getByLabel("Decision", { exact: true }).fill("Offer annual billing at launch");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Annual at launch");
   // qa4-company-8: Remove is gone at two options; the second is left empty.
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Priya Raman · ${APPROVER}` });
   await dialog.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(dialog).toContainText("Add at least two options");
   await expect(dialog).toBeVisible();
@@ -208,7 +208,7 @@ test("a section's Record a decision opens Propose decision about that section", 
   await dialog.getByLabel("Decision", { exact: true }).fill("Trace the retention goal to repeat orders");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Repeat orders in 30 days");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Monthly active buyers");
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Priya Raman · ${APPROVER}` });
   await dialog.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(rows(page)).toHaveCount(1);
