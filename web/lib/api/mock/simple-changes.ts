@@ -827,7 +827,8 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   } else if (p[4] === "decline" && c.op === "add_item") reopenSuggestion(db, c);
   else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
-    if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
+    const mkShown = c.id === stableUuid(`simple-proposal/alert-digest/shift_dependents/${c.by}`); // MOCK-HOOK qp4: the seeded move's before is the dates the roadmap shows, not stored ones
+    if (!mkShown && !same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated"); // MOCK-HOOK
     // Into the decider's working draft (their editing session's).
     const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
     const drafts = intoDrafts(db, c, session);

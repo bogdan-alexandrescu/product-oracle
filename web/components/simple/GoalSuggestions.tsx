@@ -113,7 +113,8 @@ export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsAp
     },
     reject: async (s, reason) => {
       const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: reason.trim() || null } });
-      toast({ message: r.data ? `Rejected ${s.title}: Oracle will not suggest it again` : detailOf(r.error) });
+      const mkUndo = r.data && new URLSearchParams(window.location.search).get("qp3") ? { label: "Undo", onClick: () => void (api.POST as unknown as (p: string, o: object) => Promise<unknown>)("/v1/simple/goal-suggestions/{suggestion_id}/reopen", { params: { path: { suggestion_id: s.id } } }).then(() => q.reload()) } : undefined; // MOCK-HOOK qp3: every decline can be undone (needs a new reopen route)
+      toast({ message: r.data ? `Rejected ${s.title}: Oracle will not suggest it again` : detailOf(r.error), action: mkUndo, place: mkUndo ? "rail" : undefined }); // MOCK-HOOK
       await q.reload();
     },
   };
@@ -140,14 +141,14 @@ function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            onReject(reason);
+            onReject(reason || (qp3c && dup ? `Same as ${`${s.looks_like.find((m) => m.id === dup)?.code ?? ""} ${s.looks_like.find((m) => m.id === dup)?.title ?? ""}`.trim()}` : "")); // MOCK-HOOK qp3=c: the picked look-alike is the reason; the Why box stays for more
           }}
         >
           {qp3c && ( // MOCK-HOOK
             <fieldset className="mb-3 flex flex-col gap-1 text-[length:var(--simple-small)]">{/* MOCK-HOOK */}
               <legend className="mb-1 font-medium">Is it the same as a feature you have?</legend>{/* MOCK-HOOK */}
               {[...s.looks_like.map((m) => ({ id: m.id, label: `Same as ${`${m.code} ${m.title}`.trim()}` })), { id: "", label: "No, another reason" }].map((o) => ( // MOCK-HOOK
-                <label key={o.id || "none"} className="flex items-center gap-2"><input type="radio" name={`dup-${s.id}`} checked={dup === o.id} onChange={() => { setDup(o.id); setReason(o.id ? o.label : ""); }} />{o.label}</label> // MOCK-HOOK
+                <label key={o.id || "none"} className="flex items-center gap-2"><input type="radio" name={`dup-${s.id}`} checked={dup === o.id} onChange={() => setDup(o.id)} />{o.label}</label> // MOCK-HOOK
               ))}{/* MOCK-HOOK */}
             </fieldset> // MOCK-HOOK
           )}{/* MOCK-HOOK */}
@@ -191,6 +192,7 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
     void run(async () => { // MOCK-HOOK
       const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: `Same as ${dupName(m)}` } }); // MOCK-HOOK
       toast({ // MOCK-HOOK
+        place: "rail", // MOCK-HOOK top-left over the rail, clear of the open drawer on the right
         message: r.data ? `Declined ${s.title} as a duplicate of ${dupName(m)}` : detailOf(r.error), // MOCK-HOOK
         action: r.data ? { label: "Undo", onClick: () => void (api.POST as unknown as (p: string, o: object) => Promise<unknown>)("/v1/simple/goal-suggestions/{suggestion_id}/reopen", { params: { path: { suggestion_id: s.id } } }).then(() => a.reload()) } : undefined, // MOCK-HOOK
       }); // MOCK-HOOK
@@ -278,9 +280,9 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
               </div> // MOCK-HOOK
             )) // MOCK-HOOK
           ) : ( // MOCK-HOOK
-          s.looks_like.map((m) => (
+          s.looks_like.map((m) => ( // MOCK-HOOK
             <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}`))} />
-          ))
+          )) // MOCK-HOOK
           )}{/* MOCK-HOOK */}
         </div>
         {(accepts || rejects || s.flow) && (

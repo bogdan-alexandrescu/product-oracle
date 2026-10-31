@@ -295,6 +295,7 @@ export default function SimpleHome() {
         const span = (x: { start_date?: string | null; end_date?: string | null }) => (!x.start_date && !x.end_date ? "not dated yet" : `${x.start_date ? calendarDay(x.start_date) : "undated"} – ${x.end_date ? calendarDay(x.end_date) : "undated"}`); // MOCK-HOOK
         return { id, title: itemTitle(id), before: span(b), after: span(a) }; // MOCK-HOOK
       }); // MOCK-HOOK
+  const mkAccepted = (c: Change) => { const m = mkMoves(c); return qp4 && m.length ? `Accepted: ${m.map((x) => `${x.title} now ${x.after}`).join("; ")}` : "Accepted"; }; // MOCK-HOOK
   const mkMoveList = (c: Change, cut?: number) => { // MOCK-HOOK
     const moves = mkMoves(c); // MOCK-HOOK
     const shown = cut && moves.length > cut + 1 ? moves.slice(0, cut) : moves; // MOCK-HOOK
@@ -322,19 +323,18 @@ export default function SimpleHome() {
       title={`${OP_WORDS[c.op] ?? c.op}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
       meta={qp4 === "a" && mkMoves(c).length > 0 ? ( // MOCK-HOOK
         <>{`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}{mkMoveList(c, mkAll === c.id ? undefined : 2)}</>// MOCK-HOOK
-      ) : `${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
+      ) : `${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`} // MOCK-HOOK
       change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
       thumb={NEW_FLOW_OPS.has(c.op)}
       inlineActions
       actions={
-        qp4 === "c" && c.can_decide ? ( // MOCK-HOOK
-          <Link href={REVIEW} className="simple-button simple-button-primary" data-testid="mk-review">Review on the roadmap</Link> // MOCK-HOOK
-        ) : c.can_decide ? ( // MOCK-HOOK
+        c.can_decide ? ( // MOCK-HOOK
           <>
+            {qp4 === "c" && <Link href={REVIEW} className="simple-button" data-testid="mk-review">Review on the roadmap</Link>}{/* MOCK-HOOK */}
             <button
               type="button"
               className="simple-button simple-button-primary"
-              onClick={() => (qp4 === "b" && mkMoves(c).length > 0 ? setMkSummary(c) : void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted"))} // MOCK-HOOK
+              onClick={() => (qp4 === "b" && mkMoves(c).length > 0 ? setMkSummary(c) : void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), mkAccepted(c)))} // MOCK-HOOK
             >
               Accept
             </button>
@@ -448,7 +448,7 @@ export default function SimpleHome() {
     <SimplePage title="Home">
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       {mkSummary && ( // MOCK-HOOK
-        <Dialog title={`Accept: ${OP_WORDS[mkSummary.op] ?? mkSummary.op}`} testId="mk-summary" onClose={() => setMkSummary(null)} actions={<button type="button" className="simple-button simple-button-primary" onClick={() => { const c = mkSummary; setMkSummary(null); void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted"); }}>{`Accept and move ${mkMoves(mkSummary).length} ${mkMoves(mkSummary).length === 1 ? "item" : "items"}`}</button>}>{/* MOCK-HOOK */}
+        <Dialog title={`Accept: ${OP_WORDS[mkSummary.op] ?? mkSummary.op}`} testId="mk-summary" onClose={() => setMkSummary(null)} actions={<button type="button" className="simple-button simple-button-primary" onClick={() => { const c = mkSummary; setMkSummary(null); void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), mkAccepted(c)); }}>{`Accept and move ${mkMoves(mkSummary).length} ${mkMoves(mkSummary).length === 1 ? "item" : "items"}`}</button>}>{/* MOCK-HOOK */}
           <p className="simple-small">{mkSummary.by_name} proposed this{mkSummary.reason ? `: “${mkSummary.reason}”` : "."} These dates change:</p>{/* MOCK-HOOK */}
           {mkMoveList(mkSummary)}{/* MOCK-HOOK */}
         </Dialog> // MOCK-HOOK
@@ -512,7 +512,7 @@ export default function SimpleHome() {
                       </div>
                     )}
                     {/* qa-simple-home-26: the goal opens its features on the roadmap; its code (qa-simple-home-13) only in the tooltip. */}
-                    {qp4 && (qp4 === "c" || !roadmap.data?.items.some((i) => i.goal?.id === g.id) && qp4 === "a") ? ( // MOCK-HOOK
+                    {qp4 === "c" ? ( // MOCK-HOOK
                       <span className="font-semibold text-text" data-testid="home-goal-link">{g.name}</span> // MOCK-HOOK
                     ) : ( // MOCK-HOOK
                     <Link
@@ -523,9 +523,6 @@ export default function SimpleHome() {
                     >
                       {g.name}
                     </Link>
-                    )}{/* MOCK-HOOK */}
-                    {qp4 === "a" && ( // MOCK-HOOK
-                      <span className="simple-small" data-testid="mk-goal-planned">{(() => { const n = roadmap.data?.items.filter((i) => i.goal?.id === g.id).length ?? 0; return n ? `${n} planned · opens on the roadmap` : "Nothing planned yet"; })()}</span> // MOCK-HOOK
                     )}{/* MOCK-HOOK */}
                     {qp4 === "c" && ( // MOCK-HOOK
                       <button type="button" aria-expanded={mkOpenGoal.includes(g.id)} onClick={() => setMkOpenGoal(mkOpenGoal.includes(g.id) ? mkOpenGoal.filter((x) => x !== g.id) : [...mkOpenGoal, g.id])} className="simple-small self-start font-semibold text-accent-ink underline" data-testid="mk-goal-open">{/* MOCK-HOOK */}

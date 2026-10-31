@@ -12,7 +12,7 @@
           "letter": "a",
           "name": "Keep rank order",
           "recommended": false,
-          "what": "The list stays in plain rank order, 1 to 9, whatever line is picked. A row that misses the line carries a small \"Misses\" tag, and the sentence above the list names everything that misses.",
+          "what": "The list stays in plain rank order, 1 to 9, whatever line is picked. The line above the list says the rows stay in rank order. A row that misses the line carries a small \"Misses\" tag, and the sentence above the list names everything that misses.",
           "plus": "Ranks always read 1, 2, 3 down the page, and the list does not jump around when the line changes.",
           "cost": "What makes the line is not together: the one feature that makes the Customer conference sits at rank 2, between features that miss it, so you have to scan the tags to find it.",
           "frames": [
@@ -38,7 +38,7 @@
           "letter": "b",
           "name": "Two headed parts",
           "recommended": true,
-          "what": "The list is split in two parts with a heading each: \"Makes Customer conference · Nov 14, 2026\" and \"Misses Customer conference · Nov 14, 2026\", each with its count and \"in rank order\". Rows keep their real rank number, so a part can start at 2 and skip a number, and the heading says why.",
+          "what": "The list is split in two parts with a heading each: \"Makes Customer conference · Nov 14, 2026\" and \"Misses Customer conference · Nov 14, 2026\", each with its count and \"in rank order\". Rows keep their real rank number, so a part can start at 2 and skip a number, and the heading says why. The \"8 of 9 miss\" sentence goes, since the headings already say it.",
           "why": "It answers the question a person asks when they pick a line (what makes it?) at a glance, says once what the pill said on every row, and keeps each feature's real rank so nothing reads out of order without a reason given.",
           "plus": "One heading replaces eight pills; ranks inside each part go up; works the same on a phone.",
           "cost": "Rank numbers skip across the two parts (2, then 1, 3, 4...), and the list is about two rows taller for the headings.",
@@ -65,7 +65,7 @@
           "letter": "c",
           "name": "Renumber, show rank",
           "recommended": false,
-          "what": "The list is grouped by the line, as today, under one thin divider \"The line: ... everything below misses it\". Rows are numbered 1, 2, 3 down the page; when a feature's place differs from its rank by score, a small \"rank 2\" chip says so.",
+          "what": "The list is grouped by the line, as today, under one thin divider \"The line: ... everything below misses it\". Rows are numbered 1, 2, 3 down the page; when a feature's place differs from its rank by score, a small \"rank 2\" chip says so. The \"8 of 9 miss\" sentence goes, since the divider already says it.",
           "plus": "Numbers always read in order down the page, and the divider is a single line instead of a pill per row.",
           "cost": "Two numbers per row where they differ, which a person has to tell apart; with a later line most rows near the top carry a chip.",
           "frames": [
@@ -79,7 +79,7 @@
             },
             {
               "file": "qp1-c-rest-390.html",
-              "caption": "On a phone: the chip sits beside the name and pushes the goal to the next line."
+              "caption": "On a phone: the \"rank 2\" chip sits at the end of the name line."
             },
             {
               "file": "qp1-c-beta.html",
@@ -91,7 +91,7 @@
           "letter": "d",
           "name": "Side-by-side columns",
           "recommended": false,
-          "what": "On a wide screen the list splits into two columns, \"Makes\" on the left and \"Misses\" on the right, each with its heading and count. On a phone the columns stack.",
+          "what": "On a wide screen the list splits into two columns, \"Makes\" on the left and \"Misses\" on the right, each with its heading and count. On a phone the columns stack. The line above the list says so: what makes it and what misses it sit in two columns.",
           "plus": "Makes and misses are side by side, so the balance is clear at once.",
           "cost": "Rows get half the width, so the numbers wrap under the name; one column can be nearly empty while the other runs long, as it does here (1 against 8).",
           "frames": [
@@ -119,7 +119,7 @@
       "code": "QP2",
       "name": "Value and confidence on a row",
       "question": "How should goal value and confidence read on a ranked row, now that a bar with no label sits beside \"confidence\"?",
-      "common": "Same rows and the same score: goal value × confidence ÷ effort in engineer-weeks. Only the small numbers at the right of each row change. All frames use the This quarter line.",
+      "common": "Same rows and the same score: goal value × confidence ÷ effort in engineer-weeks. Only the small numbers at the right of each row change. All frames use the This quarter line, and rows follow the recommended QP1 pick, so no row carries the long \"Misses this quarter\" pill. Each number keeps its \"·\" with it, so a wrapped line never starts or ends with a stray dot.",
       "proposals": [
         {
           "letter": "a",
@@ -216,7 +216,7 @@
       "code": "QP3",
       "name": "The suggestions drawer",
       "question": "How should the suggestions drawer offer its ways to ask Oracle, and how should a look-alike suggestion be declined?",
-      "common": "Same drawer for the goal Grow retention, with one Oracle suggestion that looks like two features already planned. Every proposal replaces the repeated \"Same as this: decline the suggestion\" links, and every decline can be undone.",
+      "common": "Same drawer for the goal Grow retention, with one Oracle suggestion that looks like two features already planned. Every proposal replaces the repeated \"Same as this: decline the suggestion\" links, and every decline can be undone. Undo needs new API work in every proposal: the real API can only accept or reject a goal suggestion, so it needs a new \"reopen\" route.",
       "proposals": [
         {
           "letter": "a",
@@ -236,7 +236,7 @@
             },
             {
               "file": "qp3-a-result.html",
-              "caption": "Picked Weekly alert digest: the suggestion is declined, with Undo in the message."
+              "caption": "Picked Weekly alert digest: the suggestion is declined, with Undo in the message at top left, clear of the drawer."
             },
             {
               "file": "qp3-a-people.html",
@@ -252,7 +252,7 @@
             },
             {
               "file": "qp3-a-open-390.html",
-              "caption": "On a phone the drawer fills the screen."
+              "caption": "On a phone the drawer opens as a sheet from the bottom, with the page still showing above it."
             }
           ]
         },
@@ -275,7 +275,7 @@
             },
             {
               "file": "qp3-b-result.html",
-              "caption": "Confirmed: the suggestion is declined, with Undo in the message."
+              "caption": "Confirmed: the suggestion is declined, with Undo in the message at top left, clear of the drawer."
             },
             {
               "file": "qp3-b-more.html",
@@ -309,11 +309,11 @@
             },
             {
               "file": "qp3-c-reject.html",
-              "caption": "Reject pressed: the form asks if it is the same as a feature, Weekly alert digest picked."
+              "caption": "Reject pressed: the form asks if it is the same as a feature, Weekly alert digest picked; the Why box stays empty for anything more."
             },
             {
               "file": "qp3-c-result.html",
-              "caption": "Rejected: the suggestion is gone, with Undo in the message."
+              "caption": "Rejected as the same as Weekly alert digest: the suggestion is gone, with Undo in the message."
             },
             {
               "file": "qp3-c-open-1512.html",
@@ -331,13 +331,13 @@
       "code": "QP4",
       "name": "Home: proposals and goal cards",
       "question": "On Home, how should a proposal show what its Accept will move, and where should a goal card take you?",
-      "common": "Same Home with three invented goals and four proposals. The first proposal, \"Move the dependents: Weekly alert digest\", moves two features. The goal Keep alerts quiet has nothing planned yet.",
+      "common": "Same Home with three invented goals and four proposals. The first proposal, \"Move the dependents: Weekly alert digest\", moves two features: Weekly alert digest from Oct 31 – Dec 10 and Mobile alert push from Oct 1 – Dec 20, the dates the roadmap shows, both to after Alert rules engine ends. The goal Keep alerts quiet has nothing planned yet.",
       "proposals": [
         {
           "letter": "a",
           "name": "Moves on the row",
           "recommended": false,
-          "what": "Each proposal row lists what it moves, with the old dates struck out and the new dates beside them. Accept applies it at once; goal cards work as today.",
+          "what": "Each proposal row lists what it moves, with the old dates struck out and the new dates beside them. Accept applies it at once and the message says what moved. Goal cards stay as they are today.",
           "plus": "You see the before and after without opening anything; one press to accept.",
           "cost": "Rows get tall when a proposal moves many items (a longer one shows its first few and \"more\"); the goal card problem is not touched.",
           "frames": [
@@ -355,7 +355,7 @@
             },
             {
               "file": "qp4-a-result.html",
-              "caption": "Accept pressed: the move is made at once and the proposal leaves the list."
+              "caption": "Accept pressed: the move is made at once, the row leaves the list, and the message says both new dates."
             }
           ]
         },
@@ -363,7 +363,7 @@
           "letter": "b",
           "name": "Confirm, filtered list",
           "recommended": true,
-          "what": "Rows stay short. Accept on a proposal that moves dates opens a short window: what was proposed, each feature with its old and new dates, and \"Accept and move 2 items\". A goal card's link opens Priorities showing only that goal, with \"Show all\" and, when nothing is planned for it, saying so.",
+          "what": "Rows stay short. Accept on a proposal that moves dates opens a short window: what was proposed, each feature with its old and new dates, and \"Accept and move 2 items\". A goal card's link opens Priorities showing only that goal, with \"Show all\" and, when nothing is planned for it, saying so. While the goal is picked, the \"miss this quarter\" sentence counts only its features and the \"Not ranked yet\" list is hidden.",
           "why": "It shows the before and after at the moment it matters, keeps Home short, and makes the goal card land on a page about that goal instead of the whole list.",
           "plus": "Home stays as compact as today; the goal link has a clear, honest landing.",
           "cost": "One more press to accept a move; Priorities gains a goal filter it must keep.",
@@ -378,15 +378,15 @@
             },
             {
               "file": "qp4-b-result.html",
-              "caption": "Accept and move pressed: the proposal leaves the list."
+              "caption": "Accept and move pressed: the proposal leaves the list and the message says both new dates."
             },
             {
               "file": "qp4-b-goal-empty.html",
-              "caption": "The Keep alerts quiet card opened: Priorities says nothing for this goal is planned yet."
+              "caption": "The Keep alerts quiet card opened: Priorities says nothing for this goal is planned yet, with nothing else listed."
             },
             {
               "file": "qp4-b-goal.html",
-              "caption": "The Grow retention card opened: Priorities shows only its features, with Show all."
+              "caption": "The Grow retention card opened: Priorities shows only its four features; the miss sentence names only its own."
             },
             {
               "file": "qp4-b-rest-1512.html",
@@ -402,13 +402,13 @@
           "letter": "c",
           "name": "Open in place",
           "recommended": false,
-          "what": "Goal cards open in place to list what is planned, with dates, or say nothing is planned yet. Proposals keep Accept but add \"Review on the roadmap\", which opens the roadmap with its proposals panel beside the dates.",
+          "what": "Goal cards open in place to list what is planned, with dates, or say nothing is planned yet. Proposals keep Accept and Decline and add \"Review on the roadmap\", which opens the roadmap with its proposals panel beside the dates.",
           "plus": "No page change to see a goal's plan; the roadmap shows a move against every other date.",
-          "cost": "Home grows when cards open; reviewing a move means leaving Home for a busy page, and Accept on Home still shows nothing before it acts.",
+          "cost": "Home grows when cards open; a third button on every proposal row (on a phone the row needs two lines of buttons); the panel covers the right part of the timeline; and Accept on Home still shows nothing before it acts.",
           "frames": [
             {
               "file": "qp4-c-rest.html",
-              "caption": "Home at rest: each goal card has a \"What's planned\" link."
+              "caption": "Home at rest: each goal card has a \"What's planned\" link; each proposal has Review on the roadmap beside Accept and Decline."
             },
             {
               "file": "qp4-c-goal.html",
@@ -416,7 +416,7 @@
             },
             {
               "file": "qp4-c-review.html",
-              "caption": "Review on the roadmap pressed: the roadmap opens with the proposals panel."
+              "caption": "Review on the roadmap pressed: the panel opens at Proposals waiting, with the Move the dependents proposal first; it covers the right part of the timeline."
             },
             {
               "file": "qp4-c-rest-1512.html",
@@ -424,7 +424,7 @@
             },
             {
               "file": "qp4-c-rest-390.html",
-              "caption": "Home on a phone, scrolled to the proposals."
+              "caption": "Home on a phone, scrolled to the proposals: the three buttons take two lines."
             }
           ]
         }

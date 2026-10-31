@@ -395,6 +395,12 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   return { start, end };
 }
 
+/** MOCK-HOOK qp4: the dates the roadmap shows for an item (stored, typed or estimated), as its bar draws them. */
+export function shownDates(db: SimpleDb, key: string): { start: string; end: string } { // MOCK-HOOK
+  const s = db.items.find((x) => x.key === key)!; // MOCK-HOOK
+  const r = resolve(db, s, simpleWindows(companyToday())[s.horizon]); // MOCK-HOOK
+  return { start: r.start.date, end: r.end.date }; // MOCK-HOOK
+} // MOCK-HOOK
 /** A milestone no plan dates (the new SimpleMilestone fields, empty). */
 const UNDATED = { start_date: null, end_date: null, effort_weeks: null, done_when: [] as string[], targets: [] as { goal: string; target: string }[] };
 
