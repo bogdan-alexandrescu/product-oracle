@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "./test";
 
+import { ALERTS_APPROVED_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
@@ -30,7 +31,7 @@ async function openReport(page: Page) {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
 }
 
-/** Track outcome for Threshold alerts on spend: +5 points, checked on Dec 15, 2026. */
+/** Track outcome for Threshold alerts on spend (an approved item): +5 points, checked on Dec 15, 2026. */
 async function trackOutcome(page: Page, metric?: string) {
   await page.goto("/plan/outcomes");
   await visible(page, "outcomes-empty").getByRole("button", { name: "Track outcome" }).click();
@@ -141,7 +142,7 @@ test.describe("desktop", () => {
   });
 
   test("qa4-plan-47: with one outcome, its item, prediction and due date show in full", async ({ page }) => {
-    await start(page);
+    await start(page, ALERTS_APPROVED_SCENARIO);
     const form = await trackOutcome(page, "Accounts that finish setup within 7 days");
     await form.getByRole("button", { name: "Track outcome" }).click();
     await expect(form).toHaveCount(0);
@@ -157,7 +158,7 @@ test.describe("desktop", () => {
   });
 
   test("qa4-plan-48: the outcome inspector says the start is not measured yet, with the goal's own metric", async ({ page }) => {
-    await start(page);
+    await start(page, ALERTS_APPROVED_SCENARIO);
     const form = await trackOutcome(page);
     // The Metric comes from the goal picked with the item.
     await expect(form.getByLabel("Metric")).toHaveValue("Accounts that finish setup within 7 days");

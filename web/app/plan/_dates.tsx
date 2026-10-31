@@ -37,7 +37,9 @@ export function DatesTab() {
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const rights = useDateRights();
   // The items' titles, so Applies to names an item as people know it (not its key).
-  const plan = useQuery("plan|approved|basis", () => unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })));
+  // Every row's title, a draft's too: a roadmap still in review has no approved rows, and a
+  // basis on one of its items is named, never shown by its key (qa4-plan-3).
+  const plan = useQuery("plan|all|basis", () => unwrap(api.GET("/v1/plan", { params: { query: { scope: "all" } } })));
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [picked, setPicked] = useState<Filter | null>(null);
   const [dialog, setDialog] = useState<{ kind: "record" } | { kind: "withdraw" | "reject"; basis: Basis } | null>(null);
