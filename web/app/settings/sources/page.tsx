@@ -23,6 +23,7 @@ import {
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
+import { needingAttention, shownStatus } from "@/lib/source-attention";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
@@ -84,16 +85,6 @@ const STATUS_LABEL: Record<Source["status"], string> = {
   needs_attention: "Needs attention",
 };
 
-/**
- * qa4-settings-6: an active source that lost access to something it picked (a doc, a folder,
- * a channel) or whose connection must be reconnected to read its files needs a person: it
- * reads Needs attention, not Active, and the header counts it.
- */
-function needsPerson(s: Source): boolean {
-  if (s.status !== "active") return false;
-  return !!s.reconnect_reason || (s.unavailable_items ?? []).some((u) => (u.status ?? "unavailable") === "unavailable");
-}
-
 /** As oracle.sources.sync words it when the provider refused the connection's credential. */
 const REJECTED = "The connection was rejected";
 
@@ -106,8 +97,6 @@ function connectionRejected(s: Source, connection: { status?: string | null } | 
   return !!s.last_error?.startsWith(REJECTED) || (!!connection?.status && connection.status !== "active");
 }
 
-/** The status a row shows: the API's, or Needs attention for an active source that needs a person. */
-const shownStatus = (s: Source): Source["status"] => (needsPerson(s) ? "needs_attention" : s.status);
 
 /** Fireflies' own API: a source reading it says nothing of where it reads. */
 const FIREFLIES_API = "https://api.fireflies.ai/graphql";
@@ -1083,7 +1072,7 @@ export default function SourceSettingsPage() {
   const { can } = useMe();
   const list = sources.data ?? [];
   const errors = list.filter((s) => s.status === "error").length;
-  const attention = list.filter((s) => shownStatus(s) === "needs_attention").length;
+  const attention = needingAttention(list).length;
   const items = list.reduce((n, s) => n + s.item_count, 0);
 
   const target = useTargetedSource();
