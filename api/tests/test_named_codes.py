@@ -115,6 +115,44 @@ def test_undashed_goal_requirement_and_milestone_codes_are_checked():
     assert plain == named_codes.Findings(unnamed=[], runs=[])
 
 
+# A milestone whose name reads like prose: commas and numbers (invented example data).
+MILESTONE = "200 teams and 50 seats, and onboarding at scale"
+
+
+def test_a_name_in_brackets_after_its_code_names_it():
+    """e2e-draft-codes: "M3 (<name>)" names M3 even when the name starts with a number or
+    holds commas; a name spliced bare after the code ("at M3 200 teams ...") does not."""
+    named = named_codes.findings(
+        f"G-B Faster first week is not expected to move at M3 ({MILESTONE}), and ships later."
+    )
+    assert named == named_codes.Findings(unnamed=[], runs=[])
+    first = named_codes.findings(f"Onboarding at scale (M3) waits. M3: {MILESTONE} is next.")
+    assert first.unnamed == []
+    spliced = named_codes.findings(
+        f"G-B Faster first week is not expected to move at M3 {MILESTONE}."
+    )
+    assert spliced.unnamed == ["M3"]
+
+
+def test_the_prompt_puts_a_prose_name_in_brackets():
+    """The writer is told to bracket a name that reads like a sentence, never to splice it
+    after the code mid-sentence."""
+    assert "M3 (" in flows.NAMED_CODES
+    assert "brackets" in flows.NAMED_CODES
+    text = _prompt("baseline_to_prd", "prd_draft", "critic")
+    assert flows.NAMED_CODES in text
+
+
+def test_the_warning_says_plainly_which_codes_lack_names():
+    md = replace(DRAFT, "Calendar sync may lag.", f"Calendar sync may lag until M3 {MILESTONE}.")
+    [warning] = named_codes.check(parse_draft(md).sections)
+    assert warning.code == "unnamed_code"
+    # The section by its heading, the code, and how to write it, in plain words.
+    assert "M3" in warning.message
+    assert "Risks: M3" in warning.message
+    assert "M3 (its name)" in warning.message
+
+
 FIXTURE = replace(
     replace(DRAFT, "Teams miss shared deadlines.", "Teams miss deadlines: G-4, G-5, G-6."),
     "Calendar sync may lag.",
