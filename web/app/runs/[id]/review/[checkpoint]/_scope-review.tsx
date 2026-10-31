@@ -17,6 +17,7 @@ import type { ReviewViewProps } from "./_shell";
 import { FixButtons, LeaveOutPicker, RequirementRow, ScopeInspector } from "./_scope-inspector";
 import { runDocName } from "../../../_lib";
 
+import { AgentQsGate, AgentQsHeaderCount, AgentQsProvider, AgentQsRowChip, AgentQsRowPanel, AgentQsSetLine, AgentQsTop, aqVariant } from "@/components/review/AgentQsMock"; // MOCK-HOOK
 import { actionsOn, changeText, decisionText, describeAction, fixesFor, goalName, named, pct, reasonText, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
 
 type Filter = "needs" | "all" | "out" | "changed";
@@ -97,7 +98,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const scope = useMemo(() => (scopeQ.data ? named(scopeQ.data) : null), [scopeQ.data]);
   const review = reviewQ.data ?? null;
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("needs");
+  const [filter, setFilter] = useState<Filter>(() => (aqVariant() === "c" ? "all" : "needs")); // MOCK-HOOK
   const [group, setGroup] = useState<Group>("goal");
   const [selected, setSelected] = useState<string | null>(item);
   const [sheet, setSheet] = useState(false);
@@ -295,6 +296,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   );
 
   return (
+    <AgentQsProvider /* MOCK-HOOK */>
     <Page>
       <PageHeader
         back={<RunBackLink run={run} />}
@@ -311,6 +313,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
             ) : (
               <Chip kind={cp.status === "approved" ? "pass" : "na"}>{cp.status === "approved" ? "Approved" : cp.status === "changes_requested" ? "Sent back" : "Skipped"}</Chip>
             )}
+            <AgentQsHeaderCount /* MOCK-HOOK */ />
           </>
         }
         action={
@@ -324,6 +327,8 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           {error}
         </p>
       )}
+      <AgentQsGate /* MOCK-HOOK */ />
+      <AgentQsTop /* MOCK-HOOK */ />
       {fileProblems.length > 0 ? (
         <FileProblems runId={run.id} cpId={cp.id} problems={fileProblems} canDecide={mode === "approver"} onRaw={() => setRawOpen(true)} onDecided={() => router.push(`/runs/${run.id}`)} />
       ) : (
@@ -345,6 +350,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               <SegmentedControl<Group> label="Group by" size="sm" value={group} onChange={setGroup} items={[{ value: "goal", label: "Goal" }, { value: "reason", label: "Reason" }]} />
             </span>
           </div>
+          <AgentQsSetLine /* MOCK-HOOK */ />
           <div role="table" aria-label="Features" className="min-w-0 rounded-panel border border-line bg-surface max-[600px]:border-0 max-[600px]:bg-transparent" data-testid="scope-table">
             <div role="row" className={`grid ${COLS} items-center gap-x-2 border-b border-line px-2 py-2 text-[13px] font-semibold text-text2 max-[600px]:hidden`}>
               <span role="columnheader" aria-label="Requirements" />
@@ -434,6 +440,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       </Sheet>
       <RawFile open={rawOpen} onClose={() => setRawOpen(false)} runId={run.id} seq={cp.segment_seq ?? scope.segment_seq} />
     </Page>
+    </AgentQsProvider /* MOCK-HOOK */>
   );
 }
 
@@ -552,11 +559,13 @@ function FeatureRow({
               {reasonChip(r, f, scope)}
             </Chip>
           ))}
+          <AgentQsRowChip feature={f.key} /* MOCK-HOOK */ />
         </span>
         <span role="cell" className="min-w-0 max-[600px]:basis-full" data-testid="your-call">
           <YourCall f={f} scope={scope} review={review} mode={mode} ops={ops} ui={ui} />
         </span>
       </div>
+      <AgentQsRowPanel feature={f.key} /* MOCK-HOOK */ />
       {suggestions.map((a) => (
         <p key={a.id} className="px-3 pb-2 pl-16 text-sm text-text2 max-[600px]:pl-3" data-testid="suggested-by">
           Suggested by {a.created_by?.name ?? "someone"}: {describeAction(a, titleOf)}

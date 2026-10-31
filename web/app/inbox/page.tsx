@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { TabBar } from "@/components/review/parts";
+import { AgentQsInbox, AgentQsProvider } from "@/components/review/AgentQsMock"; // MOCK-HOOK
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -265,6 +266,9 @@ function InboxTabs({
         </div>
       )}
       {notice}
+      <AgentQsProvider /* MOCK-HOOK */>
+        <AgentQsInbox /* MOCK-HOOK */ />
+      </AgentQsProvider /* MOCK-HOOK */>
       <div role="tabpanel" aria-label={label} data-testid={`inbox-tab-${tab}`}>
         {shown.length === 0 ? (
           <Empty testId="inbox-tab-empty">
