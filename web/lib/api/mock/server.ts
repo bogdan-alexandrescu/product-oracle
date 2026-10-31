@@ -1428,6 +1428,11 @@ function seedSimpleWaits(): Db {
   seeded("sw-feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db))); // MOCK-HOOK
   seeded("sw-eng-review", () => seedEngReviewRun(db.runs!, runsContext(db))); // MOCK-HOOK
   seeded("sw-eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db))); // MOCK-HOOK
+  // MOCK-HOOK: the feature set's problem in words, not feature keys.
+  const plain = (v: unknown): unknown => // MOCK-HOOK
+    typeof v === "string" ? v.replace("bulk-address-edit depends on shared-address-book-export, which is excluded", "Bulk address edit depends on Shared address book export, which is left out") // MOCK-HOOK
+      : Array.isArray(v) ? v.map(plain) : v && typeof v === "object" ? (Object.keys(v).forEach((k) => ((v as Record<string, unknown>)[k] = plain((v as Record<string, unknown>)[k]))), v) : v; // MOCK-HOOK
+  plain(db.runs!.runs); // MOCK-HOOK
   return db; // MOCK-HOOK
 }
 
@@ -6288,8 +6293,18 @@ async function swCalm(url: URL, res: Response): Promise<Response> {
   if (p === "/v1/simple/roadmap") // MOCK-HOOK
     return edit((j) => ({ ...j, items: (j.items as { flags: { state: string }[] }[]).map((i) => ({ ...i, flags: i.flags.filter((f) => f.state !== "red") })) })); // MOCK-HOOK
   if (p === "/v1/simple/decisions") // MOCK-HOOK
-    return edit((j) => ({ ...j, waiting_count: 0, questions: (j.questions as Record<string, unknown>[]).map((q) => ({ ...q, waiting_for_me: false })) })); // MOCK-HOOK
-  if (p === "/v1/inbox") return edit((j) => ({ ...j, decisions: (j.decisions as { reason?: string }[]).filter((d) => d.reason !== "needs_decision") })); // MOCK-HOOK
+    return edit((j) => ({ ...j, waiting_count: 0, questions: (j.questions as Record<string, unknown>[]).filter((q) => !q.waiting_for_me) })); // MOCK-HOOK: dropped, not moved to "Waiting for others"
+  if (p === "/v1/inbox/questions") // MOCK-HOOK: no question asked of the person either
+    return edit((j) => (Array.isArray(j) ? [] : Object.fromEntries(Object.entries(j).map(([k, v]) => [k, Array.isArray(v) ? [] : typeof v === "number" ? 0 : v])))); // MOCK-HOOK
+  if (p === "/v1/runs") // MOCK-HOOK: no run waits for a cost approval or an overrun
+    return edit((j) => (Array.isArray(j) ? (j as { status?: string }[]).filter((r) => r.status !== "awaiting_approval" && r.status !== "paused_overrun") : j)); // MOCK-HOOK
+  if (p === "/v1/inbox") // MOCK-HOOK: only the run stops wait (no cost approval, overrun, access request, review or question), so Detailed agrees
+    return edit((j) => { // MOCK-HOOK
+      const n = (j.checkpoints as unknown[]).length; // MOCK-HOOK
+      const out: Record<string, unknown> = { ...j, strategy: null, total: n, needs_me: n }; // MOCK-HOOK
+      for (const [k, v] of Object.entries(j)) if (Array.isArray(v) && k !== "checkpoints") out[k] = []; // MOCK-HOOK
+      return out; // MOCK-HOOK
+    }); // MOCK-HOOK
   return res; // MOCK-HOOK
 }
 

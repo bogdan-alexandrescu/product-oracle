@@ -261,7 +261,7 @@ export default function SimpleHome() {
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
-      ["decisions", waiting.data ? decisionCount : null, "decisions waiting for you", "decisions"],
+      ["decisions", waiting.data ? decisionCount : null, sw === "c" && decisionCount === 1 ? "decision waiting for you" : "decisions waiting for you", sw === "c" && decisionCount === 1 ? "decision" : "decisions"], // MOCK-HOOK: C's own count reads singular
       ["proposals", changes.data ? proposalRows.length : null, proposalRows === toDecide ? "proposals on your items" : "of your proposals waiting", "proposals"],
       ["broken-links", roadmap.data ? broken.length : null, "broken links", "broken links"],
     ] as const

@@ -1,18 +1,18 @@
 {
   "title": "Simple Home when a run waits on you",
-  "subtitle": "Today Simple's Home says \"Nothing waits on you today.\" while a run's stop (feature set, engineering check, dates) waits on you, and only Detailed's In flight lists it. Each proposal is live in the mock app behind ?sw1=a|b|c|d (&swn=0|1|3 stops waiting, &calm=1 nothing else waiting, &open=1 opens D's tray).",
+  "subtitle": "Today Simple's Home says \"Nothing waits on you today.\" while a run's stop (feature set, engineering review, engineering dates) waits on you, and only Detailed's Home lists it.",
   "decisions": [
     {
       "code": "SW1",
       "name": "Run stops in Simple",
       "question": "How should Simple show a run's stops that wait on you?",
-      "common": "Every proposal fixes the greeting: with a stop waiting, Home no longer says \"Nothing waits on you today.\" and offers Walk me through it. The stop's own work still happens on the run's page in Detailed (Approve and continue, Request changes); Simple only shows that it waits and takes you there. With no stop waiting, Home stays as built. Simple keeps its light rail, cards and 18 px text.",
+      "common": "Every proposal fixes the greeting: with a stop waiting, Home no longer says \"Nothing waits on you today.\" and offers Walk me through it. The stop's own work still happens on the run's page in Detailed (Approve and continue, Request changes); Simple only shows that it waits and takes you there, under the run page's own names (Engineering review, Engineering dates). Only a run's stops count: a cost approval or a run over its budget stays in Detailed's Inbox, as today. The frames show a week where nothing else waits on you (no cost approval, overrun, question or review), so Simple and Detailed's Needs you both say 3. With no stop waiting, Home stays as built (A's first frame). Simple keeps its light rail, cards and 18 px text.",
       "proposals": [
         {
           "letter": "A",
           "name": "A card per stop",
           "recommended": true,
-          "what": "Each stop that waits on you gets its own card on Home, under the summary and above the decisions: what the stop is, which PRD it is for, how long it has waited, and its one action as the card's button (Check the feature set, Do the engineering check, Add the dates). The greeting says \"A run waits on you.\" or \"Runs wait on you.\"",
+          "what": "Each stop that waits on you gets its own card on Home, under the summary and above the decisions: what the stop is, which PRD it is for, how long it has waited, and its one action as the card's button (Check the feature set, Check the engineering review, Review the dates). The greeting says \"A run waits on you.\" or \"Runs wait on you.\"",
           "why": "It is Home's own pattern (the owner's \"Brief as cards\"): what waits on you is a card with its action, so a stop reads like a decision and is one click from done. Nothing new to learn and nothing hidden behind a count.",
           "plus": "Seen at once, with the action named; one click to the stop; nothing added to the rail.",
           "cost": "Three stops are three cards: on a phone they fill more than a screen and push the plan and meeting down. The button opens the run's page in Detailed.",
@@ -31,7 +31,7 @@
             },
             {
               "file": "frames/sw1-a-hover.html",
-              "caption": "Scrolled down: the pointer on Do the engineering check, the second card's button."
+              "caption": "Scrolled down: the pointer on Check the engineering review, the second card's button in its hover shade."
             },
             {
               "file": "frames/sw1-a-result.html",
@@ -57,7 +57,7 @@
           "frames": [
             {
               "file": "frames/sw1-b-one.html",
-              "caption": "One stop waits: the line says \"A run waits on you\" and names the feature set."
+              "caption": "With no stop waiting, Home is as built (A's first frame). One stop waits: the line says \"A run waits on you\" and names the feature set."
             },
             {
               "file": "frames/sw1-b-rest.html",
@@ -65,11 +65,11 @@
             },
             {
               "file": "frames/sw1-b-hover.html",
-              "caption": "The pointer on Open in Detailed."
+              "caption": "The pointer on Open in Detailed, now underlined."
             },
             {
               "file": "frames/sw1-b-result.html",
-              "caption": "After the click: Detailed's Home, In flight listing the three runs waiting for review among ten."
+              "caption": "After the click: Detailed's Home, Needs you lists the same three stops, and In flight shows their runs waiting for review among eight."
             },
             {
               "file": "frames/sw1-b-rest-1512.html",
@@ -85,13 +85,13 @@
           "letter": "C",
           "name": "In Decisions",
           "recommended": false,
-          "what": "A waiting stop counts as a decision waiting for you: the Decisions tile and the rail's Decisions count include it, Home's Decisions card lists it first, and Decisions \u203a Waiting for you shows the stops above the questions, each with its action.",
+          "what": "A waiting stop counts as a decision waiting for you: the Decisions tile and the rail's Decisions count include it, Home's Decisions card lists it first, and Decisions › Waiting for you shows the stops above the questions, each with its action.",
           "plus": "One place for everything that waits on you; no new card, line or rail entry.",
           "cost": "Mixes run stops with product decisions (the rail's Decisions count today leaves run approvals out on purpose); the tile says \"decisions\" for things that are not.",
           "frames": [
             {
               "file": "frames/sw1-c-one.html",
-              "caption": "One stop waits: \"A decision waits on you.\", the Decisions tile says 1 and lists the feature set."
+              "caption": "With no stop waiting, Home is as built (A's first frame). One stop waits: \"A decision waits on you.\", the tile says 1 decision and the card lists the feature set."
             },
             {
               "file": "frames/sw1-c-rest.html",
@@ -99,19 +99,19 @@
             },
             {
               "file": "frames/sw1-c-open.html",
-              "caption": "Decisions (from the rail): Waiting for you holds the three stops above the questions waiting for others."
+              "caption": "Decisions (from the rail): Waiting for you says 3 run stops and holds them; no question waits on you this week."
             },
             {
               "file": "frames/sw1-c-hover.html",
-              "caption": "The pointer on Add the dates."
+              "caption": "The pointer on Check the engineering review in its hover shade."
             },
             {
               "file": "frames/sw1-c-result.html",
-              "caption": "After the click: the run's page in Detailed at its Engineering dates stop."
+              "caption": "After the click: the run's page in Detailed at its Engineering review, ready to approve."
             },
             {
               "file": "frames/sw1-c-open-1512.html",
-              "caption": "At 1512 in a busy week: 12 waiting, the three stops first, then 9 product questions with their own buttons."
+              "caption": "At 1512 in a busy week: 12 waiting, said as 3 run stops and 9 questions from the Guided setup PRD; the stops come first."
             },
             {
               "file": "frames/sw1-c-rest-390.html",
@@ -132,20 +132,24 @@
               "caption": "No stop waits: Runs is still in the rail; opened, the tray says no run waits on you."
             },
             {
+              "file": "frames/sw1-d-one.html",
+              "caption": "One stop waits: Runs shows 1 in the rail; the greeting says a run waits on you."
+            },
+            {
               "file": "frames/sw1-d-rest.html",
               "caption": "Three stops wait: Runs shows 3 in the rail; the greeting says runs wait on you."
             },
             {
               "file": "frames/sw1-d-open.html",
-              "caption": "Runs opened: the tray lists the three stops, each with its action."
+              "caption": "Runs opened: the tray lists the three stops, each with its action; Home stays the current page."
             },
             {
               "file": "frames/sw1-d-hover.html",
-              "caption": "The pointer on Check the feature set in the tray."
+              "caption": "The pointer on Check the feature set in the tray in its hover shade."
             },
             {
               "file": "frames/sw1-d-result.html",
-              "caption": "After the click: the run's page in Detailed at its feature set, with its one blocking problem."
+              "caption": "After the click: the run's page in Detailed at its feature set, with its one blocking problem (bulk address edit depends on a feature left out)."
             },
             {
               "file": "frames/sw1-d-open-1512.html",
@@ -153,7 +157,7 @@
             },
             {
               "file": "frames/sw1-d-rest-390.html",
-              "caption": "Phone: a floating Runs 3 button above the tab bar."
+              "caption": "Phone: a floating Runs 3 button above the tab bar, covering the edge of the card under it."
             },
             {
               "file": "frames/sw1-d-open-390.html",

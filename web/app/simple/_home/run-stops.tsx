@@ -55,25 +55,22 @@ export function useRunStops(): { stops: Stop[] | undefined; variant: SwVariant |
 /** MOCK-HOOK: the one action a stop asks of the person, in plain words. */
 const ACTION: Partial<Record<Stop["kind"], string>> = {
   feature_set: "Check the feature set", // MOCK-HOOK
-  eng_review: "Do the engineering check", // MOCK-HOOK
+  eng_review: "Check the engineering review", // MOCK-HOOK
   priority_order: "Set the order", // MOCK-HOOK
   prd_review: "Review the PRD", // MOCK-HOOK
-  eng_dates: "Add the dates", // MOCK-HOOK
+  eng_dates: "Review the dates", // MOCK-HOOK
   roadmap_items: "Check the roadmap items", // MOCK-HOOK
   baseline_confirm: "Confirm the baseline", // MOCK-HOOK
 };
 
-/** MOCK-HOOK: what the stop is, in Simple's words ("Engineering check", not "Engineering review"). */
+/** MOCK-HOOK: what the stop is, in the run page's own words (only "Feature set" is shortened). */
 const NAME: Partial<Record<Stop["kind"], string>> = {
-  eng_review: "Engineering check", // MOCK-HOOK
-  eng_dates: "Dates", // MOCK-HOOK
-  priority_order: "Order", // MOCK-HOOK
   feature_set: "Feature set", // MOCK-HOOK
 };
 
 export const stopName = (s: Stop) => NAME[s.kind] ?? CHECKPOINT_LABEL[s.kind]; // MOCK-HOOK
 export const stopAction = (s: Stop) => ACTION[s.kind] ?? "Open the stop"; // MOCK-HOOK
-export const stopHref = (s: Stop) => `/runs/${s.run_id}`; // MOCK-HOOK
+export const stopHref = (s: Stop) => swHref(`/runs/${s.run_id}`); // MOCK-HOOK: the run page tells the same story (calm, swn)
 /** MOCK-HOOK: what the run is for: its PRD, else the flow. */
 export const stopFor = (s: Stop & { document_title?: string | null; document_slug?: string | null; flow_title?: string }) =>
   s.document_title || (s.document_slug ? `${s.document_slug.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase())} PRD` : s.flow_title || "A run"); // MOCK-HOOK
@@ -221,7 +218,7 @@ export function RunTray({ phone = false }: { phone?: boolean }) {
         data-testid="sw-tray-button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-12 items-center gap-3 rounded-xl px-3 text-[length:var(--simple-rail-label)] leading-6 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${open ? "bg-rail-active font-semibold text-rail-active-text" : ""}`}
+        className={`flex h-12 items-center gap-3 rounded-xl px-3 text-[length:var(--simple-rail-label)] leading-6 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${open ? "ring-1 ring-line-strong ring-inset" : ""}`} // MOCK-HOOK: open is a ring, not "current": Home stays the one current entry
       >
         <Icon name="runs" stroke={1.7} />
         <span className="min-w-0 flex-1 truncate text-left">Runs</span>

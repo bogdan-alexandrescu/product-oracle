@@ -131,6 +131,34 @@ async function atRun(page: Page) {
   await page.waitForTimeout(1500);
 }
 
+/** MOCK-HOOK: hovers, then bakes the hover's look into inline styles so the static frame keeps it. */
+async function hoverBaked(page: Page, loc: ReturnType<Page["locator"]>) {
+  await loc.hover();
+  await page.waitForTimeout(400);
+  await loc.evaluate((el: HTMLElement) => {
+    // The page's :hover rules, again for [data-mk-hover], so the frame keeps the hover in either theme.
+    const out: string[] = [];
+    const walk = (rules: CSSRuleList) => {
+      for (const r of Array.from(rules)) {
+        if (r instanceof CSSStyleRule && r.cssText.includes(":hover")) out.push(r.cssText.replace(/:hover/g, "[data-mk-hover]"));
+        else if (r instanceof CSSMediaRule && /hover/.test(r.conditionText)) walk(r.cssRules);
+        else if ("cssRules" in r && !(r instanceof CSSMediaRule) && !(r instanceof CSSStyleRule)) walk((r as CSSGroupingRule).cssRules);
+      }
+    };
+    for (const sh of Array.from(document.styleSheets)) {
+      try {
+        walk(sh.cssRules);
+      } catch {
+        /* cross-origin */
+      }
+    }
+    const st = document.createElement("style");
+    st.textContent = out.join("\n");
+    document.head.appendChild(st);
+    el.setAttribute("data-mk-hover", "1");
+  });
+}
+
 async function scrollTo(page: Page, testId: string) {
   await simple(page).getByTestId(testId).first().evaluate((n) => n.scrollIntoView({ block: "start" }));
   await page.evaluate(() => scrollBy(0, -24));
@@ -146,7 +174,7 @@ test("A: a card per stop", async ({ page }) => {
   await snap(page, "sw1-a-rest");
   await scrollTo(page, "sw-stop-card");
   const btn = stopCards(page).nth(1).getByRole("link");
-  await btn.hover();
+  await hoverBaked(page, btn);
   await snap(page, "sw1-a-hover");
   await btn.click();
   await atRun(page);
@@ -171,7 +199,7 @@ test("B: one line to Detailed", async ({ page }) => {
   await home(page, `sw1=b&swn=3&${CALM}`);
   await snap(page, "sw1-b-rest");
   const link = simple(page).getByTestId("sw-runs-line").getByRole("link");
-  await link.hover();
+  await hoverBaked(page, link);
   await snap(page, "sw1-b-hover");
   await link.click();
   await page.waitForURL(/\/home/);
@@ -202,8 +230,8 @@ test("C: in Decisions", async ({ page }) => {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(1200);
   await snap(page, "sw1-c-open");
-  const act = simple(page).getByTestId("sw-stop-row").nth(2).getByRole("link");
-  await act.hover();
+  const act = simple(page).getByTestId("sw-stop-row").getByRole("link", { name: "Check the engineering review" });
+  await hoverBaked(page, act);
   await snap(page, "sw1-c-hover");
   await act.click();
   await atRun(page);
@@ -226,13 +254,17 @@ test("D: a run tray in the rail", async ({ page }) => {
   await signIn(page, DESK);
   await home(page, `sw1=d&swn=0&${CALM}`);
   await page.getByTestId("sw-tray-button").click();
+  await page.mouse.move(900, 880); // MOCK-HOOK: the pointer off the rail, so the frame shows the open state, not the hover
   await snap(page, "sw1-d-zero");
+  await home(page, `sw1=d&swn=1&${CALM}`);
+  await snap(page, "sw1-d-one");
   await home(page, `sw1=d&swn=3&${CALM}`);
   await snap(page, "sw1-d-rest");
   await page.getByTestId("sw-tray-button").click();
+  await page.mouse.move(900, 880); // MOCK-HOOK: the pointer off the rail, so the frame shows the open state, not the hover
   await snap(page, "sw1-d-open");
   const act = page.getByTestId("sw-tray").getByRole("link").first();
-  await act.hover();
+  await hoverBaked(page, act);
   await snap(page, "sw1-d-hover");
   await act.click();
   await atRun(page);
@@ -243,6 +275,7 @@ test("D: wide and phone", async ({ page }) => {
   await signIn(page, WIDE);
   await home(page, "sw1=d&swn=3");
   await page.getByTestId("sw-tray-button").click();
+  await page.mouse.move(900, 880); // MOCK-HOOK: the pointer off the rail, so the frame shows the open state, not the hover
   await snap(page, "sw1-d-open-1512");
   await page.setViewportSize(PHONE);
   await home(page, `sw1=d&swn=3&${CALM}`);

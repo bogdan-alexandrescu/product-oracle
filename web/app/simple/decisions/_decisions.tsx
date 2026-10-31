@@ -190,8 +190,10 @@ function ViewSwitch({ value, onChange }: { value: View; onChange: (v: View) => v
 type Actions = ReturnType<typeof useQuestionActions>;
 
 /** A card of questions: the round flag icon, its title, the count and (Waiting for you) where they were read. */
-function QuestionCard({ label, testId, questions, count, source, children }: { label: string; testId: string; questions: Question[]; count: number; source?: boolean; children: ReactNode }) {
-  const line = useSourceLine(questions);
+function QuestionCard({ label, testId, questions, count, source, children, stops = 0 }: { label: string; testId: string; questions: Question[]; count: number; source?: boolean; children: ReactNode; stops?: number /* MOCK-HOOK */ }) {
+  const qLine = useSourceLine(questions); // MOCK-HOOK
+  const qN = count - stops; // MOCK-HOOK: SW1 c, the run stops apart from the questions and their source
+  const line = stops > 0 ? [`${stops} run ${stops === 1 ? "stop" : "stops"}`, qN > 0 && qLine ? `${qN} ${qLine.replace(/^Questions/, qN === 1 ? "question" : "questions")}` : null].filter(Boolean).join(" · ") : qLine; // MOCK-HOOK
   return (
     <section className="simple-card" aria-label={label} data-testid={testId}>
       <header className="flex flex-wrap items-center gap-3">
@@ -227,7 +229,7 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
   const runStops = variant === "c" ? (stops ?? []) : []; // MOCK-HOOK
   return (
     <>
-      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length) + runStops.length /* MOCK-HOOK */} source>
+      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length) + runStops.length /* MOCK-HOOK */} source stops={runStops.length /* MOCK-HOOK */}>
         {runStops.length > 0 && <ul>{runStops.map((s) => <StopRow key={s.id} s={s} />)}</ul> /* MOCK-HOOK */}
         {mine.length === 0 ? (
           runStops.length > 0 ? null : /* MOCK-HOOK */
