@@ -52,7 +52,7 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
         const sources = page.getByRole("region", { name: "Sources of “A setup checklist that shows" });
         await expect(sources.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", "/documents/guided-setup#build");
-        await expect(page.getByRole("link", { name: "Open the detailed view" }).first()).toHaveAttribute("href", "/documents/guided-setup");
+        await expect(page.getByRole("link", { name: "Open in Detailed" })).toHaveAttribute("href", "/documents/guided-setup");
         const download = page.waitForEvent("download");
         await page.getByRole("button", { name: "Export PDF" }).click();
         expect((await download).suggestedFilename()).toBe("Guided setup v3 one-pager.pdf");

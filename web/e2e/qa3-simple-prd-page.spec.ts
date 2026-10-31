@@ -118,7 +118,7 @@ test.describe("phone, a plan", () => {
     const link = tl.getByTestId("timeline-step").first().getByRole("link");
     await expect(link).not.toContainText(/\b0 (features|flows)/);
     expect(await afterHeight(page, link)).toBeGreaterThanOrEqual(44);
-    expect(await afterHeight(page, page.getByRole("link", { name: "Open the detailed view" }).first())).toBeGreaterThanOrEqual(44);
+    expect(await afterHeight(page, page.getByRole("link", { name: "Open in Detailed" }).first())).toBeGreaterThanOrEqual(44);
   });
 
   test("counts, dates and engineer-weeks stay together (p3-20, 21)", async ({ page }) => {
@@ -186,10 +186,11 @@ test.describe("desktop, no plan", () => {
     await expect(page.getByLabel("Timeline strip")).toContainText("12 roadmap items");
   });
 
-  test("a viewer's header: four actions alike, the reason under Start review (p3-28)", async ({ page }) => {
-    await paper(page, "viewer@example.com");
+  // qa4-simple-prd-26: a viewer has no Start review, so a commenter (who may not start one) reads the reason.
+  test("a commenter's header: four actions alike, the reason under Start review (p3-28)", async ({ page }) => {
+    await paper(page, "commenter@example.com");
     const present = page.getByRole("button", { name: "Present" });
-    const detailed = page.getByRole("link", { name: "Open the detailed view" }).first();
+    const detailed = page.getByRole("link", { name: "Open in Detailed" }).first();
     const style = (l: typeof present) => l.evaluate((el) => { const s = getComputedStyle(el); return [s.borderTopWidth, s.borderTopStyle, s.textDecorationLine, s.minHeight].join(" "); });
     expect(await style(detailed)).toBe(await style(present));
     const start = (await page.getByRole("button", { name: "Start review" }).boundingBox())!;

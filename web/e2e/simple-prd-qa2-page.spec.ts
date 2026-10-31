@@ -118,11 +118,10 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(paper).not.toHaveAttribute("data-presenting", "true");
     });
 
-    test("a viewer reads why Start review is not theirs and sees no empty margin (qa-10, 34)", async ({ page }) => {
+    test("a viewer sees no Start review and no empty margin (qa-10, 34, qa4-simple-prd-26)", async ({ page }) => {
       await open(page, "viewer@example.com");
-      const start = page.getByRole("button", { name: "Start review" });
-      await expect(start).toBeDisabled();
-      await expect(page.getByText("Ask an owner to start a review")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+      await expect(page.getByText("Ask an owner to start a review")).toHaveCount(0);
       await expect(page.getByText(/No changes yet/)).toBeHidden();
     });
 
@@ -178,7 +177,7 @@ test.describe("One-pagers list and the planned PRD", () => {
     await login(page);
     await page.goto("/simple");
     await page.locator('nav[aria-label="Simple"]:visible').getByRole("link", { name: "One-pagers" }).click();
-    await expect(page.getByText(/its plan and timeline/)).toBeVisible();
+    await expect(page.getByText("Open a PRD to read it on one page, change its wording or start a review.")).toBeVisible();
     const row = page.getByTestId("one-pager-row").filter({ hasText: "Guided setup" });
     await expect(row).toContainText("Approved");
     await expect(row).not.toContainText("Draft");
