@@ -358,6 +358,9 @@
 
 html {
   background: var(--bg);
+  /* qa4-docs-share-19: the scrollbar's room is kept even while a sheet or dialog stops the
+     page scrolling, so opening one never shifts the header and rail sideways. */
+  scrollbar-gutter: stable;
 }
 body {
   background: var(--bg);
@@ -1312,4 +1315,15 @@ code .date-mark {
   --simple-m3-tag-ink: #f5d38a;
   --simple-m4-tag: #0d2e25;
   --simple-m4-tag-ink: #4cd9a0;
+}
+
+/* qa4-docs-share-58: in dark mode the audience preview (a white page as the audience sees it)
+   is dimmed, so it does not glare inside the dark console; its own colours stay as shared. */
+:root[data-theme="dark"] [data-testid="audience-view"] iframe {
+  filter: brightness(0.8);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) [data-testid="audience-view"] iframe {
+    filter: brightness(0.8);
+  }
 }
