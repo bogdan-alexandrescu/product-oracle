@@ -70,5 +70,26 @@ for (const phone of [false, true]) {
       await expect(last.getByTestId("chat-card")).toHaveCount(0);
       await expect(last).toContainText("Delivery pipeline v2");
     });
+
+    test(`an ended meeting's chat says who ended it, month first (${where})`, async ({ page }) => {
+      // protects: once a person ends the meeting, its chat reads "Ended by <name>, <Mon d, yyyy, h:mm>"
+      // fails_when: the chat only says "The meeting has ended", or shows an ISO date
+      // no_claim: a meeting that ended by itself (api tests)
+      await meeting(page);
+      await page.goto("/simple/meetings");
+      await tap(page.getByRole("button", { name: "Start review" }).first());
+      const sheet = page.getByRole("dialog", { name: "Start a review" });
+      await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
+      await tap(sheet.getByRole("button", { name: "Start", exact: true }));
+      await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+      const id = /\/simple\/meetings\/([^/?#]+)/.exec(page.url())![1];
+      await tap(page.getByRole("button", { name: "End meeting" }));
+      await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
+      await expect(page.getByTestId("end-screen")).toBeVisible();
+      await page.goto(`/simple/meetings/${id}/chat`);
+      const ended = page.getByTestId("meeting-chat").getByTestId("chat-ended");
+      await expect(ended).toContainText(/Ended by \S.*, [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2}/);
+      await expect(ended).not.toContainText(/\d{4}-\d{2}-\d{2}/);
+    });
   });
 }
