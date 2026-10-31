@@ -614,7 +614,7 @@ export function FloatingCard({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    ref.current?.focus();
+    ref.current?.focus({ preventScroll: true }); // MOCK-HOOK mk-qa4-roadmap QR4: opening a card never scrolls the page
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   const dates = item.estimated
@@ -1046,7 +1046,7 @@ export function FloatingCard({
       {/* #47: the card floats over the chart with nothing to say it has the page's
        * attention; a dimmed backdrop on desktop (a phone's sheet already reads as modal),
        * clicking it closes the card like the close button. */}
-      {!phone && (
+      {!phone && style.position !== "relative" /* MOCK-HOOK mk-qa4-roadmap QR4: a panel, a row or a popover dims nothing */ && (
         <div
           aria-hidden
           data-testid="floating-card-backdrop"

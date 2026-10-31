@@ -1,0 +1,166 @@
+[
+  {
+    "file": "qr1-a-rest.html",
+    "caption": "At rest: six months around today. One row per item, its name fixed on the left, its dates on the bar."
+  },
+  {
+    "file": "qr1-a-mid.html",
+    "caption": "Scrolled sideways into 2027: the names stay on the left, Back to today brings you home."
+  },
+  {
+    "file": "qr1-a-result.html",
+    "caption": "After choosing All 3 years: the whole plan fits; bars get thin (the cost), but every name is still readable on the left."
+  },
+  {
+    "file": "qr1-a-rest-1512.html",
+    "caption": "The owner's 1512 window: the same six months, with more room per week; nothing overlaps."
+  },
+  {
+    "file": "qr1-a-rest-390.html",
+    "caption": "Phone: a list by quarter, each item with its name, dates and goal; Today marks this quarter."
+  },
+  {
+    "file": "qr1-b-rest.html",
+    "caption": "At rest: quarters as columns, starting at this one. Each item is a block over its quarters with its name and dates inside."
+  },
+  {
+    "file": "qr1-b-mid.html",
+    "caption": "Scrolled to 2028: goal names stay on the left. An item that ends mid-quarter still fills the whole quarter (the cost)."
+  },
+  {
+    "file": "qr1-b-rest-1512.html",
+    "caption": "1512 wide: about five quarters show; the rest scroll."
+  },
+  {
+    "file": "qr1-b-rest-390.html",
+    "caption": "Phone: the same quarter columns, two at a time, scrolled sideways."
+  },
+  {
+    "file": "qr1-c-rest.html",
+    "caption": "At rest: all three years at once, no scrolling sideways. Each item has its own row with its name written above its bar."
+  },
+  {
+    "file": "qr1-c-rest-1512.html",
+    "caption": "1512 wide: a short item is still only a few pixels; the chart runs long down the page (the cost)."
+  },
+  {
+    "file": "qr1-c-rest-390.html",
+    "caption": "Phone: the names fit, but the bars are too small to tap."
+  },
+  {
+    "file": "qr1-d-rest.html",
+    "caption": "At rest: no chart at all; a list by quarter on every screen, the same as a phone."
+  },
+  {
+    "file": "qr1-d-rest-1512.html",
+    "caption": "1512 wide, scrolled down: what runs at the same time is no longer side by side (the cost)."
+  },
+  {
+    "file": "qr2-a-rest.html",
+    "caption": "At rest: the key sits above the chart. Red only for a broken link; a draft is grey and dashed; a cut item is struck through; Today is purple."
+  },
+  {
+    "file": "qr2-a-rest-390.html",
+    "caption": "Phone: the same key above the list, wrapped onto lines."
+  },
+  {
+    "file": "qr2-b-rest.html",
+    "caption": "At rest: the same colours, no key on the page; one button, What the colours mean."
+  },
+  {
+    "file": "qr2-b-open.html",
+    "caption": "After a click: the key opens under the button and covers the conflicts list until closed (the cost)."
+  },
+  {
+    "file": "qr2-c-rest.html",
+    "caption": "At rest: every bar the same blue; a short word on the row says Draft, Cut or Broken link; Today is a dark line."
+  },
+  {
+    "file": "qr2-c-rest-390.html",
+    "caption": "Phone: the words sit after each name in the list."
+  },
+  {
+    "file": "qr2-d-rest.html",
+    "caption": "At rest: the fill says progress (green in progress, blue planned); red stays only for a broken link; Today is purple. One more colour to learn (the cost)."
+  },
+  {
+    "file": "qr3-a-rest.html",
+    "caption": "At rest: the broken links get a panel of their own above the chart, words in full with their fixes; the chart has only a ⚠ by the name."
+  },
+  {
+    "file": "qr3-a-mid.html",
+    "caption": "Clicking a link's words opens its item beside the chart, its row marked."
+  },
+  {
+    "file": "qr3-a-risk.html",
+    "caption": "Accept as risk asks for one line on why it is fine, right in the panel."
+  },
+  {
+    "file": "qr3-a-result.html",
+    "caption": "After Accept as risk: that link leaves the panel, which now counts what is left."
+  },
+  {
+    "file": "qr3-a-shut.html",
+    "caption": "Hide folds the panel to one line; the chart moves up."
+  },
+  {
+    "file": "qr3-b-rest.html",
+    "caption": "At rest: each broken link takes a row of its own under its item, words in full, never over a bar. The chart grows a row per link (the cost)."
+  },
+  {
+    "file": "qr3-b-result.html",
+    "caption": "After Move the dependents: the row goes and the bars below close up."
+  },
+  {
+    "file": "qr3-c-rest.html",
+    "caption": "At rest: a small red mark after each broken bar, nothing else; you cannot read what is wrong without a click (the cost)."
+  },
+  {
+    "file": "qr3-c-open.html",
+    "caption": "Clicking the mark opens the words and fixes just under the bar."
+  },
+  {
+    "file": "qr3-d-rest.html",
+    "caption": "At rest: the broken links in a column beside the chart; the chart loses a third of its width (the cost)."
+  },
+  {
+    "file": "qr3-d-rest-1512.html",
+    "caption": "1512 wide: about four months of chart show beside the column."
+  },
+  {
+    "file": "qr4-a-open.html",
+    "caption": "Clicking Alert rules engine: the item opens in a panel at the right. The page stays where it was; the row is marked."
+  },
+  {
+    "file": "qr4-a-mid.html",
+    "caption": "With the panel open the chart still scrolls; it is narrower while the panel is open (the cost)."
+  },
+  {
+    "file": "qr4-a-result.html",
+    "caption": "Clicking Setup checklist's name swaps the panel to it, no closing first."
+  },
+  {
+    "file": "qr4-a-open-1512.html",
+    "caption": "1512 wide with Weekly alert digest open: the chart keeps about five months beside the panel."
+  },
+  {
+    "file": "qr4-a-open-390.html",
+    "caption": "Phone: the item opens as a sheet from the bottom; the list stays where it was underneath."
+  },
+  {
+    "file": "qr4-b-open.html",
+    "caption": "Clicking Alert rules engine: its details open in place under its row and push the rows below down (the cost: the rest of the plan leaves the screen)."
+  },
+  {
+    "file": "qr4-b-open-390.html",
+    "caption": "Phone: the details open inside the list under the item."
+  },
+  {
+    "file": "qr4-c-open.html",
+    "caption": "Clicking Alert rules engine: the card opens right beside its bar, over the rows next to it; the bar stays in sight."
+  },
+  {
+    "file": "qr4-c-open-hard.html",
+    "caption": "Alert routing by team, a long bar filling the screen: no room either side, so the card opens under it and covers the rows below (the cost)."
+  }
+]

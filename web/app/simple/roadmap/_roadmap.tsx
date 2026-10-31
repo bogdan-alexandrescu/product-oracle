@@ -56,6 +56,7 @@ import {
   type Where,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
+import { MkTimeline, useMk } from "./_mk"; // MOCK-HOOK mk-qa4-roadmap
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -528,6 +529,7 @@ function DecisionTray({
 export function SimpleRoadmap() {
   const { me, can } = useMe();
   const phone = usePhone();
+  const mk = useMk(); // MOCK-HOOK mk-qa4-roadmap
   // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>)
   // or to one roadmap (?roadmap=<id or slug>).
   const params = useSearchParams();
@@ -1229,6 +1231,18 @@ export function SimpleRoadmap() {
             goalSuggestions={goalCounts}
             onGoal={openGoal}
           />
+        ) : mk && format === "timeline" ? ( // MOCK-HOOK mk-qa4-roadmap: the owner's variants (QR1..QR4)
+          <MkTimeline // MOCK-HOOK
+            data={laned ?? data} // MOCK-HOOK
+            opts={mk} // MOCK-HOOK
+            phone={phone} // MOCK-HOOK
+            act={act} // MOCK-HOOK
+            canChange={canChange} // MOCK-HOOK
+            byId={byId} // MOCK-HOOK
+            card={(it, style, sheet, onClose) => ( // MOCK-HOOK
+              <FloatingCard key={it.id} item={it} items={byId} proposals={allProposals.filter((c) => c.target.item_id === it.id)} phone={sheet} style={style} act={act} canChange={canChange} onDecide={(c, how) => void onDecide(c, how)} onClose={onClose} near={nearWords(it, data.key_dates ?? [])} /> // MOCK-HOOK
+            )} // MOCK-HOOK
+          /> // MOCK-HOOK
         ) : format === "timeline" ? (
           // timeline-overlap B: the Timeline is goal lanes (B2 on a desktop, B3 on a phone).
           <Lanes
