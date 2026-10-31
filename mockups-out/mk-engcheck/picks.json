@@ -1,0 +1,130 @@
+{
+  "title": "Engineering check review page",
+  "subtitle": "The lead gives each of 9 to 15 features a verdict and a size, answers the architect's questions, then approves or sends back. Today the page is about 9 screens tall and the side panel's buttons only show at its end. Frames use invented features of an invented shop app; links ?ec1= and ?ec2= switch the page between proposals.",
+  "decisions": [
+    {
+      "code": "EC1",
+      "name": "How the lead reads and decides",
+      "question": "How should the lead read 9 to 15 long approaches and give each a verdict and a size?",
+      "common": "Every proposal shows each feature's whole approach only once, puts the feature's key on its own line under the title, says Not decided instead of a Decide word that only selected the row, keeps the verdict buttons and the size switch visible without reaching the end of the page, and keeps today's bar at the bottom with the tally, Send back and Approve.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Compact table, scrolling panel",
+          "recommended": false,
+          "what": "Today's table and side panel, made short. Each row shows only the approach's first two lines; the panel is capped to the window and scrolls on its own, with the verdict, the size and the questions at its top and the full approach below them.",
+          "plus": "Closest to today: the same table, the same panel, so nothing new to learn. All 9 features fit in one screen and a half.",
+          "cost": "Two scroll areas side by side; the approach is read in a 400 px column, so a 16-point approach is a long narrow scroll. On a phone the panel sits below every row, so tapping a row shows nothing new.",
+          "frames": [
+            {"file": "ec1-a-rest.html", "caption": "At rest: nine rows, two lines of approach each, the first feature open in the panel."},
+            {"file": "ec1-a-open.html", "caption": "The lead clicks Self-serve returns: its verdict, size and three questions show at the top of the panel."},
+            {"file": "ec1-a-mid.html", "caption": "The lead picks Feasible with changes and types what changes."},
+            {"file": "ec1-a-result.html", "caption": "After Save verdict: the row reads Feasible with changes and the bar 1 of 9 decided."},
+            {"file": "ec1-a-hard-1512.html", "caption": "15 features at 1512: the panel scrolls on its own to the approach while the table stays put; the approach reads in a narrow column."},
+            {"file": "ec1-a-phone-390.html", "caption": "Phone: the tapped row is highlighted, but its panel is below all the rows."}
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "List and reading pane",
+          "recommended": true,
+          "what": "A narrow list of the features on the left (title, size, verdict, blocking and answered counts) that scrolls on its own, and the selected feature on the right at reading width: verdict and size at the top, then the questions, then the whole approach. Previous and next arrows step through the features.",
+          "why": "The lead's job is to read one long approach at a time and decide it while keeping the others in view. The list always shows what is left; the pane gives the approach a readable width; the buttons are at the top of every feature, so nothing waits for the end of the page. It holds at 15 features and turns into list then feature on a phone.",
+          "plus": "One screen at any count; what is left to decide is always in the list; the approach reads at a comfortable width.",
+          "cost": "Only one approach is open at a time, so comparing two features means switching between them. A new layout for this page (other review pages keep the table).",
+          "frames": [
+            {"file": "ec1-b-rest.html", "caption": "At rest: the list of nine on the left, the first feature on the right with its verdict and size on top."},
+            {"file": "ec1-b-open.html", "caption": "The lead clicks Self-serve returns in the list; the pane shows it, Feature 7 of 9."},
+            {"file": "ec1-b-mid.html", "caption": "The lead picks Feasible with changes and types what changes; the questions stay just below."},
+            {"file": "ec1-b-result.html", "caption": "After Save verdict: the list row turns Feasible with changes and the bar 1 of 9 decided."},
+            {"file": "ec1-b-hard-1512.html", "caption": "15 features at 1512: the list scrolls on its own to the last feature, just marked Feasible; the bar reads 1 of 15."},
+            {"file": "ec1-b-phone-390.html", "caption": "Phone: the list comes first."},
+            {"file": "ec1-b-phone-open-390.html", "caption": "Phone: after tapping Self-serve returns, the feature fills the screen with All features to go back."}
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "One card per feature",
+          "recommended": false,
+          "what": "No table and no panel: one card per feature down the page, each with three points of its approach (Show all for the rest), its questions, and its verdict buttons and size switch in the card's own footer.",
+          "plus": "Everything is in place: read, answer and decide without selecting anything. Prints and searches well; the same on a phone.",
+          "cost": "The page is still long: about three screens for 9 features and five for 15, longer when approaches are opened. Nothing shows at a glance what is left except the bar's count.",
+          "frames": [
+            {"file": "ec1-c-rest.html", "caption": "At rest: the first card, three points of approach, its two questions and its verdict footer."},
+            {"file": "ec1-c-open.html", "caption": "The lead scrolls to Self-serve returns and opens Show all 16 points."},
+            {"file": "ec1-c-mid.html", "caption": "In the card's footer the lead picks Feasible with changes and types what changes."},
+            {"file": "ec1-c-result.html", "caption": "After Save verdict: the card's footer and head read Feasible with changes; the next card follows."},
+            {"file": "ec1-c-hard-1512.html", "caption": "15 features at 1512: card 10 of 15, well down the page; the bar still says 0 of 15."},
+            {"file": "ec1-c-phone-390.html", "caption": "Phone: the same cards, one under the other."}
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "One at a time",
+          "recommended": false,
+          "what": "One feature fills a reading column: its whole approach, then the verdict and size, then the questions and a Next feature button. Numbered dots at the top show every feature, coloured by verdict, and jump to any of them.",
+          "plus": "The calmest read: one feature, nothing else on screen. The dots show progress and allow skipping.",
+          "cost": "The verdict sits below the whole approach, so a long one has to be scrolled through before deciding; the dots show numbers, not names, so finding a feature means hovering or guessing.",
+          "frames": [
+            {"file": "ec1-d-rest.html", "caption": "At rest: dot 1 of 9 and the first feature's approach."},
+            {"file": "ec1-d-open.html", "caption": "The lead clicks dot 7: Self-serve returns, its 16-point approach first."},
+            {"file": "ec1-d-mid.html", "caption": "Below the approach, the lead picks Feasible with changes and types what changes."},
+            {"file": "ec1-d-result.html", "caption": "After Save verdict: Feasible with changes is set and the questions follow."},
+            {"file": "ec1-d-hard-1512.html", "caption": "15 features at 1512: after Next feature, dot 7 is coloured and feature 8 starts again at its approach."}
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EC2",
+      "name": "Questions and answers",
+      "question": "Where should the architect's questions and the lead's answers show, and how does an answered one look?",
+      "common": "Every proposal marks a question Blocking or Question, answers it in a box with an Answer button, and once answered drops the box: a tick, the answer, who gave it and Change. Shown inside the list and reading pane (EC1 b) on Self-serve returns, which has two blocking questions.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Under the approach",
+          "recommended": false,
+          "what": "The questions follow the approach, as the architect wrote them, at the end of the feature.",
+          "plus": "Each question is read right after the approach it is about.",
+          "cost": "With a long approach the questions are a scroll away from the verdict; a blocking one is easy to miss before deciding.",
+          "frames": [
+            {"file": "ec2-a-rest.html", "caption": "At rest: verdict and size on top, the long approach, no question in sight."},
+            {"file": "ec2-a-mid.html", "caption": "Scrolled past the approach, the lead types an answer to the first blocking question."},
+            {"file": "ec2-a-result.html", "caption": "After Answer: a tick, the answer and who gave it, no empty box; the list now shows 1 blocking."},
+            {"file": "ec2-a-hard-1512.html", "caption": "All three answered at 1512: three short answered lines under the approach."}
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Beside the verdict",
+          "recommended": true,
+          "what": "The questions sit right under the verdict and size, above the approach, so everything the lead must give is in one place at the top of the feature.",
+          "why": "A blocking question stops Approve, so it belongs with the verdict, not after a 16-point approach. Answered ones shrink to one line, so they stop taking room once done.",
+          "plus": "Nothing to answer is ever below the fold; answered questions shrink and the approach moves up.",
+          "cost": "Three open questions push the approach down by about 300 px until they are answered.",
+          "frames": [
+            {"file": "ec2-b-rest.html", "caption": "At rest: verdict, size and the three questions all in the first screen."},
+            {"file": "ec2-b-mid.html", "caption": "The lead types an answer to the first blocking question."},
+            {"file": "ec2-b-result.html", "caption": "After Answer: the question shrinks to a tick and the answer; 1 of 3 answered."},
+            {"file": "ec2-b-hard-1512.html", "caption": "All three answered at 1512: three short lines, and the approach starts mid-screen."}
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "One list for all",
+          "recommended": false,
+          "what": "Every open question of every feature in one panel above the features, two columns, each named by its feature; answered ones fold into Show answered.",
+          "plus": "The lead clears all the questions in one pass and sees at once how many block Approve.",
+          "cost": "With 13 questions the panel fills the first screen and pushes the features down; questions are answered away from the approach they are about.",
+          "frames": [
+            {"file": "ec2-c-rest.html", "caption": "At rest: 13 open questions fill the first screen above the features."},
+            {"file": "ec2-c-mid.html", "caption": "The lead types an answer to Self-serve returns' first blocking question."},
+            {"file": "ec2-c-result.html", "caption": "After Answer: the question leaves the list, which now says 12 open and offers Show 1 answered."},
+            {"file": "ec2-c-hard-1512.html", "caption": "15 features at 1512, three answered and shown: they sit below the open ones with a tick."}
+          ]
+        }
+      ]
+    }
+  ]
+}

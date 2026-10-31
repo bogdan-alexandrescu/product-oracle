@@ -4,6 +4,7 @@
  * overrun pause. Agents "finish" a segment on POST /v1/internal/tick, at 90% of its
  * estimate, as the API's FakeRuntime does.
  */
+import { mockEngBriefs } from "./engcheck-mock"; // MOCK-HOOK
 import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 
@@ -1348,7 +1349,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   // C8: the local runtime's order checks against the approved scope, and becomes a proposed snapshot.
   let snapshot: SnapshotRow | null = null;
   // F4: the architect's briefs, one per feature of the run's feature set, checked as the stop reads them.
-  const briefs = def.outputs.includes("tech_briefs.yaml") ? briefsCheckOf(r.id === ENG_CHECK_RUN ? SEEDED_BRIEFS : LOCAL_BRIEFS) : null;
+  const briefs = def.outputs.includes("tech_briefs.yaml") ? briefsCheckOf(r.id === ENG_CHECK_RUN ? mockEngBriefs() : LOCAL_BRIEFS) : null;
   // F4 lane B: the architect's dates for the draft's Now items, checked as the stop reads them.
   const dates = def.outputs.includes("eng_dates.yaml") ? datesCheckOf(r, r.id === ENG_DATES_RUN ? SEEDED_DATES : LOCAL_DATES) : null;
   if (dates) ctx.db.artifacts[`${r.id}|${s.seq}|eng_dates.yaml`] = datesYaml(dates, attempt);
@@ -3443,7 +3444,7 @@ const LOCAL_BRIEFS: Brief[] = [
 ];
 
 /** The "eng-check" scenario's briefs, on the baseline's own features (their efforts M, S, L). */
-const SEEDED_BRIEFS: Brief[] = [
+export const SEEDED_BRIEFS: Brief[] = [ // MOCK-HOOK (exported only so lint keeps it; the mock-ups use mockEngBriefs)
   { key: "f.guided-setup", title: "Guided setup", approach: "Reuse the onboarding checklist and add the test-order step.", size: "m", depends_on: [], questions: [{ id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true }, { id: "q2", question: "Show the checklist on phones too?", blocking: false }] },
   { key: "f.sample-data", title: "Sample data", approach: "A fixed catalogue copied into the new store on first sign-in.", size: "s", depends_on: [], questions: [] },
   { key: "f.saved-carts", title: "Saved carts", approach: "Keep the cart server-side and sync it on sign-in.", size: "l", depends_on: ["f.guided-setup"], questions: [] },

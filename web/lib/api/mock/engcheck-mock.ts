@@ -1,0 +1,301 @@
+// MOCK-HOOK: this whole file is mock-up data for the Engineering check review page (mk-engcheck).
+// Invented features of an invented shop app; realistic volume so the long approaches overflow.
+// The count comes from localStorage "po-mock-eng-n" (9 by default, 15 for the hard case).
+
+type Q = { id: string; question: string; blocking: boolean }; // MOCK-HOOK
+type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: Q[] }; // MOCK-HOOK
+
+const lines = (...xs: string[]) => xs.join("\n"); // MOCK-HOOK
+
+export const MOCK_ENG_BRIEFS: Brief[] = [ // MOCK-HOOK
+  {
+    key: "f.guided-setup",
+    title: "Guided setup",
+    size: "m",
+    depends_on: [],
+    approach: lines(
+      "Reuse the onboarding checklist that already ships on the dashboard, and add a fourth step: place a test order.",
+      "The checklist component reads its steps from the store settings, so the new step is one more entry there, with its own done-rule.",
+      "The test order runs through the payment sandbox, never the live provider. The store keeps a flag on the order so reports and stock skip it.",
+      "When the owner finishes the test order, the step ticks itself and the checklist shows the next one.",
+      "Steps the owner has already done in the old checklist keep their ticks; nobody sees the new step as a regression.",
+      "We hide the whole checklist once all four steps are done, and keep a link to it in Settings for a month.",
+      "Copy for each step comes from the content team's existing strings file, so translators get it in the usual batch.",
+      "Analytics: one event per step done, with the time since sign-up, so we can see where owners stall.",
+      "Out of scope: a video walkthrough, and any change to how the dashboard is laid out around the checklist.",
+      "Rollout: behind a setting per store, on for new stores first, then for stores younger than 30 days.",
+    ),
+    questions: [
+      { id: "q1", question: "Does the payment sandbox take test orders without a live account?", blocking: true },
+      { id: "q2", question: "Show the checklist on phones too, or only on the desktop dashboard?", blocking: false },
+    ],
+  },
+  {
+    key: "f.sample-data",
+    title: "Sample data",
+    size: "s",
+    depends_on: [],
+    approach: lines(
+      "Copy a fixed catalogue of 24 products, 3 collections and 2 discount codes into a new store the first time the owner signs in.",
+      "The catalogue lives as one seed file in the repository, reviewed by the content team, with images on the shared image host.",
+      "Every copied record carries a sample flag. A banner on the products page says the products are samples and offers Remove all samples.",
+      "Remove all samples deletes only flagged records that the owner has not edited; edited ones lose the flag and stay.",
+      "Sample products never appear in the public store until the owner publishes them by hand.",
+      "Search indexing skips flagged records, so a new store's search does not fill up with samples.",
+      "The copy runs as a background job after sign-in, so the first page load does not wait for it; the products page shows a short loading row until it finishes.",
+      "Out of scope: sample orders and sample customers.",
+    ),
+    questions: [],
+  },
+  {
+    key: "f.saved-carts",
+    title: "Saved carts",
+    size: "l",
+    depends_on: ["f.guided-setup"],
+    approach: lines(
+      "Keep the cart on the server instead of only in the browser, and sync it when a buyer signs in on another device.",
+      "Today the cart is a cookie of item ids and quantities. We add a carts table keyed by buyer, with lines, prices seen and last-touched time.",
+      "Guests keep the cookie cart. On sign-in, the guest cart merges into the saved one: same item, the larger quantity wins; new items are added.",
+      "Prices are always re-read at checkout; the saved price is only used to tell the buyer a price changed since they added the item.",
+      "A saved cart expires after 60 days without a visit. A nightly job removes expired carts in batches of 1,000.",
+      "Out-of-stock lines stay in the cart, greyed, with Remove and Notify me.",
+      "Two tabs editing the same cart: the last write wins per line, and the other tab refreshes its view on focus.",
+      "Load: carts are read on every page that shows the cart count, so the count is cached per buyer for a minute.",
+      "Migration: no backfill; carts start saving from the release.",
+      "Privacy: a buyer who deletes their account loses their saved cart the same day, with the rest of their data.",
+      "Out of scope: shared carts and wish lists.",
+      "Risk: the merge rule may surprise buyers who built two different carts on two devices; we log merges to see how often that happens.",
+    ),
+    questions: [
+      { id: "q1", question: "Is 60 days the right expiry, or should it follow the store's own setting?", blocking: false },
+    ],
+  },
+  {
+    key: "f.price-early",
+    title: "Show the full price early",
+    size: "m",
+    depends_on: [],
+    approach: lines(
+      "Show the total with tax and shipping on the cart page, before the buyer starts checkout.",
+      "The pricing module already computes the total at the payment step. We call it as soon as the cart changes, with the buyer's last known address or the store's default region.",
+      "The cart page shows the total with a note: Estimated for <region>, change. Changing the region re-prices at once.",
+      "Shipping comes from the cheapest method that serves the region; the buyer can still pick another at checkout.",
+      "Tax is quoted by the tax service, never computed locally, because rules differ by region.",
+      "Quotes are cached per cart and region for ten minutes, so a busy cart page does not call the tax service on every view.",
+      "If the tax service is slow (over 400 ms) the page shows the subtotal and Tax at checkout, and fills in the total when the quote arrives.",
+      "Checkout keeps its own final quote; if it differs from the cart's estimate, checkout shows both with the reason.",
+      "Analytics: we compare drop-off between cart and payment before and after.",
+      "Out of scope: showing duties for cross-border orders.",
+    ),
+    questions: [
+      { id: "q1", question: "Can quotes be cached for ten minutes without breaking the tax service's terms?", blocking: true },
+      { id: "q2", question: "Do gift cards change the total shown on the cart page?", blocking: false },
+      { id: "q3", question: "Which region do we assume for a guest with no address?", blocking: false },
+    ],
+  },
+  {
+    key: "f.order-notes",
+    title: "Order notes for the shop",
+    size: "xs",
+    depends_on: [],
+    approach: lines(
+      "Let the buyer leave a short note for the shop on the last checkout step, up to 500 characters.",
+      "The note is stored on the order and shows in the order's page in the admin, above the lines, and in the packing slip.",
+      "The note is plain text: line breaks kept, links not made clickable, so a note cannot carry a link that looks like the shop's.",
+      "Stores can turn the field off in Checkout settings; it is on by default for new stores and off for existing ones.",
+      "The order confirmation email repeats the note so the buyer sees what they sent.",
+      "Out of scope: notes per line and replies from the shop.",
+    ),
+    questions: [],
+  },
+  {
+    key: "f.low-stock",
+    title: "Low stock alerts",
+    size: "s",
+    depends_on: [],
+    approach: lines(
+      "Tell the owner when a product's stock falls below a level they set, once per crossing.",
+      "Each product gets an optional alert level. The stock module already emits an event on every change; a listener compares the new level to the alert level.",
+      "One alert per crossing: the alert re-arms only when stock goes back above the level.",
+      "Alerts go to the owner's inbox in the admin and, if they opted in, a daily email that lists every product below its level.",
+      "Bulk set: the products list gets a Set alert level action for the selected products.",
+      "Variants: the level is per variant, with the product's level as the default for new variants.",
+      "Load: the listener is cheap (one comparison); the daily email reads only products that crossed that day.",
+      "Out of scope: automatic reorder from suppliers.",
+    ),
+    questions: [
+      { id: "q1", question: "Should staff accounts get the alert too, or only the owner?", blocking: false },
+    ],
+  },
+  {
+    key: "f.returns-portal",
+    title: "Self-serve returns",
+    size: "xl",
+    depends_on: ["f.saved-carts"],
+    approach: lines(
+      "Let buyers start a return from their order page, choose the lines and a reason, and get a label, without writing to the shop.",
+      "A new returns module owns a return: its order, lines, reasons, status (requested, approved, in transit, received, refunded) and label.",
+      "Each store sets a return window (default 30 days) and which products cannot be returned; the order page offers Return only inside the window.",
+      "Labels come from the shipping provider we already use for outbound labels; it has a returns endpoint, priced per label.",
+      "The owner approves each request, or turns on auto-approve for orders under an amount they choose.",
+      "Received: the warehouse scans the label; until we have scanning, the owner marks it received by hand.",
+      "Refund: on received, the payment module refunds the lines' prices; shipping is refunded only if the reason is the shop's fault.",
+      "Stock goes back up on received, unless the owner marks the item damaged.",
+      "Emails: requested, approved with the label, received, refunded. Each one uses the store's email template.",
+      "Exchanges are a return plus a new order at the same price, made by the owner by hand in this first version.",
+      "Reports: returns per product and per reason, in the existing reports page.",
+      "Data: about 3% of orders are returned today, by email; we expect that to rise once it is easier.",
+      "Rollout: behind a store setting, off by default, with a short guide in the help centre.",
+      "Risk: label costs land on the shop; we show the cost before the owner approves.",
+      "Risk: partial refunds with discounts are hard to get right; we reuse the refund maths the admin already uses for manual refunds.",
+      "Out of scope: returns for digital products and for orders paid by invoice.",
+    ),
+    questions: [
+      { id: "q1", question: "Does the shipping provider's returns endpoint work in every region we ship to?", blocking: true },
+      { id: "q2", question: "Who pays for the label when the buyer simply changed their mind?", blocking: true },
+      { id: "q3", question: "Do we need scanning in the first version, or is marking received by hand enough?", blocking: false },
+    ],
+  },
+  {
+    key: "f.store-hours",
+    title: "Store opening hours",
+    size: "s",
+    depends_on: [],
+    approach: lines(
+      "Let shops with a counter show their opening hours on the store's contact page and in the footer.",
+      "Hours are a week of open and close times per day, plus dated exceptions (holidays, a closed afternoon).",
+      "The store's time zone, already in Settings, decides what Open now means; buyers see the hours in the store's time, labelled.",
+      "The footer shows Open now until 18:00, or Closed, opens Monday 09:00.",
+      "Search engines get the hours in the page's structured data.",
+      "Out of scope: several locations with their own hours.",
+    ),
+    questions: [
+      { id: "q1", question: "Should pick-up orders be refused outside opening hours?", blocking: false },
+    ],
+  },
+  {
+    key: "f.reviews-import",
+    title: "Import product reviews",
+    size: "m",
+    depends_on: [],
+    approach: lines(
+      "Let an owner moving from another shop platform import their product reviews from a spreadsheet.",
+      "The import reads a CSV with product code, rating, title, text, author name and date; a preview shows the first 20 rows and every row it cannot match.",
+      "Rows match products by product code; rows that do not match are listed for the owner to fix or skip.",
+      "Imported reviews are marked imported and keep their original date; they count in the product's average like any other.",
+      "Up to 50,000 rows per file; the import runs in the background and emails the owner when it is done.",
+      "Duplicates: the same product, author and date are skipped on a second import, so running it twice is safe.",
+      "Moderation: imported reviews skip the review queue, because the owner already published them elsewhere.",
+      "Out of scope: photos attached to reviews, and imports straight from another platform's API.",
+    ),
+    questions: [
+      { id: "q1", question: "Do we show imported reviews with a mark, so buyers know they came from elsewhere?", blocking: false },
+      { id: "q2", question: "Is 50,000 rows enough for the largest shops moving to us?", blocking: false },
+    ],
+  },
+  // The hard case adds six more (15 in all).
+  {
+    key: "f.gift-cards",
+    title: "Gift cards",
+    size: "l",
+    depends_on: ["f.price-early"],
+    approach: lines(
+      "Sell gift cards as a product, and accept them as payment at checkout.",
+      "A gift card is a code with a balance, a currency and an expiry set by the store (default none, where the law allows).",
+      "Buying one sends the code by email to the buyer or to the person they name, on the day they choose.",
+      "At checkout the buyer enters a code; the balance pays first, and any rest goes to the usual payment.",
+      "Refunds of orders paid by gift card go back to the card.",
+      "The admin lists every card with its balance and history, and the owner can disable one.",
+      "Codes are 16 characters, random, never guessable from order numbers; entering wrong codes is limited to 10 an hour per buyer.",
+      "Accounting: sold cards are a liability, not revenue, until spent; the reports page splits them out.",
+      "Out of scope: physical cards.",
+    ),
+    questions: [
+      { id: "q1", question: "Which regions forbid an expiry on gift cards?", blocking: true },
+      { id: "q2", question: "Can a gift card pay for another gift card?", blocking: false },
+    ],
+  },
+  {
+    key: "f.abandoned-email",
+    title: "Abandoned cart email",
+    size: "m",
+    depends_on: ["f.saved-carts"],
+    approach: lines(
+      "Email a signed-in buyer who left items in their cart for 4 hours, once, with the items and a link back.",
+      "Uses the saved cart: a job every 15 minutes finds carts untouched for 4 hours with no order since.",
+      "Only buyers who agreed to marketing email get it; the link signs nobody in.",
+      "The email shows up to 3 items with images and the current price.",
+      "The store can turn it off and change the wait (1 to 48 hours).",
+      "Out of scope: a second reminder and discount codes in the email.",
+    ),
+    questions: [],
+  },
+  {
+    key: "f.bulk-edit",
+    title: "Bulk edit products",
+    size: "m",
+    depends_on: [],
+    approach: lines(
+      "Edit price, stock, tags and status for many products at once from a grid in the admin.",
+      "The grid loads 200 products a page and keeps edits in the page until Save.",
+      "Save sends one request with every changed field; the server applies them in one transaction per 200 products.",
+      "Undo: the last bulk save can be undone for an hour, from a banner.",
+      "Validation runs per cell, so a bad price is marked before Save.",
+      "Out of scope: editing descriptions and images in the grid.",
+    ),
+    questions: [
+      { id: "q1", question: "Should price changes in bulk need a second person to confirm above a threshold?", blocking: false },
+    ],
+  },
+  {
+    key: "f.local-pickup",
+    title: "Local pick-up",
+    size: "s",
+    depends_on: ["f.store-hours"],
+    approach: lines(
+      "Offer Pick up at the shop as a shipping method, free, for stores with a counter.",
+      "The method shows only when the buyer's region is the store's own, and when the store has opening hours set.",
+      "The order confirmation gives the address, the hours and Ready for pick-up when the owner marks it so.",
+      "Out of scope: pick-up slots.",
+    ),
+    questions: [],
+  },
+  {
+    key: "f.two-step-signin",
+    title: "Two-step sign-in for staff",
+    size: "m",
+    depends_on: [],
+    approach: lines(
+      "Let owners require a second step (an authenticator app code) for every staff account.",
+      "Staff set it up on their next sign-in after the owner turns it on; until they do, they can only reach the setup page.",
+      "Ten backup codes, shown once; the owner can reset a staff member's second step.",
+      "Sessions last 12 hours; the second step is asked again after that.",
+      "Out of scope: text-message codes and security keys.",
+    ),
+    questions: [
+      { id: "q1", question: "Do we force it on the owner account too?", blocking: true },
+    ],
+  },
+  {
+    key: "f.invoice-pdf",
+    title: "Invoices as PDF",
+    size: "s",
+    depends_on: [],
+    approach: lines(
+      "Make a PDF invoice for every paid order, numbered in sequence per store, and attach it to the confirmation email.",
+      "The invoice uses the store's legal name, address and tax number from Settings.",
+      "Numbers never repeat or skip; a cancelled order keeps its number with a credit note.",
+      "The PDF is made once and stored, so it never changes after it is sent.",
+      "Out of scope: the store designing its own invoice.",
+    ),
+    questions: [
+      { id: "q1", question: "Is a sequence per store enough, or do some regions need one per year?", blocking: false },
+    ],
+  },
+];
+
+/** MOCK-HOOK: how many briefs the mock-up shows (localStorage "po-mock-eng-n"). */
+export function mockEngBriefs(): Brief[] { // MOCK-HOOK
+  const n = Number((typeof localStorage !== "undefined" && localStorage.getItem("po-mock-eng-n")) || 9); // MOCK-HOOK
+  return MOCK_ENG_BRIEFS.slice(0, n); // MOCK-HOOK
+}

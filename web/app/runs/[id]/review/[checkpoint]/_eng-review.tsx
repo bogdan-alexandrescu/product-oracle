@@ -9,6 +9,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
 
 import type { BriefsCheck, CheckpointOut, RunOut } from "../../../_lib";
+import { MockEngBody, useMockParam } from "./_eng-mock"; // MOCK-HOOK
 
 type Review = Schemas["CheckpointReview"];
 type Action = Review["items"][number]["actions"][number];
@@ -60,6 +61,9 @@ export function EngReview({
   onDecided: () => Promise<void>;
 }) {
   const router = useRouter();
+  const ec1 = useMockParam("ec1"); // MOCK-HOOK
+  const ec2 = useMockParam("ec2") ?? "b"; // MOCK-HOOK
+  const selParam = useMockParam("sel"); // MOCK-HOOK
   const [selected, setSelected] = useState(check.features[0]?.key ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -153,6 +157,19 @@ export function EngReview({
           </ul>
         </div>
       )}
+      {ec1 ? ( // MOCK-HOOK
+        <MockEngBody // MOCK-HOOK
+          key={`${ec1}-${ec2}-${selParam ?? ""}`} // MOCK-HOOK
+          ec1={ec1} // MOCK-HOOK
+          ec2={ec2} // MOCK-HOOK
+          features={check.features} // MOCK-HOOK
+          actsOf={(k) => actionsOf(review, k)} // MOCK-HOOK
+          writes={stages || suggests} // MOCK-HOOK
+          busy={busy} // MOCK-HOOK
+          onAct={act} // MOCK-HOOK
+          initial={selParam} // MOCK-HOOK
+        /> // MOCK-HOOK
+      ) : ( // MOCK-HOOK
       <Split
         inspector={
           feature && (
@@ -245,6 +262,7 @@ export function EngReview({
           </ul>
         </section>
       </Split>
+      )} {/* MOCK-HOOK */}
 
       <div
         data-testid="decision-bar"
