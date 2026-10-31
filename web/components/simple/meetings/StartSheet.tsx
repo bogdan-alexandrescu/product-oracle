@@ -147,6 +147,9 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
           attendee_ids: people, change_mode: mode, change_people: mode === "named" ? named : [], length_min: length,
         },
       }));
+      // qa4-simple-decide-17: the sheet closes as it leaves; the page left behind stays mounted
+      // (hidden), and an open sheet there would still count as a modal (the toasts move to the top).
+      onClose();
       router.push(`/simple/meetings/${m.id}`);
     } catch (e) {
       setError(errorMessage(e));
@@ -190,7 +193,7 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
               ? "You can't start a review of this PRD. Ask its decider to start it."
               : `Only ${chosen.starters.map((s) => s.name).join(", ")} can start this review.`}
           </p>
-          {liveOne && <Button variant="primary" onClick={() => router.push(`/simple/meetings/${liveOne.id}`)}>Join</Button>}
+          {liveOne && <Button variant="primary" onClick={() => { onClose(); router.push(`/simple/meetings/${liveOne.id}`); }}>Join</Button>}
         </div>
       ) : (
         <>

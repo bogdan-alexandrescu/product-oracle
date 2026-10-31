@@ -42,8 +42,8 @@ async function endIt(page: Page) {
   await expect(page.getByTestId("end-screen")).toBeVisible();
 }
 
-async function pastMeeting(page: Page) {
-  await login(page);
+async function pastMeeting(page: Page, signedIn = false) {
+  if (!signedIn) await login(page);
   await page.goto("/simple/meetings");
   await tap(page.getByTestId("meetings-past").getByRole("link", { name: "Review: Usage alerts" }).first());
   await expect(page.getByTestId("end-screen")).toBeVisible();
@@ -131,7 +131,7 @@ for (const phone of [false, true]) {
       await expect(row).toContainText("Q5 Reminder default time");
       await expect(row).not.toContainText(/D-\d+/);
       // A past meeting's open question reads by its words.
-      await pastMeeting(page);
+      await pastMeeting(page, true);
       const minutes = page.getByRole("region", { name: "Minutes" });
       await expect(minutes.getByRole("link", { name: "Should muted teams still get the weekly digest?", exact: true })).toBeVisible();
       await expect(minutes).not.toContainText("D-3");
