@@ -88,6 +88,17 @@ export function CompareBar({
                 },
           ]}
         />
+        {/* qa4-docs-46: why an option cannot be picked, in words, not only in its tip. */}
+        {(!previous || !approved) && (
+          <span data-testid="compare-unavailable" className="text-sm text-text2">
+            {[
+              !previous && (draft ? "No earlier draft yet" : "No earlier version yet"),
+              !approved && (draft ? "No approved roadmap yet" : "No other approved version yet"),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        )}
       </div>
       {diff.base && diff.summary && (
         <p data-testid="items-compare-summary" className="tnum text-sm text-text2">

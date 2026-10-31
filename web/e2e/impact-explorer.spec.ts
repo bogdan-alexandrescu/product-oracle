@@ -25,7 +25,7 @@ const row = (page: Page, title: string) => plan(page).getByTestId("plan-row").fi
 test("impact: an owner sees the lineage, picks an output and settles it, then proposes its draft run", async ({ page }) => {
   await scenario(page, "impact");
   await openImpact(page);
-  await expect(page.getByText("Preview: nothing has been marked stale.")).toBeVisible();
+  await expect(page.getByText("Preview: v2 marks nothing stale.")).toBeVisible();
 
   const graph = page.getByRole("region", { name: "Lineage" });
   await expect(graph.getByTestId("lineage-subject")).toContainText("Checkout redesign PRD v2");

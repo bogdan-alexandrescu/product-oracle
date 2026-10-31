@@ -5,8 +5,17 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api } from "@/lib/api/client";
+import { formatDate } from "@/lib/format";
 
 const ENDED = "This link has ended. Ask the person who sent it for a new one.";
+const NOT_OPENED = "That did not open the link. The passcode may be wrong, or the link may have ended. Check the passcode and the address, or ask the person who sent it.";
+
+/** "Platform roadmap, autumn - Oct 31, 2026.pdf": the roadmap's name and today's date. */
+function pdfName(title: string | null | undefined): string {
+  const name = (title ?? "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Roadmap";
+  return `${name} - ${formatDate(new Date().toISOString())}.pdf`;
+}
+
 /**
  * What an opened link's status says about it (qa-docs-71): the roadmap, the company and the
  * person who shared it, and the day it ends (`expires_on`, written by the API in the Company
@@ -42,7 +51,9 @@ export function SharedRoadmap({ token }: { token: string }) {
   const show = async (res: Response, html: string | undefined, download: boolean, about: About = {}) => {
     if (res.ok && html) return setView({ kind: "open", html, download, about });
     if (res.status === 410) return setView({ kind: "ended" });
-    if (res.status === 404) return setView({ kind: "locked", note: "That passcode did not open a link. Check it and the address, or ask the person who sent it." });
+    // qa4-docs-share-31: the API answers a wrong passcode and an ended link alike (it never
+    // says which), so the note blames neither the passcode alone nor the person.
+    if (res.status === 404) return setView({ kind: "locked", note: NOT_OPENED });
     if (res.status === 429) {
       const wait = Math.max(1, Math.ceil(Number(res.headers.get("Retry-After") ?? "60") / 60));
       return setView({ kind: "locked", note: `Too many tries. Try again in ${wait} minute${wait === 1 ? "" : "s"}.` });
@@ -105,7 +116,8 @@ export function SharedRoadmap({ token }: { token: string }) {
     const url = URL.createObjectURL(out.data);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "roadmap.pdf";
+    // qa4-docs-share-25: named after the roadmap and the day it was saved.
+    a.download = pdfName(view.kind === "open" ? view.about.title : null);
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -123,12 +135,21 @@ export function SharedRoadmap({ token }: { token: string }) {
         data-testid="shared-page"
       >
         <header data-testid="shared-header" className="border-b border-[#e2e8f0] bg-[#ffffff] px-6 py-3 dark:border-[#334155] dark:bg-[#0f172a]">
-          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="min-w-0 flex-1">
+          {/* qa4-docs-share-26: on a phone the title has the row; Download PDF goes under it. */}
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 max-[600px]:flex-col max-[600px]:items-start">
+            <div className="min-w-0 flex-1 max-[600px]:w-full max-[600px]:flex-none">
               {title && <h1 className="font-display text-xl font-bold tracking-heading break-words">{title}</h1>}
               {(who || expires_on) && (
                 <p className="text-sm text-[#475569] dark:text-[#94a3b8]" data-testid="shared-about">
-                  {[who ? `Shared by ${who}` : null, expires_on ? `Link ends ${expires_on}` : null].filter(Boolean).join(" · ")}
+                  {/* qa4-docs-share-26: each part on its own line on a phone, so no line starts with "·". */}
+                  {[who ? `Shared by ${who}` : null, expires_on ? `Link ends ${expires_on}` : null]
+                    .filter(Boolean)
+                    .map((part, i) => (
+                      <span key={i} className="max-[600px]:block">
+                        {i > 0 && <span className="max-[600px]:hidden"> · </span>}
+                        {part}
+                      </span>
+                    ))}
                 </p>
               )}
             </div>

@@ -61,7 +61,7 @@ def _check() -> str:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0094_generation_checks"]
+    assert script.get_heads() == ["0095_chat_read_answered_at"]
 
 
 def test_up_down_up_keeps_every_other_kind(scratch_db):

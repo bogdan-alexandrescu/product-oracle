@@ -487,6 +487,9 @@ export interface TeamContext extends InterviewsContext {
   recordAnswer: (questionId: string, body: string) => Promise<Response>;
 }
 
+/** Team interviews with a turn still out, until when (ms): the API's turn claim. */
+const turnHeld = new Map<string, number>();
+
 export const MOCK_TEAM_FOLLOW_UP = "Could you be more specific? Name the one that matters most, and who confirmed it.";
 const RECORDED = "Answer recorded.";
 
@@ -525,6 +528,12 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
   if (!question || (question.intake_id ?? null) !== r.intake_id) return fail(404, "Question not found");
   if (!["asked", "delegated", "deferred", "researching", "draft"].includes(question.status)) return fail(409, "This question is answered; it is not asked again");
   if (question.asked_to && question.asked_to !== ctx.userId) return fail(403, "This question was asked of someone else");
+  // As the API (turns.claim_turn): one turn per interview at a time, another is 429. A turn
+  // answered late (the test's slow knob on this path) holds the interview while it is out.
+  if ((turnHeld.get(r.id) ?? 0) > Date.now()) return fail(429, "Please wait a moment");
+  if (localStorage.getItem("po-mock-slow") === `POST /v1/interviews/${r.id}/turns`) {
+    turnHeld.set(r.id, Date.now() + (Number(localStorage.getItem("po-mock-slow-ms")) || 1500) - 100);
+  }
 
   // This question's messages since Oracle last recorded an answer to it.
   const mineOf = r.messages.filter((m) => m.question_id === qid);

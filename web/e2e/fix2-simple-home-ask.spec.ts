@@ -100,9 +100,9 @@ test.describe("simple-chat", () => {
     await panel.getByRole("button", { name: "Recent chats" }).click();
     await panel.getByTestId("ask-recent-row").filter({ hasText: "Home ·" }).first().click();
     await expect(about.getByRole("button", { name: "Home", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(about.getByRole("button", { name: "This page" })).toHaveCount(0);
-    // A new chat is about this page again.
-    await panel.getByRole("button", { name: "New chat" }).click();
+    // qa4-simple-home-24: "This page" stays offered, one click back to a chat about this page.
+    await expect(about.getByRole("button", { name: "This page" })).toHaveAttribute("aria-pressed", "false");
+    await about.getByRole("button", { name: "This page" }).click();
     await expect(about.getByRole("button", { name: "This page" })).toHaveAttribute("aria-pressed", "true");
     await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Roadmap");
   });

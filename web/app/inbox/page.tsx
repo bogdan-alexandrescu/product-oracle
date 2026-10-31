@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Chip, Empty, InfoTip, Page, PageHeader, Panel } from "@/components/ds";
 import { TabBar } from "@/components/review/parts";
-import { ErrorNote, Loading } from "@/components/ui";
+import { ErrorNote, LoadError, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingChanged } from "@/lib/waiting";
@@ -102,7 +102,8 @@ export default function InboxPage() {
   return (
     <Page>
       <PageHeader title="Inbox" status={waiting != null && waiting > 0 && <Chip kind="acc">{waiting} waiting</Chip>} />
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {/* qa4-shell-3: a plain sentence and Try again, as on every list. */}
+      {q.error && <LoadError what="your inbox" error={q.error} onRetry={() => void q.reload()} />}
       {q.loading && !inbox && <Loading />}
       {error && (
         <div className="mb-3">

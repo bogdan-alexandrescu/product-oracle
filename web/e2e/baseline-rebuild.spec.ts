@@ -103,7 +103,7 @@ test("baseline rebuild: a $14 build starts with no ritual cost cap", async ({ pa
   const card = page.getByTestId("occurrence-rebuild");
   await expect(card).toContainText("Oracle started the baseline build · Estimate $14.00 at standard depth. Its proposals wait for your review.");
   const last = page.getByTestId("ritual-block").getByRole("link", { name: /^Last built / });
-  await expect(last).toHaveText("Last built 2026-10-20 09:00 PDT");
+  await expect(last).toHaveText("Last built Oct 20, 2026, 9:00 AM PDT");
   await last.click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { level: 1, name: "Build the baseline" })).toBeVisible();

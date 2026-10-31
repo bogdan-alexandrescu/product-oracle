@@ -23,7 +23,8 @@ function home(doc?: DocumentOut) {
  * The crumb above a document page's title: back to the list. With `withTitle`, it also
  * names the document and its status (pages whose own title is something else, like a diff).
  */
-export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTitle?: boolean }) {
+/** `approvedLabel`: the word for an approved document where the page says it another way (Publish says "Published"). */
+export function DocCrumb({ doc, withTitle = true, approvedLabel }: { doc?: DocumentOut; withTitle?: boolean; approvedLabel?: string }) {
   const h = home(doc);
   // The rail highlights the same list (Plan for a roadmap, Company for a strategy) once the kind is known.
   useDocumentDestination(doc?.slug, doc ? h.href : undefined);
@@ -45,7 +46,7 @@ export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTit
           ) : (
             <span className="text-text2">…</span>
           )}
-          {doc && <DocStatusChip status={doc.status} />}
+          {doc && <DocStatusChip status={doc.status} label={doc.status === "approved" ? approvedLabel : undefined} />}
         </>
       )}
     </nav>

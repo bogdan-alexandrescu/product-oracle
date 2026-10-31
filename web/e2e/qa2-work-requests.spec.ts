@@ -144,18 +144,18 @@ test("rirs-36: To decide has its own address; the old one leads there", async ({
   await tab(page, "new").click();
   await expect(page).toHaveURL(/\/requests\/to-decide$/);
   await expect(tab(page, "new")).toHaveAttribute("aria-current", "page");
-  // Review minor: typing /requests/new opens the New request form, over the To decide tab.
+  // Review minor, qa4-work-18: typing /requests/new opens the New request form, over All requests.
   await page.goto("/requests/new");
   const dialog = page.getByRole("dialog", { name: "New request" });
   await expect(dialog).toBeVisible();
-  await expect(page).toHaveURL(/\/requests\/to-decide\?compose=request$/);
-  await expect(tab(page, "new")).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/\/requests\?compose=request$/);
+  await expect(tab(page, "all")).toHaveAttribute("aria-current", "page");
   // Closing it leaves the tab's own address, so a reload does not open it again.
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page).toHaveURL(/\/requests\/to-decide$/);
+  await expect(page).toHaveURL(/\/requests$/);
   await page.reload();
-  await expect(tab(page, "new")).toHaveAttribute("aria-current", "page");
+  await expect(tab(page, "all")).toHaveAttribute("aria-current", "page");
   await expect(dialog).toHaveCount(0);
   // An old link to one request still opens that request on To decide, with no form.
   await page.goto("/requests/new?request=00000000-0000-0000-0000-000000000000");
@@ -163,11 +163,11 @@ test("rirs-36: To decide has its own address; the old one leads there", async ({
   await expect(dialog).toHaveCount(0);
 });
 
-test("rirs-36: a viewer typing /requests/new gets the To decide tab, with no form to fill", async ({ page }) => {
+test("rirs-36, qa4-work-18: a viewer typing /requests/new gets All requests, with no form to fill", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "viewer"), MOCK_ROLE_KEY);
   await login(page);
   await page.goto("/requests/new");
-  await expect(tab(page, "new")).toHaveAttribute("aria-current", "page");
+  await expect(tab(page, "all")).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("View only").first()).toBeVisible();
   await expect(page.getByRole("dialog", { name: "New request" })).toHaveCount(0);
 });

@@ -374,7 +374,7 @@ def test_report_prose_names_days_in_words_not_iso():
     nxt = SimpleNamespace(name="First release", target_date=date(2026, 11, 30))
     counts = {"items": 3, "at_risk": 1, "blocked": 0, "stale": 0, "slipping": 1}
     assert views._headline("at_risk", counts, nxt) == (
-        "At risk: 1 of 3 items need attention (1 slipping). Next milestone: First release, Nov 30."
+        "At risk: 1 of 3 items needs attention (slipping). Next milestone: First release, Nov 30."
     )
     assert views._headline("on_track", counts, nxt) == (
         "On track: 3 items. Next milestone: First release, Nov 30."
@@ -1350,3 +1350,73 @@ def test_markdown_lists_an_item_with_two_reasons_once():
     md = alignment.markdown(content)
     assert md.count("(/plan?item=prd-0:item-x)") == 1
     assert f"- [Item X](/plan?item=prd-0:item-x) · Now: {SLIP} Its PRD section changed." in md
+
+
+def test_next_milestone_is_at_risk_when_one_of_its_items_slips_past_it():
+    """qa4-plan-7. protects=a milestone with an item slipping past it reads "at risk", not
+    only "verified basis"; fails_when=the report says a verified date supports the milestone
+    while the same track lists an item of it slipping; no_claim=items of other milestones."""
+    from types import SimpleNamespace
+
+    mid = uuid.uuid4()
+    slip = {"kind": "slipping", "detail": "ENG-405 targets Dec 9, after the milestone date Nov 30."}
+
+    def overview(item_key: str, health: str = "at_risk") -> SimpleNamespace:
+        return SimpleNamespace(
+            health=health,
+            next_milestone=SimpleNamespace(milestone_id=mid, target_date=date(2026, 11, 30)),
+            milestones=[SimpleNamespace(id=mid, item_keys=["alert-digest", "threshold-alerts"])],
+            at_risk=[SimpleNamespace(item_key=item_key, reasons=[slip])],
+        )
+
+    assert alignment.milestone_at_risk(overview("alert-digest")) is True
+    assert alignment.milestone_at_risk(overview("spend-forecast")) is False
+    # qa5-plan-at-risk: off track for an item outside the milestone is not the milestone's risk.
+    assert alignment.milestone_at_risk(overview("spend-forecast", "off_track")) is False
+    content = _content(1)
+    content["tracks"][0]["next_milestone"]["at_risk"] = True
+    md = alignment.markdown(content)
+    assert "- Next milestone: Beta, Nov 30 (at risk: an item slips past it)" in md
+    assert "(verified basis)" not in md
+
+
+async def test_an_off_track_track_leaves_its_milestone_at_risk_only_when_an_item_slips_past_it(
+    client, owner, runtime
+):
+    """qa5-plan-at-risk. protects=the report's "at risk: an item slips past it" on the next
+    milestone; fails_when=a track off track for a critical blocker (no date of the milestone
+    threatened) reads its milestone at risk, or an item of an item-named milestone slipping
+    past its date does not; no_claim=the track's health (off track either way)."""
+    from tests.roadmap_helpers import seed_trace
+    from tests.test_roadmap import seed_baseline
+
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    await seed_trace(tenant_id)
+    await built_roadmap(client, auth, runtime)
+    (track,) = (await client.get("/v1/tracks", headers=auth)).json()
+
+    async def part() -> dict:
+        resp = await client.post("/v1/alignment-reports", json={}, headers=auth)
+        assert resp.status_code == 201, resp.text
+        (t,) = resp.json()["tracks"]
+        return t
+
+    # The payment step's critical hard blocker puts the track off track; nothing slips.
+    t = await part()
+    assert t["health"] == "off_track"
+    assert {n["kind"] for n in t["needs_attention"]} == {"blocked"}
+    assert t["next_milestone"]["name"] == "Beta" and t["next_milestone"]["date"] == "2026-11-30"
+    assert t["next_milestone"]["at_risk"] is False
+
+    # Engineering now targets Dec 20 for the payment step, past Beta's Nov 30: at risk.
+    record = {"external_ref": "ENG-412", "state": "in_progress", "target_date": "2026-12-20",
+              "track_id": track["id"], "item_key": "payment-step"}  # fmt: skip
+    resp = await client.post(
+        "/v1/tracker/records", json={"tracker": "jira", "records": [record]}, headers=auth
+    )
+    assert resp.status_code == 200, resp.text
+    t = await part()
+    assert "slipping" in {n["kind"] for n in t["needs_attention"]}
+    assert t["next_milestone"]["at_risk"] is True

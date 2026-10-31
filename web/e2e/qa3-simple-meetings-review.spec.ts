@@ -80,7 +80,7 @@ for (const phone of [false, true]) {
           // It starts at the top of the page itself (not a fixed layer of its own).
           expect(await screen.evaluate((el) => el.getBoundingClientRect().top + window.scrollY)).toBe(0);
           expect(await screen.evaluate((el) => getComputedStyle(el).position)).not.toBe("fixed");
-          await page.getByRole("region", { name: "All decisions" }).scrollIntoViewIfNeeded();
+          await page.getByRole("region", { name: "Decisions in this meeting" }).scrollIntoViewIfNeeded();
           expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
           expect(await screen.evaluate((el) => el.scrollTop)).toBe(0);
         });
@@ -90,12 +90,12 @@ for (const phone of [false, true]) {
           expect(await height(page.getByRole("button", { name: "End meeting" }))).toBeGreaterThanOrEqual(44);
           // qa-simple-decide-29: the attendees fold into one row on a phone.
           await page.getByTestId("meeting-people-toggle").click();
-          expect(await height(page.getByRole("button", { name: "Commenter is here" }))).toBeGreaterThanOrEqual(44);
+          expect(await height(page.getByRole("button", { name: "Mark Commenter away" }))).toBeGreaterThanOrEqual(44);
           // The one-pager names a line by its first words (qa-simple-prd), not its number.
           await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
           await page.getByLabel("New wording for").fill("A checklist that names the next step");
           await page.getByRole("button", { name: "Save" }).click();
-          expect(await height(page.getByRole("button", { name: /^Approve one-pager edits/ }))).toBeGreaterThanOrEqual(44);
+          expect(await height(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }))).toBeGreaterThanOrEqual(44);
           await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
           const slice = page.getByRole("region", { name: "Roadmap slice" });
           const first = slice.locator("li").first();

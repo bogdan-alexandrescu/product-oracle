@@ -60,7 +60,7 @@ test("goals: the confidence ring is named and hidden without a current value; th
   await expect(g1.getByTestId("goal-confidence")).toBeVisible();
   await expect(g1.getByTestId("goal-confidence")).toContainText("confidence");
   // qa-plan-4: no evidence yet, so no score, as on the Baseline page.
-  await expect(g1.getByRole("img", { name: "No confidence" })).toBeVisible();
+  await expect(g1.getByTestId("goal-confidence")).toHaveText("No confidence yet: add evidence");
   await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
 
   // Cut early churn has no current value: no ring, no number beside the "–".
@@ -121,14 +121,15 @@ test("in flight: a run paused over budget says Paused; runs are named by title, 
   await expect(paused.getByRole("meter")).toHaveCount(0);
 
   const table = page.getByTestId("home-in-flight-table");
-  await expect(flight(page, "usage-alerts-v2")).toContainText("Usage alerts v2 PRD");
+  // #979: a run is named by its document's own title and its flow, no kind word added.
+  await expect(flight(page, "usage-alerts-v2")).toContainText("Usage alerts v2 · Baseline to PRD");
   await expect(table).not.toContainText("usage-alerts-v2");
   await expect(table).not.toContainText("team-onboarding");
   await flight(page, "team-onboarding").click();
   const inspector = page.getByTestId("home-inspector");
   await expect(inspector).toContainText("Run · selected");
   await expect(inspector).not.toContainText(/Run [0-9a-f]{4}\b/);
-  await expect(inspector.getByRole("heading", { name: /^Team onboarding PRD/ })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: /^Team onboarding · Baseline to PRD/ })).toBeVisible();
 });
 
 // qa-company-24: Set up says the default zone is used until one is set, then the zone in words.

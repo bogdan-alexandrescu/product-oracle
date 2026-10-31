@@ -101,7 +101,7 @@ test("qa-simple-home-8: the walk covers the decisions waiting for you", async ({
   const decide = step(page).getByRole("button", { name: /^Decide: / });
   await expect(decide).toBeVisible();
   await decide.click();
-  await expect(page.getByText(/^Decided Q\d+: /)).toBeVisible();
+  await expect(page.getByText(/^Decided .+: /)).toBeVisible();
   await expect(page.getByTestId("walk-progress")).not.toHaveText(at!);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText("Undone", { exact: true })).toBeVisible();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { confirmInPage } from "@/components/ds/ConfirmDialog";
 import { LIMITS, publicCall, type PublicInterview, type PublicMessage, type PublicProgress, type PublicTurn } from "@/lib/api/interviews";
@@ -12,6 +12,32 @@ const BUTTON =
   "inline-flex h-11 items-center justify-center rounded-button px-4 text-[15px] font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60";
 const PRIMARY = `${BUTTON} bg-accent text-on-accent hover:brightness-110`;
 const QUIET = `${BUTTON} border border-line-strong bg-surface text-text hover:bg-surface2`;
+/** qa4-docs-share-61: this browser finished the link; the API answers a finished link 410 "used" to anyone. */
+const doneKey = (token: string) => `po-interview-done:${token}`;
+
+function readDone(token: string): { company: string | null } | null {
+  try {
+    const raw = window.localStorage.getItem(doneKey(token));
+    return raw ? (JSON.parse(raw) as { company: string | null }) : null;
+  } catch {
+    return null;
+  }
+}
+
+function markDone(token: string, company: string | null) {
+  try {
+    window.localStorage.setItem(doneKey(token), JSON.stringify({ company }));
+  } catch {
+    // Storage off: a reload then reads as any used link.
+  }
+}
+
+/** qa4-docs-share-60: the send keys under the box, as the person's keyboard names them. */
+function sendHint(): string {
+  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  return `${mac ? "Cmd" : "Ctrl"}+Enter to send`;
+}
+
 /** The page's one column: the header, the conversation and the footer line up on it. */
 const COLUMN = "mx-auto w-full max-w-2xl min-w-0 px-4";
 
@@ -40,6 +66,10 @@ export function InterviewChat({ token }: { token: string }) {
   const [text, setText] = useState("");
   const [waiting, setWaiting] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // qa4-docs-share-59: the questions skipped here, by their message's index; each shows "Skipped".
+  const [skipped, setSkipped] = useState<ReadonlySet<number>>(new Set());
+  // qa4-docs-share-61: this browser finished the interview (its company), read on a refused reload.
+  const [finished, setFinished] = useState<{ company: string | null } | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
 
@@ -55,12 +85,18 @@ export function InterviewChat({ token }: { token: string }) {
         setPhase({ at: res.data.messages.some((m) => m.role === "customer") ? "chat" : "intro" });
         return;
       }
-      setPhase({ at: "refused", why: refusalOf(res.status, res.reason) ?? "unreachable" });
+      const why = refusalOf(res.status, res.reason) ?? "unreachable";
+      if (why === "used") setFinished(readDone(token));
+      setPhase({ at: "refused", why });
     });
     return () => {
       live = false;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (phase.at === "done") markDone(token, info?.company ?? null);
+  }, [phase.at, token, info]);
 
   useEffect(() => {
     if (phase.at === "chat") end.current?.scrollIntoView({ block: "end" });
@@ -90,6 +126,7 @@ export function InterviewChat({ token }: { token: string }) {
     const turnOut = res.data;
     // Our own message is already on screen: the turn's first message echoes it.
     setMessages([...before, ...turnOut.messages]);
+    if (action === "skip" && before.length > 0) setSkipped((prev) => new Set(prev).add(before.length - 1));
     setProgress(turnOut.progress);
     if (turnOut.done) setPhase({ at: "done" });
     else input.current?.focus();
@@ -122,7 +159,8 @@ export function InterviewChat({ token }: { token: string }) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send();
   }
 
-  const company = info?.company ?? null;
+  const company = info?.company ?? finished?.company ?? null;
+  const hintId = `interview-hint-${token}`;
 
   if (phase.at === "loading") {
     return (
@@ -135,7 +173,9 @@ export function InterviewChat({ token }: { token: string }) {
   }
   if (phase.at === "refused") {
     const line =
-      phase.why === "used"
+      phase.why === "used" && finished
+        ? "You've finished this interview, thank you."
+        : phase.why === "used"
         ? `This link has already been used. ${company ? `Ask ${company} for a new one.` : "Ask the team that sent it for a new one."}`
         : phase.why === "withdrawn"
           ? "This link was withdrawn."
@@ -208,6 +248,7 @@ export function InterviewChat({ token }: { token: string }) {
                 maxLength={LIMITS.message}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={onKey}
+                aria-describedby={hintId}
                 placeholder="Type your answer"
                 className="block max-h-40 min-h-11 w-full resize-y rounded-lg border border-line-strong bg-surface px-3 py-2 text-[16px] text-text"
               />
@@ -216,6 +257,9 @@ export function InterviewChat({ token }: { token: string }) {
               Send
             </button>
           </div>
+          <p id={hintId} data-testid="interview-hint" className="text-[13px] text-text2">
+            {sendHint()}
+          </p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span data-testid="interview-progress" className="tnum text-sm font-semibold text-text2">
               {progress.asked} of {progress.total}
@@ -243,8 +287,8 @@ export function InterviewChat({ token }: { token: string }) {
             // qa-docs-87: a run of messages from one side is one group, named once.
             const run = i > 0 && messages[i - 1].role === m.role;
             return (
+              <Fragment key={`${m.at}-${i}`}>
               <li
-                key={`${m.at}-${i}`}
                 data-testid={m.role === "oracle" ? "msg-oracle" : "msg-customer"}
                 className={`flex max-w-[85%] min-w-0 flex-col gap-0.5 ${m.role === "customer" ? "self-end items-end" : "self-start"} ${run ? "-mt-2" : ""}`}
               >
@@ -262,6 +306,12 @@ export function InterviewChat({ token }: { token: string }) {
                   {m.body}
                 </p>
               </li>
+              {skipped.has(i) && (
+                <li data-testid="msg-skipped" className="self-end text-[13px] font-semibold text-text2 italic">
+                  Skipped
+                </li>
+              )}
+              </Fragment>
             );
           })}
         </ol>

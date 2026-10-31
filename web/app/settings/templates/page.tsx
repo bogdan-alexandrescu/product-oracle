@@ -111,9 +111,9 @@ function TemplateInspector({ t, themeName }: { t: TemplateSummary; themeName: (k
         { label: "Added", value: <span className="text-lg">{formatDate(t.created_at)}</span> },
       ]}
     >
-      <InspectorSection label="Facts">
+      {/* Only names: the internal key is not shown to people (qa4-settings-17). */}
+      <InspectorSection label="Details">
         <InspectorRow value={themeName(t.suggested_theme)}>Suggested theme</InspectorRow>
-        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {t.description && (
         <InspectorSection label="Description">

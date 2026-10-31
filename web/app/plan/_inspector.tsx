@@ -40,10 +40,9 @@ function History({ item }: { item: PlanItem }) {
     <div className="flex flex-col gap-2">
       {versions.length > 0 && (
         <ol className="flex flex-col gap-1 text-[15px]">
-          {versions.map((v) => (
+          {versions.map((v, n) => (
             <li key={v.version} data-testid="plan-history-version" className="tnum">
-              {v.prd_version != null ? `PRD v${v.prd_version}` : "PRD"} {HORIZON_LABEL[v.horizon]}
-              {v.approved_at ? ` · approved ${formatDay(v.approved_at)}` : " · in a draft"}
+              {versionLine(v, versions[n - 1])}
             </li>
           ))}
         </ol>
@@ -65,6 +64,18 @@ function History({ item }: { item: PlanItem }) {
       )}
     </div>
   );
+}
+
+/**
+ * qa4-plan-27: one roadmap version of the item as a plain sentence, the version named as the Plan
+ * names it (an approved one "version N", else "draft N"): "Added to Now in version 1 from PRD v1,
+ * approved Oct 5", "Moved to Now in draft 2 from PRD v1".
+ */
+function versionLine(v: Schemas["ItemVersion"], before: Schemas["ItemVersion"] | undefined): string {
+  const verb = !before ? "Added to" : before.horizon !== v.horizon ? "Moved to" : "Kept in";
+  const name = v.approved_at ? `version ${v.version}` : `draft ${v.version}`;
+  const from = v.prd_version != null ? ` from PRD v${v.prd_version}` : "";
+  return `${verb} ${HORIZON_LABEL[v.horizon]} in ${name}${from}${v.approved_at ? `, approved ${formatDay(v.approved_at)}` : ""}`;
 }
 
 /** F2 §2: what one import changed on an issue, in plain words ("ENG-405: Open → In progress, date Nov 30 → Dec 9"). */

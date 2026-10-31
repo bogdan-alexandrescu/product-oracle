@@ -80,7 +80,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("board-decided")).toHaveAttribute("aria-label", "Decided questions");
       const foot = page.getByTestId("decisions-approvals");
       await expect(foot).toContainText("They are not product decisions, so they are not listed or counted here.");
-      await expect(foot.getByRole("link", { name: "Open the Inbox (it leaves Simple)" })).toBeVisible();
+      await expect(foot.getByRole("link", { name: "Open the Inbox in Detailed" })).toBeVisible();
     });
   });
 }

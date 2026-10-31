@@ -112,7 +112,7 @@ for (const phone of [false, true]) {
         await expect(meta).toContainText("Nov 2, 2026 → Feb 12, 2027");
         await expect(meta).toContainText("56 engineer-weeks");
         for (const name of ["Present", "Export PDF", "Start review"]) await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
-        await expect(page.getByRole("link", { name: "Open the detailed view" })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Open in Detailed" })).toBeVisible();
         const tl = page.getByRole("region", { name: "Timeline" });
         const part = page.getByTestId("milestone-part");
         // In that order down the page; the milestone's part is its own card, not the timeline's.

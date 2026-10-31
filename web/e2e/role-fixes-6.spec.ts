@@ -95,9 +95,10 @@ test("an approver publishes and approves a PRD but accepts no risk only an owner
   await page.goto("/documents/usage-alerts-roadmap/v/1");
   await expect(page.getByTestId("doc-header").getByRole("button", { name: "Approve version" })).toBeVisible();
   await page.goto("/documents/online-deposits/publish");
-  const risk = page.getByTestId("publish-inspector").getByTestId("block-risk");
-  await expect(risk).toBeVisible();
-  await expect(risk.getByRole("button", { name: "Accept risk" })).toHaveCount(0);
+  await expect(page.getByTestId("publish-inspector")).toBeVisible();
+  // qa4-docs-40: no empty Risk section for a role that cannot accept the risk.
+  await expect(page.getByTestId("publish-inspector").getByTestId("block-risk")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Accept risk" })).toHaveCount(0);
 });
 
 test("an owner sees Accept risk on a blocker that gates publishing", async ({ page }) => {

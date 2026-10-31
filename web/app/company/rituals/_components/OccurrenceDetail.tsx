@@ -6,9 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import { FindingCard } from "@/app/company/market/_components/FindingCard";
 import { MarkdownBody } from "@/components/MarkdownBody";
-import { Button, Chip, LinkButton, Panel } from "@/components/ds";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { Button, Chip, LinkButton, NotFoundPanel, Panel } from "@/components/ds";
+import { ErrorNote, INPUT, LoadError, Loading } from "@/components/ui";
+import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { formatMoney, zoneName } from "@/lib/format";
 import { parseBlocks } from "@/lib/markdown";
@@ -31,18 +31,32 @@ type Block = { key: string; title: string; as_of?: string; rows: Row[] };
 
 const NOTES_MAX = 10_000;
 
+/** The dot between the header's items (qa4-company-23). */
+function Sep() {
+  return (
+    <span aria-hidden="true" data-testid="occurrence-meta-sep">
+      ·
+    </span>
+  );
+}
+
 /**
  * An occurrence: its header (title, local time, length, attendees, state), the pre-read
  * blocks as cards in the kind's order, Oracle's summary, and, after the meeting, the
  * owner's notes with Mark held, Skip and Record decision. Opening it marks the pre-read
  * read for me (its Inbox row is done).
  */
+/** qa4-shell-4: what a meeting the API does not have says, in people's words. */
+const MEETING_MISSING = "This meeting doesn't exist or was deleted.";
+
 export function OccurrenceDetail({ id }: { id: string }) {
   const { me, can } = useMe();
   const zone = useCompanyZone();
   // Read with the time it was read: the meeting has ended when the owner records it.
   const q = useQuery(`ritual-occurrence|${id}`, async () => {
-    const occ = await unwrap(api.GET("/v1/ritual-occurrences/{occurrence_id}", { params: { path: { occurrence_id: id } } }));
+    const occ = await unwrap(api.GET("/v1/ritual-occurrences/{occurrence_id}", { params: { path: { occurrence_id: id } } })).catch((e: unknown) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, MEETING_MISSING) : e;
+    });
     return { occ, at: Date.now() };
   });
   const occ = q.data?.occ;
@@ -73,11 +87,28 @@ export function OccurrenceDetail({ id }: { id: string }) {
     return () => clearInterval(t);
   }, [running, reload]);
 
+  // qa4-shell-4: a meeting that is not there gets the app's one not-found page.
+  if (!occ && q.error === MEETING_MISSING)
+    return (
+      <NotFoundPanel
+        inPage
+        title="Meeting not found"
+        icon="search"
+        testId="meeting-not-found"
+        actions={
+          <LinkButton href="/company/rituals" variant="primary" icon="back">
+            Back to Rituals
+          </LinkButton>
+        }
+      >
+        <p>{MEETING_MISSING}</p>
+      </NotFoundPanel>
+    );
   if (q.error || !occ)
     return (
       <>
         <CompanyHeader />
-        {q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}
+        {q.error ? <LoadError what="this meeting" error={q.error} onRetry={() => void q.reload()} /> : <Loading />}
       </>
     );
   const blocks = rebuildShown(occ, occ.pre_read.blocks as unknown as Block[]);
@@ -106,17 +137,26 @@ export function OccurrenceDetail({ id }: { id: string }) {
           </Chip>
         </div>
       </div>
-      <p className="mb-3 flex flex-wrap gap-x-3 text-sm text-text2" data-testid="occurrence-meta">
+      {/* qa4-company-23: a dot between the items, so date, length, attendees and zone do not run together. */}
+      <p className="mb-3 flex flex-wrap gap-x-2 text-sm text-text2" data-testid="occurrence-meta">
         <span className="tnum" title={zoneTime(occ.due_at, occ.timezone)}>
           {localTime(occ.due_at)}
         </span>
+        <Sep />
         <span>{occ.duration_min} min</span>
+        <Sep />
         <span>
           {occ.attendee_ids.length} {occ.attendee_ids.length === 1 ? "attendee" : "attendees"}
         </span>
+        <Sep />
         {/* qa-company-21: the zone named once; the times on the page are in it. */}
         <span data-testid="occurrence-zone">Times are in {zoneName(zone)}</span>
-        {sharedAsOf && <span data-testid="occurrence-as-of">Data as of {sharedAsOf}</span>}
+        {sharedAsOf && (
+          <>
+            <Sep />
+            <span data-testid="occurrence-as-of">Data as of {sharedAsOf}</span>
+          </>
+        )}
       </p>
       <div className="flex flex-col gap-3">
         {occ.kind === "baseline_rebuild" ? (

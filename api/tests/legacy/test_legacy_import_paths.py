@@ -7,7 +7,9 @@ import re
 import uuid
 
 import pytest
+from sqlalchemy import text as sql
 
+from oracle.tenancy import tenant_session
 from tests.legacy.helpers import (
     FEEDBACK_ADDRESSED,
     FEEDBACK_DECLINED,
@@ -22,6 +24,18 @@ from tests.legacy.helpers import (
 
 V1 = fixture("legacy_prd_v1.md")
 V2 = fixture("legacy_prd_v2.md")
+
+# Every time an export writes, in the Company time zone and month first (e2e-pdf-export):
+# company_time.stamp ("Oct 24, 2026, 1:07 AM PDT") and moment_in_words ("Oct 24, 1:07 AM PDT").
+STAMP = re.compile(r"[A-Z][a-z]{2} \d{1,2}, (?:\d{4}, )?\d{1,2}:\d{2} [AP]M [A-Z]{2,5}")
+
+
+def norm(t: str) -> str:
+    """An export with what may differ between two imports masked: the slug, the feedback ids
+    and every time it writes (the imports are minutes apart, or an hour, below)."""
+    t = re.sub(r"feedback_id: [0-9a-f-]{36}", "feedback_id: ID", t)
+    t = t.replace("via-api", "SLUG").replace("via-other", "SLUG")
+    return STAMP.sub("T", t)
 
 
 def parsed(version: dict) -> list[tuple]:
@@ -94,20 +108,24 @@ async def test_every_import_path_matches_the_rest_import(client, tenant_id, path
         k: v for k, v in diff_b.items() if k not in strip
     }
 
+    # Train AE review: the two imports could straddle a minute, so their exports' times
+    # differed now and then. The other path's versions are dated an hour later, so the times
+    # always differ and the comparison below must mask every one of them.
+    async with tenant_session(tenant_id) as s:
+        await s.execute(
+            sql(
+                "UPDATE document_versions SET created_at = created_at + interval '1 hour' "
+                "WHERE document_id = (SELECT id FROM documents WHERE slug = 'via-other')"
+            )
+        )
+        await s.commit()
+
     for fmt in ("html", "md"):
         url = f"/versions/2/export?format={fmt}"
         ea = (await client.get(f"/v1/documents/via-api{url}", headers=viewer)).text
         eb = (await client.get(f"/v1/documents/via-other{url}", headers=viewer)).text
-
-        # Only the slug, the import time and the feedback ids differ.
-        def norm(t: str) -> str:
-            t = re.sub(r"feedback_id: [0-9a-f-]{36}", "feedback_id: ID", t)
-            t = t.replace("via-api", "SLUG").replace("via-other", "SLUG")
-            # Every rendered timestamp, not only "imported …": two exports can straddle a minute.
-            # Exports word times in the Company time zone ("2026-10-24 01:07 PDT", "10-24 01:07
-            # PDT"), not only UTC.
-            return re.sub(r"(\d{4}-)?\d\d-\d\d \d\d:\d\d [A-Z]{2,5}", "T", t)
-
+        # The export names its import time, month first, in the Company time zone.
+        assert STAMP.search(ea), ea[:400]
         assert norm(ea) == norm(eb)
 
 

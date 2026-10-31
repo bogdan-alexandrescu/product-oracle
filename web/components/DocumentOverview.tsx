@@ -3,7 +3,7 @@
 import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
@@ -33,7 +33,7 @@ import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/component
 import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas, type VersionSummary } from "@/lib/api/client";
-import { formatDate, formatDateTime, plural } from "@/lib/format";
+import { formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
@@ -66,7 +66,27 @@ export function assignableSections(states: SectionState[], title: string): Secti
   });
 }
 
-function versionColumns(doc: string, kind: string | null | undefined, latest: number | null | undefined): Column<VersionSummary>[] {
+type Warning = VersionSummary["warnings"][number];
+
+/**
+ * A version's warning as a person reads it (qa4fix-docs): "Sections approved in v1 changed
+ * in this version:" goes on to name those sections by heading, as the version page does.
+ */
+export function warningText(w: Warning, headings: Map<string, string>): string {
+  const keys = w.section_keys ?? [];
+  if (w.code !== "locked_section_changed" || keys.length === 0) return w.message;
+  const named = keys.flatMap((k) => headings.get(k) ?? []);
+  const other = keys.length - named.length;
+  const parts = other ? [...named, plural(other, named.length ? "other section" : "section")] : named;
+  return `${w.message} ${parts.join(", ")}`;
+}
+
+function versionColumns(
+  doc: string,
+  kind: string | null | undefined,
+  latest: number | null | undefined,
+  headings: Map<string, string>,
+): Column<VersionSummary>[] {
   return [
     {
       key: "number",
@@ -83,15 +103,15 @@ function versionColumns(doc: string, kind: string | null | undefined, latest: nu
       header: "State",
       cell: (v) => (
         <span className="inline-flex items-center gap-1.5">
-          {v.approved_at ? (
+          {/* qa4-docs-share-17: the same on every kind: Approved when approved, Latest on the latest, both when both. */}
+          {v.approved_at && (
             <Chip kind="pass" dot>
               Approved
             </Chip>
-          ) : v.number === latest ? (
-            <Chip kind="now">Latest</Chip>
-          ) : null}
+          )}
+          {v.number === latest && <Chip kind="now">Latest</Chip>}
           {v.warnings.length > 0 && (
-            <Chip kind="warn" title={v.warnings.map((w) => w.message).join("\n")}>
+            <Chip kind="warn" title={v.warnings.map((w) => warningText(w, headings)).join("\n")}>
               {plural(v.warnings.length, "warning")}
             </Chip>
           )}
@@ -131,13 +151,25 @@ function VersionInspector({
   kind,
   v,
   latest,
+  headings,
 }: {
   doc: string;
   kind: string | null | undefined;
   v: VersionSummary;
   latest: number | null | undefined;
+  headings: Map<string, string>;
 }) {
   const { can } = useMe();
+  // qa4-company-7: a draft made in the app (from a template, or by Oracle) was created, not
+  // imported. Only starting from a template (templates.service) gives a version the
+  // template_only note; an import never does. The API already names a token "An integration".
+  const byName = v.imported_by_name;
+  const made =
+    byName === "Oracle"
+      ? { date: "Created", by: "Drafted by" }
+      : (v.notes ?? []).some((n) => n.code === "template_only")
+        ? { date: "Created", by: "Started by" }
+        : { date: "Imported", by: "Imported by" };
   return (
     <Inspector
       testId="version-inspector"
@@ -161,20 +193,21 @@ function VersionInspector({
       }
     >
       <InspectorSection label="Details">
-        <InspectorRow value={<span data-testid="version-approved">{v.approved_at ? formatDate(v.approved_at) : "Not approved"}</span>}>
+        {/* qa4-docs-share-15: written as Imported is, with its time. */}
+        <InspectorRow value={<span data-testid="version-approved">{v.approved_at ? formatDateTime(v.approved_at) : "Not approved"}</span>}>
           Approved
         </InspectorRow>
         <InspectorRow value={v.warnings.length ? plural(v.warnings.length, "warning") : "None"}>Warnings</InspectorRow>
-        <InspectorRow value={formatDateTime(v.created_at)}>Imported</InspectorRow>
-        {v.imported_by_name && (
+        <InspectorRow value={formatDateTime(v.created_at)}>{made.date}</InspectorRow>
+        {byName && (
           <InspectorRow
             value={
               <span data-testid="version-importer">
-                {v.imported_by_name}
+                {byName}
               </span>
             }
           >
-            Imported by
+            {made.by}
           </InspectorRow>
         )}
         {v.imported_again && (
@@ -192,7 +225,7 @@ function VersionInspector({
           <ul className="flex flex-col gap-2">
             {v.warnings.map((w, i) => (
               <li key={i} className="rounded-button bg-warn-bg px-3 py-2 text-sm text-warn">
-                {w.message}
+                {warningText(w, headings)}
               </li>
             ))}
           </ul>
@@ -231,7 +264,8 @@ function SpecRow({ s, latestOf }: { s: SpecSummary; latestOf: LatestOf }) {
   return (
     <li data-testid="engineering-spec" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
       <span className="min-w-0 font-semibold break-words">{s.request.title}</span>
-      <span className="text-sm text-text2">{s.depth === "full" ? "Full engineering spec" : "Tech brief"}</span>
+      {/* qa4-docs-share-44: a brief-depth spec is a technical brief, as its own page title says. */}
+      <span className="text-sm text-text2">{s.depth === "full" ? "Full engineering spec" : "Technical brief"}</span>
       <span className="flex-1" />
       <Chip kind={state.kind} dot>
         {state.label}
@@ -242,7 +276,7 @@ function SpecRow({ s, latestOf }: { s: SpecSummary; latestOf: LatestOf }) {
         aria-label={`Open ${s.request.title}`}
         className="text-sm font-medium text-accent-ink hover:underline"
       >
-        Open spec
+        {s.depth === "full" ? "Open spec" : "Open technical brief"}
       </Link>
     </li>
   );
@@ -373,6 +407,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
       : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n: latest } } })),
   );
   const states = assignableSections(statesQ.data?.sections ?? [], d?.title ?? "");
+  // A warning names the sections it is about by heading.
+  const headings = useMemo(() => new Map((statesQ.data?.sections ?? []).map((s) => [s.section_key, s.heading])), [statesQ.data]);
   const names = useTemplateNames();
   // F5 lane 3: the PRD's requested specs, split by depth between Tech briefs and Engineering specs (qa-docs-29).
   const specsQ = useSpecs(d?.kind === "prd" ? doc : null);
@@ -441,12 +477,12 @@ export function DocumentOverview({ doc }: { doc: string }) {
               </p>
             )}
             {d.kind === "roadmap" && <RoadmapSharing d={d} />}
-            <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} /> : undefined}>
+            <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} headings={headings} /> : undefined}>
               <Panel title="Versions" count={versions.length}>
                 <DataTable
                   label="Versions"
                   testId="versions-table"
-                  columns={versionColumns(doc, d.kind, d.latest_version)}
+                  columns={versionColumns(doc, d.kind, d.latest_version, headings)}
                   rows={versions}
                   rowKey={(v) => String(v.number)}
                   selected={selected ? String(selected.number) : null}

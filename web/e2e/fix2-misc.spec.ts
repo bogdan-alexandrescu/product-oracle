@@ -25,16 +25,16 @@ async function openAccounts(page: Page, phone = false) {
 const detail = (page: Page) => page.getByTestId("account-detail");
 
 // qa-settings-22: no raw id, the provider by its name, the sweep in plain words, one capitalisation.
-test("claude accounts: the pane hides the id behind Copy ID and reads in plain words", async ({ page }) => {
+test("claude accounts: the pane shows no id and reads in plain words", async ({ page }) => {
   await openAccounts(page);
-  await expect(page.getByTestId("refresh-sweep")).toHaveText(/^Last checked \d+ min ago$/);
+  await expect(page.getByTestId("refresh-sweep")).toHaveText(/^Sign-ins checked \d+ min ago$/);
   await page.getByTestId("account-row-personal").getByRole("button").click();
   const pane = detail(page);
   await expect(pane.getByRole("heading", { name: "personal" })).toBeVisible();
   await expect(pane).toContainText("Anthropic · Claude subscription");
   await expect(pane).not.toContainText("anthropic");
   await expect(pane).not.toContainText(/a1111111-/);
-  await expect(pane.getByRole("button", { name: "Copy ID" })).toBeVisible();
+  await expect(pane.getByRole("button", { name: "Copy ID" })).toHaveCount(0);
   await page.getByTestId("account-row-spare").getByRole("button").click();
   await expect(pane.getByText("Not measured", { exact: true })).toBeVisible();
   await expect(pane.getByText("not measured", { exact: true })).toHaveCount(0);
@@ -60,7 +60,7 @@ test("claude accounts: at 390 px the account's buttons are at least 44 px tall",
   expect((await add.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   const pane = detail(page);
   await expect(pane.getByRole("heading", { name: "old-laptop" })).toBeVisible();
-  for (const name of ["Remove", "Refresh now", "Copy ID"]) {
+  for (const name of ["Remove", "Refresh now"]) {
     const b = pane.getByRole("button", { name, exact: true });
     await b.scrollIntoViewIfNeeded();
     expect((await b.boundingBox())!.height, name).toBeGreaterThanOrEqual(44);

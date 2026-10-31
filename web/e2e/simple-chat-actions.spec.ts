@@ -56,7 +56,7 @@ async function sayIn(box: Locator, text: string) {
 async function understood(box: Locator, text: string, summary: string): Promise<Locator> {
   await sayIn(box, text);
   await expect(box.getByTestId("chat-message-body").filter({ hasText: text }).last()).toBeVisible();
-  await expect(box.locator('[data-testid="chat-message"][data-kind="cards"]').filter({ hasText: "I understood one change:" }).last()).toBeVisible();
+  await expect(box.locator('[data-testid="chat-message"][data-kind="cards"]').filter({ hasText: "I understood one change" }).last()).toBeVisible();
   const card = box.getByTestId("chat-card").filter({ has: box.page().getByTestId("chat-card-summary").filter({ hasText: summary }) }).last();
   await expect(card.getByTestId("chat-card-summary")).toHaveText(summary);
   return card;
@@ -170,7 +170,7 @@ for (const [phone, dark] of [
       // fails_when: the decision is missing from All decisions, the owner does not change, a Preview has no description, or an unknown name makes a card
       // no_claim: the roadmap's own owner chip (simple-roadmap specs), the decider's rights after the change
       await startReview(page);
-      const decided = page.getByRole("region", { name: "All decisions" });
+      const decided = page.getByRole("region", { name: "Decisions in this meeting" });
 
       const d = await understood(chat(page), "decision: Keep the checklist to five steps", "Record the decision: Keep the checklist to five steps");
       await preview(d, "Decision: Keep the checklist to five steps — decided by Admin", "In this meeting's decisions");

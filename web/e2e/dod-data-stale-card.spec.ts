@@ -43,7 +43,7 @@ for (const [label, size] of [
     await chat.getByRole("textbox", { name: "Message Oracle" }).fill("push Delivery pipeline v2 out a quarter and push it to next quarter");
     await tap(chat.getByRole("button", { name: "Send" }));
     const line = chat.getByTestId("chat-message").last();
-    await expect(line.getByTestId("chat-message-body")).toHaveText("I understood two changes:");
+    await expect(line.getByTestId("chat-message-body")).toHaveText("I understood two changes.");
     await tap(line.getByRole("button", { name: "Apply all" }));
     const said = line.getByRole("status").filter({ hasText: "Applied 1 of 2." });
     await expect(said).toContainText("Changed since you saw it");
@@ -70,7 +70,7 @@ for (const [label, size] of [
     await chat.getByRole("textbox", { name: "Message Oracle" }).fill("push Delivery pipeline v2 to next quarter and push it out a quarter");
     await tap(chat.getByRole("button", { name: "Send" }));
     const line = chat.getByTestId("chat-message").last();
-    await expect(line.getByTestId("chat-message-body")).toHaveText("I understood two changes:");
+    await expect(line.getByTestId("chat-message-body")).toHaveText("I understood two changes.");
     const second = line.getByTestId("chat-card").last();
     await expect(second.getByTestId("chat-card-summary")).not.toContainText("Apr 1 –");
     await tap(line.getByRole("button", { name: "Apply all" }));

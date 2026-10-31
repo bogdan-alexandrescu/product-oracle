@@ -110,8 +110,10 @@ test.describe("desktop", () => {
       sheet.getByText("A downloaded PDF can't be revoked.", { exact: true }),
     ).toBeVisible();
     const why = sheet.getByTestId("create-why");
-    await expect(why).toHaveText("Add a label first.");
     const create = sheet.getByRole("button", { name: "Create link" });
+    // qa4-docs-share-23: said once Create link is tried without a label.
+    await create.click();
+    await expect(why).toHaveText("Add a label first.");
     await expect(create).toHaveAccessibleDescription("Add a label first.");
     // Under the Label field, above Expires: not squeezed in the footer beside Cancel.
     const whyBox = (await why.boundingBox())!;

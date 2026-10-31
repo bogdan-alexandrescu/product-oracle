@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Button, Icon, Sheet } from "@/components/ds";
+import { Button, confirmInPage, Icon, Sheet } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
@@ -78,6 +78,7 @@ export function DecisionBar({
   approveBlocked = null,
   sendBackSummary = null,
   decidedBy = null,
+  approveAsk = null,
 }: {
   runId: string;
   checkpointId: string;
@@ -104,6 +105,8 @@ export function DecisionBar({
   sendBackSummary?: string | null;
   /** Shown instead of the buttons to a reader who cannot decide ("An approver decides"). */
   decidedBy?: string | null;
+  /** Calls still open: Approve asks this first ("2 features still need you: …"). */
+  approveAsk?: string | null;
 }) {
   const phone = usePhone();
   const [open, setOpen] = useState(false);
@@ -170,6 +173,11 @@ export function DecisionBar({
       });
     saving.current = save;
     return save;
+  }
+
+  async function approve() {
+    if (!held && approveAsk && !(await confirmInPage({ action: approveLabel, message: approveAsk }))) return;
+    await decide(held ? "confirm" : "approved");
   }
 
   async function decide(decision: "approved" | "changes_requested" | "confirm") {
@@ -273,7 +281,7 @@ export function DecisionBar({
                 {blocked}
               </span>
             )}
-            <Button variant="solid" icon="check" disabled={busy || !!blocked} title={blocked ?? undefined} onClick={() => void decide(held ? "confirm" : "approved")}>
+            <Button variant="solid" icon="check" disabled={busy || !!blocked} title={blocked ?? undefined} onClick={() => void approve()}>
               {approveLabel}
             </Button>
           </span>

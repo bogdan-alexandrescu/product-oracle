@@ -35,6 +35,8 @@ export interface BaselineState {
   fieldChanges?: FieldChange[];
   /** Goals' dated values (B5), as GET .../measurements serves them; absent in older saved data. */
   measurements?: Schemas["MeasurementOut"][];
+  /** Which metric wrote each measurement (goal_measurements.metric_id), by measurement id; not served. */
+  measurementMetric?: Record<string, string>;
 }
 
 type FieldChange = { entity_id: string; field: string; before: unknown; after: unknown; at: string };
@@ -89,6 +91,9 @@ export type ReviewStatus = Schemas["ReviewStatusOut"];
 
 /** The scenario whose last baseline review is too old to reuse (approved 41 days ago). */
 export const BASELINE_STALE_SCENARIO = "baseline-stale";
+/** qa5-plan-at-risk: paid conversion carries a long name (Priorities' Goal column wraps it whole). */
+export const LONG_GOAL_SCENARIO = "long-goal";
+export const LONG_GOAL_NAME = "Grow paid conversion for small teams on the yearly plan, the monthly plan and the new starter plan in every region we sell in";
 const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
 
 /**
@@ -263,10 +268,12 @@ export function seedBaseline(uuid: () => string): BaselineState {
     },
     confidence: 0.78,
   });
-  const paid = entity("goal", "g.paid-conversion", "Grow paid conversion", {
+  const longGoal = typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === LONG_GOAL_SCENARIO;
+  const paid = entity("goal", "g.paid-conversion", longGoal ? LONG_GOAL_NAME : "Grow paid conversion", {
     body: "More trial accounts move to a paid plan.",
     attrs: {
-      weight: 0.3, metric: "Trial to paid rate", unit: "%", comparison: "at_least", target: 12, current: 9.4,
+      // qa4-simple-home-6: its starting value, as activation has one (the first of its monthly reads below).
+      weight: 0.3, metric: "Trial to paid rate", unit: "%", comparison: "at_least", target: 12, start: 11.2, current: 9.4,
       current_as_of: "2026-10-01", horizon: "medium", due: "2027-06-30",
     },
     confidence: 0.66,
@@ -1551,6 +1558,34 @@ export function addThreeWayConflict(s: BaselineState, uuid: () => string) {
     status: "open",
     created_at: "2026-10-18T07:30:00Z",
   });
+}
+
+/**
+ * A linked output metric's weekly value (oracle.metrics.pull._goal_measurement and link_goal):
+ * the goal's measurement on the week's Sunday (removed with a null value), then its latest
+ * measurement by day becomes the goal's current, through the "reading" writer: applied even
+ * to a locked goal, never locking it.
+ */
+export function readMetricIntoGoal(s: BaselineState, goalId: string, day: string, value: number | null, note: string, metricId: string) {
+  const goal = s.entities.find((e) => e.id === goalId && e.type === "goal");
+  if (!goal) return;
+  const rows = (s.measurements ??= []);
+  const by = (s.measurementMetric ??= {});
+  const at = rows.findIndex((x) => x.entity_id === goalId && x.measured_on === day);
+  if (value == null) {
+    // As the API: only the measurement this metric wrote is removed.
+    if (at >= 0 && by[rows[at].id] === metricId) rows.splice(at, 1);
+  } else if (at >= 0) {
+    Object.assign(rows[at], { value, note, evidence_id: null, recorded_by: null });
+    by[rows[at].id] = metricId;
+  } else {
+    const id = newId();
+    rows.push({ id, entity_id: goalId, value, measured_on: day, note, evidence_id: null, recorded_by: null, created_at: now() });
+    by[id] = metricId;
+  }
+  const latest = rows.filter((x) => x.entity_id === goalId).sort((a, b) => b.measured_on.localeCompare(a.measured_on))[0];
+  goal.attrs = { ...goal.attrs, current: latest ? latest.value : null, current_as_of: latest ? latest.measured_on : null };
+  goal.updated_at = now();
 }
 
 /** Makes the seeded activation goal owned by the given member (the mock's members get their ids after the seed). */

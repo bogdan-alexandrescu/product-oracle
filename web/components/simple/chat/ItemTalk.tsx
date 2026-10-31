@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Icon, ICONS } from "@/components/simple/FlowViews";
 import { askSay, askThread, itemTalkPage, type ChatCard as ChatCardData, type ChatThread } from "@/lib/api/simple-chat";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
+import { ItemTalkContext } from "./ChatCard";
 import { ChatComposer, ChatMessages, usePendingPoll } from "./ChatThread";
 
 /**
@@ -22,12 +23,15 @@ export function ItemTalk({
   about,
   phone = false,
   onCards,
+  known,
 }: {
   itemId: string;
   about: string;
   phone?: boolean;
   /** fix4 qa-simple-roadmap-16: the talk's cards as they change (the card's "Proposals on it" counts the open ones). */
   onCards?: (cards: ChatCardData[]) => void;
+  /** qa4-simple-roadmap-41: the red flags the roadmap shows now (flagKey): a change card lists only the ones its change brings. */
+  known?: ReadonlySet<string>;
 }) {
   const page = itemTalkPage(itemId);
   const { can } = useMe();
@@ -63,6 +67,21 @@ export function ItemTalk({
     if (el) el.scrollTop = el.scrollHeight;
   }, [count]);
   const changes = can("create_simple_change");
+  const talkCtx = useMemo(() => ({ known: known ?? new Set<string>() }), [known]);
+  // qa4-simple-roadmap-40: an empty talk offers a few example asks; a click sends one.
+  const starters = changes ? ["What is it for?", "When is it?", "Move it two weeks later"] : ["What is it for?", "When is it?"];
+  const [asking, setAsking] = useState(false);
+  const ask = async (text: string) => {
+    setAsking(true);
+    setError(null);
+    try {
+      setThread(await askSay(text, page));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setAsking(false);
+    }
+  };
   // fix4 qa-simple-roadmap-3: the item by its title, no code.
   const short = about;
   return (
@@ -83,10 +102,29 @@ export function ItemTalk({
             {error}
           </p>
         )}
-        <ChatMessages messages={thread?.messages ?? []} onCardChanged={() => void load()} onThread={setThread} ask />
+        {thread && thread.messages.length === 0 && (
+          <div data-testid="talk-starters" className="flex flex-col items-start gap-2">
+            <p className="text-[14px] leading-5 text-text2">Try asking:</p>
+            {starters.map((t) => (
+              <button
+                key={t}
+                type="button"
+                disabled={asking}
+                onClick={() => void ask(t)}
+                className="rounded-full border border-line-strong bg-surface px-3 py-1 text-left text-[14px] leading-5 text-text hover:bg-surface2"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+        <ItemTalkContext.Provider value={talkCtx}>
+          <ChatMessages messages={thread?.messages ?? []} onCardChanged={() => void load()} onThread={setThread} ask />
+        </ItemTalkContext.Provider>
       </div>
-      {/* Pick C's message box: the box and Send on one row (the chat's composer, laid out here). */}
-      <div className="flex flex-none flex-col gap-1.5 border-t border-line px-4 pt-2.5 pb-3 [&>form]:flex-row [&>form]:flex-wrap [&>form]:items-end [&>form>p]:basis-full [&>form>textarea]:h-11 [&>form>textarea]:min-h-11 [&>form>textarea]:min-w-0 [&>form>textarea]:flex-1 [&>form>textarea]:basis-0 [&>form>textarea]:resize-none [&>form>textarea]:rounded-[10px] [&>form>textarea]:py-2.5 [&>form>textarea]:text-[15px] [&>form>textarea]:leading-[22px] [&>form>textarea]:placeholder:text-text-faint">
+      {/* Pick C's message box: the box and Send on one row (the chat's composer, laid out here).
+       * qa4-simple-roadmap-40: two lines tall at least and as tall as its words, so the placeholder is never cut. */}
+      <div className="flex flex-none flex-col gap-1.5 border-t border-line px-4 pt-2.5 pb-3 [&>form]:flex-row [&>form]:flex-wrap [&>form]:items-end [&>form>p]:basis-full [&>form>textarea]:h-auto [&>form>textarea]:max-h-40 [&>form>textarea]:min-h-[66px] [&>form>textarea]:[field-sizing:content] [&>form>textarea]:min-w-0 [&>form>textarea]:flex-1 [&>form>textarea]:basis-0 [&>form>textarea]:resize-none [&>form>textarea]:rounded-[10px] [&>form>textarea]:py-2.5 [&>form>textarea]:text-[15px] [&>form>textarea]:leading-[22px] [&>form>textarea]:placeholder:text-text-faint">
         <ChatComposer
           send={async (text) => setThread(await askSay(text, page))}
           placeholder={changes ? `Ask about ${short}, or ask for a change…` : `Ask about ${short}…`}

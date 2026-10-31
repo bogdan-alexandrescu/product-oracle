@@ -22,15 +22,15 @@ test("consent: signed out goes to sign-in first, then approve returns a code", a
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/oauth\/consent\?request=mock-handle$/);
 
-  await expect(page.getByRole("heading", { name: "Connect an MCP client" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Let ${MOCK_CONSENT.client_name} use Product Oracle?` })).toBeVisible();
   const consent = page.getByTestId("consent");
   await expect(consent).toContainText(`${MOCK_CONSENT.client_name} wants to use Product Oracle as you.`);
   await expect(consent).toContainText("Read");
   await expect(consent).toContainText("Write");
   await expect(page.getByTestId("consent-user")).toHaveText(ADMIN.email);
   await expect(consent).toContainText("Owner");
-  // qa-settings-41: a loopback address reads as an app on this computer, the address in a title.
-  await expect(page.getByTestId("consent-return")).toHaveText("an app on this computer");
+  // qa-settings-41, qa4-settings-40: a loopback address reads as the client on this computer, the address in a title.
+  await expect(page.getByTestId("consent-return")).toHaveText(`${MOCK_CONSENT.client_name} on this computer`);
   await expect(page.getByTestId("consent-return")).toHaveAttribute("title", CALLBACK.host);
   await expect(page.getByTestId("consent-effective-role")).toHaveCount(0);
 

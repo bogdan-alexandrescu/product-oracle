@@ -36,7 +36,7 @@ test("the draft's author sees what synced since the draft and refreshes it", asy
 
   await syncProductChat(page);
   await page.goto(LATEST);
-  await expect(banner(page)).toHaveText(/1 new item in your sources since draft v2/);
+  await expect(banner(page)).toHaveText(/1 new or changed item in your sources since draft v2 read them/);
 
   await banner(page).getByRole("button", { name: "Refresh" }).click();
   const dialog = page.getByRole("dialog", { name: "Refresh draft" });

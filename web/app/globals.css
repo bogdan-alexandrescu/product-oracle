@@ -359,6 +359,14 @@
 html {
   background: var(--bg);
 }
+/* qa4-docs-share-19: the scrollbar's room is kept even while a sheet or dialog stops the
+   page scrolling, so opening one never shifts the header and rail sideways. Wider screens
+   only: a phone's scrollbar floats over the page and takes no room. */
+@media (min-width: 640px) {
+  html {
+    scrollbar-gutter: stable;
+  }
+}
 body {
   background: var(--bg);
   color: var(--text);
@@ -377,8 +385,9 @@ body {
 
 /* A strip that scrolls sideways (ScrollStrip): fades out at each edge that has more to scroll to,
    so a cut-off item reads as "more", not clipped. ScrollStrip sets --cut-l/--cut-r to where the
-   first whole item starts: an item cut by the edge is hidden up to its last 20 px (its padding),
-   so no label shows cut mid-word; a whole item at the edge fades over its 12 px padding only.
+   first whole item starts: an item cut by the edge is hidden up to its last 6 px (inside its
+   padding, 8 px at the least), so no letter of a cut label shows, not even faintly (qa4-plan-38);
+   a whole item at the edge fades over its 12 px padding only.
    Nothing fades when everything fits. No native scrollbar: the chevrons and swipes move it. */
 @utility scroll-fade {
   --fade-l0: 0px;
@@ -397,11 +406,11 @@ body {
     display: none;
   }
   &[data-more-left] {
-    --fade-l0: max(0px, calc(var(--cut-l, 0px) - 20px));
+    --fade-l0: max(0px, calc(var(--cut-l, 0px) - 6px));
     --fade-l1: max(12px, var(--cut-l, 0px));
   }
   &[data-more-right] {
-    --fade-r0: max(0px, calc(var(--cut-r, 0px) - 20px));
+    --fade-r0: max(0px, calc(var(--cut-r, 0px) - 6px));
     --fade-r1: max(12px, var(--cut-r, 0px));
   }
 }
@@ -1183,6 +1192,11 @@ code .date-mark {
   --prd-m3-bg: #fdf3dc;
   --prd-m3-fill: #f7e1b0;
   --prd-pm: #5b6878;
+  /* The roadmap's estimated (hatched) bars and their outlines (dark values below, qa4-simple-roadmap-6). */
+  --simple-hatch-bg: var(--accent-soft);
+  --simple-hatch-line: var(--accent-mid);
+  --simple-est-stripe: rgba(125, 142, 163, 0.35);
+  --simple-bar-outline: var(--line-strong);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -1211,6 +1225,11 @@ code .date-mark {
     --prd-m3-bg: #3a2a0c;
     --prd-m3-fill: #574015;
     --prd-pm: #9aa8b8;
+    /* qa4-simple-roadmap-6: 3:1 on the dark chart. */
+    --simple-hatch-bg: #10294a;
+    --simple-hatch-line: #4f86c0;
+    --simple-est-stripe: rgba(159, 176, 196, 0.6);
+    --simple-bar-outline: #8fa3ba;
   }
 }
 :root[data-theme="dark"] {
@@ -1239,6 +1258,10 @@ code .date-mark {
   --prd-m3-bg: #3a2a0c;
   --prd-m3-fill: #574015;
   --prd-pm: #9aa8b8;
+  --simple-hatch-bg: #10294a;
+  --simple-hatch-line: #4f86c0;
+  --simple-est-stripe: rgba(159, 176, 196, 0.6);
+  --simple-bar-outline: #8fa3ba;
 }
 @media print {
   .simple-noprint { display: none !important; }
@@ -1312,4 +1335,63 @@ code .date-mark {
   --simple-m3-tag-ink: #f5d38a;
   --simple-m4-tag: #0d2e25;
   --simple-m4-tag-ink: #4cd9a0;
+}
+
+/* qa4-docs-share-58: in dark mode the audience preview (a white page as the audience sees it)
+   is dimmed, so it does not glare inside the dark console; its own colours stay as shared. */
+:root[data-theme="dark"] [data-testid="audience-view"] iframe {
+  filter: brightness(0.8);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) [data-testid="audience-view"] iframe {
+    filter: brightness(0.8);
+  }
+}
+
+/*
+ * qa4-settings-20: in dark, the browser's own checkbox draws an unchecked box as a filled grey
+ * square that reads as ticked. Dark draws it itself: an outline when unchecked, the accent with
+ * a tick when checked. In the base layer, so a box's own size utilities (size-4, size-6) win;
+ * a box styled by hand (appearance-none) keeps its own look. The tick's colour is dark's
+ * --on-accent (a data URI can't read a variable).
+ */
+@layer base {
+  :root[data-theme="dark"] input[type="checkbox"]:not([class*="appearance-none"]) {
+    appearance: none;
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 4px;
+    background: transparent center / 80% no-repeat;
+    vertical-align: middle;
+  }
+  :root[data-theme="dark"] input[type="checkbox"]:not([class*="appearance-none"]):is(:checked, :indeterminate) {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2306101e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
+  }
+  :root[data-theme="dark"] input[type="checkbox"]:not([class*="appearance-none"]):indeterminate {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2306101e' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E");
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) input[type="checkbox"]:not([class*="appearance-none"]) {
+      appearance: none;
+      flex: none;
+      width: 1rem;
+      height: 1rem;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 4px;
+      background: transparent center / 80% no-repeat;
+      vertical-align: middle;
+    }
+    :root:not([data-theme="light"]) input[type="checkbox"]:not([class*="appearance-none"]):is(:checked, :indeterminate) {
+      border-color: var(--accent);
+      background-color: var(--accent);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2306101e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
+    }
+    :root:not([data-theme="light"]) input[type="checkbox"]:not([class*="appearance-none"]):indeterminate {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2306101e' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E");
+    }
+  }
 }

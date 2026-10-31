@@ -54,7 +54,7 @@ test("outline rail: every section, grouped by chapter and folded; the current ch
   await page.goto(BIG);
   await expect(rail(page)).toBeVisible();
   await expect(rail(page)).toHaveCSS("width", "280px");
-  await expect(rail(page).getByTestId("review-progress")).toHaveText(/13 of 104 reviewed/);
+  await expect(rail(page).getByTestId("review-progress")).toHaveText(/13 of 104 sections reviewed/);
   await expect(rail(page).getByTestId("chip-all")).toHaveText(/All\s*104/);
 
   // The first unreviewed section opens: 2.2, inside chapter 2, which is open; the others fold.
@@ -243,7 +243,7 @@ test("phone: a Sections / Review bar opens sheets that close on Escape, the scri
   await expect(switcher(page)).toHaveCount(0);
   const sectionsBtn = page.getByTestId("phone-sections");
   const reviewBtn = page.getByTestId("phone-review");
-  await expect(sectionsBtn).toHaveText(/Sections\s*·\s*10\/104/);
+  await expect(sectionsBtn).toHaveText("Section 10 of 104");
   await expect(reviewBtn).toHaveText(/Review\s*·\s*12/);
   for (const b of [sectionsBtn, reviewBtn]) expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await insideViewport(page, page.getByTestId("phone-bar"));
@@ -268,7 +268,7 @@ test("phone: a Sections / Review bar opens sheets that close on Escape, the scri
   await row.click();
   await expect(sheet).toHaveCount(0);
   await expect(section(page, "2-3-evidence-from-sales-calls")).toBeVisible();
-  await expect(sectionsBtn).toHaveText(/11\/104/);
+  await expect(sectionsBtn).toHaveText("Section 11 of 104");
 
   // Escape, the scrim and a swipe down on the handle close it.
   await sectionsBtn.click();

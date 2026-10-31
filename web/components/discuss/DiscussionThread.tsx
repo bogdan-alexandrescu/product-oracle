@@ -1124,16 +1124,19 @@ export function DiscussionThread({
                   {m.deleted ? <span className="text-text2 italic">Message deleted</span> : <Body m={m} />}
                 </p>
               )}
-              {!m.deleted && open && d.me.can_write && m.author_kind === "person" && m.author?.user_id && (
-                <OwnMessageActions m={m} discussionId={d.id} onDelete={() => void remove(m)} onSaved={() => void reload()} />
-              )}
-              {!m.deleted &&
-                open &&
-                m.author_kind === "person" &&
-                can("research_discussion_message", d.me.can_research) &&
-                !messages.some((x) => x.reply_to === m.id && x.research?.status === "running") && (
-                  <ResearchThis m={m} d={d} onStarted={() => void reload().then(() => onChanged?.())} />
+              {/* qa4-shell-12: Edit, Delete and Research this share one row (an open form takes its own). */}
+              <div className="flex flex-wrap items-start gap-x-1 empty:hidden">
+                {!m.deleted && open && d.me.can_write && m.author_kind === "person" && m.author?.user_id && (
+                  <OwnMessageActions m={m} discussionId={d.id} onDelete={() => void remove(m)} onSaved={() => void reload()} />
                 )}
+                {!m.deleted &&
+                  open &&
+                  m.author_kind === "person" &&
+                  can("research_discussion_message", d.me.can_research) &&
+                  !messages.some((x) => x.reply_to === m.id && x.research?.status === "running") && (
+                    <ResearchThis m={m} d={d} onStarted={() => void reload().then(() => onChanged?.())} />
+                  )}
+              </div>
               {renderAfter?.(m, { d, messages })}
             </li>
           ),
@@ -1238,7 +1241,7 @@ function ResearchThis({ m, d, onStarted }: { m: Message; d: Discussion; onStarte
       </span>
     );
   return (
-    <div className="mt-1 flex flex-col gap-2 rounded-button border border-line bg-surface p-3" role="group" aria-label="Research this" data-testid="research-confirm">
+    <div className="mt-1 flex w-full flex-col gap-2 rounded-button border border-line bg-surface p-3" role="group" aria-label="Research this" data-testid="research-confirm">
       <p className="text-sm text-text">
         One research run · <CostFigure usd={d.me.research_usd} est />
       </p>
@@ -1307,7 +1310,7 @@ function OwnMessageActions({
     );
   return (
     <form
-      className="mt-1 flex flex-col gap-2"
+      className="mt-1 flex w-full flex-col gap-2"
       onSubmit={async (e) => {
         e.preventDefault();
         try {

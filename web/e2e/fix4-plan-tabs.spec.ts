@@ -115,7 +115,8 @@ test("qa-plan-59: Dates has summary chips by its title, as the other tabs do", a
   await page.goto("/plan/dates");
   const summary = header(page).getByTestId("dates-summary");
   await expect(summary).toContainText("1 proposed");
-  await expect(summary).toContainText("1 verified");
+  // ENG-412 for the PRD, and ENG-402 for Threshold alerts on spend (qa4-plan-31).
+  await expect(summary).toContainText("2 verified");
   await expect(summary).not.toContainText("withdrawn");
 });
 

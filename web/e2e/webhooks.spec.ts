@@ -39,11 +39,13 @@ async function openWebhooks(page: Page, email?: string) {
 
 async function createWebhook(page: Page, name: string, url: string, groups: string[] = ["Runs"]) {
   await page.getByRole("button", { name: "New webhook" }).click();
-  const sheet = page.getByRole("dialog", { name: "New webhook" });
-  await sheet.getByLabel("Name").fill(name);
-  await sheet.getByLabel("URL").fill(url);
-  for (const g of groups) await sheet.getByRole("checkbox", { name: `All ${g}` }).check();
-  await sheet.getByRole("button", { name: "Create" }).click();
+  const form = page.getByRole("dialog", { name: "New webhook" });
+  await form.getByLabel("Name").fill(name);
+  await form.getByLabel("URL").fill(url);
+  for (const g of groups) await form.getByRole("checkbox", { name: `All ${g}` }).check();
+  await form.getByRole("button", { name: "Create" }).click();
+  // qa4-settings-29: once made, the dialog says so.
+  const sheet = page.getByRole("dialog", { name: "Webhook created" });
   await expect(sheet).toContainText("Copy it now. Oracle won't show it again.");
   const secret = await sheet.getByLabel("Signing secret", { exact: true }).inputValue();
   expect(secret).toMatch(/^whsec_/);
@@ -97,7 +99,7 @@ test("webhooks: an owner creates one, gets the secret once, sends a test event t
   // The delivery log: the test event, ✓ 200; its row opens the body, headers and response.
   const log = inspector.getByTestId("delivery-log");
   const delivery = log.getByTestId("delivery-row").first();
-  await expect(delivery).toContainText("webhook.test");
+  await expect(delivery).toContainText("Test event");
   await expect(delivery).toContainText("✓ 200");
   await delivery.click();
   const detail = page.getByRole("dialog", { name: "Delivery" });
@@ -173,7 +175,7 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await expect(sheet.getByRole("button", { name: "Create" })).toBeDisabled();
   await sheet.getByLabel("Why").fill("The leads channel is owners and approvers only");
   await sheet.getByRole("button", { name: "Create" }).click();
-  await sheet.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("dialog", { name: "Webhook created" }).getByRole("button", { name: "Done" }).click();
   await expect(page.getByTestId("webhook-row").filter({ hasText: "Leads channel" }).getByTestId("approvers-content-lock")).toBeVisible();
 
   // Take over the approver's paused webhook: it becomes the owner's.
@@ -354,9 +356,10 @@ test("webhooks: AC17, a run's checkpoint waiting, decided and the run succeeding
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-webhooks").click();
   await page.getByTestId("webhook-row").filter({ hasText: "Run watcher" }).click();
   const log = page.getByTestId("webhook-inspector").getByTestId("delivery-log");
-  for (const type of ["run.checkpoint_waiting", "run.checkpoint_decided", "run.succeeded"]) {
+  // qa4-settings-26: the log names each event as the form does.
+  for (const type of ["A run is waiting at a checkpoint for a person", "A checkpoint was approved or sent back with changes", "A run succeeded"]) {
     await expect(log.getByTestId("delivery-row").filter({ hasText: type })).toContainText("✓ 200");
   }
   // The newest first: the run's success above its checkpoint's decision.
-  await expect(log.getByTestId("delivery-row").first()).toContainText("run.succeeded");
+  await expect(log.getByTestId("delivery-row").first()).toContainText("A run succeeded");
 });

@@ -334,6 +334,7 @@ async def _track_content(
             "name": nxt.name,
             "date": nxt.target_date.isoformat() if nxt.target_date else None,
             "verified": nxt.dated,
+            "at_risk": milestone_at_risk(o),
         },
         "alignment": counts,
         "needs_attention": needs,
@@ -345,6 +346,28 @@ async def _track_content(
         "prd_moved_to": o.latest_approved_version if o.prd_moved else None,
     }
     return content, untracked_now
+
+
+def milestone_at_risk(o: Any) -> bool:
+    """qa4-plan-7, qa5-plan-at-risk: whether the next milestone's own date is threatened: it
+    has a date and an item of it is slipping (its tracker date past the milestone's, overdue,
+    cancelled, or the milestone passed with it not done). The track's health is not asked: a
+    track is off track for a critical blocker too, which moves no date of the milestone. The
+    milestone's items are its own list; an item-named milestone's are the items naming it."""
+    nxt = o.next_milestone
+    if nxt is None or nxt.target_date is None:
+        return False
+    found = getattr(o, "_found", None)
+    if found is not None:
+        keys = views.next_milestone_keys(nxt, found.milestones, found.rows, found.ctx)
+    else:
+        keys = next(
+            (set(m.item_keys or []) for m in o.milestones if m.id == nxt.milestone_id), set()
+        )
+    return any(
+        i.item_key in keys and any(r.get("kind") == "slipping" for r in i.reasons)
+        for i in o.at_risk
+    )
 
 
 async def reported_tracks(db: AsyncSession) -> list[ProductTrack]:
@@ -483,6 +506,8 @@ def markdown(content: dict[str, Any]) -> str:
         if nxt:
             day = short_day(date.fromisoformat(nxt["date"])) if nxt["date"] else "no date"
             basis = "verified basis" if nxt["verified"] else "no verified basis"
+            if nxt.get("at_risk"):
+                basis = "at risk: an item slips past it"
             lines.append(f"- Next milestone: {_line(nxt['name'])}, {day} ({basis})")
         a = t["alignment"]
         lines.append(

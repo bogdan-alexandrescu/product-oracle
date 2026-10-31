@@ -23,6 +23,7 @@ import {
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
+import { needingAttention, shownStatus } from "@/lib/source-attention";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
@@ -83,6 +84,19 @@ const STATUS_LABEL: Record<Source["status"], string> = {
   error: "Error",
   needs_attention: "Needs attention",
 };
+
+/** As oracle.sources.sync words it when the provider refused the connection's credential. */
+const REJECTED = "The connection was rejected";
+
+/**
+ * qa4-settings-7: the source failed because its connection's credential was refused (an
+ * expired or revoked token), or its connection is no longer active: only reconnecting fixes it.
+ */
+function connectionRejected(s: Source, connection: { status?: string | null } | undefined): boolean {
+  if (s.status !== "error") return false;
+  return !!s.last_error?.startsWith(REJECTED) || (!!connection?.status && connection.status !== "active");
+}
+
 
 /** Fireflies' own API: a source reading it says nothing of where it reads. */
 const FIREFLIES_API = "https://api.fireflies.ai/graphql";
@@ -607,8 +621,8 @@ function SourceRow({
             {source.name}
           </span>
           <Chip kind="acc">{KIND_LABEL[source.kind]}</Chip>
-          <Chip kind={STATUS_KIND[source.status]} dot>
-            {STATUS_LABEL[source.status]}
+          <Chip kind={STATUS_KIND[shownStatus(source)]} dot data-testid="source-status">
+            {STATUS_LABEL[shownStatus(source)]}
           </Chip>
           {!source.connector_available && (
             <Chip kind="warn" title={`The ${KIND_LABEL[source.kind]} connector is not available yet.`}>
@@ -789,9 +803,18 @@ function SourceRow({
             </div>
           )}
           {source.last_error && !attention && (
-            <p className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit" data-testid="last-error">
-              {source.last_error}
-            </p>
+            // qa4-settings-7: a rejected connection (an expired token) is not fixed by Sync now:
+            // the way to reconnect sits beside the error, as Drive's Reconnect to choose files does.
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit">
+              <span className="min-w-0 flex-1 basis-60 break-words" data-testid="last-error">
+                {source.last_error}
+              </span>
+              {connectionRejected(source, connection) && (
+                <LinkButton href="/settings/connections" icon="link" data-testid="source-reconnect" aria-label={`Reconnect ${source.name}`}>
+                  Reconnect
+                </LinkButton>
+              )}
+            </div>
           )}
           {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
           {error && <Notice tone="error">{error}</Notice>}
@@ -1049,7 +1072,7 @@ export default function SourceSettingsPage() {
   const { can } = useMe();
   const list = sources.data ?? [];
   const errors = list.filter((s) => s.status === "error").length;
-  const attention = list.filter((s) => s.status === "needs_attention").length;
+  const attention = needingAttention(list).length;
   const items = list.reduce((n, s) => n + s.item_count, 0);
 
   const target = useTargetedSource();
@@ -1065,6 +1088,18 @@ export default function SourceSettingsPage() {
   useEffect(() => {
     if (fromSetup && empty && ready) toAddSource();
   }, [fromSetup, empty, ready]);
+  // qa4-settings-4: Set up's Company domains opens #company-domains. The section sits below
+  // the list, which mounts after the browser's own jump to the hash: once the list and the
+  // section are drawn, scroll there (once), and CompanyDomains marks itself.
+  const domainsHash = useSyncExternalStore(subscribeHash, () => window.location.hash === "#company-domains", () => false);
+  const scrolledToDomains = useRef(false);
+  const listDrawn = !!sources.data || !!sources.error;
+  const showsDomains = can("put_setting");
+  useEffect(() => {
+    if (!domainsHash || !listDrawn || !ready || !showsDomains || scrolledToDomains.current) return;
+    scrolledToDomains.current = true;
+    requestAnimationFrame(() => document.getElementById("company-domains")?.scrollIntoView({ block: "start" }));
+  }, [domainsHash, listDrawn, ready, showsDomains]);
   const replace = (s: Source) => sources.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)));
 
   const inspector = (

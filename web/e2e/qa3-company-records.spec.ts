@@ -130,9 +130,9 @@ test.describe("desktop", () => {
     await page.getByTestId("metrics-empty").filter({ visible: true }).getByRole("button", { name: "Add your first metric" }).click();
     const dialog = page.getByRole("dialog", { name: "Add metric" });
     const goal = dialog.getByLabel("Goal");
-    await expect(goal.locator("option")).toHaveText(["Pick a unit to see goals measured in it"]);
+    await expect(goal.locator("option")).toHaveText(["No goal"]);
     await expect(dialog.getByTestId("metric-goal-help")).toHaveText("Pick a unit to see goals measured in it.");
-    await dialog.getByLabel("Unit", { exact: true }).fill("%");
+    await dialog.getByLabel("Unit", { exact: true }).selectOption("%");
     await expect(goal.locator("option").first()).toHaveText("No goal");
     await expect(dialog.getByTestId("metric-goal-help")).toContainText("Confirmed goals measured in the same unit.");
   });
@@ -183,13 +183,14 @@ test.describe("desktop", () => {
   });
 });
 
-test("qa-company-47: Simple Home's broken-link lines quote item names in curly quotes", async ({ page }) => {
+// qa4-simple-home-28 (#987) takes the quotes off: the line names items plainly, never in straight quotes.
+test("qa-company-47: Simple Home's broken-link lines never quote item names in straight quotes", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await scenario(page, "simple-home");
   await login(page);
   await page.goto("/simple");
   const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-  await expect(broken.first()).toContainText("‘Weekly alert digest’ starts");
-  await expect(broken.first()).toContainText("but ‘Alert rules engine’, which it depends on, ends");
+  await expect(broken.first()).toContainText(/^Weekly alert digest: Starts \w{3} \d+/);
+  await expect(broken.first()).toContainText("but Alert rules engine, which it depends on, ends");
   await expect(page.getByTestId("home-plan")).not.toContainText("'Weekly alert digest'");
 });

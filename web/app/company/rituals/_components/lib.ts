@@ -101,7 +101,8 @@ export const zoneTime = (iso: string, timezone: string) => `${withoutZone(format
  * The Company time zone in words, the one way the page names it (qa-company-21/23/24):
  * "Pacific Time (Los Angeles)"; when no owner chose one yet, "Pacific Time (Los Angeles), not set yet".
  */
-export const zoneText = (zone: string, isDefault: boolean) => (isDefault ? `${zoneName(zone)}, not set yet` : zoneName(zone));
+/** qa4-company-21: an unset zone reads as used until someone sets it, not as "used, not set". */
+export const zoneText = (zone: string, isDefault: boolean) => (isDefault ? `${zoneName(zone)} for now` : zoneName(zone));
 
 export const STATE_LABEL: Record<OccurrenceSummary["status"], string> = {
   scheduled: "Scheduled",

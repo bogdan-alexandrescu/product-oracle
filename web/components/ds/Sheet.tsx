@@ -89,6 +89,9 @@ export function Sheet({
       const at = document.activeElement;
       if (p && at && at !== document.body && !p.contains(at) && at.closest('[role="dialog"], [role="alertdialog"]')) return;
       if (e.key === "Escape") {
+        // qa4-docs-share-1: a part of the sheet that closes on Escape itself (a picker inside
+        // it, marked data-own-escape) takes the key, and the sheet with its edits stays open.
+        if (p && at instanceof Element && p.contains(at) && at.closest("[data-own-escape]")) return;
         e.preventDefault();
         e.stopPropagation();
         close.current();

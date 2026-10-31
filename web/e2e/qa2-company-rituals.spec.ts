@@ -108,9 +108,9 @@ test("qa-company-21: the zone is named once, one way, and no time carries its ow
   const row = ritualRow(page, "Weekly goals check-in");
   await expect(row).toContainText("Mondays 9:00 AM");
   await expect(row.locator('[data-col="next"]')).toHaveText("Mon, Nov 2, 9:00 AM");
-  await expect(page.getByTestId("rituals-zone")).toHaveText("Times are in Pacific Time (Los Angeles), not set yet");
+  await expect(page.getByTestId("rituals-zone")).toHaveText("Times use Pacific Time (Los Angeles) until you set the company time zone. Set it");
   await pick(page, "Weekly goals check-in");
-  await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles), not set yet");
+  await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles) for now");
   await expect(page.locator("main")).not.toContainText(/\b(PT|PST|PDT)\b/);
 
   await ritualRow(page, "Monthly roadmap refresh").getByTestId("next-pre-read").click();

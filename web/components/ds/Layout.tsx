@@ -149,6 +149,7 @@ export function Panel({
   testId,
   as: As = "section",
   bodyClassName = "",
+  toolsClassName = "",
   busy,
 }: {
   title?: ReactNode;
@@ -160,6 +161,8 @@ export function Panel({
   testId?: string;
   as?: "section" | "div";
   bodyClassName?: string;
+  /** Classes on the head's tools group (e.g. "max-[600px]:contents" to let them join the head's line). */
+  toolsClassName?: string;
   /** aria-busy: what the panel draws may still change (its tools wait on the capabilities). */
   busy?: boolean;
 }) {
@@ -179,7 +182,7 @@ export function Panel({
             </span>
           )}
           <span className="flex-1" />
-          {tools && <div className="flex flex-wrap items-center gap-2">{tools}</div>}
+          {tools && <div className={`flex flex-wrap items-center gap-2 ${toolsClassName}`}>{tools}</div>}
         </div>
       )}
       <div className={bodyClassName}>{children}</div>
@@ -202,6 +205,7 @@ export function NotFoundPanel({
   children,
   actions,
   home = true,
+  inPage = false,
 }: {
   title: string;
   icon?: IconName;
@@ -212,9 +216,11 @@ export function NotFoundPanel({
   /** The ways on: links or buttons. */
   actions?: ReactNode;
   home?: boolean;
+  /** qa4-shell-4: inside a section whose layout already draws the Page (Company, Settings). */
+  inPage?: boolean;
 }) {
-  return (
-    <Page>
+  const body = (
+    <>
       <PageHeader title={title} back={back} />
       <Panel testId={testId} bodyClassName="flex flex-col items-center gap-3 px-4 pt-10 pb-8 text-center">
         <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink">
@@ -234,8 +240,9 @@ export function NotFoundPanel({
           </div>
         )}
       </Panel>
-    </Page>
+    </>
   );
+  return inPage ? body : <Page>{body}</Page>;
 }
 
 /**

@@ -13,6 +13,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockSettingValue, setMockSetting } from "./connections";
 import type { DiscussionsDb } from "./discussions";
 import { mockUuid, seeded } from "./ids";
+import { REPORT_ITEM_MILESTONE_SCENARIO, REPORT_OFF_TRACK_SCENARIO } from "./roadmap";
 import { needsReconnect, SLACK_CHANNELS, SLACK_SCENARIO, slackInstall, unlinkAll } from "./slack";
 
 type Report = Schemas["AlignmentReportOut"];
@@ -157,7 +158,7 @@ const PLAN_CHANNEL = { id: "C0PLAN", name: "plan" };
 
 /** The "alignment-report" scenarios: the default company with two weekly reports seeded (fix4: "report-prd-moved" has the Usage alerts PRD's v2 approved too). */
 export const REPORT_PRD_MOVED_SCENARIO = "report-prd-moved";
-const reportScenario = () => [REPORT_SCENARIO, REPORT_PRD_MOVED_SCENARIO].includes(localStorage.getItem(SCENARIO_KEY) ?? "");
+const reportScenario = () => [REPORT_SCENARIO, REPORT_PRD_MOVED_SCENARIO, REPORT_OFF_TRACK_SCENARIO, REPORT_ITEM_MILESTONE_SCENARIO].includes(localStorage.getItem(SCENARIO_KEY) ?? "");
 
 function seedReports(ownerId: string, live: LiveTracks): ReportsDb {
   // Read the tracks before the seed's id scope: reading them may seed the roadmap mock, whose ids stay its own.

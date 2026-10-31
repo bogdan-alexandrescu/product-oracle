@@ -60,7 +60,7 @@ export function SegmentedControl<V extends string>({
       {items.map((it) => {
         const on = it.value === value;
         const cls = `${h} flex items-center gap-2 border-r border-line font-medium whitespace-nowrap last:border-r-0 ${
-          on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2 disabled:text-text2"
+          on ? "bg-accent text-on-accent" : "text-text enabled:hover:bg-surface2 disabled:bg-surface2 disabled:text-text2 disabled:opacity-60"
         } disabled:cursor-not-allowed`;
         const inner = (
           <>

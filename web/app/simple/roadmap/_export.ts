@@ -5,8 +5,10 @@
  * logo, name and accent, the public disclaimer) and a line naming the filters, with the
  * theme's colours resolved, onto a canvas; the PDF is one page holding that picture.
  */
+import { calendarDay, displayZone, zoneTime } from "@/lib/dates";
+
 import type { BoardColumn } from "./_board";
-import { brokenLinks, shortDay, spanWords } from "./_lib";
+import { brokenLinks, spanWords } from "./_lib";
 
 const SCALE = 2;
 const HEAD = 88;
@@ -47,7 +49,49 @@ declare global {
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 const cut = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
 
-/** The labels (as text) and a copy of the chart's SVG beside them. */
+const SVG_NS = "http://www.w3.org/2000/svg";
+const KEY_ROW = 20;
+const KEY_COL = 280;
+
+/** A bar's item name, from its spoken label ("<name>: Oct 1 to Nov 2, …"). */
+function barName(g: Element): string {
+  const said = g.getAttribute("aria-label") ?? "";
+  const m = /^(.*?): (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d/.exec(said);
+  return (m ? m[1] : said.split(": ")[0]).trim();
+}
+
+/** qa4-simple-roadmap-2: the timeline's pills too short for their names (a blank pill, or one
+ * whose name is cut to "…") get a number in the copy, and the picture a key under the chart
+ * naming each number, so every bar in the file says what it is. */
+function numberShortBars(chart: SVGSVGElement): { name: string; n: number }[] {
+  const bars = [...chart.querySelectorAll<SVGGElement>('g[data-testid="bar"][data-lane]')]
+    .map((g) => {
+      const body = g.querySelector("rect[data-body], rect[data-slice-body]");
+      const y = Number(body?.getAttribute("y") ?? 0);
+      const h = Number(body?.getAttribute("height") ?? 20);
+      return { g, x: Number(g.dataset.x0 ?? body?.getAttribute("x") ?? 0), y, h };
+    })
+    .filter(({ g }) => {
+      const words = [...g.querySelectorAll('[data-testid="bar-label"], [data-testid="slice-label"]')].map((t) => (t.textContent ?? "").trim());
+      return !words.some((w) => w && !w.endsWith("…"));
+    })
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  return bars.map(({ g, x, y, h }, k) => {
+    const n = k + 1;
+    // The cut name gives way to the number (the whole name is in the key).
+    g.querySelectorAll('[data-testid="bar-label"], [data-testid="slice-label"]').forEach((t) => t.remove());
+    const badge = document.createElementNS(SVG_NS, "g");
+    badge.setAttribute("data-export-key", String(n));
+    badge.innerHTML =
+      `<circle cx="${x + 9}" cy="${y + h / 2}" r="8" fill="var(--surface)" stroke="var(--text)" stroke-width="1"/>` +
+      `<text x="${x + 9}" y="${y + h / 2 + 3.5}" font-size="10" font-weight="700" text-anchor="middle" fill="var(--text)">${n}</text>`;
+    g.append(badge);
+    return { name: barName(g), n };
+  });
+}
+
+/** The labels (as text) and a copy of the chart's SVG beside them, with a key to the
+ * numbered short bars under it. */
 export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Picture {
   const labelW = labels?.offsetWidth ?? 0;
   const chart = svg.cloneNode(true) as SVGSVGElement;
@@ -62,7 +106,21 @@ export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Pi
       if (t) rows.push(`<text x="10" y="${r.top - top + r.height / 2 + 5}" font-size="13" fill="var(--text)">${esc(cut(t, 34))}</text>`);
     }
   }
-  return { body: rows.join("") + new XMLSerializer().serializeToString(chart), width: labelW + svg.width.baseVal.value, height: svg.height.baseVal.value };
+  const width = labelW + svg.width.baseVal.value;
+  const chartH = svg.height.baseVal.value;
+  const keyed = numberShortBars(chart);
+  const perRow = Math.max(1, Math.floor(width / KEY_COL));
+  const key = keyed.map(({ name, n }, k) => {
+    const x = (k % perRow) * KEY_COL + 10;
+    const y = chartH + 22 + Math.floor(k / perRow) * KEY_ROW;
+    return (
+      `<circle cx="${x + 8}" cy="${y - 4}" r="8" fill="var(--surface)" stroke="var(--text)" stroke-width="1"/>` +
+      `<text x="${x + 8}" y="${y - 0.5}" font-size="10" font-weight="700" text-anchor="middle" fill="var(--text)">${n}</text>` +
+      `<text data-export-key="${n}" x="${x + 22}" y="${y}" font-size="12" fill="var(--text)">${esc(cut(name, 40))}</text>`
+    );
+  });
+  const keyH = keyed.length ? 14 + Math.ceil(keyed.length / perRow) * KEY_ROW : 0;
+  return { body: rows.join("") + new XMLSerializer().serializeToString(chart) + key.join(""), width, height: chartH + keyH };
 }
 
 /** The board's columns, each group and card as boxes and text. */
@@ -112,7 +170,9 @@ export function boardPicture(cols: BoardColumn[], today: string): Picture {
 }
 
 /** One standalone SVG: the branded header (logo, company, title, filters), the picture and
- * the footer (the public disclaimer, the day, Oracle's mark), with the theme's colours. */
+ * the footer (the public disclaimer, the day and time it was made, Oracle's mark), with the
+ * theme's colours. The day is the company's (data.today); the time is in its zone ("Oct 30,
+ * 2026, 2:49 PM PDT"). */
 export function framed(pic: Picture, head: ExportHead, today: string): { markup: string; width: number; height: number } {
   const style = getComputedStyle(document.documentElement);
   const pad = 16;
@@ -132,7 +192,7 @@ export function framed(pic: Picture, head: ExportHead, today: string): { markup:
     `<g transform="translate(${pad}, ${HEAD})">${pic.body}</g>` +
     `<line x1="${pad}" x2="${width - pad}" y1="${height - FOOT}" y2="${height - FOOT}" stroke="var(--line)"/>` +
     `<text x="${pad}" y="${height - 13}" font-size="11" fill="var(--text2)">${esc(cut(b?.disclaimer ?? "", 120))}</text>` +
-    `<text x="${width - pad}" y="${height - 13}" font-size="11" text-anchor="end" fill="var(--text2)">${esc(`${shortDay(today)}${b?.mark ? " · Made with Product Oracle" : ""}`)}</text>` +
+    `<text x="${width - pad}" y="${height - 13}" font-size="11" text-anchor="end" fill="var(--text2)">${esc(`${calendarDay(today, { month: "short", day: "numeric", year: "numeric" })}, ${zoneTime(new Date().toISOString(), displayZone())}${b?.mark ? " · Made with Product Oracle" : ""}`)}</text>` +
     `</svg>`;
   return { markup: markup.replace(/var\((--[a-z0-9-]+)\)/g, (_, name: string) => style.getPropertyValue(name).trim() || "#000"), width, height };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useId, useState } from "react";
+import { type FormEvent, useId, useState, useSyncExternalStore } from "react";
 
 import { Button, Chip, confirmInPage, Icon, InfoTip, LinkButton, Notice, Panel } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
@@ -85,9 +85,16 @@ function Heading({ id, title, tip, children }: { id: string; title: string; tip:
   );
 }
 
+function subscribeHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+}
+
 /** Company email domains: docs in a picked folder owned outside them are skipped. */
 function CompanyDomains() {
   const headingId = useId();
+  // qa4-settings-4: opened from Set up's Company domains (#company-domains), the section is marked.
+  const targeted = useSyncExternalStore(subscribeHash, () => window.location.hash === "#company-domains", () => false);
   const inputId = useId();
   const q = useQuery(`setting|${DOMAINS_KEY}`, () => readSetting(DOMAINS_KEY).then(domains));
   const [text, setText] = useState("");
@@ -143,8 +150,9 @@ function CompanyDomains() {
     <section
       id="company-domains"
       aria-labelledby={headingId}
-      className="flex scroll-mt-4 flex-col gap-2.5 px-4 py-3 max-[600px]:px-3"
+      className={`flex scroll-mt-4 flex-col gap-2.5 px-4 py-3 max-[600px]:px-3${targeted ? " rounded-lg ring-2 ring-inset ring-accent" : ""}`}
       data-testid="company-domains"
+      data-highlight={targeted || undefined}
     >
       <Heading
         id={headingId}

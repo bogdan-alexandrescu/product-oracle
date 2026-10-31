@@ -95,6 +95,22 @@ def legacy(text: str) -> tuple[str, Refs]:
     return text, refs
 
 
+_LEGACY_LOCKED = re.compile(r"^sections approved in version (?P<n>\d+) changed: .*$", re.DOTALL)
+
+
+def locked_section_changed(number: int) -> str:
+    """qa4-docs-21: the sections approved in version ``number`` that this version changed.
+    The page follows it with each section's heading (from ``section_keys``), never its key."""
+    return f"Sections approved in v{number} changed in this version:"
+
+
+def legacy_locked(text: str) -> str:
+    """The changed-approved-sections message as stored before qa4-docs-21 ("...: scope"), in
+    the wording above; any other text as it is."""
+    m = _LEGACY_LOCKED.match(text)
+    return locked_section_changed(int(m["n"])) if m else text
+
+
 def quoted(name: str | None, fallback: str) -> str:
     """A title or heading as a person sees it, in quotes; ``fallback`` when it is blank."""
     name = (name or "").strip()

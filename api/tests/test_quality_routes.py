@@ -185,3 +185,28 @@ async def test_publishing_never_needs_a_stored_report(client):
         assert version.approved_at is None
     dash = (await client.get(V(seeded.slug, 1, "/readiness"), headers=ctx.as_("viewer"))).json()
     assert dash["latest_report"] is None and dash["blocked"] is False
+
+
+async def test_a_human_rating_returns_the_sections_it_names(client):
+    """qa4-docs-42: the readiness dashboard lists the sections a person picked with their rating."""
+    ctx = await make_ctx()
+    seeded = await seed_case(client, ctx, load_case("good-prd"))
+    rating = {
+        "ratings": [
+            {
+                "criterion": "problem_clarity",
+                "status": "pass",
+                "rationale": "Clear",
+                "section_keys": ["problem"],
+            },
+            {"criterion": "validation_plan", "status": "warning", "rationale": "No sample size"},
+        ]
+    }
+    resp = await client.post(
+        V(seeded.slug, 1, "/evaluations/human"), json=rating, headers=ctx.as_("commenter")
+    )
+    assert resp.status_code == 201, resp.text
+    dash = (await client.get(V(seeded.slug, 1, "/readiness"), headers=ctx.as_("viewer"))).json()
+    items = {i["key"]: i for i in dash["items"]}
+    assert items["problem_clarity"]["human"][0]["section_keys"] == ["problem"]
+    assert items["validation_plan"]["human"][0]["section_keys"] == []

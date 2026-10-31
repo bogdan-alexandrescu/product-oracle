@@ -106,7 +106,7 @@ test("qa-company-23/24: the zone is named in words and said to be not set yet", 
   await expect(row.locator('[data-col="next"]')).toHaveAttribute("title", /\(Pacific Time \(Los Angeles\)\)$/);
   await row.click();
   const panel = inspector(page);
-  await expect(panel.getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles), not set yet");
+  await expect(panel.getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles) for now");
   await expect(page.locator("main")).not.toContainText("America/Los_Angeles");
 });
 

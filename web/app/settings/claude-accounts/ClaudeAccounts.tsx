@@ -6,7 +6,7 @@
  * Ported from SwarmCloud's swarm-ui `src/Accounts.tsx`. The scan line is `cs status`'s:
  * the label, the five-hour figure and the state with when the binding window resets.
  * Everything else lives in the chosen account's inspector: the 5-hour use / 7-day use /
- * Next reset / Last given out stats, the facts, Holding now | History, and an owner's controls (state with
+ * Next reset / Last used by a job stats, the details, Running now | History, and an owner's controls (state with
  * a confirm and a reason, refresh, sign in again, remove by typing the label).
  *
  * Honesty marks, unchanged from SwarmCloud: an unmeasured window prints an em dash and
@@ -191,11 +191,12 @@ function SummaryChips({ page }: { page: Page }) {
       )}
       <Dot />
       <Chip kind={sweepOk ? "na" : "warn"} data-testid="refresh-sweep">
+        {/* The sign-in check, named as such: the table's foot says when usage was read (qa4-settings-33). */}
         {!sweep.readable
-          ? "Last check unknown"
+          ? "Sign-in check unknown"
           : sweep.last_completed_at
-            ? `${sweep.last_outcome === "ok" ? "Last checked" : "Last check failed"} ${timeAgo(sweep.last_completed_at)}`
-            : "Not checked yet"}
+            ? `${sweep.last_outcome === "ok" ? "Sign-ins checked" : "Sign-in check failed"} ${timeAgo(sweep.last_completed_at)}`
+            : "Sign-ins not checked yet"}
       </Chip>
     </span>
   );
@@ -325,14 +326,14 @@ function Pool({
     },
     {
       key: "given",
-      header: "Given out",
+      header: "Last used",
       width: "168px",
       wrap: true,
       hideOnPhone: true,
       className: "text-text2",
       cell: (a) => (
         <span className="tnum" title={a.last_assigned_at ? inWords(a.last_assigned_at, page.time_zone) : undefined}>
-          {a.last_assigned_at ? `Given out ${agoPastDay(a.last_assigned_at, now)}` : "Never given out"}
+          {a.last_assigned_at ? `Used by a job ${agoPastDay(a.last_assigned_at, now)}` : "Not used by a job yet"}
         </span>
       ),
     },
@@ -422,7 +423,7 @@ const STATE_KIND: Record<string, ChipKind> = {
 const STATE_LABEL: Record<string, string> = {
   AVAILABLE: "Available",
   PAUSED: "Paused",
-  DRAINING: "Draining",
+  DRAINING: "Moving jobs off",
   REAUTH_REQUIRED: "Needs sign-in",
 };
 
@@ -693,21 +694,21 @@ function Detail({
           ),
         },
         {
-          label: "Last given out",
+          label: "Last used by a job",
           testId: "tile-Last given out",
           figure: account.last_assigned_at ? (
             <StatFig title={inWords(account.last_assigned_at, zone)} note={inWords(account.last_assigned_at, zone)}>
               {timeAgo(account.last_assigned_at, now)}
             </StatFig>
           ) : (
-            <StatFig title="No job has ever been handed it." dim>
+            <StatFig title="No job has used it yet." dim>
               never
             </StatFig>
           ),
         },
       ]}
     >
-      <InspectorSection label="Facts">
+      <InspectorSection label="Details">
         {/* Who holds the account is an owner's to read; the API sends it to owners alone. */}
         {owner && (
           <Fact label="Claude account" testId="fact-claude-account">
@@ -743,7 +744,6 @@ function Detail({
             ? `${account.last_refresh_reason ? `${reasonLabel(account.last_refresh_reason)} · ` : ""}${timeAgo(account.last_refresh_at, now)}`
             : "Not refreshed yet"}
         </Fact>
-        <CopyId id={account.account_id} />
       </InspectorSection>
       <Holding account={account} now={now} zone={zone} />
       {owner ? (
@@ -767,30 +767,10 @@ function Detail({
   );
 }
 
-/** The account's id stays out of sight; a button copies it for a support request. */
-function CopyId({ id }: { id: string }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(id);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  }
-  return (
-    <div className="flex min-h-8 items-center justify-end">
-      <Button variant="ghost" onClick={() => void copy()}>
-        {copied ? "ID copied" : "Copy ID"}
-      </Button>
-    </div>
-  );
-}
-
 const TAB = "h-8 max-sm:min-h-11 rounded-lg px-3 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-70";
 const tabTone = (on: boolean) => (on ? "bg-accent text-on-accent" : "text-text2 hover:bg-surface2 hover:text-text");
 
-/** Holding now | History, both closed by default and loaded only when opened. */
+/** Running now | History, both closed by default and loaded only when opened. */
 function Holding({ account, now, zone }: { account: Account; now: number; zone: string }) {
   const [tab, setTab] = useState<"now" | "history" | null>(null);
   return (
@@ -798,7 +778,7 @@ function Holding({ account, now, zone }: { account: Account; now: number; zone: 
       <div role="tablist" aria-label="Jobs on this account" className="flex flex-wrap gap-1">
         {(
           [
-            ["now", `Holding now (${account.assigned})`],
+            ["now", `Running now (${account.assigned})`],
             ["history", "History"],
           ] as const
         ).map(([key, label]) => (
@@ -952,7 +932,7 @@ function HoldingHistory({ account, now, zone }: { account: Account; now: number;
 const TARGETS: { to: StateName; verb: string; why: string }[] = [
   { to: "AVAILABLE", verb: "Make available", why: "assignable to new jobs" },
   { to: "PAUSED", verb: "Pause", why: "no new jobs; the ones on it keep running" },
-  { to: "DRAINING", verb: "Drain", why: "no new jobs, and the ones on it are moved off" },
+  { to: "DRAINING", verb: "Move jobs off", why: "no new jobs, and the ones on it are moved to other accounts" },
 ];
 
 const SIGN_IN_FIRST = "It can be made available once someone signs in to it again: until then it has no working sign-in.";
@@ -1128,7 +1108,7 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
       tools={
         <InfoTip label="deleting">
           Jobs on it: {account.assigned}
-          {account.assigned > 0 && " (in use: move it to draining first to move them off)"}. Its credential is deleted
+          {account.assigned > 0 && " (in use: press Move jobs off first)"}. Its credential is deleted
           with it. Type the label to arm the button.
         </InfoTip>
       }
