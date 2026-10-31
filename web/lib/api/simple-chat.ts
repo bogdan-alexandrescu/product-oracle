@@ -68,6 +68,8 @@ export type ChatCard = {
   dependent_ids?: string[];
   /** Review major: what "Cut it and its dependents" does for the reader (apply only when they decide every item it cuts). */
   may_with_dependents?: "apply" | "propose" | null;
+  /** qa4-simple-decide-1: an applied card the reader may undo (its Apply's rule). */
+  can_undo?: boolean;
 };
 
 export type ChangeWords = { before: string; after: string };

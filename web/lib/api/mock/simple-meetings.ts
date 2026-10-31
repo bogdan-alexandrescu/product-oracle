@@ -797,7 +797,7 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   // its change outside the session, so a proposal on the meeting's PRD made while it ran counts.
   const ids = new Set(prdItems(ctx, p).map((i) => i.id));
   const ran = (c: Change) => Date.parse(c.at) >= Date.parse(m.started_at) && (!m.ended_at || Date.parse(c.at) <= Date.parse(m.ended_at));
-  const ofPrd = (c: Change) => ids.has(String(c.target.item_id)) || (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.includes(c));
+  const ofPrd = (c: Change) => ids.has(String(c.target.item_id)) || (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.some((x) => x.id === c.id));
   for (const c of [...(ctx.roadmap.changes ?? []), ...ctx.onePager.changes]) {
     if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
   }
