@@ -124,6 +124,8 @@ export const APPROVED_PLAN_SCENARIO = "approved-plan";
 export const ALERTS_APPROVED_SCENARIO = "alerts-approved";
 /** qa5-plan-at-risk: "alignment-report" with the Plan's track off track for a critical blocker, nothing slipping. */
 export const REPORT_OFF_TRACK_SCENARIO = "report-off-track";
+/** qa5-plan-at-risk review: "alignment-report" with no First release track milestone; the Plan's Now items name it. */
+export const REPORT_ITEM_MILESTONE_SCENARIO = "report-item-milestone";
 
 const now = () => new Date().toISOString();
 // The company's day (its time zone), as oracle.company_time.company_today (qa-shell-6).
@@ -265,7 +267,8 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     // qa-plan-32: on the Plan, First release is the Plan's Now items, on Nov 30 as ENG-412 verifies.
     const eng412 = db.bases.find((b) => b.reference === "ENG-412" && b.status === "verified");
     const firstDated = track.plan && eng412;
-    db.milestones.push({
+    // "report-item-milestone": no track milestone; the Plan's Now items name First release.
+    if (scenario !== REPORT_ITEM_MILESTONE_SCENARIO) db.milestones.push({
       id: mockUuid(), track_id: track.id, name: "First release", horizon: "now",
       target_date: firstDated ? firstDated.supports_date : null, basis_ids: firstDated ? [firstDated.id] : [],
       item_keys: track.plan
@@ -299,7 +302,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
     // "launches": a second track, Checkout redesign PRD, with no roadmap yet (New launch's Track picker).
     // fix4: the alignment report scenarios have it too, so a report's second track is one the mock keeps.
-    const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved" || scenario === REPORT_OFF_TRACK_SCENARIO;
+    const secondTrack = scenario === "launches" || scenario === "alignment-report" || scenario === "report-prd-moved" || scenario === REPORT_OFF_TRACK_SCENARIO || scenario === REPORT_ITEM_MILESTONE_SCENARIO;
     const checkout = secondTrack ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
     if (checkout) {
       const started = latest(ctx, checkout.id)?.number ?? 1;

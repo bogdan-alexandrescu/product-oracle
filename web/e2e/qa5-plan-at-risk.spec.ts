@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { LONG_GOAL_NAME, LONG_GOAL_SCENARIO } from "../lib/api/mock/baseline";
-import { REPORT_OFF_TRACK_SCENARIO } from "../lib/api/mock/roadmap";
+import { REPORT_ITEM_MILESTONE_SCENARIO, REPORT_OFF_TRACK_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
@@ -13,10 +13,16 @@ import { login } from "./helpers";
  *   slipping, reads its milestone at risk; no_claim=the track's health chip (off track).
  *   "report-off-track" is "alignment-report" with the digest's slip accepted at First
  *   release's Nov 30 and an open critical blocker on Alerts in the team chat (Now).
+ * - "item-named milestone": protects=a next milestone the items name (no track milestone) reads
+ *   "at risk" when an item naming it slips, as the API's next_milestone_keys reads its items;
+ *   fails_when=the milestone reads only a track milestone's own items (none), so never at risk;
+ *   no_claim=which basis supports the date. "report-item-milestone" is "alignment-report" with
+ *   no First release track milestone: the Plan's Now items name it, Nov 20 the earliest verified
+ *   date, and the Daily alert digest email slips past its Nov 30.
  * - "long goal": protects=a long goal name in Priorities' Goal column is shown whole, inside
  *   its cell, wrapped between words; fails_when=the name is cut (clamped), a word breaks across
  *   lines, or the chip runs past its cell; no_claim=a single word wider than the column.
- *   "long-goal" names G2 (paid conversion) "Grow paid conversion for small teams on the yearly plan".
+ *   "long-goal" names G2 (paid conversion) LONG_GOAL_NAME, long enough to need three lines on a phone too.
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -44,6 +50,17 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
       await expect(usage).toContainText("First release, Nov 30");
       await expect(usage.getByTestId("report-milestone-risk")).toHaveCount(0);
       await expect(usage).toContainText("· a verified basis supports it");
+    });
+
+    test("item-named milestone: an item naming the next milestone slips, the milestone reads at risk", async ({ page }) => {
+      await start(page, REPORT_ITEM_MILESTONE_SCENARIO);
+      await page.goto("/plan/reports");
+      await page.getByRole("link", { name: /week of Oct 12/ }).first().click();
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Weekly alignment · week of Oct 12");
+      const usage = visible(page, "report-track").filter({ hasText: "Usage alerts PRD" });
+      await expect(usage.getByTestId("needs-attention")).toContainText("after the milestone date Nov 30");
+      await expect(usage).toContainText("First release, Nov 20");
+      await expect(usage.getByTestId("report-milestone-risk")).toHaveText("· at risk: an item slips past it");
     });
 
     test("long goal: the Goal column shows a long goal name whole, inside its cell", async ({ page }) => {
@@ -81,7 +98,7 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
       expect(fit.clipped, "the goal name is cut").toBe(false);
       expect(fit.inside, "the goal chip runs past its cell").toBe(true);
       // Long enough to need more than one line somewhere, so the check guards the wrapping.
-      if (viewport === DESKTOP) expect(fit.lines).toBeGreaterThan(2);
+      expect(fit.lines).toBeGreaterThan(2);
     });
   });
 }

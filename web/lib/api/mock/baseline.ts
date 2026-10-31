@@ -93,7 +93,7 @@ export type ReviewStatus = Schemas["ReviewStatusOut"];
 export const BASELINE_STALE_SCENARIO = "baseline-stale";
 /** qa5-plan-at-risk: paid conversion carries a long name (Priorities' Goal column wraps it whole). */
 export const LONG_GOAL_SCENARIO = "long-goal";
-export const LONG_GOAL_NAME = "Grow paid conversion for small teams on the yearly plan";
+export const LONG_GOAL_NAME = "Grow paid conversion for small teams on the yearly plan, the monthly plan and the new starter plan in every region we sell in";
 const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
 
 /**
