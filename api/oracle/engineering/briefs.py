@@ -70,6 +70,8 @@ class Problem(BaseModel):
     feature: str | None = None
     # unknown_ref: the id cited (the Engineering check groups its lines by it).
     ref: str | None = Field(default=None, exclude=True)
+    # unknown_ref: where the feature cites it (touches[i].ref or reuse).
+    at: str | None = Field(default=None, exclude=True)
 
 
 class Touch(BaseModel):
@@ -136,9 +138,13 @@ class BriefsInvalid(ValueError):
 
 
 def _p(
-    code: ProblemCode, message: str, feature: str | None = None, ref: str | None = None
+    code: ProblemCode,
+    message: str,
+    feature: str | None = None,
+    ref: str | None = None,
+    at: str | None = None,
 ) -> Problem:
-    return Problem(code=code, message=message, feature=feature, ref=ref)
+    return Problem(code=code, message=message, feature=feature, ref=ref, at=at)
 
 
 def _text(value: Any) -> bool:
@@ -274,7 +280,7 @@ def _check(
             out.append(
                 _p("bad_size", f"{where}: size {size!r} is not one of {', '.join(SIZES)}", key)
             )
-        refs: list[tuple[str, str]] = []
+        refs: list[tuple[str, str, str]] = []
         for j, touch in enumerate(entry.get("touches") or [] if not shape else []):
             if not isinstance(touch, dict):
                 continue
@@ -291,9 +297,9 @@ def _check(
                        f"{', '.join(CHANGES)}", key)
                 )  # fmt: skip
             if _text(touch.get("ref")):
-                refs.append((f"{tw}.ref", touch["ref"]))
+                refs.append((f"{tw}.ref", f"touches[{j}].ref", touch["ref"]))
         if not shape:
-            refs += [(f"{where}.reuse", r) for r in entry.get("reuse") or []]
+            refs += [(f"{where}.reuse", "reuse", r) for r in entry.get("reuse") or []]
         for j, risk in enumerate(entry.get("risks") or [] if not shape else []):
             rw = f"{where}.risks[{j}]"
             out += _shape(risk, RISK_FIELDS, rw, key)
@@ -322,7 +328,7 @@ def _check(
                     _p("unknown_dependency", f"{where}: depends on {dep!r}, not a feature of "
                        "the feature set", key)
                 )  # fmt: skip
-        for rw, ref in refs:
+        for rw, at, ref in refs:
             if not used:
                 out.append(
                     _p("ref_without_map", f"{rw}: {ref!r} cites a code map, but code_map.used "
@@ -331,7 +337,7 @@ def _check(
             elif known_ids is None or ref not in known_ids:
                 out.append(
                     _p("unknown_ref", f"{rw}: {ref!r} is not in the code map this run used",
-                       key, ref)
+                       key, ref, at)
                 )  # fmt: skip
         if not used and not shape and not entry.get("assumptions"):
             out.append(

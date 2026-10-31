@@ -136,6 +136,8 @@ export type BriefsCheck = {
   code_map_used: boolean;
   /** The repositories the briefs name that none of the run's code maps covers. */
   unmapped_repos?: string[];
+  /** True when cited ids are in no map and the briefs name no repository without one. */
+  unnamed_repo?: boolean;
 };
 
 export function briefsCheck(cp: Pick<CheckpointOut, "kind" | "payload">): BriefsCheck | null {

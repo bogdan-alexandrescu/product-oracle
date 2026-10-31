@@ -46,8 +46,7 @@ def test_unknown_ids_are_grouped_one_line_each_with_the_features_citing_them():
     summary = check._summarize(UNMAPPED, FEATURES, MAP_IDS, {REPO})
     unknown = [p for p in summary["problems"] if p["code"] == "unknown_ref"]
     assert [p["message"] for p in unknown] == [
-        "'model:cart' is not in the code map this run used: cited by feature-b "
-        "(touches[1].ref)",
+        "'model:cart' is not in the code map this run used: cited by feature-b (touches[1].ref)",
         "'module:storefront' is not in the code map this run used: cited by feature-a "
         "(reuse), feature-b (touches[0].ref)",
     ]
@@ -83,9 +82,12 @@ def test_a_repository_named_as_a_url_or_with_git_is_the_map_s_repository():
     ):
         named = SAMPLE.replace('"org/app"', f'"{name}"')
         assert check._summarize(named, FEATURES, MAP_IDS, {"org/app"})["unmapped_repos"] == []
-    assert check._summarize(SAMPLE, FEATURES, MAP_IDS, {"https://github.com/org/app.git"})[
-        "unmapped_repos"
-    ] == []
+    assert (
+        check._summarize(SAMPLE, FEATURES, MAP_IDS, {"https://github.com/org/app.git"})[
+            "unmapped_repos"
+        ]
+        == []
+    )
     other = SAMPLE.replace('"org/app"', '"https://github.com/org/app-web"')
     assert check._summarize(other, FEATURES, MAP_IDS, {"org/app"})["unmapped_repos"] == [
         "https://github.com/org/app-web"

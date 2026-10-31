@@ -1364,6 +1364,14 @@ function seedEngCheckUnmapped(): Db {
   return db;
 }
 
+/** "eng-check-unnamed" scenario: as "eng-check-unmapped", but the briefs do not name the repository with no map. */
+function seedEngCheckUnnamed(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-check-unnamed", () => seedEngCheckUnmappedRun(db.runs!, runsContext(db), false));
+  return db;
+}
+
 /** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
 function seedEngCheckNoLead(): Db {
   const db = seed();
@@ -2784,6 +2792,8 @@ function load(): Db {
             ? seedEngCheckNoLead
           : scenario === "eng-check-unmapped"
             ? seedEngCheckUnmapped
+          : scenario === "eng-check-unnamed"
+            ? seedEngCheckUnnamed
           : scenario === "eng-dates"
             ? seedEngDates
           : scenario === "roadmap-items-console-held"
