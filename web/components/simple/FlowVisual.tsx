@@ -393,17 +393,19 @@ export function FlowPanel({
     if (commenting) setCommenting(false);
     else setFull(false);
   });
-  // qa-simple-prd-p3-22: full screen has one scroller, its own: the page behind it stops
-  // scrolling, so no second scrollbar stands beside the viewer's at the right edge.
+  // qa-simple-prd-p3-22, qa4-simple-prd-30: full screen and the flow's and storyboard's sheets
+  // each have one scroller, their own: the page behind stops scrolling, so no second scrollbar
+  // stands beside the sheet's at the right edge.
+  const sheetOpen = full || (overlay && view !== null);
   useEffect(() => {
-    if (!full) return;
+    if (!sheetOpen) return;
     const html = document.documentElement;
     const was = html.style.overflow;
     html.style.overflow = "hidden";
     return () => {
       html.style.overflow = was;
     };
-  }, [full]);
+  }, [sheetOpen]);
 
   async function post(run: () => Promise<{ data?: Visual; error?: unknown; response: Response }>, after?: () => void) {
     setBusy(true);
@@ -1026,8 +1028,10 @@ function Storyboard({
   }
   const onScreenCard = at >= n;
   const s = steps[Math.min(at, n - 1)];
+  // qa4-simple-prd-30: a sheet from the bottom, as tall as the card and its buttons, not the
+  // whole screen with blank height under them.
   return (
-    <div ref={refEl} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · storyboard`} data-testid="flow-storyboard" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
+    <div ref={refEl} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · storyboard`} data-testid="flow-storyboard" className="fixed inset-x-0 bottom-0 z-[60] flex max-h-dvh flex-col rounded-t-[14px] border-t border-line bg-surface shadow-tip text-[15px] leading-[22px] text-text outline-none">
       <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
         <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · storyboard</h2>
         <button type="button" data-first className={BTN} onClick={onClose}>
