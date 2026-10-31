@@ -1,0 +1,434 @@
+{
+  "title": "Priorities, suggestions and Home's proposals",
+  "subtitle": "Mock-ups on the mock app with invented data. Each choice is a switch in the real web code: ?qp1=a|b|c|d, ?qp2=a|b|c|d, ?qp3=a|b|c, ?qp4=a|b|c.",
+  "decisions": [
+    {
+      "code": "QP1",
+      "name": "The ranked list around a dated line",
+      "question": "When a dated line is picked, how should the ranked list show what makes it and what misses it?",
+      "common": "Same nine invented features and the same line picker. Every proposal drops the long \"Misses ...\" pill that repeated on every row below the line. The first frames use the Customer conference line on Nov 14, where only one feature makes it; the last frame switches to the Beta line on Nov 30.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Keep rank order",
+          "recommended": false,
+          "what": "The list stays in plain rank order, 1 to 9, whatever line is picked. A row that misses the line carries a small \"Misses\" tag, and the sentence above the list names everything that misses.",
+          "plus": "Ranks always read 1, 2, 3 down the page, and the list does not jump around when the line changes.",
+          "cost": "What makes the line is not together: the one feature that makes the Customer conference sits at rank 2, between features that miss it, so you have to scan the tags to find it.",
+          "frames": [
+            {
+              "file": "qp1-a-rest.html",
+              "caption": "Customer conference line: rows stay in rank order 1 to 9; eight carry a small Misses tag."
+            },
+            {
+              "file": "qp1-a-rest-1512.html",
+              "caption": "The same list in a 1512 window: the tag stays short, so nothing wraps."
+            },
+            {
+              "file": "qp1-a-rest-390.html",
+              "caption": "On a phone: one small tag per row, ranks still in order."
+            },
+            {
+              "file": "qp1-a-beta.html",
+              "caption": "The line switched to Beta, Nov 30: the order does not move; only the tags change."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Two headed parts",
+          "recommended": true,
+          "what": "The list is split in two parts with a heading each: \"Makes Customer conference · Nov 14, 2026\" and \"Misses Customer conference · Nov 14, 2026\", each with its count and \"in rank order\". Rows keep their real rank number, so a part can start at 2 and skip a number, and the heading says why.",
+          "why": "It answers the question a person asks when they pick a line (what makes it?) at a glance, says once what the pill said on every row, and keeps each feature's real rank so nothing reads out of order without a reason given.",
+          "plus": "One heading replaces eight pills; ranks inside each part go up; works the same on a phone.",
+          "cost": "Rank numbers skip across the two parts (2, then 1, 3, 4...), and the list is about two rows taller for the headings.",
+          "frames": [
+            {
+              "file": "qp1-b-rest.html",
+              "caption": "Customer conference line: \"Makes\" holds one feature, rank 2; \"Misses\" holds eight, in rank order."
+            },
+            {
+              "file": "qp1-b-rest-1512.html",
+              "caption": "The same in a 1512 window: each heading on one line with its count."
+            },
+            {
+              "file": "qp1-b-rest-390.html",
+              "caption": "On a phone: the headings wrap to two lines; the rows are unchanged."
+            },
+            {
+              "file": "qp1-b-beta.html",
+              "caption": "The line switched to Beta, Nov 30: three features now make it, and the parts regroup."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Renumber, show rank",
+          "recommended": false,
+          "what": "The list is grouped by the line, as today, under one thin divider \"The line: ... everything below misses it\". Rows are numbered 1, 2, 3 down the page; when a feature's place differs from its rank by score, a small \"rank 2\" chip says so.",
+          "plus": "Numbers always read in order down the page, and the divider is a single line instead of a pill per row.",
+          "cost": "Two numbers per row where they differ, which a person has to tell apart; with a later line most rows near the top carry a chip.",
+          "frames": [
+            {
+              "file": "qp1-c-rest.html",
+              "caption": "Customer conference line: Alert rules engine is first, with a \"rank 2\" chip; the divider follows it."
+            },
+            {
+              "file": "qp1-c-rest-1512.html",
+              "caption": "The same in a 1512 window."
+            },
+            {
+              "file": "qp1-c-rest-390.html",
+              "caption": "On a phone: the chip sits beside the name and pushes the goal to the next line."
+            },
+            {
+              "file": "qp1-c-beta.html",
+              "caption": "The line switched to Beta: three rows above the divider, and four rows now carry a rank chip."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "Side-by-side columns",
+          "recommended": false,
+          "what": "On a wide screen the list splits into two columns, \"Makes\" on the left and \"Misses\" on the right, each with its heading and count. On a phone the columns stack.",
+          "plus": "Makes and misses are side by side, so the balance is clear at once.",
+          "cost": "Rows get half the width, so the numbers wrap under the name; one column can be nearly empty while the other runs long, as it does here (1 against 8).",
+          "frames": [
+            {
+              "file": "qp1-d-rest.html",
+              "caption": "Customer conference line: one feature on the left, eight on the right, numbers wrapped under each name."
+            },
+            {
+              "file": "qp1-d-rest-1512.html",
+              "caption": "In a 1512 window: the left column stays mostly empty beside a long right column."
+            },
+            {
+              "file": "qp1-d-rest-390.html",
+              "caption": "On a phone the two columns stack, so it reads like the headed parts."
+            },
+            {
+              "file": "qp1-d-beta.html",
+              "caption": "The line switched to Beta: three on the left, six on the right."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QP2",
+      "name": "Value and confidence on a row",
+      "question": "How should goal value and confidence read on a ranked row, now that a bar with no label sits beside \"confidence\"?",
+      "common": "Same rows and the same score: goal value × confidence ÷ effort in engineer-weeks. Only the small numbers at the right of each row change. All frames use the This quarter line.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Numbers, no bar",
+          "recommended": true,
+          "what": "The bar goes. Each row reads \"value 4 · confidence 0.8 · 2 wk · score 1.6\", in the order of the score formula shown above the list.",
+          "why": "The bar was the problem: it sat beside one number and showed another. Plain numbers in the formula's order match the line above the list, and the rank already shows which rows matter most.",
+          "plus": "Shortest row; nothing to explain; reads the same on a phone.",
+          "cost": "No quick picture of which feature brings the most value; you compare numbers.",
+          "frames": [
+            {
+              "file": "qp2-a-rest.html",
+              "caption": "Each row reads value · confidence · weeks · score, with no bar."
+            },
+            {
+              "file": "qp2-a-rest-1512.html",
+              "caption": "The same in a 1512 window."
+            },
+            {
+              "file": "qp2-a-rest-390.html",
+              "caption": "On a phone: the numbers fit on one line under the name."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Bar beside value",
+          "recommended": false,
+          "what": "The bar stays but moves next to the word \"value\" it shows, and it says \"Goal value 4 of the top 6\" when pointed at or read aloud.",
+          "plus": "Keeps the quick picture of value, and the bar now sits by its own label.",
+          "cost": "The bar is relative to the top value in the list, so it changes when the list changes; the phone row wraps to two lines.",
+          "frames": [
+            {
+              "file": "qp2-b-rest.html",
+              "caption": "The bar follows \"value\", before confidence."
+            },
+            {
+              "file": "qp2-b-rest-1512.html",
+              "caption": "The same in a 1512 window."
+            },
+            {
+              "file": "qp2-b-rest-390.html",
+              "caption": "On a phone the bar pushes the numbers to a second line."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Two small meters",
+          "recommended": false,
+          "what": "Both value and confidence get a small meter right after their number: value against the top value in the list, confidence against 1.",
+          "plus": "Both inputs read at a glance, each beside its own label.",
+          "cost": "Two bars per row that look alike but measure different things; the busiest row of the four.",
+          "frames": [
+            {
+              "file": "qp2-c-rest.html",
+              "caption": "Value and confidence each with its own meter."
+            },
+            {
+              "file": "qp2-c-rest-1512.html",
+              "caption": "The same in a 1512 window."
+            },
+            {
+              "file": "qp2-c-rest-390.html",
+              "caption": "On a phone: two meters make the numbers wrap."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "One score bar",
+          "recommended": false,
+          "what": "Value and confidence are plain numbers; the one bar goes after the score, against the top score in the list.",
+          "plus": "The bar shows the number the list is sorted by, so it backs up the ranking.",
+          "cost": "The bar mostly repeats the rank order; rows lower in the list may show a longer bar than the one above it when a feature is held back by what it depends on, which needs explaining.",
+          "frames": [
+            {
+              "file": "qp2-d-rest.html",
+              "caption": "A bar after the score; value and confidence are plain numbers."
+            },
+            {
+              "file": "qp2-d-rest-1512.html",
+              "caption": "The same in a 1512 window."
+            },
+            {
+              "file": "qp2-d-rest-390.html",
+              "caption": "On a phone: the score and its bar wrap to a second line."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QP3",
+      "name": "The suggestions drawer",
+      "question": "How should the suggestions drawer offer its ways to ask Oracle, and how should a look-alike suggestion be declined?",
+      "common": "Same drawer for the goal Grow retention, with one Oracle suggestion that looks like two features already planned. Every proposal replaces the repeated \"Same as this: decline the suggestion\" links, and every decline can be undone.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Actions per tab",
+          "recommended": false,
+          "what": "Each tab holds only its own action: the Oracle tab has one \"Get more Oracle suggestions\" button, the People tab has \"Suggest a feature\". The chat is one quiet link at the bottom. A look-alike suggestion gets one \"Duplicate of...\" menu that lists the features it looks like; picking one declines it at once, with Undo in the message.",
+          "plus": "Only one button per tab, so they never look alike; one menu instead of a link per look-alike.",
+          "cost": "Declining has no confirm step, only Undo; to suggest a feature yourself you first have to switch to the People tab.",
+          "frames": [
+            {
+              "file": "qp3-a-open.html",
+              "caption": "The drawer opened on the Oracle tab: one button, one suggestion with a \"Duplicate of...\" menu."
+            },
+            {
+              "file": "qp3-a-menu.html",
+              "caption": "The menu opened: decline it as the same as one of the two look-alikes."
+            },
+            {
+              "file": "qp3-a-result.html",
+              "caption": "Picked Weekly alert digest: the suggestion is declined, with Undo in the message."
+            },
+            {
+              "file": "qp3-a-people.html",
+              "caption": "The People tab holds its own \"Suggest a feature\" button."
+            },
+            {
+              "file": "qp3-a-more.html",
+              "caption": "Back on the Oracle tab, Get more pressed: Oracle is suggesting features, and the button waits."
+            },
+            {
+              "file": "qp3-a-open-1512.html",
+              "caption": "The drawer in a 1512 window."
+            },
+            {
+              "file": "qp3-a-open-390.html",
+              "caption": "On a phone the drawer fills the screen."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Labelled row, confirm",
+          "recommended": true,
+          "what": "One row at the top holds three different-looking actions: \"+ Suggest a feature\", \"Get more from Oracle\" and a plain \"Ask in the chat\" link. Each look-alike line gets a small \"Duplicate\" button; pressing it asks in place \"Decline ... as a duplicate of ...?\" with \"Decline as duplicate\" and Cancel.",
+          "why": "Every way in is visible and named for what it does, so they no longer look alike, and declining needs a second, clearly named press where the look-alike is shown.",
+          "plus": "Nothing hidden behind a menu or a tab; the confirm sits by the line it is about.",
+          "cost": "A row of three controls at the top of the drawer, and one more press to decline.",
+          "frames": [
+            {
+              "file": "qp3-b-open.html",
+              "caption": "The drawer opened: three distinct actions on one row; each look-alike has its own Duplicate button."
+            },
+            {
+              "file": "qp3-b-confirm.html",
+              "caption": "Duplicate pressed by Weekly alert digest: the drawer asks to confirm in place."
+            },
+            {
+              "file": "qp3-b-result.html",
+              "caption": "Confirmed: the suggestion is declined, with Undo in the message."
+            },
+            {
+              "file": "qp3-b-more.html",
+              "caption": "Get more from Oracle pressed: Oracle is suggesting features, shown in the drawer and the message."
+            },
+            {
+              "file": "qp3-b-open-1512.html",
+              "caption": "The drawer in a 1512 window: the row of three still fits on one line."
+            },
+            {
+              "file": "qp3-b-open-390.html",
+              "caption": "The drawer on a phone, with the same row of actions at the top."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "One menu, reject form",
+          "recommended": false,
+          "what": "One \"Add a suggestion\" menu holds \"Write one yourself\", \"Get more from Oracle\" and \"Ask Oracle in the chat\". The look-alike lines are plain text; to decline one, press Reject, and the reject form asks \"Is it the same as a feature you have?\" with one choice per look-alike.",
+          "plus": "The calmest drawer; one way to decline, which always confirms and records why.",
+          "cost": "Getting more from Oracle takes two presses, and the open menu covers the first suggestion; declining a duplicate is less direct.",
+          "frames": [
+            {
+              "file": "qp3-c-open.html",
+              "caption": "The drawer opened: one \"Add a suggestion\" menu; look-alikes are plain text."
+            },
+            {
+              "file": "qp3-c-menu.html",
+              "caption": "The menu opened, covering the top of the suggestion."
+            },
+            {
+              "file": "qp3-c-reject.html",
+              "caption": "Reject pressed: the form asks if it is the same as a feature, Weekly alert digest picked."
+            },
+            {
+              "file": "qp3-c-result.html",
+              "caption": "Rejected: the suggestion is gone, with Undo in the message."
+            },
+            {
+              "file": "qp3-c-open-1512.html",
+              "caption": "The drawer in a 1512 window."
+            },
+            {
+              "file": "qp3-c-open-390.html",
+              "caption": "On a phone: the single menu keeps the top short."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QP4",
+      "name": "Home: proposals and goal cards",
+      "question": "On Home, how should a proposal show what its Accept will move, and where should a goal card take you?",
+      "common": "Same Home with three invented goals and four proposals. The first proposal, \"Move the dependents: Weekly alert digest\", moves two features. The goal Keep alerts quiet has nothing planned yet.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Moves on the row",
+          "recommended": false,
+          "what": "Each proposal row lists what it moves, with the old dates struck out and the new dates beside them. Accept applies it at once; goal cards work as today.",
+          "plus": "You see the before and after without opening anything; one press to accept.",
+          "cost": "Rows get tall when a proposal moves many items (a longer one shows its first few and \"more\"); the goal card problem is not touched.",
+          "frames": [
+            {
+              "file": "qp4-a-rest.html",
+              "caption": "Home: the Move the dependents row lists both features with old and new dates."
+            },
+            {
+              "file": "qp4-a-rest-1512.html",
+              "caption": "The same in a 1512 window."
+            },
+            {
+              "file": "qp4-a-rest-390.html",
+              "caption": "On a phone the dates wrap under each feature, making the row tall."
+            },
+            {
+              "file": "qp4-a-result.html",
+              "caption": "Accept pressed: the move is made at once and the proposal leaves the list."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Confirm, filtered list",
+          "recommended": true,
+          "what": "Rows stay short. Accept on a proposal that moves dates opens a short window: what was proposed, each feature with its old and new dates, and \"Accept and move 2 items\". A goal card's link opens Priorities showing only that goal, with \"Show all\" and, when nothing is planned for it, saying so.",
+          "why": "It shows the before and after at the moment it matters, keeps Home short, and makes the goal card land on a page about that goal instead of the whole list.",
+          "plus": "Home stays as compact as today; the goal link has a clear, honest landing.",
+          "cost": "One more press to accept a move; Priorities gains a goal filter it must keep.",
+          "frames": [
+            {
+              "file": "qp4-b-rest.html",
+              "caption": "Home at rest: proposal rows are short, as today."
+            },
+            {
+              "file": "qp4-b-open.html",
+              "caption": "Accept pressed: the window lists the two features with old and new dates."
+            },
+            {
+              "file": "qp4-b-result.html",
+              "caption": "Accept and move pressed: the proposal leaves the list."
+            },
+            {
+              "file": "qp4-b-goal-empty.html",
+              "caption": "The Keep alerts quiet card opened: Priorities says nothing for this goal is planned yet."
+            },
+            {
+              "file": "qp4-b-goal.html",
+              "caption": "The Grow retention card opened: Priorities shows only its features, with Show all."
+            },
+            {
+              "file": "qp4-b-rest-1512.html",
+              "caption": "Home in a 1512 window."
+            },
+            {
+              "file": "qp4-b-rest-390.html",
+              "caption": "On a phone the rows stay short."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "Open in place",
+          "recommended": false,
+          "what": "Goal cards open in place to list what is planned, with dates, or say nothing is planned yet. Proposals keep Accept but add \"Review on the roadmap\", which opens the roadmap with its proposals panel beside the dates.",
+          "plus": "No page change to see a goal's plan; the roadmap shows a move against every other date.",
+          "cost": "Home grows when cards open; reviewing a move means leaving Home for a busy page, and Accept on Home still shows nothing before it acts.",
+          "frames": [
+            {
+              "file": "qp4-c-rest.html",
+              "caption": "Home at rest: each goal card has a \"What's planned\" link."
+            },
+            {
+              "file": "qp4-c-goal.html",
+              "caption": "Two cards opened in place: Grow retention lists four features; Keep alerts quiet says nothing is planned yet."
+            },
+            {
+              "file": "qp4-c-review.html",
+              "caption": "Review on the roadmap pressed: the roadmap opens with the proposals panel."
+            },
+            {
+              "file": "qp4-c-rest-1512.html",
+              "caption": "Home in a 1512 window."
+            },
+            {
+              "file": "qp4-c-rest-390.html",
+              "caption": "Home on a phone, scrolled to the proposals."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
