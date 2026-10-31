@@ -1,13 +1,14 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { SCOPE_REVIEW_RUN } from "../lib/api/mock/runs";
 import { login } from "./helpers";
 
 /**
  * A feature-set call keeps every reason it was asked for. The "scope-review" scenario's
  * saved-addresses run (web/lib/api/mock/runs.ts seedScopeReviewRuns): Pick address in one step
- * needs a call for two reasons, "Low confidence" and "New, not in the baseline"; three of the
- * six features need you, so the bar starts at "3 of 6 handled".
+ * needs a call for two reasons, "Low confidence" and "New, not in the baseline"; five of the
+ * eight features are handled, so the bar starts at "5 of 8 handled".
  */
 
 const PICK = "Pick address in one step";
@@ -15,10 +16,8 @@ const PICK = "Pick address in one step";
 async function openReview(page: Page) {
   await page.addInitScript((key) => localStorage.setItem(key, "scope-review"), MOCK_SCENARIO_KEY);
   await login(page, "approver@example.com");
-  await page.getByTestId("nav-runs").click();
-  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
-  await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
+  await page.goto(`/runs/${SCOPE_REVIEW_RUN}`);
+  await page.getByTestId("checkpoint-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Feature set" })).toBeAttached();
 }
 
@@ -35,7 +34,7 @@ const needsYou = (page: Page) => page.getByRole("button", { name: /^Needs you/ }
 // count or the tally stays put, or the tray shows one chip; no_claim = waivers.
 test("keeping both reasons of a feature keeps both, and the tally and tray follow", async ({ page }) => {
   await openReview(page);
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("3 of 6 handled");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("5 of 8 handled");
   const pick = row(page, PICK);
   await expect(pick.getByTestId("row-reasons")).toContainText("Low confidence");
   await expect(pick.getByTestId("row-reasons")).toContainText("New, not in the baseline");
@@ -50,7 +49,7 @@ test("keeping both reasons of a feature keeps both, and the tally and tray follo
   await pick.getByRole("button", { name: "Include", exact: true }).click();
   await expect(pick.getByTestId("row-done")).toContainText("✓ Included");
   await expect(needsYou(page)).toContainText("2");
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("4 of 6 handled");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("6 of 8 handled");
   const chips = bar(page).getByTestId("staged-chip").filter({ hasText: PICK });
   await expect(chips).toHaveCount(2);
   await expect(chips.filter({ hasText: "included · low confidence" })).toHaveCount(1);
@@ -75,12 +74,12 @@ test("the side panel's Include answers what is left and shows as chosen", async 
   await expect(include).toHaveAttribute("aria-pressed", "true");
   await expect(inspector.getByTestId("reason-low_confidence")).toContainText("✓ Included");
   await expect(inspector.getByTestId("reason-new_feature")).toContainText("✓ Included");
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("4 of 6 handled");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("6 of 8 handled");
 
   await inspector.getByTestId("reason-new_feature").getByRole("button", { name: "Undo" }).click();
   await expect(inspector.getByTestId("reason-new_feature")).not.toContainText("✓ Included");
   await expect(inspector.getByTestId("reason-low_confidence")).toContainText("✓ Included");
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("3 of 6 handled");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("5 of 8 handled");
 });
 
 // Card keep-3: protects = the same on a phone: the card's Include twice, the Decide sheet's
@@ -97,7 +96,7 @@ test("on a phone both calls are kept and the Decide sheet lists each", async ({ 
   await bar(page).getByRole("button").click();
   const sheet = page.getByTestId("sheet-decide");
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByTestId("decision-tally")).toContainText("4 of 6 handled");
+  await expect(sheet.getByTestId("decision-tally")).toContainText("6 of 8 handled");
   await expect(sheet.getByTestId("staged-chip").filter({ hasText: PICK })).toHaveCount(2);
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
