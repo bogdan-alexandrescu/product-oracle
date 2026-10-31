@@ -3,7 +3,8 @@ the meeting's screen key to its own (``meeting_chat:<id>``), apart from Oracle's
 
 Card: protects=on each meeting screen key the discussion the chat used (the oldest panel
 discussion there) moves to the chat's own key when the chat wrote in it, an Ask discussion
-the chat adopted included; a newer Ask discussion, a key whose discussions hold no chat line,
+the chat adopted included, or when it is the chat's own with no line yet (titled "Meeting
+chat"); a newer Ask discussion, a key whose discussions hold no chat line,
 another page's chat and an Ask chat stay put; the downgrade puts the keys back; up again
 works; chained on 0094_generation_checks as the single head; fails_when=a meeting's chat is
 left on the screen key (it loses its lines), an Ask-only discussion becomes a chat, or a key
@@ -99,7 +100,7 @@ def test_each_meeting_keeps_its_chat(scratch_db):
     command.upgrade(cfg, PREVIOUS)
     t = uuid.uuid4()
     _run("INSERT INTO tenants (id, name) VALUES (:t, 'Example Co')", t=t)
-    a, b, c, d = (uuid.uuid4() for _ in range(4))
+    a, b, c, d, e = (uuid.uuid4() for _ in range(5))
     # A: the chat opened first; an Ask question came later.
     a_chat = _thread(t, f"/simple/meetings/{a}", "Meeting chat", 0, [CHAT])
     a_ask = _thread(t, f"/simple/meetings/{a}", "What is late?", 5, ["claude"])
@@ -109,6 +110,9 @@ def test_each_meeting_keeps_its_chat(scratch_db):
     # C: Ask questions only; the chat never wrote.
     c_ask = _thread(t, f"/simple/meetings/{c}", "What is late?", 0, ["claude"])
     c_ask2 = _thread(t, f"/simple/meetings/{c}", "Who owns it?", 5, [CHAT])
+    # E: the chat's own discussion, opened with no line yet; an Ask question came later.
+    e_chat = _thread(t, f"/simple/meetings/{e}", "Meeting chat", 0, [])
+    e_ask = _thread(t, f"/simple/meetings/{e}", "What is late?", 5, ["claude"])
     # The Ask panel on the chat's own page, and a person's Simple Ask chat on the meeting page.
     d_page = _thread(t, f"/simple/meetings/{d}/chat", "What is late?", 0, [CHAT])
     own = _thread(t, f"/simple/ask/{uuid.uuid4()}/simple/meetings/{d}", "Ask Oracle: changes",
@@ -119,7 +123,8 @@ def test_each_meeting_keeps_its_chat(scratch_db):
     after = _keys()
     assert after[a_chat] == f"meeting_chat:{a}"
     assert after[b_chat] == f"meeting_chat:{b}"
-    for x in (a_ask, b_ask, c_ask, c_ask2, d_page, own):
+    assert after[e_chat] == f"meeting_chat:{e}"
+    for x in (a_ask, b_ask, c_ask, c_ask2, d_page, own, e_ask):
         assert after[x] == before[x], x
 
     command.downgrade(cfg, PREVIOUS)
