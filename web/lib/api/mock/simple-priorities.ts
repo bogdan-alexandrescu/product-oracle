@@ -75,18 +75,19 @@ const featureId = (itemId: string): string => `feature-${itemId}`;
 
 const FEATURE_CODE = /^[A-Z]{1,3}-\d+$/;
 
-/** Initials of up to three words of `name` (Team invite nudges TIN); a one-word name's first two letters (Pricing PR). */
+/** Initials of up to three words of `name` (Team invite nudges TIN); a one-word name's first two letters (Pricing PR); then the name's first number, if it has one (Pay 1 PA1). */
 function initials(name: string): string {
   const words = name.match(/\p{L}+/gu) ?? [];
-  if (words.length >= 2) return words.slice(0, 3).map((w) => w[0]).join("").toUpperCase();
-  return `${words[0] ?? ""}xx`.slice(0, 2).toUpperCase();
+  const number = name.match(/\d+/)?.[0] ?? "";
+  if (words.length >= 2) return words.slice(0, 3).map((w) => w[0]).join("").toUpperCase() + number;
+  return `${words[0] ?? ""}xx`.slice(0, 2).toUpperCase() + number;
 }
 
 /**
  * priorities.short_codes: each feature's short code, for feature keys in creation order: the
  * key when it is a code (F-12), else its PRD section's code (F-06), else the initials of its
- * shown name (`names`, by key; the key when it has none), a digit added on a clash in creation
- * order (SC, SC2), so every reader reads the same code, a rename moves it, and a new feature
+ * shown name (`names`, by key; the key when it has none) and its number (Pay 1 PA1), a digit
+ * added on a clash in creation order (SC, SC2; PA1.2 after a number), so every reader reads the same code, a rename moves it, and a new feature
  * never renames an older one.
  */
 export function shortCodes(keys: string[], prd: Record<string, string> = {}, names: Record<string, string> = {}): string[] {
@@ -102,8 +103,9 @@ export function shortCodes(keys: string[], prd: Record<string, string> = {}, nam
   keys.forEach((k, i) => {
     if (out[i] !== null) return;
     const base = initials(names[k]?.trim() || k);
+    const sep = /\d$/.test(base) ? "." : "";
     let code = base;
-    for (let n = 2; taken.has(code); n++) code = `${base}${n}`;
+    for (let n = 2; taken.has(code); n++) code = `${base}${sep}${n}`;
     taken.add(code);
     out[i] = code;
   });
