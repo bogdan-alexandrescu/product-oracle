@@ -91,7 +91,7 @@ test.describe("desktop", () => {
     const link = spec.getByRole("link", {
       name: "Open Early shipping cost: technical brief",
     });
-    await expect(link).toHaveText("Open spec");
+    await expect(link).toHaveText("Open technical brief"); // qa4-docs-share-44
     // The brief's record names v1; an edit made v2, the latest.
     await expect(link).toHaveAttribute(
       "href",

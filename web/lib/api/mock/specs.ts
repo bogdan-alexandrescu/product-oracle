@@ -164,7 +164,7 @@ function design(kind: "user_flow" | "wireframe", versionId = kind === "user_flow
   const flow = kind === "user_flow";
   const outputs: Schemas["DesignOutputOut"][] = flow
     ? [{ name: "checkout-flow.svg", title: "Checkout with an early quote", screen: null, media_type: "image/svg+xml", size_bytes: FLOW_SVG.length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("quote"), guestNote], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg` }]
-    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<img> with a remote src"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
+    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<blink> element (content kept)"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
   return {
     request_id: flow ? I.flowRequest : I.wireRequest,
     kind,

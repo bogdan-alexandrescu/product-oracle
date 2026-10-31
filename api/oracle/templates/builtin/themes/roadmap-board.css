@@ -23,3 +23,8 @@
   .doc-header { position: running(docheader); margin: 0; }
   @page { @top-center { content: element(docheader); width: 100%; } margin-top: 30mm; }
 }
+/* qa4-docs-share-5: on a phone screen the cards stack in one column (never the PDF: print). */
+@media screen and (max-width: 640px) {
+  .section-group > .group-body { grid-template-columns: minmax(0, 1fr); }
+  .section-group > .group-body > .section-wide { grid-column: auto; }
+}

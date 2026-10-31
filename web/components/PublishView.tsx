@@ -47,6 +47,14 @@ const CHECK_KIND: Record<string, string> = {
   third_party_support: "Third-party",
 };
 const PHONE = "(max-width: 600px)";
+/** A block's kind as the sentence under Blocks counts it (qa4-docs-share-54). */
+const BLOCK_NOUN: Record<string, string> = {
+  "Critical blocker": "critical blocker",
+  "Security or policy": "security or policy problem",
+  "Third-party": "third-party problem",
+  "Hard check": "failed check",
+  "Unconfirmed date": "unconfirmed date",
+};
 /** The kinds whose approve checks the dates the text writes, not the PRD checks (api/oracle/review/publish_gate.py). */
 const DATED_KINDS = new Set(["roadmap", "update"]);
 const DAY = 86_400_000;
@@ -69,6 +77,8 @@ type Block = {
  */
 function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schemas["DocumentBlockerStrategy"] | undefined): Block[] {
   const entity = (id: string | undefined) => (id ? `/baseline?entity=${id}` : null);
+  // qa4-docs-share-52: a blocker's Resolve opens the blocker itself, where Open blocker goes.
+  const blocker = (id: string) => `/baseline?tab=blockers&blocker=${encodeURIComponent(id)}`;
   const section = (key: string | undefined) => (key ? sectionHref(doc, n, key) : null);
   // The gating blockers first, then the other refusals in the verdict's order.
   const keys = [...readiness.blocking].sort((a, b) => Number(b === BLOCKERS_CHECK) - Number(a === BLOCKERS_CHECK));
@@ -81,7 +91,7 @@ function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schema
           id: s.blocker.id,
           title: s.blocker.statement,
           kind: "Critical blocker",
-          href: entity(s.blocker.id),
+          href: blocker(s.blocker.id),
           blocker: s,
         }));
       }
@@ -111,7 +121,7 @@ export function dateBlocksOf(marks: DateMark[] | undefined, headings: Map<string
       return {
         id: `${m.section_key}:${m.text}`,
         title: `${formatDate(m.date)}${heading ? ` in “${heading}”` : ""}: ${
-          m.status === "withdrawn" ? "its schedule basis was withdrawn" : "not backed by a confirmed schedule"
+          m.status === "withdrawn" ? "its date source was withdrawn" : "not backed by a confirmed schedule"
         }`,
         kind: "Unconfirmed date",
         href: "/plan/dates",
@@ -153,15 +163,23 @@ function age(iso: string): string {
   return days < 1 ? "today" : `${days}d`;
 }
 
-/** What publishing does on main: POST .../approve stamps the version, the PRD and the audit log. */
-function onPublishLines(n: number) {
+/** The dated kinds' names, as the page says them (qa4-docs-share-3). */
+const DATED_NOUN: Record<string, string> = { roadmap: "Roadmap", update: "Update" };
+
+/**
+ * What publishing does on main: POST .../approve stamps the version, the document and the
+ * audit log. qa4-docs-share-3: a roadmap (or an update) says it in its own words.
+ */
+function onPublishLines(n: number, kind?: string) {
+  const noun = kind ? DATED_NOUN[kind] : undefined;
+  if (noun) return [`Version v${n} published`, `${noun} status set to Published`, "Publishing recorded in the audit log"];
   return [`Version v${n} approved with its evidence`, "PRD status set to Approved", "Approval recorded in the audit log"];
 }
 
-function OnPublish({ n }: { n: number }) {
+function OnPublish({ n, kind }: { n: number; kind?: string }) {
   return (
     <ul className="flex flex-col" data-testid="on-publish">
-      {onPublishLines(n).map((line) => (
+      {onPublishLines(n, kind).map((line) => (
         <li key={line} className="flex min-h-[30px] items-center gap-2">
           <Icon name="doc" size={16} className="flex-none text-accent-ink" />
           <span className="min-w-0 truncate">{line}</span>
@@ -273,11 +291,13 @@ function BlockInspector({
   block,
   question,
   n,
+  kind,
   onChanged,
 }: {
   block: Block;
   question: Question | undefined;
   n: number;
+  kind?: string;
   onChanged: (message: string) => void;
 }) {
   const why = block.blocker?.gate.rationale ?? block.check?.rationale;
@@ -328,29 +348,31 @@ function BlockInspector({
         </InspectorSection>
       )}
       <InspectorSection label="On publish">
-        <OnPublish n={n} />
+        <OnPublish n={n} kind={kind} />
       </InspectorSection>
     </Inspector>
   );
 }
 
-function ReadyInspector({ n, published }: { n: number; published: boolean }) {
+function ReadyInspector({ n, published, kind }: { n: number; published: boolean; kind?: string }) {
   // qa-docs-62: once published, the panel says what publishing did, in the past.
   const label = published ? "When it was published" : "On publish";
   return (
     <Inspector testId="publish-inspector" label={label} eyebrow={label}>
       <InspectorSection>
-        <OnPublish n={n} />
+        <OnPublish n={n} kind={kind} />
       </InspectorSection>
     </Inspector>
   );
 }
 
-function SubHead({ title, count, children }: { title: string; count: ReactNode; children?: ReactNode }) {
+function SubHead({ title, count, muted = false, children }: { title: string; count: ReactNode; muted?: boolean; children?: ReactNode }) {
   return (
     <div className="flex min-h-12 flex-wrap items-center gap-2.5 border-t border-line px-4 py-2 max-[600px]:px-3">
       <h2 className="font-display text-lg leading-6 font-bold tracking-heading">{title}</h2>
-      <span className="tnum font-display text-lg leading-6 font-bold tracking-heading text-accent-ink">{count}</span>
+      <span data-testid="subhead-count" className={`tnum font-display text-lg leading-6 font-bold tracking-heading ${muted ? "text-text2" : "text-accent-ink"}`}>
+        {count}
+      </span>
       {children}
     </div>
   );
@@ -537,11 +559,15 @@ export function PublishView({ doc }: { doc: string }) {
   // #370: Publish is POST .../approve; anyone who may not call it never sees the button. A
   // vision, strategy or update is an owner's (its per-item role); any other kind an approver's.
   const canPublish = can("approve_version", d != null && !OWNER_APPROVES[d.kind]);
-  const hard = readiness?.items.filter((i) => i.hard) ?? [];
-  const advisory = readiness?.items.filter((i) => !i.hard) ?? [];
+  // qa4-docs-share-3: the readiness checks are a PRD's; a roadmap's (or an update's) approve
+  // asks only for its dates, so the page shows that check instead of the PRD's.
+  const hard = dated ? [] : (readiness?.items.filter((i) => i.hard) ?? []);
+  const advisory = dated ? [] : (readiness?.items.filter((i) => !i.hard) ?? []);
   const failing = hard.filter((i) => i.status === "critical").length;
   const tally = (s: Item["status"]) => advisory.filter((i) => i.status === s).length;
   const hardNa = hard.filter((i) => i.status === "not_applicable").length;
+  // qa4-docs-share-20: the heading counts the hard checks that apply; n/a ones have their own chip.
+  const hardApply = hard.length - hardNa;
   const half = Math.ceil(advisory.length / 2);
 
   const questionFor = (block: Block): Question | undefined => {
@@ -614,6 +640,10 @@ export function PublishView({ doc }: { doc: string }) {
     : (dated ? blocks.length > 0 : readiness.blocked)
       ? plural(blocks.length, "block")
       : null;
+  // qa4-docs-share-54: what holds the publish, in words on the page, not only in a tooltip.
+  const blockCounts = new Map<string, number>();
+  for (const b of blocks) blockCounts.set(b.kind, (blockCounts.get(b.kind) ?? 0) + 1);
+  const blocksWhy = [...blockCounts].map(([kind, count]) => plural(count, BLOCK_NOUN[kind] ?? "failed check")).join(", ");
   // qa-docs-3: publishable, but say what is still open (the confirm dialog says the same).
   const critical = tally("critical");
   const caveats = [
@@ -671,9 +701,9 @@ export function PublishView({ doc }: { doc: string }) {
 
   const inspector =
     n == null || !readiness ? undefined : selected ? (
-      <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} onChanged={changed} />
+      <BlockInspector key={selected.id} block={selected} question={questionFor(selected)} n={n} kind={d?.kind} onChanged={changed} />
     ) : (
-      <ReadyInspector n={n} published={published} />
+      <ReadyInspector n={n} published={published} kind={d?.kind} />
     );
 
   return (
@@ -681,7 +711,8 @@ export function PublishView({ doc }: { doc: string }) {
       <PageHeader
         testId="publish-header"
         // qa-docs-31: the same crumb as the document's other pages: PRDs / <document> <status>.
-        back={<DocCrumb doc={d} />}
+        // qa4-docs-share-22: the crumb's status says "Published", the word this page uses.
+        back={<DocCrumb doc={d} approvedLabel="Published" />}
         title="Publish"
         suffix={d ? `${d.title}${n != null ? ` v${n}` : ""}` : undefined}
         status={blocksChip}
@@ -703,9 +734,12 @@ export function PublishView({ doc }: { doc: string }) {
             )}
             {blocks.length > 0 ? (
               <section aria-label="Blocks">
-                <div className="flex min-h-12 items-center gap-2.5 px-4 py-2 max-[600px]:px-3">
+                <div className="flex min-h-12 flex-wrap items-center gap-2.5 px-4 py-2 max-[600px]:px-3">
                   <h2 className="font-display text-lg leading-6 font-bold tracking-heading">Blocks</h2>
                   <span className="tnum font-display text-lg leading-6 font-bold tracking-heading text-accent-ink">{blocks.length}</span>
+                  <span data-testid="blocks-why" className="min-w-0 text-sm text-text2">
+                    Publishing waits for {blocksWhy}
+                  </span>
                 </div>
                 {blocks.map((b) => (
                   <div key={b.id}>
@@ -737,8 +771,29 @@ export function PublishView({ doc }: { doc: string }) {
               </section>
             )}
 
+            {dated && versionQ.data && (
+              <section aria-label="Checks">
+                <SubHead title="Checks" count={1} />
+                <ul>
+                  <li
+                    data-testid="dates-check"
+                    data-status={blocks.length ? "critical" : "pass"}
+                    className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_auto_auto] items-center gap-x-2 border-t border-line px-4 max-[600px]:px-3"
+                  >
+                    <Icon name={blocks.length ? "x" : "check"} size={16} className={blocks.length ? "text-crit" : "text-pass"} />
+                    <span className="min-w-0 py-2 font-medium break-words">Dates backed by a confirmed schedule</span>
+                    <span className="tnum text-right text-text2">{blocks.length ? plural(blocks.length, "date") : null}</span>
+                    <span className="justify-self-end">
+                      <Chip kind={blocks.length ? "crit" : "pass"}>{blocks.length ? "Fail" : "Pass"}</Chip>
+                    </span>
+                  </li>
+                </ul>
+              </section>
+            )}
+
+            {!dated && (
             <section aria-label="Hard checks">
-              <SubHead title="Hard checks" count={hard.length}>
+              <SubHead title="Hard checks" count={hardApply} muted={hardApply === 0}>
                 {failing > 0 && <Chip kind="crit">{failing} fail</Chip>}
                 {/* qa-docs-29: hard and advisory n/a add up to Quality's "All checks" n/a. */}
                 {hardNa > 0 && <Chip kind="na">{hardNa} n/a</Chip>}
@@ -749,7 +804,9 @@ export function PublishView({ doc }: { doc: string }) {
                 ))}
               </ul>
             </section>
+            )}
 
+            {!dated && (
             <section aria-label="Advisory">
               <SubHead title="Advisory" count={advisory.length}>
                 {tally("pass") > 0 && <Chip kind="pass">{tally("pass")} pass</Chip>}
@@ -759,6 +816,10 @@ export function PublishView({ doc }: { doc: string }) {
                 <Link href={`/documents/${doc}/v/${n}/quality`} className="text-sm font-medium text-accent-ink hover:underline">
                   Open quality
                 </Link>
+                {/* qa4-docs-share-55: a critical here is advice; only a hard check blocks. */}
+                <span data-testid="advisory-note" className="text-sm text-text2">
+                  Advice only: these never block publishing
+                </span>
               </SubHead>
               <div className="grid grid-cols-2 max-[700px]:grid-cols-1" data-testid="advisory-columns">
                 {[advisory.slice(0, half), advisory.slice(half)].map((col, c) => (
@@ -770,6 +831,7 @@ export function PublishView({ doc }: { doc: string }) {
                 ))}
               </div>
             </section>
+            )}
           </Panel>
         </Split>
       )}
@@ -795,7 +857,7 @@ export function PublishView({ doc }: { doc: string }) {
                   {unreviewedText(unreviewed, sections.length)}
                 </p>
               )}
-              <OnPublish n={n} />
+              <OnPublish n={n} kind={d?.kind} />
             </div>
             {refusal && (
               <div id="publish-refusal" role="alert" data-testid="publish-refusal" className="border-t border-line bg-crit-bg px-5 py-3 text-crit max-[600px]:px-4">

@@ -3801,6 +3801,7 @@ const BOARD_THEME_CSS = `<style>
 .section-group > .group-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
 .section-group > .group-body > .prd-section { margin: 0; padding: 0.45rem 0.6rem; border: 1px solid #d0d5dd; border-top: 3px solid #1d4ed8; border-radius: 4px; }
 .section-group > .group-body > .section-wide { grid-column: 1 / span 3; padding: 0.45rem 0 0; border: none; border-top: 3px solid #1d4ed8; border-radius: 0; }
+@media screen and (max-width: 640px) { .section-group > .group-body { grid-template-columns: minmax(0, 1fr); } .section-group > .group-body > .section-wide { grid-column: auto; } }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #d0d5dd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
 </style>`;
@@ -4394,6 +4395,7 @@ function reviewV2Context(db: Db, userId: string, role: Role) {
     versions: db.versions,
     reviews: db.reviews,
     me: { id: userId, role },
+    members: db.members,
     uuid,
     now,
     hash,
