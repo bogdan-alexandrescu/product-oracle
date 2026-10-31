@@ -29,7 +29,12 @@ async function open(page: Page, email?: string) {
 async function readsCleanly(page: Page) {
   await expect(page.getByTestId("one-pager-writing")).toHaveText(WRITING);
   const article = page.getByRole("article", { name: "One-pager" });
-  await expect(article.getByRole("region", { name: "Problem and who has it" })).toContainText("about 9 minutes per day). Every feature below serves sorting time");
+  const problem = article.getByRole("region", { name: "Problem and who has it" });
+  await expect(problem).toContainText("finding new photos (about 9 minutes per day).");
+  await expect(article).not.toContainText("[c");
+  // Its whole text reads resolved too.
+  await problem.getByRole("button", { name: "Show all" }).click();
+  await expect(problem).toContainText("about 9 minutes per day). Every feature below serves sorting time:");
   await expect(article).not.toContainText("[c");
   await expect(article.getByTestId("problem-who")).toHaveText("Who has it: Owners of small photo libraries who add a few hundred photos a week");
   const outcomes = article.getByRole("region", { name: "Outcomes and how we measure them" });
