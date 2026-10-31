@@ -2894,6 +2894,16 @@ function load(): Db {
       roadmap.status = "approved";
     }
   }
+  // qa4-plan-3: "plan-decider" (#346) edits the approved plan, so usage-alerts-roadmap v1 is
+  // approved there (the Plan reads the document's state; by default it is in review).
+  if (scenario === "plan-decider") {
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+    if (roadmap && v1) {
+      v1.approved_at = "2026-10-05T09:00:00Z";
+      roadmap.status = "approved";
+    }
+  }
   // H9 Pricing input: a second owner, two pricing memos and made-up deals in the "pricing" scenario.
   if (scenario === "pricing") seedPricingScenario(db);
   // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.

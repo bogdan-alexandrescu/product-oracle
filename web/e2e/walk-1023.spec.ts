@@ -107,6 +107,8 @@ test("the goal drawer shows a person's name and labelled attributes and history"
 // protects = "Why it needs you" says what changed once; fails_when = "42 baseline items changed;
 // 11 baseline items changed" (two counts of one thing) shows.
 test("Why it needs you names one count", async ({ page }) => {
+  // qa4-plan-3: the item's reasons are an approved row's; "plan-decider" has the roadmap approved.
+  await withScenario(page, "plan-decider");
   await openPlan(page, "approver@example.com");
   await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Daily alert digest email" }).first().click();
   const why = page.getByTestId("plan-inspector").filter({ visible: true }).getByTestId("plan-why");
