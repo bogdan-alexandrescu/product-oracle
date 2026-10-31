@@ -1,0 +1,167 @@
+{
+  "title": "Where a run agent's questions are asked",
+  "subtitle": "During a run the analyst and architect ask the owner questions with options and their own pick. Today they only sit in a raw file on the run page, so nobody answers them and the next agent guesses. Mock-ups on the Saved addresses PRD's Feature set stop (invented data). Switch: ?aq1=a|b|c|d, &aqs=rest|open|mid|done, &aqn=many.",
+  "decisions": [
+    {
+      "code": "AQ1",
+      "name": "Where agents' questions are answered",
+      "question": "Where and how does the person deciding a stop see and answer the questions the run's agents asked?",
+      "common": "Every proposal shows each question as a card: who asks (analyst or architect), what it is about (a feature or the whole set), the options as buttons with the agent's pick marked, why the agent asks, and an optional note. Picking an option and Save answer records it with who and when; an answer can be changed until the stop is decided. Answers go to the next step (Design) with the stop's decision, and its agent reads them as settled. A question nobody answers goes with the agent's pick, and the card says so.",
+      "proposals": [
+        {
+          "letter": "a",
+          "name": "Cards atop the review",
+          "recommended": true,
+          "what": "A 'Questions from the agents' block at the top of the stop's review page, above the feature table: open questions as cards in two columns with their options as buttons, answered ones below with who and when. The decider answers them on the same page where they decide, before they reach the table.",
+          "why": "The decider is already on this page to decide, and the answers travel with that decision, so asking here costs no extra visit and nothing is missed. It works for questions about one feature and about the whole set alike, and it keeps the table unchanged.",
+          "plus": "Seen first, in the one place the decision is made; no new page, no change to the Inbox or the table; works the same on a phone.",
+          "cost": "With many questions the block pushes the feature table below the fold (eleven questions fill the first screen at 1512), and a question about one feature sits away from that feature's row.",
+          "frames": [
+            {
+              "file": "frames/aq1-a-rest.html",
+              "caption": "At rest: three open questions and one answered by Mara Lindqvist sit above the feature table."
+            },
+            {
+              "file": "frames/aq1-a-open.html",
+              "caption": "Why they ask opened on the architect's send-path question: the agent's reason and what each option costs."
+            },
+            {
+              "file": "frames/aq1-a-mid.html",
+              "caption": "Build a new send path picked and a note typed; Save answer is next."
+            },
+            {
+              "file": "frames/aq1-a-done.html",
+              "caption": "Saved: the card moves to the answered row, 'by you, just now', and says it goes to Design with the decision."
+            },
+            {
+              "file": "frames/aq1-a-many.html",
+              "caption": "Hard case, 11 questions: the block fills the screen and the feature table starts below it."
+            },
+            {
+              "file": "frames/aq1-a-many-1512.html",
+              "caption": "The same at 1512: still nine open cards before the first feature row."
+            },
+            {
+              "file": "frames/aq1-a-rest-390.html",
+              "caption": "Phone: the cards stack in one column above the features."
+            }
+          ]
+        },
+        {
+          "letter": "b",
+          "name": "Inbox rows",
+          "recommended": false,
+          "what": "Each open question becomes its own row in the Inbox, in a 'Questions from run agents' group, with the run, the stop and its state; Answer opens the card in place. The stop's review page only links to them.",
+          "plus": "Questions reach the person even before they open the stop, and sit beside everything else that needs them; one place for every run's questions.",
+          "cost": "The answer is given away from the features it is about and away from the decision, so the decider can approve the stop without seeing them (the stop shows only a link). Many questions crowd the Inbox.",
+          "frames": [
+            {
+              "file": "frames/aq1-b-rest.html",
+              "caption": "At rest: the Inbox lists the four questions as their own rows above the checkpoints."
+            },
+            {
+              "file": "frames/aq1-b-open.html",
+              "caption": "Answer opened on the send-path row: the card with the reason and the options, in the Inbox."
+            },
+            {
+              "file": "frames/aq1-b-mid.html",
+              "caption": "Build a new send path picked with a note; Save answer is next."
+            },
+            {
+              "file": "frames/aq1-b-done.html",
+              "caption": "Saved: the row shows '✓ You · just now'; the card closes."
+            },
+            {
+              "file": "frames/aq1-b-stop.html",
+              "caption": "The cost: on the stop's own review page the questions are only a link to the Inbox."
+            },
+            {
+              "file": "frames/aq1-b-many.html",
+              "caption": "Hard case, 11 questions: the group pushes every other Inbox item down."
+            },
+            {
+              "file": "frames/aq1-b-many-1512.html",
+              "caption": "The same at 1512."
+            },
+            {
+              "file": "frames/aq1-b-open-390.html",
+              "caption": "Phone: an opened question row in the Inbox, the card full width."
+            }
+          ]
+        },
+        {
+          "letter": "c",
+          "name": "On the feature's row",
+          "recommended": false,
+          "what": "A '1 question' chip on the row of the feature it concerns, in the 'needs you because' column; the chip opens the card under that row. Questions about the whole set sit in one line above the table. The page title says how many are open, and the table shows All so no row with a question is hidden.",
+          "plus": "Each question is answered next to the feature it changes, with the row's goal, confidence and other problems in view.",
+          "cost": "Questions hide in the table: the decider has to open each chip, rows grow tall when open, the filter must show All, and whole-set questions need a separate line.",
+          "frames": [
+            {
+              "file": "frames/aq1-c-rest.html",
+              "caption": "At rest: question chips on Saved addresses, Bulk edit and Address lookup; the whole-set one is already answered."
+            },
+            {
+              "file": "frames/aq1-c-open.html",
+              "caption": "The chip on Saved addresses opened: the card sits under the row, the next rows pushed down."
+            },
+            {
+              "file": "frames/aq1-c-mid.html",
+              "caption": "Build a new send path picked with a note; Save answer is next."
+            },
+            {
+              "file": "frames/aq1-c-done.html",
+              "caption": "Saved: the row's chip turns to '✓ 1 answered' and the title count drops to 2."
+            },
+            {
+              "file": "frames/aq1-c-many.html",
+              "caption": "Hard case, 11 questions: chips on most rows, two on some; each must be opened to read it."
+            },
+            {
+              "file": "frames/aq1-c-many-1512.html",
+              "caption": "The same at 1512."
+            },
+            {
+              "file": "frames/aq1-c-open-390.html",
+              "caption": "Phone: the Saved addresses card opened under its row."
+            }
+          ]
+        },
+        {
+          "letter": "d",
+          "name": "One at a time first",
+          "recommended": false,
+          "what": "Opening the stop first shows its open questions one at a time in a dialog, 'Question 1 of 4' with a progress bar; each is answered or left to the agent's pick, then the stop opens with a one-line summary and a See answers link.",
+          "plus": "Nobody can reach the decision without having seen every question; one question at a time is easy to read, also on a phone.",
+          "cost": "It stands between the decider and the stop every time, with no view of the features while answering; eleven questions are eleven screens, and 'Open the stop now' becomes the habit.",
+          "frames": [
+            {
+              "file": "frames/aq1-d-rest.html",
+              "caption": "On arrival: the dialog asks question 1 of 4 over the stop, with the reason and the options."
+            },
+            {
+              "file": "frames/aq1-d-mid.html",
+              "caption": "Build a new send path picked with a note; Save answer is next."
+            },
+            {
+              "file": "frames/aq1-d-done.html",
+              "caption": "After that answer and the rest left to the agent's pick, the stop opens with a one-line summary."
+            },
+            {
+              "file": "frames/aq1-d-many.html",
+              "caption": "Hard case: 'Question 1 of 11' before the stop opens."
+            },
+            {
+              "file": "frames/aq1-d-many-1512.html",
+              "caption": "The same at 1512."
+            },
+            {
+              "file": "frames/aq1-d-rest-390.html",
+              "caption": "Phone: the dialog is a sheet from the bottom."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

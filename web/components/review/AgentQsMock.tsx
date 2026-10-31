@@ -378,11 +378,12 @@ export function AgentQsGate() {
   if (shut || open.length === 0) {
     const mine = s.qs.filter((q) => q.answer?.by === "you").length;
     const left = s.qs.filter((q) => !q.answer).length;
+    const others = s.qs.filter((q) => q.answer && q.answer.by !== "you").length;
     return (
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-panel border border-line bg-surface px-3 py-2 text-sm" data-testid="aq-gate-done">
         <span aria-hidden className="text-pass">✓</span>
         <span>
-          <b className="font-semibold">Agents&apos; questions:</b> {mine} answered by you{left ? `, ${left} left to the agent's pick` : ""}. They go to{" "}
+          <b className="font-semibold">Agents&apos; questions:</b> {mine} answered by you{others ? `, ${others} earlier by others` : ""}{left ? `, ${left} left to the agent's pick` : ""}. They go to{" "}
           {AGENT_QS_NEXT_STEP} with your decision.
         </span>
         <button type="button" className="font-semibold text-accent-ink underline" onClick={() => setShut(false)}>
@@ -394,8 +395,8 @@ export function AgentQsGate() {
   const q = s.qs.find((x) => x.id === s.opened && !x.answer) ?? open[0];
   const index = s.qs.indexOf(q) + 1;
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4 max-[600px]:items-end max-[600px]:p-0" data-testid="aq-gate">
-      <div role="dialog" aria-modal aria-label="Before you open this stop" className="flex max-h-[90vh] w-[640px] max-w-full flex-col gap-3 overflow-auto rounded-panel bg-surface p-5 shadow-xl max-[600px]:rounded-b-none">
+    <div className="fixed inset-0 z-40 grid grid-cols-1 place-items-center bg-black/40 p-4 max-[600px]:items-end max-[600px]:p-0" data-testid="aq-gate">
+      <div role="dialog" aria-modal aria-label="Before you open this stop" className="flex max-h-[90vh] w-full max-w-[640px] min-w-0 flex-col gap-3 overflow-auto rounded-panel bg-surface p-5 shadow-xl max-[600px]:rounded-b-none">
         <div className="flex flex-wrap items-baseline gap-x-3">
           <h2 className="text-lg font-semibold">Before you open this stop</h2>
           <span className="tnum text-sm text-text2">
