@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { Mark } from "@/components/ds/Brand";
@@ -94,26 +94,10 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   return counts && { ...counts, Meetings: meetings ?? 0, "Meetings live": live };
 }
 
-/** fix4 qa-simple-roadmap-51: an email with a line break allowed after its "@", so it wraps
- * between its parts ("viewer@" / "example.com"), not inside one. */
-
 /** What a rail count counts, said in words (its label and tooltip). */
 function countWords(label: string, n: number): string {
   if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
   return `${n} waiting on you`;
-}
-
-/** An email with a line break allowed before its "@" (qa-shell-18): "viewer" / "@example.com". */
-function breakAtSign(email: string): ReactNode {
-  const at = email.indexOf("@");
-  if (at <= 0) return email;
-  return (
-    <Fragment>
-      {email.slice(0, at)}
-      <wbr />
-      {email.slice(at)}
-    </Fragment>
-  );
 }
 
 /**
@@ -232,9 +216,13 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   // qa-simple-home-29: the phone shows the rail's counts too; More sums the counts in its sheet.
   const countOf = (d: Dest) => counts?.[d.label] ?? 0;
   const moreCount = moreDests.reduce((sum, d) => sum + countOf(d), 0);
-  const tabBadge = (id: string, n: number, words: string) =>
+  // qa4-simple-home-22: a count that needs nothing from you (Meetings with none live) is grey on the phone as on the rail; More is
+  // yellow only when something in it waits on you.
+  const quietOf = (d: Dest) => d.label === "Meetings" && !counts?.["Meetings live"];
+  const moreQuiet = moreDests.every((d) => countOf(d) === 0 || quietOf(d));
+  const tabBadge = (id: string, n: number, words: string, quiet = false) =>
     n > 0 && (
-      <span id={id} data-testid={id} aria-label={words} title={words} className="simple-count simple-count-tab tnum">
+      <span id={id} data-testid={id} aria-label={words} title={words} className={`simple-count simple-count-tab tnum${quiet ? " simple-count-quiet" : ""}`}>
         {n}
       </span>
     );
@@ -298,15 +286,16 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           {account("rail")}
           <span className="flex min-w-0 flex-col pt-2 leading-5">
             {/* qa-simple-home-25, 21, qa-simple-prd-p3-31: the name in full, or the email once when the member has no name of their own
-                (personLine); the email breaks only before its "@" (qa-shell-18), never mid-word. With no name the avatar says the
+                (personLine); the email on one line (qa4-simple-home-20). With no name the avatar says the
                 email to a screen reader (its "Account <email>" name), so this line is hidden from it. */}
             <span
               data-testid="simple-person-name"
               title={me?.email || me?.name || undefined}
               aria-hidden={!!me?.email && personLine(me) === me.email ? true : undefined}
-              className="text-[15px] font-semibold [overflow-wrap:break-word] text-rail-active-text"
+              className={`text-[15px] font-semibold text-rail-active-text ${me?.email && personLine(me) === me.email ? "truncate" : "[overflow-wrap:break-word]"}`}
             >
-              {me?.email && personLine(me) === me.email ? breakAtSign(me.email) : personLine(me)}
+              {/* qa4-simple-home-20: an email stays on one line, cut with an ellipsis (whole in its tooltip). */}
+              {personLine(me)}
             </span>
             <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>
           </span>
@@ -341,7 +330,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                     <Icon name={d.icon} stroke={1.7} />
                     {/* fix4 review: "One-pagers" fills a 390 px phone's fifth of the bar to the pixel; a hair tighter it is whole. */}
                     <span className="max-w-full truncate tracking-[-0.02em]">{d.label}</span>
-                    {tabBadge(`${id}-count`, n, countWords(d.label, n))}
+                    {tabBadge(`${id}-count`, n, countWords(d.label, n), quietOf(d))}
                   </Link>
                 );
               })}
@@ -359,7 +348,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               >
                 <Icon name="more" stroke={1.7} />
                 More
-                {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`)}
+                {tabBadge("simple-tab-more-count", moreCount, `${moreCount} in More`, moreQuiet)}
               </button>
             </nav>
             {/* qa-simple-home-19: Detailed's More sheet (its handle, title, close button and dimmed backdrop), sized to its links. */}
@@ -381,7 +370,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
                         >
                           <Icon name={d.icon} />
                           {d.label}
-                          {tabBadge(id, n, countWords(d.label, n))}
+                          {tabBadge(id, n, countWords(d.label, n), quietOf(d))}
                         </Link>
                       </li>
                     );
