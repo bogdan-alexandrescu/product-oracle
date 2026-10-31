@@ -35,6 +35,8 @@ export interface BaselineState {
   fieldChanges?: FieldChange[];
   /** Goals' dated values (B5), as GET .../measurements serves them; absent in older saved data. */
   measurements?: Schemas["MeasurementOut"][];
+  /** Which metric wrote each measurement (goal_measurements.metric_id), by measurement id; not served. */
+  measurementMetric?: Record<string, string>;
 }
 
 type FieldChange = { entity_id: string; field: string; before: unknown; after: unknown; at: string };
@@ -1559,17 +1561,22 @@ export function addThreeWayConflict(s: BaselineState, uuid: () => string) {
  * measurement by day becomes the goal's current, through the "reading" writer: applied even
  * to a locked goal, never locking it.
  */
-export function readMetricIntoGoal(s: BaselineState, goalId: string, day: string, value: number | null, note: string) {
+export function readMetricIntoGoal(s: BaselineState, goalId: string, day: string, value: number | null, note: string, metricId: string) {
   const goal = s.entities.find((e) => e.id === goalId && e.type === "goal");
   if (!goal) return;
   const rows = (s.measurements ??= []);
+  const by = (s.measurementMetric ??= {});
   const at = rows.findIndex((x) => x.entity_id === goalId && x.measured_on === day);
   if (value == null) {
-    if (at >= 0) rows.splice(at, 1);
+    // As the API: only the measurement this metric wrote is removed.
+    if (at >= 0 && by[rows[at].id] === metricId) rows.splice(at, 1);
   } else if (at >= 0) {
     Object.assign(rows[at], { value, note, evidence_id: null, recorded_by: null });
+    by[rows[at].id] = metricId;
   } else {
-    rows.push({ id: newId(), entity_id: goalId, value, measured_on: day, note, evidence_id: null, recorded_by: null, created_at: now() });
+    const id = newId();
+    rows.push({ id, entity_id: goalId, value, measured_on: day, note, evidence_id: null, recorded_by: null, created_at: now() });
+    by[id] = metricId;
   }
   const latest = rows.filter((x) => x.entity_id === goalId).sort((a, b) => b.measured_on.localeCompare(a.measured_on))[0];
   goal.attrs = { ...goal.attrs, current: latest ? latest.value : null, current_as_of: latest ? latest.measured_on : null };

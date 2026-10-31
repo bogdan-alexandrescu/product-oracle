@@ -37,12 +37,12 @@ export interface MetricsContext {
   companyTimezone: () => string;
   goals: () => Goal[];
   /** A linked output's weekly value written to its goal as a measurement on the week's Sunday (null removes it); the goal's current follows its latest. */
-  readIntoGoal?: (goalId: string, day: string, value: number | null, note: string) => void;
+  readIntoGoal?: (goalId: string, day: string, value: number | null, note: string, metricId: string) => void;
 }
 
 /** qa4-company-4: an output linked to a goal writes each weekly value to it (oracle.metrics.pull._goal_measurement, link_goal). */
 function toGoal(ctx: MetricsContext, m: Metric, week: string, value: number | null) {
-  if (m.goal_id && m.kind === "output") ctx.readIntoGoal?.(m.goal_id, addDays(week, 6), value, `Weekly value from ${m.title}`);
+  if (m.goal_id && m.kind === "output") ctx.readIntoGoal?.(m.goal_id, addDays(week, 6), value, `Weekly value from ${m.title}`, m.id);
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];

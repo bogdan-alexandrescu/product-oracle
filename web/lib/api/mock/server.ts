@@ -2428,7 +2428,7 @@ function metricsContext(db: Db, me: MemberRow): MetricsContext {
       db.baseline.entities
         .filter((e) => e.type === "goal")
         .map((e) => ({ id: e.id, title: e.title, unit: typeof e.attrs.unit === "string" ? e.attrs.unit : null, confirmed: e.status === "confirmed" })),
-    readIntoGoal: (goalId, day, value, note) => readMetricIntoGoal(db.baseline, goalId, day, value, note),
+    readIntoGoal: (goalId, day, value, note, metricId) => readMetricIntoGoal(db.baseline, goalId, day, value, note, metricId),
   };
 }
 
