@@ -1180,6 +1180,9 @@ class OnePagerOut(BaseModel):
     span_end: dt.date | None
     # extract: Oracle's quick read, shown while the one_pager job builds it; oracle: built.
     built_by: Literal["extract", "oracle"]
+    # The one_pager job is writing the page: until it is done the reader gets the quick read
+    # (the page says so in one quiet line).
+    writing: bool = False
     built_at: dt.datetime
     blocks: list[OnePagerBlock]
     # The timeline strip: the PRD's slice of the Simple roadmap (the span is its ends).

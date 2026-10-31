@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from oracle.docs.models import Section
+from oracle.docs.parser import strip_citations
 
 WHO_SAYS_NOTHING = "Who has it is not in the PRD yet"
 
@@ -57,11 +58,23 @@ class Look:
     source_keys: list[str] = field(default_factory=list)
 
 
-def _plain(text: str) -> str:
+# A citation an older quick read cut ("time [c…", "time [c:c"): only at the line's end.
+_CUT_CITE = re.compile(r"[ \t]*\[c(?::[^\]\s]*)?(?=…?$)")
+
+
+def resolved(text: str) -> str:
+    """``text`` as the PRD's PDF reads it: no ``[c:id]`` marker left (the export's resolver,
+    oracle.docs.parser.strip_citations), and none an older quick read cut at its end."""
+    return _CUT_CITE.sub("", strip_citations(text or ""))
+
+
+def _plain(text: str, cites: bool = False) -> str:
+    """Markdown's words; ``cites`` keeps the ``[c:id]`` markers (a measure's source)."""
+    text = text if cites else resolved(text or "")
     return " ".join(_MD.sub(lambda m: m.group(1) or "", text or "").split())
 
 
-def _rows(body: str) -> tuple[list[str], list[list[str]], list[str]]:
+def _rows(body: str, cites: bool = False) -> tuple[list[str], list[list[str]], list[str]]:
     """A section's bullets, its tables' body rows (cells) and its other lines."""
     bullets: list[str] = []
     rows: list[list[str]] = []
@@ -73,12 +86,12 @@ def _rows(body: str) -> tuple[list[str], list[list[str]], list[str]]:
         if raw.strip().startswith("|"):
             nxt = lines[i + 1] if i + 1 < len(lines) else ""
             if not (_TABLE_SEP.match(nxt) and "-" in nxt):
-                rows.append([_plain(c) for c in raw.strip().strip("|").split("|")])
+                rows.append([_plain(c, cites) for c in raw.strip().strip("|").split("|")])
             continue
         if m := _BULLET.match(raw):
-            bullets.append(_plain(m.group(1)))
+            bullets.append(_plain(m.group(1), cites))
         elif raw.strip():
-            prose.append(_plain(raw))
+            prose.append(_plain(raw, cites))
     return bullets, rows, prose
 
 
@@ -109,15 +122,60 @@ def _guidanceless(body: str) -> str:
     return "\n".join(keep)
 
 
+# A users section of labelled lines (a run's PRD: "Primary: …", "Job story: …", "Owner: …",
+# "Not the target: …"): the label says what the line is, its words who. The people come
+# first (the primary ones), a story only when no line names people, the excluded never.
+_LABEL = re.compile(
+    r"^(?:(?P<primary>primary|main|core|target)(?:\s+(?:users?|personas?|segments?|audiences?))?"
+    r"|(?P<out>not\b.*|non[- ]target.*|anti[- ]personas?|out of scope|excluded)"
+    r"|(?P<story>(?:job\s+)?stor(?:y|ies)|jobs?(?:\s+to\s+be\s+done)?|jtbd|scenarios?|quotes?)"
+    r"|(?P<people>secondary|tertiary|also|other|owners?|buyers?|segments?|personas?|users?"
+    r"|audiences?|customers?|who(?:\s+has\s+it)?)(?:\s+(?:users?|personas?|segments?))?)$",
+    re.I,
+)
+
+
+def _sentence(text: str) -> str:
+    """A labelled line's words as who has it: its first sentence, at most 30 words."""
+    first = re.split(r"(?<=[.!?])\s+", text.strip())[0].rstrip(".")
+    return " ".join(first.split()[:30])
+
+
+def _labelled(pairs: list[tuple[str, str]]) -> str | None:
+    """Who has it from labelled lines ("" when no line names people), None when the lines
+    are not labelled."""
+    kinds: dict[str, list[str]] = {"primary": [], "people": [], "story": [], "out": []}
+    for label, words in pairs:
+        m = _LABEL.match(label.strip())
+        if not m:
+            return None
+        if words := _sentence(words):
+            kinds[next(k for k, v in m.groupdict().items() if v)].append(words)
+    named = kinds["primary"] or kinds["people"] or kinds["story"]
+    return " ".join("; ".join(named).split()[:30])
+
+
 def who_has_it(sections: list[Section]) -> str | None:
     """Who has the problem, from the PRD's users or personas section: each bullet's lead
-    ("New admins: ..." -> "New admins"), else its first sentence. None when the PRD has
-    no such section (the page says :data:`WHO_SAYS_NOTHING`)."""
+    ("New admins: ..." -> "New admins"), else its first sentence; labelled lines
+    ("Primary: ...") by their words (:func:`_labelled`). None when the PRD has no such
+    section (the page says :data:`WHO_SAYS_NOTHING`)."""
     heads = [x for x in sections if _WHO_HEAD.search(x.heading or "")]
     heads = [x for x in heads if not _WHO_NOT.search(x.heading or "")]
     heads.sort(key=lambda x: not _WHO_BEST.search(x.heading or ""))
     for sec in heads:
         bullets, rows, prose = _rows(_guidanceless(sec.body_md or ""))
+        pairs = [
+            (p[0], p[1])
+            for b in bullets
+            if len(p := re.split(r"\s*(?::|—|–| - )\s*", b, maxsplit=1)) == 2
+        ]
+        pairs += [(r[0], " ".join(r[1:])) for r in rows if len(r) > 1 and r[0]]
+        if pairs and len(pairs) == len(bullets) + len([r for r in rows if r and r[0]]):
+            if (who := _labelled(pairs)) is not None:
+                if who:
+                    return who
+                continue
         named = [re.split(r"\s*(?::|—|–| - )\s*", b, maxsplit=1)[0] for b in bullets]
         named += [r[0] for r in rows if r and r[0]]
         if not named and prose:
@@ -169,6 +227,13 @@ class Measure:
     source: str | None
 
 
+# A source named only by its citation ("source: [c:c1]") leaves its word behind.
+_SOURCE_LEFT = re.compile(r"[\s;,·|]*\b(?:sources?|from|via)\s*:?\s*$", re.I)
+_CITED = re.compile(r"\[c:\s*([^\[\]]*?)\s*\]")
+# Each citation's title and excerpt, by its id.
+Cites = dict[str, tuple[str | None, str | None]]
+
+
 def _measure_in(text: str) -> Measure | None:
     m = _MEASURE.search(text)
     if not m:
@@ -176,30 +241,59 @@ def _measure_in(text: str) -> Measure | None:
     name = text[: m.start()].strip(" :,;·-—–")
     rest = text[m.end() :]
     s = _SOURCE.search(rest)
-    measure = (rest[: s.start()] if s else rest).strip(" :,;·-—–.")
+    measure = _SOURCE_LEFT.sub("", rest[: s.start()] if s else rest).strip(" :,;·-—–.")
     source = s.group("s").strip(" :,;·-—–.") if s else None
     if not measure:
         return None
     return Measure(name, measure, source or None)
 
 
-def measures(sections: list[Section]) -> list[Measure]:
+def _keys(raw: str) -> list[str]:
+    return [k.strip() for g in _CITED.findall(raw or "") for k in g.split(",") if k.strip()]
+
+
+def _cited(raw: str, cites: Cites) -> Measure | None:
+    """A measure line as the PRD's PDF reads it: its citations resolved. A definition that is
+    only citation ids ("counted as: [c:c4] [c:c11]") is its first cited source's words (the
+    citation's excerpt), else no measure; a source named only by its citation is that
+    source's title."""
+    keys = [k for k in _keys(raw) if k in cites]
+    m = _measure_in(_plain(raw))
+    if m is None:
+        at = _MEASURE.search(raw)
+        src = next((cites[k] for k in keys if cites[k][1]), None)
+        if at is None or src is None:
+            return None
+        name = _plain(raw[: at.start()]).strip(" :,;·-—–")
+        return Measure(name, _plain(src[1] or ""), src[0])
+    if m.source is None:
+        m.source = next((cites[k][0] for k in keys if cites[k][0]), None)
+    return m
+
+
+def measures(sections: list[Section], cites: Cites | None = None) -> list[Measure]:
     """Every measure the PRD states: "<metric> ... counted as <what> · from <source>"
-    lines, and a table's definition and source columns (its first cell names the metric)."""
+    lines, and a table's definition and source columns (its first cell names the metric),
+    each with its citations resolved (:func:`_cited`)."""
+    cites = cites or {}
     out: list[Measure] = []
     for sec in sections:
-        bullets, rows, prose = _rows(sec.body_md or "")
+        bullets, rows, prose = _rows(sec.body_md or "", cites=True)
         for text in bullets + re.split(r"(?<=[.!?])\s+", " ".join(prose)):
-            if m := _measure_in(text):
+            if m := _cited(text, cites):
                 out.append(m)
         head = _header(sec.body_md or "")
         mcol = next((i for i, h in enumerate(head) if i and _MEASURE_COL.search(h)), None)
         scol = next((i for i, h in enumerate(head) if i and _SOURCE_COL.search(h)), None)
         for r in rows:
             if mcol is not None and mcol < len(r) and r[mcol]:
-                src = r[scol] if scol is not None and scol < len(r) and r[scol] else None
-                out.append(Measure(r[0], r[mcol], src))
-            elif m := _measure_in(" · ".join(r)):
+                said = r[scol] if scol is not None and scol < len(r) else ""
+                keys = [k for k in _keys(r[mcol]) + _keys(said) if k in cites]
+                measure = _plain(r[mcol]) or next((cites[k][1] for k in keys if cites[k][1]), "")
+                src = _plain(said) or next((cites[k][0] for k in keys if cites[k][0]), None)
+                if measure:
+                    out.append(Measure(_plain(r[0]), _plain(measure), src or None))
+            elif m := _cited(" · ".join(r), cites):
                 out.append(m)
     return out
 
@@ -231,14 +325,41 @@ _NAMED = re.compile(r"^\s*(?:[:=—–]|\s-\s|\()\s*(?P<n>[A-Za-z][^.;,()|:\n]*)
 _CAPITAL = re.compile(r"^\s+(?P<n>[A-Z][^.;,()|:\n]*)")
 
 
+# A name written right after its code in prose ("so F-11 Photo editing is out"): its words
+# up to the first that is not a name's (a verb, a joining word), at most four.
+_NOT_NAME = (
+    r"(?:is|are|was|were|be|been|will|would|can|could|may|might|must|shall|should|has|have|"
+    r"had|do|does|did|gets?|stays?|waits?|goes|go|moves?|ships?|comes?|lands?|slips?|starts?|"
+    r"ends?|needs?|and|or|but|nor|to|in|on|at|by|of|for|from|with|without|until|because|so|"
+    r"which|that|who|as|into|after|before|than|then|also|too|now|later|first|next|out|not|"
+    r"no|the|a|an|it|its|this|these|those|we|our|you|they|here|there)\b"
+)
+_AFTER = re.compile(
+    rf"^\s+(?P<n>(?!{_NOT_NAME})[A-Za-z][\w'’-]*(?:\s+(?!{_NOT_NAME})[A-Za-z][\w'’-]*){{0,3}})",
+    re.I,
+)
+
+
 def _name(text: str) -> str:
     return " ".join(text.split()[:5]).strip(" -—–")
 
 
 def glossary(sections: list[Section]) -> dict[str, str]:
     """Each code the PRD names: "F-26: Bulk invite", "F-26 — Bulk invite", "F-26 (Bulk
-    invite)", a bullet or heading "F-26 Bulk invite", or a table row "| F-26 | Bulk invite |"."""
+    invite)", a bullet, heading or cell "F-26 Bulk invite", a table row "| F-26 | Bulk invite |",
+    or, when it is named nowhere else, prose "so F-26 Bulk invite is out"."""
     out: dict[str, str] = {}
+    after: dict[str, str] = {}
+
+    def scan(text: str) -> None:
+        for c in CODE.finditer(text):
+            rest = text[c.end() :]
+            n = _NAMED.match(rest) or (_CAPITAL.match(rest) if c.start() == 0 else None)
+            if n and _name(n.group("n")):
+                out.setdefault(c.group(0), _name(n.group("n")))
+            elif (n := _AFTER.match(rest)) and _name(n.group("n")):
+                after.setdefault(c.group(0), _name(n.group("n")))
+
     for sec in sections:
         lines = [sec.heading or ""] + (sec.body_md or "").splitlines()
         for raw in lines:
@@ -247,14 +368,12 @@ def glossary(sections: list[Section]) -> dict[str, str]:
                 for i, c in enumerate(cells[:-1]):
                     if CODE.fullmatch(c) and cells[i + 1] and not CODE.fullmatch(cells[i + 1]):
                         out.setdefault(c, _name(cells[i + 1]))
+                for c in cells:
+                    if not CODE.fullmatch(c):
+                        scan(c)
                 continue
-            text = _plain((m.group(1) if (m := _BULLET.match(raw)) else raw).lstrip("# "))
-            for c in CODE.finditer(text):
-                rest = text[c.end() :]
-                n = _NAMED.match(rest) or (_CAPITAL.match(rest) if c.start() == 0 else None)
-                if n and _name(n.group("n")):
-                    out.setdefault(c.group(0), _name(n.group("n")))
-    return out
+            scan(_plain((m.group(1) if (m := _BULLET.match(raw)) else raw).lstrip("# ")))
+    return {**after, **out}
 
 
 def with_names(text: str, names: dict[str, str]) -> tuple[str, list[str]]:
@@ -438,13 +557,14 @@ def _per_unit(sections: list[Section]) -> list[Look]:
 # --------------------------------------------------------------------------- the read
 
 
-def annotate(blocks: list[Any], sections: list[Section]) -> list[Look]:
+def annotate(blocks: list[Any], sections: list[Section], cites: Cites | None = None) -> list[Look]:
     """One call from the one-pager's read: fills each block's and line's clear-reading
     fields in place (``who``; each line's codes with names, its footnotes; each outcome's
-    ``measure`` and ``measure_source``) and returns the "Needs a look" items."""
+    ``measure`` and ``measure_source``, its citations resolved by ``cites``) and returns the
+    "Needs a look" items."""
     names = glossary(sections)
     notes = footnote_notes(sections)
-    found = measures(sections)
+    found = measures(sections, cites)
     who = who_has_it(sections)
     looks: list[Look] = []
     unnamed: dict[str, list[str]] = {}

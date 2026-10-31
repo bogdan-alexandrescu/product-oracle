@@ -207,7 +207,13 @@ async def test_stored_quick_read_with_tokens_reads_clean(client):
                     "source_keys": ["problem"],
                 }]  # fmt: skip
             if b["key"] == "risks":
-                b["lines"] = [{"id": "risks-1", "text": "Albums may group the wrong photos [c:c11]", "source_keys": ["top-risks"]}]
+                b["lines"] = [
+                    {
+                        "id": "risks-1",
+                        "text": "Albums may group the wrong photos [c:c11]",
+                        "source_keys": ["top-risks"],
+                    }
+                ]
         row.blocks = blocks
         await s.commit()
     for who in ("owner", "viewer"):
@@ -239,7 +245,10 @@ async def test_measure_from_its_source_never_ids(client):
     ctx = await run_world(client)
     view = await get(client, ctx, "owner", "photo-sorting")
     sorted_, find, renamed = block(view, "outcomes")["lines"]
-    assert sorted_["measure"] == "photos given an album within 24 hours of upload, per library per week"
+    assert (
+        sorted_["measure"]
+        == "photos given an album within 24 hours of upload, per library per week"
+    )
     assert sorted_["measure_source"] == "Upload log export"
     assert find["measure"] == "seconds from opening the library to opening the photo"
     assert find["measure_source"] == "Library owner interviews"
@@ -260,7 +269,10 @@ async def test_code_named_right_after_it(client):
                   body_text="")  # fmt: skip
     names = checks.glossary([sec])
     assert names == {"F-11": "Photo editing", "F-14": "Print orders"}
-    assert checks.with_names("so F-11 Photo editing is out", names)[0] == "so F-11 Photo editing is out"
+    assert (
+        checks.with_names("so F-11 Photo editing is out", names)[0]
+        == "so F-11 Photo editing is out"
+    )
     async with tenant_session(ctx.tenant_id) as s:
         doc = await s.scalar(select(Document).where(Document.slug == "photo-sorting"))
         assert doc is not None
