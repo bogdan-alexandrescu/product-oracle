@@ -1425,6 +1425,16 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
               No goal
             </li>
           )}
+          {/* qa4-simple-plan-9 (review): a middle line whose words found no clear spot is named here instead. */}
+          {(!effortLabel || !valueLabel) && (
+            <li data-testid="vxe-legend-middles">
+              {!effortLabel && !valueLabel
+                ? "The dashed lines are the middle effort (up and down) and the middle value (across)."
+                : !effortLabel
+                  ? "The dashed line up and down is the middle effort."
+                  : "The dashed line across is the middle value."}
+            </li>
+          )}
           <li>
             {fCodes ? "Each mark shows the feature's code from its one-pager; its rank is in the list." : "Each mark shows the feature's code; its rank is in the list."} Hollow: below the line ({lineWords(data)}). A mark on a middle line counts on the side its rank puts it.
           </li>
