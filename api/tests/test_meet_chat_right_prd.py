@@ -28,6 +28,17 @@ Test cards (protects / fails_when / no_claim):
 - test_an_oracle_line_is_dated_when_oracle_wrote_it: protects=a read line's time is when
   the reader wrote it, not the request's; fails_when=it keeps the request's time;
   no_claim=the order of the lines.
+- test_an_oracle_line_is_never_marked_edited: protects=Oracle's write time is kept on its
+  read (simple_chat_reads.answered_at), not in the line's edited_at, so a discussion view
+  never labels its lines "edited"; fails_when=edited_at is set on Oracle's line;
+  no_claim=the line's body.
+- test_the_reader_reads_the_prd_text: protects=the reader is given the text of the
+  meeting PRD's version under review; fails_when=only its title, version and approved
+  flag reach it; no_claim=how much of a long PRD is kept.
+- test_the_version_is_the_one_under_review: protects=the reader's prd_version and the
+  answer's source name the PRD's version under review even when its items come from an
+  older version's ready draft roadmap (the newer one still running); fails_when=the
+  older draft's version is named; no_claim=which draft's items are read.
 - test_an_ended_meeting_says_who_ended_it: protects=the chat's rules name who ended the
   meeting and when, or that it ended by itself after its time ran out; fails_when=only
   "ended" is said; no_claim=the web's words.
@@ -245,3 +256,53 @@ async def test_an_ended_meeting_says_who_ended_it(client):
     assert rules["ended_at"]
     r = await client.get(MEETINGS, headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
+
+
+async def test_an_oracle_line_is_never_marked_edited(client):
+    w = await world()
+    await two_prds(w)
+    mid = await meeting(client, w)
+    await say(client, w, mid, f"When does {FIRST} start?")
+    before = datetime.now(UTC)
+    await read(w.ctx, {"actions": [], "clarify": None, "answer": f"{FIRST} starts Nov 2.",
+                       "source": "prd"})  # fmt: skip
+    async with tenant_session(w.ctx.tenant_id) as s:
+        oracle_ = [m for m in await s.scalars(select(DiscussionMessage))
+                   if m.author_kind != "person"]  # fmt: skip
+        assert oracle_ and all(m.edited_at is None for m in oracle_)
+    m = await last(client, w, mid)
+    assert m["kind"] == "answer"
+    assert datetime.fromisoformat(m["at"]) >= before
+
+
+async def test_the_reader_reads_the_prd_text(client):
+    w = await world()
+    await two_prds(w)
+    mid = await meeting(client, w)
+    await say(client, w, mid, "What does the PRD say?")
+    seen: list = []
+    await read(w.ctx, {"actions": [], "clarify": None, "answer": None}, seen)
+    [payload] = seen
+    assert "# Alerts v2" in payload["context"]["meeting"]["prd_text"]
+
+
+async def test_the_version_is_the_one_under_review(client):
+    w = await world()
+    await two_prds(w)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        v2 = await s.scalar(
+            select(DocumentVersion).where(DocumentVersion.content_hash == "alerts-2")
+        )
+        draft = await s.scalar(select(DraftRoadmap).where(DraftRoadmap.prd_version_id == v2.id))
+        draft.status = "running"
+        await s.commit()
+    mid = await meeting(client, w)
+    await say(client, w, mid, f"When does {FIRST} start?")
+    seen: list = []
+    await read(w.ctx, {"actions": [], "clarify": None, "answer": f"{FIRST} starts Nov 2.",
+                       "source": "prd"}, seen)  # fmt: skip
+    [payload] = seen
+    assert payload["context"]["meeting"]["prd_version"] == 2
+    assert {i["title"] for i in payload["items"]} >= {FIRST}
+    m = await last(client, w, mid)
+    assert m["source"] == "From Alerts PRD (draft 2) and its draft roadmap"
