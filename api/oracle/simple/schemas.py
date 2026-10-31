@@ -1374,6 +1374,9 @@ class ChatChoiceOut(BaseModel):
     label: str
 
 
+ChatKind = Literal["request", "cards", "question", "answer", "note", "pending", "failed", "ask"]
+
+
 class ChatMessageOut(BaseModel):
     id: uuid.UUID
     author_kind: Literal["person", "oracle"]
@@ -1383,7 +1386,7 @@ class ChatMessageOut(BaseModel):
     at: dt.datetime
     # pending: Oracle's reader is reading the line; failed: it could not (``retry``); ask:
     # a question for Oracle's Ask (the Ask panel's one box hands the line there).
-    kind: Literal["request", "cards", "question", "answer", "note", "pending", "failed", "ask"]
+    kind: ChatKind
     cards: list[ChatCardOut]
     reply_to: uuid.UUID | None = None
     # A question's clickable choices ("Neither" last); ``picked``: the one taken.

@@ -87,7 +87,8 @@ interface StoredMessage {
   author_name: string;
   body: string;
   at: string;
-  kind: "request" | "cards" | "question" | "answer" | "note" | "pending" | "failed" | "ask";
+  /** As the API's stored prompt: a line another job wrote may carry its own ("discussion_reply.v2"; threadOut reads it as an answer). */
+  kind: ChatKind | (string & {});
   card_ids: string[];
   /** Oracle's line: the person's line it answers. */
   reply_to: string | null;
@@ -102,6 +103,9 @@ interface StoredMessage {
   /** Private: the reader's job for a pending (or failed) line. */
   reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean; document_id?: string | null };
 }
+
+type ChatKind = "request" | "cards" | "question" | "answer" | "note" | "pending" | "failed" | "ask";
+const KINDS: readonly string[] = ["request", "cards", "question", "answer", "note", "pending", "failed", "ask"] satisfies ChatKind[];
 
 interface Thread {
   id: string;
@@ -229,6 +233,27 @@ export function seedSimpleChat(members: { id: string; role: Role; status?: strin
         decisions: [],
       },
     },
+  };
+}
+
+/** The meeting chat's stray line (the "simple-chat-stray" scenario). */
+export const STRAY_REPLY = "Here is what I found about Delivery pipeline v2.";
+
+/**
+ * meet-chat-kind: the "simple-chat-stray" scenario's meeting chat already holds a line an earlier
+ * build's discussion reply job wrote there, stored with that job's prompt, answering the owner's
+ * change request.
+ */
+export function seedStrayReply(chat: ChatDb, owner: { id: string; name: string }): void {
+  const at = new Date(mockNowMs() - 60_000).toISOString();
+  const asked = crypto.randomUUID();
+  const base = { card_ids: [], choices: [], picked: null, retry: false };
+  chat.threads[`meeting:${CHAT_MEETING_ID}`] = {
+    id: crypto.randomUUID(), meeting_id: CHAT_MEETING_ID, owner_id: null,
+    messages: [
+      { ...base, id: asked, author_kind: "person", author_id: owner.id, author_name: owner.name, body: "Move Delivery pipeline v2 to start on Dec 1, 2026.", at, kind: "request", reply_to: null },
+      { ...base, id: crypto.randomUUID(), author_kind: "oracle", author_id: null, author_name: "Oracle", body: STRAY_REPLY, at, kind: "discussion_reply.v2", reply_to: asked },
+    ],
   };
 }
 
@@ -1285,7 +1310,9 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
     messages: (t?.messages ?? []).map(({ card_ids, choice_drafts: _drafts, reading: _reading, ...msg }) => {
       void _drafts;
       void _reading;
-      return { source: null, ...msg, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
+      // meet-chat-kind: as the API's thread(), a line that is not a chat kind reads as an answer.
+      const kind = (KINDS.includes(msg.kind) ? msg.kind : "answer") as ChatKind;
+      return { source: null, ...msg, kind, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
     }),
     rules: meeting ? rulesOut(meeting, ctx) : null,
     ask_id: t?.ask_id ?? null,

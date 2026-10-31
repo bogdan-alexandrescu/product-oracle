@@ -159,7 +159,7 @@ import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, 
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -550,7 +550,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
  * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
- * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts).
+ * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts);
+ * "simple-chat-stray" as "simple-chat" with an earlier build's discussion reply already in the
+ * meeting's chat (meet-chat-kind).
  */
 export { MOCK_SCENARIO_KEY };
 /**
@@ -2842,14 +2844,19 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
+              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
                     // chat-reader: the two "Delivery …" items its rules talk about.
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
-                    if (scenario !== "simple-chat" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    if (scenario !== "simple-chat" && scenario !== "simple-chat-stray" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    // meet-chat-kind: the meeting chat already holds an earlier build's discussion reply.
+                    if (scenario === "simple-chat-stray") {
+                      const owner = db.members.find((m) => m.role === "owner")!;
+                      seedStrayReply(db.simple_chat, { id: owner.id, name: displayName(owner.email, owner.name) });
+                    }
                     // fix5-cut-dependents review: approver@example.com is Alert rules engine's own
                     // decider; the company's owners decide the items that wait on it.
                     if (scenario === "roadmap-talk-own-decider" && db.simple_roadmap) {

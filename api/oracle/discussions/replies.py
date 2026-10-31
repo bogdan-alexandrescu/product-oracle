@@ -72,6 +72,7 @@ from oracle.llm.transports import (
     get_llm_settings,
 )
 from oracle.models import AuditEvent
+from oracle.simple.chat import ENGINE as SIMPLE_CHAT  # the Simple chat's own lines
 from oracle.swarm.settings import get_runtime_settings
 from oracle.tenancy import tenant_session
 
@@ -433,12 +434,24 @@ def _listen(reply_id: uuid.UUID) -> tuple[asyncio.Queue, str] | None:
 # --- running a reply --------------------------------------------------------------------
 
 
+def _not_simple_chat() -> Any:
+    """Not the Simple chat reader's own line: a Simple chat (a person's Ask chat on a page, a
+    meeting's chat) shows "Reading that…" as a ``pending`` Oracle message of its engine while
+    its ``chat_reader`` job runs; only that job answers it, once (meet-chat-kind). Oracle's
+    Ask panel on a Simple page is a discussion like any other and is still answered here."""
+    return DiscussionMessage.model.is_distinct_from(SIMPLE_CHAT)
+
+
 async def claim(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> bool:
     """Take a ``pending`` reply to run it; False when someone else has."""
     async with tenant_session(tenant_id) as db:
         got = await db.scalar(
             update(DiscussionMessage)
-            .where(DiscussionMessage.id == reply_id, DiscussionMessage.status == "pending")
+            .where(
+                DiscussionMessage.id == reply_id,
+                DiscussionMessage.status == "pending",
+                _not_simple_chat(),
+            )
             .values(
                 status="streaming",
                 stream_lease_until=func.now() + LEASE,
@@ -993,6 +1006,7 @@ async def run_pending(
                     DiscussionMessage.status == "pending",
                     DiscussionMessage.author_kind == "oracle",
                     DiscussionMessage.created_at < func.now() - PENDING_GRACE,
+                    _not_simple_chat(),
                 )
                 .order_by(DiscussionMessage.created_at)
                 .limit(limit)
