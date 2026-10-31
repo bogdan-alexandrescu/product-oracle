@@ -47,7 +47,8 @@ for (const size of SIZES) {
       await expect(page.getByTestId("segments-done")).toHaveText(/^1 of \d+ done$/);
       await expect(page.getByTestId("run-name").filter({ visible: true }).first()).toHaveText("Example test · Saved carts · Baseline to PRD");
       await expect(page.getByTestId("run-document")).toContainText("Example test · Saved carts");
-      await expect(page.getByTestId("run-document")).not.toContainText(/Example test saved carts|Saved carts PRD/);
+      // Never the slug in words ("Example test saved carts").
+      await expect(page.getByTestId("run-document")).not.toContainText(/Example test saved carts/i);
     });
 
     test("decisions: the list names who decided, and a send-back says what it sent", async ({ page }) => {
