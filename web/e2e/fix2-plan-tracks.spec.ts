@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "./test";
 
+import { ALERTS_APPROVED_SCENARIO } from "../lib/api/mock/roadmap";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -100,6 +102,8 @@ for (const phone of [false, true]) {
     // checklist lists PRD sections (Behaviour, Success metrics), the head reads "Milestone ·
     // selected / New milestone", or Add milestone sits left of Cancel.
     test(`New milestone offers the track's items, under one heading, Cancel first (${where})`, async ({ page }) => {
+      // A milestone picks from the approved plan's items: usage-alerts-roadmap v1 approved.
+      await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, ALERTS_APPROVED_SCENARIO] as const);
       await openPlan(page);
       await track(page).getByRole("button", { name: "Add milestone" }).click();
       const e = editor(page);

@@ -118,6 +118,8 @@ export const DIFF_SCENARIO = "roadmap-diff";
 export const PLAN_STALE_SCENARIO = "plan-stale";
 /** The mock scenario whose usage-alerts v2 draft moved and added one item against the approved usage-alerts-roadmap v1 (E3b). */
 export const APPROVED_PLAN_SCENARIO = "approved-plan";
+/** Only usage-alerts-roadmap v1 approved (it is in review by default): specs on the approved plan. */
+export const ALERTS_APPROVED_SCENARIO = "alerts-approved";
 
 const now = () => new Date().toISOString();
 // The company's day (its time zone), as oracle.company_time.company_today (qa-shell-6).
