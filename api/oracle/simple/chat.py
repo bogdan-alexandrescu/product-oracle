@@ -257,7 +257,7 @@ class MeetingPrd:
     version is not approved, on the version's draft roadmap (a run's items-only roadmap,
     that version's own when it is ready); ``text``: that version's markdown, or the PRD as
     the meeting's one-pager shows the asker (qa5-chat-working-draft: its working draft's
-    edited sections, for whoever sees that draft)."""
+    edited sections, for whoever sees that draft; ``number`` then names the draft's base)."""
 
     document: Document
     number: int | None
@@ -285,37 +285,41 @@ def _draft_entry(read: service.Read, prd: Document, row: RoadmapItem) -> service
 
 async def shown_text(
     db: AsyncSession, principal: Any, prd: Document, saved: DocumentVersion | None
-) -> str:
+) -> tuple[str, int | None]:
     """qa5-chat-working-draft: the PRD's text as the meeting's one-pager shows it to
-    ``principal`` (oracle.simple.one_pager.read): with an open working draft they see, the
-    draft's base with its edited sections (what submitting it imports), so an answer never
-    contradicts the screen; else ``saved``'s, the version under review."""
+    ``principal`` (oracle.simple.one_pager.read), and the number of the version it is built
+    on: with an open working draft they see, the draft's base with its edited sections
+    (what submitting it imports), so an answer never contradicts the screen; else
+    ``saved``'s, the version under review."""
     from oracle.docs.models import Section
     from oracle.simple import one_pager
 
     text = saved.markdown if saved is not None else ""
+    number = saved.number if saved is not None else None
     d = await one_pager._open_draft(db, prd)
     patched = ((d.overlay or {}).get("sections") or {}) if d is not None else {}
     if not patched or d is None or d.base_version_id is None:
-        return text
+        return text, number
     if not one_pager.sees_draft(principal, d, await one_pager.who(db, prd)):
-        return text
+        return text, number
     base = await db.get(DocumentVersion, d.base_version_id)
     if base is None:
-        return text
+        return text, number
     secs = list(
         await db.scalars(
             select(Section).where(Section.version_id == base.id).order_by(Section.ordinal)
         )
     )
     try:
-        return one_pager.patched_markdown(base, secs, patched)
+        return one_pager.patched_markdown(base, secs, patched), base.number
     except ChangeError:
-        # A section the patch cannot find in the markdown: its sections as the one-pager
-        # lists them, each with its edited body.
-        return "\n\n".join(
+        # A section the patch cannot find in the markdown: its front matter and title, then
+        # its sections as the one-pager lists them, each with its edited body.
+        head = re.split(r"^## ", base.markdown, maxsplit=1, flags=re.M)[0].strip()
+        body = "\n\n".join(
             f"## {x.heading}\n\n{patched.get(x.section_key, x.body_md).strip()}" for x in secs
         )
+        return "\n\n".join(p for p in (head, body) if p), base.number
 
 
 async def meeting_prd(
@@ -338,13 +342,13 @@ async def meeting_prd(
         .limit(1)
     )
     # The version under review is the newest; its number is named even when its own draft
-    # roadmap is not ready yet and an older version's draft gives the items.
+    # roadmap is not ready yet and an older version's draft gives the items. A working draft
+    # the asker sees names its base, the version its text is built on.
     number = newest.number if newest is not None else None
-    text = (
-        await shown_text(db, principal, prd, newest)
-        if principal is not None
-        else (newest.markdown if newest is not None else "")
-    )[:PRD_TEXT]
+    text = newest.markdown if newest is not None else ""
+    if principal is not None:
+        text, number = await shown_text(db, principal, prd, newest)
+    text = text[:PRD_TEXT]
     approved = newest is not None and newest.approved_at is not None
     on_roadmap = [e for e in read.entries if e.row.prd_document_id == prd.id
                   and e.row.draft_roadmap_id is None]  # fmt: skip
