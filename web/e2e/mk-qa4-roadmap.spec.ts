@@ -205,7 +205,7 @@ story("qr4-a", async (page) => { // MOCK-HOOK
   await snap(page, "qr4-a-mid", "With the panel open the chart still scrolls; it is narrower while the panel is open (the cost)."); // MOCK-HOOK
   await page.locator('[data-testid="mk-row"][data-item="setup-checklist"] button').first().click(); // MOCK-HOOK
   await page.waitForTimeout(800); // MOCK-HOOK
-  await snap(page, "qr4-a-result", "Clicking Setup checklist's name swaps the panel to it, no closing first."); // MOCK-HOOK
+  await snap(page, "qr4-a-result", "Clicking Setup checklist's name swaps the panel to it, no closing first; the chart slides back so its bar is in sight."); // MOCK-HOOK
   await go(page, DESK("qr1=a&qr4=a&open=alert-digest"), [1512, 900]); // MOCK-HOOK
   await snap(page, "qr4-a-open-1512", "1512 wide with Weekly alert digest open: the chart keeps about five months beside the panel."); // MOCK-HOOK
   await go(page, DESK("qr1=a&qr4=a"), [390, 844]); // MOCK-HOOK

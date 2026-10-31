@@ -274,7 +274,7 @@ function DayChart(props: Inner) { // MOCK-HOOK
               <div key={i.id} data-testid="mk-row" data-item={i.key}> {/* MOCK-HOOK */}
                 <div className={`relative flex border-b border-line/60 ${sel ? "bg-accent-soft/50" : ""}`} style={{ height: rowH }}> {/* MOCK-HOOK */}
                   {labelW > 0 && ( // MOCK-HOOK
-                    <button type="button" onClick={() => onOpen(sel ? null : i.key)} className={`sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`} style={{ width: labelW }} title={i.title}> {/* MOCK-HOOK */}
+                    <button type="button" onClick={() => { onOpen(sel ? null : i.key); if (!sel && (bx + bw < sl || bx > sl + visible)) box.current?.scrollTo({ left: Math.max(0, bx - 60) }); }} className={`sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`} style={{ width: labelW }} title={i.title}> {/* MOCK-HOOK */}
                       <span className="min-w-0 truncate" style={lk.name}>{i.title}</span> {/* MOCK-HOOK */}
                       {lk.chip && <span className={`flex-none rounded-full px-1.5 text-[11px] ${lk.chip === "Broken link" ? "bg-crit-bg text-crit" : "bg-surface2 text-text2"}`}>{lk.chip}</span>} {/* MOCK-HOOK */}
                       {lk.mark && <span className="flex-none text-crit" aria-label="Broken link">⚠</span>} {/* MOCK-HOOK */}
@@ -315,7 +315,7 @@ function DayChart(props: Inner) { // MOCK-HOOK
                   </div> // MOCK-HOOK
                 )}
                 {inline && ( // MOCK-HOOK
-                  <div data-testid="mk-inline" className="border-b border-line bg-surface2/60 py-2"> {/* MOCK-HOOK */}
+                  <div data-testid="mk-inline" className="relative z-[15] border-b border-line bg-surface2 py-2"> {/* MOCK-HOOK */}
                     <div className="sticky left-0 px-3" style={{ width: Math.min(w - 4, 760) }}> {/* MOCK-HOOK */}
                       {props.card(i, { position: "relative", left: 0, top: 0, width: "100%" }, false, () => onOpen(null))} {/* MOCK-HOOK */}
                     </div> {/* MOCK-HOOK */}

@@ -1,0 +1,356 @@
+{
+  "title": "Simple roadmap: reading long timelines, states and conflicts",
+  "subtitle": "Mock-ups for the owner to pick from (QA pass 4, simple roadmap). Each proposal is live in the mock app at /simple/roadmap?qr1=a|b|c|d&qr2=a|b|c|d&qr3=a|b|c|d&qr4=a|b|c (&zoom=6m|1y|all, &open=<item>); invented data only.",
+  "decisions": [
+    {
+      "code": "QR1",
+      "name": "Reading three years on the Timeline",
+      "question": "How should the on-screen Timeline show a plan that runs three years, at 1512 wide and on a phone?",
+      "common": "Every proposal gives each item a name you can always read, never on top of another bar, and keeps Today in sight when the page opens. Shown with the recommended colours (QR2 A), conflicts panel (QR3 A) and side panel (QR4 A). Fixes qa4-simple-roadmap-3 (tiny, overlapping, unlabelled bars) and -15 (phone thumbnail).",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Zoom around today",
+          "recommended": true,
+          "what": "The Timeline opens on six months around today with one row per item under its goal. The names sit in a column on the left that stays put while the chart scrolls sideways; dates are written on the bar when it is long enough. Show 6 months · 1 year · All 3 years changes the zoom, and Back to today returns. A phone gets a list by quarter instead of a chart.",
+          "why": "It is the only one that keeps exact days, readable names and the whole plan one click away at every width. The owner's 1512 window shows about six months with room to spare, and a phone gets a list it can actually read and tap.",
+          "plus": "Names never overlap; day-exact bars; one zoom control; works the same at 1440 and 1512; the phone list is easy to tap.",
+          "cost": "One row per item makes the chart taller (about 34 px a row); you scroll sideways for the far future; All 3 years makes short bars thin again (names stay readable on the left).",
+          "frames": [
+            {
+              "file": "qr1-a-rest.html",
+              "caption": "At rest: six months around today. One row per item, its name fixed on the left, its dates on the bar."
+            },
+            {
+              "file": "qr1-a-mid.html",
+              "caption": "Scrolled sideways into 2027: the names stay on the left, Back to today brings you home."
+            },
+            {
+              "file": "qr1-a-result.html",
+              "caption": "After choosing All 3 years: the whole plan fits; bars get thin (the cost), but every name is still readable on the left."
+            },
+            {
+              "file": "qr1-a-rest-1512.html",
+              "caption": "The owner's 1512 window: the same six months, with more room per week; nothing overlaps."
+            },
+            {
+              "file": "qr1-a-rest-390.html",
+              "caption": "Phone: a list by quarter, each item with its name, dates and goal; Today marks this quarter."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Quarters as columns",
+          "recommended": false,
+          "what": "Each quarter is a fixed-width column, starting at this one; goals are rows. An item is a block over the quarters it touches, with its name and dates written inside. You scroll sideways a quarter at a time; a phone shows two quarters at a time.",
+          "plus": "Big, easy targets; reads like a planning wall; names are inside the blocks.",
+          "cost": "Dates snap to quarters, so a two-week item looks as long as a three-month one; a block that began before the screen's edge shows no name until you scroll back.",
+          "frames": [
+            {
+              "file": "qr1-b-rest.html",
+              "caption": "At rest: quarters as columns, starting at this one. Each item is a block over its quarters with its name and dates inside."
+            },
+            {
+              "file": "qr1-b-mid.html",
+              "caption": "Scrolled to 2028: goal names stay on the left. An item that ends mid-quarter still fills the whole quarter (the cost)."
+            },
+            {
+              "file": "qr1-b-rest-1512.html",
+              "caption": "1512 wide: about five quarters show; the rest scroll."
+            },
+            {
+              "file": "qr1-b-rest-390.html",
+              "caption": "Phone: the same quarter columns, two at a time, scrolled sideways."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Names above bars",
+          "recommended": false,
+          "what": "The whole three years always fit the width, with no sideways scrolling. Each item gets its own row, its name written just above its bar.",
+          "plus": "Everything at once, nothing to scroll sideways; no new controls.",
+          "cost": "Short items are only a few pixels wide and hard to click; the page grows long; on a phone the bars are too small to tap.",
+          "frames": [
+            {
+              "file": "qr1-c-rest.html",
+              "caption": "At rest: all three years at once, no scrolling sideways. Each item has its own row with its name written above its bar."
+            },
+            {
+              "file": "qr1-c-rest-1512.html",
+              "caption": "1512 wide: a short item is still only a few pixels; the chart runs long down the page (the cost)."
+            },
+            {
+              "file": "qr1-c-rest-390.html",
+              "caption": "Phone: the names fit, but the bars are too small to tap."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "List by quarter",
+          "recommended": false,
+          "what": "Drop the chart on every screen: the Timeline becomes a list of quarters, each listing the items that start in it with their dates, goal and any broken link. Today marks the current quarter.",
+          "plus": "Simplest to read and to build; one layout for desktop and phone.",
+          "cost": "You no longer see what runs at the same time or how long things take; the Gantt has to carry all of that.",
+          "frames": [
+            {
+              "file": "qr1-d-rest.html",
+              "caption": "At rest: no chart at all; a list by quarter on every screen, the same as a phone."
+            },
+            {
+              "file": "qr1-d-rest-1512.html",
+              "caption": "1512 wide, scrolled down: what runs at the same time is no longer side by side (the cost)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QR2",
+      "name": "Colours and names for states",
+      "question": "How should a draft, a broken link, a cut item and Today look, and where is the key?",
+      "common": "In every proposal red means one thing only, a broken link, and Today gets its own look. Shown on the recommended Timeline (QR1 A). Fixes qa4-simple-roadmap-7 (one red for draft, broken link, cut item and Today).",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Own look, key on top",
+          "recommended": true,
+          "what": "Each state gets its own look: a dated item is a blue bar, an estimated one hatched, a draft grey and dashed with a Draft word, a broken link a red outline with ⚠, a cut item struck through below the line, and Today a purple line. A one-line key above the chart names only the looks on screen.",
+          "why": "The key is always in view, so nobody has to guess, and red is kept for the one thing that needs action. It costs one short line of height.",
+          "plus": "Red only for problems; the key is always there and lists only what is shown; works in light and dark.",
+          "cost": "One more line above the chart; purple is a new colour on this page.",
+          "frames": [
+            {
+              "file": "qr2-a-rest.html",
+              "caption": "At rest: the key sits above the chart. Red only for a broken link; a draft is grey and dashed; a cut item is struck through; Today is purple."
+            },
+            {
+              "file": "qr2-a-rest-390.html",
+              "caption": "Phone: the same key above the list, wrapped onto lines."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Key behind a button",
+          "recommended": false,
+          "what": "The same looks as A, but the key hides behind a What the colours mean button and opens as a small card.",
+          "plus": "Saves the line of height; the chart starts higher.",
+          "cost": "Newcomers must find the button; the open card covers part of the page until closed.",
+          "frames": [
+            {
+              "file": "qr2-b-rest.html",
+              "caption": "At rest: the same colours, no key on the page; one button, What the colours mean."
+            },
+            {
+              "file": "qr2-b-open.html",
+              "caption": "After a click: the key opens under the button and covers the conflicts list until closed (the cost)."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Words, not colours",
+          "recommended": false,
+          "what": "Every bar is the same blue. A short word after the name says Draft, Cut or Broken link; Today is a plain dark line. Only estimated keeps its hatch.",
+          "plus": "Nothing to learn; reads the same for people who cannot tell colours apart; prints well.",
+          "cost": "Problems no longer jump out of the chart; the words take room in the name column.",
+          "frames": [
+            {
+              "file": "qr2-c-rest.html",
+              "caption": "At rest: every bar the same blue; a short word on the row says Draft, Cut or Broken link; Today is a dark line."
+            },
+            {
+              "file": "qr2-c-rest-390.html",
+              "caption": "Phone: the words sit after each name in the list."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "Colour by progress",
+          "recommended": false,
+          "what": "The fill says progress: green in progress, blue planned, grey done; a draft is dashed grey, a broken link keeps its red outline, Today is purple. The key above lists them.",
+          "plus": "You see at a glance what is moving.",
+          "cost": "One more set of colours to learn, and a broken link no longer stands out as much among green and blue fills.",
+          "frames": [
+            {
+              "file": "qr2-d-rest.html",
+              "caption": "At rest: the fill says progress (green in progress, blue planned); red stays only for a broken link; Today is purple. One more colour to learn (the cost)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QR3",
+      "name": "Where conflict notices go",
+      "question": "Where should broken-link notices and their fixes appear so they never cover bars or names?",
+      "common": "In every proposal the notice is never drawn on top of a bar or a name, its words are shown in full (no … cut), and the three fixes (Move the dependents, Move the dependency, Accept as risk) stay one click away. Shown on QR1 A with QR2 A. Fixes qa4-simple-roadmap-4.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Panel above the chart",
+          "recommended": true,
+          "what": "All broken links are listed in one panel above the chart, each with its words in full and its fixes. The chart only marks the item with ⚠ by its name. Clicking a link's words opens the item; the panel counts down as links are fixed and folds to one line with Hide.",
+          "why": "It keeps the chart clean, puts every problem in one place to work through, and shrinks as you fix them; on a phone the same panel sits above the list.",
+          "plus": "One place for all problems; full words; the chart stays clean; can be folded.",
+          "cost": "Pushes the chart down by a line per link (about 40 px each) until fixed or hidden.",
+          "frames": [
+            {
+              "file": "qr3-a-rest.html",
+              "caption": "At rest: the broken links get a panel of their own above the chart, words in full with their fixes; the chart has only a ⚠ by the name."
+            },
+            {
+              "file": "qr3-a-mid.html",
+              "caption": "Clicking a link's words opens its item beside the chart, its row marked."
+            },
+            {
+              "file": "qr3-a-risk.html",
+              "caption": "Accept as risk asks for one line on why it is fine, right in the panel."
+            },
+            {
+              "file": "qr3-a-result.html",
+              "caption": "After Accept as risk: that link leaves the panel, which now counts what is left."
+            },
+            {
+              "file": "qr3-a-shut.html",
+              "caption": "Hide folds the panel to one line; the chart moves up."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Row under the item",
+          "recommended": false,
+          "what": "A broken link takes a full-width row of its own right under its item, with its words and fixes; the rows below move down to make room.",
+          "plus": "The problem sits next to the item it is about.",
+          "cost": "Lanes grow and shift as links come and go; problems are scattered down the page.",
+          "frames": [
+            {
+              "file": "qr3-b-rest.html",
+              "caption": "At rest: each broken link takes a row of its own under its item, words in full, never over a bar. The chart grows a row per link (the cost)."
+            },
+            {
+              "file": "qr3-b-result.html",
+              "caption": "After Move the dependents: the row goes and the bars below close up."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Mark, words on click",
+          "recommended": false,
+          "what": "Only a small red mark after the bar; clicking it opens the words and fixes under the bar.",
+          "plus": "Smallest footprint; the chart stays as it is.",
+          "cost": "You cannot read what is wrong without a click; easy to miss.",
+          "frames": [
+            {
+              "file": "qr3-c-rest.html",
+              "caption": "At rest: a small red mark after each broken bar, nothing else; you cannot read what is wrong without a click (the cost)."
+            },
+            {
+              "file": "qr3-c-open.html",
+              "caption": "Clicking the mark opens the words and fixes just under the bar."
+            }
+          ]
+        },
+        {
+          "letter": "D",
+          "name": "Column beside the chart",
+          "recommended": false,
+          "what": "The broken links are listed in a column on the right of the chart, each with its fixes stacked.",
+          "plus": "Always in view while you scroll the chart.",
+          "cost": "Takes about a third of the chart's width, all the time, even with one link left.",
+          "frames": [
+            {
+              "file": "qr3-d-rest.html",
+              "caption": "At rest: the broken links in a column beside the chart; the chart loses a third of its width (the cost)."
+            },
+            {
+              "file": "qr3-d-rest-1512.html",
+              "caption": "1512 wide: about four months of chart show beside the column."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "QR4",
+      "name": "What opening an item does",
+      "question": "When someone clicks an item on the Timeline, where should its card open?",
+      "common": "In every proposal the page does not jump, the rail stays full height, no grey band appears and the item you clicked stays in sight and marked. The card's content is today's item card. Shown on QR1 A, QR2 A, QR3 A. Fixes qa4-simple-roadmap-11.",
+      "proposals": [
+        {
+          "letter": "A",
+          "name": "Side panel",
+          "recommended": true,
+          "what": "The item opens in a panel on the right of the chart; the chart narrows but stays usable and scrollable, the clicked row is marked, and clicking another item swaps the panel. On a phone it opens as a sheet from the bottom.",
+          "why": "Nothing is covered: you can read the card and see the item and its neighbours at once, and moving from item to item is one click. A phone already uses a sheet, so both read the same way.",
+          "plus": "Never covers the chart; quick to move between items; same idea on phone.",
+          "cost": "The chart loses about 410 px while the panel is open (about five months show at 1440).",
+          "frames": [
+            {
+              "file": "qr4-a-open.html",
+              "caption": "Clicking Alert rules engine: the item opens in a panel at the right. The page stays where it was; the row is marked."
+            },
+            {
+              "file": "qr4-a-mid.html",
+              "caption": "With the panel open the chart still scrolls; it is narrower while the panel is open (the cost)."
+            },
+            {
+              "file": "qr4-a-result.html",
+              "caption": "Clicking Setup checklist's name swaps the panel to it, no closing first; the chart slides back so its bar is in sight."
+            },
+            {
+              "file": "qr4-a-open-1512.html",
+              "caption": "1512 wide with Weekly alert digest open: the chart keeps about five months beside the panel."
+            },
+            {
+              "file": "qr4-a-open-390.html",
+              "caption": "Phone: the item opens as a sheet from the bottom; the list stays where it was underneath."
+            }
+          ]
+        },
+        {
+          "letter": "B",
+          "name": "Open in place",
+          "recommended": false,
+          "what": "The card opens inside the chart, right under the item's row, pushing the rows below down. On a phone it opens inside the list.",
+          "plus": "The card is right where you clicked; the chart keeps its width.",
+          "cost": "Everything below moves down; the rest of the plan leaves the screen while it is open.",
+          "frames": [
+            {
+              "file": "qr4-b-open.html",
+              "caption": "Clicking Alert rules engine: its details open in place under its row and push the rows below down (the cost: the rest of the plan leaves the screen)."
+            },
+            {
+              "file": "qr4-b-open-390.html",
+              "caption": "Phone: the details open inside the list under the item."
+            }
+          ]
+        },
+        {
+          "letter": "C",
+          "name": "Card beside the bar",
+          "recommended": false,
+          "what": "A floating card opens next to the visible part of the bar: on its right when there is room, on its left otherwise, and under it for a bar that fills the screen. No dimming. On a phone, a sheet.",
+          "plus": "Close to the bar; the chart keeps its width.",
+          "cost": "It covers neighbouring rows, and where it lands changes from item to item.",
+          "frames": [
+            {
+              "file": "qr4-c-open.html",
+              "caption": "Clicking Alert rules engine: the card opens right beside its bar, over the rows next to it; the bar stays in sight."
+            },
+            {
+              "file": "qr4-c-open-hard.html",
+              "caption": "Alert routing by team, a long bar filling the screen: no room either side, so the card opens under it and covers the rows below (the cost)."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
