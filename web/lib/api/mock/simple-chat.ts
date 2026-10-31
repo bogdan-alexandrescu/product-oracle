@@ -1730,6 +1730,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const meeting = chat.meetings[p[3]];
     if (!meeting) return json(404, { detail: "No such meeting" });
     if (!meeting.attendee_ids.includes(ctx.id)) return json(403, { detail: "Only the meeting's attendees read and write its chat" });
+    // The meeting chat's own thread, as the API's ``meeting_chat:<id>`` key (meet-chat-own-key):
+    // never the Ask panel's discussion on the meeting's page (./discussions.ts, ``screen:<path>``).
     const key = `meeting:${meeting.id}`;
     if (!p[5] && m === "GET") {
       resolvePending(db, chat, key, ctx);
