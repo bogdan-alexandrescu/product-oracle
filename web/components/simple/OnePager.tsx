@@ -13,6 +13,7 @@ import { quoteLine } from "@/components/simple/quote-line";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
+import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { downloadedNote } from "@/lib/export-note";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -141,13 +142,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
   // e2e-pdf-export: what the download says ("PDF downloaded", and its pages past one).
-  const [saved, setSaved] = useState<string | null>(null);
-  // qa-simple-prd-25: "PDF downloaded" shows a few seconds, then goes.
-  useEffect(() => {
-    if (!saved) return;
-    const t = window.setTimeout(() => setSaved(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [saved]);
+  const [saved, setSaved] = useDownloadNote();
   // qa-simple-prd-24: leaving full screen (Esc) ends presenting too.
   useEffect(() => {
     const on = () => {
@@ -377,9 +372,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       </Link>
     </>
   );
-  const toast = saved && (
-    <p role="status" className="simple-noprint fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-[15px] font-semibold shadow-md">{saved}</p>
-  );
+  const toast = <DownloadNote note={saved} className="simple-noprint" />;
 
   return (
     <div

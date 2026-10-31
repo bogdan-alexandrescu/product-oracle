@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { InlineError, Menu } from "@/components/review/parts";
 import { Button, Chip } from "@/components/ds";
+import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { api, unwrap } from "@/lib/api/client";
 import { downloadedNote } from "@/lib/export-note";
 import { formatDate } from "@/lib/format";
@@ -47,12 +48,7 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // e2e-pdf-export: a download closes the menu and says so a few seconds, as the one-pager's.
-  const [saved, setSaved] = useState<string | null>(null);
-  useEffect(() => {
-    if (!saved) return;
-    const t = window.setTimeout(() => setSaved(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [saved]);
+  const [saved, setSaved] = useDownloadNote();
 
   async function download(layer: Layer, format: Format, label: string, close: () => void) {
     setBusy(`${layer}.${format}`);
@@ -111,14 +107,7 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
           </div>
         )}
       </Menu>
-      {saved && (
-        <p
-          role="status"
-          className="fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-[15px] font-semibold shadow-md"
-        >
-          {saved}
-        </p>
-      )}
+      <DownloadNote note={saved} />
     </>
   );
 }
@@ -162,11 +151,7 @@ export function ApproveButton({
     setSaving(true);
     setError(null);
     try {
-      await unwrap(
-        api.POST("/v1/documents/{doc}/versions/{n}/approve", {
-          params: { path: { doc, n } },
-        }),
-      );
+      await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } }));
       setConfirming(false);
       onApproved();
     } catch (e) {
@@ -181,7 +166,14 @@ export function ApproveButton({
     // (and where to fix it) takes a line of its own below them, right-aligned (left on a phone).
     return (
       <div className="contents" data-testid="approve-blocked">
-        <Button variant="primary" icon="check" disabled aria-describedby="approve-blocked-reason" title={blockedReason} className="max-[600px]:mr-auto">
+        <Button
+          variant="primary"
+          icon="check"
+          disabled
+          aria-describedby="approve-blocked-reason"
+          title={blockedReason}
+          className="max-[600px]:mr-auto"
+        >
           Approve version
         </Button>
         <span className="flex basis-full justify-end max-[600px]:justify-start">
