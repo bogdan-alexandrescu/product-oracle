@@ -918,7 +918,7 @@ function MarginNote({
       )}
       {widened && (
         // qa-simple-prd-2: the flow opens in a dialog wide enough for it, over a dimmed page.
-        <div data-testid="note-flow-backdrop" className="fixed inset-0 z-40 flex items-start justify-center bg-black/50 md:pt-16" onClick={(e) => { if (e.target === e.currentTarget) setWide(null); }}>
+        <div data-backdrop="" data-testid="note-flow-backdrop" className="fixed inset-0 z-40 flex items-start justify-center bg-black/50 md:pt-16" onClick={(e) => { if (e.target === e.currentTarget) setWide(null); }}>
           <div role="dialog" aria-modal="true" aria-label="User flow" className="h-full w-full overflow-auto bg-[var(--simple-paper)] p-4 md:h-auto md:max-h-[80vh] md:w-[min(640px,90vw)] md:rounded-md">
             <FlowPanel subject={{ kind: n.flow?.subject_kind ?? "change", id: n.flow?.subject_id ?? n.change_id }} />
             <Button className="mt-2" onClick={() => setWide(null)}>Close</Button>
