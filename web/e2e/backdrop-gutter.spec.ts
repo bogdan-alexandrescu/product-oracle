@@ -100,9 +100,12 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
       await sheet.getByRole("button", { name: "Cancel" }).click();
       await expect(sheet).toHaveCount(0);
 
-      await page.getByRole("group", { name: "User flow of “A setup checklist that shows" }).getByTestId("flow-row").getByRole("button", { name: "Open the storyboard", exact: true }).click();
-      await expect(page.getByTestId("flow-storyboard")).toBeVisible();
-      await expectCoversWindow(page.getByTestId("flow-backdrop"));
+      await page.getByRole("group", { name: "User flow of “A setup checklist that shows" }).getByTestId("flow-row").getByRole("button", { name: desktop ? "Open the storyboard" : "Open the flow", exact: true }).click();
+      // A desktop dims the page behind the storyboard; a phone opens the flow as a full-window sheet.
+      if (desktop) {
+        await expect(page.getByTestId("flow-storyboard")).toBeVisible();
+        await expectCoversWindow(page.getByTestId("flow-backdrop"));
+      } else await expectCoversWindow(page.getByTestId("flow-detail"));
     });
   });
 }

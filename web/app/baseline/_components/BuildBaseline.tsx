@@ -186,7 +186,7 @@ export function BuildBaselineSheet({
   const legendCls = "mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2";
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:p-0">
+    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:p-0">
       <div
         role="dialog"
         aria-modal="true"

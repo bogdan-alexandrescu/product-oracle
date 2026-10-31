@@ -361,6 +361,7 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
       ref={rootRef}
       data-testid="present-mode"
       data-presenter={presenter ? "true" : "false"}
+      data-backdrop=""
       className="fixed inset-0 z-50 flex flex-col bg-hero text-hero-text max-[600px]:top-[calc(44px+env(safe-area-inset-top))]"
     >
       {deckQ.error && (

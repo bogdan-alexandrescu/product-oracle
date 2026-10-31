@@ -638,7 +638,7 @@ export function FlowPanel({
 
   /** A phone's opened view (A): a full-height sheet, the diagram top to bottom, then the steps. */
   const phoneOpened = (f: Flow) => (
-    <div ref={openedRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · flow`} data-testid="flow-detail" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
+    <div data-backdrop="" ref={openedRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · flow`} data-testid="flow-detail" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
       <div className="flex flex-none items-center gap-2.5 border-b border-line px-3 py-2.5">
         <button type="button" data-first className={BTN_GHOST} onClick={() => setView(null)}>
           {/* qa4-simple-prd-30: the flow's sheet closes with "Close", as the storyboard's does. */}
@@ -717,7 +717,7 @@ export function FlowPanel({
       </>
     );
     return (
-      <div ref={viewerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Full screen: ${f.title}`} data-testid="flow-fullscreen" className="fixed inset-0 z-[70] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
+      <div data-backdrop="" ref={viewerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Full screen: ${f.title}`} data-testid="flow-fullscreen" className="fixed inset-0 z-[70] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
         {phone ? (
           <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
             <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · flow</h2>
@@ -820,7 +820,7 @@ export function FlowPanel({
   // The opened view and the storyboard on a desktop dim the page behind (qa-simple-prd-22); a
   // click on it closes them, as Escape does. A phone's are full-height sheets.
   const backdrop = overlay && !phone && !full && (view === "opened" || view === "story") && (
-    <div aria-hidden data-testid="flow-backdrop" className="fixed inset-0 z-50 bg-hero/50" onClick={() => setView(null)} />
+    <div data-backdrop="" aria-hidden data-testid="flow-backdrop" className="fixed inset-0 z-50 bg-hero/50" onClick={() => setView(null)} />
   );
   const layers = flow ? (
     <Layer>

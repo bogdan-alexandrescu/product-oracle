@@ -955,6 +955,7 @@ function HopDock() {
         <div
           aria-hidden
           data-testid="hop-backdrop"
+          data-backdrop={simple ? "below-1240" : "below-1600"}
           className={`fixed inset-0 z-40 bg-hero/30 [:root[data-theme=dark]_&]:bg-[rgb(0_0_0/0.55)] dark:[:root:not([data-theme=light])_&]:bg-[rgb(0_0_0/0.55)] ${simple ? "min-[1240px]:hidden" : "min-[1600px]:hidden"}`}
           onClick={() => setPanelOpen(false)}
         />

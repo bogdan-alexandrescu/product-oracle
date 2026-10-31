@@ -117,6 +117,7 @@ function MakeOpenWarning({
   useFocusTrap(ref, true, onKeep);
   return (
     <div
+      data-backdrop=""
       className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onKeep();
@@ -306,6 +307,7 @@ function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string
 
   return (
     <div
+      data-backdrop=""
       className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onCancel();

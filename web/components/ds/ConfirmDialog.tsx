@@ -138,6 +138,7 @@ function ConfirmDialog({ ask, onAnswer }: { ask: ConfirmAsk; onAnswer: (yes: boo
   return (
     <div
       data-testid="confirm-scrim"
+      data-backdrop=""
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onAnswer(false);

@@ -405,6 +405,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   return (
     <div
       ref={root}
+      data-backdrop={presenting ? "" : undefined}
       className={`min-h-screen ${presenting ? "bg-[var(--simple-desk)]" : ""} text-[length:var(--simple-body)] text-text ${presenting ? "fixed inset-0 z-50 overflow-auto" : ""}`}
       data-testid="one-pager"
       data-presenting={presenting ? "true" : undefined}

@@ -1076,6 +1076,7 @@ export function FloatingCard({
         <div
           aria-hidden
           data-testid="floating-card-backdrop"
+          data-backdrop=""
           className="fixed inset-0 z-[35] bg-black/30"
           onClick={(e) => {
             // fix4 review: the rail is dimmed under the backdrop, yet a click on one of its
@@ -1100,6 +1101,7 @@ export function FloatingCard({
         data-talk={talk ? "true" : "false"}
         data-flow-open={flowOpen ? "true" : "false"}
         style={placeStyle}
+        data-backdrop={phone && wide ? "" : undefined}
         className={`${place} ${phone ? "max-w-none overflow-hidden" : "max-w-[calc(100vw-16px)]"} border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
       >
       {phone ? (
