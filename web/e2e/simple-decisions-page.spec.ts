@@ -86,7 +86,7 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Edit “A sample project created on" }).click();
         await page.getByLabel("New wording for").fill("A sample project on day one");
         await page.getByRole("button", { name: "Save" }).click();
-        const decisions = page.getByRole("region", { name: "All decisions" });
+        const decisions = page.getByRole("region", { name: "Decisions in this meeting" });
         await expect(decisions).toContainText("New wording for a line of Guided setup");
         const lineNo = (await decisions.getByTestId("meeting-decision").first().locator("strong").textContent())!;
         await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();

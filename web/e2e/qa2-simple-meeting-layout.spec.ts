@@ -53,7 +53,7 @@ test.describe("desktop", () => {
     await tap(box.getByRole("button", { name: "Send" }));
     await tap(box.getByRole("button", { name: "Apply all" }));
     // No reload: All decisions lists what the chat changed.
-    await expect(page.getByRole("region", { name: "All decisions" }).getByTestId("meeting-decision").first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "Decisions in this meeting" }).getByTestId("meeting-decision").first()).toBeVisible();
   });
 });
 

@@ -106,7 +106,7 @@ for (const phone of [false, true]) {
         await expect(s.getByRole("radio", { name: "Presenter plus one or two people" })).toBeVisible();
         await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
         for (const box of await s.getByRole("group", { name: "Who attends" }).getByRole("checkbox").all()) await box.uncheck();
-        await expect(s.getByTestId("start-no-attendees")).toHaveText("Pick at least one attendee besides you.");
+        await expect(s.getByTestId("start-missing")).toHaveText("Tick at least one attendee besides you.");
         await expect(s.getByRole("button", { name: "Start", exact: true })).toBeDisabled();
         await page.keyboard.press("Escape");
         await expect(s).toBeHidden();
@@ -163,7 +163,7 @@ test.describe("desktop · the live meeting", () => {
     await expect(chat(page).getByRole("textbox", { name: "Message Oracle" })).toBeInViewport();
 
     // Absent: "away" with a grey dot, never struck through.
-    await page.getByRole("button", { name: "Approver is here" }).click();
+    await page.getByRole("button", { name: "Mark Approver away" }).click();
     const away = page.getByLabel("Attendees").locator("li", { hasText: "Approver" });
     await expect(away.getByTestId("attendee-away")).toBeVisible();
     expect(await away.evaluate((el) => getComputedStyle(el).textDecorationLine)).not.toContain("line-through");
@@ -178,7 +178,7 @@ test.describe("desktop · the live meeting", () => {
     await first.getByRole("button", { name: `Cut ${title}` }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }).click();
     await expect(slice.getByRole("button", { name: `Restore ${title}` })).toBeVisible();
-    await expect(page.getByRole("region", { name: "All decisions" }).getByTestId("meeting-decision").first()).toContainText(/[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}/);
+    await expect(page.getByRole("region", { name: "Decisions in this meeting" }).getByTestId("meeting-decision").first()).toContainText(/[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}/);
 
     // The chat's own page: linked here, it names the meeting and leads back.
     await page.getByTestId("meeting-chat-page-link").click();

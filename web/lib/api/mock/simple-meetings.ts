@@ -481,10 +481,13 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     change_mode: m.change_mode,
     change_people: m.change_people.map((i) => ref(ctx, i)),
     roadmap_ids: [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))].sort(),
-    meeting_decisions: db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst).map((d) => ({
-      id: d.id, number: d.number, title: d.title, approver: ref(ctx, d.approver_id ?? ""), at: d.at, subjects: d.subjects, change_ids: d.change_ids,
-      flow: decidedFlow(ctx, d),
-    })),
+    // qa4-simple-decide-11 (as questions._write): a question decided in the meeting is the
+    // question's own decision there (its id, number and title), so it keeps its code (Q5).
+    meeting_decisions: db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst).map((d) => {
+      const n = d.question ? Number(d.question.code.replace(/^Q/, "")) : NaN;
+      const own = d.question && Number.isFinite(n) ? { id: stableUuid(`simple-question/${n}`), number: 100 + n, title: d.question.title } : { id: d.id, number: d.number, title: d.title };
+      return { ...own, approver: ref(ctx, d.approver_id ?? ""), at: d.at, subjects: d.subjects, change_ids: d.change_ids, flow: decidedFlow(ctx, d) };
+    }),
     open_decisions: openDecisions(ctx, db, p),
     // The meeting PRD's agenda (questions.due_for): the open questions blocking the soonest
     // one's milestone, whoever decides them, and those decided in this meeting (with Undo).
@@ -640,6 +643,8 @@ const OP_WORDS: Record<string, string> = {
 };
 
 /** A change in words and the subjects it names (as meetings.describe). */
+const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+
 function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
   const subjects: Decision["subjects"] = [];
   let name = "";
@@ -661,6 +666,9 @@ function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
     }
   } else if (!name) name = String(c.after.title ?? c.target.title ?? "");
   const words = OP_WORDS[c.op] ?? c.op.replace(/_/g, " ");
+  // qa4-simple-decide-12 (meetings.describe): a move says where to.
+  const h = HORIZON_TO[String(c.after.horizon)];
+  if (c.op === "change_horizon" && name && h) return [`Moved ${name} to ${h}`, subjects];
   return [`${words} ${name}`.trim(), subjects];
 }
 
@@ -692,7 +700,9 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   const c = out.change;
   m.last_change_at = iso(mockNowMs());
   const [words, subjects] = describe(ctx, c);
-  const title = verb ? `${verb}: ${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
+  // qa4-simple-decide-12 (meetings.after_change): an accepted or declined proposal says whose.
+  const whose = verb && c.by_name ? `${verb} ${c.by_name}'s proposal: ` : verb ? `${verb}: ` : null;
+  const title = whose ? `${whose}${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
   const prd = prds(ctx).find((x) => x.slug === m.prd)!;
   record(db, ctx, m, title, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
   const line = ctx.onePager.changes.find((x) => x.id === c.id);
@@ -819,8 +829,14 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
     else if (d.status === "working") waits.push({ what: `${d.document.title}: the working draft is not approved yet`, on: [] });
   }
   const made = new Set(db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.change_ids));
+  // qa4-simple-decide-3 (as meetings._waits: every proposal of the meeting's session still
+  // proposed): the chat's Propose in the meeting is the meeting's too. The chat mock makes
+  // its change outside the session, so a proposal on the meeting's PRD made while it ran counts.
+  const ids = new Set(prdItems(ctx, p).map((i) => i.id));
+  const ran = (c: Change) => Date.parse(c.at) >= Date.parse(m.started_at) && (!m.ended_at || Date.parse(c.at) <= Date.parse(m.ended_at));
+  const ofPrd = (c: Change) => ids.has(String(c.target.item_id)) || (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.some((x) => x.id === c.id));
   for (const c of [...(ctx.roadmap.changes ?? []), ...ctx.onePager.changes]) {
-    if (made.has(c.id) && c.status === "proposed") waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
+    if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
   }
   return {
     summary: summary.slice(0, 4000),
@@ -898,7 +914,9 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     }),
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
-    prds: [...ps].sort((a, b) => a.title.localeCompare(b.title)).map((x) => ({ id: x.slug, title: x.title })),
+    // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
+    prds: [...new Map([...ps.map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
+      .sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ id, title })),
     goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
     // qa-simple-decide-11: the meeting's title carries its day (the company's zone) and,
     // while it is still live, " · live".

@@ -71,6 +71,8 @@ interface StoredCard {
   flag?: Schemas["SimpleItemFlags"] | null;
   change_id: string | null;
   decided_by_name: string | null;
+  /** Who applied it (the API's decided_by; not sent): they may undo it. */
+  decided_by?: string | null;
   decided_at: string | null;
   decision_id: string | null;
   /** Chat actions: what Undo restores (the agenda before, the decision made). */
@@ -1330,10 +1332,21 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   return { may: decides ? "apply" : "propose", why_not: null };
 }
 
+/** qa4-simple-decide-1 (chat._undo_bar): why the reader may not undo an applied card, by its Apply's rule. */
+function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): string | null {
+  const m = meetingOf(chat, c);
+  const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
+  if (bar || LOCAL_OPS.has(c.op) || c.op === "add_feature_ask" || c.op === "suggest_feature" || c.decided_by === ctx.id) return bar;
+  const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
+  const decides = c.item_id ? !!item?.can_decide : ctx.role === "owner";
+  return decides ? null : "Only someone who may change this item undoes it";
+}
+
 function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   const check = c.flag !== undefined ? { flags: c.flag ? [c.flag] : [] } : asIf(db, c);
-  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, ...rest } = c;
+  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, decided_by: _by, ...rest } = c;
   void _undo;
+  void _by;
   void _flag;
   void _thread;
   void _meeting;
@@ -1344,7 +1357,7 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   // Review major (chat.cards_out): "Cut it and its dependents" applies only when the reader decides every item it cuts.
   const allMine = [c.item_id, ...waiting.map((i) => i.id)].every((id) => !!items.find((i) => i.id === id)?.can_decide);
   const may_with_dependents = waiting.length && may.may ? (allMine ? "apply" : "propose") : null;
-  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents };
+  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -1500,7 +1513,7 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   }
   Object.assign(c, {
     status: result.change.status === "applied" ? "applied" : "proposed", change_id: result.change.id,
-    decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: now(),
+    decided_by_name: ctx.names[ctx.id] ?? "someone", decided_by: ctx.id, decided_at: now(),
   });
   if (n != null) Object.assign(c, { op: use.op, target: use.target, before: use.before, after: use.after });
   const meeting = meetingOf(chat, c);
@@ -1623,7 +1636,7 @@ function applyLocal(c: StoredCard, meeting: Meeting | null, ctx: ChatCtx, s8?: C
       meeting.decisions.push({ id: decision, title: text, card_id: c.id, at });
     } else if (s8) undo.decision_id = s8.decide(null, text, decider, (c.target.document_id as string | undefined) ?? null);
   }
-  Object.assign(c, { status: "applied", change_id: crypto.randomUUID(), decided_by_name: by, decided_at: at, decision_id: decision, undo });
+  Object.assign(c, { status: "applied", change_id: crypto.randomUUID(), decided_by_name: by, decided_by: ctx.id, decided_at: at, decision_id: decision, undo });
   const change = {
     id: c.change_id, session_id: null, document_id: null, draft_ids: [], op: c.op, target: c.target, before: c.before, after: c.after, status: "applied", by: ctx.id, by_name: by, at,
     decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: true,
@@ -1670,6 +1683,30 @@ function unapplyLocal(c: StoredCard, meeting: Meeting | null, s8?: ChatMeetings)
   }
 }
 
+/** S8's past review (./simple-meetings.ts's "Review: Usage alerts"). */
+const PAST_MEETING_ID = stableUuid("simple-meeting/past-alerts");
+
+/**
+ * qa4-simple-decide-4: the past review's chat holds the lines said in it, as the API keeps a
+ * meeting's thread after it ends: the approver's note (the meeting's note "keep quiet hours on
+ * by default", 35 minutes in) and Oracle's reply.
+ */
+function seedPastChat(chat: ChatDb, m: Pick<Meeting, "presenter_id" | "attendee_ids">, ctx: ChatCtx): void {
+  const key = `meeting:${PAST_MEETING_ID}`;
+  if (chat.threads[key]) return;
+  const by = m.attendee_ids.find((id) => ctx.roles[id] === "approver") ?? m.presenter_id;
+  const at = new Date(mockNowMs() - 7 * DAY + 3 * 3_600_000 + 35 * 60_000).toISOString();
+  const said = crypto.randomUUID();
+  const base = { card_ids: [], choices: [], picked: null, retry: false };
+  chat.threads[key] = {
+    id: crypto.randomUUID(), meeting_id: PAST_MEETING_ID, owner_id: null,
+    messages: [
+      { ...base, id: said, author_kind: "person", author_id: by, author_name: ctx.names[by] ?? "someone", body: "note: keep quiet hours on by default", at, kind: "request", reply_to: null },
+      { ...base, id: crypto.randomUUID(), author_kind: "oracle", author_id: null, author_name: "Oracle", body: "Added to the minutes: keep quiet hours on by default", at, kind: "note", reply_to: said },
+    ],
+  };
+}
+
 /** The S9 routes; null for any other path. */
 export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, req: Request, p: string[], s8?: ChatMeetings): Promise<Response | null> {
   if (p[1] !== "simple") return null;
@@ -1681,6 +1718,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     for (const id of ids) {
       const found = s8.find(id);
       if (found) chat.meetings[id] = { ...(chat.meetings[id] ?? { agenda: [], decisions: [] }), ...found, id, s8: true };
+      if (found && id === PAST_MEETING_ID) seedPastChat(chat, found, ctx);
     }
   }
 
@@ -1828,6 +1866,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
     if (p[5] === "undo") {
       if (c.status !== "applied" || !c.change_id) return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
+      const bar = undoBar(db, chat, c, ctx);
+      if (bar) return json(403, { detail: bar });
       const meeting = meetingOf(chat, c);
       if (c.op === "suggest_feature") {
         if (!unfileSuggestion(db, String(c.target.suggestion_id ?? ""))) return json(409, { detail: "The decider has decided this suggestion already" });

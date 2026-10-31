@@ -12871,7 +12871,8 @@ export interface paths {
         put?: never;
         /**
          * Undo Simple Chat Card
-         * @description Undo the change an applied card made (its author, in its session).
+         * @description Undo the change an applied card made: whoever its Apply would let apply it now (403
+         *     with the reason otherwise; ``ChatCardOut.can_undo``).
          */
         post: operations["undo_simple_chat_card"];
         delete?: never;
@@ -17834,6 +17835,11 @@ export interface components {
             dependent_ids: string[];
             /** May With Dependents */
             may_with_dependents?: ("apply" | "propose") | null;
+            /**
+             * Can Undo
+             * @default false
+             */
+            can_undo: boolean;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {

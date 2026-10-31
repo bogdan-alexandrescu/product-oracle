@@ -1842,6 +1842,18 @@ def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
     return None
 
 
+def _undo_bar(principal: Any, card: SimpleChatCard, rules: Any, read_: service.Read) -> str | None:
+    """qa4-simple-decide-1: why the caller may not undo an applied card (None: they may).
+    The rule its Apply takes (the meeting's change mode, the viewer's bar); an engine card
+    also needs the caller to decide its item, unless they applied it themselves."""
+    bar = _card_bar(principal, card, rules)
+    if bar is not None or card.op in _actions().DIRECT_OPS or card.decided_by == _me(principal):
+        return bar
+    if not _decides(principal, card, read_):
+        return "Only someone who may change this item undoes it"
+    return None
+
+
 def _as_if(card: SimpleChatCard, read_: service.Read, overlays: dict) -> dict:
     """The reader's overlays with the card's item fields applied (the constraint check)."""
     if card.op not in CARD_OPS_ON_ITEMS or card.item_id is None:
@@ -1971,6 +1983,7 @@ async def cards_out(
             correct=correct if c.status == "open" else None,
             dependents=[x.row.title for x in waiting], dependent_ids=[x.row.id for x in waiting],
             may_with_dependents=may_all,  # type: ignore[arg-type]
+            can_undo=c.status == "applied" and _undo_bar(principal, c, rules, read_) is None,
         ))  # fmt: skip
     return outs
 
@@ -2204,6 +2217,11 @@ async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatC
 
 async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCardOut:
     card, rules = await _get(db, principal, card_id)
+    if card.status == "applied":
+        read_ = await service.load(db, await drafts.overlays_for(db, principal))
+        bar = _undo_bar(principal, card, rules, read_)
+        if bar is not None:
+            raise ChatError(403, bar)
     if card.status == "applied" and card.op in _actions().DIRECT_OPS:
         await _actions().undo(db, principal, card, rules)
         card.status = "undone"

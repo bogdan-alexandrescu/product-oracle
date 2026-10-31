@@ -294,7 +294,7 @@ export function QuestionRow({
 }: {
   q: Question;
   mode: Mode;
-  /** Simple's Home (qa-simple-home-13): names, no codes; the code stays in the title's tooltip. */
+  /** Simple's Home (qa-simple-home-13): the title without its code; the code stays in the title's tooltip. */
   plain?: boolean;
   actions: ReturnType<typeof useQuestionActions>;
   as?: "li" | "div";
@@ -426,7 +426,8 @@ export function QuestionRow({
             <span className="simple-meta">
               <DueLabel q={q} />
               {q.due_label && q.blocks ? " · " : ""}
-              {plain && q.blocks ? plainBlocks(q.blocks) : q.blocks?.label}
+              {/* qa4-simple-decide-10: plain words on every row (Home, Decisions, a meeting's agenda), never "M1: F-03". */}
+              {q.blocks ? plainBlocks(q.blocks) : null}
             </span>
           )
         )}

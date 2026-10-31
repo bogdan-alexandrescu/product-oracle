@@ -53,7 +53,7 @@ async function endOne(page: Page) {
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
   await tap(page.getByRole("button", { name: "Move Setup checklist to Next" }));
-  await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
+  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Moved Setup checklist");
   await tap(page.getByRole("button", { name: "End meeting" }));
   await tap(page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }));
   await expect(page.getByTestId("end-screen")).toBeVisible();

@@ -177,7 +177,8 @@ async def discard_simple_chat_card(
 async def undo_simple_chat_card(
     card_id: uuid.UUID, principal: Commenter, db: TenantDB
 ) -> ChatCardOut:
-    """Undo the change an applied card made (its author, in its session)."""
+    """Undo the change an applied card made: whoever its Apply would let apply it now (403
+    with the reason otherwise; ``ChatCardOut.can_undo``)."""
     return await _run(db, chat.undo(db, principal, card_id))
 
 

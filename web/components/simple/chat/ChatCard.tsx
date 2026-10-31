@@ -225,7 +225,8 @@ export function ChatCard({
           {card.summary}
         </p>
       )}
-      {!actionsOnly && card.item_title && <p className="simple-small text-text2">Item: {card.item_title}</p>}
+      {/* qa4-simple-decide-29: one line per change: no "Item:" line when the summary names the item already. */}
+      {!actionsOnly && card.item_title && !card.summary.includes(card.item_title) && <p className="simple-small text-text2">Item: {card.item_title}</p>}
       {!actionsOnly && changeWords(card) && (
         <p className="simple-small [overflow-wrap:anywhere]" data-testid="chat-card-change">
           <span className="text-text2">Before:</span> {changeWords(card)!.before} → <span className="text-text2">After:</span> {changeWords(card)!.after}
@@ -377,7 +378,8 @@ export function ChatCard({
               Recorded as a meeting decision
             </span>
           )}
-          {card.status === "applied" && (
+          {/* qa4-simple-decide-1: only a reader the card's Apply rule lets change it undoes it. */}
+          {card.status === "applied" && card.can_undo && (
             <button type="button" className="simple-button" disabled={busy} onClick={() => void run(() => undoCard(card.id))}>
               Undo this change
             </button>

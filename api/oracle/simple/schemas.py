@@ -1370,6 +1370,8 @@ class ChatCardOut(BaseModel):
     # Review major: what "Cut it and its dependents" does for the reader: "apply" when they
     # decide every item it cuts, "propose" when not, None when they may not (``why_not``).
     may_with_dependents: Literal["apply", "propose"] | None = None
+    # qa4-simple-decide-1: an applied card the reader may undo (Apply's own rule).
+    can_undo: bool = False
 
 
 class ChatChoiceOut(BaseModel):

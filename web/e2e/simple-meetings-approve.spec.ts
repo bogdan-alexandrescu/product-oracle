@@ -60,16 +60,16 @@ async function startWithAnEdit(page: Page, absent?: string, attendee = "Commente
   if (absent) {
     // qa-simple-decide-29: on a phone the attendees fold into one row.
     if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
-    const here = page.getByRole("button", { name: `${absent} is here` });
-    await here.click();
-    await expect(here).toHaveAttribute("aria-pressed", "false");
+    await page.getByRole("button", { name: `Mark ${absent} away` }).click();
+    await expect(page.getByRole("button", { name: `Mark ${absent} here` })).toBeVisible();
   }
   await expect(page.getByTestId("meeting-screen").getByTestId("one-pager")).toContainText("Version 3");
   await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
   await page.getByLabel("New wording for").fill("A checklist that names the next step");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
-  await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
+  await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
 }
 
 async function onePagerOutside(page: Page) {
@@ -89,7 +89,7 @@ async function endOne(page: Page) {
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
-  await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
+  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();
@@ -106,7 +106,7 @@ for (const phone of [false, true]) {
         await flags(context, "no-reviewers");
         await startWithAnEdit(page);
         await expect(page.getByTestId("approved-banner")).toHaveText("Approved in Review: Guided setup · published");
-        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (published)");
         const pager = await onePagerOutside(page);
         await expect(pager).toContainText("Version 4");
         await expect(pager).toContainText("A checklist that names the next step");
@@ -118,8 +118,8 @@ for (const phone of [false, true]) {
         const banner = page.getByTestId("approved-banner");
         await expect(banner).toHaveText("Approved in Review: Guided setup · not yet published: Waiting on Approver's approval");
         await expect(banner).not.toContainText("· published");
-        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (not yet published: Waiting on Approver's approval)");
-        await expect(page.getByRole("region", { name: "All decisions" })).not.toContainText("(published)");
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (not yet published: Waiting on Approver's approval)");
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).not.toContainText("(published)");
         const pager = await onePagerOutside(page);
         await expect(pager).toContainText("Version 3");
         await expect(pager).not.toContainText("Version 4");
@@ -135,7 +135,7 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("approved-banner")).toHaveText(
           "Approved in Review: Guided setup · not yet published: Waiting on Commenter's approval",
         );
-        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (not yet published: Waiting on Commenter's approval)");
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (not yet published: Waiting on Commenter's approval)");
         const pager = await onePagerOutside(page);
         await expect(pager).toContainText("Version 3");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
