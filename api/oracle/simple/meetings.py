@@ -866,7 +866,10 @@ async def _open_decisions(db: AsyncSession, document: Document, item_ids: set[uu
 
 
 async def _prd_items(db: AsyncSession, document: Document) -> tuple[set, set]:
-    """The PRD's roadmap items (ids of every version) and the roadmaps they are on."""
+    """The PRD's roadmap items (ids of every version) and the roadmaps they are on.
+
+    meet-draft-items: an item on a run's draft roadmap has no roadmap document; it counts
+    as the PRD's item but adds no roadmap."""
     rows = (
         await db.execute(
             select(RoadmapItem.id, RoadmapItem.roadmap_document_id).where(
@@ -874,7 +877,7 @@ async def _prd_items(db: AsyncSession, document: Document) -> tuple[set, set]:
             )
         )
     ).all()
-    return {r[0] for r in rows}, {r[1] for r in rows}
+    return {r[0] for r in rows}, {r[1] for r in rows if r[1] is not None}
 
 
 async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,

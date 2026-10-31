@@ -317,6 +317,21 @@ async def draft_items(db: AsyncSession, row: DraftRoadmap) -> list[RoadmapItem]:
     )
 
 
+async def item_documents(db: AsyncSession, ids) -> dict[uuid.UUID, uuid.UUID]:
+    """Each item's document, for whether a reader may see it: its roadmap's, or for an
+    item on a draft roadmap (no roadmap), its PRD's (meet-draft-items review)."""
+    rows = await db.execute(
+        select(
+            RoadmapItem.id,
+            func.coalesce(RoadmapItem.roadmap_document_id, DraftRoadmap.prd_document_id),
+        )
+        .outerjoin(DraftRoadmap, DraftRoadmap.id == RoadmapItem.draft_roadmap_id)
+        .where(RoadmapItem.id.in_(ids))
+        .execution_options(oracle_all_documents=True)
+    )
+    return dict(rows.all())
+
+
 async def _counts(db: AsyncSession, row_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
     if not row_ids:
         return {}

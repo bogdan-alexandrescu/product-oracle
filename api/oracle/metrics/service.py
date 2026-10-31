@@ -470,7 +470,7 @@ async def _withheld_drafts(
     visibility), as a draft written before #541 part 4 may (its run read as its
     creator)."""
     from oracle.docs import visibility
-    from oracle.roadmap.models import RoadmapItem
+    from oracle.roadmap.draft_items import item_documents
 
     drafted = [r for r in rows if r.oracle_draft]
     hidden = await visibility.hidden_for_reader(db, as_member=as_member) if drafted else None
@@ -488,13 +488,7 @@ async def _withheld_drafts(
         return out
 
     items = {i for r in drafted for i in ids(r, "roadmap_item")}
-    item_docs = dict(
-        (await db.execute(
-            select(RoadmapItem.id, RoadmapItem.roadmap_document_id)
-            .where(RoadmapItem.id.in_(items))
-            .execution_options(oracle_all_documents=True)
-        )).all()
-    ) if items else {}  # fmt: skip
+    item_docs = await item_documents(db, items) if items else {}
     return {
         r.id
         for r in drafted
