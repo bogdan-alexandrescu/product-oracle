@@ -2962,8 +2962,12 @@ function load(): Db {
   // qa4-plan-3). It is approved where a scenario works on the approved plan: launches are
   // planned from it (New launch, #344, has items to pick), "plan-decider" (#346) edits it,
   // "date-bases" verifies its dates, "strategy-plan" reviews its items against the strategy,
-  // "outcomes" tracks outcomes of its items, and "alerts-approved" is the approved plan alone.
-  const approvedPlan = ["launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, ALERTS_APPROVED_SCENARIO];
+  // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, and
+  // the "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item).
+  const approvedPlan = [
+    "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, ALERTS_APPROVED_SCENARIO,
+    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history",
+  ];
   if (approvedPlan.includes(scenario ?? "")) {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
     const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
@@ -3055,7 +3059,9 @@ function load(): Db {
   if (scenario === "proposal-overlap-status") addStatusOverlapProposals(db.baseline, uuid);
   if (scenario === "conflict-3way") addThreeWayConflict(db.baseline, uuid);
   if (scenario === "goal-words") addGoalWords(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
-  if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
+  // "strategy-plan" also has draft 2: a draft item's drift is measured on the draft, so the Plan
+  // shows draft 2's rows only while the roadmap document has that unapproved version (qa4-plan-3).
+  if (scenario === DIFF_SCENARIO || scenario === "strategy-plan") addRoadmapVersion(db);
   if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
   // #561 review: a run, its segment, roadmap items and a next-draft build that failed on Oct 18 on a stored refusal; refinements refused now.
   if (scenario === STORED_REFUSALS_SCENARIO) {
