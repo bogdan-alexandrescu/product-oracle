@@ -175,6 +175,19 @@ async def test_start_permissions(client, who, code):
     assert r.status_code == 200 and uid(w, "commenter") in [a["id"] for a in r.json()["attendees"]]
 
 
+async def test_start_sheet_says_who_may_change_things(client):
+    """qa4-simple-decide-14: each member on the start sheet carries ``can_change``, so
+    "Presenter plus one or two people" offers only people whose role may change things (a
+    viewer never may, in any mode)."""
+    w = await world()
+    r = await client.get(f"{MEETINGS}/options", params={"prd": PRD}, headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    can = {x["id"]: x["can_change"] for x in r.json()["members"]}
+    assert can[uid(w, "viewer")] is False
+    for who in ("owner", "approver", "commenter", "decider"):
+        assert can[uid(w, who)] is True, who
+
+
 async def test_every_action_is_a_meeting_decision(client):
     w = await world()
     m = await start(client, w)
