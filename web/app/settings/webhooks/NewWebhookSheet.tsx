@@ -97,7 +97,7 @@ export function NewWebhookSheet({
         </div>
       ) : (
         <form
-          className="flex flex-col gap-4 p-4"
+          className="flex flex-col gap-4 p-4 sm:max-w-[640px]"
           onSubmit={(e) => {
             e.preventDefault();
             if (ready) void create();

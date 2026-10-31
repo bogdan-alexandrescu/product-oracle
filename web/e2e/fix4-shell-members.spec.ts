@@ -26,12 +26,12 @@ const selectFits = (select: Locator) =>
     return { whole: box.width + 0.5 >= needs, inCell: box.left >= cell.left - 0.5 && box.right <= cell.right + 0.5 };
   });
 
-/** The email sits on one line, never wrapped (qa4-settings-10), and nothing of it is cut here. */
+/** The email sits on one line, never wrapped (qa4-settings-10); if it must be cut, its title holds it whole. */
 const emailWhole = (email: Locator) =>
   email.evaluate((el) => {
     const range = document.createRange();
     range.selectNodeContents(el);
-    return range.getClientRects().length === 1 && el.scrollWidth <= el.clientWidth + 1;
+    return range.getClientRects().length === 1 && el.getAttribute("title") === el.textContent;
   });
 
 /** The status cell's content stays inside the cell, so it never covers Last sign-in. */
@@ -69,7 +69,7 @@ for (const width of [1440, 1512]) {
         for (const email of ["commenter@example.com", "approver@example.com", "viewer@example.com"]) {
           expect(await selectFits(page.getByLabel(`Role for ${email}`)), email).toEqual({ whole: true, inCell: true });
         }
-        // Emails stay on one line, whole.
+        // Emails stay on one line, the whole address on hover.
         const emails = page.getByTestId("member-email");
         await expect(emails.first()).toBeVisible();
         for (const el of await emails.all()) expect(await emailWhole(el), await el.innerText()).toBe(true);

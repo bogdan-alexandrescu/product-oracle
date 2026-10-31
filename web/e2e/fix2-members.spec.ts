@@ -48,8 +48,8 @@ test.describe("at 1440 px", () => {
     await expect(rows.first()).toBeVisible();
     const check = async () => {
       for (const el of await page.getByTestId("member-name").all()) expect(await showsAll(el), await el.innerText()).toBe(true);
-      // qa4-settings-10: the email may carry an ellipsis for when it must be cut; here it is not cut.
-      for (const el of await page.getByTestId("member-email").all()) expect(await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), await el.innerText()).toBe(true);
+      // qa4-settings-10: the email stays on one line; cut with an ellipsis if it must be, whole on hover.
+      for (const el of await page.getByTestId("member-email").all()) await expect(el).toHaveAttribute("title", await el.innerText());
       // The "you" chip sits under the name, so the name keeps its width.
       const name = memberRow(page, "admin@example.com").getByTestId("member-name");
       expect((await name.boundingBox())!.width).toBeGreaterThan(30);

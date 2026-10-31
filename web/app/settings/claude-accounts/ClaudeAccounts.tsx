@@ -1108,7 +1108,7 @@ function Remove({ account, reload }: { account: Account; reload: () => Promise<v
       tools={
         <InfoTip label="deleting">
           Jobs on it: {account.assigned}
-          {account.assigned > 0 && " (in use: move it to draining first to move them off)"}. Its credential is deleted
+          {account.assigned > 0 && " (in use: press Move jobs off first)"}. Its credential is deleted
           with it. Type the label to arm the button.
         </InfoTip>
       }

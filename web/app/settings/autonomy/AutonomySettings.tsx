@@ -283,7 +283,7 @@ function ChangeSheet({
 
   return (
     <Sheet open dialog title={`Change ${item.title}`} onClose={onClose} testId="autonomy-sheet">
-      <div className="flex w-full flex-col gap-3 px-4 py-3 text-[15px]">
+      <div className="flex w-full flex-col gap-3 px-4 py-3 text-[15px] sm:max-w-[640px]">
         <p data-testid="autonomy-from">
           <span className="font-semibold">Now, {TITLE[item.level]}:</span> {item.levels[item.level]}
         </p>
