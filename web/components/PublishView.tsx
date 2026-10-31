@@ -158,7 +158,7 @@ function age(iso: string): string {
 function onPublishLines(n: number, qv: Qv4 = null) { // MOCK-HOOK
   const lines = [`Version v${n} approved with its evidence`, "PRD status set to Approved", "Approval recorded in the audit log"]; // MOCK-HOOK
   if (qv === "a" || qv === "c") return [...lines, `v${n} ready to share as a link`]; // MOCK-HOOK
-  if (qv === "b") return [...lines, `Not shared yet: publish v${n} for sharing from Share a link`]; // MOCK-HOOK
+  if (qv === "b") return [...lines, `Not shared yet: publish from Share a link`]; // MOCK-HOOK
   return lines; // MOCK-HOOK
 } // MOCK-HOOK
 /** QV4 mock-up: which proposal the page shows (?qv4=a|b|c, roadmaps only). */ // MOCK-HOOK
@@ -647,7 +647,7 @@ export function PublishView({ doc }: { doc: string }) {
     : !canPublish
       ? `${whoPublishes} v${n}`
       : caveats.length > 0
-        ? `Publishable, but ${caveats.join(" and ")}`
+        ? `${qv === "b" ? "Can be approved" : "Publishable"}, but ${caveats.join(" and ")}` // MOCK-HOOK
         : `Ready to ${word.toLowerCase()} v${n}`; // MOCK-HOOK
   const action =
     n == null ? null : published ? (
@@ -696,10 +696,10 @@ export function PublishView({ doc }: { doc: string }) {
       <PageHeader
         testId="publish-header"
         // qa-docs-31: the same crumb as the document's other pages: PRDs / <document> <status>.
-        back={<DocCrumb doc={d} />}
+        back={<DocCrumb doc={d} mkPill={qv === "a" && published ? <Chip kind="pass">Published</Chip> : undefined} />} // MOCK-HOOK QV4 a: one word, Published
         title={word} // MOCK-HOOK
         suffix={d ? `${d.title}${n != null ? ` v${n}` : ""}` : undefined}
-        status={blocksChip}
+        status={qv === "a" && published ? undefined : blocksChip} // MOCK-HOOK QV4 a: no "Not blocked" once published
         action={action}
       />
       {docQ.error && <ErrorNote>{docQ.error}</ErrorNote>}

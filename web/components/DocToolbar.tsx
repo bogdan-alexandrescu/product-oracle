@@ -23,7 +23,7 @@ function home(doc?: DocumentOut) {
  * The crumb above a document page's title: back to the list. With `withTitle`, it also
  * names the document and its status (pages whose own title is something else, like a diff).
  */
-export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTitle?: boolean }) {
+export function DocCrumb({ doc, withTitle = true, mkPill }: { doc?: DocumentOut; withTitle?: boolean; mkPill?: ReactNode }) { // MOCK-HOOK mkPill: QV4 a's own status pill
   const h = home(doc);
   // The rail highlights the same list (Plan for a roadmap, Company for a strategy) once the kind is known.
   useDocumentDestination(doc?.slug, doc ? h.href : undefined);
@@ -45,7 +45,7 @@ export function DocCrumb({ doc, withTitle = true }: { doc?: DocumentOut; withTit
           ) : (
             <span className="text-text2">…</span>
           )}
-          {doc && <DocStatusChip status={doc.status} />}
+          {doc && (mkPill ?? <DocStatusChip status={doc.status} />)}{/* MOCK-HOOK */}
         </>
       )}
     </nav>

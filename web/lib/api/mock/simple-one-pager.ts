@@ -415,7 +415,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const note = (c: (typeof db.changes)[number], kind: "change" | "proposal"): Schemas["OnePagerNote"] => {
     const lineId = String(c.target.line_id);
     return {
-      change_id: c.id, line_id: lineId, kind, by: c.by, by_name: c.by_name, at: c.at, in_meeting: c.in_meeting,
+      change_id: c.id, line_id: lineId, kind, by: c.by, by_name: mkSeeded && c.by === ctx.id ? "You" : c.by_name, at: c.at, /* MOCK-HOOK: the signed-in owner reads "You" */ in_meeting: c.in_meeting,
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
       can_undo: kind === "proposal" ? c.by === ctx.id : c.by === ctx.id && c.session_open,
       can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
@@ -519,7 +519,9 @@ async function mkSeed(db: OnePagerDb, ctx: OnePagerCtx) { // MOCK-HOOK
     await edit(ownerId, "owner", "bets-1", "A setup checklist that shows the next step", "A setup checklist that shows the next two steps and how long each takes"); // MOCK-HOOK
     await edit(ownerId, "owner", "not_doing-2", "A mobile setup flow", "A mobile setup flow before the spring release"); // MOCK-HOOK
   } // MOCK-HOOK
+  db.changes.forEach((c) => (c.at = "2026-10-31T05:22:00Z")); // MOCK-HOOK: one pinned time for the owner's edits (Oct 30, 10:22 PM PT)
   if (q.get("mkprop")) await edit(commenterId, "commenter", "risks-1", "Calendar access may scare admins away", "Asking for calendar access on day one may scare admins away; ask after the first invite"); // MOCK-HOOK
+  db.changes.forEach((c) => (c.by === commenterId && commenterId !== ownerId ? (c.at = "2026-10-31T05:25:00Z") : null)); // MOCK-HOOK
   if (q.get("mkdraft") === "submitted" && db.draft) { // MOCK-HOOK
     db.draft.status = "submitted"; // MOCK-HOOK
     db.draft.waiting_on = [...ctx.reviewers]; // MOCK-HOOK

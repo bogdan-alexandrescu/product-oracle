@@ -3,7 +3,7 @@
 import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react"; // MOCK-HOOK
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
@@ -362,6 +362,12 @@ export function DocumentOverview({ doc }: { doc: string }) {
     }),
   );
   const d = q.data;
+  const reloadDoc = q.reload; // MOCK-HOOK
+  useEffect(() => { // MOCK-HOOK
+    const f = () => void reloadDoc(); // MOCK-HOOK
+    window.addEventListener("mk-qv4-changed", f); // MOCK-HOOK
+    return () => window.removeEventListener("mk-qv4-changed", f); // MOCK-HOOK
+  }, [reloadDoc]); // MOCK-HOOK
   const versions = [...(d?.versions ?? [])].reverse();
   const [picked, setPicked] = useState<number | null>(null);
   const selected = versions.find((v) => v.number === picked) ?? versions[0] ?? null;

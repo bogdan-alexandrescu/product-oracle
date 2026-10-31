@@ -364,7 +364,7 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
   const [audience, setAudience] = useState<Audience>(initial);
   const [label, setLabel] = useState("");
   const [expires, setExpires] = useState<Expiry>("14d");
-  const [download, setDownload] = useState(true);
+  const [download, setDownload] = useState(!useSearchParams().get("qv4")); // MOCK-HOOK QV4: PDF download off until ticked
   const [passcode, setPasscode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -955,7 +955,7 @@ function Qv4Row({ done, testId, children, fix }: { done: boolean; testId: string
   return ( // MOCK-HOOK
     <li data-testid={testId} data-done={done} className="flex min-h-9 items-center gap-2 border-t border-line py-1.5 first:border-t-0">{/* MOCK-HOOK */}
       <Icon name={done ? "check" : "alert"} size={16} className={`flex-none ${done ? "text-pass" : "text-warn"}`} />{/* MOCK-HOOK */}
-      <span className={`min-w-0 flex-1 ${done ? "text-text2 line-through" : "font-medium text-text"}`}>{children}</span>{/* MOCK-HOOK */}
+      <span className={`min-w-0 flex-1 ${done ? "text-text2" : "font-medium text-text"}`}>{children}</span>{/* MOCK-HOOK */}
       {!done && fix}{/* MOCK-HOOK */}
     </li> // MOCK-HOOK
   ); // MOCK-HOOK
@@ -1051,6 +1051,7 @@ function Qv4Blockers({ qv, doc, n, audience, onClose, onPublished, onShared }: {
     } finally { // MOCK-HOOK
       setBusy(false); // MOCK-HOOK
       void q.reload(); // MOCK-HOOK
+      window.dispatchEvent(new Event("mk-qv4-changed")); // MOCK-HOOK: the page behind shows the new version state too
     } // MOCK-HOOK
   }; // MOCK-HOOK
   const errorNote = error && <ErrorNote>{error}</ErrorNote>; // MOCK-HOOK
@@ -1123,7 +1124,7 @@ function Qv4Blockers({ qv, doc, n, audience, onClose, onPublished, onShared }: {
     run(async () => { // MOCK-HOOK
       if (!approved) await doApprove(); // MOCK-HOOK
       const pub = await doPublish(); // MOCK-HOOK
-      const out = await unwrap(api.POST("/v1/documents/{doc}/share-links", { params: { path: { doc } }, body: { publication_id: pub.id, audience, label: label.trim(), expires_in: "14d", allow_download: true, passcode: null } })); // MOCK-HOOK
+      const out = await unwrap(api.POST("/v1/documents/{doc}/share-links", { params: { path: { doc } }, body: { publication_id: pub.id, audience, label: label.trim(), expires_in: "14d", allow_download: false, passcode: null } })); // MOCK-HOOK
       onShared({ url: out.url, passcode: out.passcode, expires_at: out.expires_at }); // MOCK-HOOK
     }); // MOCK-HOOK
   return ( // MOCK-HOOK

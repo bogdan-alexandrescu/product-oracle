@@ -379,7 +379,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           >
             {!phone && <Glyph d={REVIEW} />}{mk.qv1 === "a" || mk.qv1 === "c" ? "Start a review meeting" : "Start review"} {/* MOCK-HOOK */}
           </button>
-          {!v.can_start && (
+          {!v.can_start && !phone && ( // MOCK-HOOK QV2: on phone the reason gets its own line below the row
             <span id="start-review-why" data-testid="start-review-why" className="absolute top-full right-0 z-[1] mt-1 w-max max-w-[240px] text-right text-[13px] leading-[17px] text-text2">
               {startWhy}
             </span>
@@ -390,6 +390,9 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       <Link className={`${btn(phone)} ${phone ? TAP44 : ""}`} href={`/documents/${v.document.slug}`} {...(sessionId ? { target: "_blank", rel: "noopener" } : {})}>
         Open the detailed view{sessionId ? " (new tab)" : ""}
       </Link>
+      {!sessionId && mk.qv1 !== "b" && !v.can_start && phone && ( // MOCK-HOOK
+        <span id="start-review-why" data-testid="start-review-why" className="basis-full text-[13px] leading-[17px] text-text2">{startWhy}</span> // MOCK-HOOK
+      )} {/* MOCK-HOOK */}
     </>
   );
   const toast = saved && (
@@ -609,6 +612,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                             )}
                           </div>
                         )}
+                        {mk.qv2 === "b" && !presenting && <Qv2LineMark v={v} lineId={l.id} />} {/* MOCK-HOOK QV2 b: marked in place, right under its line's words */}
                         {b.kind === "metrics" && editing !== l.id && (
                           // 2026-10-30: how the outcome is measured, from the PRD (what is counted and where).
                           <p className="pl-3 text-sm text-text2" data-testid="outcome-measure">
@@ -662,7 +666,6 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                           </div>
                         )}
                       </div>
-                      {mk.qv2 === "b" && !presenting && <Qv2LineMark v={v} lineId={l.id} />} {/* MOCK-HOOK QV2 b: marked in place */}
                       {/* Phone: the margin notes move under their line. */}
                       <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
                     </li>
@@ -758,7 +761,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
           </span>
         )}
         {/* qa-simple-prd-9: the same state the One-pagers list names. */}
-        {approved && draft && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
+        {approved && draft && !presenting && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}{/* MOCK-HOOK: hidden while presenting */}
         {/* qa-simple-prd-p3-16: never approved, it shows the status the list shows ("In review", "Draft"). */}
         {!approved && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
         <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
@@ -849,7 +852,7 @@ function MarginNote({
       <p>
         {n.kind === "change"
           ? `${n.can_undo ? "You" : n.by_name} changed ${quote} · ${clock(n.at, zone)}${n.meeting_title ? `, in ${n.meeting_title}` : n.in_meeting ? ", in the meeting" : ""}`
-          : `${n.can_undo ? "You propose" : `${n.by_name} proposes`} new wording for ${quote} · ${clock(n.at, zone)}`}
+          : `${n.can_undo || n.by_name === "You" ? "You propose" : `${n.by_name} proposes`} new wording for ${quote} · ${clock(n.at, zone)}`} {/* MOCK-HOOK */}
       </p>
       {/* qa-simple-prd-35: a proposal shows its words at once. */}
       {n.kind === "proposal" && <p className="mt-1 text-[15px]" data-testid="proposal-words">“{n.after}”</p>}
