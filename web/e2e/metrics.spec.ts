@@ -286,7 +286,7 @@ test("the Goal select and what Save sends agree: a goal of another unit is dropp
   await sheet.getByLabel("Unit", { exact: true }).selectOption("%");
   await sheet.getByLabel("Goal").selectOption({ label: "Raise activation" });
   await sheet.getByLabel("Unit", { exact: true }).selectOption({ label: "Count of…" });
-  await sheet.getByLabel("Counted noun").fill("accounts");
+  await sheet.getByLabel("Count of what", { exact: true }).fill("accounts");
   await expect(sheet.getByLabel("Goal")).toHaveValue("");
   await sheet.getByLabel("Owner").selectOption({ label: "Approver" });
   await sheet.getByLabel("Source").selectOption("manual");

@@ -94,12 +94,13 @@ test.describe("desktop", () => {
     for (const select of [unit, dialog.getByLabel("Kind"), dialog.getByLabel("Good direction")]) {
       await expect(select).toHaveJSProperty("tagName", "SELECT");
     }
-    await expect(dialog.getByLabel("Counted noun")).toHaveCount(0);
+    await expect(dialog.getByLabel("Count of what", { exact: true })).toHaveCount(0);
     await unit.selectOption({ label: "Count of…" });
-    await dialog.getByLabel("Counted noun").fill("teams");
+    await dialog.getByLabel("Count of what", { exact: true }).fill("teams");
+    await expect(dialog).not.toContainText("Counted noun");
     await expect(dialog.getByTestId("metric-goal-help")).toHaveText("No confirmed goal is measured in teams yet.");
     await unit.selectOption("%");
-    await expect(dialog.getByLabel("Counted noun")).toHaveCount(0);
+    await expect(dialog.getByLabel("Count of what", { exact: true })).toHaveCount(0);
     await expect(dialog.getByTestId("metric-goal-help")).toContainText("Confirmed goals measured in the same unit.");
   });
 

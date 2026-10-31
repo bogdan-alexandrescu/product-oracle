@@ -82,6 +82,40 @@ test("qa4-company-6: an approver edits an alternative's kind and website, then a
   await expect(alternativeRow(page, "Competitor A")).toHaveCount(1);
 });
 
+test("review: the Archive confirm says it cannot be undone here", async ({ page }) => {
+  await openAlternatives(page);
+  await alternativeRow(page, "Spreadsheets").click();
+  const panel = inspector(page);
+  await panel.getByRole("button", { name: "Archive", exact: true }).click();
+  await expect(panel.getByTestId("archive-confirm")).toContainText("This cannot be undone here.");
+});
+
+test("review: a name-only edit saves an alternative whose older website is http://", async ({ page }) => {
+  await openAlternatives(page);
+  await alternativeRow(page, "Competitor B").click();
+  const panel = inspector(page);
+  await expect(panel.getByTestId("alternative-about")).toContainText("competitor-b.example");
+  await panel.getByRole("button", { name: "Edit", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit alternative" });
+  await expect(dialog.getByLabel("Website")).toHaveValue("http://competitor-b.example");
+  await dialog.getByLabel("Name").fill("Competitor B Tracker");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(alternativeRow(page, "Competitor B Tracker")).toHaveCount(1);
+});
+
+test("review: a website with no host, like https://:443, is refused in the dialog", async ({ page }) => {
+  await openAlternatives(page);
+  const dialog = await openAddAlternative(page);
+  await dialog.getByLabel("Name").fill("Shared docs");
+  await dialog.getByLabel("Kind").selectOption({ label: "Status quo" });
+  await dialog.getByLabel("Website").fill("https://:443");
+  await dialog.getByRole("button", { name: "Add alternative" }).click();
+  await expect(dialog.getByTestId("website-error")).toContainText("Only https:// addresses can be added");
+  await expect(dialog).toBeVisible();
+  await expect(alternativeRow(page, "Shared docs")).toHaveCount(0);
+});
+
 test("qa4-company-6: a viewer sees no Edit or Archive on an alternative", async ({ page }) => {
   await openAlternatives(page, VIEWER);
   await alternativeRow(page, "Spreadsheets").click();

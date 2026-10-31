@@ -82,7 +82,8 @@ test.describe("desktop", () => {
 
     await actions(page).getByRole("button", { name: "Withdraw", exact: true }).click();
     const withdraw = inspector(page).getByRole("form", { name: "Withdraw" });
-    await expect(withdraw.getByRole("button", { name: /^Withdraw D-\d+$/ })).toBeVisible();
+    await expect(withdraw.getByRole("button", { name: "Withdraw this decision", exact: true })).toBeVisible();
+    await expect(withdraw).not.toContainText(/D-\d+/);
     await expect(inspector(page).getByRole("button", { name: "Withdraw", exact: true })).toHaveCount(1);
     await withdraw.getByRole("button", { name: "Cancel" }).click();
     await expect(withdraw).toHaveCount(0);
@@ -170,5 +171,21 @@ test.describe("desktop", () => {
     await row(other, CAPS).click();
     await expect(inspector(other)).toContainText(CAPS);
     await expect(inspector(other).getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+  });
+});
+
+test.describe("one column (900 px)", () => {
+  test.use({ viewport: { width: 900, height: 900 } });
+
+  test("review: with no decision to show, no empty 'Pick a decision' panel sits under the list", async ({ page }) => {
+    await login(page);
+    await page.goto("/company/decisions?state=all");
+    await expect(inspector(page)).toBeVisible();
+    await group(page, "Kind")
+      .getByRole("button", { name: /^Checkpoints/ })
+      .click();
+    await expect(page.getByTestId("decisions-empty")).toBeVisible();
+    await expect(inspector(page)).toHaveCount(0);
+    await expect(page.getByTestId("decision-inspector-empty")).toBeHidden();
   });
 });
