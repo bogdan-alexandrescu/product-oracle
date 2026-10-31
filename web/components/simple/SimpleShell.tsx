@@ -292,9 +292,9 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               data-testid="simple-person-name"
               title={me?.email || me?.name || undefined}
               aria-hidden={!!me?.email && personLine(me) === me.email ? true : undefined}
-              className={`text-[15px] font-semibold text-rail-active-text ${me?.email && personLine(me) === me.email ? "truncate" : "[overflow-wrap:break-word]"}`}
+              className={`font-semibold text-rail-active-text ${me?.email && personLine(me) === me.email ? "truncate text-[13px]" : "text-[15px] [overflow-wrap:break-word]"}`}
             >
-              {/* qa4-simple-home-20: an email stays on one line, cut with an ellipsis (whole in its tooltip). */}
+              {/* qa4-simple-home-20: an email stays on one line, a size smaller so a short one shows whole; a long one is cut with an ellipsis (whole in its tooltip). */}
               {personLine(me)}
             </span>
             <span className="text-[14px] text-rail-text capitalize">{role ?? ""}</span>

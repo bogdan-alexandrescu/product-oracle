@@ -192,7 +192,8 @@ test("qa-simple-home-7: skipping every step ends by saying what is left, and sta
   await signIn(page, "simple-home");
   const total = await startWalk(page);
   const kinds = await skipAll(page, total);
-  const decisions = kinds.filter((k) => k === "decision" || k === "agenda_decision").length;
+  // qa4-simple-home-9: a meeting agenda item is counted apart from the decisions.
+  const decisions = kinds.filter((k) => k === "decision").length;
   const broken = kinds.filter((k) => k === "broken_link").length;
   const finished = page.getByTestId("walk-finished");
   await expect(finished).not.toContainText("That is everything");
