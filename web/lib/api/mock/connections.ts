@@ -12,6 +12,7 @@
 import type { Schemas } from "@/lib/api/client";
 
 import { FIREFLIES_CONNECTION_ID } from "./fireflies";
+import { MOCK_LOGIN } from "./fixtures";
 import { newCompany } from "./ids";
 import { MOCK_NOTION_CONNECTION_ID, notionPages } from "./notion";
 
@@ -302,6 +303,9 @@ function load(): ConnDb {
   return { connections: newCompany() ? [] : seedConnections(), settings: {} };
 }
 
+/** The seeded connections (seedConnections), the default company's owner's own. */
+const SEEDED_IDS = ["c0000000-0000-4000-8000-000000000002", "c0000000-0000-4000-8000-000000000004"];
+
 /**
  * qa5-mock-people: the default company's person has connected GitHub with a token (the
  * Sources page's "example-org" account) and Notion; Slack, Google Docs and Fireflies are left
@@ -323,9 +327,18 @@ function seedConnections(): ConnectionRow[] {
     updated_at: created_at,
   });
   return [
-    row("c0000000-0000-4000-8000-000000000002", "github", "github-example-org", "example-org", ["repo"], "2026-09-02T10:00:00Z", "2026-10-20T06:00:00Z"),
-    row("c0000000-0000-4000-8000-000000000004", "notion", "notion-example", "Example Notion", [], "2026-09-10T14:30:00Z", "2026-10-19T06:00:00Z"),
+    row(SEEDED_IDS[0], "github", "github-example-org", "example-org", ["repo"], "2026-09-02T10:00:00Z", "2026-10-20T06:00:00Z"),
+    row(SEEDED_IDS[1], "notion", "notion-example", "Example Notion", [], "2026-09-10T14:30:00Z", "2026-10-19T06:00:00Z"),
   ];
+}
+
+/**
+ * Whether `email` reads connection `c` as theirs. The API keeps each person's connections
+ * (Connection.user_id): the seeded ones are the owner's (MOCK_LOGIN), so another member, an
+ * invited one too, starts with none; the rows the tests connect stay everyone's, as before.
+ */
+function yours(c: ConnectionRow, email: string | undefined): boolean {
+  return !SEEDED_IDS.includes(c.id) || email === undefined || email === MOCK_LOGIN.email;
 }
 
 /** A company setting as the mock stores it (its default when unset). */
@@ -423,11 +436,11 @@ function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
  * What the Set up checklist reads from this store (A1): active connections, the company's
  * domains and whether the horizons were confirmed (a stored row).
  */
-export function setupFacts(): { connections: number; domains: string[]; horizons: boolean; timezone: string | null } {
+export function setupFacts(email?: string): { connections: number; domains: string[]; horizons: boolean; timezone: string | null } {
   const db = load();
   const domains = ("company_email_domains" in db.settings ? db.settings.company_email_domains : SETTING_DEFAULTS.company_email_domains) as string[];
   return {
-    connections: db.connections.filter((c) => c.status === "active").length,
+    connections: db.connections.filter((c) => c.status === "active" && yours(c, email)).length,
     domains,
     horizons: "planning_horizons" in db.settings,
     timezone: "company_timezone" in db.settings ? String(db.settings.company_timezone) : null,
@@ -435,15 +448,15 @@ export function setupFacts(): { connections: number; domains: string[]; horizons
 }
 
 /** Handles /v1/connections… and /v1/settings…; null for other routes. */
-export async function connectionsRoute(req: Request, p: string[], role: string = "owner"): Promise<Response | null> {
+export async function connectionsRoute(req: Request, p: string[], role: string = "owner", email?: string): Promise<Response | null> {
   if (p[1] !== "connections" && p[1] !== "settings") return null;
   const db = load();
-  const res = await handle(db, req, p, role);
+  const res = await handle(db, req, p, role, email);
   save(db);
   return res;
 }
 
-async function handle(db: ConnDb, req: Request, p: string[], role: string): Promise<Response> {
+async function handle(db: ConnDb, req: Request, p: string[], role: string, email?: string): Promise<Response> {
   const m = req.method;
   const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
 
@@ -498,7 +511,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string): Prom
   }
 
   if (p[1] === "connections") {
-    if (!p[2] && m === "GET") return json(200, db.connections.map((c) => out(db, c)));
+    if (!p[2] && m === "GET") return json(200, db.connections.filter((c) => yours(c, email)).map((c) => out(db, c)));
     if (p[2] === "providers" && m === "GET") return json(200, PROVIDERS);
     if (p[2] === "google" && p[3] === "picker-config" && m === "GET") return json(200, MOCK_PICKER_CONFIG);
     const provider = PROVIDERS.find((x) => x.key === p[2]);
