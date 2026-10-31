@@ -292,6 +292,14 @@ function parseDay(text: string): string | null {
   return d;
 }
 
+/** "Dec 1, 2026" (that day) or "Dec 1" (the next such day, as parseDay). */
+function fullDay(text: string): string | null {
+  const m = /^([a-z]+ \d{1,2}),? (\d{4})$/i.exec(text.trim());
+  if (!m) return parseDay(text);
+  const d = parseDay(m[1]);
+  return d ? `${m[2]}${d.slice(4)}` : null;
+}
+
 /** The n months from the first of `month` (0-based; it may run past December). */
 const months = (year: number, month: number, n: number): [string, string] => [isoDay(Date.UTC(year, month, 1)), isoDay(Date.UTC(year, month + n, 0))];
 
@@ -844,6 +852,11 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
     }
     if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:by\s+)?(?:a|one)\s+quarter$/i.exec(part))) out.push({ op: "move_dates", x: m[1], months: 3 });
     else if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:to|into)\s+(.+)$/i.exec(part)) && parsePeriod(m[2])) out.push({ op: "move_dates", x: m[1], period: parsePeriod(m[2])! });
+    // meet-chat-right-prd: "move X to start on Dec 1, 2026" (a day, its year optional): it starts that day.
+    else if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+to\s+(?:start\s+(?:on\s+)?)?([a-z]+ \d{1,2}(?:,? \d{4})?)$/i.exec(part)) && fullDay(m[2])) {
+      const d = fullDay(m[2])!;
+      out.push({ op: "move_dates", x: m[1], period: [d, addDays(d, 29)] });
+    }
     else if ((m = /\b(?:cut|drop)\s+(.+)$/i.exec(part))) out.push({ op: "cut", x: m[1] });
     else if ((m = /\bmake\s+(.+?)\s+(?:the\s+owner\s+of|own)\s+(.+)$/i.exec(part))) out.push({ op: "set_owner", x: m[2], rest: m[1] });
     if (out.length === had) skipped.push(part);
