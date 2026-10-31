@@ -1,20 +1,20 @@
-"use client";
+"use client"; // MOCK-HOOK
 // MOCK-HOOK: the whole file is mk-runplan mock-up code (never merged). RP1 = how a run's new
-// features get ranked (?rp1=a|b|c|d); RP2 = where a not-yet-approved PRD's dated items show in
-// Simple (?rp2=a|b|c|d). State switches: &open=1, &phase=mid, &done=1, &step=1, &sel=<key>.
+// features get ranked (?rp1=a|b|c|d); RP2 = where a not-yet-approved PRD's dated items show in // MOCK-HOOK
+// Simple (?rp2=a|b|c|d). State switches: &open=1, &phase=mid, &done=1, &step=1, &sel=<key>. // MOCK-HOOK
 
 import { useSearchParams } from "next/navigation"; // MOCK-HOOK
 import { useState, type CSSProperties, type ReactNode } from "react"; // MOCK-HOOK
 
 import { Button, Chip, Icon, Notice, Panel } from "@/components/ds"; // MOCK-HOOK
 import type { Schemas } from "@/lib/api/client"; // MOCK-HOOK
-import { MK_DRAFT_ITEMS, MK_MERGED_ORDER, MK_NEW_FEATURES, MK_PRD, MK_PRD_RP1, MK_RANGE, type MkDraftItem, type MkNewFeature } from "@/lib/api/mock/mk-runplan"; // MOCK-HOOK
+import { MK_DRAFT_ITEMS, MK_MERGED_ORDER, MK_NEW_FEATURES, MK_NEXT_PRD, MK_PRD, MK_PRD_RP1, MK_RANGE, type MkDraftItem, type MkNewFeature } from "@/lib/api/mock/mk-runplan"; // MOCK-HOOK
 
 type RankedFeature = Schemas["RankedFeature"]; // MOCK-HOOK
 
 export type Mk = { rp1: string | null; rp2: string | null; open: boolean; mid: boolean; done: boolean; step: number | null; sel: string | null }; // MOCK-HOOK
 
-/** The mock-up switches from the URL. */
+/** The mock-up switches from the URL. */ // MOCK-HOOK
 export function useMk(): Mk { // MOCK-HOOK
   const q = useSearchParams(); // MOCK-HOOK
   const step = q.get("step"); // MOCK-HOOK
@@ -23,47 +23,66 @@ export function useMk(): Mk { // MOCK-HOOK
 
 export const isNew = (key: string) => key.startsWith("N-"); // MOCK-HOOK
 
-/** A new feature as a row of the order, scored from the run's feature set. */
-function asRow(n: MkNewFeature, rank: number | null, method: RankedFeature["explanation"]["method"]): RankedFeature { // MOCK-HOOK
+/** A new feature as a row of the order, scored on the baseline's formula with the goal a baseline row already names. */ // MOCK-HOOK
+function asRow(n: MkNewFeature, rank: number | null, method: RankedFeature["explanation"]["method"], rows: RankedFeature[]): RankedFeature { // MOCK-HOOK
+  const g = rows.flatMap((r) => r.explanation.goals).find((x) => x.title === n.goalTitle); // MOCK-HOOK: the same goal the baseline rows show
+  const gid = g?.goal ?? n.goalTitle; // MOCK-HOOK
+  const value = n.weight * n.contribution; // MOCK-HOOK
   return { // MOCK-HOOK
     rank: rank ?? 0, score_rank: rank ?? 0, entity_id: "", key: n.key, title: n.title, status: "proposed", score: rank == null ? null : n.score, serves_goal: true, flags: [], depends_on: n.depends ? [n.depends] : [], dependents: [], // MOCK-HOOK
     explanation: { // MOCK-HOOK
-      method, formula: "goal weight × contribution × confidence ÷ effort", inputs: {}, // MOCK-HOOK
-      confidence: { value: rank == null ? 0 : n.confidence, source: "default", explain: rank == null ? "Not scored: not in the baseline yet." : `From the run's feature set: ${n.why}`, evidence: [] }, // MOCK-HOOK
-      goals: [{ goal: n.goal, title: n.goalTitle, weight: 3, contribution: 2 } as never], missing: [], steps: rank == null ? [] : [`score from the run's feature set = ${n.score}`], order: [], // MOCK-HOOK
+      method, formula: "goal weight × contribution × confidence ÷ effort", // MOCK-HOOK
+      inputs: { effort: { value: n.effort, attr: "effort", raw: n.effort }, goal_value: { value, terms: [] } }, // MOCK-HOOK
+      confidence: { value: n.confidence, source: "attrs", explain: `Set on the feature by the run: ${n.why}`, evidence: [] }, // MOCK-HOOK
+      goals: [{ ...(g ?? {}), goal: gid, title: n.goalTitle, weight: n.weight, contribution: n.contribution, term: value } as never], missing: [], // MOCK-HOOK
+      steps: rank == null ? [] : [`goal value = ${n.weight}×${n.contribution} (${gid}) = ${value}`, `score = ${value} × ${n.confidence} ÷ ${n.effort} = ${n.score}`], order: [], // MOCK-HOOK
     }, // MOCK-HOOK
     run_explanation: rank == null ? null : `New in this PRD. ${n.why}`, // MOCK-HOOK
-  }; // MOCK-HOOK
+  } as RankedFeature; // MOCK-HOOK
 } // MOCK-HOOK
 
-/** True when the order shows the new features ranked among the baseline's. */
+/** True when the order shows the new features ranked among the baseline's. */ // MOCK-HOOK
 export function mergedShown(mk: Mk): boolean { // MOCK-HOOK
   return mk.rp1 === "a" || (mk.done && (mk.rp1 === "b" || mk.rp1 === "c" || mk.rp1 === "d")); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** The rows of the run's order for each proposal: merged, or the baseline's only. */
+/** The merged order's keys: b leaves one out. */ // MOCK-HOOK
+const mergedKeys = (mk: Mk) => MK_MERGED_ORDER.filter((k) => !(mk.rp1 === "b" && k === "N-6")); // MOCK-HOOK
+
+/** The rows of the run's order for each proposal: merged, or the baseline's only. */ // MOCK-HOOK
 export function mkRows(rows: RankedFeature[] | undefined, mk: Mk, method: RankedFeature["explanation"]["method"]): RankedFeature[] | undefined { // MOCK-HOOK
   if (!rows || !mk.rp1) return rows; // MOCK-HOOK
   if (!mergedShown(mk)) return rows; // MOCK-HOOK
   const byKey = new Map(rows.map((r) => [r.key, r])); // MOCK-HOOK
-  return MK_MERGED_ORDER.filter((k) => !(mk.rp1 === "b" && k === "N-6")).map((k, i) => { // MOCK-HOOK: b left one out
+  return mergedKeys(mk).map((k, i) => { // MOCK-HOOK
     const n = MK_NEW_FEATURES.find((x) => x.key === k); // MOCK-HOOK
-    return n ? asRow(n, i + 1, method) : { ...(byKey.get(k) ?? rows[0]!), rank: i + 1 }; // MOCK-HOOK
+    return n ? asRow(n, i + 1, method, rows) : { ...(byKey.get(k) ?? rows[0]!), rank: i + 1 }; // MOCK-HOOK
   }); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** The "New in this PRD" chip on a merged row. */
+/** The run's compare rows with the merged rank: Δ is worked out again as Live # minus the new #. */ // MOCK-HOOK
+export function mkCompare<T extends { key: string; run_rank: number; live_rank?: number | null; delta?: number | null }>(rows: T[] | undefined, mk: Mk): T[] | undefined { // MOCK-HOOK
+  if (!rows || !mk.rp1 || !mergedShown(mk)) return rows; // MOCK-HOOK
+  const keys = mergedKeys(mk); // MOCK-HOOK
+  return rows.map((c) => { // MOCK-HOOK
+    const at = keys.indexOf(c.key) + 1; // MOCK-HOOK
+    return at === 0 ? c : { ...c, run_rank: at, delta: c.live_rank == null ? null : c.live_rank - at }; // MOCK-HOOK
+  }); // MOCK-HOOK
+} // MOCK-HOOK
+
+/** The "New in this PRD" chip on a merged row. */ // MOCK-HOOK
 export function NewChip({ k }: { k: string }) { // MOCK-HOOK
-  if (!isNew(k)) return null; // MOCK-HOOK
+  const mk = useMk(); // MOCK-HOOK
+  if (!isNew(k) || (mk.rp1 === "d" && mk.done)) return null; // MOCK-HOOK: d's later order: they are in the baseline by then
   return <Chip kind="acc" title="Not in the baseline yet: proposed by this PRD's run">New in this PRD</Chip>; // MOCK-HOOK
 } // MOCK-HOOK
 
 const N = MK_NEW_FEATURES.length; // MOCK-HOOK
 
-/**
- * The order stop's band additions: RP1 b's "accept first" gate, a's and c's results.
- * Returns whether Approve order is held.
- */
+/** // MOCK-HOOK
+ * The order stop's band additions: RP1 b's "accept first" gate, a's and c's results. // MOCK-HOOK
+ * Returns whether Approve order is held. // MOCK-HOOK
+ */ // MOCK-HOOK
 export function mkApproveHeld(mk: Mk): string | null { // MOCK-HOOK
   if (mk.rp1 === "b" && !mk.done) return `Accept or leave out this PRD's ${N} new features first.`; // MOCK-HOOK
   return null; // MOCK-HOOK
@@ -76,7 +95,7 @@ export function MkOrderNotes({ mk }: { mk: Mk }) { // MOCK-HOOK
       <Notice tone={mk.done ? "pass" : "info"}> {/* MOCK-HOOK */}
         {mk.done // MOCK-HOOK
           ? `Order approved. The ${N} new features joined the baseline as proposed, at the ranks you approved.` // MOCK-HOOK
-          : `This order ranks the ${N} features ${MK_PRD_RP1.title} adds, scored from the run's feature set. Approving the order adds them to the baseline as proposed.`} {/* MOCK-HOOK */}
+          : `This order ranks the ${N} features ${MK_PRD_RP1.title} adds, scored on the same formula and goals as the rest. Approving the order adds them to the baseline as proposed.`} {/* MOCK-HOOK */}
       </Notice> // MOCK-HOOK
     ); // MOCK-HOOK
   if (mk.rp1 === "b" && mk.done) return <Notice tone="pass">{`5 new features accepted into the baseline and ranked below. Address labels and notes was left out.`}</Notice>; // MOCK-HOOK
@@ -106,18 +125,18 @@ export function MkOrderNotes({ mk }: { mk: Mk }) { // MOCK-HOOK
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2.5"> {/* MOCK-HOOK */}
               <Button variant="primary" icon="check">{`Accept ${picked.size} and rank them`}</Button> {/* MOCK-HOOK */}
               <Button>Cancel</Button> {/* MOCK-HOOK */}
-              <span className="text-sm text-text2">{`Accepted features join the baseline as proposed; the run re-scores the order with them.${picked.size < N ? ` ${N - picked.size} left out stay in the PRD only.` : ""}`}</span> {/* MOCK-HOOK */}
+              <span className="text-sm text-text2">{`Accepted features join the baseline as proposed; the run re-scores the order with them.${picked.size < N ? ` ${N - picked.size} left out stays in the PRD only.` : ""}`}</span> {/* MOCK-HOOK */}
             </div> {/* MOCK-HOOK */}
           </div> // MOCK-HOOK
         )} {/* MOCK-HOOK */}
       </section> // MOCK-HOOK
     ); // MOCK-HOOK
   if (mk.rp1 === "c" && mk.done) return <Notice tone="pass">{`${N} new features ranked into this order. They stay proposed in the baseline until the PRD is approved.`}</Notice>; // MOCK-HOOK
-  if (mk.rp1 === "d" && mk.done) return <Notice tone="info">{`${MK_PRD_RP1.title} was approved on Nov 20: its ${N} features joined the baseline, and this new order ranks them.`}</Notice>; // MOCK-HOOK
+  if (mk.rp1 === "d" && mk.done) return <Notice tone="info">{`${MK_PRD_RP1.title} was approved on Nov 20 and its ${N} features joined the baseline. This is the next order, from the ${MK_NEXT_PRD.title} run: it ranks them with the rest.`}</Notice>; // MOCK-HOOK
   return null; // MOCK-HOOK
 } // MOCK-HOOK
 
-/** RP1 c's "Proposed by this PRD" group and d's plain "Not ranked yet" group, under the order. */
+/** RP1 c's "Proposed by this PRD" group and d's plain "Not ranked yet" group, under the order. */ // MOCK-HOOK
 export function MkProposedGroup({ mk }: { mk: Mk }) { // MOCK-HOOK
   if ((mk.rp1 !== "c" && mk.rp1 !== "d") || mk.done) return null; // MOCK-HOOK
   const c = mk.rp1 === "c"; // MOCK-HOOK
@@ -129,12 +148,12 @@ export function MkProposedGroup({ mk }: { mk: Mk }) { // MOCK-HOOK
     > {/* MOCK-HOOK */}
       <p className="border-b border-line px-4 py-2.5 text-sm text-text2"> {/* MOCK-HOOK */}
         {c // MOCK-HOOK
-          ? `New in ${MK_PRD_RP1.title}: not in the baseline, so the order above leaves them out. Rank them to score them from the run's feature set and place them in this order.` // MOCK-HOOK
+          ? `New in ${MK_PRD_RP1.title}: not in the baseline, so the order above leaves them out. Rank them to score them on the same formula as the rest and place them in this order.` // MOCK-HOOK
           : `New in ${MK_PRD_RP1.title}. They are ranked once the PRD is approved and they join the baseline; until then this order ranks the baseline's features only.`} {/* MOCK-HOOK */}
       </p> {/* MOCK-HOOK */}
       {c && mk.open && ( // MOCK-HOOK
         <div className="border-b border-line bg-accent-soft px-4 py-3"> {/* MOCK-HOOK */}
-          <p className="font-semibold">{mk.mid ? `Scoring ${N} features from the run's feature set…` : `Rank ${N} new features into this order?`}</p> {/* MOCK-HOOK */}
+          <p className="font-semibold">{mk.mid ? `Scoring ${N} features on the same formula as the rest…` : `Rank ${N} new features into this order?`}</p> {/* MOCK-HOOK */}
           <p className="mt-1 text-sm text-text2">They get a score and a rank here; in the baseline they stay proposed until the PRD is approved. The order must be approved again.</p> {/* MOCK-HOOK */}
           <div className="mt-2 flex gap-2"> {/* MOCK-HOOK */}
             <Button variant="primary" icon="flag" disabled={mk.mid}>{mk.mid ? "Ranking…" : "Rank them"}</Button> {/* MOCK-HOOK */}
@@ -160,19 +179,24 @@ export function MkProposedGroup({ mk }: { mk: Mk }) { // MOCK-HOOK
 
 const t0 = Date.parse(MK_RANGE.start); // MOCK-HOOK
 const t1 = Date.parse(MK_RANGE.end); // MOCK-HOOK
-const at = (d: string) => ((Date.parse(d) - t0) / (t1 - t0)) * 100; // MOCK-HOOK
+const tJul = Date.parse("2027-07-01"); // MOCK-HOOK: the axis grows a June when an item moves past May
 const MONTHS = ["Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May"]; // MOCK-HOOK
+const DAYS: Record<string, number> = { Nov: 30, Dec: 31, Jan: 31, Feb: 28, Mar: 31, Apr: 30, May: 31, Jun: 30 }; // MOCK-HOOK
 const day = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }); // MOCK-HOOK
 
-/** The hatch every draft bar wears. */
+/** The hatch every draft bar wears. */ // MOCK-HOOK
 export const HATCH: CSSProperties = { backgroundImage: "repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, transparent) 0 6px, transparent 6px 12px)", border: "1.5px dashed var(--accent)" }; // MOCK-HOOK
 
-/** A small timeline of the draft's items: hatched bars over the months. */
+/** A small timeline of the draft's items: hatched bars over the months. */ // MOCK-HOOK
 export function MkDraftBars({ items = MK_DRAFT_ITEMS, solid = false, picked, label }: { items?: MkDraftItem[]; solid?: boolean; picked?: string | null; label?: string }) { // MOCK-HOOK
+  const june = items.some((i) => Date.parse(i.end) > t1); // MOCK-HOOK
+  const end = june ? tJul : t1; // MOCK-HOOK
+  const months = june ? [...MONTHS, "Jun"] : MONTHS; // MOCK-HOOK
+  const at = (d: string) => ((Date.parse(d) - t0) / (end - t0)) * 100; // MOCK-HOOK
   return ( // MOCK-HOOK
     <div aria-label={label ?? "Draft dates"} className="min-w-0"> {/* MOCK-HOOK */}
-      <div className="grid grid-cols-7 border-b border-line text-[13px] text-text2"> {/* MOCK-HOOK */}
-        {MONTHS.map((m) => <span key={m} className="border-l border-line px-1.5 py-1 first:border-l-0">{m}</span>)} {/* MOCK-HOOK */}
+      <div className="grid border-b border-line text-[13px] text-text2" style={{ gridTemplateColumns: months.map((m) => `${DAYS[m]}fr`).join(" ") }}> {/* MOCK-HOOK: each month as wide as its days */}
+        {months.map((m) => <span key={m} className="border-l border-line px-1.5 py-1 first:border-l-0">{m}</span>)} {/* MOCK-HOOK */}
       </div> {/* MOCK-HOOK */}
       <div className="relative py-1"> {/* MOCK-HOOK */}
         {items.map((i) => ( // MOCK-HOOK
@@ -192,7 +216,7 @@ export function MkDraftBars({ items = MK_DRAFT_ITEMS, solid = false, picked, lab
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** The legend chip for a draft: a hatched swatch and its words. */
+/** The legend chip for a draft: a hatched swatch and its words. */ // MOCK-HOOK
 export function DraftKey({ children }: { children: ReactNode }) { // MOCK-HOOK
   return ( // MOCK-HOOK
     <span className="inline-flex items-center gap-1.5 text-[15px] text-text2"> {/* MOCK-HOOK */}
@@ -202,7 +226,7 @@ export function DraftKey({ children }: { children: ReactNode }) { // MOCK-HOOK
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** A draft item's card when its bar is picked. */
+/** A draft item's card when its bar is picked. */ // MOCK-HOOK
 function DraftCard({ item, where }: { item: MkDraftItem; where: "roadmap" | "one-pager" }) { // MOCK-HOOK
   return ( // MOCK-HOOK
     <div role="dialog" aria-label={item.title} className="simple-card mt-3 max-w-[460px] border-accent"> {/* MOCK-HOOK */}
@@ -213,7 +237,7 @@ function DraftCard({ item, where }: { item: MkDraftItem; where: "roadmap" | "one
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** RP2 on the Simple roadmap page (a: draft layer; b/c: nothing; d: said plainly). */
+/** RP2 on the Simple roadmap page (a: draft layer; b/c: nothing; d: said plainly). */ // MOCK-HOOK
 export function MkRoadmapDraft({ mk, phone }: { mk: Mk; phone: boolean }) { // MOCK-HOOK
   if (mk.rp2 === "d") // MOCK-HOOK
     return mk.done ? ( // MOCK-HOOK
@@ -245,7 +269,29 @@ export function MkRoadmapDraft({ mk, phone }: { mk: Mk; phone: boolean }) { // M
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** RP2 in the PRD's one-pager timeline (b: hatched there; d: said plainly; a/c: the page as today). */
+type OnePagerOut = Schemas["OnePagerOut"]; // MOCK-HOOK
+
+/** The Saved carts one-pager's own words (invented), in place of the mock's one seeded one-pager. */ // MOCK-HOOK
+const MK_CARTS: Record<string, (string | { name: string; from: string; to: string })[]> = { // MOCK-HOOK
+  problem: ["Buyers who build a large order lose their cart when they switch devices or wait for sign-off, and most never rebuild it."], // MOCK-HOOK
+  bets: ["Save a cart and come back to it on any device", "Share a saved cart with the team before buying", "Turn a saved cart into a quote for sign-off"], // MOCK-HOOK
+  outcomes: [{ name: "Saved carts that become orders", from: "12%", to: "25%" }, { name: "Large orders rebuilt by hand", from: "40%", to: "15%" }], // MOCK-HOOK
+  not_doing: ["Wish lists for single buyers", "Carts shared outside the account"], // MOCK-HOOK
+  risks: ["Prices in a saved cart may change before checkout", "Decide how long a saved cart is kept"], // MOCK-HOOK
+}; // MOCK-HOOK
+
+/** RP2: the draft PRD's one-pager reads as Saved carts, its header span the draft's own dates. */ // MOCK-HOOK
+export function mkOnePager(v: OnePagerOut, mk: Mk): OnePagerOut { // MOCK-HOOK
+  if (!mk.rp2) return v; // MOCK-HOOK
+  const line = (b: string, i: number, x: string | { name: string; from: string; to: string }) => ({ ...v.blocks[0]!.lines[0]!, id: `mk-${b}-${i}`, text: typeof x === "string" ? x : `${x.name} from ${x.from} to ${x.to}`, full: null, flow: null, flow_subject: null, can_draw_flow: false, decisions: [], footnotes: [], measure: null, measure_source: null, metric: typeof x === "string" ? null : x }) as OnePagerOut["blocks"][number]["lines"][number]; // MOCK-HOOK
+  return { // MOCK-HOOK
+    ...v, needs_look: [], notes: [], // MOCK-HOOK
+    span_start: mk.rp2 === "b" ? MK_DRAFT_ITEMS[0]!.start : null, span_end: mk.rp2 === "b" ? MK_DRAFT_ITEMS.at(-1)!.end : null, // MOCK-HOOK: d: no dates until approved
+    blocks: v.blocks.map((b) => (MK_CARTS[b.key] ? { ...b, who: b.key === "problem" ? "Buyers at companies of 20 to 500 people who order for a team" : b.who, lines: MK_CARTS[b.key]!.map((x, i) => line(b.key, i, x)) } : b)), // MOCK-HOOK
+  }; // MOCK-HOOK
+} // MOCK-HOOK
+
+/** RP2 in the PRD's one-pager timeline (b: hatched there; d: said plainly; a/c: the page as today). */ // MOCK-HOOK
 export function MkOnePagerDraft({ mk, phone }: { mk: Mk; phone: boolean }) { // MOCK-HOOK
   if (mk.rp2 === "d") // MOCK-HOOK
     return <p className="text-base text-text-faint">{`No roadmap items yet. The run dated ${MK_DRAFT_ITEMS.length} items; they show here once this PRD is approved.`}</p>; // MOCK-HOOK
@@ -268,7 +314,7 @@ export function MkOnePagerDraft({ mk, phone }: { mk: Mk; phone: boolean }) { // 
   ); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** RP2 in the review meeting's Roadmap step (c: as a draft to approve; d: said plainly). */
+/** RP2 in the review meeting's Roadmap step (c: as a draft to approve; d: said plainly). */ // MOCK-HOOK
 export function MkMeetingDraft({ mk, canChange }: { mk: Mk; canChange: boolean }) { // MOCK-HOOK
   if (mk.rp2 === "d") // MOCK-HOOK
     return <p className="simple-small">{`No roadmap items for this PRD yet. Its run dated ${MK_DRAFT_ITEMS.length} items; they join the roadmap when the PRD is approved.`}</p>; // MOCK-HOOK
@@ -277,13 +323,13 @@ export function MkMeetingDraft({ mk, canChange }: { mk: Mk; canChange: boolean }
     return ( // MOCK-HOOK
       <div className="space-y-2"> {/* MOCK-HOOK */}
         <p role="status" className="simple-small">{`Dates approved in this meeting: ${MK_DRAFT_ITEMS.length} items are on the roadmap.`}</p> {/* MOCK-HOOK */}
-        <MkDraftBars solid label="Roadmap items" items={MK_DRAFT_ITEMS.map((i) => (i.key === "R-6" ? { ...i, start: "2027-05-03", end: "2027-06-01", horizon: "later" } : i))} /> {/* MOCK-HOOK */}
+        <MkDraftBars solid label="Roadmap items" items={MK_DRAFT_ITEMS.map((i) => (i.key === "R-6" ? { ...i, start: "2027-05-03", end: "2027-06-25", horizon: "later" } : i))} /> {/* MOCK-HOOK */}
       </div> // MOCK-HOOK
     ); // MOCK-HOOK
-  const items = mk.mid ? MK_DRAFT_ITEMS.map((i) => (i.key === "R-6" ? { ...i, start: "2027-05-03", end: "2027-06-01", horizon: "later" as const } : i)) : MK_DRAFT_ITEMS; // MOCK-HOOK
+  const items = mk.mid ? MK_DRAFT_ITEMS.map((i) => (i.key === "R-6" ? { ...i, start: "2027-05-03", end: "2027-06-25", horizon: "later" as const } : i)) : MK_DRAFT_ITEMS; // MOCK-HOOK
   return ( // MOCK-HOOK
     <div className="space-y-3"> {/* MOCK-HOOK */}
-      <div className="flex flex-wrap items-center gap-3"><DraftKey>Draft from the run: not approved</DraftKey>{mk.mid && <span role="status" className="simple-small">Moved Turn a cart into a quote to May (draft)</span>}</div> {/* MOCK-HOOK */}
+      <div className="flex flex-wrap items-center gap-3"><DraftKey>Draft from the run: not approved</DraftKey>{mk.mid && <span role="status" className="simple-small">Moved Turn a cart into a quote 4 weeks later (draft)</span>}</div> {/* MOCK-HOOK */}
       <MkDraftBars items={items} picked={mk.mid ? "R-6" : null} label="Draft roadmap" /> {/* MOCK-HOOK */}
       <ul className="divide-y divide-line"> {/* MOCK-HOOK */}
         {items.map((i) => ( // MOCK-HOOK

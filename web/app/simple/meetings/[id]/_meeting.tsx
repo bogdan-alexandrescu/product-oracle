@@ -1,7 +1,7 @@
 "use client";
 
 import { MkMeetingDraft, useMk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
-import { MK_PRD } from "@/lib/api/mock/mk-runplan"; // MOCK-HOOK
+import { MK_DRAFT_ITEMS, MK_PRD } from "@/lib/api/mock/mk-runplan"; // MOCK-HOOK
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -117,7 +117,8 @@ function useAct(reload: () => Promise<unknown>) {
 
 function LiveScreen({ m: real, reload }: { m: Meeting; reload: () => Promise<unknown> }) { // MOCK-HOOK
   const mkUrl = useMk(); // MOCK-HOOK
-  const m = mkUrl.rp2 ? { ...real, title: `Review: ${MK_PRD.title}`, prd: { ...real.prd, title: MK_PRD.title } } : real; // MOCK-HOOK: the review is of the draft PRD
+  const mkDecided = mkUrl.rp2 === "c" && mkUrl.done ? [{ id: "00000000-0000-4000-8000-0000000000d1", number: 12, title: `${MK_PRD.title} dates approved: ${MK_DRAFT_ITEMS.length} items on the roadmap`, approver: { id: "00000000-0000-4000-8000-0000000000a1", name: "Admin" }, at: "2026-10-31T10:42:00Z", subjects: [], change_ids: [], flow: null } as never] : []; // MOCK-HOOK: c's approval, in All decisions
+  const m = mkUrl.rp2 ? { ...real, title: `Review: ${MK_PRD.title}`, prd: { ...real.prd, title: MK_PRD.title }, meeting_decisions: [...mkDecided, ...real.meeting_decisions] } : real; // MOCK-HOOK: the review is of the draft PRD
   const zone = useCompanyZone();
   const mk = useMk(); // MOCK-HOOK
   const [step, setStep] = useState(mk.step ?? 0); // MOCK-HOOK

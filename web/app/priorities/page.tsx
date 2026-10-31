@@ -29,7 +29,8 @@ import {
   type Column,
 } from "@/components/ds";
 import { usePhone } from "@/components/ds/page-info";
-import { MkOrderNotes, MkProposedGroup, NewChip, mkApproveHeld, mkRows, useMk, type Mk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
+import { MkOrderNotes, MkProposedGroup, NewChip, mkApproveHeld, mkCompare, mkRows, useMk, type Mk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
+import { MK_NEXT_PRD } from "@/lib/api/mock/mk-runplan"; // MOCK-HOOK
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
@@ -474,6 +475,7 @@ function FeatureInspector({
         title={f.title}
         label={`Feature ${f.title}`}
         testId="priority-inspector"
+        statColumns={run ? 2 : undefined} // MOCK-HOOK: four tiles in two rows, so no figure breaks
         // On the theme's card surface like every other card, not a dark hero (qa-plan-33).
         tone="card"
         chips={
@@ -911,8 +913,9 @@ function Priorities() {
     { keepPrevious: true },
   );
   const cmpLive = snapshotId ? (cq.data ?? null) : null; // MOCK-HOOK
-  const mkDecided = mk.done && (mk.rp1 === "a" || mk.rp1 === "d"); // MOCK-HOOK
-  const cmp = cmpLive && mkDecided ? { ...cmpLive, snapshot: { ...cmpLive.snapshot, status: "saved" as const }, checkpoint: cmpLive.checkpoint && { ...cmpLive.checkpoint, status: "approved" } } : cmpLive; // MOCK-HOOK
+  const mkDecided = mk.done && mk.rp1 === "a"; // MOCK-HOOK
+  const mkLater = mk.done && mk.rp1 === "d" && cmpLive?.snapshot.document; // MOCK-HOOK: d's later order, from the next PRD's run
+  const cmp = cmpLive && mkDecided ? { ...cmpLive, snapshot: { ...cmpLive.snapshot, status: "saved" as const }, checkpoint: cmpLive.checkpoint && { ...cmpLive.checkpoint, status: "approved" } } : cmpLive && mkLater ? { ...cmpLive, snapshot: { ...cmpLive.snapshot, document: { ...mkLater, slug: MK_NEXT_PRD.slug, title: MK_NEXT_PRD.title } } } : cmpLive; // MOCK-HOOK
   const [chosen, setMethod] = useState<Method>("goal_weighted");
   const method: Method = cmp?.snapshot.method ?? chosen;
   const [selected, setSelected] = useState<string | null>(mk.sel); // MOCK-HOOK
@@ -948,7 +951,7 @@ function Priorities() {
     unwrap(api.GET("/v1/priorities/overrides", { params: { query: { limit: 200 } } })),
   );
   const r = q.data;
-  const byKey = new Map(cmp?.rows.map((c) => [c.key, c]) ?? []);
+  const byKey = new Map(mkCompare(cmp?.rows, mk)?.map((c) => [c.key, c]) ?? []); // MOCK-HOOK: Δ from the merged rank
   // Run mode: the run's order, each row its live RankedFeature at the run's rank.
   const stored = new Map(cmp?.snapshot.ranking.map((f) => [f.key, f]) ?? []);
   const runRows = cmp?.rows.map((c) => ({ ...(stored.get(c.key) ?? placeholder(c, method)), rank: c.run_rank }));
@@ -1304,7 +1307,7 @@ function Priorities() {
           counts && (
             <>
               {capsReady && !canSnapshot && !canOverride && <ViewOnly />}
-              <Chip kind="acc">{counts.features} ranked</Chip>
+              <Chip kind="acc">{cmp && mk.rp1 ? features.length : counts.features} ranked</Chip> {/* MOCK-HOOK */}
               {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
               {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
               {counts.in_cycles > 0 && <Chip kind="warn">{counts.in_cycles} in a cycle</Chip>}

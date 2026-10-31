@@ -1,6 +1,6 @@
 // MOCK-HOOK: mk-runplan frame capture (never merged). Each frame: a fresh mock session, the
-// real UI driven to the state, then a static HTML snapshot (styles inlined, scripts removed,
-// fonts in assets/) and a PNG under mockups-out/mk-runplan/.
+// real UI driven to the state, then a static HTML snapshot (styles inlined, scripts removed, // MOCK-HOOK
+// fonts in assets/) and a PNG under mockups-out/mk-runplan/. // MOCK-HOOK
 import fs from "node:fs"; // MOCK-HOOK
 import path from "node:path"; // MOCK-HOOK
 import { test, expect, type Page } from "../test"; // MOCK-HOOK
@@ -23,7 +23,7 @@ async function signIn(page: Page, email: string, scenario?: string) { // MOCK-HO
   await page.waitForURL("**/home"); // MOCK-HOOK
 } // MOCK-HOOK
 
-/** RP1: the run's order stop (Detailed › Priorities in run mode) with the switches. */
+/** RP1: the run's order stop (Detailed › Priorities in run mode) with the switches. */ // MOCK-HOOK
 const order = (q: string, after?: (page: Page) => Promise<void>) => async (page: Page) => { // MOCK-HOOK
   await signIn(page, "approver@example.com", "priority-order"); // MOCK-HOOK
   await page.goto(`/runs/${PRIORITY_RUN}`); // MOCK-HOOK
@@ -35,7 +35,7 @@ const order = (q: string, after?: (page: Page) => Promise<void>) => async (page:
   if (after) await after(page); // MOCK-HOOK
 }; // MOCK-HOOK
 
-/** RP2: Simple's roadmap, the PRD's one-pager, the review meeting's Roadmap step. */
+/** RP2: Simple's roadmap, the PRD's one-pager, the review meeting's Roadmap step. */ // MOCK-HOOK
 const roadmap = (q: string) => async (page: Page) => { // MOCK-HOOK
   await signIn(page, "admin@example.com"); // MOCK-HOOK
   await page.goto(`/simple/roadmap?${q}`); // MOCK-HOOK
@@ -74,11 +74,11 @@ const ALL: Frame[] = [ // MOCK-HOOK
   { file: "rp1-b-open", ...D, go: order("rp1=b&open=1") }, // MOCK-HOOK
   { file: "rp1-b-mid", ...D, go: order("rp1=b&open=1&phase=mid", async (page) => { await center(page.getByRole("button", { name: "Accept 5 and rank them" })); }) }, // MOCK-HOOK
   { file: "rp1-b-done", ...D, go: order("rp1=b&done=1") }, // MOCK-HOOK
-  { file: "rp1-b-open-1512", ...W, go: order("rp1=b&open=1&phase=mid") }, // MOCK-HOOK
-  { file: "rp1-b-open-390", ...P, go: order("rp1=b&open=1&phase=mid", async (page) => { await center(page.getByRole("button", { name: "Accept 5 and rank them" })); }) }, // MOCK-HOOK
+  { file: "rp1-b-open-1512", ...W, go: order("rp1=b&open=1") }, // MOCK-HOOK
+  { file: "rp1-b-open-390", ...P, go: order("rp1=b&open=1", async (page) => { await center(page.getByRole("button", { name: "Accept 6 and rank them" })); }) }, // MOCK-HOOK
   { file: "rp1-c-rest", ...D, go: order("rp1=c", scrollTo("Proposed by this PRD")) }, // MOCK-HOOK
-  { file: "rp1-c-open", ...D, go: order("rp1=c&open=1", scrollTo("Proposed by this PRD")) }, // MOCK-HOOK
-  { file: "rp1-c-mid", ...D, go: order("rp1=c&open=1&phase=mid", scrollTo("Proposed by this PRD")) }, // MOCK-HOOK
+  { file: "rp1-c-open", ...D, go: order("rp1=c&open=1", scrollTo("Rank 6 new features into this order?")) }, // MOCK-HOOK
+  { file: "rp1-c-mid", ...D, go: order("rp1=c&open=1&phase=mid", scrollTo("Scoring 6 features on the same formula as the rest…")) }, // MOCK-HOOK
   { file: "rp1-c-done", ...D, go: order("rp1=c&done=1") }, // MOCK-HOOK
   { file: "rp1-c-rest-1512", ...W, go: order("rp1=c") }, // MOCK-HOOK
   { file: "rp1-d-rest", ...D, go: order("rp1=d", scrollTo("Not ranked yet")) }, // MOCK-HOOK
@@ -108,7 +108,7 @@ const ALL: Frame[] = [ // MOCK-HOOK
 
 const only = process.env.MK_ONLY ? new RegExp(process.env.MK_ONLY) : null; // MOCK-HOOK
 
-/** Snapshot the page: a static HTML file (styles inlined, scripts gone, fonts in assets/) and a PNG. */
+/** Snapshot the page: a static HTML file (styles inlined, scripts gone, fonts in assets/) and a PNG. */ // MOCK-HOOK
 async function snap(page: Page, f: Frame) { // MOCK-HOOK
   await page.waitForTimeout(900); // MOCK-HOOK
   const { html, css } = await page.evaluate(() => { // MOCK-HOOK

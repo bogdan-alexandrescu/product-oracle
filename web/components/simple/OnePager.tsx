@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Button, LinkButton } from "@/components/ds";
 import { clock, FlowPanel } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
-import { MkOnePagerDraft, useMk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
+import { MkOnePagerDraft, mkOnePager, useMk } from "@/components/mk/MkRunPlan"; // MOCK-HOOK
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
@@ -249,7 +249,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       </div>
     );
   }
-  const v: View = q.data;
+  const v: View = mkOnePager(q.data, mk); // MOCK-HOOK: the draft PRD's own words
   const numbers = new Map<string, number>();
   const words = new Map<string, string>();
   v.blocks.flatMap((b) => b.lines).forEach((l, i) => {

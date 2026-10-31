@@ -1,29 +1,29 @@
 {
   "title": "A run's new features and dated items in the plan",
-  "subtitle": "A Baseline to PRD run for Saved addresses proposes 6 new features; a run for Saved carts has dated 6 items after the engineering dates stop. Pick how the order stop ranks the new features (RP1) and where Simple shows the dates before the PRD is approved (RP2). Every frame is the real app on mock data; switch with ?rp1=a|b|c|d or ?rp2=a|b|c|d, plus &open=1, &phase=mid, &done=1.",
+  "subtitle": "A Baseline to PRD run for Saved addresses proposes 6 new features; a run for Saved carts has dated 6 items after the engineering dates stop. Pick how the order stop ranks the new features (RP1) and where Simple shows the dates before the PRD is approved (RP2). Every frame is the real app on invented mock data.",
   "decisions": [
     {
       "code": "RP1",
       "name": "How a run's new features get ranked",
       "question": "How should the run's Priority order stop rank the features its PRD adds, which the baseline does not have yet?",
-      "common": "The order stop is Detailed › Priorities with the run's order (Live #, Δ, Approve order, Request changes). Today the PRD's 6 new features sit at the bottom unranked, by key, at 0% confidence, and only join the baseline if someone accepts the run's proposals, which nothing asks for. Every proposal names them as new in this PRD and says what happens to them.",
+      "common": "The order stop is Detailed › Priorities with the run's order (Live #, Δ, Approve order, Request changes). Today the PRD's 6 new features sit at the bottom unranked, by key, at 0% confidence, and only join the baseline if someone accepts the run's proposals, which nothing asks for. Every proposal names them as new in this PRD and says what happens to them. The feature panel on the right shows its four figures two by two: in the built app, four in one row break a score like 0.60 and the word Confidence across lines at 1440 and 1512.",
       "proposals": [
         {
           "letter": "a",
           "name": "Scored with the rest",
           "recommended": true,
-          "what": "The order stop scores the new features from the run's feature set and ranks them among the baseline's features, each with a 'New in this PRD' chip. A line above the table says approving the order adds them to the baseline as proposed. One decision, at the stop that already exists.",
+          "what": "The order stop scores the new features on the same formula and goals as the baseline's (goal weight × contribution × confidence ÷ effort) and ranks them by score among them, each with a 'New in this PRD' chip. A line above the table says approving the order adds them to the baseline as proposed. One decision, at the stop that already exists.",
           "why": "The order stop is the one place someone is already asked to decide; ranking the PRD's own features there closes the gap with no new step, and approving it is the 'accept' that nothing asks for today.",
           "plus": "No extra step; the order is whole the first time; the person approving sees exactly where each new feature lands.",
-          "cost": "Approving the order also changes the baseline, a side effect some will miss; new features are scored from the run's feature set only, with no evidence yet (the inspector shows it).",
+          "cost": "Approving the order also changes the baseline, a side effect some will miss; the new features' confidence is set by the run, with no evidence yet (the feature panel shows it).",
           "frames": [
             {
               "file": "frames/rp1-a-rest.html",
-              "caption": "At rest: the run's order with the 6 new features ranked in, each marked 'New in this PRD'; the line above says approving adds them to the baseline."
+              "caption": "At rest: the 6 new features ranked by score among the baseline's, each marked 'New in this PRD'; Δ shows how far each baseline feature moved; the line above says approving adds them to the baseline."
             },
             {
               "file": "frames/rp1-a-open.html",
-              "caption": "A new feature opened: its score comes from the run's feature set, 50% confidence and no evidence yet. This is the cost."
+              "caption": "A new feature opened: Import addresses is #8 at 1.80, worked out like every other row; its 60% confidence is set by the run, with no evidence yet. This is the cost."
             },
             {
               "file": "frames/rp1-a-done.html",
@@ -31,11 +31,11 @@
             },
             {
               "file": "frames/rp1-a-rest-1512.html",
-              "caption": "Hard case at 1512: 11 rows, the longest name wraps to five lines beside the open inspector."
+              "caption": "Hard case at 1512: 11 rows; the longest name wraps to three lines beside the open feature panel."
             },
             {
               "file": "frames/rp1-a-rest-390.html",
-              "caption": "Phone 390: each row card carries the 'New in this PRD' chip under its name."
+              "caption": "Phone 390: each row card carries the 'New in this PRD' chip beside its name."
             }
           ]
         },
@@ -65,11 +65,11 @@
             },
             {
               "file": "frames/rp1-b-open-1512.html",
-              "caption": "Hard case at 1512: the review list pushes the order itself below the fold. This is the cost."
+              "caption": "Hard case at 1512: the open review list pushes the order itself below the fold. This is the cost."
             },
             {
               "file": "frames/rp1-b-open-390.html",
-              "caption": "Phone 390: the list scrolls under the band; Accept and Cancel sit at its foot."
+              "caption": "Phone 390: the list fills the screen; Accept 6 and rank them and Cancel sit at its foot, with the order below."
             }
           ]
         },
@@ -79,7 +79,7 @@
           "recommended": false,
           "what": "The order stays the baseline's. Under it, a 'Proposed by this PRD' group lists the new features unscored, with a Rank them action that scores them from the run's feature set and places them in the order, which then needs approving again.",
           "plus": "The approver sees the baseline's order untouched first, and ranks the new ones on purpose; they stay proposed in the baseline until the PRD is approved.",
-          "cost": "Easy to approve the order without ever pressing Rank them; the group sits below the table, out of sight at 1440 and 1512.",
+          "cost": "Easy to approve the order without ever pressing Rank them: Approve order sits at the top and works while the group is still unscored.",
           "frames": [
             {
               "file": "frames/rp1-c-rest.html",
@@ -91,7 +91,7 @@
             },
             {
               "file": "frames/rp1-c-mid.html",
-              "caption": "Mid-way: scoring the 6 features from the run's feature set."
+              "caption": "Mid-way: scoring the 6 features on the same formula as the rest; the buttons wait."
             },
             {
               "file": "frames/rp1-c-done.html",
@@ -99,7 +99,7 @@
             },
             {
               "file": "frames/rp1-c-rest-1512.html",
-              "caption": "Hard case at 1512: the group is below the fold; Approve order is right there at the top. This is the cost."
+              "caption": "At 1512: the group and Rank them show under the order, but Approve order at the top works without them; nothing asks to rank the 6 first. This is the cost."
             }
           ]
         },
@@ -117,7 +117,7 @@
             },
             {
               "file": "frames/rp1-d-done.html",
-              "caption": "Later: once Saved addresses is approved, the next order ranks them with the rest."
+              "caption": "Later: Saved addresses was approved, and the next order, from the Delivery slots run, ranks its 6 features with the rest."
             },
             {
               "file": "frames/rp1-d-rest-1512.html",
@@ -173,7 +173,7 @@
           "frames": [
             {
               "file": "frames/rp2-b-rest.html",
-              "caption": "At rest: the one-pager's Timeline with 6 hatched draft items."
+              "caption": "At rest: the Saved carts one-pager, its header spanning the draft's Nov 9 → May 28, with 6 hatched draft items in its Timeline."
             },
             {
               "file": "frames/rp2-b-open.html",
@@ -208,7 +208,7 @@
             },
             {
               "file": "frames/rp2-c-mid.html",
-              "caption": "Mid-way: 'Turn a cart into a quote' moved to May, still draft."
+              "caption": "Mid-way: 'Turn a cart into a quote' moved 4 weeks later, to May 3 – Jun 25, still draft; the chart grows a June to show it."
             },
             {
               "file": "frames/rp2-c-open.html",
@@ -216,7 +216,7 @@
             },
             {
               "file": "frames/rp2-c-done.html",
-              "caption": "Result: the dates approved in the meeting; the 6 items are on the roadmap, solid."
+              "caption": "Result: the dates approved in the meeting; the 6 items are on the roadmap, solid, and All decisions lists the approval."
             },
             {
               "file": "frames/rp2-c-rest-1512.html",

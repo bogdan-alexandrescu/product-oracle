@@ -1,5 +1,5 @@
 // MOCK-HOOK: mk-runplan mock-up capture only (never merged): drives the running mock app on
-// E2E_PORT and snapshots each frame; scrollbars shown.
+// E2E_PORT and snapshots each frame; scrollbars shown. // MOCK-HOOK
 import { defineConfig, devices } from "@playwright/test"; // MOCK-HOOK
 
 export default defineConfig({ // MOCK-HOOK

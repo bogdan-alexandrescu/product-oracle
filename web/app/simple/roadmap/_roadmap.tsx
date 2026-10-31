@@ -1093,7 +1093,7 @@ export function SimpleRoadmap() {
     setGoalStart(!people.length && oracle.length ? "oracle" : undefined);
     setGoalPanel(g);
   };
-  const goalCounters = <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={openCounted} only={pickedGoal} />;
+  const goalCounters = mk.rp2 === "a" && f.prd === MK_PRD.slug ? null /* MOCK-HOOK: the draft PRD alone has no goal tiles */ : <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={openCounted} only={pickedGoal} />;
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
