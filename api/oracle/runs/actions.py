@@ -691,7 +691,7 @@ async def put_action(
         # C7: each reason of a feature keeps its own call, so keeping another reason never
         # un-keeps the first and Undo takes back one call.
         field = body.answers[0]
-    existing =await db.scalar(
+    existing = await db.scalar(
         select(CheckpointAction).where(
             CheckpointAction.checkpoint_id == cp.id,
             CheckpointAction.item_key == body.item_key,
