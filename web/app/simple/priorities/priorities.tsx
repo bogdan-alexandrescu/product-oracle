@@ -214,6 +214,8 @@ export function Priorities() {
                 tabRefs.current[k] = el;
               }}
               role="tab"
+              id={`prio-tab-${t.key}`}
+              aria-controls="prio-panel"
               aria-selected={tab === t.key}
               tabIndex={tab === t.key ? 0 : -1}
               onKeyDown={(e) => tabKey(e, k)}
@@ -241,6 +243,8 @@ export function Priorities() {
         )}
       </div>
 
+      {/* qa4-simple-plan-29: the shown view is the tab panel its tab names. */}
+      <div role="tabpanel" id="prio-panel" aria-labelledby={`prio-tab-${tab}`}>
       {q.error && !data && <p role="alert" className="text-crit">{q.error}</p>}
       {!data && !q.error && <p className="text-text2">Loading priorities…</p>}
       {blank && (
@@ -269,6 +273,7 @@ export function Priorities() {
       )}
       {data && !blank && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
       {data && !blank && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
+      </div>
     </div>
   );
 }
@@ -334,7 +339,8 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
   // qa-simple-plan-5: closing the move dialog (Escape, Cancel, Move) puts focus back on the row's handle.
   const backToHandle = (featureId: string) =>
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-handle="${featureId}"]`)?.focus());
-  const list = <YourList data={data} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} moved={moved} />;
+  // qa4-simple-plan-6: beside Oracle's order (half the width) each card's details take a line of their own.
+  const list = <YourList data={data} half={compare && !phone} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} moved={moved} />;
   return (
     <>
       {compare && phone && (
@@ -385,7 +391,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
   );
 }
 
-function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
+function YourList({ data, half = false, mayChange, onMove, changed, moved }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
   const rows = byLine(data);
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
@@ -513,20 +519,9 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
               />
               <CodeChip r={r} />
               <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">{r.title}</span>
-              {/* After the title, so a moved row's title starts where the others' do. */}
-              {r.oracle_rank != null && r.oracle_rank !== r.rank && (
-                <span
-                  data-testid="prio-ghost"
-                  title="Oracle's rank"
-                  className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-2 text-[length:var(--simple-small)] text-text2"
-                >
-                  Oracle #{r.oracle_rank}
-                </span>
-              )}
-              {words && <MovedTag words={words} />}
-              <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2">
+              <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : "ml-auto"} flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
                 {/* The chips stay together, wrapping as one group. */}
-                <span className="flex flex-none flex-wrap items-center gap-1.5">
+                <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
                   {!r.above_line && <MissesTag data={data} row={r} />}
                   {goalOf(r) ? (
                     <span data-testid="prio-goal">{goalOf(r)}</span>
@@ -562,9 +557,24 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
                 </span>
               </span>
             </div>
+            {/* qa4-simple-plan-25: Oracle's rank and the move sit in a slot of their own under the row, so the row keeps its layout. */}
+            {((r.oracle_rank != null && r.oracle_rank !== r.rank) || words) && (
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 sm:pl-12" data-testid="prio-marks">
+                {r.oracle_rank != null && r.oracle_rank !== r.rank && (
+                  <span
+                    data-testid="prio-ghost"
+                    title="Oracle's rank"
+                    className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-2 text-[length:var(--simple-small)] text-text2"
+                  >
+                    Oracle #{r.oracle_rank}
+                  </span>
+                )}
+                {words && <MovedTag words={words} />}
+              </p>
+            )}
             {mayChange && !r.can_reorder && (
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="prio-locked">
-                You can&apos;t move this one: it is on a roadmap you don&apos;t have open to you.
+                Only people with access to this feature&apos;s roadmap can move it. Ask the owner for access.
               </p>
             )}
             {r.after && (
@@ -596,6 +606,21 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
 }
 
 /**
+ * qa4-simple-plan-22: why a row nobody moved ranks differently in yours: the moves that went past
+ * it ("pushed down when Mobile alert push moved up"), else a dependency's.
+ */
+function pushedBy(rows: Row[], r: Row): string {
+  const o = r.oracle_rank ?? r.rank;
+  const down = r.rank > o;
+  // Moved rows that crossed it: up past it (it went down), or down past it (it went up).
+  const movers = rows.filter((x) => x.override && x.oracle_rank != null && (down ? x.oracle_rank > o && x.rank <= r.rank : x.oracle_rank < o && x.rank >= r.rank));
+  const names = movers.map((x) => x.title);
+  const list = names.length > 2 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join(" and ");
+  if (names.length) return `${down ? "pushed down" : "pulled up"} when ${list} moved ${down ? "up" : "down"}`;
+  return down ? "pushed down by the moves above it" : "pulled up by the moves below it";
+}
+
+/**
  * Oracle's order beside yours: the two orders differ, so rows cannot line up one to one; each row
  * Oracle ranks differently is marked (and says where yours has it), with the line and the goal as yours shows them.
  */
@@ -618,7 +643,13 @@ function OracleOrder({ data }: { data: Out }) {
               <CodeChip r={r} />
               <span className="min-w-[8rem] flex-1 font-medium">{r.title}</span>
               <span className="flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
-                <span data-testid="oracle-goal">{goalOf(r) ?? "No goal"}</span>
+                {goalOf(r) ? (
+                  <span data-testid="oracle-goal">{goalOf(r)}</span>
+                ) : (
+                  <span data-testid="oracle-goal" className="whitespace-nowrap rounded-full bg-warn-bg px-2 text-warn">
+                    No goal
+                  </span>
+                )}
                 <span className="whitespace-nowrap">{r.score == null ? "no score" : `score ${fmt(r.score, 2)}`}</span>
               </span>
             </div>
@@ -626,7 +657,7 @@ function OracleOrder({ data }: { data: Out }) {
               <p className="mt-1 text-[length:var(--simple-small)] text-text2 sm:pl-12" data-testid="oracle-why">
                 {r.override
                   ? `Yours: #${r.rank}. ${r.override.by_name} moved it: “${r.override.reason}”`
-                  : `Yours: #${r.rank}, moved by other people's moves.`}
+                  : `Yours: #${r.rank} (${pushedBy(data.rows, r)})`}
               </p>
             )}
           </li>
@@ -1051,7 +1082,8 @@ function markSpots(
   const free = (x: number, y: number) =>
     inside(x, y) &&
     placed.every(([px, py]) => Math.abs(px - x) >= 2 * R || Math.abs(py - y) >= 2 * R) &&
-    o.avoid.every((q) => x + R - 2 <= q[0] || x - R + 2 >= q[2] || y + R - 2 <= q[1] || y - R + 2 >= q[3]);
+    // qa4-simple-plan-9: a mark keeps 3 px clear of a quadrant's name, never on its edge.
+    o.avoid.every((q) => x + R + 3 <= q[0] || x - R - 3 >= q[2] || y + R + 3 <= q[1] || y - R - 3 >= q[3]);
   const out = new Map<string, [number, number]>();
   for (const r of rows) {
     const [x0, y0] = o.at(r);
@@ -1252,8 +1284,9 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     { box: [at * w - 42, vy + 4, at * w + 42, vy + 20] as Box, style: { left: `${at * 100}%`, top: `calc(${valueAt}% + 4px)`, transform: "translateX(-50%)" } },
     { box: [at * w - 42, vy - 20, at * w + 42, vy - 4] as Box, style: { left: `${at * 100}%`, top: `calc(${valueAt}% - 20px)`, transform: "translateX(-50%)" } },
   ]);
-  const effortLabel = (w && effortSpots.find((s) => free(s.box))) || effortSpots[0];
-  const valueLabel = (w && valueSpots.find((s) => free(s.box))) || valueSpots[0];
+  // qa4-simple-plan-9: once the plot is measured, a middle line's words with no free spot are left out, never drawn over a mark.
+  const effortLabel = w ? effortSpots.find((s) => free(s.box)) : effortSpots[0];
+  const valueLabel = w ? valueSpots.find((s) => free(s.box)) : valueSpots[0];
   // qa-simple-plan-14: what the dragged mark will take, live.
   const dragRow = drag ? rows.find((r) => r.code === drag.code) : undefined;
   const pending = dragRow && drag ? dragTo(dragRow, drag.dx, drag.dy) : null;
@@ -1285,12 +1318,16 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
             ))}
             <span data-testid="vxe-median-effort" aria-hidden className="pointer-events-none absolute inset-y-0 w-0" style={{ left: `${effortAt}%` }} />
             <span data-testid="vxe-median-value" aria-hidden className="pointer-events-none absolute inset-x-0 h-0" style={{ top: `${valueAt}%` }} />
-            <span data-testid="vxe-middle-effort" aria-hidden className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink" style={effortLabel.style}>
-              middle effort
-            </span>
-            <span data-testid="vxe-middle-value" aria-hidden className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink" style={valueLabel.style}>
-              middle value
-            </span>
+            {effortLabel && (
+              <span data-testid="vxe-middle-effort" aria-hidden className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink" style={effortLabel.style}>
+                middle effort
+              </span>
+            )}
+            {valueLabel && (
+              <span data-testid="vxe-middle-value" aria-hidden className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink" style={valueLabel.style}>
+                middle value
+              </span>
+            )}
             {QUADRANTS.map((q, k) => (
               <span key={q.name} data-testid="vxe-quadrant" className={`pointer-events-none absolute whitespace-nowrap text-[15px] font-[650] leading-5 text-text-faint ${q.at}`}>
                 {q.name} · {counts[k]}
@@ -1381,7 +1418,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
             {fCodes ? "Each mark shows the feature's code from its one-pager; its rank is in the list." : "Each mark shows the feature's code; its rank is in the list."} Hollow: below the line ({lineWords(data)}). A mark on a middle line counts on the side its rank puts it.
           </li>
         </ul>
-        <p className="mt-1 pl-6 text-[15px] leading-[22px] text-text-faint">
+        <p className="mt-1 pl-6 text-[15px] leading-[22px] text-text2">
           {mayChange ? "Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys); a feature with no goal has no goal value to change." : "Select a mark to find it in the list."}
         </p>
       </section>
@@ -1418,6 +1455,19 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
+                  {/* qa4-simple-plan-8: why a score is out of order: a person's move, or a feature it needs. */}
+                  {r.after ? (
+                    <span data-testid="side-held" title={`After ${r.after.title}, which it needs`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+                      after {rows.find((x) => x.code === r.after!.code)?.short_code || r.after.title}
+                    </span>
+                  ) : (
+                    r.oracle_rank != null &&
+                    r.oracle_rank !== r.rank && (
+                      <span data-testid="side-ghost" title="Oracle's rank" className="flex-none whitespace-nowrap rounded-full border border-dashed border-[var(--simple-ghost)] px-1.5 text-[12px] leading-[18px] text-text2">
+                        Oracle #{r.oracle_rank}
+                      </span>
+                    )
+                  )}
                   {!r.above_line && <MissesTag data={data} compact />}
                   <span className="flex-none tabular-nums text-text2" title="Score">{r.score == null ? "–" : fmt(r.score, 2)}</span>
                 </button>
@@ -1457,8 +1507,11 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
   // qa-simple-plan-1: the day typed is applied only when whole (Apply or Enter), never mid-typing.
   const [day, setDay] = useState("");
   const whole = /^\d{4}-\d{2}-\d{2}$/.test(day) && Number(day.slice(0, 4)) >= 2000;
+  // qa4-simple-plan-33: a day already gone is refused (everything would miss it), said under the field.
+  const today = localDay(new Date());
+  const past = whole && day < today;
   const apply = () => {
-    if (!whole) return;
+    if (!whole || past) return;
     setPicking(false);
     onPick(`date:${day}`);
   };
@@ -1477,8 +1530,10 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
           <input
             type="date"
             autoFocus
-            min="2000-01-01"
+            min={today}
             aria-label="The line's date"
+            aria-invalid={past || undefined}
+            aria-describedby={past ? "prio-line-past" : undefined}
             className={field}
             value={day}
             onChange={(e) => setDay(e.target.value)}
@@ -1489,12 +1544,17 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
               } else if (e.key === "Escape") setPicking(false);
             }}
           />
-          {whole && (
+          {whole && !past && (
             <span data-testid="line-day-preview" className="whitespace-nowrap text-text2">
               {calendarDay(day, { month: "short", day: "numeric", year: "numeric" }, "en-US")}
             </span>
           )}
-          <Button type="button" onClick={apply} disabled={!whole} title={whole ? undefined : "Type the whole date first"}>
+          {past && (
+            <span id="prio-line-past" role="alert" data-testid="line-day-past" className="whitespace-nowrap text-crit">
+              That date has passed: pick today or later.
+            </span>
+          )}
+          <Button type="button" onClick={apply} disabled={!whole || past} title={past ? "That date has passed" : whole ? undefined : "Type the whole date first"}>
             Apply
           </Button>
           <Button type="button" variant="ghost" onClick={() => setPicking(false)}>
@@ -1528,6 +1588,9 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
     </div>
   );
 }
+
+/** A day as a date field writes it (2026-10-31), in the reader's own time zone. */
+const localDay = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 /** The line inside a sentence: "this quarter", "Nov 20, 2026", "Beta · Dec 4, 2026" (never the picker's "By " or "(Now)"). */
 const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now" ? "this quarter" : data.line.label.replace(/^By /, ""));
@@ -1608,7 +1671,7 @@ function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compa
   const own = !!row?.milestone && data.line?.kind === "milestone" && data.line.label.split(" · ")[0] === row.milestone;
   if (own && !compact)
     return (
-      <span data-testid="prio-misses" data-own="true" className="flex-none whitespace-nowrap rounded-full bg-crit-bg px-2 text-[length:var(--simple-small)] font-medium text-crit">
+      <span data-testid="prio-misses" data-own="true" className="min-w-0 max-w-full rounded-full bg-crit-bg px-2 text-[length:var(--simple-small)] font-medium text-crit">
         Misses its own milestone, {lineLabel(data)}
       </span>
     );
@@ -1631,7 +1694,11 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
     <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5 leading-[21px]" : "py-1"}`}>
       <span aria-hidden className="h-0.5 w-6 flex-none bg-accent-ink" />
       {/* qa-simple-plan-19: "misses it" kept together, so no word is left alone on a line. */}
-      <span className="min-w-0">The line: {lineLabel(data)} · everything below misses{"\u00a0"}it</span>
+      {/* qa4-simple-plan-28: one line on a phone (the rest said to screen readers), a rule each side. */}
+      <span className="min-w-0 whitespace-nowrap sm:whitespace-normal">
+        The line: {lineLabel(data)}
+        <span className="sr-only sm:not-sr-only"> · everything below misses{"\u00a0"}it</span>
+      </span>
       <span aria-hidden className="h-0.5 flex-1 bg-accent-ink" />
     </li>
   );
@@ -1648,11 +1715,16 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
   const buckets: Bucket[] = data.buckets.filter((b) => !(b.no_goal && b.weeks === 0 && b.codes.length === 0));
   const percent = sharePercents(buckets.map((b) => b.weeks));
   // Each feature by its code and its name, as the Ranked list shows them.
-  const named = new Map(data.rows.map((r) => [r.code, r.short_code ? `${r.short_code} ${r.title}` : r.title]));
+  const rowOf = new Map(data.rows.map((r) => [r.code, r]));
+  // qa4-simple-plan-2: milestones or key dates on the roadmap (the Line's) are not a dated plan; never say there are no dates.
+  const dated = (data.lines ?? []).some((l) => l.kind === "milestone" || l.kind === "key_date");
   return (
     <section aria-label="Goal buckets">
-      <p className="mb-3 text-text2">
-        No dated plan yet, so the work is not placed by milestone. Engineer-weeks per confirmed goal this quarter: {fmt(data.weeks_total)} wk in all.
+      <p className="mb-3 text-text2" data-testid="buckets-intro">
+        {dated
+          ? "Grouped by goal for this quarter; the milestones and key dates are on the Ranked list's Line."
+          : "No dated plan yet, so the work is not placed by milestone."}{" "}
+        Engineer-weeks per confirmed goal this quarter: {fmt(data.weeks_total)} wk in all.
       </p>
       <figure className="hidden sm:block" data-testid="bucket-bar">
         <figcaption className="mb-1 text-[length:var(--simple-small)] text-text2">Share of engineer-weeks by goal</figcaption>
@@ -1686,7 +1758,21 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
               <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
             </div>
             {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
-            <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.map((c) => named.get(c) ?? c).join(", ") : "Nothing this quarter"}</p>
+            {b.codes.length ? (
+              <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2" data-testid="bucket-features">
+                {b.codes.map((c) => {
+                  const r = rowOf.get(c);
+                  return (
+                    <li key={c} className="flex items-center gap-1.5">
+                      {r && <CodeChip r={r} />}
+                      <span>{r?.title ?? c}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-1 text-[length:var(--simple-small)] text-text2">Nothing this quarter</p>
+            )}
             {!b.no_goal && (
               <div className="mt-3 border-t border-line pt-3">
                 <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} label={can("create_goal_suggestion") ? "See or make suggestions" : "See suggestions"} />
@@ -1814,7 +1900,13 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
                 <li key={b.key} data-testid="plan-outside-goal" data-key={b.key} className="border-b border-line py-[5px] text-[16px] leading-[22px]">
                   <span className={`font-[650] ${b.no_goal ? "text-warn" : ""}`}>{b.no_goal ? "⚠ Serves no confirmed goal" : b.title}</span>
                   {": "}
-                  {rows.map((r) => `${r.short_code || r.code} ${r.title}`).join(", ")}
+                  {rows.map((r, k) => (
+                    <span key={r.code} className="inline-flex items-center gap-1.5">
+                      {k > 0 && ", "}
+                      <CodeChip r={r} />
+                      {r.title}
+                    </span>
+                  ))}
                   <span className="whitespace-nowrap text-text2"> · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))}{"\u00a0"}wk</span>
                 </li>
               ))}
