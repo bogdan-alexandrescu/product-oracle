@@ -872,7 +872,7 @@ export function takeReaderWrote(): boolean {
 }
 
 /** The thread's pending lines, read now (the reader's job ends on the thread's next read). */
-function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): void {
+function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx, s8?: ChatMeetings): void {
   const t = chat.threads[key];
   if (!t) return;
   for (const msg of t.messages) {
@@ -894,6 +894,13 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): 
       choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })),
       choice_drafts: (reply.choices ?? []).map((c) => c.draft),
     });
+    // As chat._keep_question: a kept question is the meeting's open question at once (Notes so far, then the minutes).
+    if (meeting && !meeting.ended && reply.body === MEETING_ASK) {
+      const by = t.messages.find((x) => x.id === msg.reply_to)?.author_name ?? "someone";
+      const n: MeetingNote = { id: `note-${msg.id}`, kind: "question", text: r.text.trim().slice(0, 1000), by_name: by, at: now(), card_id: null };
+      if (meeting.s8 && s8) s8.note(meeting.id, n);
+      else (meeting.notes ??= []).push(n);
+    }
     delete msg.reading;
   }
 }
@@ -1609,7 +1616,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const own = q.get("chat") ? ownChat(chat, ctx, q.get("chat")) : null;
     if (q.get("chat") && !own) return json(404, { detail: "No such chat" });
     const key = own ?? `ask:${ctx.id}:${pageOf(q.get("page"))}`;
-    resolvePending(db, chat, key, ctx);
+    resolvePending(db, chat, key, ctx, s8);
     return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, null));
   }
   // chat-reader: Retry a failed line, pick a clarify question's choice, apply a line's open cards in order.
@@ -1705,7 +1712,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (!meeting.attendee_ids.includes(ctx.id)) return json(403, { detail: "Only the meeting's attendees read and write its chat" });
     const key = `meeting:${meeting.id}`;
     if (!p[5] && m === "GET") {
-      resolvePending(db, chat, key, ctx);
+      resolvePending(db, chat, key, ctx, s8);
       return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, meeting));
     }
     if (p[5] === "messages" && m === "POST") {

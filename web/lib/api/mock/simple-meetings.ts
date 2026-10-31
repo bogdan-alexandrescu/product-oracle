@@ -425,6 +425,23 @@ function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Sc
   }];
 }
 
+/** changes.MEETING_IDLE: a meeting's session closes after this long without a change. */
+export const MEETING_IDLE_MS = 4 * 60 * 60_000;
+
+/**
+ * As meetings._settle and the ticker's idle sweep (meetings.end_idle): a live meeting with
+ * no change through it for MEETING_IDLE_MS (its start, else its last decision) ends, with
+ * Oracle's quick minutes, by its presenter, whether or not anyone opened it.
+ */
+function endIdle(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
+  if (m.status !== "live") return;
+  const last = Math.max(Date.parse(m.started_at), ...db.decisions.filter((d) => d.meeting_id === m.id).map((d) => Date.parse(d.at)));
+  if (mockNowMs() - last < MEETING_IDLE_MS) return;
+  Object.assign(m, { status: "ended", ended_at: iso(mockNowMs()), ended_by: m.presenter_id });
+  m.minutes = extract(ctx, db, m);
+  m.minutes_state = "ready";
+}
+
 /** A "minutes-later" job whose time came: it answers (Oracle's minutes) or fails. */
 function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
   if (!m.minutes_due || m.minutes_state !== "drafting" || mockNowMs() < m.minutes_due.at) return;
@@ -885,6 +902,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   if (method !== "GET" && RANK[ctx.me.role] < RANK.commenter) return json(403, { detail: "Requires the commenter role" });
   if (!p[3]) {
     if (method === "GET") {
+      for (const m of db.meetings) endIdle(ctx, db, m);
       const all = [...db.meetings].sort((a, b) => (a.started_at < b.started_at ? 1 : -1)).map((m) => brief(ctx, db, m));
       return json(200, { upcoming: upcoming(ctx, db), live: all.filter((m) => m.status === "live"), past: all.filter((m) => m.status === "ended") });
     }
@@ -953,6 +971,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   if (!m) return json(404, { detail: "No such meeting" });
   const prd = ps.find((x) => x.slug === m.prd)!;
   const ok = () => json(200, one(ctx, db, m));
+  endIdle(ctx, db, m);
   settleLater(ctx, db, m);
   if (!p[4] && method === "GET") return ok();
   if (p[4] === "join" && method === "POST") {

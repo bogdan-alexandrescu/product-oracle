@@ -43,6 +43,8 @@ class CompanyTick:
     date_suggestions: bool = False
     # Simple's sessions closed after 30 idle minutes.
     sessions_closed: int = 0
+    # Simple's live meetings those sessions ended (oracle.simple.meetings.end_idle).
+    meetings_ended: int = 0
     # Simple S7: goals Oracle queued suggestions for (once each, when they had no items).
     goal_suggestions: int = 0
     # What raised, step by step (logged); the other steps still ran.
@@ -122,8 +124,11 @@ async def tick_company(
     try:
         # Simple S3a (#723): sessions idle 30 minutes close.
         from oracle.simple import changes as simple_changes
+        from oracle.simple import meetings as simple_meetings
 
         out.sessions_closed = await simple_changes.close_idle(db)
+        # A meeting whose session closed ends now, not on its next read.
+        out.meetings_ended = await simple_meetings.end_idle(db)
         await db.commit()
     except Exception as exc:
         log.exception("tick: closing idle Simple sessions failed for company %s", tenant_id)

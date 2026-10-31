@@ -1486,6 +1486,7 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
         # As the mock's question branch: only a line the reader saw nothing to change in;
         # a change it could not build keeps its own reply.
         reply = Reply("note", MEETING_ASK)
+        await _keep_question(s, principal, read.meeting_id, read.line)
     msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
     if reply.kind == "answer" and isinstance(answer, dict):
         msg.citations = _talk().source_of(c, answer.get("source"))
@@ -1493,6 +1494,21 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()
     return {"kind": reply.kind, "cards": len(reply.cards), "choices": len(reply.choices)}
+
+
+async def _keep_question(
+    db: AsyncSession, principal: Any, meeting_id: uuid.UUID, line: str
+) -> None:
+    """A kept question is the meeting's open question at once (its "Notes so far", then the
+    minutes' open questions, which list each question once); an ended meeting keeps none."""
+    meetings = _module(MEETINGS)
+    if meetings is None or not hasattr(meetings, "add_note"):
+        return
+    try:
+        async with db.begin_nested():
+            await meetings.add_note(db, principal, meeting_id, "question", line)
+    except getattr(meetings, "MeetingError", ()):
+        pass
 
 
 async def _read_of(
