@@ -159,7 +159,7 @@ import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, 
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -553,6 +553,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts);
  * "simple-chat-stray" as "simple-chat" with an earlier build's discussion reply already in the
  * meeting's chat (meet-chat-kind).
+ * "meet-chat-right-prd" as "simple-chat" with the meeting reviewing Guided setup, whose features
+ * are only on its draft roadmap (Setup checklist, Setup reminders).
  */
 export { MOCK_SCENARIO_KEY };
 /**
@@ -2844,14 +2846,16 @@ function load(): Db {
                     db.simple_roadmap!.plan!.goalless = true;
                     return db;
                   }
-              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
+              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
                     // chat-reader: the two "Delivery …" items its rules talk about.
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
-                    if (scenario !== "simple-chat" && scenario !== "simple-chat-stray" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    if (!["simple-chat", "simple-chat-stray", "meet-chat-right-prd"].includes(scenario) && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    // meet-chat-right-prd: the meeting reviews Guided setup, its features on its draft roadmap.
+                    if (scenario === "meet-chat-right-prd" && db.simple_roadmap) seedRightPrd(db.simple_roadmap, db.simple_chat);
                     // meet-chat-kind: the meeting chat already holds an earlier build's discussion reply.
                     if (scenario === "simple-chat-stray") {
                       const owner = db.members.find((m) => m.role === "owner")!;

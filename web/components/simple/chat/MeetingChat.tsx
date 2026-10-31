@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { meetingSay, meetingThread, setChatMode, type ChangeMode, type ChatRules, type ChatThread } from "@/lib/api/simple-chat";
 import { errorMessage } from "@/lib/use-query";
 
@@ -13,6 +14,14 @@ const POLL_MS = 2000;
 // qa-simple-decide-25: viewers only ask, whatever the mode.
 const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone except viewers", presenter: "Only the presenter", named: "Presenter plus one or two people" };
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
+
+/** meet-chat-right-prd: who ended the meeting, or that it ended by itself once its time ran out, and when. */
+function endedWords(r: ChatRules, zone: string): string {
+  const when = r.ended_at ? `, ${formatInZone(r.ended_at, zone, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}` : "";
+  if (r.ended_by_itself) return `Ended by itself after its time ran out${when}`;
+  if (r.ended_by) return `Ended by ${r.ended_by.name}${when}`;
+  return "The meeting has ended";
+}
 
 function rulesLine(r: ChatRules): string {
   if (r.change_mode === "named") return `Presenter plus ${r.change_people.length ? r.change_people.map((p) => p.name).join(", ") : "no one named yet"}`;
@@ -44,6 +53,7 @@ export function MeetingChat({
   heading?: boolean;
 }) {
   const [thread, setThread] = useState<ChatThread | null>(null);
+  const zone = useCompanyZone();
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
@@ -93,7 +103,7 @@ export function MeetingChat({
           {/* qa-simple-decide-10: the presenter's control states the setting; everyone else reads the line. */}
           {!(rulesControl && rules.is_presenter && !rules.ended) && <p className="simple-small" data-testid="chat-rules">
             Who changes things: <strong>{rulesLine(rules)}</strong>
-            {rules.ended && " · The meeting has ended"}
+            {rules.ended && <span data-testid="chat-ended"> · {endedWords(rules, zone)}</span>}
           </p>}
           {rulesControl && rules.is_presenter && !rules.ended && <ModeControl meetingId={meetingId} rules={rules} onSaved={(r) => setThread((t) => (t ? { ...t, rules: r } : t))} />}
         </div>

@@ -695,7 +695,10 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
   return {
     find(id) {
       const m = find(id);
-      return m ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended" } : null;
+      return m
+        ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended",
+            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: false }
+        : null;
     },
     setMode(id, mode, people) {
       const m = find(id);

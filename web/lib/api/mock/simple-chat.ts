@@ -159,6 +159,12 @@ interface Meeting {
   agenda_state?: MeetingAgenda;
   /** A review meeting of S8's (./simple-meetings.ts), mirrored here from `ChatMeetings.find` on each call. */
   s8?: boolean;
+  /** meet-chat-right-prd: the PRD the meeting reviews (its slug): its chat reads only its items. */
+  prd?: string | null;
+  /** How it ended: who ended it, or by itself once its time ran out, and when. */
+  ended_at?: string | null;
+  ended_by?: string | null;
+  ended_by_itself?: boolean;
 }
 
 /** The meeting's live notes and open questions (SimpleMeetingOut.notes). */
@@ -172,7 +178,7 @@ export type MeetingAgenda = Schemas["SimpleAgenda"];
  * decisions an Ask line records on a page's document (the Decisions page).
  */
 export interface ChatMeetings {
-  find(id: string): Pick<Meeting, "title" | "presenter_id" | "attendee_ids" | "change_mode" | "change_people" | "ended"> | null;
+  find(id: string): Pick<Meeting, "title" | "presenter_id" | "attendee_ids" | "change_mode" | "change_people" | "ended" | "prd" | "ended_at" | "ended_by" | "ended_by_itself"> | null;
   setMode(id: string, mode: Mode, people: string[]): void;
   note(id: string, n: MeetingNote): void;
   unnote(id: string, cardId: string): void;
@@ -684,6 +690,25 @@ export function seedReaderItems(db: SimpleDb): void {
   }
 }
 
+/**
+ * meet-chat-right-prd: the "meet-chat-right-prd" scenario's meeting reviews Guided setup, whose
+ * new draft's features are only on its draft roadmap (Setup checklist first); Usage alerts, an
+ * approved PRD, keeps its own items (Delivery pipeline v2) on its roadmap.
+ */
+export function seedRightPrd(db: SimpleDb, chat: ChatDb): void {
+  const add: SimpleDb["items"] = [
+    { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5, end: 35, source: "typed", draft_roadmap: true },
+    { key: "setup-reminders", title: "Setup reminders", horizon: "next", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 20, end: 50, source: "typed", draft_roadmap: true },
+  ];
+  for (const s of add) {
+    if (db.items.some((x) => x.key === s.key)) continue;
+    db.items.push(s);
+    db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
+  }
+  const m = chat.meetings[CHAT_MEETING_ID];
+  if (m) Object.assign(m, { title: "Guided setup review", prd: "guided-setup" });
+}
+
 function plusMonths(day: string, n: number): string {
   const d = new Date(msOf(day));
   const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n + 1, 0)).getUTCDate();
@@ -912,7 +937,7 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): 
       continue;
     }
     const meeting = r.meeting_id ? (chat.meetings[r.meeting_id] ?? null) : null;
-    const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx), meeting);
+    const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx, meeting), meeting);
     Object.assign(msg, {
       kind: reply.kind, body: reply.body, retry: false, at: now(),
       card_ids: storeCards(db, chat, reply.cards, msg.id, key, meeting),
@@ -1099,7 +1124,7 @@ function correctCard(db: SimpleDb, ctx: ChatCtx, c: StoredCard, values: Record<s
   const v: Record<string, string | null> = { ...(c.correct?.values ?? {}) };
   for (const [k, x] of Object.entries(values)) if (allowed.has(k)) v[k] = x == null || x === "" ? null : String(x);
   const day = (x: string | null) => (x && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : null);
-  const item = c.item_id ? itemsFor(db, ctx).find((x) => x.id === c.item_id) : undefined;
+  const item = c.item_id ? itemsFor(db, ctx, null, true).find((x) => x.id === c.item_id) : undefined;
   if (c.op === "move_dates" && item) {
     const [a, b] = [day(v.start_date), day(v.end_date)];
     if (!a || !b || b < a) return "Start and End: two days, the end on or after the start";
@@ -1202,8 +1227,16 @@ export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): { text
   return { text: i.prd ? text.replace("[c:1]", "[c:1] [c:2]") : text, citations };
 }
 
-function itemsFor(db: SimpleDb, ctx: ChatCtx): Item[] {
-  return roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role, roles: ctx.roles, owners: ctx.owners, names: ctx.names })?.items ?? [];
+/**
+ * The items a line is read against: a meeting's chat reads only its PRD's items, those on the
+ * PRD's draft roadmap too (meet-chat-right-prd, as the API's chat.meeting_prd); `lookup` (a
+ * card's own item) finds any of them.
+ */
+function itemsFor(db: SimpleDb, ctx: ChatCtx, meeting: Meeting | null = null, lookup = false): Item[] {
+  const q = new URLSearchParams();
+  if (meeting?.prd || lookup) q.set("draft_roadmap", "1");
+  if (meeting?.prd) q.set("prd", meeting.prd);
+  return roadmapOut(db, ctx.role, q, { id: ctx.id, role: ctx.role, roles: ctx.roles, owners: ctx.owners, names: ctx.names })?.items ?? [];
 }
 
 const VERSIONED = new Set(["move_dates", "change_horizon", "edit_title", "cut"]);
@@ -1270,7 +1303,7 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   if (bar) return { may: null, why_not: bar };
   // As the API (chat_actions.proposes): on Ask, approvers and owners record decisions; a commenter proposes one.
   if (!m && c.op === "record_decision" && ctx.role === "commenter") return { may: "propose", why_not: null };
-  const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
+  const item = c.item_id ? itemsFor(db, ctx, null, true).find((i) => i.id === c.item_id) : undefined;
   // Filing a feature ask is every commenter's right (Requests), as are a meeting's notes, agenda
   // and decisions (the meeting's rules came first) and a decision on Ask; else the item's rule.
   const decides = c.op === "add_feature_ask" || LOCAL_OPS.has(c.op) ? true : c.item_id ? !!item?.can_decide : ctx.role === "owner";
@@ -1299,6 +1332,9 @@ function rulesOut(m: Meeting, ctx: ChatCtx) {
   return {
     change_mode: m.change_mode, change_people: m.change_people.map(ref), presenter: ref(m.presenter_id),
     is_presenter: ctx.id === m.presenter_id, may_apply: meetingBar(m, ctx) === null, ask_only: ctx.role === "viewer", ended: m.ended,
+    ended_at: m.ended ? (m.ended_at ?? null) : null,
+    ended_by: m.ended && !m.ended_by_itself && m.ended_by ? ref(m.ended_by) : null,
+    ended_by_itself: m.ended && !!m.ended_by_itself,
   };
 }
 
@@ -1359,7 +1395,7 @@ const line = (ctx: ChatCtx, body: string, at: string): StoredMessage => ({
  */
 function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false, documentId: string | null = null): boolean {
   const talk = TALK_KEY.exec(key);
-  const reply = talk ? itemTalk(db, ctx, itemsFor(db, ctx), talk[1], text) : parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names), documentId);
+  const reply = talk ? itemTalk(db, ctx, itemsFor(db, ctx), talk[1], text) : parse(db, ctx, text, meeting, itemsFor(db, ctx, meeting), Object.values(ctx.names), documentId);
   // A question about something not on the roadmap is Ask's (the one box writes nothing); a
   // change phrase naming no item is read by the reader in context, as the API does.
   const asksElsewhere = reply.understood === false && !!reply.missing;
