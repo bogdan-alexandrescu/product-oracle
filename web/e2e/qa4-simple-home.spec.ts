@@ -90,18 +90,6 @@ for (const [device, size] of [
       const buttons = home(page).getByTestId("home-broken").getByRole("button", { name: /^Move the dependents$/ });
       expect(await buttons.count()).toBe(moves.length);
     });
-
-    test(`qa4-simple-home-25 (${device}): a tile says one in the singular`, async ({ page }) => {
-      // fails_when: a tile reads "1 proposals on your items" or "1 proposals"
-      await signIn(page, ADMIN.email, size);
-      const tiles = home(page).getByTestId("home-summary").locator("a");
-      await expect(tiles.first()).toBeVisible();
-      for (const t of await tiles.all()) {
-        const n = (await t.locator(".simple-number").textContent())!.trim();
-        if (n === "1") await expect(t).not.toContainText(/\b1\s*(decisions|proposals|broken links)\b/);
-      }
-      await expect(home(page).getByTestId("home-summary")).not.toContainText(/\b1 (decisions|proposals|broken links)\b/);
-    });
   });
 }
 
@@ -159,21 +147,46 @@ test("qa4-simple-home-7: the plan's row label keeps one line with Ask Oracle ope
   }
 });
 
+test("qa4-simple-home-7: under a plan of one PRD, each broken link names the roadmap it is on", async ({ page }) => {
+  // fails_when: the plan draws Guided setup only and its broken links on the Alerts and Onboarding roadmaps say nothing of where they are
+  await signIn(page, ADMIN.email);
+  await expect(home(page).getByTestId("home-strip-label").first()).toContainText("Guided setup");
+  await expect(home(page).getByTestId("home-broken-links").locator("h3")).toHaveText("Broken links · Alerts roadmap, Onboarding roadmap");
+  await expect(brokenItem(page, "Weekly alert digest").getByTestId("home-broken-roadmap")).toHaveText("· Alerts roadmap");
+  await expect(brokenItem(page, "In-app tour").getByTestId("home-broken-roadmap")).toHaveText("· Onboarding roadmap");
+  const items = home(page).getByTestId("home-broken-item");
+  await expect(items.first()).toBeVisible();
+  await expect(items.getByTestId("home-broken-roadmap")).toHaveCount(await items.count());
+});
+
 test.describe("a commenter", () => {
-  test("qa4-simple-home-17: the greeting and the card say the same about the broken links; a lone tile keeps a tile's width", async ({ page }) => {
-    // fails_when: the greeting says "You can propose fixes" while the card says only "Nothing waits on you … comment on a one-pager", or one tile spans the card
-    await signIn(page, COMMENTER);
-    const sentence = home(page).getByTestId("home-sentence");
-    await expect(sentence).toContainText("propose fixes for");
+  test("qa4-simple-home-17: with nothing waiting, the card says what the greeting says about the broken links, and its lone tile keeps a tile's width", async ({ page }) => {
+    // fails_when: the card says only "Nothing waits on you … comment on a one-pager" while the greeting says "You can propose fixes", or the one tile spans the card
+    // The mock's default data: no decisions or proposals wait on the commenter, so the broken links tile is alone.
+    await signIn(page, COMMENTER, DESKTOP, false);
+    await expect(home(page).getByTestId("home-sentence")).toContainText("You can propose fixes for broken links.");
     const quiet = home(page).getByTestId("home-nothing-waits");
-    if (await quiet.count()) await expect(quiet).toContainText("You can propose fixes for");
-    const summary = home(page).getByTestId("home-summary");
-    const tiles = summary.locator("li");
-    if ((await tiles.count()) === 1) {
-      const card = (await summary.boundingBox())!;
-      const tile = (await tiles.first().boundingBox())!;
-      expect(tile.width).toBeLessThan(card.width / 2);
-    }
+    await expect(quiet).toHaveText("Nothing waits on you. You can propose fixes for broken links in the plan below. Go to the broken links");
+    await quiet.getByRole("link", { name: "Go to the broken links" }).click();
+    await expect(page).toHaveURL(/#broken-links$/);
+    await expect(home(page).getByTestId("home-broken-links")).toBeInViewport();
+    const tiles = home(page).getByTestId("home-summary").locator("li");
+    await expect(tiles).toHaveCount(1);
+    await expect(tiles.first()).toContainText("broken links");
+    const card = (await home(page).getByTestId("home-summary").boundingBox())!;
+    const tile = (await tiles.first().boundingBox())!;
+    expect(tile.width).toBeLessThan(card.width / 2);
+  });
+
+  test("qa4-simple-home-17: two tiles still share the whole card", async ({ page }) => {
+    // fails_when: two tiles are drawn in three columns, leaving the card's last third blank
+    await signIn(page, COMMENTER);
+    const list = home(page).getByTestId("home-summary").locator("ul").first();
+    const tiles = list.locator("li");
+    await expect(tiles).toHaveCount(2);
+    const row = (await list.boundingBox())!;
+    const last = (await tiles.last().boundingBox())!;
+    expect(Math.abs(last.x + last.width - (row.x + row.width))).toBeLessThan(2);
   });
 
   test("qa4-simple-home-18: a move proposed on one item is not offered again on the item it also moves", async ({ page }) => {

@@ -546,7 +546,8 @@ export default function SimpleHome() {
       {!reads && (tilesShown.length > 0 || myDrafts.length > 0) && (
         <section aria-label="Summary" data-testid="home-summary" className="simple-card">
           {tilesShown.length > 0 && (
-          <ul className="grid gap-3 max-[600px]:gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(tilesShown.length, 3)}, minmax(0, 1fr))` }}>
+          // qa4-simple-home-17: a lone tile keeps a third of the card; two or three share it as built.
+          <ul className="grid gap-3 max-[600px]:gap-2" style={{ gridTemplateColumns: `repeat(${tilesShown.length === 1 ? 3 : tilesShown.length}, minmax(0, 1fr))` }}>
             {tilesShown.map(([id, n, label, short]) => (
               <li key={id}>
                 <a
@@ -779,7 +780,18 @@ export default function SimpleHome() {
                         key={links[0].item.id}
                         testId="home-broken-item"
                         lead={<RowIcon name="alert" />}
-                        title={<span className="text-crit">{links[0].item.title}</span>}
+                        title={
+                          <>
+                            <span className="text-crit">{links[0].item.title}</span>
+                            {/* qa4-simple-home-7: the plan draws one PRD; with links on several roadmaps each item says its own. */}
+                            {brokenRoadmaps.length > 1 && (
+                              <span data-testid="home-broken-roadmap" className="font-normal text-text2">
+                                {" "}
+                                · {links[0].item.roadmap.title}
+                              </span>
+                            )}
+                          </>
+                        }
                         meta={
                           <ul className="flex flex-col gap-3">
                             {links.map((b) => (
