@@ -86,7 +86,7 @@ test("annotations are numbered as Oracle labels them, with a thread each and the
   await notes.getByRole("button", { name: "All 2" }).click();
   await expect(notes.getByTestId("annotation").first()).toContainText("Is 'from' price enough before the postcode?");
   // The thread names its author.
-  await expect(notes.getByTestId("annotation").first()).toContainText("Commenter (you)");
+  await expect(notes.getByTestId("annotation").first()).toContainText("Theo Brandt (you)");
 
   // A commenter has no verdicts.
   await expect(panel.getByRole("button", { name: "Approve" })).toHaveCount(0);
@@ -140,7 +140,7 @@ test("wireframes: switch screens, compare 2-4 side by side, see the sanitised no
   await expect(page.getByTestId("page-header").filter({ visible: true })).toContainText("Approved");
   await expect(panel.getByTestId("version-reviews")).toContainText("Approved");
   await expect(panel.getByTestId("version-meta")).toContainText("Approved");
-  await expect(panel.getByTestId("version-meta")).toContainText("by Admin (you)");
+  await expect(panel.getByTestId("version-meta")).toContainText("by Avery Stone (you)");
 });
 
 test("approving v2 supersedes v1: v1 links to v2, names who approved it, and still takes comments", async ({ page }) => {
@@ -159,8 +159,8 @@ test("approving v2 supersedes v1: v1 links to v2, names who approved it, and sti
   await expect(panel).toContainText("v2 replaced this version. Comments are still allowed; verdicts are not.");
   await expect(panel.getByRole("button", { name: "Approve" })).toHaveCount(0);
   // Who approved v1, by name, in its thread and its meta.
-  await expect(panel.getByTestId("version-reviews")).toContainText("Approver");
-  await expect(panel.getByTestId("version-meta")).toContainText("by Approver");
+  await expect(panel.getByTestId("version-reviews")).toContainText("Priya Raman");
+  await expect(panel.getByTestId("version-meta")).toContainText("by Priya Raman");
   // Comments are still allowed on its annotations.
   const notes = panel.getByTestId("annotations");
   await notes.getByLabel("Comment on annotation 1").fill("Kept for the record.");
@@ -188,7 +188,7 @@ test("an approver who is not named sees who the spec's engineering approvers are
   await openFlow(page);
   const panel = inspector(page);
   await expect(panel).toContainText("Only the spec's engineering approvers (or an owner) decide on it.");
-  await expect(panel).toContainText("Engineering approver named on this spec: Admin");
+  await expect(panel).toContainText("Engineering approver named on this spec: Avery Stone");
   await expect(panel.getByRole("button", { name: "Request changes" })).toBeDisabled();
 });
 
@@ -204,7 +204,7 @@ test("an owner rejects with a note; the rejected version is read only", async ({
   await expect(panel.getByRole("button", { name: "Reject" })).toHaveCount(0);
   // Its annotations still take comments, as the API allows.
   await expect(panel.getByTestId("annotations").getByLabel("Comment on annotation 1")).toBeVisible();
-  await expect(panel.getByTestId("version-reviews")).toContainText("Admin (you)");
+  await expect(panel.getByTestId("version-reviews")).toContainText("Avery Stone (you)");
 });
 
 test("while a regeneration runs, the design page says so and links the run", async ({ page }) => {

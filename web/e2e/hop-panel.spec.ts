@@ -145,7 +145,7 @@ test("a commenter cannot stage in the panel, sees why, and suggests the change",
   await expect(stage).toBeDisabled();
   await expect(stage).toHaveAttribute("title", "Approvers stage changes. You can suggest it.");
   await change.getByRole("button", { name: "Suggest" }).click();
-  await expect(change.getByTestId("change-by")).toHaveText("Suggested by Commenter");
+  await expect(change.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
   await expect(change.getByRole("button", { name: "Suggest" })).toHaveCount(0);
 });
 
@@ -171,7 +171,7 @@ test("an approver stages a panel change with the reason everyone will see", asyn
   await form.getByRole("button", { name: "Stage" }).click();
   const card = panel(page).getByTestId("changes-card");
   await expect(card.getByTestId("changes-handled").locator("summary")).toHaveText("1 handled");
-  await expect(panel(page).getByTestId("discussion-system-line")).toContainText("Approver staged: Change problem");
+  await expect(panel(page).getByTestId("discussion-system-line")).toContainText("Priya Raman staged: Change problem");
 });
 
 // Privacy card: criteria 3 and 5.

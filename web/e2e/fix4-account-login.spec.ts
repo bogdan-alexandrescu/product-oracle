@@ -103,7 +103,7 @@ test.describe("desktop", () => {
     await page.getByLabel("Password").fill(ADMIN.password);
     await page.getByRole("button", { name: "Sign in" }).click();
     const alert = page.getByRole("alert").filter({ hasText: /\S/ });
-    await expect(alert).toHaveText("An owner removed you from this Oracle. Ask Admin to restore you.");
+    await expect(alert).toHaveText("An owner removed you from this Oracle. Ask Avery Stone to restore you.");
     await expect(page).toHaveURL(/\/login/);
 
     // A wrong password says no more than for anyone else.

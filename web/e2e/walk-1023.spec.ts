@@ -90,7 +90,7 @@ test("the goal drawer shows a person's name and labelled attributes and history"
   const d = page.getByRole("dialog", { name: "Raise activation" });
 
   const lock = d.getByTestId("lock-note");
-  await expect(lock).toContainText("Locked by Approver");
+  await expect(lock).toContainText("Locked by Priya Raman");
   await expect(lock).not.toContainText("member");
 
   await expect(d.getByLabel("Attributes")).toBeVisible();

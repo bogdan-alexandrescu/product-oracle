@@ -97,7 +97,7 @@ test.describe("desktop", () => {
   test("qa4-docs-39: someone else's feedback shows its author's name beside the avatar", async ({ page }) => {
     await openFeedback(page, CHECKOUT, "commenter@example.com");
     const item = feedbackItem(page, "most recently used address");
-    await expect(item.getByTestId("feedback-author")).toHaveText("Admin");
-    await expect(item.getByRole("img", { name: "Admin" })).toHaveText("AD");
+    await expect(item.getByTestId("feedback-author")).toHaveText("Avery Stone");
+    await expect(item.getByRole("img", { name: "Avery Stone" })).toHaveText("AS");
   });
 });

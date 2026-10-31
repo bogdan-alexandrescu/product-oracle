@@ -173,16 +173,16 @@ for (const phone of [false, true]) {
         await page.goto("/simple");
         const next = page.getByTestId("home-meeting-next");
         await expect(next).toBeVisible();
-        await expect(next).not.toContainText("Commenter");
+        await expect(next).not.toContainText("Theo Brandt");
         await page.goto("/simple/meetings");
         // The soonest scheduled review, the one Home shows.
         await tap(page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" }).first());
         const sheet = page.getByRole("dialog", { name: "Start a review" });
-        await sheet.getByRole("checkbox", { name: "Commenter" }).check();
+        await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
         await sheet.getByRole("button", { name: "Start", exact: true }).click();
-        await expect(page.getByLabel("Attendees")).toContainText("Commenter");
+        await expect(page.getByLabel("Attendees")).toContainText("Theo Brandt");
         await page.goto("/simple");
-        await expect(page.getByTestId("home-meeting-next")).toContainText("Commenter");
+        await expect(page.getByTestId("home-meeting-next")).toContainText("Theo Brandt");
       });
     });
   }

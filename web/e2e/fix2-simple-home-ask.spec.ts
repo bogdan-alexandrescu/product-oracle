@@ -54,7 +54,7 @@ test.describe("simple-chat", () => {
     await expect(about).toHaveCSS("text-overflow", "ellipsis");
     const mine = panel.locator('[data-testid="chat-message"][data-author="person"]').first();
     await expect(mine.getByTestId("chat-who")).toHaveText(/^You · /);
-    await expect(panel.getByTestId("chat-who").filter({ hasText: /^Admin/ })).toHaveCount(0);
+    await expect(panel.getByTestId("chat-who").filter({ hasText: /^Avery Stone/ })).toHaveCount(0);
   });
 
   test("qa-simple-home-17: a citation leaves no space before the punctuation after it", async ({ page }) => {

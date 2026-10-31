@@ -44,11 +44,11 @@ test("lead: Plan › Dates shows the proposed basis; Verify turns it Verified an
   await openDates(page);
   await expect(page.getByTestId("dates-filter").getByRole("button", { name: /Proposed/ })).toHaveAttribute("aria-pressed", "true");
   const proposed = row(page, "ENG-420");
-  await expect(proposed).toContainText("Proposed by Approver");
+  await expect(proposed).toContainText("Proposed by Priya Raman");
   await proposed.getByRole("button", { name: "Verify" }).click();
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
   await expect(row(page, "ENG-420")).toHaveAttribute("data-status", "verified");
-  await expect(row(page, "ENG-420")).toContainText("Verified by Commenter");
+  await expect(row(page, "ENG-420")).toContainText("Verified by Theo Brandt");
   await page.goto("/inbox");
   await expect(page.getByTestId("inbox-date")).toHaveCount(0);
 });
@@ -88,7 +88,7 @@ test("withdraw: the impact sentence comes first; afterwards the roadmap marks th
   await confirm.click();
   await expect(dialog).toBeHidden();
   await page.getByTestId("dates-filter").getByRole("button", { name: "Withdrawn" }).click();
-  await expect(row(page, "ENG-412")).toContainText("Withdrawn by Admin");
+  await expect(row(page, "ENG-412")).toContainText("Withdrawn by Avery Stone");
   await expect(row(page, "ENG-412")).not.toContainText("Verified by");
   await expect(page.getByTestId("dates-table").locator('[data-reason-for="ENG-412"]').filter({ visible: true })).toContainText("The team re-estimated");
 
@@ -97,7 +97,7 @@ test("withdraw: the impact sentence comes first; afterwards the roadmap marks th
   await expect(mark).toHaveText("date withdrawn");
   await mark.click();
   const popover = page.getByTestId("date-mark-popover");
-  await expect(popover).toContainText("ENG-412 was withdrawn by Admin");
+  await expect(popover).toContainText("ENG-412 was withdrawn by Avery Stone");
   await expect(popover).toContainText("The team re-estimated");
   await expect(popover.getByRole("button", { name: "Add a new date source" })).toBeVisible();
 });
@@ -177,7 +177,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   // no_claim=the API's plan rules (api/tests/test_plan.py).
   await asScenario(page);
   let line = await selectPlanItem(page, "Daily alert digest email");
-  await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
+  await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Avery Stone");
 
   await openDates(page);
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
@@ -208,7 +208,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await dialog.getByLabel("Reference").fill("ENG-412");
   await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
-  await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
+  await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Avery Stone");
   // A later basis on the same date and item that the date does not name is not what it rests on.
   await openDates(page);
   await page.getByRole("button", { name: "Add a date source" }).click();
@@ -222,7 +222,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
   await expect(row(page, "CAP-9")).toHaveAttribute("data-status", "verified");
   line = await selectPlanItem(page, "Daily alert digest email");
-  await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
+  await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Avery Stone");
   await expect(line).not.toContainText("CAP-9");
 });
 
@@ -260,7 +260,7 @@ test("plan inspector: an unverified date offers Verify date; the dialog picks th
   await dialog.getByLabel("Date it supports").fill("2026-12-15");
   await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
-  await expect(line).toContainText("Dec 15 ✓ ENG-431, verified by Admin");
+  await expect(line).toContainText("Dec 15 ✓ ENG-431, verified by Avery Stone");
   await openDates(page);
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
   await expect(row(page, "ENG-431")).toContainText("Item: Alerts in the team chat");

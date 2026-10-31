@@ -104,7 +104,7 @@ async function seedStagedSplit(page: Page) {
     db.runs.drafts[cp.id] = {
       revision: 1,
       note: null,
-      log: [{ revision: 1, by: "Admin" }],
+      log: [{ revision: 1, by: "Avery Stone" }],
       actions: [
         {
           id: "7a11c0de-0000-4000-8000-0000000007a1",

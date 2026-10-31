@@ -206,7 +206,7 @@ test.describe("desktop, no plan", () => {
     await page.getByRole("button", { name: "Propose", exact: true }).click();
     const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Single sign-on setup" }).filter({ visible: true });
     await expect(note).toBeVisible();
-    await expect(note).not.toContainText("Commenter proposes");
+    await expect(note).not.toContainText("Theo Brandt proposes");
     await note.getByRole("button", { name: "Withdraw" }).click();
     await expect(page.getByRole("note").filter({ hasText: "Single sign-on setup" })).toHaveCount(0);
   });

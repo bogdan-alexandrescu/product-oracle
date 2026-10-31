@@ -77,7 +77,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   await expect(whyNot(page)).not.toContainText("Drafting the replies…", { timeout: 10_000 });
   await expect(reply(page, "An ops lead at a customer")).toContainText('"Export every board at once"');
   await expect(reply(page, "A finance manager at a shop")).toBeVisible();
-  await expect(reply(page, "Commenter")).toBeVisible();
+  await expect(reply(page, "Theo Brandt")).toBeVisible();
 
   // 11b: a promise in a person's words is flagged; taking it out clears the flag.
   const ops = reply(page, "An ops lead at a customer");
@@ -113,7 +113,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   await finance.getByRole("button", { name: "Skip reply" }).click();
   await expect(finance).toContainText("Skipped · Asked anonymously");
   await expect(reply(page, "An ops lead at a customer").getByRole("button", { name: "Tell them in Oracle" })).toHaveCount(0);
-  const member = reply(page, "Commenter");
+  const member = reply(page, "Theo Brandt");
   await member.getByRole("button", { name: "Tell them in Oracle" }).click();
   await expect(member).toContainText("Told in Oracle");
   await expect(panel.getByTestId("loop-closed")).toHaveText("Loop closed · Oct 23");

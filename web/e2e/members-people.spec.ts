@@ -32,13 +32,13 @@ async function openMember(page: Page, email: string) {
   return inspector;
 }
 
-test("members: removing the approver previews what it ends and hands everything to Admin", async ({ page }) => {
+test("members: removing the approver previews what it ends and hands everything to Avery Stone", async ({ page }) => {
   // AC 30
   await login(page);
   await page.goto("/settings/members");
   await page.getByRole("button", { name: "Remove approver@example.com" }).click();
   const dialog = page.getByTestId("remove-dialog");
-  await expect(dialog.getByRole("heading", { name: "Remove Approver?" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Remove Priya Raman?" })).toBeVisible();
   await expect(dialog).toContainText("approver@example.com · Approver");
 
   await expect(dialog.getByTestId("preview-ends")).toContainText("Signs them out everywhere; they can't sign in.");
@@ -59,10 +59,10 @@ test("members: removing the approver previews what it ends and hands everything 
   }
   await expect(dialog).toContainText("History keeps their name. An owner can restore them; revoked tokens and connections stay revoked.");
 
-  // Admin is an owner: every row qualifies.
-  await dialog.getByLabel("Hand everything to").selectOption({ label: "Admin" });
+  // Avery Stone is an owner: every row qualifies.
+  await dialog.getByLabel("Hand everything to").selectOption({ label: "Avery Stone" });
   for (const label of ["Decides document reviews", "Owns document sections", "Has open questions to answer"]) {
-    await expect(chosen(page, `Hand over ${label}`)).toHaveText("Admin");
+    await expect(chosen(page, `Hand over ${label}`)).toHaveText("Avery Stone");
   }
   await dialog.getByRole("button", { name: "Remove member" }).click();
   await expect(dialog).toBeHidden();
@@ -87,7 +87,7 @@ test("members: a removed member's Still assigned sections are handed to the comm
   await expect(sections).toContainText("· 2");
 
   await sections.getByRole("button", { name: "Hand over", exact: true }).click();
-  await sections.getByLabel("Hand over Owns document sections").selectOption({ label: "Commenter" });
+  await sections.getByLabel("Hand over Owns document sections").selectOption({ label: "Theo Brandt" });
   await sections.getByRole("button", { name: "Hand over", exact: true }).click();
   await expect(held.getByTestId("responsibility-row").filter({ hasText: "Owns document sections" })).toHaveCount(0);
   // The document policy's decider stays until handed over too.
@@ -98,24 +98,24 @@ test("members: a removed member's Still assigned sections are handed to the comm
   await expect(again.getByTestId("responsibility-row").filter({ hasText: "Owns document sections" })).toHaveCount(0);
 });
 
-test("members: demoting the approver asks first, and Cancel keeps Approver; a promotion applies at once", async ({ page }) => {
+test("members: demoting the approver asks first, and Cancel keeps Priya Raman; a promotion applies at once", async ({ page }) => {
   // AC 32
   await login(page);
   await page.goto("/settings/members");
   await page.getByLabel("Role for approver@example.com").selectOption("commenter");
   const dialog = page.getByTestId("role-dialog");
-  await expect(dialog.getByRole("heading", { name: "Change Approver to Commenter?" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Change Priya Raman to Commenter?" })).toBeVisible();
   await expect(dialog.getByTestId("preview-lapses")).toContainText("3 section approvals and 1 version approval");
-  await expect(dialog.getByTestId("preview-needs-holder")).toContainText("Approver can no longer decide 1 document review.");
+  await expect(dialog.getByTestId("preview-needs-holder")).toContainText("Priya Raman can no longer decide 1 document review.");
   // Sections and questions need commenter: the approver keeps them as a commenter.
   await expect(dialog.getByTestId("preview-needs-holder")).not.toContainText("Owns document sections");
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByLabel("Role for approver@example.com")).toHaveValue("approver");
 
-  // Again, handing the decider to Admin.
+  // Again, handing the decider to Avery Stone.
   await page.getByLabel("Role for approver@example.com").selectOption("commenter");
-  await dialog.getByLabel("Hand over Decides document reviews").selectOption({ label: "Admin" });
+  await dialog.getByLabel("Hand over Decides document reviews").selectOption({ label: "Avery Stone" });
   await dialog.getByRole("button", { name: "Change role" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByLabel("Role for approver@example.com")).toHaveValue("commenter");
@@ -131,9 +131,9 @@ test("members: the owner names the approver in the inspector, and a commenter na
   // AC 29
   await login(page);
   await page.goto("/settings/members");
-  // The name in bold with the email under it; the viewer has no name, so the one name rule's "Viewer" (qa-settings-5).
-  await expect(memberRow(page, "approver@example.com").getByTestId("member-open")).toHaveText(/^Approver\s*approver@example\.com$/);
-  await expect(memberRow(page, "viewer@example.com").getByTestId("member-open")).toHaveText(/^Viewer\s*viewer@example\.com$/);
+  // The name in bold with the email under it, for every member (qa-settings-5).
+  await expect(memberRow(page, "approver@example.com").getByTestId("member-open")).toHaveText(/^Priya Raman\s*approver@example\.com$/);
+  await expect(memberRow(page, "viewer@example.com").getByTestId("member-open")).toHaveText(/^Lena Ortiz\s*viewer@example\.com$/);
 
   const inspector = await openMember(page, "approver@example.com");
   await expect(inspector).toContainText("Up to 80 characters");

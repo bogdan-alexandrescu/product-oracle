@@ -129,7 +129,7 @@ test("13b: an approver adds an output metric linked to a goal, tests its query a
     "Market",
   ]);
   await expect(viewOnly(page)).toHaveCount(0);
-  await expect(metricRow(page, "Weekly active teams")).toContainText("Commenter");
+  await expect(metricRow(page, "Weekly active teams")).toContainText("Theo Brandt");
   await page.getByRole("button", { name: "Add metric" }).click();
   const sheet = page.getByRole("dialog", { name: "Add metric" });
   await sheet.getByLabel("Title").fill("Setup completion rate");
@@ -140,7 +140,7 @@ test("13b: an approver adds an output metric linked to a goal, tests its query a
   // Grow paid conversion already has a metric; Raise activation is free and in %.
   await expect(sheet.getByLabel("Goal").locator("option")).toHaveText(["No goal", "Raise activation"]);
   await sheet.getByLabel("Goal").selectOption({ label: "Raise activation" });
-  await sheet.getByLabel("Owner").selectOption({ label: "Approver" });
+  await sheet.getByLabel("Owner").selectOption({ label: "Priya Raman" });
   await sheet.getByLabel("Source").selectOption("posthog");
   await sheet.getByLabel("Query").fill("select countIf(finished_setup) / count() * 100 from accounts where created_at between {period_start} and {period_end}");
   await sheet.getByRole("button", { name: "Test" }).click();
@@ -288,7 +288,7 @@ test("the Goal select and what Save sends agree: a goal of another unit is dropp
   await sheet.getByLabel("Unit", { exact: true }).selectOption({ label: "Count of…" });
   await sheet.getByLabel("Count of what", { exact: true }).fill("accounts");
   await expect(sheet.getByLabel("Goal")).toHaveValue("");
-  await sheet.getByLabel("Owner").selectOption({ label: "Approver" });
+  await sheet.getByLabel("Owner").selectOption({ label: "Priya Raman" });
   await sheet.getByLabel("Source").selectOption("manual");
   await sheet.getByRole("button", { name: "Add metric" }).click();
   await expect(sheet).toBeHidden();

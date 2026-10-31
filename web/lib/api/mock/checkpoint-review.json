@@ -45,15 +45,15 @@
             "answers": ["unverified_date"],
             "state": "staged",
             "note": null,
-            "created_by": { "id": "00000000-0000-4000-8000-0000000d1e01", "name": "Approver", "role": "approver" },
-            "updated_by": { "id": "00000000-0000-4000-8000-0000000d1e01", "name": "Approver", "role": "approver" },
+            "created_by": { "id": "00000000-0000-4000-8000-0000000d1e01", "name": "Priya Raman", "role": "approver" },
+            "updated_by": { "id": "00000000-0000-4000-8000-0000000d1e01", "name": "Priya Raman", "role": "approver" },
             "updated_at": "2026-10-20T09:10:00Z",
             "question": {
               "id": "00000000-0000-4000-8000-0000000d1b01",
               "status": "answered",
               "text": "Is the beta date firm?",
-              "asked_to": { "id": "00000000-0000-4000-8000-0000000d1e02", "name": "Commenter" },
-              "answer": { "kind": "text", "body": "Not yet", "answered_by": { "id": "00000000-0000-4000-8000-0000000d1e02", "name": "Commenter" } }
+              "asked_to": { "id": "00000000-0000-4000-8000-0000000d1e02", "name": "Theo Brandt" },
+              "answer": { "kind": "text", "body": "Not yet", "answered_by": { "id": "00000000-0000-4000-8000-0000000d1e02", "name": "Theo Brandt" } }
             }
           }
         ],
@@ -74,7 +74,7 @@
       "handled": 1,
       "blocking_open": 2,
       "to_confirm_open": 3,
-      "waiting_on": [{ "user_id": "00000000-0000-4000-8000-0000000d1e02", "name": "Commenter", "count": 1 }],
+      "waiting_on": [{ "user_id": "00000000-0000-4000-8000-0000000d1e02", "name": "Theo Brandt", "count": 1 }],
       "suggested": 1
     },
     "note": "Keep the beta small",
@@ -95,10 +95,10 @@
   "conflicts": {
     "review_changed": {
       "code": "review_changed",
-      "message": "The review changed since you loaded it (1 change by Commenter): look again, then decide.",
+      "message": "The review changed since you loaded it (1 change by Theo Brandt): look again, then decide.",
       "revision": 4,
       "changes": 1,
-      "by": ["Commenter"]
+      "by": ["Theo Brandt"]
     },
     "blocking_open": {
       "code": "blocking_open",

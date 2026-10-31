@@ -24,7 +24,7 @@ const thread = (page: Page) => page.getByTestId("discussion-thread").filter({ vi
 async function startThread(page: Page, opts: { private?: string } = {}) {
   if (opts.private) {
     await form(page).getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
-    await form(page).getByRole("searchbox", { name: "Find a person" }).fill(opts.private.toLowerCase());
+    await form(page).getByRole("searchbox", { name: "Find a person" }).fill("approver");
     await form(page).getByRole("option", { name: new RegExp(opts.private) }).click();
     await expect(form(page)).not.toContainText("counts as feedback on the whole draft");
   } else {
@@ -66,7 +66,7 @@ test("a reviewer leaves whole-draft feedback through Discuss and the approver se
   await expect(openFeedback(page)).toHaveText(String(before + 1));
   await expect(general(page)).toHaveText(/^General\s*1$/);
   await general(page).click();
-  await expect(items(page).filter({ hasText: REMARK }).getByTestId("feedback-author")).toHaveText("Commenter");
+  await expect(items(page).filter({ hasText: REMARK }).getByTestId("feedback-author")).toHaveText("Theo Brandt");
 
   await page.goto("/inbox");
   const row = page.getByTestId("inbox-tab-new").getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: REMARK });
@@ -80,7 +80,7 @@ test("a private discussion of the draft stays a discussion", async ({ page }) =>
   await openSection(page, "problem");
   const before = await openFeedback(page).textContent();
   await page.getByTestId("doc-discuss").click();
-  await startThread(page, { private: "Approver" });
+  await startThread(page, { private: "Priya" });
   // Back on the discussions; All feedback has no new item.
   await panel(page).getByTestId("feedback-discussions").click();
   await expect(general(page)).toHaveText(/^General\s*0$/);

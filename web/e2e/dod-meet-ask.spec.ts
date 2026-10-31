@@ -11,7 +11,7 @@ import { ADMIN } from "./helpers";
  * Card dod-meet-ask-every-page: protects = on Home, One-pagers, PRDs, a PRD, Roadmap,
  * Priorities, Decisions and Meetings the Ask panel turns "rename …" into a change card; the
  * owner's card says Apply and applies ("Applied by you"), a commenter's says Propose and
- * proposes ("Proposed to Admin by you"); fails_when = a page's Ask panel has no change card,
+ * proposes ("Proposed to Avery Stone by you"); fails_when = a page's Ask panel has no change card,
  * an owner's card proposes, or a commenter's applies; no_claim = previews and ghosts
  * (simple-ask-changes.spec.ts), Oracle's answers to questions.
  *
@@ -56,7 +56,7 @@ for (const phone of [false, true]) {
 
     for (const [role, email, verb, outcome] of [
       ["an owner", ADMIN.email, "Apply", "Applied by you"],
-      ["a commenter", "commenter@example.com", "Propose", "Proposed to Admin by you"],
+      ["a commenter", "commenter@example.com", "Propose", "Proposed to Avery Stone by you"],
     ] as const) {
       // card: dod-meet-ask-every-page
       test(`${role}'s Ask card on every Simple page says ${verb} and does it (${where})`, async ({ page }) => {

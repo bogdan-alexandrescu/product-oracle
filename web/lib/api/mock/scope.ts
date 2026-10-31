@@ -9,7 +9,7 @@
  * checkpoint's D8 draft revision.
  */
 import type { Schemas } from "@/lib/api/client";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 
 import type { DraftRow, RunsContext, RunsDb } from "./runs";
 

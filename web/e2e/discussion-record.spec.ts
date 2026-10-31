@@ -44,7 +44,7 @@ test("an approver records the date basis Oracle proposed", async ({ page }) => {
   await expect(row.getByTestId("change-by")).toHaveText("Proposed by Oracle");
   await row.getByRole("button", { name: "Record" }).click();
   await expect(card(page).getByTestId("changes-handled").locator("summary")).toHaveText("1 handled");
-  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Approver recorded: ${RECORD}`);
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Priya Raman recorded: ${RECORD}`);
 });
 
 // protects=criterion 8 and #370: a commenter who is not the engineering lead has no date

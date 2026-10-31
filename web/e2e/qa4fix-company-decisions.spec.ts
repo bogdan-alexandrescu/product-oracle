@@ -5,8 +5,8 @@ import { login, signOut } from "./helpers";
 /*
  * Fourth QA pass on Company › Decisions (Detailed), driven through the UI on the default mock
  * scenario. The mock seeds judgement calls only (no checkpoint decisions): D-4 "Price the team
- * plan per seat" (decided, Approver is its approver) and D-5 "Ship usage caps before anomaly
- * detection" (proposed by Commenter for Approver). Admin, the default sign-in, is an owner.
+ * plan per seat" (decided, Priya Raman is its approver) and D-5 "Ship usage caps before anomaly
+ * detection" (proposed by Theo Brandt for Priya Raman). Avery Stone, the default sign-in, is an owner.
  * Each test names the finding it protects.
  */
 
@@ -92,8 +92,8 @@ test.describe("desktop", () => {
     const reassign = inspector(page).getByRole("form", { name: "Reassign" });
     await expect(reassign.getByRole("button", { name: "Reassign to the new approver" })).toBeDisabled();
     await expect(inspector(page).getByRole("button", { name: "Reassign", exact: true })).toHaveCount(1);
-    await reassign.getByLabel("New approver").selectOption({ label: "Admin · admin@example.com" });
-    await expect(reassign.getByRole("button", { name: "Reassign to Admin" })).toBeEnabled();
+    await reassign.getByLabel("New approver").selectOption({ label: "Avery Stone · admin@example.com" });
+    await expect(reassign.getByRole("button", { name: "Reassign to Avery Stone" })).toBeEnabled();
     await expect(inspector(page).getByRole("button", { name: "Reassign", exact: true })).toHaveCount(1);
   });
 
@@ -147,13 +147,13 @@ test.describe("desktop", () => {
 
   test("qa4-company-18: a commenter who cannot edit a proposal sees no Edit", async ({ page }) => {
     const title = "Offer annual billing at launch";
-    // Admin proposes a decision for Approver.
+    // Avery Stone proposes a decision for Priya Raman.
     await login(page);
     const dialog = await openPropose(page);
     await dialog.getByLabel("Decision", { exact: true }).fill(title);
     await dialog.getByLabel("Option 1", { exact: true }).fill("Annual at launch");
     await dialog.getByLabel("Option 2", { exact: true }).fill("Monthly only");
-    await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
+    await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Priya Raman · ${APPROVER}` });
     await dialog.getByRole("button", { name: "Propose", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(row(page, title)).toContainText("Proposed");

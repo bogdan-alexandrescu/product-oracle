@@ -107,7 +107,7 @@ test.describe("desktop", () => {
     }
     // A suggestion from the panel goes in as one, the row still waiting for an approver.
     await inspector(page).getByRole("button", { name: "Suggest Defer to a later PRD", exact: true }).click();
-    await expect(row(page, "Address labels").getByTestId("suggested-by")).toHaveText("Suggested by Commenter: Defer to a later PRD");
+    await expect(row(page, "Address labels").getByTestId("suggested-by")).toHaveText("Suggested by Theo Brandt: Defer to a later PRD");
     await expect(row(page, "Address labels").getByTestId("row-done")).toHaveCount(0);
   });
 

@@ -95,11 +95,11 @@ for (const [phone, dark] of [
       await expect(moved.getByTestId("chat-card-outcome")).toContainText("Applied by you");
 
       // chat-join: the owner half is chat-actions' set_owner, a second card.
-      await say(chat, "push Delivery integrity and release safety to next quarter and make Commenter own it");
+      await say(chat, "push Delivery integrity and release safety to next quarter and make Theo Brandt own it");
       await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood two changes.");
       await expect(last(chat).getByTestId("chat-card")).toHaveCount(2);
       await expect(last(chat).getByTestId("chat-card").first()).toContainText("Move Delivery integrity and release safety to Jan 1");
-      await expect(last(chat).getByTestId("chat-card").last()).toContainText("Make Commenter the owner of Delivery integrity and release safety");
+      await expect(last(chat).getByTestId("chat-card").last()).toContainText("Make Theo Brandt the owner of Delivery integrity and release safety");
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
     });
 

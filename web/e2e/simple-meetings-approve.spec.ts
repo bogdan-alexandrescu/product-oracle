@@ -17,7 +17,7 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  * test_simple_meetings_approve's (test_required_sections_without_reviewers_publish).
  *
  * Card approve-waits-on-reviewer: protects = with the required reviewer marked absent,
- * Approve says "not yet published: Waiting on Approver's approval" in the banner and the
+ * Approve says "not yet published: Waiting on Priya Raman's approval" in the banner and the
  * decision, and the one-pager stays on Version 3 with its working draft, whose bar says the
  * same; fails_when = the banner or decision says "published" for a version that is not, or
  * the decision or the bar words it otherwise than the banner; no_claim = the reviewer's own
@@ -25,7 +25,7 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  *
  * Card approve-section-reviewer: protects = a required section whose named reviewer is
  * absent holds publishing and the draft waits on them (their Inbox request): "Waiting on
- * Commenter's approval" in the banner, the decision and the one-pager's draft bar;
+ * Theo Brandt's approval" in the banner, the decision and the one-pager's draft bar;
  * fails_when = the banner says "published" or the draft does not wait on them;
  * no_claim = how the API words several sections.
  *
@@ -49,7 +49,7 @@ async function flags(context: BrowserContext, value: string) {
 }
 
 /** `attendee`: the one ticked besides the presenter (qa-simple-decide-35); never the reviewer a test needs absent. */
-async function startWithAnEdit(page: Page, absent?: string, attendee = "Commenter") {
+async function startWithAnEdit(page: Page, absent?: string, attendee = "Theo Brandt") {
   await login(page);
   await page.goto("/simple/prds/guided-setup");
   await page.getByRole("button", { name: "Start review" }).click();
@@ -114,32 +114,32 @@ for (const phone of [false, true]) {
       });
 
       test("Approve with the required reviewer absent says what it waits on, and the one-pager stays published", async ({ page }) => {
-        await startWithAnEdit(page, "Approver");
+        await startWithAnEdit(page, "Priya Raman");
         const banner = page.getByTestId("approved-banner");
-        await expect(banner).toHaveText("Approved in Review: Guided setup · not yet published: Waiting on Approver's approval");
+        await expect(banner).toHaveText("Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval");
         await expect(banner).not.toContainText("· published");
-        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (not yet published: Waiting on Approver's approval)");
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (not yet published: Waiting on Priya Raman's approval)");
         await expect(page.getByRole("region", { name: "Decisions in this meeting" })).not.toContainText("(published)");
         const pager = await onePagerOutside(page);
         await expect(pager).toContainText("Version 3");
         await expect(pager).not.toContainText("Version 4");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
-          "Approved in Review: Guided setup · not yet published: Waiting on Approver's approval",
+          "Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval",
         );
       });
 
       test("Approve with a required section's reviewer absent waits on that person", async ({ page, context }) => {
         await flags(context, "section-reviewer");
-        // Commenter, the section's reviewer, is not in the meeting; Approver (the PRD's reviewer) is.
-        await startWithAnEdit(page, undefined, "Approver");
+        // Theo Brandt, the section's reviewer, is not in the meeting; Priya Raman (the PRD's reviewer) is.
+        await startWithAnEdit(page, undefined, "Priya Raman");
         await expect(page.getByTestId("approved-banner")).toHaveText(
-          "Approved in Review: Guided setup · not yet published: Waiting on Commenter's approval",
+          "Approved in Review: Guided setup · not yet published: Waiting on Theo Brandt's approval",
         );
-        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (not yet published: Waiting on Commenter's approval)");
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Approved Guided setup (not yet published: Waiting on Theo Brandt's approval)");
         const pager = await onePagerOutside(page);
         await expect(pager).toContainText("Version 3");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
-          "Approved in Review: Guided setup · not yet published: Waiting on Commenter's approval",
+          "Approved in Review: Guided setup · not yet published: Waiting on Theo Brandt's approval",
         );
       });
 

@@ -27,17 +27,17 @@ test("the next review lists who was present until the ritual's attendees are edi
   const title = (await first.locator("strong").innerText()).trim();
   await first.getByRole("button", { name: "Start review" }).click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByRole("checkbox", { name: "Commenter" }).check();
+  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
-  await expect(page.getByLabel("Attendees")).toContainText("Commenter");
+  await expect(page.getByLabel("Attendees")).toContainText("Theo Brandt");
   // The review is held: end it, so Home's next review is the ritual's next one, not this live one.
   await page.getByRole("button", { name: "End meeting" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
   await page.goto("/simple");
   const next = page.getByTestId("home-meeting-next");
-  await expect(next).toContainText("Commenter");
-  await expect(next).not.toContainText("Viewer");
+  await expect(next).toContainText("Theo Brandt");
+  await expect(next).not.toContainText("Lena Ortiz");
 
   // An owner edits the ritual's attendees after the review: its list is the list.
   await page.goto("/company/rituals");
@@ -52,6 +52,6 @@ test("the next review lists who was present until the ritual's attendees are edi
   await expect(panel.getByTestId("ritual-no-changes")).toBeVisible();
 
   await page.goto("/simple");
-  await expect(page.getByTestId("home-meeting-next")).toContainText("Viewer");
-  await expect(page.getByTestId("home-meeting-next")).not.toContainText("Commenter");
+  await expect(page.getByTestId("home-meeting-next")).toContainText("Lena Ortiz");
+  await expect(page.getByTestId("home-meeting-next")).not.toContainText("Theo Brandt");
 });

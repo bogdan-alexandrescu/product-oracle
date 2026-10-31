@@ -4,7 +4,7 @@ import { expect, test, type Locator, type Page } from "./test";
 /**
  * QA pass 4's findings on the Simple meeting screen (live and ended), driven through the UI
  * on the mock's invented PRD "Guided setup" and its past "Review: Usage alerts", desktop and
- * phone, as the company's owner (and the invented Commenter for a chat proposal).
+ * phone, as the company's owner (and Theo Brandt for a chat proposal).
  *
  * -2: Approve publishes, so it says so and asks first, listing the edits. -3: End says which
  * proposals still wait, and the minutes list a chat proposal under What still waits on whom.
@@ -31,7 +31,7 @@ async function startReview(page: Page) {
   await tap(page.getByRole("button", { name: /^Start review/ }).first());
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await sheet.getByRole("checkbox", { name: "Commenter" }).check();
+  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await tap(sheet.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 }
@@ -116,7 +116,7 @@ for (const phone of [false, true]) {
       await tap(page.getByRole("button", { name: "End meeting" }));
       const ask = page.getByRole("alertdialog");
       await expect(ask).toContainText(/\d+ proposals? still waits? for a decision/);
-      await expect(ask).toContainText("Commenter proposes to move Welcome video to Now");
+      await expect(ask).toContainText("Theo Brandt proposes to move Welcome video to Now");
       await ask.getByRole("button", { name: "End meeting" }).click();
       await expect(page.getByTestId("end-screen")).toBeVisible();
       await expect(page.getByRole("region", { name: "What still waits" })).toContainText("Proposal: Moved Welcome video");
@@ -204,15 +204,15 @@ for (const phone of [false, true]) {
     test("qa4-simple-decide-23: an attendee chip has a visible Mark away / Mark here", async ({ page }) => {
       await startReview(page);
       await openPeople(page);
-      const away = page.getByRole("button", { name: "Mark Commenter away" });
+      const away = page.getByRole("button", { name: "Mark Theo Brandt away" });
       await expect(away).toBeVisible();
       await expect(away).toHaveText("Mark away");
       await tap(away);
-      const here = page.getByRole("button", { name: "Mark Commenter here" });
+      const here = page.getByRole("button", { name: "Mark Theo Brandt here" });
       await expect(here).toHaveText("Mark here");
-      await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Commenter");
+      await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Theo Brandt");
       await tap(here);
-      await expect(page.getByRole("button", { name: "Mark Commenter away" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Mark Theo Brandt away" })).toBeVisible();
     });
 
     test("qa4-simple-decide-31: Accept and Decline are one height", async ({ page }) => {

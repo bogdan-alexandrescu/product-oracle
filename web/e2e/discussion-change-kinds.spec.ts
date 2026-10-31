@@ -22,7 +22,7 @@ const RUN = "7a11c0de-0000-4000-8000-0000000000f5";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
 const MOVE = "Move Saved carts above Guided setup: Gut feeling";
-const ASK = "Ask Approver: How long should a saved cart last?";
+const ASK = "Ask Priya Raman: How long should a saved cart last?";
 const APPLY_WHY_NOT = "Approvers apply this change.";
 const DECISION = "Ship saved carts before guided setup?";
 
@@ -63,7 +63,7 @@ test("an approver applies Oracle's priority move after its pushback", async ({ p
   await handled(page).locator("summary").click();
   await expect(change(page, MOVE)).toHaveAttribute("data-status", "done");
   await expect(change(page, MOVE)).toContainText("Done");
-  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Approver applied: ${MOVE}`);
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Priya Raman applied: ${MOVE}`);
 });
 
 // protects=#370 for Apply and G3 Ask: a commenter sees Apply disabled with the API's reason,
@@ -81,7 +81,7 @@ test("a commenter cannot apply, sees why, and asks the person", async ({ page })
   await expect(handled(page).locator("summary")).toHaveText("1 handled");
   await handled(page).locator("summary").click();
   await expect(change(page, ASK)).toHaveAttribute("data-status", "done");
-  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Commenter asked: ${ASK}`);
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Theo Brandt asked: ${ASK}`);
 });
 
 // protects=G3 decision: a person proposes a decision through "Propose a change" (title,
@@ -99,17 +99,18 @@ test("a commenter proposes a decision that lands in the decision log", async ({ 
   await form.getByRole("textbox", { name: "Decision", exact: true }).fill(DECISION);
   await form.getByRole("textbox", { name: "What is being decided" }).fill("Which ships first next quarter?");
   await form.getByRole("textbox", { name: "Options" }).fill("Saved carts first\nGuided setup first");
+  // The pickers read GET /v1/decisions/people, which has no names: they show the email's.
   await form.getByRole("combobox", { name: "Who decides" }).selectOption({ label: "Approver" });
   await form.getByRole("button", { name: "Propose" }).click();
 
   const mine = change(page, `Decide: ${DECISION}`);
-  await expect(mine.getByTestId("change-by")).toHaveText("Suggested by Commenter");
+  await expect(mine.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
   await mine.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(handled(page).locator("summary")).toHaveText("1 handled");
   await handled(page).locator("summary").click();
   const done = change(page, `Decide: ${DECISION}`);
   await expect(done).toHaveAttribute("data-status", "done");
-  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Commenter proposed: Decide: ${DECISION}`);
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Theo Brandt proposed: Decide: ${DECISION}`);
   const link = done.getByRole("link", { name: /^Open D-\d+$/ });
   await expect(link).toBeVisible();
   await link.click();
@@ -193,7 +194,7 @@ test("an approver writes and applies a priority move and a pin", async ({ page }
   await form.getByRole("button", { name: "Propose" }).click();
   const moved = `Move Guided setup above Saved carts: ${why}`;
   await change(page, moved).getByRole("button", { name: "Apply", exact: true }).click();
-  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Approver applied: ${moved}`);
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Priya Raman applied: ${moved}`);
 
   form = await propose(page, "Pin a priority");
   await form.getByRole("combobox", { name: "Feature", exact: true }).selectOption({ label: "Saved carts" });
@@ -203,7 +204,7 @@ test("an approver writes and applies a priority move and a pin", async ({ page }
   await form.getByRole("button", { name: "Propose" }).click();
   const pinned = `Pin Saved carts at #2: ${pinWhy}`;
   await change(page, pinned).getByRole("button", { name: "Apply", exact: true }).click();
-  await expect(thread(page).getByTestId("discussion-system-line").last()).toHaveText(`Approver applied: ${pinned}`);
+  await expect(thread(page).getByTestId("discussion-system-line").last()).toHaveText(`Priya Raman applied: ${pinned}`);
   await handled(page).locator("summary").click();
   await expect(change(page, moved)).toHaveAttribute("data-status", "done");
   await expect(change(page, pinned)).toHaveAttribute("data-status", "done");
@@ -220,10 +221,10 @@ test("a commenter writes a question for a person and asks it", async ({ page }) 
   await form.getByRole("combobox", { name: "Ask whom" }).selectOption({ label: "Approver" });
   await form.getByRole("textbox", { name: "Question" }).fill("Who owns cart expiry?");
   await form.getByRole("button", { name: "Propose" }).click();
-  const asked = "Ask Approver: Who owns cart expiry?";
-  await expect(change(page, asked).getByTestId("change-by")).toHaveText("Suggested by Commenter");
+  const asked = "Ask Priya Raman: Who owns cart expiry?";
+  await expect(change(page, asked).getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
   await change(page, asked).getByRole("button", { name: "Ask", exact: true }).click();
-  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Commenter asked: ${asked}`);
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Theo Brandt asked: ${asked}`);
   await handled(page).locator("summary").click();
   await expect(change(page, asked)).toHaveAttribute("data-status", "done");
 });
