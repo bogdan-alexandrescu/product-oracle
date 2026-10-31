@@ -148,8 +148,29 @@ test.describe("desktop", () => {
     await expect(panel.getByTestId("flow-comments")).toContainText("Name the invite step after the calendar · open");
   });
 
+  test("Start review on Meetings lists every PRD by its title, as the API does", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/meetings");
+    await page.getByRole("button", { name: "Start review" }).first().click();
+    const sheet = page.getByRole("dialog", { name: "Start a review" });
+    await expect(sheet.getByLabel("PRD")).toContainText("Saved carts PRD");
+    const titles = await sheet.getByLabel("PRD").locator("option").allTextContents();
+    expect(titles).toContain("Guided setup");
+    expect(titles).toContain("Saved carts PRD");
+    expect(titles).toEqual([...titles].sort((a, b) => a.localeCompare(b)));
+  });
+
   test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
-    await openFromList(page, "Saved carts PRD");
+    // The same line drawn on Guided setup first: its flow is that PRD's own, never this one's.
+    await login(page);
+    await page.goto("/simple/one-pagers/guided-setup");
+    const first = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
+    await first.getByRole("button", { name: "Draw the flow" }).click();
+    await expect(page.getByRole("button", { name: /^Flow for “Invite suggestions/ })).toBeVisible();
+
+    await page.goto("/simple/one-pagers");
+    await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Saved carts PRD", exact: true }).click();
+    await expect(page.getByRole("article", { name: "One-pager" })).toBeVisible();
     const line = page.locator("li", { hasText: "Invite suggestions from the admin" }).first();
     await line.getByRole("button", { name: "Draw the flow" }).click();
     await page.getByRole("button", { name: /^Flow for “Invite suggestions/ }).click();
