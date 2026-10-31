@@ -370,7 +370,8 @@ export default function DocumentsPage() {
     />
   );
   // qa4-shell-2: a failed read is the error and Try again only: no switch counts, no empty list.
-  if (q.error)
+  // A failed reload after a good one keeps the rows under the error.
+  if (q.error && !q.data)
     return (
       <Page>
         {header}
@@ -381,6 +382,7 @@ export default function DocumentsPage() {
   return (
     <Page>
       {header}
+      {q.error && <LoadError what="your PRDs" error={q.error} onRetry={() => void q.reload()} />}
       {names.failed && (
         <p data-testid="template-names-failed" role="status" className="mb-3 text-[13px] text-text2">
           {NAMES_FAILED}
