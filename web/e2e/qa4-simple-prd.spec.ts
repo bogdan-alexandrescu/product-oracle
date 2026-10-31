@@ -100,7 +100,8 @@ test.describe("desktop", () => {
     const strip = page.getByLabel("Timeline strip");
     const parts = strip.getByTestId("plan-strip-label").locator("span");
     await expect(parts.first()).toBeVisible();
-    for (const lines of await parts.evaluateAll((els) => els.map((el) => el.getClientRects().length))) expect(lines).toBe(1);
+    // Each part (the name, the count) on one line: one line's height, never two.
+    for (const h of await parts.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) expect(h).toBeLessThan(30);
     await expect(strip.getByTestId("plan-strip-edge")).toHaveText("1 roadmap item with no milestone ends after Jan");
     await expect(strip.getByTestId("plan-strip-row").filter({ hasText: "No milestone" }).getByTestId("plan-strip-ends")).toHaveText("ends after Jan");
   });
@@ -108,7 +109,8 @@ test.describe("desktop", () => {
   test("today is the company's day, as the change times read (qa4-simple-prd-10)", async ({ page }) => {
     // 03:11 UTC on Oct 31 is the evening of Oct 30 in the company's zone (Los Angeles).
     await page.clock.setSystemTime(new Date("2026-10-31T03:11:00Z"));
-    await openFromList(page, "Guided setup");
+    await login(page);
+    await page.goto("/simple/one-pagers/guided-setup");
     await expect(page.getByLabel("Timeline strip").getByTestId("plan-strip-legend")).toContainText("Today Oct 30");
   });
 
@@ -120,7 +122,8 @@ test.describe("desktop", () => {
   });
 
   test("a viewer's flow offers no Comment (qa4-simple-prd-33)", async ({ page }) => {
-    await openFromList(page, "Guided setup", VIEWER);
+    await login(page, VIEWER);
+    await page.goto("/simple/one-pagers/guided-setup");
     await page.getByRole("button", { name: "Open the flow" }).first().click();
     const opened = page.getByTestId("flow-detail");
     await expect(opened).toBeVisible();
