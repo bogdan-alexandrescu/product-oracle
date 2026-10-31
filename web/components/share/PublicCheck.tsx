@@ -58,7 +58,17 @@ type Refusal =
   | { kind: "warnings"; message: string; warnings: string[] }
   | { kind: "other"; message: string };
 
-const toApprove = (r: Row) => (r.state === "draft" || r.state === "missing" || r.state === "changed") && r.left_out_reason !== "no_goal";
+/**
+ * The "To approve" rows: every text with an Approve button (qa4-docs-share-47: one on an item
+ * that serves no goal too), and each goal-serving item with no text yet to write.
+ */
+const toApprove = (r: Row) => r.state === "draft" || r.state === "changed" || (r.state === "missing" && r.left_out_reason !== "no_goal");
+
+/** qa4-docs-share-9: where an item's feature is linked to a confirmed goal (Baseline's Flagged tab). */
+const GOALS_HREF = "/baseline?tab=flagged";
+
+/** qa4-docs-share-48: a new text's stage, from the item's horizon. */
+const HORIZON_STAGE: Record<string, Stage> = { now: "in_progress", next: "planned", later: "exploring" };
 
 /** The 422 detail of PUT public-texts as a Refusal. */
 function refusal(error: unknown): Refusal {
@@ -153,7 +163,7 @@ function TextEditor({
   const t = row.text;
   const [title, setTitle] = useState(t?.title ?? "");
   const [description, setDescription] = useState(t?.description ?? "");
-  const [stage, setStage] = useState<Stage>(t?.stage ?? "exploring");
+  const [stage, setStage] = useState<Stage>(t?.stage ?? HORIZON_STAGE[row.horizon] ?? "exploring");
   const [quarter, setQuarter] = useState(t?.announced_quarter ?? "");
   const [url, setUrl] = useState(t?.changelog_url ?? "");
   const [ticked, setTicked] = useState<string[]>(t?.checked_warnings ?? []);
@@ -278,16 +288,11 @@ function ReviewRow({ doc, version, row, onChanged }: { doc: string; version: num
   const t = row.text;
 
   const quick = async (next: "approved" | "excluded") => {
-    if (next === "approved" && !t) {
-      setRefused(null);
-      setEditing(true);
-      return;
-    }
     setBusy(true);
     const result = await putText(doc, version, row.item_key, {
       title: (t?.title || row.internal_title).slice(0, 80),
       description: t?.description ?? "",
-      stage: t?.stage || "exploring",
+      stage: t?.stage || HORIZON_STAGE[row.horizon] || "exploring",
       announced_quarter: t?.announced_quarter ?? null,
       changelog_url: t?.changelog_url ?? null,
       state: next,
@@ -328,7 +333,14 @@ function ReviewRow({ doc, version, row, onChanged }: { doc: string; version: num
       ) : (
         <p className="mt-1.5 text-sm text-text2">No public text yet.</p>
       )}
-      {row.left_out_reason === "no_goal" && <p className="mt-1 text-[13px] text-text2">Left out: serves no confirmed goal.</p>}
+      {row.left_out_reason === "no_goal" && (
+        <p className="mt-1 text-[13px] text-text2">
+          Left out: serves no confirmed goal.{" "}
+          <Link href={GOALS_HREF} className="font-medium text-accent-ink hover:underline">
+            Link it to a goal
+          </Link>
+        </p>
+      )}
       {row.findings.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Findings">
           {row.findings.map((f) => (
@@ -371,9 +383,10 @@ function ReviewRow({ doc, version, row, onChanged }: { doc: string; version: num
                 setEditing(true);
               }}
             >
-              Edit
+              {t ? "Edit" : "Write text"}
             </Button>
-            {row.state !== "approved" && (
+            {/* qa4-docs-share-48: Approve approves a text; with none yet, Write text is the one control. */}
+            {t && row.state !== "approved" && (
               <Button disabled={busy} onClick={() => void quick("approved")}>
                 Approve
               </Button>
@@ -462,6 +475,9 @@ function CheckState({ doc, data, onChecked, onShow }: { doc: string; data: Texts
   // What still keeps the check back: items' texts, else the page's own title or intro, else an empty page.
   const left = data.not_ready.filter((x) => x.item_key).length;
   const pageText = data.not_ready.some((x) => x.reason === "page_findings");
+  // qa4-docs-share-9: the page is empty and the items left out serve no confirmed goal: that is the blocker, not approval.
+  const noGoalCount = data.rows.filter((r) => r.left_out_reason === "no_goal").length;
+  const noGoal = !pageText && noGoalCount > 0 && data.not_ready.some((x) => x.reason === "nothing_shown");
 
   const mark = async () => {
     if (!pub) return;
@@ -486,7 +502,15 @@ function CheckState({ doc, data, onChecked, onShow }: { doc: string; data: Texts
             text: `Approve or exclude the public text of ${plural(left, "item")} below.`,
             control: <Button onClick={() => onShow("approve")}>Show {left === 1 ? "it" : "them"}</Button>,
           }
-        : data.not_ready.length > 0
+        : noGoal
+          ? {
+              step: 1,
+              text: `${
+                noGoalCount === data.rows.length ? "No item serves a confirmed goal" : `${plural(noGoalCount, "item")} ${noGoalCount === 1 ? "serves" : "serve"} no confirmed goal and the rest are excluded`
+              }, so the public page is empty. Link items to a goal in Baseline, then approve their public text.`,
+              control: <LinkButton href={GOALS_HREF}>Link items to goals</LinkButton>,
+            }
+          : data.not_ready.length > 0
           ? {
               step: 1,
               text: pageText
@@ -537,7 +561,7 @@ function CheckState({ doc, data, onChecked, onShow }: { doc: string; data: Texts
 }
 
 /** What a public_text job came to, as the approver reads it. */
-function draftOutcome(job: LlmJob): string {
+function draftOutcome(job: LlmJob, rows: Row[]): string {
   if (job.status === "queued" || job.status === "running") return "Oracle is drafting public texts…";
   if (job.status === "cancelled") return "The draft was cancelled.";
   if (job.status === "failed") {
@@ -545,6 +569,9 @@ function draftOutcome(job: LlmJob): string {
     return `${why} Write the public texts yourself, or try again.`;
   }
   const n = Number((job.output as { drafted?: number } | null)?.drafted ?? 0);
+  if (n === 0 && rows.length > 0 && rows.every((r) => r.left_out_reason === "no_goal"))
+    // qa4-docs-share-9: nothing serves a goal, so nothing was drafted; say so, not "every item has a text".
+    return "No item serves a confirmed goal, so there was nothing to draft. Link items to a goal in Baseline first.";
   if (n === 0) return "Every item that serves a goal already has a public text.";
   return `Oracle drafted ${n} public ${n === 1 ? "text" : "texts"}. Check each one before you approve it.`;
 }
@@ -553,7 +580,7 @@ function draftOutcome(job: LlmJob): string {
  * Draft public texts (O5-Q7): one public_text job writes a draft for each goal-serving item
  * with none; a person still edits and approves each text.
  */
-function DraftTexts({ doc, version, onDrafted }: { doc: string; version: number; onDrafted: () => void }) {
+function DraftTexts({ doc, version, rows, onDrafted }: { doc: string; version: number; rows: Row[]; onDrafted: () => void }) {
   const [job, setJob] = useState<LlmJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -586,7 +613,7 @@ function DraftTexts({ doc, version, onDrafted }: { doc: string; version: number;
         </Button>
         {job && (
           <p data-testid="public-draft" role="status" className="text-sm text-text2">
-            {draftOutcome(job)}
+            {draftOutcome(job, rows)}
           </p>
         )}
       </div>
@@ -774,7 +801,8 @@ export function PublicCheck({ doc }: { doc: string }) {
   if (!allowed) {
     return (
       <Page>
-        {header}
+        {/* qa4-docs-share-50: the locked panel's button is the one way back; the header has none. */}
+        <PageHeader title="Public version" />
         {/* qa-docs-4: the Publish page's locked state: the lock, who may do this, and the way back. */}
         <Panel testId="public-check-locked" bodyClassName="flex flex-col items-center gap-3 px-4 py-12 text-center">
           <span aria-hidden className="grid size-12 place-items-center rounded-full bg-surface2 text-text2">
@@ -827,7 +855,7 @@ export function PublicCheck({ doc }: { doc: string }) {
             setPane("review");
           }}
         />
-        <DraftTexts doc={doc} version={data.version} onDrafted={changed} />
+        <DraftTexts doc={doc} version={data.version} rows={data.rows} onDrafted={changed} />
         <Radios<Pane>
           label="Pane"
           className="min-[640px]:hidden"

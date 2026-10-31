@@ -161,7 +161,7 @@ test("qa-work-43, qa-work-44, qa-work-45: an interview's page says what to do, w
   await expect(header.getByRole("button", { name: "Withdraw link" })).toBeVisible();
   await expect(page.getByTestId("interview-link-note")).toContainText("can't be shown or copied again");
   await expect(page.getByTestId("interview-link-note")).toContainText("If Ana Lima lost it, use Make a new link; the old link stops working.");
-  await expect(page.getByTestId("interview-transcript-empty")).toHaveText("Ana Lima hasn't opened the link yet. Send it to them if you haven't.");
+  await expect(page.getByTestId("interview-transcript-empty")).toHaveText("Ana Lima hasn't opened the link yet. If you didn't send it, make a new link.");
   await expect(page.getByTestId("interview-snapshot-empty")).toContainText("once Ana Lima finishes the interview");
   await expect(page.getByTestId("interview-requests-empty")).toContainText("once they finish the interview");
   for (const old of ["Nothing said yet", "No snapshot yet", "None yet"]) await expect(page.getByText(old, { exact: true })).toHaveCount(0);
