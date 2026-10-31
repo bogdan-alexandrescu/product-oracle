@@ -450,10 +450,13 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     change_mode: m.change_mode,
     change_people: m.change_people.map((i) => ref(ctx, i)),
     roadmap_ids: [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))].sort(),
-    meeting_decisions: db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst).map((d) => ({
-      id: d.id, number: d.number, title: d.title, approver: ref(ctx, d.approver_id ?? ""), at: d.at, subjects: d.subjects, change_ids: d.change_ids,
-      flow: decidedFlow(ctx, d),
-    })),
+    // qa4-simple-decide-11 (as questions._write): a question decided in the meeting is the
+    // question's own decision there (its id, number and title), so it keeps its code (Q5).
+    meeting_decisions: db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst).map((d) => {
+      const n = d.question ? Number(d.question.code.replace(/^Q/, "")) : NaN;
+      const own = d.question && Number.isFinite(n) ? { id: stableUuid(`simple-question/${n}`), number: 100 + n, title: d.question.title } : { id: d.id, number: d.number, title: d.title };
+      return { ...own, approver: ref(ctx, d.approver_id ?? ""), at: d.at, subjects: d.subjects, change_ids: d.change_ids, flow: decidedFlow(ctx, d) };
+    }),
     open_decisions: openDecisions(ctx, db, p),
     // The meeting PRD's agenda (questions.due_for): the open questions blocking the soonest
     // one's milestone, whoever decides them, and those decided in this meeting (with Undo).
@@ -782,8 +785,14 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
     else if (d.status === "working") waits.push({ what: `${d.document.title}: the working draft is not approved yet`, on: [] });
   }
   const made = new Set(db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.change_ids));
+  // qa4-simple-decide-3 (as meetings._waits: every proposal of the meeting's session still
+  // proposed): the chat's Propose in the meeting is the meeting's too. The chat mock makes
+  // its change outside the session, so a proposal on the meeting's PRD made while it ran counts.
+  const ids = new Set(prdItems(ctx, p).map((i) => i.id));
+  const ran = (c: Change) => Date.parse(c.at) >= Date.parse(m.started_at) && (!m.ended_at || Date.parse(c.at) <= Date.parse(m.ended_at));
+  const ofPrd = (c: Change) => ids.has(String(c.target.item_id)) || (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.includes(c));
   for (const c of [...(ctx.roadmap.changes ?? []), ...ctx.onePager.changes]) {
-    if (made.has(c.id) && c.status === "proposed") waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
+    if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
   }
   return {
     summary: summary.slice(0, 4000),

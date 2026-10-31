@@ -38,7 +38,7 @@ async function switchTo(page: Page, email: string) {
   await page.setViewportSize(size);
 }
 
-const allDecisions = (page: Page) => page.getByRole("region", { name: "All decisions" });
+const allDecisions = (page: Page) => page.getByRole("region", { name: "Decisions in this meeting" });
 const steps = (page: Page) => page.getByRole("navigation", { name: "Steps" });
 
 async function start(page: Page) {
@@ -112,13 +112,14 @@ for (const phone of [false, true]) {
         await start(page);
         // qa-simple-decide-29: on a phone the attendees fold behind one row.
         if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
-        await page.getByRole("button", { name: "Approver is here" }).click();
+        await page.getByRole("button", { name: "Mark Approver away" }).click();
         await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Approver");
         await page.getByRole("button", { name: "Edit “Invite suggestions from the admin's" }).click();
         await page.getByLabel("New wording for").fill("Invite suggestions from a shared calendar");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
-        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
+        await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
+        await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
         await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toContainText("not yet published: Waiting on Approver's approval");
         await expect(allDecisions(page)).toContainText("Approved Guided setup (not yet published: Waiting on Approver's approval)");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("Approved in Review: Guided setup · not yet published: Waiting on Approver's approval");
@@ -127,9 +128,9 @@ for (const phone of [false, true]) {
         await switchTo(page, "commenter@example.com");
         await page.goto(url);
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: /^Approve and publish one-pager edits/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
-        await expect(page.getByRole("button", { name: /is here/ })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: /^Mark .* (away|here)$/ })).toHaveCount(0);
         await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Everyone except viewers");
       });
 

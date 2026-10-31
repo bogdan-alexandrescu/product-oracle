@@ -108,7 +108,7 @@ for (const phone of [false, true]) {
         await tap(box.getByRole("button", { name: "Add comment" }));
         await expect(box.getByTestId("meeting-comment")).toContainText("We should wait for legal first");
         await expect(box.getByTestId("meeting-comment")).toContainText(/Admin · \w{3} \w{3} \d+, \d+:\d{2} [AP]M/);
-        await expect(page.getByRole("region", { name: "All decisions" })).not.toContainText("Comment:");
+        await expect(page.getByRole("region", { name: "Decisions in this meeting" })).not.toContainText("Comment:");
         // qa-simple-decide-21: the chat page link in the accent colour.
         const link = page.getByTestId("meeting-chat-page-link");
         const colours = await link.evaluate((el) => {
@@ -127,7 +127,7 @@ for (const phone of [false, true]) {
         await expect(page.getByLabel("Summary")).not.toHaveValue(/;|Comment:/);
         await expect(page.getByRole("list", { name: "Decisions taken" })).toHaveCount(0);
         // qa-simple-decide-31: the one day-and-time format, the zone once.
-        await expect(page.getByTestId("meeting-ended-at")).toContainText(/Ended \w{3} \w{3} \d+, \d+:\d{2} [AP]M \(/);
+        await expect(page.getByTestId("meeting-ended-at")).toContainText(/Ended \w{3} \w{3} \d+, \d+:\d{2} [AP]M Pacific Time · /);
         await page.goto("/simple/meetings");
         await expect(page.getByRole("region", { name: "Past" })).not.toContainText("Comment:");
         // qa-simple-decide-33: 44 px taps on a phone.

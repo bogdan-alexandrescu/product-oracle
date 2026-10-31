@@ -87,10 +87,10 @@ test.describe("desktop", () => {
     const box = chat(page);
     await say(page, "push Team invite nudges to next quarter and make it better");
     const reply = box.locator('[data-testid="chat-message"][data-kind="cards"]').last();
-    await expect(reply).toContainText("I understood one change:");
+    await expect(reply).toContainText("I understood one change.");
     await expect(reply).toContainText("I did not understand: “make it better”.");
     await say(page, "push Team invite nudges to next quarter\nnote that legal signs off");
-    await expect(box.locator('[data-testid="chat-message"][data-kind="cards"]').last()).toContainText("I understood two changes:");
+    await expect(box.locator('[data-testid="chat-message"][data-kind="cards"]').last()).toContainText("I understood two changes.");
   });
 });
 

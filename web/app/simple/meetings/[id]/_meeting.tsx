@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, confirmInPage, toast } from "@/components/ds";
+import { setToastPlace } from "@/components/ds/Toast";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
 import { OnePager } from "@/components/simple/OnePager";
 import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple/questions/Questions";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { MeetingAgenda, MeetingNote } from "@/lib/api/simple-chat";
-import { calendarDay, formatInZone, todayIn, useCompanyZone } from "@/lib/dates";
+import { calendarDay, todayIn, useCompanyZone } from "@/lib/dates";
 import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -58,6 +59,36 @@ const MINUTES_POLL_MS = 3_000;
 
 /** Names for ids, from the meeting's attendees and the people its drafts wait on (who need not be attendees). */
 const namer = (m: Meeting) => (id: string) => [...m.attendees, ...m.waiting_people].find((a) => a.id === id)?.name ?? "a reviewer";
+
+/**
+ * qa4-simple-decide-11: a question decided in the meeting keeps its own code ("Q5"), never
+ * also a decision code: the meeting's decision is the question's own (its id), whose code
+ * the meeting's agenda carries. Every other decision reads "D-<number>".
+ */
+const decisionCode = (m: Meeting) => {
+  const codes = new Map((m.decisions_due ?? []).map((q) => [q.id, q.code] as const));
+  return (d: Meeting["meeting_decisions"][number]) => codes.get(d.id) || `D-${d.number}`;
+};
+
+/** qa4-simple-decide-11: an open question in the minutes reads by its words, no decision code ("D-3: …" reads "…"). */
+const questionWords = (q: string) => q.replace(/^D-\d+:\s*/, "");
+
+/** qa4-simple-decide-15: the roadmap step's rows in the roadmap's own order. */
+const ORDER: Record<string, number> = { now: 0, next: 1, later: 2, cut: 3 };
+
+/** qa-simple-decide-18: a proposal names its item ("move Sample data import to Now"). */
+function useProposalWords(m: Meeting) {
+  const roadmap = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
+  return (c: Meeting["pending_proposals"][number]) => {
+    const id = (c.target as { item_id?: unknown }).item_id;
+    const t = roadmap.data?.items.find((i) => i.id === id)?.title ?? null;
+    if (c.op === "change_horizon") return c.after.horizon ? `move ${t ?? "an item"} to ${cap(String(c.after.horizon))}` : `move ${t ?? "an item"}`;
+    if (c.op === "cut") return `cut ${t ?? "an item"}`;
+    if (c.op === "restore") return `restore ${t ?? "an item"}`;
+    const w = opWords(c.op);
+    return `${w[0]!.toLowerCase()}${w.slice(1)}${t ? ` (${t})` : ""}${c.op === "edit_line" ? ` “${String(c.after.line ?? "")}”` : ""}`;
+  };
+}
 
 /**
  * Simple S8 (#723): one review meeting, full screen (direction A). Live: the steps
@@ -142,10 +173,37 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   // Approve approves every draft the meeting worked on: the label names them all.
   const toApprove = m.drafts.filter((d) => !d.decider_approved && d.changes > 0);
   const edits = toApprove.reduce((n, d) => n + d.changes, 0);
-  const approveLabel = toApprove.every((d) => d.document.id === m.prd.id) ? `Approve one-pager edits (${edits})` : `Approve edits to ${toApprove.map((d) => d.document.title).join(", ")} (${edits})`;
+  // qa4-simple-decide-2: the label says it publishes.
+  const docs = toApprove.every((d) => d.document.id === m.prd.id) ? null : toApprove.map((d) => d.document.title).join(", ");
+  const approveLabel = docs ? `Approve and publish edits to ${docs} (${edits})` : `Approve and publish one-pager edits (${edits})`;
+  const code = decisionCode(m);
+  const proposalWords = useProposalWords(m);
+  // qa4-simple-decide-17: the meeting's toasts sit at the bottom, clear of the header's steps and clock.
+  useEffect(() => setToastPlace("corner"), []);
+  // qa4-simple-decide-2: Approve publishes: it lists the edits it takes and asks first.
+  const approve = async () => {
+    const made = m.meeting_decisions.filter((d) => d.change_ids.length > 0).map((d) => `${code(d)} ${d.title}`);
+    const what = docs ?? m.prd.title;
+    const yes = await confirmInPage({
+      action: "Approve and publish",
+      title: `Publish ${what}?`,
+      message: `This publishes ${what} with ${edits === 1 ? "this edit" : `these ${edits} edits`}: ${made.length ? made.join("; ") : `${edits} ${edits === 1 ? "edit" : "edits"} made in this meeting`}. Everyone then reads the new version.`,
+      cancel: "Back",
+    });
+    if (!yes) return;
+    await act(async () => {
+      const r = await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/approve", path));
+      setNotApproved(r.not_approved);
+    });
+  };
   // qa-simple-decide-1: ending closes the meeting for everyone: ask first.
+  // qa4-simple-decide-3: it says which proposals still wait (the minutes list them under What still waits on whom).
   const end = async () => {
-    const yes = await confirmInPage({ action: "End meeting", message: "End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.", destructive: true });
+    const waiting = m.pending_proposals;
+    const warn = waiting.length
+      ? ` ${waiting.length} ${waiting.length === 1 ? "proposal still waits" : "proposals still wait"} for a decision: ${waiting.map((c) => `${c.by_name} proposes to ${proposalWords(c)}`).join("; ")}.`
+      : "";
+    const yes = await confirmInPage({ action: "End meeting", message: `End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.${warn}`, destructive: true });
     if (yes) await act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/end", path)));
   };
   // qa-simple-decide-42: a change applied in the chat shows at once in the stage and All decisions (read now and once the chat has settled).
@@ -157,8 +215,11 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
     <div className="flex min-h-full flex-col">
       {/* qa-simple-decide-48: on a phone the header scrolls away with the page (not sticky). */}
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-3 max-[600px]:static max-[600px]:gap-y-1 max-[600px]:py-2" aria-label="Meeting">
-        <Link href="/simple/meetings" className={`text-base ${LINK} ${PHONE_TAP}`}>Meetings</Link>
-        <h1 className="text-xl font-semibold">{m.title}</h1>
+        {/* qa4-simple-decide-27: the back link and the title share one line and one baseline. */}
+        <div className="flex min-w-0 items-baseline gap-x-3" data-testid="meeting-title-row">
+          <Link href="/simple/meetings" className={`text-base ${LINK} ${PHONE_TAP}`}>Meetings</Link>
+          <h1 className="min-w-0 text-xl font-semibold [overflow-wrap:anywhere]">{m.title}</h1>
+        </div>
         <nav aria-label="Steps" className="flex flex-wrap gap-1">
           {STEPS.map((s, i) => (
             <button
@@ -182,12 +243,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               variant="primary"
               className={PHONE_TAP}
               disabled={busy}
-              onClick={() =>
-                act(async () => {
-                  const r = await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/approve", path));
-                  setNotApproved(r.not_approved);
-                })
-              }
+              onClick={() => void approve()}
             >
               {approveLabel}
             </Button>
@@ -204,27 +260,25 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           {m.attendees.map((a) => (
             // qa-simple-decide-41: an absent attendee reads "away" with a grey dot, never struck through.
             <li key={a.id} data-present={a.present ? "true" : "false"} className={`flex items-center rounded-full border border-line px-3 py-0.5 max-[600px]:min-h-11 ${a.present ? "" : "text-text2"}`}>
-              {m.can.set_rules && a.id !== m.presenter.id ? (
-                <button
-                  type="button"
-                  aria-pressed={a.present}
-                  disabled={busy}
-                  aria-label={`${a.name} is here`}
-                  className="flex items-center max-[600px]:min-h-11"
-                  title={a.present ? "Here: press to mark absent" : "Absent: press to mark here"}
-                  onClick={() => rules({ absent_ids: a.present ? [...absent, a.id] : absent.filter((x) => x !== a.id) })}
-                >
-                  <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${a.present ? "bg-accent" : "bg-text-faint"}`} />
-                  {a.name}
-                </button>
-              ) : (
-                <span>
-                  <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${a.present ? "bg-accent" : "bg-text-faint"}`} />
-                  {a.name}
-                </span>
-              )}
+              <span>
+                <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${a.present ? "bg-accent" : "bg-text-faint"}`} />
+                {a.name}
+              </span>
               {a.roles.length > 0 && <span className="text-sm text-text-faint">&nbsp;· {a.roles.join(", ")}</span>}
               {!a.present && <span className="text-sm text-text-faint" data-testid="attendee-away">&nbsp;· away</span>}
+              {/* qa4-simple-decide-23: a visible control whose name follows the state. */}
+              {m.can.set_rules && a.id !== m.presenter.id && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  aria-label={a.present ? `Mark ${a.name} away` : `Mark ${a.name} here`}
+                  className={`ml-2 text-sm ${LINK} max-[600px]:min-h-11`}
+                  data-testid="attendee-toggle"
+                  onClick={() => rules({ absent_ids: a.present ? [...absent, a.id] : absent.filter((x) => x !== a.id) })}
+                >
+                  {a.present ? "Mark away" : "Mark here"}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -271,17 +325,18 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
             Open chat on its own page
           </Link>
           <NotesSoFar notes={(m.notes ?? []).filter((n) => n.kind !== "comment")} mayChange={m.can.change} />
-          <section aria-label="All decisions" className="simple-card">
-            <h2 className="simple-h2">All decisions</h2>
+          {/* qa4-simple-decide-24: it lists this meeting's decisions only, and says so. */}
+          <section aria-label="Decisions in this meeting" className="simple-card">
+            <h2 className="simple-h2">Decisions in this meeting</h2>
             {m.meeting_decisions.length === 0 ? (
               <p className="simple-small">None yet.</p>
             ) : (
               <ul className="mt-2 space-y-2">
                 {m.meeting_decisions.map((d) => (
                   <li key={d.id} data-testid="meeting-decision">
-                    <strong>D-{d.number}</strong> {d.title}
-                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple. */}
-                    <span className="block text-sm text-text-faint">{d.approver.name} · {formatInZone(d.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                    <strong>{code(d)}</strong> {d.title}
+                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple; qa4-simple-decide-19: the meeting's one format, no zone letters. */}
+                    <span className="block text-sm text-text-faint">{d.approver.name} · {momentWords(d.at, zone)}</span>
                   </li>
                 ))}
               </ul>
@@ -385,37 +440,46 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
     await reload();
   });
   const [said, setSaid] = useState<string | null>(null);
-  const change = (body: Schemas["SimpleChangeIn"]) =>
+  // qa4-simple-decide-16: the line says what moved ("Moved Sample data import to Later").
+  const change = (body: Schemas["SimpleChangeIn"], words: string) =>
     act(async () => {
       const r = await unwrap(api.POST("/v1/simple/changes", { body: { ...body, session_id: m.session_id } }));
-      setSaid(r.change.status === "proposed" ? "Proposed: it waits on its decider" : "Done");
+      setSaid(r.change.status === "proposed" ? `Proposed: ${words[0]!.toLowerCase()}${words.slice(1)}. It waits on its decider.` : `${words}.`);
     });
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
-  const items = q.data.items;
+  // qa4-simple-decide-15: Now, Next, Later, then Cut; the roadmap's order within each.
+  const all = q.data.items;
+  const rank = (i: (typeof all)[number]) => ORDER[i.status === "cut" ? "cut" : i.horizon] ?? 4;
+  const items = all.map((i, n) => [i, n] as const).sort(([a, x], [b, y]) => rank(a) - rank(b) || x - y).map(([i]) => i);
   return (
     <section aria-label="Roadmap slice" className="simple-card">
       <h2 className="simple-h2">{m.prd.title} on the roadmap</h2>
-      {said && <p role="status" className="simple-small">{said}</p>}
+      {said && <p role="status" className="simple-small" data-testid="roadmap-said">{said}</p>}
       {error && <ErrorNote>{error}</ErrorNote>}
       {items.length === 0 && <p className="simple-small">No roadmap items for this PRD yet.</p>}
       <ul className="mt-2 divide-y divide-line">
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span>
+            <span className="min-w-0 flex-1">
               <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · <span className="whitespace-nowrap" data-testid="roadmap-span">{dayWords(i.start.date, zone)} – {dayWords(i.end.date, zone)}</span>
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (
-              <Button className={PHONE_TAP} disabled={busy} aria-label={`Restore ${i.title}`} onClick={() => change({ op: "restore", target: { item_id: i.id }, before: { cut: true }, after: {} })}>Restore</Button>
+              <Button className={PHONE_TAP} disabled={busy} aria-label={`Restore ${i.title}`} onClick={() => change({ op: "restore", target: { item_id: i.id }, before: { cut: true }, after: {} }, `Restored ${i.title}`)}>Restore</Button>
             )}
             {m.can.change && i.status !== "cut" && (
-              <span className="flex flex-wrap gap-2">
-                {HORIZONS.filter((h) => h !== i.horizon).map((h) => (
-                  <Button key={h} className={PHONE_TAP} disabled={busy} aria-label={`Move ${i.title} to ${h[0].toUpperCase() + h.slice(1)}`} onClick={() => change({ op: "change_horizon", target: { item_id: i.id }, before: { horizon: i.horizon }, after: { horizon: h } })}>
-                    Move to {h[0].toUpperCase() + h.slice(1)}
-                  </Button>
-                ))}
+              // qa4-simple-decide-15: one fixed column per horizon (the item's own stays empty), so the buttons line up row to row.
+              <span className="flex flex-wrap gap-2" data-testid="roadmap-moves">
+                {HORIZONS.map((h) =>
+                  h === i.horizon ? (
+                    <span key={h} aria-hidden className="w-36 max-[600px]:hidden" />
+                  ) : (
+                    <Button key={h} className={`w-36 max-[600px]:w-auto ${PHONE_TAP}`} disabled={busy} aria-label={`Move ${i.title} to ${cap(h)}`} onClick={() => change({ op: "change_horizon", target: { item_id: i.id }, before: { horizon: i.horizon }, after: { horizon: h } }, `Moved ${i.title} to ${cap(h)}`)}>
+                      Move to {cap(h)}
+                    </Button>
+                  ),
+                )}
                 {/* qa-simple-decide-28: the destructive one stands apart and asks first. */}
                 <Button
                   className={`${PHONE_TAP} ml-2 text-crit`}
@@ -423,7 +487,7 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
                   aria-label={`Cut ${i.title}`}
                   onClick={async () => {
                     const yes = await confirmInPage({ action: "Cut", message: `Cut ${i.title} from the roadmap? It leaves Now, Next and Later; Restore brings it back.`, destructive: true });
-                    if (yes) await change({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: {} });
+                    if (yes) await change({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: {} }, `Cut ${i.title}`);
                   }}
                 >
                   Cut
@@ -439,20 +503,7 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
 
 function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const { busy, error, act } = useAct(reload);
-  // qa-simple-decide-18: a proposal names its item ("move Sample data import to Now").
-  const roadmap = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
-  const itemTitle = (c: Meeting["pending_proposals"][number]) => {
-    const id = (c.target as { item_id?: unknown }).item_id;
-    return roadmap.data?.items.find((i) => i.id === id)?.title ?? null;
-  };
-  const proposalWords = (c: Meeting["pending_proposals"][number]) => {
-    const t = itemTitle(c);
-    if (c.op === "change_horizon") return c.after.horizon ? `move ${t ?? "an item"} to ${cap(String(c.after.horizon))}` : `move ${t ?? "an item"}`;
-    if (c.op === "cut") return `cut ${t ?? "an item"}`;
-    if (c.op === "restore") return `restore ${t ?? "an item"}`;
-    const w = opWords(c.op);
-    return `${w[0]!.toLowerCase()}${w.slice(1)}${t ? ` (${t})` : ""}${c.op === "edit_line" ? ` “${String(c.after.line ?? "")}”` : ""}`;
-  };
+  const proposalWords = useProposalWords(m);
   const decide = (id: string, how: "accept" | "decline") =>
     act(() =>
       how === "accept"
@@ -488,8 +539,9 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
               </span>
               {c.can_decide && (
                 <span className="flex gap-2">
-                  <Button variant="primary" disabled={busy} onClick={() => decide(c.id, "accept")}>Accept</Button>
-                  <Button disabled={busy} onClick={() => decide(c.id, "decline")}>Decline</Button>
+                  {/* qa4-simple-decide-31: one height for both. */}
+                  <Button variant="primary" className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => decide(c.id, "accept")}>Accept</Button>
+                  <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => decide(c.id, "decline")}>Decline</Button>
                 </span>
               )}
             </li>
@@ -634,6 +686,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
     setDirty(true);
   };
   const d = m.delivery;
+  const code = decisionCode(m);
   return (
     <div className="mx-auto max-w-[1180px] space-y-4 p-4" data-testid="end-screen">
       <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -641,7 +694,8 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
         <h1 className="text-2xl font-semibold">{m.title}</h1>
         {/* qa-simple-decide-31: the one day-and-time format; the zone said once. */}
         <span className="text-base text-text-faint" data-testid="meeting-ended-at">
-          Ended {m.ended_at ? `${momentWords(m.ended_at, zone)} (${zoneName(zone)})` : ""} · {m.attendees.map((a) => a.name).join(", ")}
+          {/* qa4-simple-decide-20: "Ended Sat Oct 24, 12:02 AM Pacific Time", no brackets in brackets. */}
+          Ended {m.ended_at ? `${momentWords(m.ended_at, zone)} ${zoneName(zone).replace(/\s*\(.*\)$/, "")}` : ""} · {m.attendees.map((a) => a.name).join(", ")}
         </span>
       </header>
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -705,7 +759,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 <ul className="list-disc pl-5">
                   {minutes.open_questions.map((x) => (
                     <li key={x}>
-                      <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>{x}</Link>
+                      <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>{questionWords(x)}</Link>
                     </li>
                   ))}
                 </ul>
@@ -746,7 +800,8 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               {m.meeting_decisions.map((x) => (
                 <DecidedItem key={x.id} flow={x.flow}>
                   <span>
-                    <Link className={`${LINK} ${PHONE_TAP} inline-flex items-center max-[600px]:min-w-11`} href={`/simple/decisions#d-${x.number}`}>D-{x.number}</Link> {x.title} · {x.approver.name}
+                    {/* qa4-simple-decide-39: the link is named by its code and its words. */}
+                    <Link className={`${LINK} ${PHONE_TAP} inline-flex items-center max-[600px]:min-w-11`} aria-label={`${code(x)} ${x.title}`} href={code(x).startsWith("D-") ? `/simple/decisions#d-${x.number}` : `/simple/decisions?meeting=${m.id}`}>{code(x)}</Link> {x.title} · {x.approver.name}
                   </span>
                 </DecidedItem>
               ))}
@@ -797,7 +852,8 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                   <p className="flex flex-wrap items-center gap-2">
                     <input type="checkbox" disabled checked={false} onChange={() => undefined} aria-label="Post to Slack" /> Post to Slack
                     <span className="simple-small"> · {m.slack.connected ? "Slack has no channel for minutes yet." : "Slack is not connected yet."}</span>
-                    <Link className="simple-small font-semibold text-accent-ink hover:underline" href="/settings/connections">{m.slack.connected ? "Pick a channel" : "Connect Slack"}</Link>
+                    {/* qa4-simple-decide-32: drawn as a link, not grey like the note beside it. */}
+                    <Link className={`text-[length:var(--simple-small)] ${LINK}`} href="/settings/connections" data-testid="slack-connect-link">{m.slack.connected ? "Pick a channel" : "Connect Slack"}</Link>
                   </p>
                 )}
                 <Button variant="primary" disabled={busy} onClick={send}>Send</Button>

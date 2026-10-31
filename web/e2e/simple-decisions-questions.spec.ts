@@ -247,7 +247,7 @@ for (const phone of [false, true]) {
         // The PRD's open questions, whoever decides them (Q7 is the approver's), not only mine.
         await expect(due.locator('[data-code="Q7"]')).toContainText("Q7 Legal input on health notes");
         await due.getByTestId("question-row").first().getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(region(page, "All decisions")).toContainText("Decided Q5 Reminder default time: 9:00 in each person's zone");
+        await expect(region(page, "Decisions in this meeting")).toContainText("Q5 Reminder default time");
         const q5 = due.locator('[data-code="Q5"]');
         await expect(q5.getByTestId("question-decided")).toContainText("Decided in this meeting: 9:00 in each person's zone · Admin ·");
         await q5.getByRole("button", { name: "Undo" }).click();

@@ -29,9 +29,9 @@ async function decideAndEnd(page: Page) {
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
   await page.getByRole("button", { name: "Move Team invite nudges to Now" }).click();
-  await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Team invite nudges");
+  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Moved Team invite nudges");
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
-  await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
+  await expect(page.getByRole("region", { name: "Decisions in this meeting" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();
