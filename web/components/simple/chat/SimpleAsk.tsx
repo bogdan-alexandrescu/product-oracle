@@ -201,14 +201,15 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         <div role="group" aria-label="About" className="inline-flex flex-none gap-0.5 rounded-[10px] bg-surface2 p-[3px]">
           {(
             [
-              [false, herePage],
-              [true, "General"],
+              [false, herePage, !chat.general],
+              // qa4-simple-home-24: a chat about another page keeps its page named, and "This page" starts one about the page shown.
+              ...(herePage !== "This page" ? ([[false, "This page", false]] as const) : []),
+              [true, "General", chat.general],
             ] as const
-          ).map(([general, label]) => {
-            const on = chat.general === general;
+          ).map(([general, label, on]) => {
             return (
               <button
-                key={String(general)}
+                key={label}
                 type="button"
                 aria-pressed={on}
                 onClick={() => {
@@ -366,7 +367,12 @@ function RecentMenu({
                 onClick={() => onOpen(c)}
                 className="flex w-full flex-col rounded-lg p-2 text-left outline-none hover:bg-surface2 focus:bg-surface2 focus-visible:ring-2 focus-visible:ring-[var(--focus-ring,var(--accent))]"
               >
-                <b className="text-[15px] leading-[21px] font-semibold text-text [overflow-wrap:anywhere]" data-testid="ask-recent-question">
+                {/* qa4-simple-home-32: a long first question shows two lines at most, with an ellipsis. */}
+                <b
+                  className="line-clamp-2 text-[15px] leading-[21px] font-semibold text-text [overflow-wrap:anywhere]"
+                  title={c.question ? tidyTitle(c.question) : undefined}
+                  data-testid="ask-recent-question"
+                >
                   {(c.question && tidyTitle(c.question)) || `Chat about ${c.page_name}`}
                 </b>
                 <span className="text-[13px] leading-[18px] text-text2" data-testid="ask-recent-when">
@@ -633,7 +639,7 @@ function AskLine({ message: m, askId, onEnded }: { message: AskMessage; askId: s
           </p>
         ) : text ? (
           <>
-            <AnswerText text={text} live={live} />
+            <AnswerText text={text} live={live} cites={cites} />
             <AnswerSources cites={cites} />
           </>
         ) : (
