@@ -607,16 +607,27 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
 
 /**
  * qa4-simple-plan-22: why a row nobody moved ranks differently in yours: the moves that went past
- * it ("pushed down when Mobile alert push moved up"), else a dependency's.
+ * it ("pushed down when Mobile alert push moved up"), else the dependency that moved it ("pulled up
+ * to come before Alert routing by team, which needs it").
  */
 function pushedBy(rows: Row[], r: Row): string {
   const o = r.oracle_rank ?? r.rank;
   const down = r.rank > o;
   // Moved rows that crossed it: up past it (it went down), or down past it (it went up).
   const movers = rows.filter((x) => x.override && x.oracle_rank != null && (down ? x.oracle_rank > o && x.rank <= r.rank : x.oracle_rank < o && x.rank >= r.rank));
-  const names = movers.map((x) => x.title);
-  const list = names.length > 2 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join(" and ");
-  if (names.length) return `${down ? "pushed down" : "pulled up"} when ${list} moved ${down ? "up" : "down"}`;
+  const list = (xs: Row[]) => {
+    const names = xs.map((x) => x.title);
+    return names.length > 2 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join(" and ");
+  };
+  if (movers.length) return `${down ? "pushed down" : "pulled up"} when ${list(movers)} moved ${down ? "up" : "down"}`;
+  // A prerequisite comes just before the rows that need it: rows that need it moved up pull it up;
+  // a row it needs moved down pushes it down.
+  const deps = rows.filter((x) =>
+    down
+      ? r.depends_on.includes(x.code) && x.rank < r.rank && x.oracle_rank != null && x.rank > x.oracle_rank
+      : x.depends_on.includes(r.code) && x.rank > r.rank && x.oracle_rank != null && x.rank < x.oracle_rank,
+  );
+  if (deps.length) return down ? `pushed down to stay after ${list(deps)}, which it needs` : `pulled up to come before ${list(deps)}, which ${deps.length > 1 ? "need" : "needs"} it`;
   return down ? "pushed down by the moves above it" : "pulled up by the moves below it";
 }
 
