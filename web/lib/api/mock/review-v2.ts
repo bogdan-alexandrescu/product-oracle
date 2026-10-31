@@ -84,7 +84,7 @@ export function seedReviewV2(doc: DocumentLike | undefined, latest: VersionLike 
     id: "p0000000-0000-4000-8000-000000000001", document_id: doc.id, section_key: target.section_key,
     base_version: latest.number, base_hash: sectionRevision(target, hash), heading: target.heading,
     body_md: `${target.body_md}\n\nAn agent proposed this added sentence.`, origin: "run", action: "replace", run_id: null,
-    rationale: "An agent draft rewrote this approved section; the approved text was kept. Review the rewrite as a diff.",
+    rationale: "Adds a sentence on the new activation goal.", // MOCK-HOOK: only this section's reason; the panel says the rest once
     status: "open", created_by: userId, decided_by: null, decided_at: null, decision_note: null, applied_version: null,
     lock_version: 1, created_at: AT, updated_at: AT,
   });
@@ -93,7 +93,7 @@ export function seedReviewV2(doc: DocumentLike | undefined, latest: VersionLike 
   const heldWhy = ["Tightens the scope to card payments only.", "Adds the guest checkout limit agreed with support.", "Rewrites the success measures as weekly numbers."]; // MOCK-HOOK
   moreHeld.forEach((sec, i) => db.patches.push({ // MOCK-HOOK
     id: `p0000000-0000-4000-8000-00000000000${i + 2}`, document_id: doc.id, section_key: sec.section_key, base_version: latest.number, base_hash: sectionRevision(sec, hash), heading: sec.heading, // MOCK-HOOK
-    body_md: `${sec.body_md}\n\n${heldWhy[i]}`, origin: "run", action: "replace", run_id: null, rationale: `An agent draft rewrote this approved section. ${heldWhy[i]}`, // MOCK-HOOK
+    body_md: `${sec.body_md}\n\n${heldWhy[i]}`, origin: "run", action: "replace", run_id: null, rationale: heldWhy[i], // MOCK-HOOK
     status: "open", created_by: userId, decided_by: null, decided_at: null, decision_note: null, applied_version: null, lock_version: 1, created_at: AT, updated_at: AT, // MOCK-HOOK
   })); // MOCK-HOOK
   db.notifications.push(

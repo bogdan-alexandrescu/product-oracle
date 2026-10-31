@@ -109,7 +109,7 @@ export function TemplateFieldsForm() {
                 {secs.map((s, i) => (
                   <div key={i} className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-lg border border-line bg-surface2 p-2 max-[700px]:grid-cols-1" data-testid="template-section">
                     <input aria-label={`Section ${i + 1} heading`} className={INPUT} value={s.heading} onChange={(e) => set(i, { heading: e.target.value })} placeholder="Heading" />
-                    <input aria-label={`Section ${i + 1} guide`} className={INPUT} value={s.guide} onChange={(e) => set(i, { guide: e.target.value })} placeholder="What goes here" />
+                    <textarea rows={1} ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight + 2}px`; } }} aria-label={`Section ${i + 1} guide`} className={`${INPUT} resize-none overflow-hidden`} value={s.guide} onChange={(e) => set(i, { guide: e.target.value })} placeholder="What goes here" />
                     <label className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
                       <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={s.brief} onChange={(e) => set(i, { brief: e.target.checked })} />
                       In the brief

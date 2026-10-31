@@ -73,8 +73,10 @@ function Requests({ view }: { view: RequestsView }) {
   const router = useRouter();
   const canStart = can("create_intake", true);
   const [mkFiled, setMkFiled] = useState(0); // MOCK-HOOK: a request filed from a found item leaves the found list
+  const [mkLast, setMkLast] = useState<Schemas["RequestOut"] | null>(null); // MOCK-HOOK: qd3=b, the Filed note for a request filed from New request
   const filed = (request: Schemas["RequestOut"]) => {
     setMkFiled((n) => n + 1); // MOCK-HOOK
+    setMkLast(request); // MOCK-HOOK
     // Clear the filters so the filed request shows, selected.
     setFilters(NO_FILTERS);
     // On Themes, the filed request opens on All requests.
@@ -119,7 +121,7 @@ function Requests({ view }: { view: RequestsView }) {
     <Page>
       <RequestsHeader triage={triage} onFiled={filed} />
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-        {view === "all" && can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}:${mkFiled}`} onFiledMk={filed} /* MOCK-HOOK */ />}
+        {view === "all" && can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}:${mkFiled}`} onFiledMk={filed} filedMk={mkLast} /* MOCK-HOOK */ />}
         {view === "themes" ? (
           <Panel title="Themes" count={liveThemes.length}>
             {themes.error && (

@@ -10,7 +10,7 @@ import { Icon } from "./Icon";
 const FIELD = "input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled])";
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-const SIZE = { md: "max-w-xl", lg: "max-w-3xl" } as const;
+const SIZE = { md: "max-w-xl", lg: "max-w-3xl", xl: "max-w-6xl" /* MOCK-HOOK: qd4=b, the wide delivery log */ } as const;
 
 /**
  * The app's one modal dialog (qa-plan-29): a dimmed backdrop, a head row with the title and

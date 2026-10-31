@@ -19,8 +19,10 @@ import { EstimateSummary, usd, type EstimateOut } from "@/app/runs/_lib";
 
 type Ready = { runId: string; estimate: EstimateOut };
 
-/** What the run does, in steps a person reads before paying for it. */
-const STEPS = ["Reads the PRD and its sources", "Drafts roadmap items with dates and sizes", "Stops for your review before anything is saved"];
+/** Every button that starts a roadmap run (Draft roadmap on a track, Re-plan on a plan item) names itself here. */
+export type RunAction = { title: string; question: string; intro: (prd: string) => string };
+export const DRAFT_ROADMAP: RunAction = { title: "Draft a roadmap from this track", question: "Draft a roadmap from this track?", intro: (prd) => `Oracle drafts a roadmap from ${prd}.` };
+export const REPLAN: RunAction = { title: "Re-plan this track", question: "Re-plan this track?", intro: (prd) => `Oracle drafts the roadmap for ${prd} again, from its new dates.` };
 
 async function draftAndEstimate(trackId: string): Promise<Ready> {
   const run = await unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", { params: { path: { track_id: trackId } } }));
@@ -52,7 +54,7 @@ function useStart(onStarted: (runId: string) => void) {
 }
 
 /** a: one dialog for every action that starts a paid run: what it does, its estimate, Start for $X. */
-export function StartRunDialog({ trackId, prdTitle, onClose }: { trackId: string; prdTitle: string; onClose: () => void }) {
+export function StartRunDialog({ trackId, prdTitle, onClose, action = DRAFT_ROADMAP }: { trackId: string; prdTitle: string; onClose: () => void; action?: RunAction }) {
   const router = useRouter();
   const { can } = useMe();
   const [ready, setReady] = useState<Ready | null>(null);
@@ -63,7 +65,7 @@ export function StartRunDialog({ trackId, prdTitle, onClose }: { trackId: string
   }, [trackId]);
   return (
     <Dialog
-      title="Draft a roadmap from this track"
+      title={action.title}
       onClose={onClose}
       busy={busy}
       testId="start-run-dialog"
@@ -75,13 +77,8 @@ export function StartRunDialog({ trackId, prdTitle, onClose }: { trackId: string
     >
       <div className="flex flex-col gap-3 text-[15px]">
         <p>
-          Oracle drafts a roadmap from <b>{prdTitle}</b>. It runs on its own and takes about 10 minutes.
+          {action.intro(prdTitle)} It runs on its own{ready ? `, in ${ready.estimate.segments.length === 2 ? "two" : ready.estimate.segments.length} parts priced below,` : ""} and stops for your review before anything is saved.
         </p>
-        <ol className="flex list-decimal flex-col gap-1 pl-5 text-text2">
-          {STEPS.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ol>
         {ready ? <EstimateSummary estimate={ready.estimate} /> : !loadError && <p className="text-sm text-text2">Working out the cost…</p>}
         <p className="text-sm text-text2">Nothing is charged until you start it. You can cancel it while it runs.</p>
         {(loadError || error) && <InlineError>{loadError || error}</InlineError>}
@@ -91,7 +88,7 @@ export function StartRunDialog({ trackId, prdTitle, onClose }: { trackId: string
 }
 
 /** b: the button opens a strip on the card itself: the estimate in one line, Start and Cancel. */
-export function StartRunStrip({ trackId, onClose }: { trackId: string; onClose: () => void }) {
+export function StartRunStrip({ trackId, onClose, action = DRAFT_ROADMAP }: { trackId: string; onClose: () => void; action?: RunAction }) {
   const router = useRouter();
   const { can } = useMe();
   const [ready, setReady] = useState<Ready | null>(null);
@@ -103,10 +100,10 @@ export function StartRunStrip({ trackId, onClose }: { trackId: string; onClose: 
   const e = ready?.estimate;
   return (
     <div data-testid="start-run-strip" className="flex basis-full flex-col gap-2 rounded-panel border border-accent bg-accent-soft px-3 py-2.5">
-      <p className="text-[15px] font-semibold">Draft a roadmap from this track?</p>
+      <p className="text-[15px] font-semibold">{action.question}</p>
       <p className="text-sm text-text2">
         {e
-          ? `About ${usd(e.total_usd)} · about 10 minutes · it stops for your review before anything is saved.${e.needs_approval ? " Over the $50 limit: an owner approves it." : ""}`
+          ? `About ${usd(e.total_usd)} · it stops for your review before anything is saved.${e.needs_approval ? " Over the $50 limit: an owner approves it." : ""}`
           : "Working out the cost…"}
       </p>
       <div className="flex flex-wrap gap-2">
@@ -123,7 +120,7 @@ export function StartRunStrip({ trackId, onClose }: { trackId: string; onClose: 
 }
 
 /** c: starts at once, as now, then says what it costs, with Cancel run for the first minute. */
-export function StartRunAtOnce({ trackId, onDone }: { trackId: string; onDone: () => void }) {
+export function StartRunAtOnce({ trackId, onDone, action = DRAFT_ROADMAP }: { trackId: string; onDone: () => void; action?: RunAction }) {
   const router = useRouter();
   const [state, setState] = useState<{ ready: Ready; held: boolean } | null>(null);
   const [cancelled, setCancelled] = useState(false);
@@ -149,7 +146,7 @@ export function StartRunAtOnce({ trackId, onDone }: { trackId: string; onDone: (
       <Notice tone={state.held ? "warn" : "pass"}>
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>
-            {state.held ? `Roadmap run waits for an owner: ${total} is over the $50 limit.` : `Roadmap run started · about ${total}.`} Free to cancel in the first minute.
+            {state.held ? `${action === REPLAN ? "Re-plan" : "Roadmap run"} waits for an owner: ${total} is over the $50 limit.` : `${action === REPLAN ? "Re-plan" : "Roadmap run"} started · about ${total}.`} Free to cancel in the first minute.
           </span>
           <Button
             variant="ghost"

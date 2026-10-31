@@ -48,7 +48,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
     { key: "status", header: "Status", width: "88px", cell: (d) => <Outcome d={d} /> }, // MOCK-HOOK
   ] : qd4 === "b" && wide ? [ // MOCK-HOOK: b, the full log has room for what each event means
     { key: "when", header: "When", width: "190px", cell: (d) => <span className="tnum">{formatDateTime(d.last_at ?? d.created_at)}</span> }, // MOCK-HOOK
-    { key: "event", header: "Event", cell: (d) => <span className="flex flex-col"><span>{labelOf(d.event_type)}</span><span className="font-mono text-[13px] text-text2">{d.event_type}</span></span> }, // MOCK-HOOK
+    { key: "event", header: "Event", wrap: true, cell: (d) => <span className="flex flex-col"><span>{labelOf(d.event_type)}</span><span className="font-mono text-[13px] text-text2">{d.event_type}</span></span> }, // MOCK-HOOK
     { key: "status", header: "Status", width: "110px", cell: (d) => <Outcome d={d} /> }, // MOCK-HOOK
     { key: "http", header: "HTTP", width: "70px", align: "right", cell: (d) => <span className="tnum text-text2">{d.http_status ?? "–"}</span> }, // MOCK-HOOK
     { key: "time", header: "Time", width: "80px", align: "right", cell: (d) => <span className="tnum text-text2">{d.duration_ms != null ? `${d.duration_ms} ms` : "–"}</span> }, // MOCK-HOOK
@@ -122,7 +122,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
           {rows[0] && <p className="text-sm text-text2">Last: {labelOf(rows[0].event_type)}, {formatDateTime(rows[0].last_at ?? rows[0].created_at)}</p>} {/* MOCK-HOOK */}
           <span><Button onClick={() => setWide(true)} data-testid="open-delivery-log">Open the delivery log</Button></span> {/* MOCK-HOOK */}
           {wide && ( // MOCK-HOOK
-            <Dialog title={`Delivery log · ${hook.name}`} size="lg" onClose={() => setWide(false)} cancelLabel="Close" testId="delivery-log-wide"> {/* MOCK-HOOK */}
+            <Dialog title={`Delivery log · ${hook.name}`} size="xl" onClose={() => setWide(false)} cancelLabel="Close" testId="delivery-log-wide"> {/* MOCK-HOOK */}
               <div className="flex flex-col gap-2">{filters}<p className="text-[13px] text-text2">Times are in Company time.</p>{table}</div> {/* MOCK-HOOK */}
             </Dialog> // MOCK-HOOK
           )} {/* MOCK-HOOK */}
@@ -144,6 +144,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
       <OnTop>
         <DeliverySheet
           hook={hook}
+          labelOf={qd4 ? labelOf : undefined} // MOCK-HOOK
           delivery={open}
           onClose={() => setOpen(null)}
           onRedelivered={() => {
@@ -157,7 +158,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
   );
 }
 
-function DeliverySheet({ hook, delivery, onClose, onRedelivered }: { hook: Webhook; delivery: Delivery | null; onClose: () => void; onRedelivered: () => void }) {
+function DeliverySheet({ hook, delivery, onClose, onRedelivered, labelOf }: { hook: Webhook; labelOf?: (t: string) => string /* MOCK-HOOK */; delivery: Delivery | null; onClose: () => void; onRedelivered: () => void }) {
   const { can } = useMe();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +191,7 @@ function DeliverySheet({ hook, delivery, onClose, onRedelivered }: { hook: Webho
     <Sheet open title="Delivery" onClose={onClose} testId="delivery-sheet">
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-2 text-[15px]">
+          {labelOf ? <span className="font-semibold">{labelOf(d.event_type)}</span> : null} {/* MOCK-HOOK: the event's name heads the sheet */}
           <span className="font-mono text-[13px]">{d.event_type}</span>
           <Outcome d={d} />
           <span className="text-text2">

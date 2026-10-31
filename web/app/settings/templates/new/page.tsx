@@ -118,7 +118,7 @@ export default function NewTemplatePage() {
             <input className={INPUT} value={name} onChange={(e) => { setName(e.target.value); if (qd4 === "c") setKey(keyFromName(e.target.value)); }} placeholder="Launch brief" required /> {/* MOCK-HOOK: c */}
           </Field>
           {qd4 === "c" && <p className="-mt-1 text-sm text-text2">{key ? <>Saved as <b className="font-semibold text-text">{key}</b>, made from the name.</> : "Its key is made from the name."}</p>} {/* MOCK-HOOK */}
-          {qd4 === "c" && <Notice tone="info">The block between the two <b>---</b> lines sets the theme, when Oracle suggests it and which sections make the brief. Each <b>## Heading {"{#key}"}</b> is a section; the grey <b>{"<!-- -->"}</b> line under it guides the writer.</Notice>} {/* MOCK-HOOK */}
+          {qd4 === "c" && <Notice tone="info">The block between the two <b>---</b> lines sets the theme, when Oracle suggests it and which sections make the brief. Each <b>## Heading {"{#key}"}</b> is a section; the grey <code className="font-mono [font-variant-ligatures:none]">{"<!-- -->"}</code> line under it guides the writer.</Notice>} {/* MOCK-HOOK */}
           <fieldset className="flex flex-col gap-1.5">
             <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Kind</legend>
             <div className="flex gap-4 text-[15px]">

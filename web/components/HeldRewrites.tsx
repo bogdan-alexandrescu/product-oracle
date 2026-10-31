@@ -148,7 +148,7 @@ function HeldRewrite({
     <li className="rounded-button border border-line bg-surface2 px-3 py-2.5" data-testid="held-rewrite">
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 truncate font-semibold text-text">{heading}</p>
-        <span className="font-mono text-[13px] text-text2">#{patch.section_key}</span>
+        {/* MOCK-HOOK: qd1, the section's name only, no #id */}
         {patch.action === "remove" && <Chip kind="crit">Removes the section</Chip>}
         {!isOpen && <Chip kind={patch.status === "accepted" ? "pass" : "na"}>{DECIDED[patch.status as keyof typeof DECIDED]}</Chip>}
       </div>

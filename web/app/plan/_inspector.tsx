@@ -18,6 +18,8 @@ import { acceptTrackAlertDate, alertDay, alertSentence, keepTrackAlert, listTrac
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { WaiveForm } from "../company/strategy/_components/DriftList";
+import { REPLAN, StartRunAtOnce, StartRunDialog, StartRunStrip } from "./_mk-start-run"; // MOCK-HOOK
+import { useMockHook } from "@/lib/mock-hook"; // MOCK-HOOK
 import { assess, type GoalView, type Point } from "../home/_goals";
 import { dateBasis, HORIZON_LABEL, nextSentence, roadmapHref, stateChip, type PlanDrift, type PlanItem } from "./_lib";
 
@@ -310,6 +312,8 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
   const ref = typeof a.data.tracker_ref === "string" ? a.data.tracker_ref : undefined;
   const prdId = item.prd?.id;
   const discussion = discussionOf(a, item);
+  const qd2 = useMockHook("qd2"); // MOCK-HOOK: Re-plan starts a paid run too, the same way as Draft roadmap
+  const [qd2Open, setQd2Open] = useState(false); // MOCK-HOOK
   async function run(call: () => Promise<unknown>, after?: (out: unknown) => void) {
     setBusy(true);
     setError(null);
@@ -374,16 +378,21 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
             {has("replan") && (
               <Button
                 disabled={busy}
+                data-testid="plan-replan" // MOCK-HOOK
                 onClick={() =>
+                  qd2 ? setQd2Open(true) : // MOCK-HOOK
                   void run(
                     () => unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", { params: { path: { track_id: a.track_id } } })),
                     (r) => router.push(`/runs/${(r as { id: string }).id}`),
                   )
                 }
               >
-                Re-plan
+                {qd2 === "a" ? "Re-plan…" : "Re-plan"} {/* MOCK-HOOK */}
               </Button>
             )}
+            {qd2Open && qd2 === "a" && <StartRunDialog action={REPLAN} trackId={a.track_id} prdTitle={a.prd.title} onClose={() => setQd2Open(false)} />} {/* MOCK-HOOK */}
+            {qd2Open && qd2 === "b" && <StartRunStrip action={REPLAN} trackId={a.track_id} onClose={() => setQd2Open(false)} />} {/* MOCK-HOOK */}
+            {qd2Open && qd2 === "c" && <StartRunAtOnce action={REPLAN} trackId={a.track_id} onDone={() => {}} />} {/* MOCK-HOOK */}
             {(has("review") || has("reconcile")) && (
               <Button
                 disabled={busy}

@@ -37,7 +37,7 @@ const SHARING =
  * filed as a request (filing shares the item in full) or dismissed. `refresh` changes when a
  * triage run ends, so new finds show.
  */
-export function FoundInSources({ refresh, onFiledMk }: { refresh: string; onFiledMk?: (r: Schemas["RequestOut"]) => void /* MOCK-HOOK */ }) {
+export function FoundInSources({ refresh, onFiledMk, filedMk }: { refresh: string; onFiledMk?: (r: Schemas["RequestOut"]) => void; filedMk?: Schemas["RequestOut"] | null /* MOCK-HOOK */ }) {
   const q = useQuery(`request-candidates:${refresh}`, () =>
     unwrap(api.GET("/v1/request-candidates", { params: { query: { status: "open" } } })),
   );
@@ -46,8 +46,9 @@ export function FoundInSources({ refresh, onFiledMk }: { refresh: string; onFile
   const [error, setError] = useState<string | null>(null);
   const open = q.data ?? [];
   const qd3 = useMockHook("qd3"); // MOCK-HOOK: a one form, b two forms with the same words, c files at once
+  const shownFiled = filed ?? (qd3 === "b" ? filedMk : null); // MOCK-HOOK: b files from New request; the same note shows
   async function fileAtOnce(c: Candidate) { // MOCK-HOOK: qd3=c
-    const request = await unwrap(api.POST("/v1/request-candidates/{candidate_id}/file", { params: { path: { candidate_id: c.id } }, body: { title: c.title, body: c.body ?? null, channel: c.channel, requester_name: c.requester_name ?? null, requester_kind: "unknown" } })); // MOCK-HOOK
+    const request = await unwrap(api.POST("/v1/request-candidates/{candidate_id}/file", { params: { path: { candidate_id: c.id } }, body: { title: c.title, body: c.body ?? null, channel: c.channel, requester_name: c.requester_name ?? null, requester_kind: "unknown", goal_ids: [], theme_id: null } })); // MOCK-HOOK: filed with no goal or theme, set on the right
     setFiled(request); // MOCK-HOOK
     q.setData((rows) => rows?.filter((r) => r.id !== c.id)); // MOCK-HOOK
     onFiledMk?.(request); // MOCK-HOOK: the filed request opens, selected, on the right
@@ -65,9 +66,9 @@ export function FoundInSources({ refresh, onFiledMk }: { refresh: string; onFile
 
   return (
     <>
-      {filed && (
+      {shownFiled && ( // MOCK-HOOK
         <Notice tone="pass" testId="filed-notice">
-          Filed &ldquo;{filed.title}&rdquo; as a new request.
+          Filed &ldquo;{shownFiled.title}&rdquo; as a new request. {/* MOCK-HOOK */}
           {qd3 === "c" && <> It is open on the right: change anything there, or <button type="button" className="font-semibold underline">Undo</button>.</>} {/* MOCK-HOOK */}
         </Notice>
       )}
@@ -110,7 +111,7 @@ export function FoundInSources({ refresh, onFiledMk }: { refresh: string; onFile
           pickFound={qd3 === "b"} // MOCK-HOOK
           onClose={() => setFiling(null)} // MOCK-HOOK
           onOpenExisting={() => setFiling(null)} // MOCK-HOOK
-          onFiled={(request) => { setFiling(null); setFiled(request); q.setData((rows) => rows?.filter((r) => r.id !== filing.id)); }} // MOCK-HOOK
+          onFiled={(request) => { setFiling(null); setFiled(request); q.setData((rows) => rows?.filter((r) => r.id !== filing.id)); onFiledMk?.(request); }} // MOCK-HOOK: the list shows it, selected
         /> // MOCK-HOOK
       )} {/* MOCK-HOOK */}
       {filing && !(qd3 === "a" || qd3 === "b") && ( // MOCK-HOOK

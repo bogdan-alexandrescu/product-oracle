@@ -12,17 +12,35 @@
           "letter": "a",
           "name": "A drawer on top",
           "recommended": true,
-          "what": "Held rewrites opens as a drawer from the right, over the page, at the full height of the window. The outline, section and review panel stay as they are behind it. On a phone it fills the screen.",
+          "what": "Held rewrites opens as a drawer from the right, over the page, at the full height of the window. The outline, section and review panel stay as they are behind it. On a phone it rises from the bottom, almost to the top of the screen.",
           "why": "The rewrites get the whole height of the window and the page behind keeps its layout, so nothing is squeezed. It fits a short job you open, do, and close, and it works the same on a phone.",
           "plus": "Nothing on the page moves. Closing the drawer puts you back where you were.",
           "cost": "The drawer covers the section text, so you cannot read the section and its rewrite side by side.",
           "frames": [
-            {"file": "qd1-a-rest.html", "caption": "At rest: version 2 with 4 held rewrites waiting, shown on the Held rewrites button."},
-            {"file": "qd1-a-open.html", "caption": "Held rewrites opens as a drawer at full height; each rewrite has room for its text, Reason and Accept."},
-            {"file": "qd1-a-mid.html", "caption": "A reason is typed for the first rewrite, Goal trace."},
-            {"file": "qd1-a-result.html", "caption": "After Accept: version 3 opens on Goal trace, and the button now says 3 held rewrites."},
-            {"file": "qd1-a-open-1512.html", "caption": "At 1512 wide the drawer is the same width; the page behind keeps its three panels."},
-            {"file": "qd1-a-open-390.html", "caption": "On a phone the drawer fills the screen, one rewrite after another."}
+            {
+              "file": "qd1-a-rest.html",
+              "caption": "At rest: version 2 with 4 held rewrites waiting, shown on the Held rewrites button."
+            },
+            {
+              "file": "qd1-a-open.html",
+              "caption": "Held rewrites opens as a drawer at full height; each rewrite has room for its text, Reason and Accept."
+            },
+            {
+              "file": "qd1-a-mid.html",
+              "caption": "A reason is typed for the first rewrite, Goal trace."
+            },
+            {
+              "file": "qd1-a-result.html",
+              "caption": "After Accept and closing the drawer: version 3 opens on Goal trace, and the button now says 3 held rewrites. The open comment was raised on version 2, so it shows in its short form."
+            },
+            {
+              "file": "qd1-a-open-1512.html",
+              "caption": "At 1512 wide the drawer is the same width; the page behind keeps its three panels."
+            },
+            {
+              "file": "qd1-a-open-390.html",
+              "caption": "On a phone the drawer rises from the bottom, almost full height, one rewrite after another."
+            }
           ]
         },
         {
@@ -33,9 +51,18 @@
           "plus": "Nothing covers anything; every part has its full size.",
           "cost": "Held rewrites pushes the outline and review panel down the page, so you scroll to get back to them.",
           "frames": [
-            {"file": "qd1-b-open.html", "caption": "Held rewrites opens full width under the toolbar, above the outline and section."},
-            {"file": "qd1-b-scrolled.html", "caption": "Scrolled down: the outline, section and review panel keep their full height below it."},
-            {"file": "qd1-b-open-1512.html", "caption": "At 1512 wide, scrolled to the panels, the rewrites are off screen above."}
+            {
+              "file": "qd1-b-open.html",
+              "caption": "Held rewrites opens full width under the toolbar, above the outline and section."
+            },
+            {
+              "file": "qd1-b-scrolled.html",
+              "caption": "Scrolled down: the outline, section and review panel keep their full height below it."
+            },
+            {
+              "file": "qd1-b-open-1512.html",
+              "caption": "At 1512 wide, scrolled to the panels, the rewrites are off screen above."
+            }
           ]
         },
         {
@@ -46,9 +73,18 @@
           "plus": "You read the section and its rewrite side by side.",
           "cost": "The review column is narrow, so long rewrites wrap into many lines, and the review panel is hidden while it is open.",
           "frames": [
-            {"file": "qd1-c-open.html", "caption": "Held rewrites replaces the review panel on the right; the outline and section stay."},
-            {"file": "qd1-c-mid.html", "caption": "A reason is typed for Goal trace; the narrow column wraps the rewrite onto many lines."},
-            {"file": "qd1-c-open-1512.html", "caption": "At 1512 wide the column is a little wider but the rewrite still wraps."}
+            {
+              "file": "qd1-c-open.html",
+              "caption": "Held rewrites replaces the review panel on the right; the outline and section stay."
+            },
+            {
+              "file": "qd1-c-mid.html",
+              "caption": "A reason is typed for Goal trace; the narrow column wraps the rewrite onto many lines."
+            },
+            {
+              "file": "qd1-c-open-1512.html",
+              "caption": "At 1512 wide the column is a little wider but the rewrite still wraps."
+            }
           ]
         }
       ]
@@ -57,46 +93,89 @@
       "code": "QD2",
       "name": "Starting a paid run",
       "question": "How does a person start a run that costs money, seeing its estimate first, the same way for every button that starts one?",
-      "common": "The estimate comes from the same numbers the run page shows. A run over the $50 limit waits for an owner, as it does now. Every button that starts a paid run works the same way.",
+      "common": "The estimate comes from the same numbers the run page shows. A run over the $50 limit waits for an owner, as it does now. The same pattern serves every button that starts a paid run with no price shown today: Draft roadmap from this track, Re-plan on a plan item, and in a later pass Build baseline, the pricing memo, the strategy draft, the update, the intake draft, Build roadmap and the next draft. New run already shows its estimate in its own dialog and keeps it.",
       "proposals": [
         {
           "letter": "a",
           "name": "Confirm in a dialog",
           "recommended": true,
-          "what": "The button ends in \"…\" and opens a dialog: what the run does in three steps, the cost of each part, the total, and a button that says the price, \"Start for $14.50\". Over the limit the button says \"Approve $58.00 and start\" for an owner.",
+          "what": "The button ends in \"…\" and opens a dialog: what the run does, the cost of each of its parts, the total, and a button that says the price, \"Start for $14.50\". Over the limit the button says \"Approve $58.00 and start\" for an owner. Re-plan on a plan item opens the same dialog, named Re-plan this track.",
           "why": "Money is spent only after a person has seen the price on the button they press. One dialog can serve every action that starts a run, so people learn it once.",
-          "plus": "The steps and the cost of each part are shown, so it is clear what you pay for.",
-          "cost": "One more click for every run, even cheap ones.",
+          "plus": "The cost of each part is shown, so it is clear what you pay for. It reads like the New run dialog people already know.",
+          "cost": "One more click for every run, even cheap ones. To price the run, opening the dialog makes a draft run; Cancel leaves it on Runs unless the real build estimates without one.",
           "frames": [
-            {"file": "qd2-a-rest.html", "caption": "At rest: the Usage alerts track with \"Draft roadmap from this track…\"."},
-            {"file": "qd2-a-open.html", "caption": "The dialog shows what the run does, what each part costs, and Start for $14.50."},
-            {"file": "qd2-a-result.html", "caption": "After Start: the run page opens, running, with $14.50 estimated."},
-            {"file": "qd2-a-over-1512.html", "caption": "Over the limit, at 1512 wide: Owner approves, and the button says Approve $58.00 and start."}
+            {
+              "file": "qd2-a-rest.html",
+              "caption": "At rest: the Usage alerts track with \"Draft roadmap from this track…\"."
+            },
+            {
+              "file": "qd2-a-open.html",
+              "caption": "The dialog says what the run does, prices its two parts, and offers Start for $14.50."
+            },
+            {
+              "file": "qd2-a-result.html",
+              "caption": "After Start: the run page opens, running, with $14.50 estimated."
+            },
+            {
+              "file": "qd2-a-replan.html",
+              "caption": "Another paid run: Re-plan… on a slipped plan item opens the same dialog, as Re-plan this track, with the same price."
+            },
+            {
+              "file": "qd2-a-over-1512.html",
+              "caption": "Over the limit, at 1512 wide: Owner approves, and the button says Approve $58.00 and start."
+            }
           ]
         },
         {
           "letter": "b",
           "name": "A strip on the card",
           "recommended": false,
-          "what": "The button opens a short strip on the track card itself: the estimate and time in one line, then Start for $14.50 and Cancel. Nothing covers the page.",
+          "what": "The button opens a short strip on the track card itself: the estimate in one line, then Start for $14.50 and Cancel. Nothing covers the page. Re-plan on a plan item opens the same strip under its alert.",
           "plus": "Lighter than a dialog; you stay with the track you were reading.",
-          "cost": "No cost of each part. On a page with many cards the strip is easy to miss or leave open.",
+          "cost": "No cost of each part. On a page with many cards the strip is easy to miss or leave open. Like a, opening it makes a draft run to price it.",
           "frames": [
-            {"file": "qd2-b-open.html", "caption": "The strip opens on the card: about $14.50, about 10 minutes, Start for $14.50 and Cancel."},
-            {"file": "qd2-b-over-1512.html", "caption": "Over the limit, at 1512 wide: the strip says an owner approves, and the button says Approve $58.00 and start."}
+            {
+              "file": "qd2-b-open.html",
+              "caption": "The strip opens on the card: about $14.50, Start for $14.50 and Cancel."
+            },
+            {
+              "file": "qd2-b-result.html",
+              "caption": "After Start for $14.50: the run page opens, running, with $14.50 estimated."
+            },
+            {
+              "file": "qd2-b-replan.html",
+              "caption": "Another paid run: Re-plan on a slipped plan item opens the same strip under its alert."
+            },
+            {
+              "file": "qd2-b-over-1512.html",
+              "caption": "Over the limit, at 1512 wide: the strip says an owner approves, and the button says Approve $58.00 and start."
+            }
           ]
         },
         {
           "letter": "c",
           "name": "Start, then cancel",
           "recommended": false,
-          "what": "The button starts the run at once, as now, then says what it costs, with Cancel run free for the first minute.",
+          "what": "The button starts the run at once, as now, then says what it costs, with Cancel run free for the first minute. Re-plan on a plan item does the same, with the note under its alert.",
           "plus": "No extra click; fast for people who start runs every day.",
           "cost": "The price is seen only after the run has started; a person who misses the note pays.",
           "frames": [
-            {"file": "qd2-c-open.html", "caption": "Pressed: the run has started; a note gives about $14.50, with Cancel run and Open run."},
-            {"file": "qd2-c-result.html", "caption": "After Cancel run: Run cancelled. Nothing was charged."},
-            {"file": "qd2-c-over-1512.html", "caption": "Over the limit, at 1512 wide: the run waits for an owner, $58.00 is over the $50 limit."}
+            {
+              "file": "qd2-c-open.html",
+              "caption": "Pressed: the run has started; a note gives about $14.50, with Cancel run and Open run."
+            },
+            {
+              "file": "qd2-c-result.html",
+              "caption": "After Cancel run: Run cancelled. Nothing was charged."
+            },
+            {
+              "file": "qd2-c-replan.html",
+              "caption": "Another paid run: Re-plan on a slipped plan item starts at once, with the same note and Cancel run."
+            },
+            {
+              "file": "qd2-c-over-1512.html",
+              "caption": "Over the limit, at 1512 wide: the run waits for an owner, $58.00 is over the $50 limit."
+            }
           ]
         }
       ]
@@ -116,13 +195,34 @@
           "plus": "Customer or team is on every request, however it is made.",
           "cost": "Filing a found item takes a form, not one click.",
           "frames": [
-            {"file": "qd3-a-rest.html", "caption": "At rest: Oracle found 4 possible requests, each with File as request."},
-            {"file": "qd3-a-open.html", "caption": "File as request opens the form filled in from the support thread, with what filing shares."},
-            {"file": "qd3-a-mid.html", "caption": "Customer is picked and the title is changed to \"Reorder last week's basket in one click\"."},
-            {"file": "qd3-a-result.html", "caption": "After File request: a note says it was filed, and 3 found items are left."},
-            {"file": "qd3-a-new.html", "caption": "New request opens the same form, blank."},
-            {"file": "qd3-a-open-1512.html", "caption": "At 1512 wide the form is the same size, over the requests page."},
-            {"file": "qd3-a-open-390.html", "caption": "On a phone the same form fills the screen."}
+            {
+              "file": "qd3-a-rest.html",
+              "caption": "At rest: Oracle found 4 possible requests, each with File as request."
+            },
+            {
+              "file": "qd3-a-open.html",
+              "caption": "File as request opens the form filled in from the support thread, with what filing shares."
+            },
+            {
+              "file": "qd3-a-mid.html",
+              "caption": "Customer is picked and the title is changed to \"Reorder last week's basket in one click\"."
+            },
+            {
+              "file": "qd3-a-result.html",
+              "caption": "After File request: a note says it was filed, 3 found items are left, and All requests, now 13, opens the new request at the top."
+            },
+            {
+              "file": "qd3-a-new.html",
+              "caption": "New request opens the same form, blank, over the list with the filed request in it."
+            },
+            {
+              "file": "qd3-a-open-1512.html",
+              "caption": "At 1512 wide the form is the same size, over the requests page."
+            },
+            {
+              "file": "qd3-a-open-390.html",
+              "caption": "On a phone the same form fills the screen."
+            }
           ]
         },
         {
@@ -133,10 +233,22 @@
           "plus": "Only one button, and found items can also be reached from the form.",
           "cost": "Found items are one step further away; the found list keeps its own button, so there are still two ways to file one.",
           "frames": [
-            {"file": "qd3-b-open.html", "caption": "New request opens with Start from: a blank request."},
-            {"file": "qd3-b-mid.html", "caption": "Start from \"Found: Pick a delivery slot\" fills in the title, what they asked and the channel."},
-            {"file": "qd3-b-result.html", "caption": "After File request: Pick a delivery slot is selected in All requests, now 13, and is off the found list."},
-            {"file": "qd3-b-open-1512.html", "caption": "At 1512 wide the form, starting from the first found item."}
+            {
+              "file": "qd3-b-open.html",
+              "caption": "New request opens with Start from: a blank request."
+            },
+            {
+              "file": "qd3-b-mid.html",
+              "caption": "Start from \"Found: Pick a delivery slot\" fills in the title, what they asked and the channel."
+            },
+            {
+              "file": "qd3-b-result.html",
+              "caption": "After File request: the same Filed note, Pick a delivery slot is selected in All requests, now 13, with no goal or theme until someone sets one, and is off the found list."
+            },
+            {
+              "file": "qd3-b-open-1512.html",
+              "caption": "At 1512 wide the form, starting from the first found item."
+            }
           ]
         },
         {
@@ -147,8 +259,14 @@
           "plus": "The fastest way to file a found item: one click, and Undo.",
           "cost": "Two ways to make a request with different fields; a filed item can miss its description until someone edits it.",
           "frames": [
-            {"file": "qd3-c-rest.html", "caption": "At rest: each found item has File it."},
-            {"file": "qd3-c-result.html", "caption": "After File it: the request is filed and open on the right, with Undo in the note."}
+            {
+              "file": "qd3-c-rest.html",
+              "caption": "At rest: each found item has File it."
+            },
+            {
+              "file": "qd3-c-result.html",
+              "caption": "After File it: the request is filed with no goal or theme and open on the right to fill in, with Undo in the note."
+            }
           ]
         }
       ]
@@ -164,19 +282,46 @@
           "name": "Cards and fields",
           "recommended": true,
           "what": "Each delivery is a two-line card that fits the side panel: what happened in words, then the time, HTTP code and time taken. A new template is made from fields: one row per section with its heading, its guide and \"In the brief\"; the Markdown is one click away under Edit as Markdown.",
-          "why": "Both fit the space they have and use words, not codes. People who know Markdown can still use it; others never need to.",
+          "why": "Both fit the space they have and use words, not codes. A new template is made without Markdown; people who know it can still use it.",
           "plus": "The log reads in words, and the cards stack well on a phone.",
-          "cost": "Cards show fewer deliveries on screen than a table, and the number of tries is only shown when you open a delivery.",
+          "cost": "Cards show fewer deliveries on screen than a table, and the number of tries is only shown when you open a delivery. The fields are only on New template: once made, the next version is still changed as Markdown on the template page, until that page gets the same fields.",
           "frames": [
-            {"file": "qd4-a-log.html", "caption": "The Deploy notifier's delivery log as cards in the side panel."},
-            {"file": "qd4-a-log-row.html", "caption": "A run started delivery that failed with 500 is opened: what was sent, the reply, and Redeliver."},
-            {"file": "qd4-a-log-1512.html", "caption": "At 1512 wide the cards keep the same two lines."},
-            {"file": "qd4-a-log-390.html", "caption": "On a phone the same cards fill the width."},
-            {"file": "qd4-a-tpl.html", "caption": "New template: sections as fields, with the details on the right."},
-            {"file": "qd4-a-tpl-mid.html", "caption": "Named Launch brief, and a fourth section, Support readiness, is added."},
-            {"file": "qd4-a-tpl-markdown.html", "caption": "Edit as Markdown shows the same template as text, checked as valid."},
-            {"file": "qd4-a-tpl-result.html", "caption": "After Create template: the Launch brief template page, version 1."},
-            {"file": "qd4-a-tpl-390.html", "caption": "On a phone the section fields stack one under another."}
+            {
+              "file": "qd4-a-log.html",
+              "caption": "The Deploy notifier, selected in the list, with its delivery log as cards in the side panel."
+            },
+            {
+              "file": "qd4-a-log-row.html",
+              "caption": "A run started delivery that failed with 500 is opened: its name, then what was sent, the reply, and Redeliver."
+            },
+            {
+              "file": "qd4-a-log-1512.html",
+              "caption": "At 1512 wide the cards keep the same two lines and the same times."
+            },
+            {
+              "file": "qd4-a-log-390.html",
+              "caption": "On a phone the same cards, at the same times, fill the width."
+            },
+            {
+              "file": "qd4-a-tpl.html",
+              "caption": "New template: sections as fields, with the details on the right."
+            },
+            {
+              "file": "qd4-a-tpl-mid.html",
+              "caption": "Named Launch brief, and a fourth section, Support readiness, is added."
+            },
+            {
+              "file": "qd4-a-tpl-markdown.html",
+              "caption": "Edit as Markdown shows the same template as text, checked as valid."
+            },
+            {
+              "file": "qd4-a-tpl-result.html",
+              "caption": "After Create template: the Launch brief template page, version 1. Its next version is still changed as Markdown here; that is the limit of this proposal."
+            },
+            {
+              "file": "qd4-a-tpl-390.html",
+              "caption": "On a phone the section fields stack one under another, and each guide grows to show all its words."
+            }
           ]
         },
         {
@@ -187,12 +332,30 @@
           "plus": "The full log has every column at a readable width; a copy is never blank.",
           "cost": "One more click to see any delivery. A copy still means changing the Markdown on its page.",
           "frames": [
-            {"file": "qd4-b-log.html", "caption": "The side panel shows 14 deliveries, 7 failed or retrying, with Open the delivery log."},
-            {"file": "qd4-b-log-open.html", "caption": "The whole log in a wide window: when, event, status, HTTP code, time taken and tries."},
-            {"file": "qd4-b-log-row.html", "caption": "A delivery is opened from the wide log."},
-            {"file": "qd4-b-tpl.html", "caption": "New template: pick the template closest to what you need."},
-            {"file": "qd4-b-tpl-mid.html", "caption": "One-pager is picked and the copy named Launch brief."},
-            {"file": "qd4-b-tpl-result.html", "caption": "After Make the copy: Launch brief opens as version 1, its text copied from One-pager."}
+            {
+              "file": "qd4-b-log.html",
+              "caption": "The Deploy notifier, selected in the list; its side panel shows a summary of the log with Open the delivery log."
+            },
+            {
+              "file": "qd4-b-log-open.html",
+              "caption": "The whole log in a wide window: when, event in words with its code under it, status, HTTP code, time taken and tries; no event is cut."
+            },
+            {
+              "file": "qd4-b-log-row.html",
+              "caption": "A run started delivery is opened from the wide log, headed by its name."
+            },
+            {
+              "file": "qd4-b-tpl.html",
+              "caption": "New template: pick the template closest to what you need."
+            },
+            {
+              "file": "qd4-b-tpl-mid.html",
+              "caption": "Goal-traced PRD is picked and the copy named Launch brief."
+            },
+            {
+              "file": "qd4-b-tpl-result.html",
+              "caption": "After Make the copy: Launch brief opens as version 1, its text copied from Goal-traced PRD, to change as Markdown."
+            }
           ]
         },
         {
@@ -203,9 +366,18 @@
           "plus": "The smallest change from today.",
           "cost": "Times are cut short and events show their codes, not words. A new template still needs Markdown with front matter.",
           "frames": [
-            {"file": "qd4-c-log.html", "caption": "The delivery log in three columns; times are cut short and events show as codes."},
-            {"file": "qd4-c-log-1512.html", "caption": "At 1512 wide the columns are no wider; the codes still wrap."},
-            {"file": "qd4-c-tpl.html", "caption": "New template keeps the Markdown, with a note on what each part means and the key made from the name."}
+            {
+              "file": "qd4-c-log.html",
+              "caption": "The Deploy notifier, selected, with its delivery log in three columns; times are cut short and events show as codes."
+            },
+            {
+              "file": "qd4-c-log-1512.html",
+              "caption": "At 1512 wide the columns are no wider; the codes still wrap."
+            },
+            {
+              "file": "qd4-c-tpl.html",
+              "caption": "New template keeps the Markdown, with a note on what each part means and the key made from the name."
+            }
           ]
         }
       ]

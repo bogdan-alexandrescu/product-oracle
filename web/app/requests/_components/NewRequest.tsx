@@ -166,7 +166,7 @@ export function NewRequestDialog({ // MOCK-HOOK: exported for qd3=a
         }
       }
       const request = from // MOCK-HOOK: a found item files through its own route, same fields
-        ? await unwrap(api.POST("/v1/request-candidates/{candidate_id}/file", { params: { path: { candidate_id: from.id } }, body: { title: title.trim(), body: body.trim() || null, channel: channel as Found["channel"], requester_name: requester.trim() || null, requester_kind: kind } })) // MOCK-HOOK
+        ? await unwrap(api.POST("/v1/request-candidates/{candidate_id}/file", { params: { path: { candidate_id: from.id } }, body: { title: title.trim(), body: body.trim() || null, channel: channel as Found["channel"], requester_name: requester.trim() || null, requester_kind: kind, goal_ids: goalIds, theme_id: null } })) // MOCK-HOOK: only the goals ticked here, no theme
         : await unwrap( // MOCK-HOOK
         api.POST("/v1/requests", {
           body: {
