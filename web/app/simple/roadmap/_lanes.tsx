@@ -31,6 +31,7 @@ import {
   type Roadmap,
   type Scale,
   type Slice,
+  yearSpan,
 } from "./_lib";
 import { CALL_H, RH } from "./_pitch";
 import { ellipsize, monthTick, ordinal, PreviewGhost, previewSpan, useAppliedFlash, usePreview, type Layout } from "./_timeline";
@@ -65,6 +66,8 @@ const MIN_PILL_W = 28;
 const MIN_RUN_W = 12;
 /** fix4 qa-simple-roadmap-52: a lane's least height: its name (20 px) and count (16 px) with 4 px above and below. */
 const LANE_MIN_H = 44;
+/** qa4-simple-roadmap-26: room right of the last day (a suggestion's rounded end, an arrow's head). */
+const RIGHT_PAD = 24;
 const LONG_PRESS_MS = 450;
 /** B3: the Today row, the month row, the flags row; each lane's name line, gap and bar row. */
 const P_TODAY_H = 22;
@@ -310,10 +313,11 @@ function calendar(t0: string, t1: string) {
 
 // ---------------------------------------------------------------- marks (milestone ends, key dates)
 
-type Mark = { key: string; kind: "end" | "key" | "track"; x: number; words: string; side: "before" | "after"; row: number; w: number };
+/** `box`: its flag (or diamond) and words, left to right (qa4-simple-roadmap-27: the lines start under them). */
+type Mark = { key: string; kind: "end" | "key" | "track"; x: number; words: string; side: "before" | "after"; row: number; w: number; box: [number, number] };
 
 /** Each mark takes the first row where its flag (or diamond) and words touch no other's; words that would run off the chart go on the line's other side. */
-function placeMarks(list: Omit<Mark, "row" | "w">[], width: number, size: number): Mark[] {
+function placeMarks(list: Omit<Mark, "row" | "w" | "box">[], width: number, size: number): Mark[] {
   const rows: [number, number][][] = [];
   const out: Mark[] = [];
   for (const m of list) {
@@ -328,9 +332,17 @@ function placeMarks(list: Omit<Mark, "row" | "w">[], width: number, size: number
     let row = 0;
     while (rows[row]?.some(([p, q]) => p < x1 + 6 && x0 < q + 6)) row++;
     (rows[row] ??= []).push([x0, x1]);
-    out.push({ ...m, side, row, w });
+    out.push({ ...m, side, row, w, box: [x0, x1] });
   }
   return out;
+}
+
+/** qa4-simple-roadmap-27: where a vertical line at `x` may start, from `from` down: under the words
+ * of any other mark it would cross (a line never strikes through a label). `self`: the line's own mark. */
+function lineTop(marks: Mark[], rowY: (row: number) => number, size: number, x: number, from: number, self = ""): number {
+  const half = size / 2 + 3;
+  const under = marks.filter((o) => o.key !== self && o.box[0] - 2 <= x && x <= o.box[1] + 2 && rowY(o.row) + half > from).map((o) => rowY(o.row) + half);
+  return under.length ? Math.max(from, ...under) : from;
 }
 
 const FLAG_PATH = "M2 1h1.4v10H2zM3.4 1.5h7l-1.8 2.6 1.8 2.6h-7z";
@@ -402,7 +414,7 @@ function Defs() {
       </pattern>
       <pattern id="lanes-estimated" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
         <rect width="7" height="7" fill="var(--na-bg)" />
-        <rect width="2" height="7" fill="var(--line-strong)" opacity="0.35" />
+        <rect width="2" height="7" fill="var(--simple-est-stripe)" />
       </pattern>
       <marker id="lanes-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
         <path d="M0,0 L8,4 L0,8 z" fill="var(--line-strong)" />
@@ -480,7 +492,7 @@ function useMarks(data: Roadmap, sc: Scale, width: number, compact: boolean, fon
   return useMemo(() => {
     void fonts;
     const many = planPrds(data).size > 1;
-    const list: Omit<Mark, "row" | "w">[] = [];
+    const list: Omit<Mark, "row" | "w" | "box">[] = [];
     for (const m of planMilestones(data)) {
       const prd = many ? milestonePrd(data, m) : null;
       const code = `${m.name.split(/[\s·]/)[0]}${prd ? ` ${prd.title}` : ""}`;
@@ -519,7 +531,7 @@ function Marks({ data, marks, sc, rowY, size, height, poleTop, width }: { data: 
           <g key={m.id} data-testid="milestone-end" data-date={m.end_date!} data-row={mk?.row ?? 0} role="img" aria-label={name} pointerEvents="none">
             <title>{name}</title>
             {/* The milestone's end: a dashed line down the lanes (B2's pole). */}
-            <line data-testid="milestone-end-line" x1={x - 0.25} x2={x - 0.25} y1={poleTop} y2={height} stroke={mLine(code)} strokeWidth={1.5} strokeDasharray="4 3" />
+            <line data-testid="milestone-end-line" x1={x - 0.25} x2={x - 0.25} y1={lineTop(marks, rowY, size, x, poleTop, mk?.key)} y2={height} stroke={mLine(code)} strokeWidth={1.5} strokeDasharray="4 3" />
             {mk && (
               <>
                 <path data-testid="milestone-flag" d={FLAG_PATH} transform={`translate(${fx} ${cy - 6.5}) scale(${13 / 12})`} fill={mLine(code)} />
@@ -554,7 +566,7 @@ function Marks({ data, marks, sc, rowY, size, height, poleTop, width }: { data: 
         return (
           <g key={k.id} data-testid="key-date-marker" data-name={k.name} data-date={k.date} data-draft={k.in_draft ? "true" : undefined} data-row={mk.row} pointerEvents="none">
             <title>{`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`}</title>
-            <line x1={kx} x2={kx} y1={cy + 6} y2={height} stroke="var(--accent-ink)" strokeWidth={1} opacity={0.7} strokeDasharray={k.in_draft ? "3 3" : undefined} />
+            <line x1={kx} x2={kx} y1={lineTop(marks, rowY, size, kx, cy + 6, mk.key)} y2={height} stroke="var(--accent-ink)" strokeWidth={1} opacity={0.7} strokeDasharray={k.in_draft ? "3 3" : undefined} />
             <rect x={kx - 4.5} y={cy - 4.5} width={9} height={9} transform={`rotate(45 ${kx} ${cy})`} fill={k.in_draft ? "var(--simple-paper)" : "var(--accent-ink)"} stroke="var(--accent-ink)" />
             <text x={mk.side === "after" ? kx + 9 : kx - 9} y={cy} dominantBaseline="central" fontSize={size} fontWeight={700} fill="var(--accent-ink)" textAnchor={mk.side === "after" ? "start" : "end"} data-testid="key-date-label">
               {k.name}
@@ -642,9 +654,11 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   // The span (and so the scale) does not depend on the rows: a first packing finds it, then the
   // lanes are packed with the scale's px a day (a name beside its pill takes room in its row).
   const { t0, t1 } = useMemo(() => spanOf(data, groupedUnits(data, moved), previewDays), [data, moved, previewDays]);
-  const dayPx = W / daysBetween(t0, t1);
+  // qa4-simple-roadmap-26: the days take the width less RIGHT_PAD, so a suggestion's dotted
+  // outline (its rounded end and stroke) and an arrow out of the last day stay inside the chart.
+  const dayPx = (W - RIGHT_PAD) / daysBetween(t0, t1);
   const { lanes, places } = useMemo(() => (void fonts, laneModels(data, lane, moved, callH, dayPx)), [data, lane, moved, callH, dayPx, fonts]);
-  const sc = useMemo(() => scale(t0, addDays(t1, -1), W / daysBetween(t0, t1)), [t0, t1, W]);
+  const sc = useMemo(() => scale(t0, addDays(t1, -1), (W - RIGHT_PAD) / daysBetween(t0, t1)), [t0, t1, W]);
   const { months, mondays } = useMemo(() => calendar(t0, t1), [t0, t1]);
   const marks = useMarks(data, sc, W, false, fonts);
   const markRows = Math.max(1, ...marks.map((m) => m.row + 1));
@@ -676,6 +690,13 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
   }, [lanes, geo, top, height]);
   const items = useMemo(() => new Map(data.items.map((i) => [i.id, i])), [data]);
   const units = useMemo(() => new Map(lanes.flatMap((l) => l.units.map((u) => [u.item.id, u] as const))), [lanes]);
+  // qa4-simple-roadmap-47: each lane's pills in reading order (row by row, left to right), so
+  // Tab moves through the chart as it reads, not in the packing's date order across rows.
+  // By the dates as saved: a pending key move never moves the focused pill in the DOM (that would blur it).
+  const ordered = useMemo(() => {
+    const at = (u: Unit) => ms((moved[u.item.id] ? piecesOf(u.item) : u.pieces)[0].start);
+    return lanes.map((l) => [...l.units].sort((a, b) => a.row - b.row || at(a) - at(b)));
+  }, [lanes, moved]);
   const xt = sc.x(data.today) + sc.px / 2;
   const shownMonths = monthLabels(months, sc, W);
   const weekLabels = weekLabelsOf(mondays, sc, W, xt);
@@ -941,12 +962,12 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
               ))}
               <Grid months={months} mondays={mondays} sc={sc} top={top} height={height} weeks noWork={noWork} />
               <g data-testid="today-mark" pointerEvents="none">
-                <line data-testid="today-line" x1={xt} x2={xt} y1={MONTH_H + WEEK_H - 2} y2={height} stroke="var(--crit)" strokeWidth={2} />
+                <line data-testid="today-line" x1={xt} x2={xt} y1={lineTop(marks, rowY, 12.5, xt, MONTH_H + WEEK_H - 2)} y2={height} stroke="var(--crit)" strokeWidth={2} />
               </g>
               <Marks data={data} marks={marks} sc={sc} rowY={rowY} size={12.5} height={height} poleTop={MONTH_H + WEEK_H + 6} width={W} />
               <Arrows data={data} units={units} y={layout.y} sc={sc} moved={moved} />
               {lanes.map((l, n) =>
-                l.units.map((u) => (
+                ordered[n].map((u) => (
                   <Pill
                     key={u.item.id}
                     unit={u}
@@ -1041,7 +1062,8 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const left = Math.min(x0, s ? sc.x(s.start_date) : x0) - 14;
   const mark = left >= 10 ? left : Math.min(width - 10, Math.max(sc.x(s?.end_date ?? end), x1) + sc.px + 12);
   // QA2 finding 14: a reader's words, not the API's raw enum (sourceWord, from ./_lib).
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${sourceWord(item.estimated ? "estimated" : item.source)}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
+  // qa4-simple-roadmap-30: each red flag in its own words ("ends Jun 8, after its milestone 'Beta'"), as Now / Next / Later says it.
+  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${sourceWord(item.estimated ? "estimated" : item.source)}${red ? `, ${broken(item).map((f) => f.reason).join("; ")}` : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
   const strokeOf = (base: string) => (red ? "var(--crit)" : amber ? "var(--warn)" : base);
   const strokeW = red || amber || open ? 2.5 : 1.5;
   // fix4 qa-simple-roadmap-31: the suggestion's outline is drawn under the pill (its fill hides
@@ -1069,7 +1091,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             pointerEvents="none"
           >
             {/* QA2 finding 21: an empty dashed box says what it is on hover. */}
-            <title>{`Oracle suggests dates for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}</title>
+            <title>{`Oracle suggests dates for ${item.title}: ${yearSpan(s.start_date, s.end_date, " to ")}`}</title>
           </rect>
         );
       })()}
@@ -1218,7 +1240,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             data-item={item.key}
             role="button"
             tabIndex={0}
-            aria-label={`Oracle's date suggestion for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}
+            aria-label={`Oracle's date suggestion for ${item.title}: ${yearSpan(s.start_date, s.end_date, " to ")}`}
             className="cursor-pointer"
             transform={`translate(${mark}, ${y + BAR_H / 2})`}
             onClick={() => onSuggestion(item, { x: sc.x(s.start_date), y: y + BAR_H })}
@@ -1271,7 +1293,8 @@ function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, 
   const { words, beside } = pillWords(full, piece.code, b, room, besideAt, stop);
   const w = words ? textWidth(words, 12, beside ? 600 : 650) : 0;
   const tag = draft && words.startsWith("Draft");
-  const hover = `${full}${place != null ? ` · ${ordinal(place)} to come back if room opens` : ""}`;
+  // qa4-simple-roadmap-30: its red flags' own words, as Now / Next / Later writes them on its card.
+  const hover = `${full}${place != null ? ` · ${ordinal(place)} to come back if room opens` : ""}${broken(item).map((f) => ` · ${f.reason}`).join("")}`;
   return (
     <>
       <title>{hover}</title>
@@ -1356,6 +1379,7 @@ function Arrows({ data, units, y, sc, moved }: { data: Roadmap; units: Map<strin
 }
 
 /** B2's legend, inside the card: the milestones' hues, PM-owned, Today, the holidays, slices of one feature; then only what else the chart draws. */
+// qa4-simple-roadmap-29: a mark's words are the other views' own (MARK_WORDS in _board.tsx).
 function LanesLegend({ data, lanes, noWork }: { data: Roadmap; lanes: LaneModel[]; noWork: { start: string; end: string }[] }) {
   const pieces = lanes.filter((l) => l.kind !== "below").flatMap((l) => l.units.flatMap((u) => u.pieces.map((p) => ({ p, item: u.item }))));
   const codes = [...new Set(pieces.flatMap(({ p }) => (p.milestone && !p.pm ? [p.milestone] : [])))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -1371,17 +1395,17 @@ function LanesLegend({ data, lanes, noWork }: { data: Roadmap; lanes: LaneModel[
   return (
     <div data-testid="legend" className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 pt-2 text-[13px] leading-[18px] text-text-faint">
       {codes.map((c) => item(c, <i aria-hidden className={sw} style={{ background: mBg(c), borderColor: mLine(c) }} />, c))}
-      {pieces.some(({ p }) => p.pm) && item("pm", <i aria-hidden className={`${sw} border-dashed`} style={{ borderColor: "var(--prd-pm)" }} />, "PM-owned, no engineering")}
+      {pieces.some(({ p }) => p.pm) && item("pm", <i aria-hidden className={`${sw} border-dashed`} style={{ borderColor: "var(--prd-pm)" }} />, "No engineering work")}
       {plain.some((i) => barKind(i) === "dated") && item("plain", <i aria-hidden className={sw} style={{ background: "var(--na-bg)", borderColor: "var(--text2)" }} />, "Not in a milestone")}
       {plain.some((i) => barKind(i) === "estimated") &&
-        item("estimated", <i aria-hidden className={sw} style={{ background: "repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, var(--na-bg) 1.5px 5px)", borderColor: "var(--text2)" }} />, "Estimated (the horizon’s window)")}
+        item("estimated", <i aria-hidden className={sw} style={{ background: "repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, var(--na-bg) 1.5px 5px)", borderColor: "var(--text2)" }} />, "Estimated dates")}
       {plain.some((i) => barKind(i) === "draft") && item("draft", <i aria-hidden className={`${sw} border-dashed`} style={{ borderColor: "var(--line-strong)" }} />, "Draft")}
       {item("today", <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />, `Today ${dm(data.today)}`)}
       {noWork.length > 0 &&
         item("holidays", <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-[2px] opacity-60" style={{ background: "repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, transparent 1.5px 7px)" }} />, `Holidays ${holidayWords(noWork)}`)}
-      {sliced && item("slices", <i aria-hidden className="inline-block w-[18px] flex-none border-t-2 border-dotted border-line-strong" />, "slices of one feature")}
+      {sliced && item("slices", <i aria-hidden className="inline-block w-[18px] flex-none border-t-2 border-dotted border-line-strong" />, "One bar per part of a feature")}
       {data.items.some((i) => i.suggestion && !closedItem(i)) &&
-        item("suggestion", <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px] border-dotted border-accent-ink" />, "Oracle’s date suggestion (? opens it)")}
+        item("suggestion", <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px] border-dotted border-accent-ink" />, "Dates Oracle suggests (? opens them)")}
       {(data.key_dates?.length ?? 0) > 0 && item("key", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, "Key date")}
       {data.milestones.some((m) => m.date && !(m.start_date && m.end_date)) && item("track", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-warn" />, "A track’s milestone")}
       {data.items.some((i) => broken(i).length && !closedItem(i)) && item("broken", <i aria-hidden className={sw} style={{ borderColor: "var(--crit)", borderWidth: 2 }} />, "A broken link")}
@@ -1499,7 +1523,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
               const name = textWidth(l.title, 14, 700);
               const count = `${l.count} ${l.count === 1 ? "item" : "items"}`;
               const words = name + 4 + textWidth(count, 12.5, 400);
-              const chipW = textWidth("open below", 12, 650) + 16;
+              const chipW = textWidth("Listed below", 12, 650) + 16;
               const midY = g.top + 8 + g.head / 2;
               return (
                 <g
@@ -1541,7 +1565,8 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                     <g data-testid="lane-open-chip">
                       <rect x={W - chipW} y={midY - 10} width={chipW} height={20} rx={10} fill="var(--accent-soft)" />
                       <text x={W - chipW / 2} y={midY} textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={650} fill="var(--accent-ink)">
-                        open below
+                        {/* qa4-simple-roadmap-35: says what is below: the lane's items. */}
+                        Listed below
                       </text>
                     </g>
                   )}
@@ -1585,7 +1610,8 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
             <b className="text-[16px] leading-6 font-bold">{openLane.title}</b>
             {/* fix4 qa-simple-roadmap-45: "at once" counts the lane's bars as drawn (its rows of runs), not its pieces. */}
             <span className="text-[14px] leading-5 text-text-faint" data-testid="lane-list-count">
-              {openLane.count} {openLane.count === 1 ? "item" : "items"}, up to {runs[lanes.indexOf(openLane)]?.rows ?? 1} at once
+              {/* qa4-simple-roadmap-33: the count alone, no "up to 1 at once". */}
+              {openLane.count} {openLane.count === 1 ? "item" : "items"}
             </span>
           </div>
           <ul>
@@ -1602,9 +1628,9 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                     data-code={p.code ?? undefined}
                     data-open={open === item.id ? "true" : undefined}
                     onClick={() => onOpen(item, { x: 0, y: 0 })}
-                    className={`grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-left text-[14px] leading-[19px] ${open === item.id ? "bg-accent-soft" : ""}`}
+                    className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-left text-[14px] leading-[19px] ${open === item.id ? "bg-accent-soft" : ""}`}
                   >
-                    {p.code ? <span className="rounded-[6px] border border-line bg-surface2 px-[5px] font-mono text-[12px] leading-[17px] font-semibold whitespace-nowrap text-text">{p.code}</span> : <span />}
+                    {/* qa4-simple-roadmap-32: the name only, no feature code. */}
                     <span className={`min-w-0 ${closedItem(item) ? "text-text2 line-through" : ""}`}>
                       {p.name}
                       {item.draft && !closedItem(item) && <span className="ml-1.5 rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">Draft</span>}

@@ -87,7 +87,8 @@ for (const phone of [false, true]) {
         // A slice's name is cut with "…" to its bar (a phone's two-week bar reads "Tea…"), whole
         // in its tooltip.
         for (const code of ["F-05a", "F-05b"]) {
-          await expect(slice(page, code).getByTestId("slice-label")).toHaveText(/^Tea/);
+          // qa4-simple-roadmap-25: or its part alone ("Part 1 of 2") where the whole name fits nowhere.
+          await expect(slice(page, code).getByTestId("slice-label")).toHaveText(/^(Tea|Part [12] of 2$)/);
           await expect(slice(page, code).locator("title")).toHaveText(/^Team invites, part [12] of 2 · /);
         }
         await expect(slice(page, "F-08").getByTestId("slice-label")).toHaveCount(0);
@@ -108,8 +109,8 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("no-work")).toHaveAttribute("fill", "var(--na-bg)");
         await expect(row(page, "Team invite nudges").getByTestId("pending-tag")).toHaveText("Pending decision");
         await expect(page.locator('g[data-testid="bar"][data-item="setup-ideas"]')).toHaveAttribute("data-pulled", "true");
-        await expect(page.getByTestId("today-mark")).toContainText(phone ? "" : "Today");
-        if (phone) await expect(page.getByTestId("today-mark").locator("text")).toHaveCount(0);
+        // qa4-simple-roadmap-34: a phone's Gantt has its Today pill too.
+        await expect(page.getByTestId("today-mark")).toContainText("Today");
 
         const legend = page.getByTestId("legend");
         await expect(legend).toContainText("One bar per part of a feature");

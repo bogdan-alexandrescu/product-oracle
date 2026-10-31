@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
-import { spanWords } from "@/app/simple/roadmap/_lib";
+import { shortDay, spanWords } from "@/app/simple/roadmap/_lib";
 import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
 import { api, unwrap } from "@/lib/api/client";
-import { applyCard, CORRECT_FIELDS, discardCard, FLOW_OPS, isActionPreview, sendApplied, sendCardChanged, sendPreview, undoCard, type ActionPreview, type ChatCard as Card } from "@/lib/api/simple-chat";
+import { applyCard, CORRECT_FIELDS, discardCard, FLOW_OPS, isActionPreview, sendApplied, sendCardChanged, sendPreview, undoCard, type ActionPreview, type ChatCard as Card, type ChatPreview } from "@/lib/api/simple-chat";
 import { useMe } from "@/lib/me";
 import { OP_WORDS } from "@/lib/simple-home";
 import { errorMessage } from "@/lib/use-query";
@@ -27,6 +27,35 @@ function changeWords(card: Card): { before: string; after: string } | null {
     return { before: "Estimated by Oracle", after: spanWords(a.start_date, a.end_date) };
   }
   return card.change_words ?? null;
+}
+
+/** qa4-simple-roadmap-41: one flag by its item, kind and subject (the same flag before and after a change). */
+export const flagKey = (itemId: string, kind: string, subject: string | null | undefined): string => `${itemId}|${kind}|${subject ?? ""}`;
+
+/**
+ * qa4-simple-roadmap-41: the item card's talk. `known` holds the red flags the roadmap shows
+ * now (flagKey); a change card there lists only the flags its change brings, not the ones the
+ * items already had, and drops the fixes of those. Its Preview also says in words what the
+ * roadmap's ghost shows, since the card covers the roadmap. Outside an item's talk: null.
+ */
+export const ItemTalkContext = createContext<{ known: ReadonlySet<string> } | null>(null);
+
+/** qa4-simple-roadmap-41: a roadmap ghost in words ("On the roadmap: Adaptive pacing moves to Nov 30 – Dec 11"). */
+function ghostWords(p: ChatPreview, title: string): string | null {
+  if (!p) return null;
+  switch (p.kind) {
+    case "dates":
+      return `On the roadmap: ${title} moves to ${spanWords(p.start_date, p.end_date)}`;
+    case "horizon":
+      return `On the roadmap: ${title} moves to ${p.horizon[0].toUpperCase()}${p.horizon.slice(1)}`;
+    case "title":
+      return `On the roadmap: ${title} is renamed “${p.title}”`;
+    case "milestone":
+      return `On the roadmap: ${title} moves to ${p.name} (${shortDay(p.date)})`;
+    case "cut":
+      return `On the roadmap: ${title} goes below the line, cut`;
+  }
+  return null;
 }
 
 const proposedWords = (to: string) => `Proposed to ${to}; they decide`;
@@ -100,6 +129,7 @@ export function ChatCard({
     if (formOpen) actions.current?.scrollIntoView({ block: "nearest" });
   }, [formOpen]);
   const { me } = useMe();
+  const talk = useContext(ItemTalkContext);
   const corrected = (f: Record<string, string>) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.trim() || null]));
   useEffect(() => {
     onCorrecting?.(initial.id, fields ? corrected(fields) : null);
@@ -158,19 +188,26 @@ export function ChatCard({
   const correct = card.correct ?? null;
   const shown = correct ? CORRECT_FIELDS.filter((f) => correct.fields.includes(f)) : [];
   const startCorrect = () => setFields(fields ? null : Object.fromEntries(shown.map((f) => [f, correct?.values[f] ?? ""])));
-  const red = actionsOnly ? [] : card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red").map((x) => ({ item: f.item_id, ...x })));
+  // qa4-simple-roadmap-41: in the item card's talk, only the flags the change brings.
+  const known = (item: string, kind: string, subject: string | null | undefined) => !!talk?.known.has(flagKey(item, kind, subject));
+  const red = actionsOnly ? [] : card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red" && !known(f.item_id, x.kind, x.subject)).map((x) => ({ item: f.item_id, ...x })));
   // fix4 qa-simple-roadmap-24: moving a dependency makes no sense once the item is cut, so a
   // cut offers no fixes: its Apply says the dependents stay (their red reasons stay shown
   // above it). fix5-cut-dependents: beside it, "Cut it and its dependents" (only when items
   // wait on it: the card's dependents) cuts them with it as one change.
   const cutting = card.op === "cut";
   const cutsDependents = cutting && open && (card.dependents ?? []).length > 0;
-  const fixes = cutting ? [] : card.fixes;
+  // qa4-simple-roadmap-41: and no fixes of a broken link the items already had.
+  // Each keeps its own index: Apply names the fix by its place in the card's list.
+  const stale = (f: Card["fixes"][number]) => typeof f.target.item_id === "string" && typeof f.target.subject === "string" && known(f.target.item_id, "dependency_order", f.target.subject);
+  const fixes = cutting ? [] : card.fixes.map((f, n) => ({ ...f, n })).filter((f) => !stale(f));
+  const ghost = talk && previewing && card.preview && !action ? ghostWords(card.preview as ChatPreview, card.item_title ?? "The item") : null;
   // The walk: Apply when no fix makes the card's own change, named by what it does.
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const applyShown = !actionsOnly || !card.fixes.some((f) => f.op === card.op && same(f.target, card.target));
   const applyLabel =
-    cutting && (red.length > 0 || cutsDependents)
+    // qa4-simple-roadmap-12: "keep the dependents" only when items wait on it.
+    cutsDependents
       ? card.may === "propose"
         ? "Propose: cut it, keep the dependents"
         : "Cut it, keep the dependents"
@@ -233,10 +270,15 @@ export function ChatCard({
           ))}
         </div>
       )}
+      {open && ghost && (
+        <p className="simple-small rounded-lg border border-dashed border-line px-2 py-1.5 [overflow-wrap:anywhere]" data-testid="chat-card-preview" data-kind={(card.preview as ChatPreview)?.kind}>
+          {ghost}
+        </p>
+      )}
       {open && fixes.length > 0 && (
         <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label="Fixes">
-          {fixes.map((f, n) => (
-            <button key={n} type="button" className="simple-button simple-button-wrap" disabled={busy || !card.may} onClick={() => void apply(n)} data-testid="chat-card-fix">
+          {fixes.map((f) => (
+            <button key={f.n} type="button" className="simple-button simple-button-wrap" disabled={busy || !card.may} onClick={() => void apply(f.n)} data-testid="chat-card-fix">
               {card.may === "propose" ? `Propose: ${f.label}` : f.label}
             </button>
           ))}

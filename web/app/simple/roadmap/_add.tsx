@@ -46,6 +46,7 @@ export function QuickAdd({
   const [tried, setTried] = useState(false);
   const noTitle = tried && !title.trim();
   const noRoadmap = tried && ask && !chosen;
+  const picker = useRef<HTMLSelectElement>(null);
   const drag = useRef<{ pointer: number; ghost: HTMLElement; x0: number; y0: number; over: HTMLElement | null } | null>(null);
 
   const whereAt = (x: number, y: number): HTMLElement | null => {
@@ -82,6 +83,8 @@ export function QuickAdd({
    * same as dropping the chip there — no sheet repeating the title and roadmap it already has. */
   const sendDefault = () => {
     setTried(!ready);
+    // qa4-simple-roadmap-17: a title with no roadmap yet: focus goes to the picker the message names.
+    if (title.trim() && ask && !chosen) picker.current?.focus();
     if (ready && options[0]) void send(options[0]);
   };
 
@@ -171,6 +174,7 @@ export function QuickAdd({
       )}
       {ask && (
         <select
+          ref={picker}
           aria-label="Roadmap"
           data-testid="quick-add-roadmap"
           value={rm}

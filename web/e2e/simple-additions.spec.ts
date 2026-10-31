@@ -142,7 +142,7 @@ for (const scheme of ["light", "dark"] as const) {
       const c = boardCard(page, TWIN_KEY);
       await expect(column(page, "later").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
       await expect(c.getByTestId("draft-tag")).toHaveText("Draft");
-      await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like F-06 Weekly alert digest");
+      await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like Weekly alert digest");
 
       await page.getByTestId("needs-decision").click();
       const tray = page.getByTestId("decision-tray");
