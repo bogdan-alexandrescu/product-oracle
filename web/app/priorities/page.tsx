@@ -1050,9 +1050,7 @@ function Priorities() {
     {
       key: "rank",
       header: "#",
-      // Two digits; the room it frees keeps the Feature column wide enough beside the docked
-      // inspector where the page's scrollbar takes about 15 px (Windows, Linux; qa-plan-5).
-      width: "32px",
+      width: "44px",
       phone: "meta",
       cell: (f) => (
         <b className="tnum font-semibold max-[600px]:text-text">
@@ -1151,8 +1149,10 @@ function Priorities() {
     {
       key: "score",
       header: "Score",
-      // Two decimals for every score, right-aligned in tabular figures (qa-plan-18).
-      width: "84px",
+      // Two decimals for every score, right-aligned in tabular figures (qa-plan-18). No wider, so
+      // the Feature column keeps its room beside the docked inspector where the page's scrollbar
+      // takes about 15 px (Windows, Linux; qa-plan-5).
+      width: "72px",
       align: "right",
       phoneLabel: "Score",
       cell: (f) => (

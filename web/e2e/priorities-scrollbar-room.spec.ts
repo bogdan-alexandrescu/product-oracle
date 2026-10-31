@@ -27,4 +27,23 @@ test("qa-plan-5: the Feature column keeps its room beside the docked inspector w
   await expect(page.getByTestId("priority-row-F-5").getByTestId("row-goals")).toBeVisible();
   const cell = page.getByTestId("priority-row-F-5").locator("td").filter({ has: page.locator("button[aria-controls]") });
   expect((await cell.boundingBox())!.width).toBeGreaterThan(130);
+  // The room is not taken from the rank or the score: each reads whole, here and in RICE's
+  // thousands (the train re-review found ranks cut to "1…" at 32 px).
+  const whole = (testid: string) =>
+    page.locator('tr[data-testid^="priority-row-"]').evaluateAll((trs, id) => {
+      const cut: string[] = [];
+      for (const tr of trs) {
+        const el = (id === "rank" ? tr.querySelector("td") : tr.querySelector(`[data-testid="${id}"]`)) as HTMLElement | null;
+        const td = el?.closest("td") as HTMLElement | null;
+        if (td && td.scrollWidth > td.clientWidth + 1) cut.push(td.innerText.trim());
+      }
+      return cut;
+    }, testid);
+  expect(await whole("rank"), "a rank is cut").toEqual([]);
+  expect(await whole("score"), "a score is cut").toEqual([]);
+  const rice = page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "RICE", exact: true });
+  await rice.click();
+  await expect(rice).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
+  expect(await whole("score"), "a RICE score is cut").toEqual([]);
 });
