@@ -57,7 +57,9 @@ test("branding: an owner uploads a logo and sets an accent, and the HTML export 
   await page.goto("/settings/company");
   const card = page.getByTestId("branding-panel");
   await expect(card.getByRole("heading", { name: "Branding" })).toBeVisible();
-  await expect(card.getByLabel("Display name")).toHaveValue("Example Co");
+  // The seed's placeholder is never offered: the owner types the company's name.
+  await expect(card.getByLabel("Display name")).toHaveValue("");
+  await card.getByLabel("Display name").fill("Northwind Labs");
   await expect(card.getByLabel("Show 'Made with Product Oracle' on shared pages")).toBeChecked();
   await expect(card.getByTestId("brand-preview-light").locator("img")).toHaveCount(0);
 
@@ -109,7 +111,8 @@ test("branding: a viewer reads it and cannot change it", async ({ page }) => {
   await page.goto("/settings/company");
   const card = page.getByTestId("branding-panel");
   await expect(card.getByRole("heading", { name: "Branding" })).toBeVisible();
-  await expect(card).toContainText("Example Co");
+  await expect(card).toContainText("None yet");
+  await expect(card).not.toContainText("Example Co");
   await expect(card.getByRole("button", { name: "Save branding" })).toHaveCount(0);
   await expect(card.getByLabel("Logo", { exact: true })).toHaveCount(0);
   await expect(card.getByLabel("Display name")).toHaveCount(0);
