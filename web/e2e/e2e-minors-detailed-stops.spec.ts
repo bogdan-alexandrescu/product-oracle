@@ -161,7 +161,8 @@ for (const [name, viewport] of [
       const rows = page.locator('tr[data-testid^="priority-row-"]');
       await expect(rows).toHaveCount(5);
       await expect(page.getByText("5 in the run's order").filter({ visible: true })).toHaveCount(1);
-      await expect(page.getByText(/^\d+ ranked$/)).toHaveCount(0);
+      // The header's count; each goal's "N ranked" (#1006, qa4-plan-17, a phone's words) is not it.
+      await expect(page.getByText(/^\d+ ranked$/).and(page.locator(':not([data-testid="goal-ranked"])'))).toHaveCount(0);
 
       const names = page.locator('[data-testid="row-goals"] [data-testid="code-name"]').filter({ visible: true });
       await expect(names.first()).toBeVisible();

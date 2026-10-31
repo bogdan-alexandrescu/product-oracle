@@ -86,7 +86,10 @@ test.describe("desktop", () => {
     const bar = goal.getByTestId("review-bar");
     await bar.getByRole("group", { name: /^Verdict for/ }).getByRole("button", { name: "Request changes" }).click();
     await expect(bar.getByTestId("verdict-submit")).toHaveText("Send request");
-    await expect(bar.getByRole("button", { name: "Request changes", exact: true })).toHaveCount(1);
+    // #979: while the note is written the three verdicts give way to its form, so Request changes
+    // shows once, as the verdict being written, never also as a button beside its send.
+    await expect(bar.getByRole("button", { name: "Request changes", exact: true })).toHaveCount(0);
+    await expect(bar.getByTestId("verdict-pending")).toHaveText("Changes requested");
     await bar.getByLabel(/What should change/).fill("Name the goal this serves.");
     await bar.getByTestId("verdict-submit").click();
     await expect(bar.getByTestId("verdict-state")).toContainText("Changes requested");

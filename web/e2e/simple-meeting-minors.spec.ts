@@ -82,7 +82,9 @@ for (const phone of [false, true]) {
       await tap(page.getByRole("button", { name: "Save" }));
       await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
       await page.clock.fastForward(3 * 60 * 60_000);
-      await tap(page.getByRole("button", { name: /^Approve one-pager edits/ }));
+      // qa4-simple-decide-2 (#1001): Approve says it publishes, and asks first.
+      await tap(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }));
+      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }));
       await expect(page.getByTestId("meeting-screen")).toContainText("Approved Guided setup");
       await page.goto("/simple/meetings");
       await page.clock.fastForward(61 * 60_000);

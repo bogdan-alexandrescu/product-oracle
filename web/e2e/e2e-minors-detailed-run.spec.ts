@@ -88,7 +88,8 @@ for (const size of SIZES) {
       await del.click();
       const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding PRD run" });
       await expect(dialog.getByTestId("delete-what")).toHaveText(/^This removes the run's record: its steps, decisions and spend\./);
-      await dialog.getByRole("button", { name: "Back" }).click();
+      // qa4-docs-25 (#996): the way out of the delete confirm is Cancel.
+      await dialog.getByRole("button", { name: "Cancel" }).click();
       await expect(dialog).toHaveCount(0);
     });
 

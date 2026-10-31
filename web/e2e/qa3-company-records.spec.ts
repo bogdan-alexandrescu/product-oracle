@@ -183,13 +183,14 @@ test.describe("desktop", () => {
   });
 });
 
-test("qa-company-47: Simple Home's broken-link lines quote item names in curly quotes", async ({ page }) => {
+// qa4-simple-home-28 (#987) takes the quotes off: the line names items plainly, never in straight quotes.
+test("qa-company-47: Simple Home's broken-link lines never quote item names in straight quotes", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await scenario(page, "simple-home");
   await login(page);
   await page.goto("/simple");
   const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
-  await expect(broken.first()).toContainText("‘Weekly alert digest’ starts");
-  await expect(broken.first()).toContainText("but ‘Alert rules engine’, which it depends on, ends");
+  await expect(broken.first()).toContainText(/^Weekly alert digest: Starts \w{3} \d+/);
+  await expect(broken.first()).toContainText("but Alert rules engine, which it depends on, ends");
   await expect(page.getByTestId("home-plan")).not.toContainText("'Weekly alert digest'");
 });
