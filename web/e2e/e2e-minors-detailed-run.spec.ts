@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { decisionLine } from "../lib/labels";
 import { login } from "./helpers";
 
 /**
@@ -112,3 +113,13 @@ for (const size of SIZES) {
     });
   });
 }
+
+test("review minors 2: the decider's name stands in for the role whatever the role phrase reads", () => {
+  // Another wording of the role than "by an owner": the name still replaces it, never the role kept.
+  const d = { summary: "Feature set · approved by the engineering lead · note: Keep bulk import out", status: "approved", via: "oracle" } as const;
+  expect(decisionLine(d, "Ana Example")).toBe("Feature set · approved by Ana Example · note: Keep bulk import out");
+  expect(decisionLine({ summary: "Baseline · changes requested in SwarmCloud's console", status: "changes_requested", via: "swarmcloud_console" }, "Ana Example")).toBe(
+    "Baseline · changes requested by Ana Example in SwarmCloud's console",
+  );
+  expect(decisionLine(d, null)).toBe(d.summary);
+});

@@ -38,3 +38,15 @@ export function runLabel(run: RunNamed, title?: string | null): string {
   const named = (title ?? run.document_title)?.trim() || (run.document_slug ? slugWords(run.document_slug) : null);
   return named ? `${named} · ${run.flow_title}` : run.flow_title;
 }
+
+/**
+ * A run decision's line naming who decided (review minors 2): "<what> · <how> · note: …" with
+ * the "how" built from the decision's fields, so the name stands in for the role whatever the
+ * role phrase reads; no name, the API's line as it is.
+ */
+export function decisionLine(d: Pick<Schemas["RunDecision"], "summary" | "status" | "via">, name: string | null | undefined): string {
+  if (!name) return d.summary;
+  const [what, , ...rest] = d.summary.split(" · ");
+  const how = `${d.status.replace("_", " ")} by ${name}${d.via === "swarmcloud_console" ? " in SwarmCloud's console" : ""}`;
+  return [what, how, ...rest].join(" · ");
+}

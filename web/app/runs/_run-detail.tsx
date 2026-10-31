@@ -7,7 +7,7 @@ import { createPortal, flushSync } from "react-dom";
 
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
 import { peopleByIds } from "@/components/PersonPicker";
-import { runLabel } from "@/lib/labels";
+import { decisionLine, runLabel } from "@/lib/labels";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
@@ -831,12 +831,7 @@ function RunDecisions({ run }: { run: RunOut }) {
   const said = (d: Schemas["RunDecision"]) => {
     const by = run.checkpoints.find((c) => c.id === d.checkpoint_id)?.decided_by;
     const name = by ? people.data?.get(by)?.name : undefined;
-    if (!name) return d.summary;
-    // The decision's own words, from its fields (review minors 2): "<what> · <how> · note: …",
-    // the role's place taken by the name whatever the role phrase reads.
-    const [what, , ...rest] = d.summary.split(" · ");
-    const how = `${d.status.replace("_", " ")} by ${name}${d.via === "swarmcloud_console" ? " in SwarmCloud's console" : ""}`;
-    return [what, how, ...rest].join(" · ");
+    return decisionLine(d, name);
   };
   return (
     <InspectorSection

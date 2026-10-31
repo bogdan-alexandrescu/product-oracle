@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
+import { gateReason, openCriticalCount, type Summary } from "../app/intakes/[id]/_lib";
 import { login } from "./helpers";
 
 /*
@@ -249,3 +250,10 @@ for (const [name, viewport] of VIEWPORTS) {
     });
   });
 }
+
+test("review minors 24: the critical count is never under the server's, so the gate reason never reads 0", () => {
+  // The server counts a critical question this page does not list: its count stands.
+  const s = { readiness: { open_critical: 2, blocking_gap_ids: ["g-1"] }, gaps: [{ importance: "critical", status: "unknown" }] } as unknown as Summary;
+  expect(openCriticalCount(s)).toBe(2);
+  expect(gateReason(1, openCriticalCount(s))).toMatch(/^2 critical/);
+});
