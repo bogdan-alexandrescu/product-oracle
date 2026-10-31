@@ -339,9 +339,10 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
           <Link href={`/simple/meetings/${m.id}`} className={LINK}>{m.title}</Link>
         </h2>
         {/* qa-simple-decide-11: two reviews of one PRD told apart by their day and "live". */}
-        {/* qa4-simple-decide-21: the PRD's name only when the title does not already say it. */}
+        {/* qa4-simple-decide-21: the PRD's name only when the title does not already say it, with or
+            without the kind word its document's title may carry ("Usage alerts PRD", qa4-simple-prd-28). */}
         <span className="simple-meta" data-testid="meeting-group-when">
-          {[momentWords(m.started_at, zone, true), m.status === "live" ? "live" : null, m.title.includes(m.prd.title) ? null : m.prd.title].filter(Boolean).join(" · ")}
+          {[momentWords(m.started_at, zone, true), m.status === "live" ? "live" : null, m.title.includes(m.prd.title.replace(/\s+PRD$/, "")) ? null : m.prd.title].filter(Boolean).join(" · ")}
         </span>
       </div>
       {minutes?.summary && <p>{minutes.summary}</p>}
