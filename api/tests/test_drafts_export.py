@@ -439,19 +439,17 @@ async def test_one_page_theme_checks_the_fit(client, tenant_id):
     await _import(client, h, out["slug"], long)
     html = (await client.get(f"/v1/documents/{out['slug']}/versions/2/export", headers=h)).text
     assert page_count(html) > 1
-    pdf = (
-        await client.get(
-            f"/v1/documents/{out['slug']}/versions/2/export", params={"format": "pdf"}, headers=h
-        )
-    ).content
-    first = PdfReader(io.BytesIO(pdf)).pages[0].extract_text()
-    assert "meant to fit one page" in first
-    short = (
-        await client.get(
-            f"/v1/documents/{out['slug']}/versions/1/export", params={"format": "pdf"}, headers=h
-        )
-    ).content
-    assert "meant to fit one page" not in PdfReader(io.BytesIO(short)).pages[0].extract_text()
+    resp = await client.get(
+        f"/v1/documents/{out['slug']}/versions/2/export", params={"format": "pdf"}, headers=h
+    )
+    # e2e-pdf-export: the overflow is told to the person exporting, never printed.
+    pages = PdfReader(io.BytesIO(resp.content)).pages
+    assert resp.headers["X-Oracle-Overflow-Pages"] == str(len(pages))
+    assert "meant to fit one page" not in pages[0].extract_text()
+    short = await client.get(
+        f"/v1/documents/{out['slug']}/versions/1/export", params={"format": "pdf"}, headers=h
+    )
+    assert "X-Oracle-Overflow-Pages" not in short.headers
 
 
 @requires_pdf
