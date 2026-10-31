@@ -12,6 +12,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { isHttpsSite } from "@/lib/https-site";
 import { stableUuid } from "./ids";
 
 type CompetitorOut = Schemas["CompetitorOut"];
@@ -110,7 +111,8 @@ export function seedMarket(occurrenceId: string | null): MarketDb {
     lock_version: 1,
   });
   const a = competitor("a", "Competitor A", "direct", "https://competitor-a.example", ["CompA"], "A planning tool for product teams.");
-  const b = competitor("b", "Competitor B", "indirect", "https://competitor-b.example", [], "A general project tracker teams use for roadmaps.");
+  // Competitor B was saved before websites had to be https://, so an edit must not send it back.
+  const b = competitor("b", "Competitor B", "indirect", "http://competitor-b.example", [], "A general project tracker teams use for roadmaps.");
   const s = competitor("s", "Spreadsheets", "status_quo", null, ["a spreadsheet"], "Roadmaps and request lists kept in shared spreadsheets.");
   db.competitors.push(a, b, s);
   const page = (key: string, c: Competitor, url: string, label: Page["label"], fields: Partial<Page> = {}): Page => ({
@@ -357,8 +359,6 @@ export function digestBlocks(db: MarketDb, zone: string, asOf: string) {
 // --- routes -----------------------------------------------------------------------------------
 
 /** Handles the market routes; null for any other path. */
-/** An alternative's website: an https:// address with a host and no spaces, as the API (qa4-company-5). */
-const HTTPS_SITE = /^https:\/\/[^\s/]+[^\s]*$/i;
 const WEBSITE_HTTPS = "website: only https:// addresses can be added";
 
 export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
@@ -390,7 +390,7 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
       const aliases = (input.aliases ?? []).map((a) => a.trim()).filter(Boolean);
       if (aliases.length > MAX_ALIASES) return fail(422, `aliases: at most ${MAX_ALIASES} aliases`);
       const website = input.website?.trim() || null;
-      if (website && !HTTPS_SITE.test(website)) return fail(422, WEBSITE_HTTPS);
+      if (website && !isHttpsSite(website)) return fail(422, WEBSITE_HTTPS);
       const c: Competitor = {
         id: ctx.uuid(),
         name,
@@ -433,7 +433,7 @@ export async function routeMarket(ctx: MarketContext, db: MarketDb, req: Request
       }
       if ("website" in input) {
         const website = input.website?.trim() || null;
-        if (website && !HTTPS_SITE.test(website)) return fail(422, WEBSITE_HTTPS);
+        if (website && !isHttpsSite(website)) return fail(422, WEBSITE_HTTPS);
         c.website = website;
       }
       if (input.kind != null) c.kind = input.kind;

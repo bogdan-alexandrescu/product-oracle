@@ -7,6 +7,7 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
 import { formatDay } from "@/lib/format";
+import { isHttpsSite } from "@/lib/https-site";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -260,7 +261,7 @@ function CompetitorInspector({
         >
           {archiving && (
             <div data-testid="archive-confirm" className="mb-3 flex flex-col gap-2 text-sm">
-              <p>Archive {detail.name}? Its watched pages stop being read and it leaves the list.</p>
+              <p>Archive {detail.name}? Its watched pages stop being read and it leaves the list. This cannot be undone here.</p>
               <div className="flex gap-2">
                 <Button variant="solid" disabled={busy} onClick={() => void archive()}>
                   Archive
@@ -500,8 +501,6 @@ function Required() {
   );
 }
 
-/** qa4-company-5: an https:// address with a host and no spaces, as the API takes. */
-const HTTPS_SITE = /^https:\/\/[^\s/]+[^\s]*$/i;
 
 /**
  * Add alternative (approvers and owners): name, kind, website, description and aliases.
@@ -533,7 +532,10 @@ function AlternativeDialog({
     e.preventDefault();
     setError(null);
     const site = website.trim();
-    const badSite = site && !HTTPS_SITE.test(site) ? "Only https:// addresses can be added, like https://example.com" : null;
+    // An edit sends the website only when it changed, so an older one the API would now
+    // refuse does not block a name-only edit.
+    const siteChanged = !editing || site !== (editing.website ?? "");
+    const badSite = siteChanged && site && !isHttpsSite(site) ? "Only https:// addresses can be added, like https://example.com" : null;
     setSiteError(badSite);
     if (!name.trim()) return setError("Give the alternative a name");
     if (!kind) return setError("Pick a kind");
@@ -545,7 +547,7 @@ function AlternativeDialog({
     if (names.length > 5) return setError("At most 5 other names");
     setBusy(true);
     try {
-      const fields = { name: name.trim(), kind, website: site || null, description: description.trim() || null, aliases: names };
+      const fields = { name: name.trim(), kind, ...(siteChanged && { website: site || null }), description: description.trim() || null, aliases: names };
       const c = editing
         ? await unwrap(
             api.PATCH("/v1/competitors/{competitor_id}", {
