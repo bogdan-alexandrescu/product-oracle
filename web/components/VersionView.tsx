@@ -57,6 +57,7 @@ import { OWNER_APPROVES } from "@/lib/owner-kinds";
 import { useDocumentView, type DocumentView } from "@/lib/preferences";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { keyFromHash, sectionHref } from "@/lib/section-link";
+import { useLiveRefresh } from "@/lib/use-live-refresh";
 import { useQuery } from "@/lib/use-query";
 import { useViewportFit } from "@/lib/use-viewport-fit";
 
@@ -77,6 +78,8 @@ function subtree(sections: SectionOut[], key: string): SectionOut[] {
 }
 
 const PHONE = "(max-width: 639px)";
+/** e2e-review-live: how often an open run review re-reads the review state (as the meeting chat does). */
+const LIVE_POLL_MS = 5_000;
 function subscribePhone(cb: () => void) {
   const mq = window.matchMedia(PHONE);
   mq.addEventListener("change", cb);
@@ -363,6 +366,28 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const openSection =
     shownSections.find((s) => s.section_key === hashKey) ?? shownSections.find((s) => !s.verdict) ?? shownSections[0];
   const openKey = openSection?.section_key ?? null;
+  // e2e-review-live: other reviewers' work shows without a reload. On window focus, and every
+  // LIVE_POLL_MS while a run review waits on this version, the review state is read again in
+  // place (sections and verdicts, feedback and Oracle's suggestions, the run review bar): no
+  // query blanks while it does, and open forms keep their state.
+  const [runReviewOpen, setRunReviewOpen] = useState(false);
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(
+    () => {
+      // Without a hash the first unreviewed section is open: keep it open when someone else reviews it.
+      if (!hash && openKey) setHash(`#${openKey}`);
+      void verQ.reload();
+      void docQ.reload();
+      void commentsQ.reload();
+      void statesQ.reload();
+      void feedbackQ.reload();
+      void discussionsQ.reload();
+      void held.refresh();
+      setLiveTick((t) => t + 1);
+    },
+    onDocument && runReviewOpen ? LIVE_POLL_MS : null,
+    rootRef,
+  );
   // G7 3.3: the panel is about the open section, else the document.
   useScreenSubject(
     document_ ? (openSection ? { kind: "section", subject: { document_id: document_.id, version: n, section_key: openSection.section_key } } : { kind: "document", subject: { document_id: document_.id, version: n } }) : null,
@@ -1397,8 +1422,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           <RunReviewBar
             doc={doc}
             n={n}
-            refreshKey={`${refreshKey}|${sections.filter((x) => x.verdict).length}|${version.approved_at ?? ""}`}
+            refreshKey={`${refreshKey}|${sections.filter((x) => x.verdict).length}|${version.approved_at ?? ""}|${liveTick}`}
             onDecided={() => void Promise.all([verQ.reload(), docQ.reload()])}
+            onOpen={setRunReviewOpen}
           />
         )}
         {pane === "items" && isRoadmap && (
