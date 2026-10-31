@@ -54,10 +54,10 @@ function Market() {
   const [adding, setAdding] = useState(false);
   // qa-company-20: an empty list shows its own Add button, so the header drops its one.
   const [noAlternatives, setNoAlternatives] = useState(false);
-  // qa-company-43: the header's Add alternative shows on the alternatives' own sub-tabs too
-  // (Change log, Positioning), unless there is none yet: then the empty list's button is the one.
-  // Read again on each of those sub-tabs, so one added on Alternatives counts on the Change log;
-  // Pricing and Win and loss show no such button and read nothing again for it.
+  // qa-company-43: the header's Add alternative shows on the Change log too (it lists the
+  // alternatives' changes), unless there is none yet: then the empty list's button is the one.
+  // qa4-company-36: Positioning, Pricing and Win and loss show no such button and read nothing
+  // again for it.
   const shownTab = params.get("tab") ?? "";
   const [readOn, setReadOn] = useState(shownTab);
   if (shownTab !== readOn && !NO_ADD_TABS.includes(shownTab)) setReadOn(shownTab);
@@ -88,7 +88,7 @@ function Market() {
         status={capsReady && !mayWrite ? <ViewOnly /> : undefined}
         action={
           mayWrite &&
-          (tab === "alternatives" ? !noAlternatives : (tab === "changes" || tab === "positioning") && !!competitors.data?.length) && (
+          (tab === "alternatives" ? !noAlternatives : tab === "changes" && !!competitors.data?.length) && (
             <Button variant="primary" icon="plus" onClick={addAlternative}>
               Add alternative
             </Button>
@@ -130,7 +130,7 @@ function Market() {
  * phone). On a phone they wrap onto a second line, so every sub-tab shows (qa-company-44).
  */
 /** The sub-tabs whose header has no Add alternative, so the alternatives are not read again for it. */
-const NO_ADD_TABS = ["pricing", "win-loss"];
+const NO_ADD_TABS = ["positioning", "pricing", "win-loss"];
 
 function MarketTabs({ tabs, value, onChange }: { tabs: { value: Tab; label: string; testId: string }[]; value: Tab; onChange: (v: Tab) => void }) {
   const ref = useRef<HTMLDivElement>(null);

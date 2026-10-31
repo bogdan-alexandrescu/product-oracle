@@ -62,10 +62,11 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
     setCheck(null);
     setError(null);
     if (!file) return;
+    setName(file.name);
+    setText(null);
     if (file.size > 1024 * 1024) return setError("The file is larger than 1 MB");
     const content = await file.text();
     setText(content);
-    setName(file.name);
     setBusy(true);
     try {
       setCheck(await importCsv(content, true));
@@ -117,10 +118,30 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
         <a href={SAMPLE_HREF} download="win-and-loss-sample.csv" data-testid="import-sample-download" className="self-start text-sm font-medium text-accent-ink hover:underline">
           Download a sample CSV
         </a>
-        <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-          CSV file
-          <input type="file" accept=".csv,text/csv" data-autofocus="" onChange={(e) => void pick(e.target.files?.[0])} />
-        </label>
+        {/* qa4-company-33: a styled "Choose a CSV file" button (the browser's own control is
+            hidden, still the field a keyboard reaches) and the chosen file's name. */}
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-text2">CSV file</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <label
+              data-testid="import-choose"
+              className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface px-3 text-sm font-semibold whitespace-nowrap text-text hover:bg-surface2 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent"
+            >
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                aria-label="CSV file"
+                className="sr-only"
+                data-autofocus=""
+                onChange={(e) => void pick(e.target.files?.[0])}
+              />
+              {name ? "Choose another file" : "Choose a CSV file"}
+            </label>
+            <span data-testid="import-file-name" className="min-w-0 text-sm text-text2 [overflow-wrap:anywhere]">
+              {name ?? "No file chosen yet"}
+            </span>
+          </div>
+        </div>
         {busy && !check && <p className="text-sm text-text2">Checking {name}…</p>}
         {check && (
           <div className="flex flex-col gap-2" data-testid="import-check">
