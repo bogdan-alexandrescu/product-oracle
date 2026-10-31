@@ -206,7 +206,8 @@ function QuestionBubble({
   const waitingReview = gap?.status === "answered_pending_review";
   const last = card.answers[card.answers.length - 1];
   /** An answer stands on it (not a hand-over to someone else): Answer becomes Change answer. */
-  const standing = !!last && last.kind !== "delegate";
+  // A deferral undone (the question asked again) no longer stands: Answer, not Change answer.
+  const standing = !!last && last.kind !== "delegate" && !(last.kind === "defer" && q.status !== "deferred");
   // Answered "I don't know": the API lets an approver write the answer later (answers.py).
   const unsure = q.status === "answered" && last?.kind === "dont_know";
   const mayChange = unsure && can("update_question");

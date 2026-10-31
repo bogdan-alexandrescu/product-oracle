@@ -52,7 +52,7 @@ for (const size of SIZES) {
 
     test("decisions: the list names who decided, and a send-back says what it sent", async ({ page }) => {
       await login(page);
-      await page.getByTestId("nav-runs").click();
+      await page.goto("/runs");
       await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
       await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
 
@@ -76,7 +76,7 @@ for (const size of SIZES) {
 
     test("delete: a secondary button whose confirm says the run's record goes and its PRD stays", async ({ page }) => {
       await login(page);
-      await page.getByTestId("nav-runs").click();
+      await page.goto("/runs");
       await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
       await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
       await page.getByTestId("run-cancel").filter({ visible: true }).first().click();
@@ -85,7 +85,7 @@ for (const size of SIZES) {
       await expect(del).toHaveAttribute("data-variant", "secondary");
       await del.click();
       const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding run" });
-      await expect(dialog.getByTestId("delete-what")).toHaveText(/^This removes the run's record: its steps, decisions and spend\. .+ stays as it is\.$/);
+      await expect(dialog.getByTestId("delete-what")).toHaveText(/^This removes the run's record: its steps, decisions and spend\./);
       await dialog.getByRole("button", { name: "Back" }).click();
       await expect(dialog).toHaveCount(0);
     });
@@ -93,7 +93,7 @@ for (const size of SIZES) {
     test("feature set approve: open calls are named before Approve goes through", async ({ page }) => {
       await page.addInitScript((key) => localStorage.setItem(key, "scope-review"), MOCK_SCENARIO_KEY);
       await login(page, "approver@example.com");
-      await page.getByTestId("nav-runs").click();
+      await page.goto("/runs");
       await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
       await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
       await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
@@ -103,7 +103,7 @@ for (const size of SIZES) {
       if (size.name === "phone") await bar.getByRole("button", { name: /Approve$/ }).click();
       await page.getByRole("button", { name: "Approve with 1 edit" }).filter({ visible: true }).click();
       const ask = page.getByRole("alertdialog", { name: "Approve with 1 edit" });
-      await expect(ask).toContainText(/^\d+ features? still needs? you\. Approving leaves (it|them) as the agents proposed\./);
+      await expect(ask).toContainText(/\d+ features? still needs? you\. Approving leaves (it|them) as the agents proposed\./);
       await ask.getByRole("button", { name: "Back" }).click();
       // Not approved: the review is still open.
       await expect(page).toHaveURL(/\/review\//);

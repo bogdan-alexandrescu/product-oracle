@@ -139,6 +139,9 @@ for (const [name, viewport] of [
       const answer = inspector(page).getByRole("textbox", { name: `Answer: ${PHONES}` });
       await answer.fill("Yes, the checklist");
       await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
+      // Back in the box, as a person does, and on typing while the verdict saves.
+      await answer.click();
+      await answer.press("End");
       await answer.pressSequentially(" shows on phones too.");
       await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
       await expect(answer).toHaveValue("Yes, the checklist shows on phones too.");
