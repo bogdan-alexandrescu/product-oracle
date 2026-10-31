@@ -77,6 +77,28 @@ async def test_limits(client, ctx, at, web):
     assert (await add_competitor(client, ctx, name="Competitor C", aliases=six)).status_code == 422
 
 
+async def test_an_alternative_website_must_be_https(client, ctx, at):
+    """protects=an alternative's website is an https:// address or blank, on add and on
+    edit; fails_when='not a url' or an http:// address is stored; no_claim=the screen."""
+    body = {"name": "Spreadsheets", "kind": "status_quo", "website": "not a url"}
+    resp = await client.post("/v1/competitors", json=body, headers=ctx.as_("approver"))
+    assert resp.status_code == 422 and "https://" in resp.text
+    body["website"] = "http://sheets.example"
+    resp = await client.post("/v1/competitors", json=body, headers=ctx.as_("approver"))
+    assert resp.status_code == 422
+    body["website"] = "  "
+    resp = await client.post("/v1/competitors", json=body, headers=ctx.as_("approver"))
+    assert resp.status_code == 201 and resp.json()["website"] is None
+    cid = resp.json()["id"]
+    url = f"/v1/competitors/{cid}"
+    resp = await client.patch(url, json={"lock_version": 1, "website": "sheets dot example"},
+                              headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 422
+    resp = await client.patch(url, json={"lock_version": 1, "website": "https://sheets.example"},
+                              headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 200 and resp.json()["website"] == "https://sheets.example"
+
+
 async def test_positioning_edit_and_item_limits(client, ctx, at):
     """protects=approvers edit positioning with lock_version, items are capped at 300
     characters and 10 per field (one market category), and a person's edit is audited;

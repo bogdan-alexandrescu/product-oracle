@@ -6,6 +6,7 @@ import { Avatar, Button, Chip, Icon, type ChipKind } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Suggestion } from "@/lib/api/client";
 import { CLASSIFICATION_LABEL } from "@/lib/format";
+import { plainText } from "@/lib/markdown";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 const STATUS: Record<Suggestion["status"], { label: string; kind: ChipKind }> = {
@@ -15,6 +16,13 @@ const STATUS: Record<Suggestion["status"], { label: string; kind: ChipKind }> = 
   applied: { label: "Applied", kind: "pass" },
   superseded: { label: "Superseded", kind: "na" },
 };
+
+/** qa4-docs-20: how strong a pushback's source is, in words; never the raw 0..1 score. */
+function evidenceWord(confidence: number): string {
+  if (confidence >= 0.7) return "strong evidence";
+  if (confidence >= 0.4) return "fair evidence";
+  return "weak evidence";
+}
 
 type Mode = null | "edit" | "keep" | "dismiss";
 
@@ -93,8 +101,9 @@ export function SuggestionActions({ d }: { d: SuggestionDecision }) {
           <Button variant="solid" icon="check" disabled={busy} onClick={() => d.dismiss(true)}>
             Take the advice
           </Button>
+          {/* qa4-docs-52: the button names the outcome (accepting against the advice). */}
           <Button disabled={busy} onClick={() => setMode("keep")}>
-            Keep my call
+            Accept anyway
           </Button>
         </>
       ) : (
@@ -149,12 +158,12 @@ export function SuggestionForm({ d }: { d: SuggestionDecision }) {
       {mode === "keep" && (
         <div className="mt-2 flex flex-col gap-2">
           <label className={FIELD_LABEL}>
-            Why keep your call? (logged for later review)
+            Why accept against the advice? (logged for later review)
             <textarea autoFocus rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className={TEXTAREA} />
           </label>
           <div className="flex gap-1.5">
             <Button variant="solid" disabled={busy || !reason.trim()} onClick={() => d.accept({ reason })}>
-              Accept anyway
+              Accept against the advice
             </Button>
             <Button variant="ghost" onClick={() => setMode(null)}>
               Cancel
@@ -170,10 +179,10 @@ export function SuggestionForm({ d }: { d: SuggestionDecision }) {
           </label>
           <div className="flex flex-wrap gap-1.5">
             <Button disabled={busy} onClick={() => d.dismiss(false)}>
-              Dismiss suggestion
+              Dismiss, keep feedback open
             </Button>
             <Button variant="danger" disabled={busy} onClick={() => d.dismiss(true)}>
-              Dismiss and decline the feedback
+              Dismiss and decline feedback
             </Button>
             <Button variant="ghost" onClick={() => setMode(null)}>
               Cancel
@@ -208,7 +217,9 @@ export function SuggestionCard({
   editing?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const shown = s.edited_text ?? s.text;
+  // qa4-docs-11: the proposed text is markdown; it reads as plain text (no "**").
+  const raw = s.edited_text ?? s.text;
+  const shown = raw ? plainText(raw) : raw;
   const long = !!shown && (shown.length > LONG_CHARS || shown.split("\n").length > LONG_LINES);
   const collapsed = long && !expanded;
 
@@ -223,7 +234,12 @@ export function SuggestionCard({
           <Chip kind={STATUS[s.status].kind}>{STATUS[s.status].label}</Chip>
         </span>
       </div>
-      {s.kind === "duplicate" && <p className="mt-1.5 text-sm text-text2">Duplicate of an earlier item; resolved with it.</p>}
+      {/* qa4-docs-12: an open duplicate is not resolved yet: it closes when the earlier item does. */}
+      {s.kind === "duplicate" && (
+        <p className="mt-1.5 text-sm text-text2" data-testid="duplicate-note">
+          {s.status === "open" ? "Duplicate of an earlier item; resolved when that one is." : "Duplicate of an earlier item; resolved with it."}
+        </p>
+      )}
       {shown && !editing && (
         <div className="mt-2">
           <p className="text-[13px] font-semibold tracking-[0.02em] text-text2">
@@ -267,14 +283,14 @@ export function SuggestionCard({
                 ) : (
                   src.title
                 )}
-                {src.confidence != null && <span className="tnum text-text2"> · confidence {src.confidence.toFixed(2)}</span>}
+                {src.confidence != null && <span className="text-text2" data-testid="pushback-strength"> · {evidenceWord(src.confidence)}</span>}
                 {src.excerpt && <span className="block text-text2">“{src.excerpt}”</span>}
               </li>
             ))}
           </ul>
           {s.override_reason && (
             <p className="mt-1 text-text">
-              <span className="font-semibold">Kept the call:</span> {s.override_reason}
+              <span className="font-semibold">Accepted against the advice:</span> {s.override_reason}
             </p>
           )}
         </div>

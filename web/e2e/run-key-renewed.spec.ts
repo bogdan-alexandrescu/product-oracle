@@ -17,7 +17,7 @@ test("a run whose key was renewed says so on its page", async ({ page }) => {
   await page.getByRole("button", { name: "About the runtime" }).click();
   const notes = page.getByTestId("run-notes");
   await expect(notes).toBeVisible();
-  await expect(notes).toContainText("Key renewed at 2026-10-21 03:10 PDT");
+  await expect(notes).toContainText("Key renewed at Oct 21, 2026, 3:10 AM PDT");
   await expect(notes).toContainText("expired while it waited in SwarmCloud's queue");
   // The key itself is never shown.
   await expect(notes).not.toContainText("ort_");

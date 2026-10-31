@@ -46,7 +46,8 @@ test("qa-docs-35: the design page names sections, documents and requirements in 
   const file = page.getByTestId("file-details").first();
   await expect(file).not.toHaveAttribute("open", "");
   await file.getByText("Details").click();
-  await expect(file).toContainText("checkout-flow.svg");
+  // qa4-docs-share-40: the file by its title, never its file name.
+  await expect(file).not.toContainText("checkout-flow.svg");
   await expect(file).toContainText("Drawing (SVG)");
   // qa-docs-79: no sizes, fingerprints, prompts or runners, even behind a click.
   await expect(file).not.toContainText("Fingerprint");

@@ -36,7 +36,7 @@ test("engineering lead: the owner ticks Eng lead, it stays after a reload and th
   const box = leadBox(page, "commenter@example.com");
   await expect(box).not.toBeChecked();
   await expect(page.getByTestId("roles-engineering-lead")).toContainText("Engineering lead");
-  await expect(page.getByTestId("engineering-lead-count")).toHaveText("0");
+  await expect(page.getByTestId("engineering-lead-none")).toHaveText("Nobody named yet. Pick who carries engineering checks.");
   await box.check();
   await expect(box).toBeChecked();
   await expect(page.getByTestId("engineering-lead-count")).toHaveText("1");
@@ -72,7 +72,7 @@ test("engineering lead: making the lead a viewer unticks and disables their box"
   await expect(leadBox(page, "commenter@example.com")).toBeDisabled();
   await page.reload();
   await expect(leadBox(page, "commenter@example.com")).not.toBeChecked();
-  await expect(page.getByTestId("engineering-lead-count")).toHaveText("0");
+  await expect(page.getByTestId("engineering-lead-none")).toHaveText("Nobody named yet. Pick who carries engineering checks.");
 });
 
 test("engineering lead: the invite form names a lead, never a viewer", async ({ page }) => {

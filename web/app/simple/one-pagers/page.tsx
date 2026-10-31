@@ -17,8 +17,8 @@ export default function OnePagers() {
   // qa-simple-prd-p3-30: newest first, by when each last changed (and the list says so).
   const rows = q.data ? [...q.data].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)) : null;
   return (
-    // qa-simple-prd-11: a PRD with a plan leads with its plan, so the lead names both.
-    <SimplePage title="One-pagers" lead="Every PRD on one page: its plan and timeline, or its problem, bets, outcomes, what we will not do and risks.">
+    // qa4-simple-prd-25: a help line, saying what a person can do here.
+    <SimplePage title="One-pagers" lead="Open a PRD to read it on one page, change its wording or start a review.">
       <SimpleSection
         title="PRDs"
         testId="simple-one-pagers"

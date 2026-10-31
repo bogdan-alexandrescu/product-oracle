@@ -14,7 +14,8 @@ export type TemplateCheck = Schemas["TemplateValidateOut"];
 /** A minimal body that passes validation: what "New template" starts from. */
 export const TEMPLATE_SKELETON = `---
 theme: clean-document
-suggest_when: "Describe when this template is the right pick"
+# When to suggest this template, in a few words. Left empty, it is not saved.
+suggest_when: ""
 brief: [problem, solution]
 ---
 

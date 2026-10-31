@@ -374,7 +374,7 @@ def test_report_prose_names_days_in_words_not_iso():
     nxt = SimpleNamespace(name="First release", target_date=date(2026, 11, 30))
     counts = {"items": 3, "at_risk": 1, "blocked": 0, "stale": 0, "slipping": 1}
     assert views._headline("at_risk", counts, nxt) == (
-        "At risk: 1 of 3 items need attention (1 slipping). Next milestone: First release, Nov 30."
+        "At risk: 1 of 3 items needs attention (slipping). Next milestone: First release, Nov 30."
     )
     assert views._headline("on_track", counts, nxt) == (
         "On track: 3 items. Next milestone: First release, Nov 30."
@@ -1350,3 +1350,30 @@ def test_markdown_lists_an_item_with_two_reasons_once():
     md = alignment.markdown(content)
     assert md.count("(/plan?item=prd-0:item-x)") == 1
     assert f"- [Item X](/plan?item=prd-0:item-x) · Now: {SLIP} Its PRD section changed." in md
+
+
+def test_next_milestone_is_at_risk_when_one_of_its_items_slips_past_it():
+    """qa4-plan-7. protects=a milestone with an item slipping past it reads "at risk", not
+    only "verified basis"; fails_when=the report says a verified date supports the milestone
+    while the same track lists an item of it slipping; no_claim=items of other milestones."""
+    from types import SimpleNamespace
+
+    mid = uuid.uuid4()
+    slip = {"kind": "slipping", "detail": "ENG-405 targets Dec 9, after the milestone date Nov 30."}
+
+    def overview(item_key: str, health: str = "at_risk") -> SimpleNamespace:
+        return SimpleNamespace(
+            health=health,
+            next_milestone=SimpleNamespace(milestone_id=mid),
+            milestones=[SimpleNamespace(id=mid, item_keys=["alert-digest", "threshold-alerts"])],
+            at_risk=[SimpleNamespace(item_key=item_key, reasons=[slip])],
+        )
+
+    assert alignment.milestone_at_risk(overview("alert-digest")) is True
+    assert alignment.milestone_at_risk(overview("spend-forecast")) is False
+    assert alignment.milestone_at_risk(overview("spend-forecast", "off_track")) is True
+    content = _content(1)
+    content["tracks"][0]["next_milestone"]["at_risk"] = True
+    md = alignment.markdown(content)
+    assert "- Next milestone: Beta, Nov 30 (at risk: an item slips past it)" in md
+    assert "(verified basis)" not in md

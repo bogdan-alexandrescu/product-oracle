@@ -60,15 +60,11 @@ test("qa-docs-1: confirming keeps the brief sections, revision after revision", 
   await dialog.getByRole("button", { name: "Confirm revision 1", exact: true }).click();
   await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 1 in force");
 
+  // The next revision's outline keeps the brief (qa4-docs-16: with nothing changed it can't be confirmed).
   await page.getByRole("button", { name: "Use these modules" }).click();
   dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   expect(await briefHeadings(dialog)).toEqual(before);
-  await dialog.getByLabel("Reason (required)").fill("Second look.");
-  await dialog.getByRole("button", { name: "Confirm revision 2", exact: true }).click();
-  await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 2 in force");
-
-  await page.getByRole("button", { name: "Use these modules" }).click();
-  expect(await briefHeadings(page.getByRole("dialog", { name: "Confirm revision 3" }))).toEqual(before);
+  await expect(dialog.getByRole("button", { name: "Nothing changed" })).toBeDisabled();
 });
 
 test("qa-docs-1: a brief-layer module's section sits in the brief, before the full version, as the composer orders it", async ({ page }) => {

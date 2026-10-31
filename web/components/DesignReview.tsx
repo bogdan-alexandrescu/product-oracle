@@ -230,7 +230,8 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
       shown={shown}
       reasons={reasons}
       words={words}
-      chips={chipsOf("na")}
+      // qa4-docs-share-42: the pills show once; beside the page header only the sheet repeats them.
+      chips={phone ? chipsOf("na") : undefined}
       roles={roles}
       meId={me?.user_id ?? null}
       onChanged={reload}
@@ -255,8 +256,9 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
         status={chips}
         action={
           phone ? (
-            <Button variant="primary" onClick={() => setSheetOpen(true)}>
-              Review the design
+            // qa4-docs-share-56: a reader opens the review; only those who can comment are asked to review.
+            <Button variant={roles.comment ? "primary" : "secondary"} onClick={() => setSheetOpen(true)}>
+              {roles.comment ? "Review the design" : "Open the review"}
             </Button>
           ) : undefined
         }
@@ -309,7 +311,9 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
           .filter((o) => o.removed.length > 0)
           .map((o) => (
             <Notice key={o.name} tone="info" testId="sanitised">
-              Sanitised: Oracle removed {o.removed.join("; ")} from {o.title ?? o.name} when it stored it.
+              {/* qa4-docs-share-8: plain words, never the sanitiser's raw markup notes. */}
+              {o.removed.length === 1 ? "A part that isn't allowed was" : `${o.removed.length} parts that aren't allowed were`} removed from{" "}
+              {o.title ?? o.name} for safety.
             </Notice>
           ))}
         <Panel
@@ -419,11 +423,10 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
       {/* qa-docs-35/79: the file by its title; its name and type in a closed Details (no sizes or fingerprints). */}
       <figcaption className="flex flex-wrap items-start gap-x-2.5 gap-y-1 border-b border-line bg-surface2 px-2.5 py-1.5 text-[13px] text-text2">
         <b className="min-w-0 font-semibold break-words text-text">{output.title ?? output.name}</b>
+        {/* qa4-docs-share-40: the file by its title only; Details keeps its type. */}
         <details data-testid="file-details" className="ml-auto min-w-0">
           <summary className="cursor-pointer select-none hover:text-text">Details</summary>
           <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
-            <dt>File</dt>
-            <dd className="break-words text-text">{output.name}</dd>
             <dt>Type</dt>
             <dd className="text-text">{MEDIA[output.media_type] ?? "A file"}</dd>
           </dl>
@@ -433,12 +436,12 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
         {q.error ? (
           <ErrorNote>{q.error}</ErrorNote>
         ) : q.data == null ? (
-          <span role="status" aria-label={`Loading ${output.name}`} className="block h-64 animate-pulse rounded bg-surface2" />
+          <span role="status" aria-label={`Loading ${output.title ?? "the file"}`} className="block h-64 animate-pulse rounded bg-surface2" />
         ) : (
           <iframe
             sandbox=""
             referrerPolicy="no-referrer"
-            title={`${output.title ?? output.name} (${output.name})`}
+            title={output.title ?? "A design file"}
             srcDoc={asDocument(output, q.data, dark)}
             className={`block w-full rounded border-0 ${dark && output.media_type !== "text/html" ? "bg-surface" : "bg-white"} ${output.media_type === "text/html" ? "h-[520px] max-[600px]:h-[440px]" : "h-[360px] max-[600px]:h-[220px]"}`}
           />
@@ -473,8 +476,10 @@ function ReviewInspector({
 }) {
   const v = d.version;
   const readOnly = v.status === "superseded" || v.status === "rejected";
-  const annotationReviews = d.outputs.reduce((n, o) => n + o.annotations.reduce((m, a) => m + a.reviews.length, 0), 0);
-  const roleName = roles.owner ? "owner" : roles.approverRole ? "approver" : roles.comment ? "commenter" : "viewer";
+  // qa4-docs-share-41: Reviews counts verdicts only, not comments.
+  const verdicts = d.reviews.filter((e) => e.kind === "approved" || e.kind === "changes_requested" || e.kind === "rejected").length;
+  // Anything new on the version (a comment anywhere, a verdict) moves this on.
+  const activity = d.reviews.length + d.outputs.reduce((n, o) => n + o.annotations.reduce((m, a) => m + a.reviews.length, 0), 0);
   const post = async (body: Schemas["DesignReviewIn"]) => {
     await unwrap(api.POST("/v1/design-artifacts/{version_id}/reviews", { params: { path: { version_id: v.id } }, body }));
     onChanged();
@@ -482,17 +487,17 @@ function ReviewInspector({
   return (
     <Inspector
       label="Design review"
-      eyebrow={`Design review · viewing as ${roleName}`}
+      eyebrow={roles.comment ? "Design review" : "Design review · read only"}
       title={`${d.title} v${v.number}`}
       chips={chips}
       stats={[
         { label: d.outputs.length === 1 ? "File" : "Files", value: d.outputs.length },
         { label: "Annotations", value: d.outputs.reduce((n, o) => n + o.annotations.length, 0) },
-        { label: "Reviews", value: d.reviews.length + annotationReviews },
+        { label: "Reviews", value: verdicts, testId: "reviews-stat" },
       ]}
     >
       <InspectorSection label={`Verdict on v${v.number}`} testId="verdict">
-        <VerdictSection spec={spec} d={d} roles={roles} readOnly={readOnly} post={post} />
+        <VerdictSection spec={spec} d={d} roles={roles} readOnly={readOnly} activity={activity} post={post} />
       </InspectorSection>
       <AnnotationsSection spec={spec} words={words} outputs={shown} roles={roles} meId={meId} post={post} />
       <InspectorSection label="Version reviews · oldest first" testId="version-reviews">
@@ -517,18 +522,24 @@ function VerdictSection({
   d,
   roles,
   readOnly,
+  activity,
   post,
 }: {
   spec: Spec;
   d: Design;
   roles: Roles;
   readOnly: boolean;
+  activity: number;
   post: (body: Schemas["DesignReviewIn"]) => Promise<void>;
 }) {
   const v = d.version;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  // qa4-docs-share-41: an error belongs to the moment it was said; it clears once the person
+  // moves on (types a note, or anything new lands on the version).
+  const [errAt, setErrAt] = useState<{ text: string; at: number } | null>(null);
+  const err = errAt && errAt.at === activity ? errAt.text : null;
+  const setErr = (text: string | null) => setErrAt(text ? { text, at: activity } : null);
   const stale = v.freshness === "potentially_stale";
   if (readOnly) {
     const latest = spec.design?.find((a) => a.request_id === d.request_id && a.version.id !== v.id)?.version;
@@ -541,7 +552,7 @@ function VerdictSection({
     }
     return <Notice tone="info">{`Version ${v.number} is ${VERSION_STATUS[v.status].label.toLowerCase()}`}: comments are still allowed; verdicts are not.</Notice>;
   }
-  if (!roles.comment) return <Notice tone="info">You can read this review. Commenting needs the commenter role.</Notice>;
+  if (!roles.comment) return <Notice tone="info">You can read this review.</Notice>;
   const named = spec.engineering_approvers ?? [];
   const approvedLine = v.status === "approved" && v.approved_at && (
     <p className="mb-2 text-sm text-text2">Approved {formatDateTime(v.approved_at)}.</p>
@@ -603,7 +614,15 @@ function VerdictSection({
       {roles.decide && (
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-semibold text-text2">{NOTE_LABEL}</span>
-          <textarea className={TEXTAREA} placeholder="Say why" value={note} onChange={(e) => setNote(e.target.value)} />
+          <textarea
+            className={TEXTAREA}
+            placeholder="Say why"
+            value={note}
+            onChange={(e) => {
+              setNote(e.target.value);
+              setErr(null);
+            }}
+          />
         </label>
       )}
       {err && <ErrorNote>{err}</ErrorNote>}
@@ -692,6 +711,7 @@ function AnnotationsSection({
                         a={a}
                         n={n}
                         output={o.name}
+                        outputTitle={o.title ?? "this file"}
                         many={outputs.length > 1}
                         canComment={roles.comment}
                         meId={meId}
@@ -715,6 +735,7 @@ function AnnotationRow({
   a,
   n,
   output,
+  outputTitle,
   many,
   canComment,
   meId,
@@ -725,6 +746,7 @@ function AnnotationRow({
   a: Annotation;
   n: number;
   output: string;
+  outputTitle: string;
   many: boolean;
   canComment: boolean;
   meId: string | null;
@@ -756,7 +778,7 @@ function AnnotationRow({
           )}
           {canComment && (
             <Composer
-              label={many ? `Comment on annotation ${n} of ${output}` : `Comment on annotation ${n}`}
+              label={many ? `Comment on annotation ${n} of ${outputTitle}` : `Comment on annotation ${n}`}
               send={(body) => post({ kind: "comment", body, output, annotation_id: a.id })}
             />
           )}
@@ -898,12 +920,12 @@ function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design;
                 <Chip kind={FRESHNESS[dep.freshness].kind}>{FRESHNESS[dep.freshness].label}</Chip>
               </span>
             ))
-          : reasons.length > 0
-            ? reasons.join("; ")
-            : words.slug
-              ? prd
-              : "Nothing recorded"}
+          : words.slug
+            ? prd
+            : "Nothing recorded"}
       </MetaRow>
+      {/* qa4-docs-share-43: staleness on its own line, never under "Depends on". */}
+      {reasons.length > 0 && <MetaRow k="May be stale">{reasons.join("; ")}</MetaRow>}
     </div>
   );
 }

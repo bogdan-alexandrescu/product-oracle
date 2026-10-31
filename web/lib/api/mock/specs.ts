@@ -32,6 +32,12 @@ const I = {
   run: "c3000000-0000-4000-8000-000000000031",
   requirement: "c3000000-0000-4000-8000-000000000041",
   specDependency: "c3000000-0000-4000-8000-000000000051",
+  /** qa4-docs-8: the full engineering spec's request, version, document and run. */
+  fullRequest: "c3000000-0000-4000-8000-000000000004",
+  fullVersion: "c3000000-0000-4000-8000-000000000015",
+  fullDocVersion: "c3000000-0000-4000-8000-000000000023",
+  fullDocument: "c3000000-0000-4000-8000-000000000024",
+  fullRun: "c3000000-0000-4000-8000-000000000032",
 };
 
 /** A spec version's dependency on the PRD section that changed (#481: Reconcile names it by its heading). */
@@ -158,7 +164,7 @@ function design(kind: "user_flow" | "wireframe", versionId = kind === "user_flow
   const flow = kind === "user_flow";
   const outputs: Schemas["DesignOutputOut"][] = flow
     ? [{ name: "checkout-flow.svg", title: "Checkout with an early quote", screen: null, media_type: "image/svg+xml", size_bytes: FLOW_SVG.length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("quote"), guestNote], removed: [], content_url: `/v1/design-artifacts/${versionId}/outputs/checkout-flow.svg` }]
-    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<img> with a remote src"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
+    : [1, 2].map((n) => ({ name: `cart-${n}.html`, title: `Cart ${n}`, screen: `cart-${n}`, media_type: "text/html", size_bytes: wireframe(n).length, sha256: "0".repeat(64), section_keys: ["s-5-2"], requirement_ids: [I.requirement], annotations: [note("cost")], removed: n === 2 ? ["<blink> element (content kept)"] : [], content_url: `/v1/design-artifacts/${versionId}/outputs/cart-${n}.html` }));
   return {
     request_id: flow ? I.flowRequest : I.wireRequest,
     kind,
@@ -268,8 +274,35 @@ export function seedSpecs({ approver, named = [] }: { approver?: SpecPerson; nam
   v1.reviews = approver
     ? [{ id: "c3000000-0000-4000-8000-000000000061", version_id: v1.version.id, kind: "approved", body: null, actor: `user:${approver.id}`, actor_name: approver.name, data: {}, created_at: AT }]
     : [];
+  // qa4-docs-8: the full engineering spec document has its spec request, as in the API (a
+  // spec document is only ever written by one), so the PRD lists it under Engineering specs.
+  const fullSlug = "checkout-redesign-early-shipping-cost-engineering-spec";
+  const fullRequest = {
+    ...request(I.fullRequest, "engineering_spec", "Early shipping cost: engineering spec", {
+      document_slug: fullSlug, depth: "full", design: false, screens: 0, engineering_approver_ids: named.map((x) => x.id), document_id: I.fullDocument,
+    }),
+    requirement_ids: [],
+    run_id: I.fullRun,
+    created_at: "2026-10-20T10:00:00Z",
+    updated_at: "2026-10-20T10:00:00Z",
+  };
+  const full: Spec = {
+    ...spec,
+    request: fullRequest,
+    document_slug: fullSlug,
+    document_id: I.fullDocument,
+    depth: "full",
+    latest_version: 1,
+    freshness: "fresh",
+    requirements: [],
+    versions: [{ artifact_version: { ...version(I.fullVersion, I.fullRequest, "fresh"), created_at: "2026-10-20T10:00:00Z" }, document_version: 1, document_version_id: I.fullDocVersion, approach_status: "proposed", approved_by: null, approved_at: null, origin: "run" }],
+    design: [],
+    stale: [],
+    run_id: I.fullRun,
+    state: "in_review",
+  };
   return {
-    specs: [spec],
+    specs: [spec, full],
     history: [v1],
     files: {
       [`${I.wireVersionOld}/cart-1.html`]: { media_type: "text/html", content: wireframe(1) },

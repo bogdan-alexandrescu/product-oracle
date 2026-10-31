@@ -71,6 +71,8 @@ interface StoredCard {
   flag?: Schemas["SimpleItemFlags"] | null;
   change_id: string | null;
   decided_by_name: string | null;
+  /** Who applied it (the API's decided_by; not sent): they may undo it. */
+  decided_by?: string | null;
   decided_at: string | null;
   decision_id: string | null;
   /** Chat actions: what Undo restores (the agenda before, the decision made). */
@@ -159,6 +161,12 @@ interface Meeting {
   agenda_state?: MeetingAgenda;
   /** A review meeting of S8's (./simple-meetings.ts), mirrored here from `ChatMeetings.find` on each call. */
   s8?: boolean;
+  /** meet-chat-right-prd: the PRD the meeting reviews (its slug): its chat reads only its items. */
+  prd?: string | null;
+  /** How it ended: who ended it, or by itself once its time ran out, and when. */
+  ended_at?: string | null;
+  ended_by?: string | null;
+  ended_by_itself?: boolean;
 }
 
 /** The meeting's live notes and open questions (SimpleMeetingOut.notes). */
@@ -172,7 +180,7 @@ export type MeetingAgenda = Schemas["SimpleAgenda"];
  * decisions an Ask line records on a page's document (the Decisions page).
  */
 export interface ChatMeetings {
-  find(id: string): Pick<Meeting, "title" | "presenter_id" | "attendee_ids" | "change_mode" | "change_people" | "ended"> | null;
+  find(id: string): Pick<Meeting, "title" | "presenter_id" | "attendee_ids" | "change_mode" | "change_people" | "ended" | "prd" | "ended_at" | "ended_by" | "ended_by_itself"> | null;
   setMode(id: string, mode: Mode, people: string[]): void;
   note(id: string, n: MeetingNote): void;
   unnote(id: string, cardId: string): void;
@@ -284,6 +292,14 @@ function parseDay(text: string): string | null {
   let d = isoDay(Date.UTC(y, month, Number(m[2])));
   if (d < t) d = isoDay(Date.UTC(++y, month, Number(m[2])));
   return d;
+}
+
+/** "Dec 1, 2026" (that day) or "Dec 1" (the next such day, as parseDay). */
+function fullDay(text: string): string | null {
+  const m = /^([a-z]+ \d{1,2}),? (\d{4})$/i.exec(text.trim());
+  if (!m) return parseDay(text);
+  const d = parseDay(m[1]);
+  return d ? `${m[2]}${d.slice(4)}` : null;
 }
 
 /** The n months from the first of `month` (0-based; it may run past December). */
@@ -684,6 +700,25 @@ export function seedReaderItems(db: SimpleDb): void {
   }
 }
 
+/**
+ * meet-chat-right-prd: the "meet-chat-right-prd" scenario's meeting reviews Guided setup, whose
+ * new draft's features are only on its draft roadmap (Setup checklist first); Usage alerts, an
+ * approved PRD, keeps its own items (Delivery pipeline v2) on its roadmap.
+ */
+export function seedRightPrd(db: SimpleDb, chat: ChatDb): void {
+  const add: SimpleDb["items"] = [
+    { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5, end: 35, source: "typed", draft_roadmap: true },
+    { key: "setup-reminders", title: "Setup reminders", horizon: "next", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 20, end: 50, source: "typed", draft_roadmap: true },
+  ];
+  for (const s of add) {
+    if (db.items.some((x) => x.key === s.key)) continue;
+    db.items.push(s);
+    db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
+  }
+  const m = chat.meetings[CHAT_MEETING_ID];
+  if (m) Object.assign(m, { title: "Guided setup review", prd: "guided-setup" });
+}
+
 function plusMonths(day: string, n: number): string {
   const d = new Date(msOf(day));
   const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n + 1, 0)).getUTCDate();
@@ -819,6 +854,11 @@ function clauses(text: string, skipped: string[] = []): Clause[] {
     }
     if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:by\s+)?(?:a|one)\s+quarter$/i.exec(part))) out.push({ op: "move_dates", x: m[1], months: 3 });
     else if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:to|into)\s+(.+)$/i.exec(part)) && parsePeriod(m[2])) out.push({ op: "move_dates", x: m[1], period: parsePeriod(m[2])! });
+    // meet-chat-right-prd: "move X to start on Dec 1, 2026" (a day, its year optional): it starts that day.
+    else if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+to\s+(?:start\s+(?:on\s+)?)?([a-z]+ \d{1,2}(?:,? \d{4})?)$/i.exec(part)) && fullDay(m[2])) {
+      const d = fullDay(m[2])!;
+      out.push({ op: "move_dates", x: m[1], period: [d, addDays(d, 29)] });
+    }
     else if ((m = /\b(?:cut|drop)\s+(.+)$/i.exec(part))) out.push({ op: "cut", x: m[1] });
     else if ((m = /\bmake\s+(.+?)\s+(?:the\s+owner\s+of|own)\s+(.+)$/i.exec(part))) out.push({ op: "set_owner", x: m[2], rest: m[1] });
     if (out.length === had) skipped.push(part);
@@ -897,7 +937,7 @@ export function takeReaderWrote(): boolean {
 }
 
 /** The thread's pending lines, read now (the reader's job ends on the thread's next read). */
-function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): void {
+function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx, s8?: ChatMeetings): void {
   const t = chat.threads[key];
   if (!t) return;
   for (const msg of t.messages) {
@@ -912,13 +952,20 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): 
       continue;
     }
     const meeting = r.meeting_id ? (chat.meetings[r.meeting_id] ?? null) : null;
-    const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx), meeting);
+    const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx, meeting), meeting);
     Object.assign(msg, {
       kind: reply.kind, body: reply.body, retry: false, at: now(),
       card_ids: storeCards(db, chat, reply.cards, msg.id, key, meeting),
       choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })),
       choice_drafts: (reply.choices ?? []).map((c) => c.draft),
     });
+    // As chat._keep_question: a kept question is the meeting's open question at once (Notes so far, then the minutes).
+    if (meeting && !meeting.ended && reply.body === MEETING_ASK) {
+      const by = t.messages.find((x) => x.id === msg.reply_to)?.author_name ?? "someone";
+      const n: MeetingNote = { id: `note-${msg.id}`, kind: "question", text: r.text.trim().slice(0, 1000), by_name: by, at: now(), card_id: null };
+      if (meeting.s8 && s8) s8.note(meeting.id, n);
+      else (meeting.notes ??= []).push(n);
+    }
     delete msg.reading;
   }
 }
@@ -1099,7 +1146,7 @@ function correctCard(db: SimpleDb, ctx: ChatCtx, c: StoredCard, values: Record<s
   const v: Record<string, string | null> = { ...(c.correct?.values ?? {}) };
   for (const [k, x] of Object.entries(values)) if (allowed.has(k)) v[k] = x == null || x === "" ? null : String(x);
   const day = (x: string | null) => (x && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : null);
-  const item = c.item_id ? itemsFor(db, ctx).find((x) => x.id === c.item_id) : undefined;
+  const item = c.item_id ? itemsFor(db, ctx, null, true).find((x) => x.id === c.item_id) : undefined;
   if (c.op === "move_dates" && item) {
     const [a, b] = [day(v.start_date), day(v.end_date)];
     if (!a || !b || b < a) return "Start and End: two days, the end on or after the start";
@@ -1202,8 +1249,16 @@ export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): { text
   return { text: i.prd ? text.replace("[c:1]", "[c:1] [c:2]") : text, citations };
 }
 
-function itemsFor(db: SimpleDb, ctx: ChatCtx): Item[] {
-  return roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role, roles: ctx.roles, owners: ctx.owners, names: ctx.names })?.items ?? [];
+/**
+ * The items a line is read against: a meeting's chat reads only its PRD's items, those on the
+ * PRD's draft roadmap too (meet-chat-right-prd, as the API's chat.meeting_prd); `lookup` (a
+ * card's own item) finds any of them.
+ */
+function itemsFor(db: SimpleDb, ctx: ChatCtx, meeting: Meeting | null = null, lookup = false): Item[] {
+  const q = new URLSearchParams();
+  if (meeting?.prd || lookup) q.set("draft_roadmap", "1");
+  if (meeting?.prd) q.set("prd", meeting.prd);
+  return roadmapOut(db, ctx.role, q, { id: ctx.id, role: ctx.role, roles: ctx.roles, owners: ctx.owners, names: ctx.names })?.items ?? [];
 }
 
 const VERSIONED = new Set(["move_dates", "change_horizon", "edit_title", "cut"]);
@@ -1270,17 +1325,28 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   if (bar) return { may: null, why_not: bar };
   // As the API (chat_actions.proposes): on Ask, approvers and owners record decisions; a commenter proposes one.
   if (!m && c.op === "record_decision" && ctx.role === "commenter") return { may: "propose", why_not: null };
-  const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
+  const item = c.item_id ? itemsFor(db, ctx, null, true).find((i) => i.id === c.item_id) : undefined;
   // Filing a feature ask is every commenter's right (Requests), as are a meeting's notes, agenda
   // and decisions (the meeting's rules came first) and a decision on Ask; else the item's rule.
   const decides = c.op === "add_feature_ask" || LOCAL_OPS.has(c.op) ? true : c.item_id ? !!item?.can_decide : ctx.role === "owner";
   return { may: decides ? "apply" : "propose", why_not: null };
 }
 
+/** qa4-simple-decide-1 (chat._undo_bar): why the reader may not undo an applied card, by its Apply's rule. */
+function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): string | null {
+  const m = meetingOf(chat, c);
+  const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
+  if (bar || LOCAL_OPS.has(c.op) || c.op === "add_feature_ask" || c.op === "suggest_feature" || c.decided_by === ctx.id) return bar;
+  const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
+  const decides = c.item_id ? !!item?.can_decide : ctx.role === "owner";
+  return decides ? null : "Only someone who may change this item undoes it";
+}
+
 function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   const check = c.flag !== undefined ? { flags: c.flag ? [c.flag] : [] } : asIf(db, c);
-  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, ...rest } = c;
+  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, decided_by: _by, ...rest } = c;
   void _undo;
+  void _by;
   void _flag;
   void _thread;
   void _meeting;
@@ -1291,7 +1357,7 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   // Review major (chat.cards_out): "Cut it and its dependents" applies only when the reader decides every item it cuts.
   const allMine = [c.item_id, ...waiting.map((i) => i.id)].every((id) => !!items.find((i) => i.id === id)?.can_decide);
   const may_with_dependents = waiting.length && may.may ? (allMine ? "apply" : "propose") : null;
-  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents };
+  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -1299,6 +1365,9 @@ function rulesOut(m: Meeting, ctx: ChatCtx) {
   return {
     change_mode: m.change_mode, change_people: m.change_people.map(ref), presenter: ref(m.presenter_id),
     is_presenter: ctx.id === m.presenter_id, may_apply: meetingBar(m, ctx) === null, ask_only: ctx.role === "viewer", ended: m.ended,
+    ended_at: m.ended ? (m.ended_at ?? null) : null,
+    ended_by: m.ended && !m.ended_by_itself && m.ended_by ? ref(m.ended_by) : null,
+    ended_by_itself: m.ended && !!m.ended_by_itself,
   };
 }
 
@@ -1359,7 +1428,7 @@ const line = (ctx: ChatCtx, body: string, at: string): StoredMessage => ({
  */
 function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false, documentId: string | null = null): boolean {
   const talk = TALK_KEY.exec(key);
-  const reply = talk ? itemTalk(db, ctx, itemsFor(db, ctx), talk[1], text) : parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names), documentId);
+  const reply = talk ? itemTalk(db, ctx, itemsFor(db, ctx), talk[1], text) : parse(db, ctx, text, meeting, itemsFor(db, ctx, meeting), Object.values(ctx.names), documentId);
   // A question about something not on the roadmap is Ask's (the one box writes nothing); a
   // change phrase naming no item is read by the reader in context, as the API does.
   const asksElsewhere = reply.understood === false && !!reply.missing;
@@ -1444,7 +1513,7 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   }
   Object.assign(c, {
     status: result.change.status === "applied" ? "applied" : "proposed", change_id: result.change.id,
-    decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: now(),
+    decided_by_name: ctx.names[ctx.id] ?? "someone", decided_by: ctx.id, decided_at: now(),
   });
   if (n != null) Object.assign(c, { op: use.op, target: use.target, before: use.before, after: use.after });
   const meeting = meetingOf(chat, c);
@@ -1567,7 +1636,7 @@ function applyLocal(c: StoredCard, meeting: Meeting | null, ctx: ChatCtx, s8?: C
       meeting.decisions.push({ id: decision, title: text, card_id: c.id, at });
     } else if (s8) undo.decision_id = s8.decide(null, text, decider, (c.target.document_id as string | undefined) ?? null);
   }
-  Object.assign(c, { status: "applied", change_id: crypto.randomUUID(), decided_by_name: by, decided_at: at, decision_id: decision, undo });
+  Object.assign(c, { status: "applied", change_id: crypto.randomUUID(), decided_by_name: by, decided_by: ctx.id, decided_at: at, decision_id: decision, undo });
   const change = {
     id: c.change_id, session_id: null, document_id: null, draft_ids: [], op: c.op, target: c.target, before: c.before, after: c.after, status: "applied", by: ctx.id, by_name: by, at,
     decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: true,
@@ -1614,6 +1683,30 @@ function unapplyLocal(c: StoredCard, meeting: Meeting | null, s8?: ChatMeetings)
   }
 }
 
+/** S8's past review (./simple-meetings.ts's "Review: Usage alerts"). */
+const PAST_MEETING_ID = stableUuid("simple-meeting/past-alerts");
+
+/**
+ * qa4-simple-decide-4: the past review's chat holds the lines said in it, as the API keeps a
+ * meeting's thread after it ends: the approver's note (the meeting's note "keep quiet hours on
+ * by default", 35 minutes in) and Oracle's reply.
+ */
+function seedPastChat(chat: ChatDb, m: Pick<Meeting, "presenter_id" | "attendee_ids">, ctx: ChatCtx): void {
+  const key = `meeting:${PAST_MEETING_ID}`;
+  if (chat.threads[key]) return;
+  const by = m.attendee_ids.find((id) => ctx.roles[id] === "approver") ?? m.presenter_id;
+  const at = new Date(mockNowMs() - 7 * DAY + 3 * 3_600_000 + 35 * 60_000).toISOString();
+  const said = crypto.randomUUID();
+  const base = { card_ids: [], choices: [], picked: null, retry: false };
+  chat.threads[key] = {
+    id: crypto.randomUUID(), meeting_id: PAST_MEETING_ID, owner_id: null,
+    messages: [
+      { ...base, id: said, author_kind: "person", author_id: by, author_name: ctx.names[by] ?? "someone", body: "note: keep quiet hours on by default", at, kind: "request", reply_to: null },
+      { ...base, id: crypto.randomUUID(), author_kind: "oracle", author_id: null, author_name: "Oracle", body: "Added to the minutes: keep quiet hours on by default", at, kind: "note", reply_to: said },
+    ],
+  };
+}
+
 /** The S9 routes; null for any other path. */
 export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, req: Request, p: string[], s8?: ChatMeetings): Promise<Response | null> {
   if (p[1] !== "simple") return null;
@@ -1625,6 +1718,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     for (const id of ids) {
       const found = s8.find(id);
       if (found) chat.meetings[id] = { ...(chat.meetings[id] ?? { agenda: [], decisions: [] }), ...found, id, s8: true };
+      if (found && id === PAST_MEETING_ID) seedPastChat(chat, found, ctx);
     }
   }
 
@@ -1636,7 +1730,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const own = q.get("chat") ? ownChat(chat, ctx, q.get("chat")) : null;
     if (q.get("chat") && !own) return json(404, { detail: "No such chat" });
     const key = own ?? `ask:${ctx.id}:${pageOf(q.get("page"))}`;
-    resolvePending(db, chat, key, ctx);
+    resolvePending(db, chat, key, ctx, s8);
     return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, null));
   }
   // chat-reader: Retry a failed line, pick a clarify question's choice, apply a line's open cards in order.
@@ -1730,9 +1824,11 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const meeting = chat.meetings[p[3]];
     if (!meeting) return json(404, { detail: "No such meeting" });
     if (!meeting.attendee_ids.includes(ctx.id)) return json(403, { detail: "Only the meeting's attendees read and write its chat" });
+    // The meeting chat's own thread, as the API's ``meeting_chat:<id>`` key (meet-chat-own-key):
+    // never the Ask panel's discussion on the meeting's page (./discussions.ts, ``screen:<path>``).
     const key = `meeting:${meeting.id}`;
     if (!p[5] && m === "GET") {
-      resolvePending(db, chat, key, ctx);
+      resolvePending(db, chat, key, ctx, s8);
       return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, meeting));
     }
     if (p[5] === "messages" && m === "POST") {
@@ -1770,6 +1866,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
     if (p[5] === "undo") {
       if (c.status !== "applied" || !c.change_id) return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
+      const bar = undoBar(db, chat, c, ctx);
+      if (bar) return json(403, { detail: bar });
       const meeting = meetingOf(chat, c);
       if (c.op === "suggest_feature") {
         if (!unfileSuggestion(db, String(c.target.suggestion_id ?? ""))) return json(409, { detail: "The decider has decided this suggestion already" });

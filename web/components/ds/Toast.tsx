@@ -9,7 +9,8 @@ export type ToastAsk = {
   /** One action beside the message ("Undo"); the toast closes when it is pressed. */
   action?: { label: string; onClick: () => void };
   /** "corner": bottom-right on a desktop, clear of a wide chart (Simple's Roadmap, #34);
-   * "rail": bottom-left on a desktop, over Simple's rail, clear of the main column's buttons
+   * "rail": bottom-left on a desktop, just right of Simple's rail (qa4-simple-home-11: never over
+   * its Ask Oracle and account), clear of the main column's buttons on the right
    * (qa-simple-home-30); a phone keeps the centred strip. Every other toast stays centred. */
   place?: "corner" | "rail";
 };
@@ -17,6 +18,7 @@ export type ToastAsk = {
 type Shown = ToastAsk & { id: number };
 
 let show: ((ask: ToastAsk) => void) | null = null;
+let hide: ((message: string) => void) | null = null;
 /** Where a toast sits when it does not say (a page sets it while it is open: Simple's Home, "rail"). */
 let pagePlace: ToastAsk["place"];
 
@@ -34,6 +36,11 @@ export function toast(ask: ToastAsk) {
   show?.(ask);
 }
 
+/** Closes the toast on screen if it still says `message` (a message about a state that is gone, qa4-simple-roadmap-43). */
+export function clearToast(message: string) {
+  hide?.(message);
+}
+
 /** Draws what `toast` says (one per app: the shell mounts it). */
 export function ToastHost() {
   const [shown, setShown] = useState<Shown | null>(null);
@@ -45,8 +52,10 @@ export function ToastHost() {
   const left = useRef(LIFETIME_MS);
   useEffect(() => {
     show = (ask) => setShown({ place: pagePlace, ...ask, id: ++next.current });
+    hide = (message) => setShown((s) => (s?.message === message ? null : s));
     return () => {
       show = null;
+      hide = null;
     };
   }, []);
   useEffect(() => {
@@ -65,7 +74,7 @@ export function ToastHost() {
     // While a sheet or a modal dialog is open, the message moves to the top, clear of its controls;
     // the Roadmap's own messages sit in the corner on a desktop.
     <div
-      className={`pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? " min-[601px]:inset-x-auto min-[601px]:left-4 min-[601px]:justify-start min-[601px]:px-0" : ""}`}
+      className={`pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? " min-[601px]:inset-x-auto min-[601px]:left-[calc(var(--simple-rail-width,232px)+16px)] min-[601px]:justify-start min-[601px]:px-0" : ""}`}
     >
       {shown && (
         <div

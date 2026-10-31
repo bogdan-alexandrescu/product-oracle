@@ -1370,6 +1370,8 @@ class ChatCardOut(BaseModel):
     # Review major: what "Cut it and its dependents" does for the reader: "apply" when they
     # decide every item it cuts, "propose" when not, None when they may not (``why_not``).
     may_with_dependents: Literal["apply", "propose"] | None = None
+    # qa4-simple-decide-1: an applied card the reader may undo (Apply's own rule).
+    can_undo: bool = False
 
 
 class ChatChoiceOut(BaseModel):
@@ -1408,6 +1410,11 @@ class ChatRulesOut(BaseModel):
     may_apply: bool
     ask_only: bool
     ended: bool
+    # meet-chat-right-prd: when the meeting ended and who ended it, or ``ended_by_itself``
+    # (its time ran out with nobody ending it).
+    ended_at: dt.datetime | None = None
+    ended_by: SimplePersonRef | None = None
+    ended_by_itself: bool = False
 
 
 class ChatThreadOut(BaseModel):

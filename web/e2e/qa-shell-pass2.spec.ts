@@ -198,7 +198,7 @@ test("qa-shell-4, 5: the switch maps an old one-pager link and the Roadmap's own
 });
 
 // Plan's and Company's tabs carry the section's name; Settings' pages name themselves
-// (qa-settings-40: "Members", "Company"), the Settings strip under the title says where they are.
+// (qa-settings-40: "Members", "Company"), and their browser tab names Settings too (qa4-shell-13).
 test("qa-shell-3, 20: a section's tabs carry the section's name as H1, and the browser tab names the tab", async ({ page }) => {
   await login(page);
   for (const [path, h1, title] of [
@@ -206,7 +206,7 @@ test("qa-shell-3, 20: a section's tabs carry the section's name as H1, and the b
     ["/plan/dates", "Plan", "Dates · Plan · Product Oracle"],
     ["/plan/reports", "Plan", "Reports · Plan · Product Oracle"],
     ["/company/strategy", "Company", "Strategy · Company · Product Oracle"],
-    ["/settings/members", "Members", "Members · Product Oracle"],
+    ["/settings/members", "Members", "Members · Settings · Product Oracle"],
   ] as const) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1, name: h1, exact: true })).toHaveCount(1);

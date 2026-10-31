@@ -256,8 +256,9 @@ function NewRequestDialog({
           )}
         </fieldset>
         <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
+          {/* qa4-work-19: "Asked by", as the queue's column and the inspector say. */}
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Requester
+            Asked by
             <input
               className={INPUT}
               value={requester}

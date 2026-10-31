@@ -16,6 +16,9 @@ export const VARIANCE_LABEL = { better: "Better", worse: "Worse" } as const;
 export const VARIANCE_KIND: Record<"better" | "worse", ChipKind> = { better: "pass", worse: "crit" };
 export const VARIANCE_STATE: Record<Variance["status"], string> = { open: "Open", explained: "Explained", unknown: "Don't know yet", noise: "Noise" };
 
+/** The share of the week before that makes a change a variance when a metric sets none (oracle.metrics.variance.DEFAULT_THRESHOLD_PCT). */
+export const DEFAULT_THRESHOLD_PCT = 10;
+
 /** The goal units (B5): a percentage, a currency, a duration, or a counted noun typed in. */
 export const UNITS = ["%", "USD", "EUR", "GBP", "ms", "s", "min", "h", "days"];
 

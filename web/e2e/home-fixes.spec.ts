@@ -96,7 +96,7 @@ test("Home: a large company's first paint stays within the call budget", async (
   // Selecting another row loads that row's inspector, and nothing else.
   const before = (await calls(page)).length;
   await runs.and(page.locator('[data-document="team-onboarding-12"]')).click();
-  await expect(page.getByTestId("home-inspector").getByRole("heading", { name: /^Team onboarding 12 PRD/ })).toBeVisible();
+  await expect(page.getByTestId("home-inspector").getByRole("heading", { name: /^Team onboarding 12 · / })).toBeVisible();
   await expect(page.getByTestId("home-inspector").getByTestId("stat-segments")).toContainText("1/4");
   const after = await settledCalls(page, 800);
   expect(after.slice(before).length, after.slice(before).join("\n")).toBeLessThanOrEqual(2);

@@ -251,6 +251,24 @@ async def test_invite_is_done_with_two_members_or_an_open_invite(client, tenant_
     }
 
 
+async def test_invite_does_not_count_an_expired_invite(client, tenant_id, owner):
+    # protects=qa4-settings-3: Set up said "2 invited" for two expired invites while Members
+    # showed none open; fails_when=an invite past its expiry counts as invited or ticks the
+    # step; no_claim=Members' own invite list.
+    past = datetime.now(UTC) - timedelta(days=1)
+    async with tenant_session(tenant_id) as s:
+        s.add(Invite(email="late1@example.com", role="viewer", expires_at=past))
+        s.add(Invite(email="late2@example.com", role="viewer", expires_at=past))
+        await s.commit()
+    step = _step(await _setup(client, owner), "invite")
+    assert step["done"] is False and step["invited"] == 0
+    async with tenant_session(tenant_id) as s:
+        s.add(Invite(email="fresh@example.com", role="viewer"))
+        await s.commit()
+    step = _step(await _setup(client, owner), "invite")
+    assert step["done"] is True and step["invited"] == 1
+
+
 async def test_horizons_done_while_a_row_is_stored(client, owner):
     # protects=Horizons is done once an owner confirmed (stored) them; fails_when=the
     # defaults read as done, or a reset leaves it done; no_claim=the Company page.

@@ -77,9 +77,10 @@ function ApprovedValue({ d }: { d: Doc }) {
   );
 }
 
-function StatusChip({ status, hero = false }: { status: Doc["status"]; hero?: boolean }) {
+/** qa4-plan-34: a state reads one way everywhere: its colour, a dot and its word (the list's style, in the inspector too). */
+function StatusChip({ status }: { status: Doc["status"] }) {
   return (
-    <Chip kind={STATUS_KIND[status]} hero={hero} dot={!hero} data-status={status}>
+    <Chip kind={STATUS_KIND[status]} dot data-status={status}>
       {DOC_STATUS_LABEL[status]}
     </Chip>
   );
@@ -122,7 +123,7 @@ function RoadmapInspector({ d, names }: { d: Doc; names: StyleNames }) {
       }
       chips={
         <>
-          <StatusChip status={d.status} hero />
+          <StatusChip status={d.status} />
           {d.latest_version != null && <Chip hero>v{d.latest_version}</Chip>}
           {template && <Chip hero>{template}</Chip>}
         </>
@@ -135,7 +136,7 @@ function RoadmapInspector({ d, names }: { d: Doc; names: StyleNames }) {
           value={
             // qa-plan-50: not approved is a status, shown as a chip, not as a big figure.
             d.approved_version == null ? (
-              <Chip kind="na" data-testid="roadmap-not-approved">
+              <Chip kind="na" dot data-testid="roadmap-not-approved">
                 Not approved yet
               </Chip>
             ) : (

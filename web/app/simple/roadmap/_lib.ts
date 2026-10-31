@@ -3,7 +3,7 @@
  * strings (the API's), counted in UTC; a scale turns them into pixels.
  */
 import { api, type Schemas } from "@/lib/api/client";
-import { calendarDay } from "@/lib/dates";
+import { calendarDay, displayZone, todayIn } from "@/lib/dates";
 
 export type Roadmap = Schemas["SimpleRoadmapOut"];
 export type Item = Schemas["SimpleRoadmapItem"];
@@ -35,6 +35,19 @@ export function spanWords(start: string, end: string, today: string = start, eac
   if (eachEnd) return `${ys === yt ? shortDay(start) : `${shortDay(start)}, ${ys}`} – ${ye === yt ? shortDay(end) : `${shortDay(end)}, ${ye}`}`;
   return `${shortDay(start)}, ${ys} – ${shortDay(end)}, ${ye}`;
 }
+
+/** The company's day as the roadmap last gave it (data.today), for words drawn where the
+ * roadmap's data is not at hand; set when GET /v1/simple/roadmap answers. */
+let roadmapToday: string | null = null;
+export const setRoadmapToday = (day: string | null | undefined): void => {
+  roadmapToday = day || null;
+};
+
+/** qa4-simple-roadmap-19: a span with its year whenever an end is not in this year (or it spans two).
+ * "This year" is the company's (data.today, or the company's day by its zone before the
+ * roadmap answers), never the browser clock's UTC year. */
+export const yearSpan = (start: string, end: string, sep = " – ", today: string = roadmapToday ?? todayIn(displayZone())): string =>
+  spanWords(start, end, today).replace(" – ", sep);
 
 export function quarterOf(day: string): { start: string; label: string } {
   const d = new Date(ms(day));

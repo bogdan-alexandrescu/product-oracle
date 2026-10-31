@@ -13,8 +13,9 @@ basis lookups only touch items of roadmap versions.
 """
 
 import logging
+import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -306,6 +307,44 @@ async def run_ended(db: AsyncSession, run: Any, error: str) -> None:
 
 # --- reading ---------------------------------------------------------------------------------
 
+_DAY = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+_OUTSIDE_NOW = re.compile(r"dated milestones belong only in now \(this item is in (\w+)\)")
+
+
+def _day(m: re.Match[str]) -> str:
+    """An ISO day month first, as people read it ("Dec 15, 2026")."""
+    try:
+        d = date(int(m[1]), int(m[2]), int(m[3]))
+    except ValueError:
+        return m[0]
+    return f"{d:%b} {d.day}, {d.year}"
+
+
+def _problem_words(problem: dict[str, Any]) -> str:
+    code = problem.get("code")
+    key = problem.get("item")
+    text = str(problem.get("message") or "")
+    if key:
+        text = re.sub(rf"^(item )?{re.escape(str(key))}:\s*", "", text)
+    if code == "unverified_date":
+        days = list(_DAY.finditer(text))
+        when = f"the {_day(days[-1])} date" if days else "its date"
+        return f"{when} has no confirmed schedule behind it yet"
+    outside = _OUTSIDE_NOW.search(text)
+    if code == "date_outside_now" and outside:
+        return f"a dated milestone belongs only in Now; this item is in {outside[1].capitalize()}"
+    return _DAY.sub(_day, text.replace("is not YYYY-MM-DD", "is not a date"))
+
+
+def readable_check(check: dict[str, Any] | None) -> dict[str, Any] | None:
+    """qa4-docs-4: the stored check (the engine's words, which the agents read) as the
+    Roadmap tab shows it: each problem's message without the item key, and its dates month
+    first; the title the tab puts before it names the item."""
+    if not check:
+        return check
+    problems = [{**p, "message": _problem_words(p)} for p in check.get("problems") or []]
+    return {**check, "problems": problems}
+
 
 async def draft_items(db: AsyncSession, row: DraftRoadmap) -> list[RoadmapItem]:
     return list(
@@ -410,7 +449,7 @@ async def view(
         )
         if row is not None and row.error
         else None,
-        check=row.items_check if row is not None and rows else None,
+        check=readable_check(row.items_check) if row is not None and rows else None,
         previous=prev_out,
         auto=document.draft_roadmap_auto,
         view=view,  # type: ignore[arg-type]

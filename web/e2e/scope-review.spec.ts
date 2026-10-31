@@ -128,6 +128,8 @@ test("add a requirement, approve with edits, and the baseline lists it under its
   await expect(bar(page).getByTestId("staged-chip").filter({ hasText: "+ Requirement on Saved addresses" })).toBeVisible();
 
   await bar(page).getByRole("button", { name: "Approve with 2 edits" }).click();
+  // Rows still under Needs you: Approve says so first.
+  await page.getByRole("alertdialog", { name: "Approve with 2 edits" }).getByRole("button", { name: "Approve with 2 edits" }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${SCOPE_REVIEW_RUN}$`));
   await expect(page.getByTestId("checkpoint-feature_set")).toContainText("Approved");
 

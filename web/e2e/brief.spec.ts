@@ -276,7 +276,7 @@ test("exports: Brief, Full and Deck downloads", async ({ page }) => {
     ["Export brief HTML", "saved-carts-v2-brief.html"],
     ["Export deck PDF", "saved-carts-v2-deck.pdf"],
     ["Export deck PPTX", "saved-carts-v2-deck.pptx"],
-    ["Export MD", "saved-carts-v2.md"],
+    ["Export Markdown (.md)", "saved-carts-v2.md"],
   ];
   for (const [name, file] of cases) {
     // e2e-pdf-export: each download closes the menu; it opens again for the next.

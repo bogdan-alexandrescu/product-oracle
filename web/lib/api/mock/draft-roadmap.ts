@@ -154,7 +154,8 @@ function seedV2(): ItemSeed[] {
 }
 
 const V2_PROBLEMS: DraftRoadmapCheck["problems"] = [
-  { code: "unverified_date", item: "saved-addresses", message: "saved-addresses: 2026-12-15 has no verified schedule basis" },
+  // As the API's view words it (draft_items.readable_check): no item key, the date month first.
+  { code: "unverified_date", item: "saved-addresses", message: "the Dec 15, 2026 date has no confirmed schedule behind it yet" },
 ];
 
 /** The seeded rows: checkout-redesign v1 and v2, ready. */

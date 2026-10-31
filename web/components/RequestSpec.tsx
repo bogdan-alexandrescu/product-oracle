@@ -22,7 +22,9 @@ export const SPEC_STATE: Record<SpecSummary["state"], { label: string; kind: Chi
   drafting: { label: "Drafting", kind: "now" },
   in_review: { label: "In review", kind: "acc" },
   approved: { label: "Approved", kind: "pass" },
-  stale: { label: "Stale", kind: "warn" },
+  // qa4-docs-30: a spec is "stale" exactly when its latest version is potentially stale
+  // (specs.service._state): said in the same words as a tech brief's freshness.
+  stale: { label: "Potentially stale", kind: "warn" },
   failed: { label: "Run failed", kind: "crit" },
 };
 

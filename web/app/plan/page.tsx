@@ -14,7 +14,7 @@ import { useQuery } from "@/lib/use-query";
 
 import { GoalsPanel } from "../home/_goals-panel";
 import { useGoals } from "../home/_use-goals";
-import { approvedRoadmaps, EditPlanButton, PlanChanges, roadmapName, useRoadmapDocs } from "./_edit-plan";
+import { approvedRoadmaps, draftOnlyRoadmaps, EditPlanButton, PlanChanges, roadmapName, useRoadmapDocs } from "./_edit-plan";
 import { PlanInspector } from "./_inspector";
 import type { PlanItem } from "./_lib";
 import { PrdCards } from "./_prd-cards";
@@ -132,6 +132,8 @@ export default function PlanPage() {
   }, []);
   const counts = data?.counts;
   const roadmaps = approvedRoadmaps(data?.items);
+  // qa4-plan-3: a roadmap with no approved version on the Plan (only a draft's rows) says so.
+  const unapproved = draftOnlyRoadmaps(data?.items);
   // qa-plan-21: each roadmap by its title, never its slug (read again when the live version moves).
   const roadmapDocs = useRoadmapDocs(roadmaps.map((r) => `${r.slug}@${r.version}`).join(","));
   const reload = q.reload;
@@ -243,6 +245,11 @@ export default function PlanPage() {
                       {roadmapName(r.slug, roadmapDocs)} v{r.version}
                     </span>
                   ))}
+                  {unapproved.map((r) => (
+                    <span key={r.slug} data-testid="plan-unapproved-version" className="text-sm text-text2">
+                      {roadmapName(r.slug, roadmapDocs)} v{r.version}: not approved yet
+                    </span>
+                  ))}
                   {canWrite && <EditPlanButton roadmaps={roadmaps} docs={roadmapDocs} onOpened={setOpened} />}
                   <span data-testid="plan-legend" className="text-sm text-text2 max-[600px]:hidden">
                     Dashed: proposed by a draft, not approved
@@ -284,7 +291,8 @@ export default function PlanPage() {
                 by={by}
                 tags={tags}
                 prdOrder={prdOrder}
-                selected={item?.id ?? null}
+                // qa4-plan-20: a picked milestone is the one thing shown, so no row stays highlighted.
+                selected={msTrack ? null : (item?.id ?? null)}
                 onSelect={onSelect}
                 me={userId}
                 loading={q.loading}

@@ -64,9 +64,9 @@ test("qa-plan-20: a row below a feature a person moved says who moved it, not a 
   await s.getByLabel("Why?").fill("A launch partner needs it in the first release");
   await s.getByRole("button", { name: "Save", exact: true }).click();
   await expect(s).toBeHidden();
-  await expect(row.getByTestId("override-chip")).toHaveText(`Moved by ${APPROVER}`);
+  await expect(row.getByTestId("override-chip")).toHaveText("Moved by Approver");
   const why = rowOf(page, "F-2").getByTestId("rank-reason");
   await expect(why.first()).toBeVisible();
-  await expect(rowOf(page, "F-2").getByTestId("row-flags")).toContainText(`moved by ${APPROVER}`);
+  await expect(rowOf(page, "F-2").getByTestId("row-flags")).toContainText("moved by Approver");
   await expect(rowOf(page, "F-2").getByTestId("row-flags")).not.toContainText("dependency");
 });

@@ -240,7 +240,7 @@ test("a /simple link opens in Simple for an owner whose saved mode is Detailed",
   await expectSimple(page, "/simple/one-pagers/checkout-redesign");
   // S5's one-pager is the page the list opens.
   await expect(page.getByTestId("one-pager")).toBeVisible();
-  await page.getByTestId("one-pager").getByRole("link", { name: "Open the detailed view", exact: true }).first().click();
+  await page.getByTestId("one-pager").getByRole("link", { name: "Open in Detailed", exact: true }).first().click();
   await expectDetailed(page, "/documents/checkout-redesign");
 
   // The saved mode is still Detailed: the next landing is Detailed's Home.

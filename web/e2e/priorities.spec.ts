@@ -81,7 +81,7 @@ test("priorities: save a snapshot", async ({ page }) => {
   await expect(page.getByTestId("formula")).toContainText("Must have (4)");
   await page.getByLabel("Snapshot note").fill("Before planning");
   await page.getByRole("button", { name: "Save snapshot" }).click();
-  await expect(page.getByRole("status")).toContainText("Snapshot saved: MoSCoW ranking of 8 features");
+  await expect(page.getByRole("status")).toHaveText("Snapshot saved.");
   const list = page.getByTestId("snapshot-list");
   await expect(list.getByRole("listitem")).toHaveCount(1);
   await expect(list).toContainText("MoSCoW");

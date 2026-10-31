@@ -39,7 +39,10 @@ async function readsCleanly(page: Page) {
   await problem.getByRole("button", { name: "Show all" }).click();
   await expect(problem).toContainText("about 9 minutes per day). Every feature below serves sorting time:");
   await expect(article).not.toContainText("[c");
-  await expect(article.getByTestId("problem-who")).toHaveText("Who has it: Owners of small photo libraries who add a few hundred photos a week");
+  // qa4-simple-prd-12 (#999): the problem's own words already name who has it, so no "Who has it"
+  // line says it again.
+  await expect(problem).toContainText("Owners of small photo libraries who add a few hundred photos a week");
+  await expect(article.getByTestId("problem-who")).toHaveCount(0);
   const outcomes = article.getByRole("region", { name: "Outcomes and how we measure them" });
   await expect(outcomes.locator('[data-line="outcomes-1"]').getByTestId("outcome-measure")).toHaveText(
     "counted as: photos given an album within 24 hours of upload, per library per week · from Upload log export",
@@ -66,9 +69,10 @@ for (const phone of [false, true]) {
       await open(page);
       await readsCleanly(page);
       const look = page.getByRole("region", { name: "Needs a look" });
+      // qa4-simple-prd-11 (#999): each names the page's own section, not the PRD's heading.
       await expect(look.getByRole("listitem")).toHaveText([
-        "F-40 has no name in the PRD. In: Top risks",
-        "F-50 has no name in the PRD. In: Top risks",
+        "F-40 has no name in the PRD. In: Risks and open decisions",
+        "F-50 has no name in the PRD. In: Risks and open decisions",
       ]);
     });
 

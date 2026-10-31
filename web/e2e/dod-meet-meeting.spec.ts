@@ -27,9 +27,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * meeting's approval; no_claim = the reviewers' Inbox rows.
  */
 
-const allDecisions = (page: Page) => page.getByRole("region", { name: "All decisions" });
+const allDecisions = (page: Page) => page.getByRole("region", { name: "Decisions in this meeting" });
 const steps = (page: Page) => page.getByRole("navigation", { name: "Steps" });
-const WHO_WHEN = /^\S.* · [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}\s?[AP]M( [A-Z]{2,5})?$/;
+const WHO_WHEN = /^\S.* · (?:[A-Z][a-z]{2} )?[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2}\s?[AP]M( [A-Z]{2,5})?$/;
 
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom of the screen). */
 async function tap(l: Locator) {
@@ -61,7 +61,8 @@ for (const phone of [false, true]) {
       await startReview(page);
       await editLine(page, "A setup checklist that shows", "A setup checklist with the next two steps");
       await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
-      await tap(page.getByRole("button", { name: /^Approve one-pager edits/ }));
+      await tap(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }));
+      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }));
       await expect(allDecisions(page)).toContainText("Approved Guided setup");
 
       await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));
@@ -116,7 +117,8 @@ test.describe("the PRD's decider", () => {
       await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
       await startReview(page);
       await editLine(page, "A setup checklist that shows", "A setup checklist with the next two steps");
-      await tap(page.getByRole("button", { name: /^Approve one-pager edits/ }));
+      await tap(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }));
+      await tap(page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }));
       await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toBeVisible();
       await expect(allDecisions(page)).toContainText("Approved Guided setup");
       // No reviewer is required here, so the approved working draft is the one-pager's new version.

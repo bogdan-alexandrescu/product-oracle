@@ -52,11 +52,12 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
       await expect(sheet.getByTestId("start-not-allowed")).toHaveCount(0);
     });
 
-    test("a viewer is told the decider or an owner starts the review (qa-10)", async ({ page }) => {
+    // qa4-simple-prd-26: a viewer takes no part in a review, so is offered no Start review at all.
+    test("a viewer is offered no Start review (qa-10, qa4-simple-prd-26)", async ({ page }) => {
       await seed(page, MOCK_SCENARIO_KEY, "simple-deciders");
       await open(page, "viewer@example.com");
-      await expect(page.getByRole("button", { name: "Start review" })).toBeDisabled();
-      await expect(page.getByText("Ask Dana Decider or an owner to start a review")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+      await expect(page.getByText("Ask Dana Decider or an owner to start a review")).toHaveCount(0);
     });
   });
 }

@@ -87,10 +87,10 @@ test.describe("desktop", () => {
     const box = chat(page);
     await say(page, "push Team invite nudges to next quarter and make it better");
     const reply = box.locator('[data-testid="chat-message"][data-kind="cards"]').last();
-    await expect(reply).toContainText("I understood one change:");
+    await expect(reply).toContainText("I understood one change.");
     await expect(reply).toContainText("I did not understand: “make it better”.");
     await say(page, "push Team invite nudges to next quarter\nnote that legal signs off");
-    await expect(box.locator('[data-testid="chat-message"][data-kind="cards"]').last()).toContainText("I understood two changes:");
+    await expect(box.locator('[data-testid="chat-message"][data-kind="cards"]').last()).toContainText("I understood two changes.");
   });
 });
 
@@ -135,7 +135,7 @@ test.describe("one column", () => {
     expect(rec.y).toBeLessThan(decided.y);
     // Read in the same order: the headings follow the columns.
     const headings = await page.getByTestId("questions-board").locator("h2").allTextContents();
-    expect(headings.map((h) => h.trim())).toEqual(["Needs input", "Recommended", "Decided questions"]);
+    expect(headings.map((h) => h.trim())).toEqual(["Missing a decider or a recommendation", "Recommended", "Decided questions"]);
   });
 });
 

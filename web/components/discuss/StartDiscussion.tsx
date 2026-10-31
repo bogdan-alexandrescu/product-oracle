@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { PersonPicker, type Person } from "@/components/PersonPicker";
 import { Button, Chip, SegmentedControl } from "@/components/ds";
@@ -44,6 +44,10 @@ export function StartDiscussion({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // qa4-docs-33: the form opens with the title focused, so Escape (Cancel) works at once.
+  const titleRef = useRef<HTMLInputElement>(null);
+  useEffect(() => titleRef.current?.focus({ preventScroll: true }), []);
+
   // G2: Oracle answers the first message while it is just the starter (#402).
   const solo = visibility === "open" || people.length === 0;
 
@@ -79,12 +83,20 @@ export function StartDiscussion({
         e.preventDefault();
         void start();
       }}
+      onKeyDown={(e) => {
+        // qa4-docs-33: Escape cancels, as it closes every dialog and menu (a picker's own
+        // Escape, which takes the key, goes first).
+        if (e.key !== "Escape" || !onCancel || e.defaultPrevented || saving) return;
+        e.preventDefault();
+        onCancel();
+      }}
     >
       <h3 className="font-display text-[15px] font-bold tracking-heading">Start a discussion</h3>
       <label className="flex flex-col gap-1 text-sm font-semibold text-text2" htmlFor={`${id}-title`}>
         Title
       </label>
       <input
+        ref={titleRef}
         id={`${id}-title`}
         value={title}
         maxLength={200}

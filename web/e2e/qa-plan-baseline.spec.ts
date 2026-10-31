@@ -85,10 +85,10 @@ test("phone: Make measurable and Add subgoal do not overlap", async ({ page }) =
 // protects=qa-plan-43: Progress says what its number is; fails_when=it reads "50% own";
 // no_claim=the roll-up maths (subgoals.spec, pytest).
 // qa-plan-2: and what it is measured from (its start, 31%), so it squares with Plan's 38% of 45%.
-test("goals table: progress reads '50% of the way from 31% to ≥ 45%'", async ({ page }) => {
+test("goals table: progress reads '7 pts to go (38% now)'", async ({ page }) => {
   await openBaseline(page);
   const progress = page.getByTestId("goal-g.activation").locator('[data-attr="progress"]');
-  await expect(progress).toHaveText("50% of the way from 31% to ≥ 45%");
+  await expect(progress).toHaveText("7 pts to go (38% now)");
   await expect(progress).not.toContainText("own");
 });
 
@@ -96,16 +96,16 @@ test("goals table: progress reads '50% of the way from 31% to ≥ 45%'", async (
 // Back changes nothing; fails_when=the click writes at once; no_claim=the parse rules.
 test("Fill goals from text asks first, naming the goal, and Back changes nothing", async ({ page }) => {
   await openBaseline(page);
-  await page.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
-  const ask = page.getByRole("alertdialog", { name: "Read targets from 1 goal's text" });
+  await page.getByRole("button", { name: "Fill targets from the goal's wording (1)" }).click();
+  const ask = page.getByRole("alertdialog", { name: "Fill targets from the goal's wording (1)" });
   await expect(ask).toContainText("Cut early churn");
   await ask.getByRole("button", { name: "Back" }).click();
   await expect(ask).toHaveCount(0);
   const churn = page.getByTestId("goal-g.early-churn");
   await expect(churn.locator('[data-attr="target"]')).toHaveAttribute("data-text", "true");
 
-  await page.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
-  await ask.getByRole("button", { name: "Read targets from 1 goal's text" }).click();
+  await page.getByRole("button", { name: "Fill targets from the goal's wording (1)" }).click();
+  await ask.getByRole("button", { name: "Fill targets from the goal's wording (1)" }).click();
   await expect(page.getByRole("status")).toContainText("1 goal filled.");
   await expect(churn.locator('[data-attr="target"]')).toHaveText("< 8%");
 });

@@ -90,7 +90,8 @@ test("settings: its own strip routes to each section, Settings stays active", as
     await strip.getByTestId(id).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
-    await expect(page).toHaveTitle(`${heading} · Product Oracle`);
+    // qa4-shell-13: the browser tab names Settings too.
+    await expect(page).toHaveTitle(`${heading} · Settings · Product Oracle`);
     await expect(strip.getByTestId(id)).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings")).toHaveAttribute(
       "aria-current",

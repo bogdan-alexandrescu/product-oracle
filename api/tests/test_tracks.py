@@ -261,7 +261,7 @@ async def test_read_only_alignment_and_drift(client, owner, runtime):  # noqa: F
     at_risk = {i["item_key"]: {r["kind"] for r in i["reasons"]} for i in overview["at_risk"]}
     assert at_risk == {"payment-step": {"slipping"}}
     assert overview["counts"]["slipping"] == 1
-    assert overview["headline"].startswith("Off track: 1 of 2 items need attention")
+    assert overview["headline"].startswith("Off track: 1 of 2 items needs attention")
 
     # Updating a record (latest state per issue): done clears the slip.
     resp = await client.post(

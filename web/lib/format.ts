@@ -147,14 +147,18 @@ export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | n
 export const isWebLink = (url: string | null | undefined): url is string => !!url && /^https?:/i.test(url.replace(/[\u0000-\u0020]/g, ""));
 
 /**
- * What a citation's writer said of it: its confidence as "0.75", else (no score) its note,
- * e.g. "owner decision, locked"; null when it says neither.
+ * What a citation's writer said of it: its confidence in words ("High confidence"; qa4-docs-19:
+ * never the raw score), else (no score) its note, e.g. "owner decision, locked"; null when it
+ * says neither, or when the low-confidence chip beside it already says so.
  */
-export const citationConfidence = (c: Pick<CitationOut, "confidence" | "confidence_note">): string | null =>
-  c.confidence != null ? c.confidence.toFixed(2) : c.confidence_note?.trim() || null;
+export const citationConfidence = (c: Pick<CitationOut, "confidence" | "confidence_note" | "low_confidence">): string | null => {
+  if (c.confidence == null) return c.confidence_note?.trim() || null;
+  if (c.low_confidence) return null;
+  return c.confidence >= 0.7 ? "High confidence" : c.confidence >= 0.4 ? "Medium confidence" : "Low confidence";
+};
 
-/** The source with the citation's confidence beside it: "GitHub · 0.75". */
-export const citationSourceLabel = (c: Pick<CitationOut, "source" | "confidence" | "confidence_note">): string => {
+/** The source with the citation's confidence beside it: "GitHub · High confidence". */
+export const citationSourceLabel = (c: Pick<CitationOut, "source" | "confidence" | "confidence_note" | "low_confidence">): string => {
   const confidence = citationConfidence(c);
   return confidence ? `${SOURCE_LABEL[c.source]} · ${confidence}` : SOURCE_LABEL[c.source];
 };

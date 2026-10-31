@@ -53,7 +53,7 @@ for (const [name, viewport] of [
     await page.setViewportSize(viewport);
     await login(page);
     await openRequests(page);
-    await expect(page.getByTestId("request-list-head-choose")).toHaveText("Start a PRD");
+    await expect(page.getByTestId("request-list-head-choose")).toHaveText("PRD");
     await expect(page.getByTestId("request-list-head-choose")).toBeVisible();
     // A greyed-out box says why on the row, not only in a hover tip.
     const fresh = row(page, "Dark mode");
@@ -75,20 +75,18 @@ for (const [name, viewport] of [
   });
 }
 
-test("qa-work-39: 'Request' heads the titles and State sits over the state chips", async ({ page }) => {
+test("qa-work-39, qa4-work-15: State sits over the state chips, on one line of headers", async ({ page }) => {
   await login(page);
   await openRequests(page);
   const head = page.getByTestId("request-list-head");
-  await expect(page.getByTestId("request-list-head-title")).toHaveText("Request");
-  const titleHead = (await page.getByTestId("request-list-head-title").boundingBox())!;
+  // qa4-work-15: no "Request" stacked over the column names.
+  await expect(head.getByText("Request", { exact: true })).toHaveCount(0);
   const stateHead = (await head.getByText("State", { exact: true }).boundingBox())!;
+  const ageHead = (await head.getByText("Age", { exact: true }).boundingBox())!;
   const first = rows(page).first();
-  const title = (await first.getByRole("button").first().boundingBox())!;
   const chip = (await first.locator("[data-field=state]").boundingBox())!;
-  expect(Math.abs(titleHead.x - title.x)).toBeLessThan(2);
   expect(Math.abs(stateHead.x - chip.x)).toBeLessThan(2);
-  // "Request" is on its own line, above the columns' names.
-  expect(titleHead.y + titleHead.height).toBeLessThanOrEqual(stateHead.y + 1);
+  expect(Math.abs(stateHead.y - ageHead.y)).toBeLessThan(2);
 });
 
 test("qa-onboarding-26: Auto-sort reads the same for every role", async ({ page }) => {

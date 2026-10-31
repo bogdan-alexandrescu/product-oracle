@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Chip, Icon, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
-import { DOCS_ONLY, FRESHNESS, sizeText } from "@/components/tech-brief";
+import { DOCS_ONLY, FRESHNESS, approachParts, readerText, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
@@ -12,8 +12,16 @@ import { useQuery } from "@/lib/use-query";
 
 type TechBrief = Schemas["TechBriefOut"];
 
-const KIND: Record<string, string> = { module: "Module", api: "API", data_model: "Data model", flag: "Flag", job: "Job" };
-const CHANGE: Record<string, string> = { new: "New", change: "Change", remove: "Remove" };
+/** qa4-docs-share-46: a touch's kind and change read as one phrase ("Changes an existing module"). */
+const KIND: Record<string, string> = { module: "module", api: "API", data_model: "data model", flag: "flag", job: "job" };
+const ARTICLE: Record<string, string> = { module: "a", api: "an", data_model: "a", flag: "a", job: "a" };
+function touchText(kind: string, change: string): string {
+  const what = KIND[kind] ?? sentence(kind).toLowerCase();
+  if (change === "new") return `Adds a new ${what}`;
+  if (change === "change") return `Changes an existing ${what}`;
+  if (change === "remove") return `Removes ${ARTICLE[kind] ?? "a"} ${what}`;
+  return `${sentence(change)} · ${what}`;
+}
 const LEVEL: Record<string, ChipKind> = { low: "na", medium: "warn", high: "crit" };
 
 const sentence = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
@@ -43,7 +51,7 @@ function CodeMap({ b }: { b: TechBrief }) {
         <p className="font-semibold">No code map: assumptions</p>
         <ul className="mt-1 list-disc pl-5">
           {b.assumptions.map((a) => (
-            <li key={a}>{a}</li>
+            <li key={a}>{readerText(a, b.questions)}</li>
           ))}
         </ul>
       </Block>
@@ -73,7 +81,8 @@ function Touches({ b }: { b: TechBrief }) {
   return (
     <Block title="What it touches" testId="brief-touches">
       {b.touches.length === 0 ? (
-        <p className="text-text2">Nothing listed</p>
+        // Production minors 20: a brief written on assumptions has no code map to list from.
+        <p className="text-text2">{b.code_map.used ? "Nothing listed" : "Not mapped: see assumptions"}</p>
       ) : (
         <>
           {/* qa-docs-85: a table from 601 px up; on a phone each touch is a short stack of
@@ -83,8 +92,7 @@ function Touches({ b }: { b: TechBrief }) {
               <thead className="text-[13px] text-text2">
                 <tr>
                   <th className="py-1 pr-3 font-semibold">Area</th>
-                  <th className="py-1 pr-3 font-semibold">Kind</th>
-                  <th className="py-1 pr-3 font-semibold">Change</th>
+                  <th className="py-1 pr-3 font-semibold">What changes</th>
                   <th className="py-1 font-semibold">In the code map</th>
                 </tr>
               </thead>
@@ -92,8 +100,7 @@ function Touches({ b }: { b: TechBrief }) {
                 {b.touches.map((t, i) => (
                   <tr key={`${t.area}-${i}`} className="border-t border-line align-top">
                     <td className="py-1.5 pr-3 break-words">{t.area}</td>
-                    <td className="py-1.5 pr-3">{KIND[t.kind] ?? t.kind}</td>
-                    <td className="py-1.5 pr-3">{CHANGE[t.change] ?? t.change}</td>
+                    <td className="py-1.5 pr-3">{touchText(t.kind, t.change)}</td>
                     <td className="py-1.5 break-words">{t.ref ? refName(t.ref) : <span className="text-text2">Not mapped</span>}</td>
                   </tr>
                 ))}
@@ -105,10 +112,8 @@ function Touches({ b }: { b: TechBrief }) {
               <li key={`${t.area}-${i}`} className="border-t border-line py-2 first:border-t-0 first:pt-0">
                 <p className="font-semibold break-words">{t.area}</p>
                 <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[14px]">
-                  <dt className="whitespace-nowrap text-text2">Kind</dt>
-                  <dd>{KIND[t.kind] ?? t.kind}</dd>
-                  <dt className="whitespace-nowrap text-text2">Change</dt>
-                  <dd>{CHANGE[t.change] ?? t.change}</dd>
+                  <dt className="whitespace-nowrap text-text2">What changes</dt>
+                  <dd>{touchText(t.kind, t.change)}</dd>
                   <dt className="whitespace-nowrap text-text2">In the code map</dt>
                   <dd className="break-words">{t.ref ? refName(t.ref) : <span className="text-text2">Not mapped</span>}</dd>
                 </dl>
@@ -134,15 +139,19 @@ function Questions({ b }: { b: TechBrief }) {
         <p className="text-text2">No questions</p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {b.questions.map((q) => (
-            <li key={q.id} data-testid={`brief-question-${q.id}`}>
-              <p className="font-semibold">
-                {q.question} {q.blocking && <Chip kind="crit">Blocking</Chip>}
-              </p>
-              {q.why && <p className="text-text2">Why: {q.why}</p>}
-              <p>{answers.get(q.id) ? <>Answer: {answers.get(q.id)}</> : <span className="text-text2">Not answered at the Engineering check</span>}</p>
-            </li>
-          ))}
+          {b.questions.map((q) => {
+            const answer = answers.get(q.id);
+            return (
+              <li key={q.id} data-testid={`brief-question-${q.id}`}>
+                <p className="font-semibold">
+                  {/* qa4-docs-53: an answered question no longer blocks. */}
+                  {q.question} {q.blocking && (answer ? <Chip kind="na">Was blocking · answered</Chip> : <Chip kind="crit">Blocking</Chip>)}
+                </p>
+                {q.why && <p className="text-text2">Why: {readerText(q.why, b.questions)}</p>}
+                <p>{answer ? <>Answer: {readerText(answer, b.questions)}</> : <span className="text-text2">Not answered yet</span>}</p>
+              </li>
+            );
+          })}
         </ul>
       )}
     </Block>
@@ -158,7 +167,7 @@ function Verdict({ b }: { b: TechBrief }) {
       ) : (
         <>
           <p className="font-semibold">{v.value ? sentence(v.value) : "Approved at the Engineering check"}</p>
-          {v.note && <p>{v.note}</p>}
+          {v.note && <p>{readerText(v.note, b.questions)}</p>}
           {v.at && <p className="text-[13px] text-text2">{formatDateTime(v.at)}</p>}
         </>
       )}
@@ -177,6 +186,12 @@ export function BriefDetail({ id }: { id: string }) {
   );
   const featureTitle = (key: string) => siblingsQ.data?.find((x) => x.feature.key === key)?.feature.title ?? refName(key);
   const prdTitle = prdQ.data?.title ?? (prdQ.error ? "The PRD" : "…");
+  // Production minors 18: the link opens the PRD as it is now; a brief written for an older
+  // version says so, never naming that version as the PRD's.
+  const latest = prdQ.data?.latest_version ?? null;
+  const written = b?.prd.version ?? null;
+  const prdVersion = written == null ? "" : latest != null && latest !== written ? ` v${latest} · written for v${written}` : ` v${written}`;
+  const approach = b ? approachParts(readerText(b.approach, b.questions)) : null;
   const fresh = b ? FRESHNESS[b.freshness] : null;
   return (
     <Page>
@@ -190,7 +205,7 @@ export function BriefDetail({ id }: { id: string }) {
               <Link href={`/documents/${b.prd.slug}`} className="inline-flex items-center gap-1 hover:text-text hover:underline">
                 <Icon name="back" size={16} />
                 {prdTitle}
-                {b.prd.version != null ? ` v${b.prd.version}` : ""}
+                {prdVersion}
               </Link>
             }
             status={
@@ -212,7 +227,17 @@ export function BriefDetail({ id }: { id: string }) {
           <div className="grid grid-cols-[minmax(0,1fr)_340px] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3">
             <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
               <Block title="Approach" testId="brief-approach">
-                <p className="break-words">{b.approach}</p>
+                {approach?.lead && <p className="break-words">{approach.lead}</p>}
+                {/* Production minors 19: the approach's steps as a list, not one paragraph. */}
+                {approach && approach.items.length > 0 && (
+                  <ul className="mt-1 list-disc pl-5" data-testid="brief-approach-steps">
+                    {approach.items.map((item, i) => (
+                      <li key={i} className="break-words">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Block>
               <Touches b={b} />
               <Block title="Risks" testId="brief-risks">
@@ -222,8 +247,8 @@ export function BriefDetail({ id }: { id: string }) {
                   <ul className="flex flex-col gap-2">
                     {b.risks.map((r) => (
                       <li key={r.risk}>
-                        <span className="font-semibold">{r.risk}</span> <Chip kind={LEVEL[r.level] ?? "na"}>{sentence(r.level)}</Chip>
-                        {r.mitigation && <p className="text-text2">Mitigation: {r.mitigation}</p>}
+                        <span className="font-semibold">{readerText(r.risk, b.questions)}</span> <Chip kind={LEVEL[r.level] ?? "na"}>{sentence(r.level)}</Chip>
+                        {r.mitigation && <p className="text-text2">Mitigation: {readerText(r.mitigation, b.questions)}</p>}
                       </li>
                     ))}
                   </ul>
@@ -235,7 +260,7 @@ export function BriefDetail({ id }: { id: string }) {
               <Verdict b={b} />
               <Block title="Size" testId="brief-size">
                 <p className="font-semibold">{sizeText(b.size)}</p>
-                {b.size_why && <p className="text-text2">{b.size_why}</p>}
+                {b.size_why && <p className="text-text2">{readerText(b.size_why, b.questions)}</p>}
                 {b.depends_on.length > 0 && <p className="mt-1">Depends on {b.depends_on.map(featureTitle).join(", ")}</p>}
               </Block>
               <CodeMap b={b} />

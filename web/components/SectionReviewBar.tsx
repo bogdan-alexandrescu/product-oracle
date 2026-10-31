@@ -19,6 +19,9 @@ const ACTIONS: { verdict: Verdict; label: string; icon: IconName }[] = [
  */
 const NOTE_REQUIRED: Record<Verdict, boolean> = { approved: false, changes_requested: true, rejected: true };
 
+/** qa4-docs-32: the send button under the note, not a second "Request changes" under the first. */
+const SUBMIT_LABEL: Record<Verdict, string> = { approved: "Approve", changes_requested: "Send request", rejected: "Reject" };
+
 /** Per-section verdict: approve, or request changes / reject with a note saying what should change. */
 export function SectionReviewBar({
   heading,
@@ -84,7 +87,9 @@ export function SectionReviewBar({
           “{verdict.note}”
         </span>
       )}
-      <span className="tnum flex-none text-[13px] text-text2 max-[600px]:hidden">{formatDateTime(verdict.created_at)}</span>
+      <span className="tnum flex-none text-[13px] whitespace-nowrap text-text2 max-[600px]:hidden" data-testid="verdict-date">
+        {formatDateTime(verdict.created_at)}
+      </span>
     </>
   ) : (
     // qa-docs-48: the text colour, not the muted status grey, so it reads at 4.5:1 or better on
@@ -112,19 +117,23 @@ export function SectionReviewBar({
   return (
     <div className="mt-4 rounded-button border border-line bg-surface2" data-testid="review-bar">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2" data-testid="verdict-state">
+        {/* The state wraps within its own room (14rem at least, else the buttons go to the next
+            line): never under the buttons. */}
+        <div className="flex min-w-0 flex-[1_1_14rem] flex-wrap items-center gap-x-2 gap-y-1" data-testid="verdict-state">
           {pending ? (
             <>
               <Chip kind={VERDICT_KIND[pending]} data-testid="verdict-pending">
                 {VERDICT_LABEL[pending]}
               </Chip>
-              <span className="text-[13px] text-text2">Not saved yet</span>
+              <span className="text-[13px] whitespace-nowrap text-text2">Not saved yet</span>
             </>
           ) : (
             state
           )}
         </div>
-        {!readOnly && (
+        {/* One Approve per bar: while a verdict is being written its form's button says the
+            action (and Cancel goes back to the three), so the three are not shown twice over. */}
+        {!readOnly && !draft && (
           // qa-docs-12: a phone keeps one row of three with the full labels (no "Changes" for
           // Request changes): the icons give way instead.
           <div
@@ -175,7 +184,7 @@ export function SectionReviewBar({
               disabled={saving || needsNote}
               data-testid="verdict-submit"
             >
-              {saving ? "Saving…" : ACTIONS.find((a) => a.verdict === draft)!.label}
+              {saving ? "Saving…" : SUBMIT_LABEL[draft]}
             </Button>
             <Button variant="ghost" onClick={() => setDraft(null)}>
               Cancel

@@ -100,10 +100,16 @@ export default function NewThemePage() {
                   setKeyError(null);
                 }}
                 error={keyError}
-                placeholder="company-brand"
+                placeholder="e.g. company-brand"
               />
               <Field label="Name">
-                <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Company brand" required />
+                <input
+                  className={`${INPUT} placeholder:italic placeholder:text-text2/70`}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Company brand"
+                  required
+                />
               </Field>
               <Field label="For">
                 <select className={`${SELECT} h-9 w-full`} value={kind} onChange={(e) => setKind(e.target.value as ThemeKind)}>

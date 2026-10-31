@@ -174,7 +174,7 @@ test("qa-settings-5 / qa-settings-6 / qa-settings-7: one name rule, one read-onl
   await expect(roles.locator('[data-testid^="role-"]:not([data-testid="role-can"])')).toHaveCount(4);
   await expect(roles).not.toContainText("Engineering lead");
   await expect(page.getByTestId("roles-lead")).toContainText("Engineering lead");
-  await expect(page.getByTestId("roles-lead").getByTestId("engineering-lead-count")).toHaveText("0");
+  await expect(page.getByTestId("roles-lead").getByTestId("engineering-lead-none")).toHaveText("Nobody named yet. Pick who carries engineering checks.");
 
 });
 

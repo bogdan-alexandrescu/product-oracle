@@ -193,7 +193,8 @@ export function DataTable<T>({
             [0, 1, 2].map((i) => (
               <tr key={`l${i}`} aria-hidden className="h-11 border-t border-line max-[600px]:flex max-[600px]:items-center">
                 <td colSpan={visibleCols} className="px-4 max-[600px]:block max-[600px]:w-full max-[600px]:px-3">
-                  <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
+                  {/* qa4-shell-19: line-strong (3:1 on the card), so a loading list never reads as an empty, finished one. */}
+                  <span className="block h-3 w-2/3 animate-pulse rounded bg-line-strong" />
                 </td>
               </tr>
             ))}

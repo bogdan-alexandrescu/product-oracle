@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
+import { ALERTS_APPROVED_SCENARIO } from "../lib/api/mock/roadmap";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 
@@ -87,6 +88,8 @@ test("a track's title, owner and status are edited in place", async ({
 test("milestones are added and edited in the inspector, with dated titles", async ({
   page,
 }) => {
+  // A milestone picks from the approved plan's items: usage-alerts-roadmap v1 approved.
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, ALERTS_APPROVED_SCENARIO] as const);
   await openPlan(page);
   const t = track(page);
   const m1 = t

@@ -288,9 +288,12 @@ export function FlowPanel({
   backLabel,
   inlineComments = false,
   showHint,
+  sectionNames,
 }: {
   subject: FlowSubject;
   documentId?: string;
+  /** The page's own names for the PRD's sections (a one-pager's "What we will build"), for the notes. */
+  sectionNames?: Record<string, string>;
   onClose?: () => void;
   onDrawn?: (flow: Flow) => void;
   /** The owner's pick A: start as the row (the live thumbnail and its states). */
@@ -390,17 +393,19 @@ export function FlowPanel({
     if (commenting) setCommenting(false);
     else setFull(false);
   });
-  // qa-simple-prd-p3-22: full screen has one scroller, its own: the page behind it stops
-  // scrolling, so no second scrollbar stands beside the viewer's at the right edge.
+  // qa-simple-prd-p3-22, qa4-simple-prd-30: full screen and the flow's and storyboard's sheets
+  // each have one scroller, their own: the page behind stops scrolling, so no second scrollbar
+  // stands beside the sheet's at the right edge.
+  const sheetOpen = full || (overlay && view !== null);
   useEffect(() => {
-    if (!full) return;
+    if (!sheetOpen) return;
     const html = document.documentElement;
     const was = html.style.overflow;
     html.style.overflow = "hidden";
     return () => {
       html.style.overflow = was;
     };
-  }, [full]);
+  }, [sheetOpen]);
 
   async function post(run: () => Promise<{ data?: Visual; error?: unknown; response: Response }>, after?: () => void) {
     setBusy(true);
@@ -453,6 +458,9 @@ export function FlowPanel({
   const v = q.data;
   const flow = old ?? v.flow;
   const open = v.comments.filter((c) => c.addressed_in === null);
+  // qa4-simple-prd-33: a reader who may not comment (a viewer) is not offered "Comment": the same
+  // panel reads as the flow's comments, notes and versions.
+  const commentWord = v.can_comment ? "Comment" : "See comments";
   const title = (f: Flow, what: string) => (
     <>
       {code ? <><Code code={code} className="mr-0.5 align-[2px]" />{" "}</> : null}
@@ -517,13 +525,18 @@ export function FlowPanel({
             <li key={a.n}>
               <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-bold text-surface">{a.n}</span>
               {a.note}
-              {(a.section_key || a.requirement) && (
-                <span className="text-text2">
-                  {" "}
-                  · {a.section_key ? `From the PRD: ${capSection(a.section_key)} section` : ""}
-                  {a.section_key && a.requirement ? ", " : ""}
-                  {a.requirement ? <span className="whitespace-nowrap">{`Requirement ${a.requirement}`}</span> : ""}
-                </span>
+              {/* qa4-simple-prd-32: where the page names its sections, the section in those words and no requirement code. */}
+              {a.section_key && sectionNames?.[a.section_key] ? (
+                <span className="text-text2"> · From “{sectionNames[a.section_key]}”</span>
+              ) : (
+                (a.section_key || a.requirement) && (
+                  <span className="text-text2">
+                    {" "}
+                    · {a.section_key ? `From the PRD: ${capSection(a.section_key)} section` : ""}
+                    {a.section_key && a.requirement ? ", " : ""}
+                    {a.requirement ? <span className="whitespace-nowrap">{`Requirement ${a.requirement}`}</span> : ""}
+                  </span>
+                )
               )}
             </li>
           ))}
@@ -561,8 +574,9 @@ export function FlowPanel({
                 ))}
               </select>
             )}
+            {/* qa4-simple-prd-31: named apart from the header's Comment toggle. */}
             <button type="submit" className={BTN} disabled={busy || !text.trim()}>
-              Comment
+              Post comment
             </button>
           </div>
         </form>
@@ -603,7 +617,7 @@ export function FlowPanel({
   // view, after the screen on a phone; elsewhere (qa-simple-prd-p3-22) it opens them full screen.
   const commentButton = inlineComments ? (
     <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-      Comment
+      {commentWord}
     </button>
   ) : (
     <button
@@ -614,7 +628,7 @@ export function FlowPanel({
         setFull(true);
       }}
     >
-      Comment
+      {commentWord}
     </button>
   );
   const exitFull = () => {
@@ -627,8 +641,8 @@ export function FlowPanel({
     <div ref={openedRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · flow`} data-testid="flow-detail" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
       <div className="flex flex-none items-center gap-2.5 border-b border-line px-3 py-2.5">
         <button type="button" data-first className={BTN_GHOST} onClick={() => setView(null)}>
-          <Icon d={ICONS.back} size={18} />
-          Back
+          {/* qa4-simple-prd-30: the flow's sheet closes with "Close", as the storyboard's does. */}
+          Close
         </button>
         <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · flow</h2>
         <button type="button" className={BTN} onClick={() => setFull(true)}>
@@ -708,7 +722,7 @@ export function FlowPanel({
           <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
             <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · flow</h2>
             <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-              Comment
+              {commentWord}
             </button>
             <button type="button" className={BTN_SOLID} data-first aria-label="Exit full screen" onClick={exitFull}>
               Exit
@@ -737,7 +751,7 @@ export function FlowPanel({
               {older}
             </span>
             <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-              Comment
+              {commentWord}
             </button>
             <button type="button" className={BTN_SOLID} data-first onClick={exitFull}>
               Exit full screen
@@ -1014,8 +1028,10 @@ function Storyboard({
   }
   const onScreenCard = at >= n;
   const s = steps[Math.min(at, n - 1)];
+  // qa4-simple-prd-30: a sheet from the bottom, as tall as the card and its buttons, not the
+  // whole screen with blank height under them.
   return (
-    <div ref={refEl} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · storyboard`} data-testid="flow-storyboard" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
+    <div ref={refEl} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · storyboard`} data-testid="flow-storyboard" className="fixed inset-x-0 bottom-0 z-[60] flex max-h-dvh flex-col rounded-t-[14px] border-t border-line bg-surface shadow-tip text-[15px] leading-[22px] text-text outline-none">
       <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
         <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · storyboard</h2>
         <button type="button" data-first className={BTN} onClick={onClose}>

@@ -115,7 +115,7 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
   // An unshared file and a folder Oracle lost access to are reported on their own (the
   // folder's docs are hidden until it can be read again), and docs owned outside the
   // company or in a shared drive outside it are listed as skipped, per reason, with their
-  // count and names; the source is still active.
+  // count and names; the source needs attention (qa4-settings-6), not Active.
   const notes = row.getByRole("list", { name: "Sync notes for Product docs" });
   await expect(notes.getByRole("listitem")).toHaveText([
     /Lost access\s*to\s*Vendor research\s*— its docs are hidden until Oracle can read it again/,
@@ -123,7 +123,7 @@ test("sources › Google Docs: editing adds to the list from the picker; removin
     /Skipped\s*owned outside example.com\s*3 docs\s*Agency SOW 2026, Partner pricing sheet, Contractor onboarding notes/,
     /Skipped\s*in a shared drive outside the company\s*1 doc\s*Joint launch plan/,
   ]);
-  await expect(row).toContainText("Active");
+  await expect(row.getByTestId("source-status")).toHaveText("Needs attention");
 
   await row.getByRole("button", { name: "More actions for Product docs" }).click();
   await row.getByRole("menuitem", { name: "Edit files and folders" }).click();

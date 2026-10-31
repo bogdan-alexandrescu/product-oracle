@@ -160,7 +160,10 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
     </>
   );
   // qa-plan-61: one sentence, "Impact: Guided setup", not the title and a suffix run together.
-  const title = subject ? `Impact: ${subject.title}` : "Impact";
+  // qa4-plan-45: a back link that names the version ("‹ Impact of Checkout redesign PRD v2")
+  // leaves it out of the title: "Impact: Success metrics section edited".
+  const named = !!subject?.where && !!backTo?.label.endsWith(subject.where);
+  const title = subject ? `Impact: ${named ? subject.short : subject.title}` : "Impact";
 
   return (
     <NamesContext.Provider value={names}>
@@ -168,9 +171,10 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       <PageHeader
         title={title}
         back={back}
-        // qa-plan-11: Baseline's and a change's back link (‹, like the Plan crumb) sit on the
-        // title row, so the title does not move down; a version's crumb keeps its own line.
-        backInline={source.kind !== "version"}
+        // qa-plan-11: Baseline's back link (‹, like the Plan crumb) sits on the title row, so the
+        // title does not move down; a change's longer crumb and a version's keep their own line
+        // above the title (qa4-plan-45).
+        backInline={source.kind === "entity"}
         // qa-plan-62: on a phone the top bar cuts a long title; the page's H1 says it in full.
         phoneTitle
         status={status}
@@ -269,9 +273,13 @@ function intro(report: Report, source: ImpactSource, subject: SubjectWords): str
   if (!report.preview) return "Recorded: this change marked these outputs Potentially stale.";
   if (source.kind === "entity") return `What if ${report.subject.title ?? subject.title} changed? Preview only; nothing is marked stale.`;
   const n = source.kind === "version" ? source.n : null;
-  return `Preview: nothing has been marked stale. The lines show what each output was built from in earlier versions${
-    n ? `; v${n} changed the sections in the middle column` : ""
-  }.`;
+  // qa4-docs-9: the preview marks nothing, but an output an earlier change already marked
+  // stale shows as such here; say so rather than "nothing has been marked stale".
+  const already = report.affected.filter((o) => o.freshness === "potentially_stale").length;
+  const lead = already
+    ? `Preview: ${n ? `v${n}` : "this change"} marks nothing stale. ${already === 1 ? "1 output was" : `${already} outputs were`} already marked stale by an earlier change.`
+    : "Preview: nothing has been marked stale.";
+  return `${lead} The lines show what each output was built from in earlier versions${n ? `; v${n} changed the sections in the middle column` : ""}.`;
 }
 
 function LoadingBoard() {
@@ -334,6 +342,12 @@ function Lineage({
         if (source.kind === "change" && v && up.document_slug === v.slug && u.kind === "section") {
           const built = up.version_number != null && up.version_number !== v.n ? `Outputs were built on v${up.version_number}` : undefined;
           m.set(u.key, { ...u, sub: `Section of ${names.doc(v.slug)} v${v.n}`, builtOn: built });
+        } else if (source.kind === "version" && u.kind === "section" && up.document_slug === source.doc && up.section_key) {
+          // qa4-docs-44: on a version's Impact the middle column is what that version changed:
+          // "7. Success metrics", "Section changed in v2"; the version the outputs were built on
+          // is said on hover.
+          const built = up.version_number != null && up.version_number !== source.n ? `Outputs were built on v${up.version_number}` : undefined;
+          m.set(u.key, { ...u, label: names.heading(up.section_key, source.doc, source.n), sub: `Section changed in v${source.n}`, builtOn: built });
         } else m.set(u.key, u);
       }
     }
@@ -381,10 +395,13 @@ function Lineage({
               All categories
             </button>
           )}
-          <span className="flex items-center gap-3 text-[13px] text-text2">
+          <span className="flex items-center gap-3 text-[13px] text-text2" data-testid="lineage-legend">
             <span className="flex items-center gap-1.5"><i aria-hidden className="h-0.5 w-4 bg-line-strong" />depends on</span>
             <span className="flex items-center gap-1.5"><i aria-hidden className="h-0.5 w-4 bg-accent" />selected path</span>
-            <span className="flex items-center gap-1.5"><i aria-hidden className="h-0 w-4 border-t-2 border-dashed border-crit" />deleted upstream</span>
+            {/* Only what the diagram draws (qa4-plan-46). */}
+            {shownUps.some((u) => u.deleted) && (
+              <span className="flex items-center gap-1.5"><i aria-hidden className="h-0 w-4 border-t-2 border-dashed border-crit" />deleted upstream</span>
+            )}
           </span>
         </>
       }

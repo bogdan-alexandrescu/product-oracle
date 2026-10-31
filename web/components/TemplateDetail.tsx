@@ -11,6 +11,8 @@ import {
   InspectorRow,
   InspectorSection,
   Label,
+  LinkButton,
+  NotFoundPanel,
   Notice,
   PageHeader,
   ViewOnly,
@@ -29,8 +31,8 @@ import {
   useTemplateCheck,
   useThemeNames,
 } from "@/components/TemplateBodyEditor";
-import { Loading } from "@/components/ui";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { LoadError, Loading } from "@/components/ui";
+import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -42,6 +44,9 @@ function message(e: unknown) {
   return e instanceof Error && e.message ? e.message : errorMessage(e);
 }
 
+/** qa4-shell-4: what a template the API does not have says. */
+const TEMPLATE_MISSING = "This template doesn't exist or was deleted.";
+
 const BACK = (
   <Link href="/settings/templates" className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11">
     ← Templates
@@ -50,7 +55,11 @@ const BACK = (
 
 /** A template: its versions, an editor for the next version, details, archive / restore. */
 export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
-  const q = useQuery(`template|${key}`, () => unwrap(api.GET("/v1/templates/{key}", { params: { path: { key } } })));
+  const q = useQuery(`template|${key}`, () =>
+    unwrap(api.GET("/v1/templates/{key}", { params: { path: { key } } })).catch((e: unknown) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, TEMPLATE_MISSING) : e;
+    }),
+  );
   const t = q.data;
   // #370: approvers and owners change templates; other roles read them, with no editors.
   const { can, capsReady } = useMe();
@@ -69,11 +78,29 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const live = useTemplateCheck(body, !!t);
   const themeName = useThemeNames();
 
+  // qa4-shell-4: a template that is not there gets the app's one not-found page.
+  if (q.error === TEMPLATE_MISSING) {
+    return (
+      <NotFoundPanel
+        inPage
+        title="Template not found"
+        icon="search"
+        testId="template-not-found"
+        actions={
+          <LinkButton href="/settings/templates" variant="primary" icon="back">
+            Back to Templates
+          </LinkButton>
+        }
+      >
+        <p>{TEMPLATE_MISSING}</p>
+      </NotFoundPanel>
+    );
+  }
   if (q.error) {
     return (
       <>
         <PageHeader back={BACK} title="Template" />
-        <Notice tone="error">{q.error}</Notice>
+        <LoadError what="this template" error={q.error} onRetry={() => void q.reload()} />
       </>
     );
   }
@@ -214,7 +241,6 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
         </InspectorRow>
         <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
         {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
-        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {canEdit && (
         <InspectorSection>

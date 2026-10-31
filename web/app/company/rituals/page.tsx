@@ -8,7 +8,7 @@ import { usePhone } from "@/components/ds/page-info";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -228,8 +228,18 @@ function Rituals() {
           }
         >
           {/* qa-company-21: the zone named once, the times above and below without it. */}
+          {/* qa4-company-21: an unset zone says it is used until it is set, and where to set it. */}
           <p className="px-4 pt-2.5 pb-1 text-sm text-text2" data-testid="rituals-zone">
-            Times are in {zone}
+            {zoneQ.data?.is_default ? (
+              <>
+                Times use {zoneName(companyZone)} until you set the company time zone.{" "}
+                <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
+                  Set it
+                </Link>
+              </>
+            ) : (
+              <>Times are in {zone}</>
+            )}
           </p>
           {ritualsQ.data && rows.length === 0 ? (
             <Empty>No rituals yet</Empty>

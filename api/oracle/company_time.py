@@ -105,6 +105,16 @@ def stamp(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
     )
 
 
+def moment_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
+    """``moment`` in ``zone``, month first, as people read it: "Oct 30, 1:28 PM PDT"."""
+    local = _local(moment, zone)
+    hour = local.hour % 12 or 12
+    return (
+        f"{local:%b} {local.day}, {hour}:{local:%M} {'AM' if local.hour < 12 else 'PM'} "
+        f"{local.tzname()}"
+    )
+
+
 def in_words(moment: datetime, zone: str = DEFAULT_ZONE) -> str:
     """``moment`` in ``zone`` as "Sun Oct 25, 2:59 PM PDT"."""
     local = _local(moment, zone)

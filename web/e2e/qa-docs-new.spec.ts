@@ -116,7 +116,8 @@ async function missingFields(page: Page) {
   await title.fill("Saved addresses at checkout");
   await problem.fill("Too short");
   await go.click();
-  await expect(page.getByTestId("new-prd-missing")).toHaveText("To continue, say what problem it solves.");
+  // qa4-docs-54: a problem too short asks for a bit more, not for a problem.
+  await expect(page.getByTestId("new-prd-missing")).toHaveText("To continue, say a bit more about the problem (at least 20 characters).");
   await expect(page.getByText("Say a little more: at least 20 characters (9 so far).")).toBeVisible();
   await expect(problem).toBeFocused();
 
