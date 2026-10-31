@@ -184,6 +184,32 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use({ viewport: PHONE });
 
+  test("the flow's sheet has one scroll bar, and the storyboard is as tall as its card (qa4-simple-prd-30)", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/one-pagers/guided-setup");
+    const pageScrolls = () => page.evaluate(() => getComputedStyle(document.documentElement).overflowY !== "hidden" && document.documentElement.scrollHeight > innerHeight);
+    await expect(page.getByRole("button", { name: "Open the flow" }).first()).toBeVisible();
+    expect(await pageScrolls()).toBe(true);
+
+    await page.getByRole("button", { name: "Open the flow" }).first().click();
+    const opened = page.getByTestId("flow-detail");
+    await expect(opened).toBeVisible();
+    // Only the sheet scrolls: the page behind it shows no second scroll bar.
+    expect(await pageScrolls()).toBe(false);
+    await opened.getByRole("button", { name: "Close" }).click();
+    expect(await pageScrolls()).toBe(true);
+
+    await page.getByRole("button", { name: "Open the storyboard" }).first().click();
+    const story = page.getByRole("dialog", { name: /storyboard$/ });
+    await expect(story.getByRole("button", { name: "Step 2" })).toBeVisible();
+    expect(await pageScrolls()).toBe(false);
+    const sheet = (await story.boundingBox())!;
+    const next = (await story.getByRole("button", { name: "Step 2" }).boundingBox())!;
+    // No blank height under the card and its button.
+    expect(sheet.y + sheet.height - (next.y + next.height)).toBeLessThan(48);
+    expect(sheet.height).toBeLessThan(PHONE.height - 100);
+  });
+
   test("a viewer sees no Start review (qa4-simple-prd-26)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD", VIEWER);
     await expect(page.getByRole("link", { name: "Open in Detailed" })).toBeVisible();
