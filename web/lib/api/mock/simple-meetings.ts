@@ -861,7 +861,9 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     }),
     // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
     other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
-    prds: [...ps].sort((a, b) => a.title.localeCompare(b.title)).map((x) => ({ id: x.slug, title: x.title })),
+    // qa4-simple-decide-37 (as decisions_page: both from the PRDs the reader reads): every PRD whose questions are shown.
+    prds: [...new Map([...ps.map((x) => [x.slug, x.title] as const), ...questionsOut(ctx, qd, null).map((x) => [x.prd.slug, x.prd.title] as const)])]
+      .sort((a, b) => a[1].localeCompare(b[1])).map(([id, title]) => ({ id, title })),
     goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
     // qa-simple-decide-11: the meeting's title carries its day (the company's zone) and,
     // while it is still live, " · live".

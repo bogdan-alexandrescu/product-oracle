@@ -135,7 +135,7 @@ test.describe("one column", () => {
     expect(rec.y).toBeLessThan(decided.y);
     // Read in the same order: the headings follow the columns.
     const headings = await page.getByTestId("questions-board").locator("h2").allTextContents();
-    expect(headings.map((h) => h.trim())).toEqual(["Needs input", "Recommended", "Decided questions"]);
+    expect(headings.map((h) => h.trim())).toEqual(["Missing a decider or a recommendation", "Recommended", "Decided questions"]);
   });
 });
 

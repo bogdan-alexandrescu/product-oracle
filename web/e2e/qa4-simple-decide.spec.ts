@@ -151,7 +151,7 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("questions-board")).toBeVisible();
         if (phone) {
           // qa-simple-decide-4: no sideways page scroll; "Decided" fits.
-          await expect(page.getByTestId("board-tab-decided")).toContainText(/^Decided \d+$/);
+          await expect(page.getByTestId("board-tab-decided")).toContainText(/^Decided questions \d+$/);
           expect(await page.evaluate(() => document.scrollingElement!.scrollWidth)).toBeLessThanOrEqual(390);
         } else {
           // qa-simple-decide-13: Decided questions straight under Needs input.
