@@ -109,3 +109,83 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
     });
   });
 }
+
+/*
+ * The backdrop-gutter review's findings. protects = a margin note's flow dialog dims the whole
+ * window; the scrollbar's room is right when the Ask panel's backdrop is in the page but not
+ * shown, and when a page opens with a backdrop already up; a toast over a dialog keeps to the
+ * page's width. fails_when = an undimmed strip at the right, or the page moves when the Ask
+ * panel closes, or the toasts reach under where the scrollbar was.
+ */
+test.describe("desktop: the review's cases", () => {
+  test.use({ viewport: DESKTOP });
+
+  const ask = (page: Page) => page.getByTestId("hop-panel").filter({ visible: true });
+  const pageWidth = async (page: Page) => (await page.locator("main#main").boundingBox())!.width;
+
+  test("a margin note's flow dialog covers the whole window", async ({ page }) => {
+    await page.context().addInitScript((key) => localStorage.removeItem(key), MOCK_SCENARIO_KEY);
+    await login(page);
+    await page.goto("/simple/one-pagers/guided-setup");
+    await expect(page.getByTestId("one-pager")).toBeVisible();
+    await showScrollbar(page, true);
+    const bet = page.locator('[data-line="bets-1"]');
+    await bet.hover();
+    await bet.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+    await page.getByLabel("New wording for").fill("A setup checklist that shows the next two steps");
+    await page.getByRole("button", { name: "Save" }).click();
+    const note = page.getByRole("complementary", { name: "Changes and proposals" }).getByRole("note").first();
+    await note.getByRole("button", { name: /^Flow for/ }).click();
+    await expect(page.getByRole("dialog", { name: "User flow" })).toBeVisible();
+    await expectCoversWindow(page.getByTestId("note-flow-backdrop").filter({ visible: true }));
+  });
+
+  test("the scrollbar's room follows a change while the Ask panel is docked", async ({ page }) => {
+    await page.setViewportSize({ width: 1700, height: 900 });
+    await login(page);
+    await page.goto("/requests");
+    await expect(page.getByRole("heading", { name: "Requests", level: 1 })).toBeAttached();
+    await page.getByTestId("hop-strip").click();
+    await expect(ask(page)).toBeVisible();
+    // The scrollbar widens (as with a zoom) while the panel sits beside the page.
+    await page.addStyleTag({ content: SCROLLBAR.replace(/15px/g, "24px") });
+    await expect.poll(() => page.evaluate(() => window.innerWidth - document.documentElement.getBoundingClientRect().width)).toBe(24);
+    // Narrower, the panel dims the page (it sits over the page's right); closing it, the page does not move.
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await expect(page.getByTestId("hop-backdrop")).toBeVisible();
+    const open = await pageWidth(page);
+    await page.keyboard.press("Escape");
+    await expect(ask(page)).toHaveCount(0);
+    expect(await pageWidth(page), "the page does not jump").toBe(open);
+  });
+
+  test("a page that opens with a dialog up keeps the scrollbar's room", async ({ page }) => {
+    // The scrollbar is styled from the first paint, so it is there before the page is.
+    await page.context().addInitScript((css) => {
+      const style = document.createElement("style");
+      style.textContent = css;
+      document.documentElement.appendChild(style);
+    }, SCROLLBAR);
+    await login(page);
+    await page.goto("/company/decisions?propose=1");
+    const dialog = page.getByRole("dialog", { name: "Propose decision" });
+    await expect(dialog).toBeVisible();
+    const open = await pageWidth(page);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(await pageWidth(page), "the page does not jump").toBe(open);
+  });
+
+  test("the toasts keep to the page's width over a dialog", async ({ page }) => {
+    await login(page);
+    await page.goto("/requests");
+    await expect(page.getByRole("heading", { name: "Requests", level: 1 })).toBeAttached();
+    await showScrollbar(page, true);
+    // Where a toast shows: the strip it centres in.
+    const strip = () => page.getByTestId("toasts").evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, w: r.width }; });
+    const before = await strip();
+    await page.getByRole("button", { name: "New request" }).first().click();
+    await expect(page.getByRole("dialog", { name: "New request" })).toBeVisible();
+    await expect.poll(strip).toEqual(before);
+  });
+});
