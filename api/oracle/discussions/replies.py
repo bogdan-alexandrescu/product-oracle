@@ -72,6 +72,7 @@ from oracle.llm.transports import (
     get_llm_settings,
 )
 from oracle.models import AuditEvent
+from oracle.simple.chat import ENGINE as SIMPLE_CHAT  # the Simple chat's own lines
 from oracle.swarm.settings import get_runtime_settings
 from oracle.tenancy import tenant_session
 
@@ -85,8 +86,6 @@ GOAL_JOB = "discussion_reply_goal"
 MAX_TOKENS = 1500
 LEASE = timedelta(seconds=150)
 PENDING_GRACE = timedelta(seconds=10)
-# oracle.simple.chat.ENGINE: the model of the Simple chat's own lines.
-SIMPLE_CHAT = "oracle.simple.chat"
 CHECK_SECONDS = 0.5
 SAVE_SECONDS = 1.0
 SAVE_CHARS = 400
