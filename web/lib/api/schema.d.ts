@@ -12558,7 +12558,8 @@ export interface paths {
         };
         /**
          * Export Simple One Pager
-         * @description The one-pager as a branded one-page PDF (its published lines).
+         * @description The one-pager as a branded one-page PDF (its published lines). One that runs past
+         *     its page says so in ``X-Oracle-Overflow-Pages`` (the page count), never in the PDF.
          */
         get: operations["export_simple_one_pager"];
         put?: never;
