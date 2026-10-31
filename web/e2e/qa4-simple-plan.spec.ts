@@ -83,6 +83,18 @@ test.describe("QA pass 4: simple-plan, phone", () => {
     });
     expect(hits).toEqual([]);
   });
+
+  /* qa4-simple-plan-9 (review): on a narrow phone a middle line with no clear spot for its words is named in the legend. */
+  test("value / effort names a middle line in the legend when its words have no room", async ({ page }) => {
+    await setUp(page, { phone: true });
+    await page.setViewportSize({ width: 320, height: 568 });
+    await open(page, "?tab=value-effort");
+    await expect(page.getByTestId("vxe-point").first()).toBeVisible();
+    await page.waitForTimeout(300);
+    await expect(page.getByTestId("vxe-middle-effort")).toHaveCount(0);
+    await expect(page.getByTestId("vxe-middle-value")).toBeVisible();
+    await expect(page.getByTestId("vxe-legend-middles")).toHaveText("The dashed line up and down is the middle effort.");
+  });
 });
 
 test.describe("QA pass 4: simple-plan, desktop", () => {
