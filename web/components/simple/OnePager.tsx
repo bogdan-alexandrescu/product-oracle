@@ -260,6 +260,9 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     numbers.set(l.id, i + 1);
     words.set(l.id, quoteLine(l.metric ? l.metric.name : l.text));
   });
+  // qa4-simple-prd-32: a flow's note names its section as this page does (the block it reads under).
+  const sectionNames: Record<string, string> = Object.fromEntries(v.sections.map((s) => [s.key, s.heading]));
+  v.blocks.forEach((b) => b.lines.forEach((l) => l.source_keys.forEach((k) => (sectionNames[k] = b.title))));
 
   async function act(run: () => Promise<unknown>) {
     setBusy(true);
@@ -617,7 +620,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                           // The flows review (2026-10-30: only once a flow exists or is being drawn): a bet's flow is the same row as a roadmap card's
                           // (the live thumbnail and its states), opened in place.
                           <div className="simple-noprint" aria-label={`User flow of ${words.get(l.id)}`} role="group">
-                            <FlowPanel row subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} openLabel={`Flow for ${words.get(l.id)}`} />
+                            <FlowPanel row subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} openLabel={`Flow for ${words.get(l.id)}`} sectionNames={sectionNames} />
                           </div>
                         )}
                         {l.decisions.length > 0 && (

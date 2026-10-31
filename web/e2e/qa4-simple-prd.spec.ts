@@ -130,6 +130,23 @@ test.describe("desktop", () => {
     await expect(opened.getByRole("button", { name: "See comments" })).toBeVisible();
     await expect(opened.getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
   });
+
+  test("the flow's notes cite the section in words, and its comment submit reads Post comment (qa4-simple-prd-31, 32)", async ({ page }) => {
+    await login(page, COMMENTER);
+    await page.goto("/simple/one-pagers/guided-setup");
+    await page.getByRole("button", { name: "Flow for “A setup checklist that shows" }).click();
+    const opened = page.getByTestId("flow-detail");
+    await opened.getByRole("button", { name: "Full screen" }).click();
+    const full = page.getByTestId("flow-fullscreen");
+    await full.getByRole("button", { name: "Comment" }).click();
+    await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · From “What we will build”");
+    await expect(full.getByTestId("flow-annotations")).not.toContainText("Requirement");
+    const panel = full.getByTestId("flow-comments-panel");
+    await panel.getByLabel("Comment on the flow").fill("Name the invite step after the calendar");
+    await expect(panel.getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
+    await panel.getByRole("button", { name: "Post comment" }).click();
+    await expect(panel.getByTestId("flow-comments")).toContainText("Name the invite step after the calendar · open");
+  });
 });
 
 test.describe("phone", () => {

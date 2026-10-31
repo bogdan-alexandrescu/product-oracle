@@ -288,9 +288,12 @@ export function FlowPanel({
   backLabel,
   inlineComments = false,
   showHint,
+  sectionNames,
 }: {
   subject: FlowSubject;
   documentId?: string;
+  /** The page's own names for the PRD's sections (a one-pager's "What we will build"), for the notes. */
+  sectionNames?: Record<string, string>;
   onClose?: () => void;
   onDrawn?: (flow: Flow) => void;
   /** The owner's pick A: start as the row (the live thumbnail and its states). */
@@ -520,13 +523,18 @@ export function FlowPanel({
             <li key={a.n}>
               <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-bold text-surface">{a.n}</span>
               {a.note}
-              {(a.section_key || a.requirement) && (
-                <span className="text-text2">
-                  {" "}
-                  · {a.section_key ? `From the PRD: ${capSection(a.section_key)} section` : ""}
-                  {a.section_key && a.requirement ? ", " : ""}
-                  {a.requirement ? <span className="whitespace-nowrap">{`Requirement ${a.requirement}`}</span> : ""}
-                </span>
+              {/* qa4-simple-prd-32: where the page names its sections, the section in those words and no requirement code. */}
+              {a.section_key && sectionNames?.[a.section_key] ? (
+                <span className="text-text2"> · From “{sectionNames[a.section_key]}”</span>
+              ) : (
+                (a.section_key || a.requirement) && (
+                  <span className="text-text2">
+                    {" "}
+                    · {a.section_key ? `From the PRD: ${capSection(a.section_key)} section` : ""}
+                    {a.section_key && a.requirement ? ", " : ""}
+                    {a.requirement ? <span className="whitespace-nowrap">{`Requirement ${a.requirement}`}</span> : ""}
+                  </span>
+                )
               )}
             </li>
           ))}
@@ -564,8 +572,9 @@ export function FlowPanel({
                 ))}
               </select>
             )}
+            {/* qa4-simple-prd-31: named apart from the header's Comment toggle. */}
             <button type="submit" className={BTN} disabled={busy || !text.trim()}>
-              Comment
+              Post comment
             </button>
           </div>
         </form>

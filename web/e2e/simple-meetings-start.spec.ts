@@ -98,7 +98,7 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("simple-roadmap")).toBeVisible();
         await page.getByRole("button", { name: "Start review" }).click();
         await expect(sheet(page).getByLabel("PRD")).toBeVisible();
-        await sheet(page).getByLabel("PRD").selectOption({ label: "Usage alerts" });
+        await sheet(page).getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
         await sheet(page).getByRole("checkbox", { name: "Commenter" }).check();
         await sheet(page).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Usage alerts" })).toBeVisible();
