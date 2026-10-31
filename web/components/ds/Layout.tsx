@@ -202,6 +202,7 @@ export function NotFoundPanel({
   children,
   actions,
   home = true,
+  inPage = false,
 }: {
   title: string;
   icon?: IconName;
@@ -212,9 +213,11 @@ export function NotFoundPanel({
   /** The ways on: links or buttons. */
   actions?: ReactNode;
   home?: boolean;
+  /** qa4-shell-4: inside a section whose layout already draws the Page (Company, Settings). */
+  inPage?: boolean;
 }) {
-  return (
-    <Page>
+  const body = (
+    <>
       <PageHeader title={title} back={back} />
       <Panel testId={testId} bodyClassName="flex flex-col items-center gap-3 px-4 pt-10 pb-8 text-center">
         <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink">
@@ -234,8 +237,9 @@ export function NotFoundPanel({
           </div>
         )}
       </Panel>
-    </Page>
+    </>
   );
+  return inPage ? body : <Page>{body}</Page>;
 }
 
 /**
