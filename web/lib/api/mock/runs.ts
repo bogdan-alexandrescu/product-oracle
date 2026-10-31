@@ -1951,7 +1951,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const items = itemsReuse(ctx, r);
     estimated(r).draft_items_reused = items;
     const free = (name: string) => (!!reused && name === "baseline") || (!!items && name === "roadmap_items");
-    for (const s of r.segments) s.estimate_usd = free(s.name) || skippedOff(s) ? 0 : segEstimate(s.roles, r.knobs.depth);
+    const mkOver = typeof location !== "undefined" && new URLSearchParams(location.search).get("cost") === "over" ? 4 : 1; // MOCK-HOOK: ?cost=over, a run over the approval limit
+    for (const s of r.segments) s.estimate_usd = free(s.name) || skippedOff(s) ? 0 : segEstimate(s.roles, r.knobs.depth) * mkOver; // MOCK-HOOK
     const total = round2(r.segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
     r.estimate_usd = total;
     r.needs_approval = total > THRESHOLD;

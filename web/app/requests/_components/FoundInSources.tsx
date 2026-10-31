@@ -8,7 +8,6 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { plural } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { useMockHook } from "@/lib/mock-hook"; // MOCK-HOOK
-import { useRouter } from "next/navigation"; // MOCK-HOOK
 import { NewRequestDialog } from "./NewRequest"; // MOCK-HOOK
 
 type Candidate = Schemas["CandidateOut"];
@@ -38,7 +37,7 @@ const SHARING =
  * filed as a request (filing shares the item in full) or dismissed. `refresh` changes when a
  * triage run ends, so new finds show.
  */
-export function FoundInSources({ refresh }: { refresh: string }) {
+export function FoundInSources({ refresh, onFiledMk }: { refresh: string; onFiledMk?: (r: Schemas["RequestOut"]) => void /* MOCK-HOOK */ }) {
   const q = useQuery(`request-candidates:${refresh}`, () =>
     unwrap(api.GET("/v1/request-candidates", { params: { query: { status: "open" } } })),
   );
@@ -47,12 +46,11 @@ export function FoundInSources({ refresh }: { refresh: string }) {
   const [error, setError] = useState<string | null>(null);
   const open = q.data ?? [];
   const qd3 = useMockHook("qd3"); // MOCK-HOOK: a one form, b two forms with the same words, c files at once
-  const router = useRouter(); // MOCK-HOOK
   async function fileAtOnce(c: Candidate) { // MOCK-HOOK: qd3=c
     const request = await unwrap(api.POST("/v1/request-candidates/{candidate_id}/file", { params: { path: { candidate_id: c.id } }, body: { title: c.title, body: c.body ?? null, channel: c.channel, requester_name: c.requester_name ?? null, requester_kind: "unknown" } })); // MOCK-HOOK
     setFiled(request); // MOCK-HOOK
     q.setData((rows) => rows?.filter((r) => r.id !== c.id)); // MOCK-HOOK
-    router.push(`/requests?qd3=c&request=${encodeURIComponent(request.id)}`); // MOCK-HOOK
+    onFiledMk?.(request); // MOCK-HOOK: the filed request opens, selected, on the right
   } // MOCK-HOOK
 
   async function dismiss(c: Candidate) {

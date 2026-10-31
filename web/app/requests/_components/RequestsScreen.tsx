@@ -117,7 +117,7 @@ function Requests({ view }: { view: RequestsView }) {
     <Page>
       <RequestsHeader triage={triage} onFiled={filed} />
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-        {view === "all" && can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} />}
+        {view === "all" && can("list_request_candidates") && <FoundInSources refresh={`${run?.run_id ?? ""}:${run?.active ?? false}`} onFiledMk={filed} /* MOCK-HOOK */ />}
         {view === "themes" ? (
           <Panel title="Themes" count={liveThemes.length}>
             {themes.error && (

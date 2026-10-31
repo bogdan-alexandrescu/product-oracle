@@ -30,8 +30,9 @@ const START: Sec[] = [
   { heading: "Problem", guide: "The customer problem, in the customer's terms.", brief: true },
   { heading: "Solution", guide: "What we will build, as conclusions.", brief: true },
   { heading: "Launch plan", guide: "Who hears about it, when and how.", brief: false },
-  { heading: "Sources and data points", guide: "The only place for sources, numbers and evidence.", brief: false },
 ];
+/** Every template ends with this section (the template check asks for it). */
+const SOURCES = "## Sources and data points {#sources}\n<!-- The only place for sources, numbers and evidence. -->\n";
 
 function bodyOf(theme: string, when: string, secs: Sec[]) {
   const keyed = secs.filter((s) => s.heading.trim()).map((s) => ({ ...s, key: keyFromName(s.heading) || "section" }));
@@ -45,6 +46,7 @@ function bodyOf(theme: string, when: string, secs: Sec[]) {
     "# <Title> {#title}",
     "",
     ...keyed.flatMap((s) => [`## ${s.heading.trim()} {#${s.key}}`, `<!-- ${s.guide.trim()} -->`, ""]),
+    SOURCES,
   ].join("\n");
 }
 
@@ -115,6 +117,10 @@ export function TemplateFieldsForm() {
                     <Button variant="ghost" icon="x" aria-label={`Remove ${s.heading || "section"}`} onClick={() => setSecs((xs) => xs.filter((_, j) => j !== i))} />
                   </div>
                 ))}
+                <div className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)] items-center gap-2 rounded-lg border border-dashed border-line p-2 text-[15px] text-text2 max-[700px]:grid-cols-1">
+                  <span className="px-3 font-semibold text-text">Sources and data points</span>
+                  <span className="px-3">Always last: the only place for sources, numbers and evidence.</span>
+                </div>
                 <span>
                   <Button icon="plus" onClick={() => setSecs((xs) => [...xs, { heading: "", guide: "", brief: false }])}>
                     Add a section
@@ -166,7 +172,7 @@ export function TemplateFieldsForm() {
             </select>
           </Field>
           <Field label="When to suggest it">
-            <textarea className={INPUT} rows={3} value={when} onChange={(e) => setWhen(e.target.value)} placeholder="A launch that needs sales and support ready on the day" />
+            <textarea className={`${INPUT} h-auto min-h-20 py-2`} rows={3} value={when} onChange={(e) => setWhen(e.target.value)} placeholder="A launch that needs sales and support ready on the day" />
           </Field>
         </Panel>
       </div>

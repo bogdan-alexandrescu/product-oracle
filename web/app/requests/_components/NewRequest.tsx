@@ -123,7 +123,7 @@ export function NewRequestDialog({ // MOCK-HOOK: exported for qd3=a
   const [from, setFrom] = useState<Found | undefined>(given); // MOCK-HOOK
   const found = useQuery(`mk-found|${pickFound}`, () => (pickFound ? unwrap(api.GET("/v1/request-candidates")) : Promise.resolve([] as Found[]))); // MOCK-HOOK
   const [title, setTitle] = useState(from?.title ?? ""); // MOCK-HOOK: prefilled from a found item
-  const [body, setBody] = useState(from?.body ?? ""); // MOCK-HOOK
+  const [body, setBody] = useState(from?.body ?? from?.source.excerpt ?? ""); // MOCK-HOOK: a found item's excerpt says what they asked
   const [goalIds, setGoalIds] = useState<string[]>([]);
   const [requester, setRequester] = useState(from ? from.requester_name ?? "" : myName); // MOCK-HOOK
   const [channel, setChannel] = useState<Request["channel"]>(from?.channel ?? "in_app"); // MOCK-HOOK
@@ -213,7 +213,7 @@ export function NewRequestDialog({ // MOCK-HOOK: exported for qd3=a
         {pickFound && (found.data?.length ?? 0) > 0 && ( // MOCK-HOOK: qd3=b, start from a found item
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2"> {/* MOCK-HOOK */}
             Start from {/* MOCK-HOOK */}
-            <select data-testid="start-from" className={INPUT} value={from?.id ?? ""} onChange={(e) => { const f = found.data?.find((x) => x.id === e.target.value); setFrom(f); setTitle(f?.title ?? ""); setBody(f?.body ?? ""); setChannel(f?.channel ?? "in_app"); setRequester(f ? f.requester_name ?? "" : myName); }}> {/* MOCK-HOOK */}
+            <select data-testid="start-from" className={INPUT} value={from?.id ?? ""} onChange={(e) => { const f = found.data?.find((x) => x.id === e.target.value); setFrom(f); setTitle(f?.title ?? ""); setBody(f?.body ?? f?.source.excerpt ?? ""); setChannel(f?.channel ?? "in_app"); setRequester(f ? f.requester_name ?? "" : myName); }}> {/* MOCK-HOOK */}
               <option value="">A blank request</option> {/* MOCK-HOOK */}
               {found.data?.map((f) => <option key={f.id} value={f.id}>Found: {f.title}</option>)} {/* MOCK-HOOK */}
             </select> {/* MOCK-HOOK */}
