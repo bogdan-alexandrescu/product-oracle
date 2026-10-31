@@ -94,6 +94,8 @@ interface Meeting {
   length_min: number;
   status: "live" | "ended";
   started_at: string;
+  /** Its session's last change (simple_sessions.last_change_at): a change, accept or decline made through it. */
+  last_change_at?: string | null;
   ended_at: string | null;
   ended_by: string | null;
   minutes: Minutes | null;
@@ -430,12 +432,13 @@ export const MEETING_IDLE_MS = 4 * 60 * 60_000;
 
 /**
  * As meetings._settle and the ticker's idle sweep (meetings.end_idle): a live meeting with
- * no change through it for MEETING_IDLE_MS (its start, else its last decision) ends, with
- * Oracle's quick minutes, by its presenter, whether or not anyone opened it.
+ * no change through its session for MEETING_IDLE_MS (its last change, else its start, as
+ * changes.close_idle; an Approve or a chat decision is no change) ends, with Oracle's quick
+ * minutes, by its presenter, whether or not anyone opened it.
  */
 function endIdle(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
   if (m.status !== "live") return;
-  const last = Math.max(Date.parse(m.started_at), ...db.decisions.filter((d) => d.meeting_id === m.id).map((d) => Date.parse(d.at)));
+  const last = Date.parse(m.last_change_at ?? m.started_at);
   if (mockNowMs() - last < MEETING_IDLE_MS) return;
   Object.assign(m, { status: "ended", ended_at: iso(mockNowMs()), ended_by: m.presenter_id });
   m.minutes = extract(ctx, db, m);
@@ -676,6 +679,7 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   if (!res || !res.ok) return res;
   const out = (await res.clone().json()) as Schemas["SimpleChangeResult"];
   const c = out.change;
+  m.last_change_at = iso(mockNowMs());
   const [words, subjects] = describe(ctx, c);
   const title = verb ? `${verb}: ${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
   const prd = prds(ctx).find((x) => x.slug === m.prd)!;
@@ -1132,6 +1136,7 @@ export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Req
     const m = db.meetings.find((x) => x.session_id === sessionId);
     if (!m) return false;
     if (m.status !== "live") return "ended";
+    m.last_change_at = iso(mockNowMs());
     const prd = prds(ctx).find((x) => x.slug === m.prd);
     const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
     if (own) d.question = own;

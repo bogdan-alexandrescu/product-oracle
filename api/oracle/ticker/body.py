@@ -124,14 +124,22 @@ async def tick_company(
     try:
         # Simple S3a (#723): sessions idle 30 minutes close.
         from oracle.simple import changes as simple_changes
-        from oracle.simple import meetings as simple_meetings
 
         out.sessions_closed = await simple_changes.close_idle(db)
-        # A meeting whose session closed ends now, not on its next read.
-        out.meetings_ended = await simple_meetings.end_idle(db)
         await db.commit()
     except Exception as exc:
         log.exception("tick: closing idle Simple sessions failed for company %s", tenant_id)
+        await db.rollback()
+        out.errors.append(exc)
+    try:
+        # A meeting whose session closed ends now, not on its next read; on its own, so a
+        # failed end keeps the sessions closed above (the next tick tries it again).
+        from oracle.simple import meetings as simple_meetings
+
+        out.meetings_ended = await simple_meetings.end_idle(db)
+        await db.commit()
+    except Exception as exc:
+        log.exception("tick: ending idle Simple meetings failed for company %s", tenant_id)
         await db.rollback()
         out.errors.append(exc)
     try:
