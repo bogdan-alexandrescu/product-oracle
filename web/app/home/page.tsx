@@ -281,7 +281,7 @@ export default function HomePage() {
           testId="home-needs"
           // qa4-company-50: on a phone the head's tools join its line (display: contents), so the
           // counts group can sit on a line of its own under the title, Info and Inbox beside it.
-          className="max-[600px]:[&>div:first-child>div:last-child]:contents"
+          toolsClassName="max-[600px]:contents"
           tools={
             <>
               {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}

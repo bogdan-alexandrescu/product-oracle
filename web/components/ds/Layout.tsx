@@ -149,6 +149,7 @@ export function Panel({
   testId,
   as: As = "section",
   bodyClassName = "",
+  toolsClassName = "",
   busy,
 }: {
   title?: ReactNode;
@@ -160,6 +161,8 @@ export function Panel({
   testId?: string;
   as?: "section" | "div";
   bodyClassName?: string;
+  /** Classes on the head's tools group (e.g. "max-[600px]:contents" to let them join the head's line). */
+  toolsClassName?: string;
   /** aria-busy: what the panel draws may still change (its tools wait on the capabilities). */
   busy?: boolean;
 }) {
@@ -179,7 +182,7 @@ export function Panel({
             </span>
           )}
           <span className="flex-1" />
-          {tools && <div className="flex flex-wrap items-center gap-2">{tools}</div>}
+          {tools && <div className={`flex flex-wrap items-center gap-2 ${toolsClassName}`}>{tools}</div>}
         </div>
       )}
       <div className={bodyClassName}>{children}</div>
