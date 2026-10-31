@@ -139,8 +139,9 @@ function VersionInspector({
 }) {
   const { can } = useMe();
   // qa4-company-7: a draft made in the app (from a template, or by Oracle) was created, not
-  // imported; and a token's own name is never shown, only "An integration".
-  const byName = v.imported_by_name && /^API token\b/i.test(v.imported_by_name) ? "An integration" : v.imported_by_name;
+  // imported. Only starting from a template (templates.service) gives a version the
+  // template_only note; an import never does. The API already names a token "An integration".
+  const byName = v.imported_by_name;
   const made =
     byName === "Oracle"
       ? { date: "Created", by: "Drafted by" }
