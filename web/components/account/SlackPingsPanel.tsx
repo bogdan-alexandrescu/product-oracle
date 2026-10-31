@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { Notice, Panel } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Pings = Schemas["SlackPings"];
@@ -26,6 +28,9 @@ export const PINGS: { key: Ping; label: string; detail: string }[] = [
 export function SlackPingsPanel() {
   const prefs = useQuery("my-preferences", () => unwrap(api.GET("/v1/me/preferences")));
   const slack = useQuery("slack-status", () => unwrap(api.GET("/v1/company-integrations/slack/status")));
+  const { can } = useMe();
+  // qa4-settings-19: whoever may open Settings › Notifications gets a link to it there.
+  const canConnect = can("list_company_integrations");
   const [saving, setSaving] = useState<Ping | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pings = prefs.data?.slack_pings;
@@ -51,7 +56,19 @@ export function SlackPingsPanel() {
           the notifications channel instead, without the titles of approvers-only items.
         </p>
         {slack.data && !slack.data.connected && (
-          <Notice testId="slack-pings-off">Slack is not connected yet: an owner connects it in Settings › Notifications. Your choices apply once it is.</Notice>
+          <Notice testId="slack-pings-off">
+            {canConnect ? (
+              <>
+                Slack is not connected yet: connect it in{" "}
+                <Link href="/settings/notifications" className="font-medium text-accent-ink underline">
+                  Settings › Notifications
+                </Link>
+                . Your choices apply once it is.
+              </>
+            ) : (
+              "Slack is not connected yet: an owner connects it in Settings › Notifications. Your choices apply once it is."
+            )}
+          </Notice>
         )}
         {(prefs.error || error) && <Notice tone="error">{error ?? prefs.error}</Notice>}
         {pings && (

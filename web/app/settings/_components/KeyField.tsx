@@ -36,7 +36,7 @@ export function KeyField({
       </label>
       <input
         id={id}
-        className={`${INPUT} font-mono ${flagged ? "border-crit ring-1 ring-crit" : ""}`}
+        className={`${INPUT} font-mono placeholder:font-sans placeholder:italic placeholder:text-text2/70 ${flagged ? "border-crit ring-1 ring-crit" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value.toLowerCase())}
         placeholder={placeholder}

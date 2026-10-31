@@ -94,10 +94,11 @@ export default function AccessPage() {
 
   async function send(e: FormEvent) {
     e.preventDefault();
+    if (!note.trim()) return;
     setSending(true);
     setError(null);
     try {
-      const { data, response } = await api.POST("/v1/auth/access/note", { body: { note: note.trim() || null } });
+      const { data, response } = await api.POST("/v1/auth/access/note", { body: { note: note.trim() } });
       if (!response.ok || !data) throw new Error(response.statusText || "Couldn't send the note");
       setAccess(data);
       setSent(true);
@@ -145,7 +146,8 @@ export default function AccessPage() {
                 />
               </Field>
               <div>
-                <Button type="submit" variant="solid" disabled={sending || sent}>
+                {/* qa4-settings-46: nothing typed, nothing to send. */}
+                <Button type="submit" variant="solid" disabled={sending || sent || !note.trim()}>
                   {sending ? "Sending…" : sent ? "Sent" : "Send note"}
                 </Button>
               </div>

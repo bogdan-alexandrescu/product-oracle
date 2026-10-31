@@ -26,10 +26,19 @@ export function ThemePreview({
   title = "Theme preview",
   testId = "theme-preview",
   height,
-}: PreviewIn & { title?: string; testId?: string; height?: string }) {
+  pageWidth,
+}: PreviewIn & { title?: string; testId?: string; height?: string; pageWidth?: number }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 300);
   return (
-    <PreviewFrame html={live.data} pending={live.pending} error={live.error} title={title} testId={testId} height={height} />
+    <PreviewFrame
+      html={live.data}
+      pending={live.pending}
+      error={live.error}
+      title={title}
+      testId={testId}
+      height={height}
+      pageWidth={pageWidth}
+    />
   );
 }
 
@@ -85,7 +94,20 @@ const PAGE_WIDTH = 794;
  * thumbnail (qa-settings-30): a narrow box no longer squeezes the text between the page
  * margins. A box wider than the page shows it at full size. It still scrolls inside.
  */
-function FittedPage({ html, title, testId, height }: { html: string | undefined; title: string; testId: string; height: string }) {
+function FittedPage({
+  html,
+  title,
+  testId,
+  height,
+  pageWidth = PAGE_WIDTH,
+}: {
+  html: string | undefined;
+  title: string;
+  testId: string;
+  height: string;
+  /** The width the sample is laid out at before scaling; a narrow box may pass less, to keep the type readable. */
+  pageWidth?: number;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState<number | null>(null);
   useLayoutEffect(() => {
@@ -96,7 +118,7 @@ function FittedPage({ html, title, testId, height }: { html: string | undefined;
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  const scale = width && width < PAGE_WIDTH ? width / PAGE_WIDTH : 1;
+  const scale = width && width < pageWidth ? width / pageWidth : 1;
   return (
     <div ref={box} data-scale={scale.toFixed(3)} className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface`}>
       <iframe
@@ -108,7 +130,7 @@ function FittedPage({ html, title, testId, height }: { html: string | undefined;
         style={
           scale === 1
             ? { width: "100%", height: "100%" }
-            : { width: PAGE_WIDTH, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }
+            : { width: pageWidth, height: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }
         }
       />
     </div>
@@ -123,6 +145,7 @@ function PreviewFrame({
   testId,
   scale = 1,
   height = "h-[34rem]",
+  pageWidth,
 }: {
   html: string | undefined;
   pending: boolean;
@@ -132,11 +155,12 @@ function PreviewFrame({
   scale?: number;
   /** The frame's height class; the sample scrolls inside it, so nothing is cut off. */
   height?: string;
+  pageWidth?: number;
 }) {
   return (
     <div className="relative">
       {scale === 1 ? (
-        <FittedPage html={html} title={title} testId={testId} height={height} />
+        <FittedPage html={html} title={title} testId={testId} height={height} pageWidth={pageWidth} />
       ) : (
         <div className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface2`}>
           <iframe

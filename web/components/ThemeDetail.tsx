@@ -292,7 +292,6 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
       <InspectorSection label="Facts">
         <InspectorRow value={formatDate(t.updated_at)}>Updated</InspectorRow>
         {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
-        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {canEdit && (
         <InspectorSection>

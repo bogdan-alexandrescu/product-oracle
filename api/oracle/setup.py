@@ -111,12 +111,17 @@ async def _sources(db: AsyncSession, principal: Principal) -> SetupStep:
 
 
 async def _invite(db: AsyncSession, principal: Principal) -> SetupStep:
-    """Done with someone else on board: a second active member, or an open invite."""
+    """Done with someone else on board: a second active member, or an open invite. An
+    expired invite is not open: nobody can join through it (qa4-settings-3)."""
     members = select(func.count()).select_from(User).where(User.disabled_at.is_(None))
     invites = (
         select(func.count())
         .select_from(Invite)
-        .where(Invite.accepted_at.is_(None), Invite.revoked_at.is_(None))
+        .where(
+            Invite.accepted_at.is_(None),
+            Invite.revoked_at.is_(None),
+            Invite.expires_at > func.now(),
+        )
     )
     row = (await db.execute(select(members.scalar_subquery(), invites.scalar_subquery()))).one()
     people, open_invites = row

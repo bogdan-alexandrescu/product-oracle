@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * qa-onboarding-3, -43: a new company's owner picks a Slack source (not an upload) from Home's
  * Set up, syncs it, and comes back with Back to Home. Home's Pick sources and Settings ›
  * Sources never contradict: the sync reads the channel's messages, and the step is done and says
- * so ("1 source read"), as the API's step rule has it (a source with items ticks the step).
+ * so ("1 source with content"), as the API's step rule has it (a source with items ticks the step).
  *
  * no_claim: the in-browser mock stands in for the API's /v1/setup and the Slack connector (its
  * first sync reads two invented messages); api/tests/test_setup.py covers the API's rule that
@@ -68,7 +68,7 @@ test("Pick sources: a Slack source added and synced from Set up is counted on Ho
   // Back to Home: the source is read, and the step is done (qa-onboarding-3).
   await backToHome(page);
   const status = row(page, "sources").getByTestId("setup-status");
-  await expect(status).toHaveText("1 source read");
+  await expect(status).toHaveText("1 source with content");
   await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
   await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
 
@@ -91,6 +91,6 @@ test("Pick sources: a Slack source added and synced from Set up is counted on Ho
   await expect(page.getByRole("list", { name: "My sources" }).getByRole("listitem")).toHaveCount(2);
   await backToHome(page);
   await expect(row(page, "sources")).toHaveAttribute("data-done", "true");
-  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("2 sources read");
+  await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("2 sources with content");
   await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
 });

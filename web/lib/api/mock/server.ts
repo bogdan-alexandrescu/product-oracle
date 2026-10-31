@@ -3854,7 +3854,8 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   const facts = setupFacts();
   const sources = sourceCount();
   const people = db.members.filter((x) => x.status !== "disabled").length;
-  const invites = db.invites.filter((i) => i.status === "open").length;
+  // qa4-settings-3: as oracle.setup, an expired invite is not open (nobody can join through it).
+  const invites = db.invites.filter((i) => i.status === "open" && !expired(i)).length;
   const built = lastBaselineBuild(db.runs);
   // qa-onboarding-10: the build under way, the first started (as the one-at-a-time rule names it).
   const building = (db.runs?.runs ?? [])

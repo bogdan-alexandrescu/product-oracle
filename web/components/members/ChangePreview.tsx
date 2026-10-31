@@ -129,6 +129,23 @@ function Lapses({ lapses, memberId }: { lapses: Impact["lapses"]; memberId: stri
   );
 }
 
+/**
+ * qa4-settings-13: what a lower role can no longer do, in plain words ("decide 1 document
+ * review"), by the kinds the API registers (api/oracle/members/handover.py); any other kind
+ * reads by its label.
+ */
+const CAN_NO_LONGER: Record<string, (n: number) => string> = {
+  review_decider: (n) => `decide ${plural(n, "document review")}`,
+  mandatory_reviewer: (n) => `approve ${plural(n, "document review")}`,
+  section_owner: (n) => `own ${plural(n, "document section")}`,
+  section_reviewer: (n) => `review ${plural(n, "document section")}`,
+  questions: (n) => `answer ${plural(n, "open question")}`,
+  open_items: (n) => `own ${plural(n, "open item")}`,
+  engineering_lead: () => "be the engineering lead",
+};
+const canNoLonger = (name: string, r: Responsibility) =>
+  CAN_NO_LONGER[r.kind] ? `${name} can no longer ${CAN_NO_LONGER[r.kind](r.count)}.` : `${name} can no longer hold this: ${r.label} (${r.count}).`;
+
 /** "keep" leaves a kind as it is; "clear" hands it to nobody; otherwise a member's id. */
 type Choice = "keep" | "clear" | string;
 export type Choices = Record<string, Choice>;
@@ -182,6 +199,7 @@ function HandOverRows({
   choices,
   setChoices,
   rowLabel,
+  countInLabel = false,
 }: {
   title: string;
   testId: string;
@@ -191,6 +209,8 @@ function HandOverRows({
   choices: Choices;
   setChoices: (c: Choices) => void;
   rowLabel: (r: Responsibility) => string;
+  /** The row's label already says how many (the role dialog's sentence). */
+  countInLabel?: boolean;
 }) {
   const [all, setAll] = useState("");
   if (!rows.length) return null;
@@ -226,7 +246,7 @@ function HandOverRows({
         {rows.map((r) => (
           <li key={r.kind} data-testid="handover-row" className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line py-2 first:border-t-0">
             <span className="min-w-0 flex-1 text-[15px]">
-              {rowLabel(r)} <span className="tnum text-text2">· {r.count}</span>
+              {rowLabel(r)} {!countInLabel && <span className="tnum text-text2">· {r.count}</span>}
             </span>
             <HandOverSelect r={r} people={people} subjectId={subjectId} value={choices[r.kind] ?? "keep"} onChange={(c) => setChoices({ ...choices, [r.kind]: c })} />
             {r.blocks && (
@@ -383,7 +403,8 @@ export function RoleDialog({
             subjectId={member.id}
             choices={choices}
             setChoices={setChoices}
-            rowLabel={(r) => `${r.label} needs ${ROLE_WORD[r.needs_role]}`}
+            rowLabel={(r) => canNoLonger(personName(member), r)}
+            countInLabel
           />
         </>
       )}

@@ -194,8 +194,10 @@ function Badge({ n, testId }: { n: number | null; testId?: string }) {
     <span
       data-testid={testId}
       aria-hidden
-      className={`tnum absolute top-0.5 left-[calc(50%+14px)] h-4 min-w-4 rounded-lg bg-rail-badge text-center font-mono leading-4 font-semibold text-on-rail-badge ring-2 ring-rail ${
-        text.length > 2 ? "px-0.5 text-[11px] tracking-tighter" : "px-1 text-[13px]"
+      // qa4-settings-32: a round pill tall enough for its digits; two or more digits drop to 11 px
+      // so "11" fits without an oval squeezed against the icon.
+      className={`tnum absolute top-0 left-[calc(50%+14px)] h-[18px] min-w-[18px] rounded-full bg-rail-badge text-center font-mono leading-[18px] font-semibold whitespace-nowrap text-on-rail-badge ring-2 ring-rail ${
+        text.length > 2 ? "px-1 text-[11px] tracking-tighter" : text.length > 1 ? "px-1 text-[11px]" : "px-0.5 text-[12px]"
       }`}
     >
       {text}
