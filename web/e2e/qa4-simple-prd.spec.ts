@@ -160,6 +160,20 @@ test.describe("desktop", () => {
     expect(titles).toEqual([...titles].sort((a, b) => a.localeCompare(b)));
   });
 
+  test("each line is one Tab stop, and the keyboard edits it from the line (qa4-simple-prd-35)", async ({ page }) => {
+    await login(page);
+    await page.goto("/simple/one-pagers/guided-setup");
+    const lines = page.getByTestId("one-pager-line-text");
+    await lines.first().focus();
+    await page.keyboard.press("Tab");
+    // The next stop is the next line's words, not the first line's Edit.
+    await expect(lines.nth(1)).toBeFocused();
+    await page.keyboard.press("Enter");
+    const sources = page.getByRole("region", { name: /^Sources of/ });
+    await sources.getByRole("button", { name: "Edit this line" }).press("Enter");
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+  });
+
   test("a bet's first flow is titled after its line, as Version 1 (qa4-simple-prd-22)", async ({ page }) => {
     // The same line drawn on Guided setup first: its flow is that PRD's own, never this one's.
     await login(page);
