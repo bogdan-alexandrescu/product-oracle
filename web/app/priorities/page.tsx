@@ -1104,8 +1104,9 @@ function Priorities() {
       key: "goal",
       header: "Goal",
       // Wide enough that a goal's code and a word of its name share a line: a name wraps
-      // between words, never inside one ("Scalin g").
-      width: "160px",
+      // between words, never inside one ("Scalin g"); no wider, so the Feature column keeps its
+      // room beside the docked inspector and an approver's move column (qa-plan-5).
+      width: "128px",
       // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
       wrap: true,
       cell: (f) =>
