@@ -10,6 +10,7 @@ import { addDays, displayZone, formatInZone, zoneInstant } from "@/lib/dates";
 import { formatAge, formatDate, formatDateTime, formatMoney, plural } from "@/lib/format";
 import { runLabel } from "@/lib/labels";
 import { useMe, type Operation } from "@/lib/me";
+import { lostItems, needingAttention, needsPerson } from "@/lib/source-attention";
 import { errorMessage } from "@/lib/use-query";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
@@ -1714,20 +1715,22 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
 
 /**
  * My sources that need attention: saved before a newer rule they break (more than 100 Slack
- * channels, a date out of range), so they are not synced until edited. GET /v1/sources
- * filtered here; each row opens the source on Settings › Sources, where Edit is.
+ * channels, a date out of range), so they are not synced until edited, or active ones that
+ * lost access to something they picked or must reconnect (qa4-settings-6), counted as
+ * Settings › Sources counts them. GET /v1/sources filtered here; each row opens the source on
+ * Settings › Sources, where Edit is.
  */
 export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Need[] {
-  return sources
-    .filter((s) => s.status === "needs_attention")
-    .map((s) => ({
+  return needingAttention(sources).map((s) => {
+    const why = sourceNeedReason(s, mayEdit);
+    return {
       key: s.id,
       icon: "sources",
       kind: "Source",
       item: (
         // qa-company-20: the reason wraps to a second line rather than cut mid-sentence.
-        <span className="line-clamp-2 min-w-0 break-words whitespace-normal" title={s.last_error ?? undefined} data-testid="source-need-text">
-          {s.last_error ?? (mayEdit ? "Needs attention: edit this source to sync it again" : "Needs attention: it syncs again once it is edited")}
+        <span className="line-clamp-2 min-w-0 break-words whitespace-normal" title={why} data-testid="source-need-text">
+          {why}
         </span>
       ),
       context: (
@@ -1744,7 +1747,18 @@ export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Ne
       ) : (
         <ByRole who="View only" title="Your role cannot edit sources: commenters and above can" />
       ),
-    }));
+    };
+  });
+}
+
+/** Why a source needs a person: the API's message, else what it lost or must reconnect for. */
+function sourceNeedReason(s: Schemas["SourceOut"], mayEdit: boolean): string {
+  if (s.status === "needs_attention" || !needsPerson(s)) {
+    return s.last_error ?? (mayEdit ? "Needs attention: edit this source to sync it again" : "Needs attention: it syncs again once it is edited");
+  }
+  if (s.reconnect_reason) return `${s.reconnect_reason}: reconnect its account in Settings › Connections`;
+  const lost = lostItems(s);
+  return `Lost access to ${plural(lost, "item")}: share ${lost === 1 ? "it" : "them"} again or remove ${lost === 1 ? "it" : "them"} from this source`;
 }
 
 /** H6 launch rows: Ready to launch and Notes to send (the launch's owner), Set tier (approvers),

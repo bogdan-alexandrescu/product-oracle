@@ -36,13 +36,15 @@ const STEPS: Record<string, Copy> = {
     // all. Both say the same number: a source with nothing read yet is said as such. Home
     // lists the sources only while the step is open (its call budget); a done step says how
     // many are read, which never contradicts a longer list on Sources.
+    // qa4-settings-2: the count is of sources holding something read, said so ("3 sources
+    // with content"), so it never reads as the whole list Sources shows ("My sources 6").
     status: (s, mine) => {
       const read = s.count ?? 0;
-      if (s.done) return `${sourcesText(read)} read`;
+      if (s.done) return `${sourcesText(read)} with content`;
       const all = Math.max(mine.sources ?? read, read);
       if (all === 0) return "None";
       if (read === 0) return `${sourcesText(all)} · nothing read yet`;
-      return all > read ? `${sourcesText(all)} · ${read} read` : sourcesText(read);
+      return all > read ? `${sourcesText(all)} · ${read} with content` : sourcesText(read);
     },
   },
   invite: {
@@ -87,7 +89,8 @@ const STEPS: Record<string, Copy> = {
     status: (s) => (s.run_id ? "Building…" : !s.done ? "Not built" : s.detail ? `Built ${formatDay(s.detail)}` : "Built"),
     // Built: the row reviews the baseline, never starts a second build from Home.
     doneAction: "Review",
-    doneHref: "/baseline",
+    // qa4-settings-5: from=setup, so the baseline keeps the way back to Home, as the other steps do.
+    doneHref: "/baseline?from=setup",
   },
 };
 

@@ -241,7 +241,6 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
         </InspectorRow>
         <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
         {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
-        <InspectorRow value={t.key}>Key</InspectorRow>
       </InspectorSection>
       {canEdit && (
         <InspectorSection>

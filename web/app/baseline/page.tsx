@@ -3,7 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Button, Chip, InfoTip, KpiStrip, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
+import { setupReturn } from "@/app/settings/_nav";
+import { Button, Chip, InfoTip, KpiStrip, LinkButton, Notice, Page, PageHeader, Split, ViewOnly, type Kpi } from "@/components/ds";
 import { VagueGoalsLine } from "@/components/discuss/VagueGoalsLine";
 import { Loading } from "@/components/ui";
 import { startInterview, startInterviews, vagueGoals } from "@/lib/api/goal-interview";
@@ -60,6 +61,20 @@ function BuildFromUrl({ onBuild }: { onBuild: (fromSetup: boolean) => void }) {
     if (build) onBuild(fromSetup);
   }, [build, fromSetup, onBuild]);
   return null;
+}
+
+/**
+ * qa4-settings-5: opened from a Set up step (?from=setup, or Simple's ?from=simple-setup), the
+ * header keeps the way back to that Home, as the Settings steps do.
+ */
+function BackHomeFromUrl() {
+  const home = setupReturn(useSearchParams().get("from"));
+  if (!home) return null;
+  return (
+    <LinkButton href={home} variant="ghost" icon="home" data-testid="baseline-back-home">
+      Back to Home
+    </LinkButton>
+  );
 }
 
 /** qa-onboarding-25: ?build=1 for a role that cannot build says who can, instead of nothing. */
@@ -465,6 +480,9 @@ export default function BaselinePage() {
         }
         action={
           <span className="flex flex-wrap items-center gap-2">
+            <Suspense fallback={null}>
+              <BackHomeFromUrl />
+            </Suspense>
             {/* The Items tab has its own Add, on the kind it shows: one Add control there (qa-plan-49). */}
             {canWrite && tab !== "items" && (
               <Button icon="plus" className="h-10" onClick={() => setAdding("goal")}>

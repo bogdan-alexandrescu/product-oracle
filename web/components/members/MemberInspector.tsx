@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { Field, INPUT } from "@/app/settings/_components/fields";
 import { Button, Chip, InfoTip, Inspector, InspectorRow, InspectorSection, Notice } from "@/components/ds";
@@ -174,8 +174,24 @@ export function MemberInspector({
     }
   }
 
+  // qa4-settings-11: Escape closes the panel, as the Close button does; not while a dialog
+  // (Remove, Change role) is open over the page, whose own Escape closes it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector('dialog[open], [role="dialog"], [role="alertdialog"]')) return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const removed = member.status === "disabled";
   const rows = detail?.responsibilities ?? [];
+  // qa4-settings-12: holding no approval and no responsibility reads once, not "Nothing" twice.
+  const h = detail?.holds;
+  const holdsNothing =
+    !!detail && !!h && !h.section_approvals && !h.version_approvals && !h.spend_approvals && !h.checkpoint_decisions && rows.length === 0;
   return (
     <Inspector
       eyebrow="Members"
@@ -245,6 +261,14 @@ export function MemberInspector({
           Tokens
         </InspectorRow>
       </InspectorSection>
+      {holdsNothing ? (
+        <InspectorSection label={removed ? "Still assigned" : "Holds"} testId="member-holds">
+          <p data-testid="member-holds-nothing" className="text-[15px] text-text2">
+            {personName(member)} holds nothing: no approvals and no responsibilities.
+          </p>
+        </InspectorSection>
+      ) : (
+        <>
       <InspectorSection label="Holds" testId="member-holds">
         {detail ? <HoldsLine d={detail} /> : <p className="text-[15px]">—</p>}
       </InspectorSection>
@@ -261,6 +285,8 @@ export function MemberInspector({
           </ul>
         )}
       </InspectorSection>
+        </>
+      )}
       {footer && <InspectorSection>{footer}</InspectorSection>}
     </Inspector>
   );

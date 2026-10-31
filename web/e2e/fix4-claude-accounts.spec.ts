@@ -65,12 +65,12 @@ test("qa-settings-18: the list and the pane read in plain words, no 5h, clears o
   await expect(row(page, "work").getByTestId("clears")).toHaveText(/^7-day window resets in ~\d+h \d\dm$/);
   await expect(row(page, "spare").getByTestId("clears")).toHaveText("Not measured");
   await expect(page.getByTestId("accounts-foot")).toContainText("4 accounts · Usage read 2–50 min ago");
-  await expect(table).not.toContainText(/clears|given out \d+d/);
+  await expect(table).not.toContainText(/clears|used by a job \d+d/);
 
   // The pane opens on old-laptop: its last job, in words.
   await expect(detail(page).getByRole("heading", { name: "old-laptop" })).toBeVisible();
   const given = detail(page).getByTestId("tile-Last given out");
-  await expect(given).toContainText("Last given out");
+  await expect(given).toContainText("Last used by a job");
   await expect(given).toContainText("9 days ago");
   await expect(given).not.toContainText(/\b9d\b/);
   await expect(detail(page).getByTestId("tile-Clears")).toContainText("Next reset");
@@ -82,7 +82,7 @@ test("qa-settings-19: one date style and one relative style on the screen", asyn
   await expect(row(page, "work")).toContainText(WORDED);
   await expect(detail(page).getByTestId("tile-Last given out")).toContainText(WORDED);
   // Relative ones all read "4 min ago", "9 days ago".
-  await expect(page.getByTestId("refresh-sweep")).toHaveText(/^Last checked \d+ min ago$/);
+  await expect(page.getByTestId("refresh-sweep")).toHaveText(/^Sign-ins checked \d+ min ago$/);
   await expect(detail(page)).toContainText(/Sign-in needed · \d+ min ago/);
   for (const part of [page.getByTestId("account-list"), page.getByTestId("accounts-foot"), detail(page)])
     await expect(part).not.toContainText(/\b\d+[mhd] ago\b/);

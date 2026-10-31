@@ -8,7 +8,7 @@ import { Field, INPUT, TEXTAREA } from "@/app/settings/_components/fields";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
 
-import { GROUPS, outcomeText, SecretOnce, type Delivery, type EventType, type Webhook } from "./parts";
+import { failureText, GROUPS, outcomeText, SecretOnce, type Delivery, type EventType, type Webhook } from "./parts";
 
 /**
  * New webhook (I1): Name, URL, the events grouped Runs · Drafts · Approvals with "All" per
@@ -68,10 +68,20 @@ export function NewWebhookSheet({
     }
   }
 
-  const ready = name.trim() && url.trim() && types.length > 0 && (!approvers || why.trim());
+  // qa4-settings-30: Create names what it still needs, not just greyed out.
+  const missing = !name.trim()
+    ? "Add a name"
+    : !url.trim()
+      ? "Add a URL"
+      : types.length === 0
+        ? "Pick at least one event"
+        : approvers && !why.trim()
+          ? "Say why it sends owners-and-approvers content"
+          : null;
+  const ready = !missing;
 
   return (
-    <Sheet open={open} dialog title="New webhook" onClose={close} testId="new-webhook-sheet">
+    <Sheet open={open} dialog title={created ? "Webhook created" : "New webhook"} onClose={close} testId="new-webhook-sheet">
       {created ? (
         <div className="flex flex-col gap-4 p-4">
           <p className="text-[15px]">
@@ -87,7 +97,7 @@ export function NewWebhookSheet({
         </div>
       ) : (
         <form
-          className="flex flex-col gap-4 p-4"
+          className="flex flex-col gap-4 p-4 sm:max-w-[640px]"
           onSubmit={(e) => {
             e.preventDefault();
             if (ready) void create();
@@ -109,7 +119,13 @@ export function NewWebhookSheet({
             autoFocus
           />
           {error && <ErrorNote>{error}</ErrorNote>}
-          <div className="flex justify-end gap-2">
+          {/* qa4-settings-30: the footer stays in view while the events scroll. */}
+          <div className="sticky bottom-0 z-[2] -mx-4 -mb-4 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-4 py-3">
+            {missing && (
+              <span className="mr-auto text-[13px] leading-[18px] text-text2" data-testid="create-missing">
+                {missing}
+              </span>
+            )}
             <Button onClick={close}>Cancel</Button>
             <Button type="submit" variant="primary" disabled={!ready || busy}>
               {busy ? "Creating…" : "Create"}
@@ -142,12 +158,12 @@ export function TestEvent({ hook, onSent }: { hook: Webhook; onSent?: (d: Delive
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Button onClick={() => void send()} disabled={busy}>
-        {busy ? "Sending…" : "Send test event"}
+        {busy ? "Sending…" : result && (result.status === "failed" || result.status === "retrying") ? "Try again" : "Send test event"}
       </Button>
+      {/* qa4-settings-25: a failure in words, never the raw error code. */}
       {result && (
         <span className="text-[15px] font-semibold" data-testid="test-result">
-          {outcomeText(result)}
-          {result.status !== "succeeded" && <span className="font-normal text-text2"> · Oracle tries again in a minute</span>}
+          {result.status === "failed" || result.status === "retrying" ? `✕ ${failureText(result, hook.host)}` : outcomeText(result)}
         </span>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -239,7 +255,11 @@ export function WebhookFields({
             <input type="checkbox" role="switch" className="size-4 accent-[var(--accent)]" checked={approvers} onChange={(e) => setApprovers(e.target.checked)} />
             Include owners-and-approvers content
           </label>
-          <p className="text-[13px] leading-[18px] text-text2">Updates, pricing memos, their runs, checkpoints and approvals. Off unless you say why.</p>
+          {/* qa4-settings-31: what is sent and who sees it, in plain words. */}
+          <p className="text-[13px] leading-[18px] text-text2" data-testid="approvers-content-help">
+            Also sends events that only owners and approvers can see in Oracle: updates, pricing memos, and their runs, checkpoints and
+            approvals. Anyone who can read the receiving tool will see them. Turning it on or off needs a reason, which Oracle keeps with the change.
+          </p>
           {askWhy && (
             <Field label="Why">
               <textarea className={TEXTAREA} rows={2} maxLength={500} value={why} onChange={(e) => setWhy(e.target.value)} />

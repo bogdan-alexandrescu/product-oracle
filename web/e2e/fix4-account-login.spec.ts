@@ -81,7 +81,7 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("signed-in-as")).toHaveText(ADMIN.email);
   });
 
-  test("qa-settings-41: the consent card speaks plainly and calls a loopback address an app on this computer", async ({ page }) => {
+  test("qa-settings-41: the consent card speaks plainly and calls a loopback address the client on this computer", async ({ page }) => {
     await login(page);
     await page.goto("/oauth/consent?request=mock-handle");
     const consent = page.getByTestId("consent");
@@ -92,7 +92,7 @@ test.describe("desktop", () => {
     await expect(consent).toContainText("Make the changes you are allowed to: propose, comment, approve and edit.");
     await expect(consent).not.toContainText("including pages in no source");
     const back = page.getByTestId("consent-return");
-    await expect(back).toHaveText("an app on this computer");
+    await expect(back).toHaveText(`${MOCK_CONSENT.client_name} on this computer`);
     await expect(back).toHaveAttribute("title", new URL(MOCK_CONSENT.redirect_uri).host);
     await expect(consent).not.toContainText("127.0.0.1");
   });

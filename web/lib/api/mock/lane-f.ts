@@ -1530,7 +1530,7 @@ export function previewHtml(t: Tokens, css: string, kind: Kind): string {
           ["Goal trace", "Moves G1: raise first-order completion by removing a late surprise in checkout."],
           ["Problem", "Buyers leave checkout when the total changes late in the flow."],
           ["Solution", "Show the shipping cost in the cart, before checkout starts."],
-          ["Sources and data points", "c1: funnel export, September. c2: customer interview 07."],
+          ["Sources and data points", "Checkout funnel report, September. Customer interview notes, week 7."],
         ]
       : [
           ["Now", "Shipping cost in the cart (G1) · Saved addresses (G1)"],
