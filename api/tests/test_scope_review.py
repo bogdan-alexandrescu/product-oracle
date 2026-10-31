@@ -48,6 +48,10 @@ Test cards (protects / fails_when / no_claim):
   fixes 1); fails_when=a commenter's or viewer's capabilities (can(): the operation and its
   per-item role) say yes to a write the API answers 403, or an approver's say no;
   no_claim=the D8 suggestions a commenter makes instead.
+- test_each_reason_keeps_its_own_call: protects=a feature-set Keep per reason (two
+  reasons, two calls); fails_when=keeping a second reason un-keeps the first, the feature
+  stays under Needs you once every reason is answered, or Undo of one call drops the
+  other; no_claim=waivers (they merge into one waiver).
 - test_mcp_refuses_approval_while_a_reason_is_open: protects=criterion 2 on MCP;
   fails_when=decide_checkpoint approves with a person's exclusion leaving an open
   depends_on_excluded, or still refuses after the waiver; no_claim=the reason texts.
@@ -691,3 +695,46 @@ async def test_capabilities_agree_with_the_scope_routes(client, owner, runtime):
         )
         assert (resp.status_code == 201) is writes, resp.text
         assert (resp.status_code == 403) is not writes, resp.text
+
+
+async def test_each_reason_keeps_its_own_call(client, owner, runtime):  # noqa: F811
+    _, auth = owner
+    run, cp, scope_id = await _open(client, owner, runtime)
+    scope = await _read(client, auth, scope_id)
+    handled = scope["summary"]["handled"]
+    for code in ("serves_no_goal", "new_feature"):
+        resp = await _action(
+            client, auth, run, cp, item_key="bulk-edit", kind="accept", answers=[code]
+        )
+        assert resp.status_code == 200, resp.text
+    scope = await _read(client, auth, scope_id)
+    bulk = _row(scope, "bulk-edit")
+    assert {r["code"]: r["answered"] for r in bulk["reasons"]} == {
+        "serves_no_goal": True,
+        "new_feature": True,
+    }
+    assert bulk["needs_you"] is False
+    assert scope["summary"]["handled"] == handled + 1 and scope["summary"]["needs_you"] == 0
+
+    # Each call is its own action: undoing one keeps the other.
+    draft = (
+        await client.get(f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/review", headers=auth)
+    ).json()
+    keeps = [
+        a
+        for i in draft["items"]
+        if i["key"] == "bulk-edit"
+        for a in i["actions"]
+        if a["kind"] == "accept"
+    ]
+    assert sorted(a["answers"][0] for a in keeps) == ["new_feature", "serves_no_goal"]
+    first = next(a for a in keeps if a["answers"] == ["serves_no_goal"])
+    resp = await client.delete(
+        f"/v1/runs/{run['id']}/checkpoints/{cp['id']}/actions/{first['id']}", headers=auth
+    )
+    assert resp.status_code in (200, 204), resp.text
+    bulk = _row(await _read(client, auth, scope_id), "bulk-edit")
+    assert {r["code"]: r["answered"] for r in bulk["reasons"]} == {
+        "serves_no_goal": False,
+        "new_feature": True,
+    }

@@ -3826,8 +3826,15 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
         if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
       }
     }
-    // As the API: an owner's waiver of Stopped in the strategy is its own action.
-    const field = a.kind === "waive" && cp.kind === "roadmap_items" ? ((a.answers ?? []).some((c) => OWNER_WAIVES.includes(c)) ? "owner" : null) : (a.field ?? null);
+    // As the API: an owner's waiver of Stopped in the strategy is its own action; a feature set's Keep of one reason is that reason's own.
+    const field =
+      a.kind === "waive" && cp.kind === "roadmap_items"
+        ? (a.answers ?? []).some((c) => OWNER_WAIVES.includes(c))
+          ? "owner"
+          : null
+        : a.kind === "accept" && cp.kind === "feature_set" && (a.answers ?? []).length === 1
+          ? a.answers![0]
+          : (a.field ?? null);
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
     if (cp.kind === "feature_set" && stages && (a.kind === "edit" || a.kind === "add")) {
@@ -4402,7 +4409,7 @@ const SCOPE_ATTEMPT2_SET: FeatureSetSpec = {
 /** The held console approval: one blocking row (Bulk edit depends on the export left out). */
 const SCOPE_CONSOLE_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK], excluded: [EXPORT_OUT] };
 
-function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
+function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number, flags: Record<string, string[]> = {}): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
   const { from, now } = seedClock();
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}) };
   const full = { ...ctx, db: own, now };
@@ -4439,7 +4446,7 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
     if (s) f.text = s.summary;
     // A row the set leaves out reads as a name ("Address book export"), as the agents titled it.
     if (f.title === f.key) f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, " ");
-    f.flags = [];
+    f.flags = [...(flags[f.key] ?? [])];
   }
   prepareScope(scope);
   const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
@@ -4453,12 +4460,14 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
 /**
  * The "scope-review" scenario (C7): the default company plus three Baseline to PRD runs at
  * their feature set: saved-addresses (attempt 1: one blocking dependency, one feature with no
- * goal, one with low confidence, and a commenter's suggestion), saved-addresses-next (attempt
+ * goal, one with low confidence that is also new, and a commenter's suggestion), saved-addresses-next (attempt
  * 2, for the Changed filter) and address-book (approved in SwarmCloud's console while one
- * blocking row is open, so the approval is held).
+ * blocking row is open, so the approval is held). With `kept`, that row is also new and a likely
+ * duplicate, both kept by one call staged before each reason had its own.
  */
-export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
-  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1);
+export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false) {
+  // Pick address in one step is new as well as low in confidence: one feature, two calls.
+  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
   const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
   if (commenter) {
     db.drafts![first.cp.id] = {
@@ -4493,7 +4502,32 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     "address-book-export": [],
     "address-sharing": [],
   };
-  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1);
+  // kept: Bulk edit is new and a likely duplicate as well as blocked, both kept with one call
+  // staged before each reason had its own (field-less, answering both), as an older draft holds it.
+  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1, kept ? { "bulk-edit": ["new_feature", "duplicate_of_existing"] } : {});
+  const approver = (ctx.members ?? []).find((x) => x.email === "approver@example.com");
+  if (kept && approver) {
+    db.drafts![held.cp.id] = {
+      revision: 1,
+      note: null,
+      actions: [
+        {
+          id: ctx.uuid(),
+          item_key: "bulk-edit",
+          kind: "accept",
+          field: null,
+          value: null,
+          answers: ["new_feature", "duplicate_of_existing"],
+          note: null,
+          state: "staged",
+          created_by: approver.id,
+          updated_by: approver.id,
+          updated_at: "2026-10-17T07:30:00Z",
+        },
+      ],
+      log: [{ revision: 1, by: displayName(approver.email) }],
+    };
+  }
   held.cp.console = {
     answered_by: "lead@example.com",
     answered_at: "2026-10-17T07:40:00Z",

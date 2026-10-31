@@ -517,6 +517,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * problem (C6, saved-addresses);
  * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
  * with three rows that need a person, attempt 2, and a held console approval);
+ * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
+ * duplicate, both kept by one older call that answers the two;
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
@@ -1425,9 +1427,9 @@ function seedFeatureSet(): Db {
 }
 
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
-function seedScopeReview(): Db {
+function seedScopeReview(kept = false): Db {
   const db = seed();
-  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db)));
+  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept));
   return db;
 }
 
@@ -2767,8 +2769,8 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
-          : scenario === "scope-review"
-            ? seedScopeReview
+          : scenario === "scope-review" || scenario === "scope-review-kept"
+            ? () => seedScopeReview(scenario === "scope-review-kept")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"
