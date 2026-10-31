@@ -203,8 +203,9 @@ export const pct = (c: number | null | undefined) => (c == null ? null : Math.ro
  */
 export function includeFeature(mode: Mode, ops: Ops, f: Feature): Promise<void> | void {
   if (f.decision !== "include") return setDecision(mode, ops, f, "include");
+  // Each reason keeps its own call (one Keep each), so the ones kept before stay kept.
   const codes = f.reasons.filter((r) => !r.answered && r.severity !== "blocking").map((r) => r.code);
-  if (codes.length) return ops.act({ item_key: f.key, kind: "accept", answers: codes });
+  return codes.reduce<Promise<void>>((done, code) => done.then(() => ops.act({ item_key: f.key, kind: "accept", answers: [code] })), Promise.resolve());
 }
 
 /** qa-work-16: what the agents proposed, in the Decision control's words ("Oracle proposes: Include"). */

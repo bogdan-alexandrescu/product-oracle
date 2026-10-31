@@ -471,7 +471,9 @@ export function ScopeInspector({
   const goalTitle = (key: string) => goalName(scope, key);
   const write = mode !== "viewer";
   // rirs-14: a row the person has not decided yet shows what the agents proposed, not a decision.
-  const undecided = f.needs_you && !f.edited;
+  // A feature kept for every reason to confirm is included, though a blocking reason is still open.
+  const kept = staged.some((a) => a.kind === "accept") && !f.reasons.some((r) => !r.answered && r.severity !== "blocking");
+  const undecided = f.needs_you && !f.edited && !kept;
   const proposed = proposedText(f.decision);
   return (
     <Inspector

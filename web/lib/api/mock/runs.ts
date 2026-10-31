@@ -3826,8 +3826,15 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
         if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
       }
     }
-    // As the API: an owner's waiver of Stopped in the strategy is its own action.
-    const field = a.kind === "waive" && cp.kind === "roadmap_items" ? ((a.answers ?? []).some((c) => OWNER_WAIVES.includes(c)) ? "owner" : null) : (a.field ?? null);
+    // As the API: an owner's waiver of Stopped in the strategy is its own action; a feature set's Keep of one reason is that reason's own.
+    const field =
+      a.kind === "waive" && cp.kind === "roadmap_items"
+        ? (a.answers ?? []).some((c) => OWNER_WAIVES.includes(c))
+          ? "owner"
+          : null
+        : a.kind === "accept" && cp.kind === "feature_set" && (a.answers ?? []).length === 1
+          ? a.answers![0]
+          : (a.field ?? null);
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
     if (cp.kind === "feature_set" && stages && (a.kind === "edit" || a.kind === "add")) {

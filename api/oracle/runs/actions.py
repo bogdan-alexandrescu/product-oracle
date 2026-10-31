@@ -687,7 +687,11 @@ async def put_action(
     if body.kind == "waive" and cp.kind == "roadmap_items":
         # An owner's waiver of Stopped in the strategy is its own action (gate.OWNER_WAIVES).
         field = gate.OWNER_WAIVE_FIELD if OWNER_WAIVES & set(body.answers) else None
-    existing = await db.scalar(
+    if body.kind == "accept" and cp.kind == "feature_set" and len(body.answers) == 1:
+        # C7: each reason of a feature keeps its own call, so keeping another reason never
+        # un-keeps the first and Undo takes back one call.
+        field = body.answers[0]
+    existing =await db.scalar(
         select(CheckpointAction).where(
             CheckpointAction.checkpoint_id == cp.id,
             CheckpointAction.item_key == body.item_key,

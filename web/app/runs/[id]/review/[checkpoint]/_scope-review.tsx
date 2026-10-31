@@ -237,7 +237,13 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     for (const a of it.actions) {
       if (a.state !== "staged" || (a.kind !== "accept" && a.kind !== "waive")) continue;
       if (a.kind === "accept") accepted.add(a.id);
-      chips.push({ key: a.id, label: `${title(it.key)}: ${a.kind === "waive" ? "waived" : "included"}`, onRemove: () => ops.removeAction(a.id) });
+      // Each call by the reason it answers ("Bulk edit: included · low confidence").
+      const f = scope.features.find((x) => x.key === it.key);
+      const why = a.answers.map((code) => {
+        const r = f?.reasons.find((x) => x.code === code);
+        return (r && f ? reasonChip(r, f, scope) : (REASON_CHIP[code] ?? code)).toLowerCase();
+      });
+      chips.push({ key: a.id, label: [`${title(it.key)}: ${a.kind === "waive" ? "waived" : "included"}`, ...why].join(" · "), onRemove: () => ops.removeAction(a.id) });
     }
   }
   const s = scope.summary;
@@ -605,8 +611,10 @@ function YourCall({ f, scope, review, mode, ops, ui }: { f: Feature; scope: Scop
   if (f.edited) return done(changeText(f), () => ops.patch(f, { revert: true }));
   const open = openReasons(f);
   if (open.length) return <FixButtons fixes={fixesFor(open[0], f, scope, mode, ops, ui)} />;
-  const answer = actionsOn(review, f.key).find((a) => a.state === "staged" && (a.kind === "accept" || a.kind === "waive"));
-  if (answer) return done(answer.kind === "waive" ? "Waived" : "Included", () => ops.removeAction(answer.id));
+  // A call per reason: the row's Undo takes back all of them.
+  const answers = actionsOn(review, f.key).filter((a) => a.state === "staged" && (a.kind === "accept" || a.kind === "waive"));
+  if (answers.length)
+    return done(answers.every((a) => a.kind === "waive") ? "Waived" : "Included", () => Promise.all(answers.map((a) => ops.removeAction(a.id))).then(() => undefined));
   // Fixed elsewhere (a dependency included again): Undo puts that row back.
   const fixedBy = scope.features.filter((d) => f.depends_on.includes(d.key) && d.edited);
   if (fixedBy.length) return done("Fixed", () => Promise.all(fixedBy.map((d) => ops.patch(d, { revert: true }))).then(() => undefined));
