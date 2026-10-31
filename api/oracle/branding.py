@@ -68,6 +68,7 @@ DEFAULT_DISCLAIMER = (
     "This roadmap shows our current plans. It is not a commitment, and plans and timing can change."
 )
 MARK = "Made with Product Oracle"
+STAND_IN = "“Example Co” is a stand-in name. Type your company's name."
 # The setting's stored shape; display_name null reads as the company's name.
 DEFAULT: dict[str, Any] = {
     "display_name": None,
@@ -209,6 +210,26 @@ async def company_name(db: AsyncSession) -> str:
     return tenant.name if tenant is not None else ""
 
 
+async def export_name(db: AsyncSession) -> str:
+    """The name an export prints when branding names none: the company's, never the
+    seed's placeholder (e2e-pdf-export, 2026-10-30: "" prints no name)."""
+    return _not_placeholder(await company_name(db))
+
+
+def _not_placeholder(name: Any) -> str:
+    """``name``, or "" when it is none or the seed's placeholder (e2e-pdf-export review)."""
+    from oracle.models import PLACEHOLDER_NAME
+
+    name = name.strip() if isinstance(name, str) else ""
+    return "" if name == PLACEHOLDER_NAME else name
+
+
+async def brand_name(db: AsyncSession, value: dict[str, Any]) -> str:
+    """The display name the branding ``value`` stores, else the company's; never the
+    seed's placeholder."""
+    return _not_placeholder(value.get("display_name")) or await export_name(db)
+
+
 # --- what renders read ------------------------------------------------------------------
 
 
@@ -288,7 +309,7 @@ async def load_brand(db: AsyncSession) -> Brand:
     accent = value.get("accent")
     return Brand(
         tenant_id=current_tenant(db),
-        display_name=value.get("display_name") or await company_name(db),
+        display_name=await brand_name(db, value),
         accent=accent if isinstance(accent, str) and _HEX.match(accent) else None,
         public_disclaimer=value.get("public_disclaimer") or DEFAULT_DISCLAIMER,
         oracle_mark=bool(value.get("oracle_mark", True)),
@@ -332,10 +353,13 @@ def render_brand_header(
         return Markup("")
     uri = brand.logo_dark_data_uri if dark else brand.logo_data_uri
     name = escape(brand.display_name)
+    if not uri and not name and not (shared and brand.oracle_mark):
+        return Markup("")
     parts = ['<div class="brand-header">']
     if uri:
         parts.append(f'<img class="brand-logo" src="{uri}" alt="{name}" height="40">')
-    parts.append(f'<span class="brand-name">{name}</span>')
+    if name:
+        parts.append(f'<span class="brand-name">{name}</span>')
     if shared and brand.oracle_mark:
         parts.append(f'<span class="brand-mark">{MARK}</span>')
     parts.append("</div>")
@@ -426,7 +450,7 @@ async def _out(db: AsyncSession, principal: Principal) -> BrandingOut:
     value = await stored(db)
     logo_dark = _logo(value.get("logo_dark"))
     return BrandingOut(
-        display_name=value.get("display_name") or await company_name(db),
+        display_name=await brand_name(db, value),
         logo=_logo(value.get("logo")),
         logo_dark=logo_dark,
         accent=value.get("accent"),
@@ -474,6 +498,8 @@ async def put_branding(body: BrandingIn, principal: Owner, db: TenantDB) -> Bran
     name = body.display_name.strip()
     if not name or len(name) > MAX_NAME:
         raise _invalid(f"The display name must be 1 to {MAX_NAME} characters")
+    if not _not_placeholder(name):
+        raise _invalid(STAND_IN)
     disclaimer = body.public_disclaimer.strip()
     if not disclaimer or len(disclaimer) > MAX_DISCLAIMER:
         raise _invalid(f"The public disclaimer must be 1 to {MAX_DISCLAIMER} characters")

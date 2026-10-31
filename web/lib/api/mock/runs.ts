@@ -180,7 +180,7 @@ export interface RunsContext {
     run: Pick<RunOut, "id" | "document_kind" | "source" | "template" | "theme">,
     /** A person's Retry import: the version's `imported_again`. */
     again?: string,
-  ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems">;
+  ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems" | "code_names">;
   /** The run's open baseline proposals (RunOut.open_proposals). */
   openProposals?: (runId: string) => number;
   /** B6: the confirmed and proposed goals not measurable (an approved baseline_confirm's vague_goals). */
@@ -1358,7 +1358,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   }
   if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md") || def.outputs.includes("update.md") || def.outputs.includes("pricing.md")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
-    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
+    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null };
     r.document_id = imp.document_id ?? null;
     // As the API (fill_document): once the draft imports, the run's scopes and orders name the document.
     for (const x of ctx.db.scopes?.[r.id] ?? []) x.document_id ??= r.document_id;
@@ -2204,7 +2204,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     // run creator's; its history says who imported it again, and when (owner, 2026-10-25).
     const again = `imported again by ${displayName(ctx.userName ?? "admin@example.com")} on ${companyStamp(ctx.now())}`;
     const imp = ctx.importDraft(r.document_slug, r, again);
-    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
+    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null };
     r.document_id = imp.document_id ?? null;
     review.payload = { ...review.payload, import: s.draft_import };
     return done();
@@ -2391,7 +2391,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
     status: "succeeded",
     cost_usd: 8.1,
     artifacts: ["prd.md"],
-    draft_import: { document_id: done.document_id, slug: "checkout-redesign", version: 2, created: true, warnings: [], error: null, problems: [], summary: null },
+    draft_import: { document_id: done.document_id, slug: "checkout-redesign", version: 2, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null },
   });
   db.artifacts[`${done.id}|1|prd.md`] = fileContent("prd.md", "next_draft", 1);
   done.checkpoints.push({
@@ -2649,6 +2649,27 @@ export function seedEngCheckRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunOu
   return r;
 }
 
+/**
+ * The "eng-check-unmapped" scenario: the "eng-check" run whose maps cover example/shop-app and
+ * example/shop-api while the features cite ids of example/shop-web, which has no map.
+ */
+export function seedEngCheckUnmappedRun(db: RunsDb, ctx: Omit<RunsContext, "db">, named = true): RunOut {
+  const r = seedEngCheckRun(db, ctx);
+  const cp = r.checkpoints.find((c) => c.kind === "eng_review" && c.status === "pending")!;
+  const file: BriefsMaps = {
+    cites: {
+      "f.guided-setup": [["module:onboarding", "touches[0].ref"], ["module:storefront", "touches[1].ref"]],
+      "f.sample-data": [["module:storefront", "touches[0].ref"], ["model:catalogue", "reuse"]],
+      "f.saved-carts": [["module:storefront", "reuse"]],
+    },
+    repos: ["https://github.com/example/shop-app.git"],
+    unmapped: named ? ["example/shop-web"] : [],
+  };
+  const maps: RunMaps = { ids: ["module:onboarding", "module:checkout"], repos: ["example/shop-app", "example/shop-api"] };
+  cp.payload = { ...cp.payload, briefs_check: briefsCheckOf(SEEDED_BRIEFS, file, maps) };
+  return r;
+}
+
 /** The runs the "eng-dates" scenario seeds (F4 lane B). */
 export const ENG_DATES_RUN = "7a11c0de-0000-4000-8000-0000000000d4";
 export const ENG_DATES_WAITING_RUN = "7a11c0de-0000-4000-8000-0000000000d5";
@@ -2766,7 +2787,7 @@ export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
       Object.assign(s, { status: "succeeded", cost_usd: 1, started_at: at, finished_at: at });
       if (s.name !== "prd_draft") continue;
       s.artifacts = ["prd.md"];
-      s.draft_import = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems: [], summary, source: null, prd_links: null };
+      s.draft_import = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems: [], code_names: [], summary, source: null, prd_links: null };
       db.artifacts[`${id}|${s.seq}|prd.md`] = fileContent("prd.md", s.name, 1, document);
       r.checkpoints.push({
         id: ctx.uuid(), run_id: id, kind: "prd_review", status: "approved", approver_role: "approver", segment_seq: s.seq,
@@ -3430,7 +3451,7 @@ export const ROADMAP_FILE_PROBLEM_RUN: { run: RunOut; artifacts: Record<string, 
 // ---------------------------------------------------------------- F4 Engineering check
 
 type Brief = { key: string; title: string; approach: string; size: string; depends_on: string[]; questions: { id: string; question: string; blocking: boolean }[] };
-type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null }[]; code_map_used: boolean };
+type BriefsCheck = { features: Brief[]; problems: { code: string; message: string; feature?: string | null; features?: string[] }[]; code_map_used: boolean; unmapped_repos: string[]; unnamed_repo: boolean };
 const SIZES = ["xs", "s", "m", "l", "xl"];
 const VERDICTS = ["feasible", "feasible_with_changes", "not_feasible"];
 const VERDICT_WORDS: Record<string, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
@@ -3449,8 +3470,45 @@ const SEEDED_BRIEFS: Brief[] = [
   { key: "f.saved-carts", title: "Saved carts", approach: "Keep the cart server-side and sync it on sign-in.", size: "l", depends_on: ["f.guided-setup"], questions: [] },
 ];
 
-function briefsCheckOf(briefs: Brief[]): BriefsCheck {
-  return { features: briefs, problems: [], code_map_used: false };
+/** What a brief file says of the code maps: the ids each feature cites (with where: touches[i].ref or reuse) and the repositories it names. */
+type BriefsMaps = { cites: Record<string, [string, string][]>; repos: string[]; unmapped: string[] };
+/** What the run's maps hold: their ids and repositories. */
+type RunMaps = { ids: string[]; repos: string[] };
+
+/**
+ * As oracle.engineering.check._summarize: an unknown code map id once (sorted), with the
+ * features citing it and where; the repositories the file names that none of the run's maps
+ * covers (compared as owner/name); unnamed_repo when ids are unknown but none is named.
+ */
+function briefsCheckOf(briefs: Brief[], file?: BriefsMaps, maps?: RunMaps): BriefsCheck {
+  const cited: Record<string, Record<string, string[]>> = {};
+  for (const b of briefs) {
+    for (const [ref, at] of file?.cites[b.key] ?? []) {
+      if (maps?.ids.includes(ref)) continue;
+      const places = ((cited[ref] ??= {})[b.key] ??= []);
+      if (!places.includes(at)) places.push(at);
+    }
+  }
+  const problems = Object.keys(cited)
+    .sort()
+    .map((ref) => {
+      const by = Object.entries(cited[ref]).map(([key, places]) => (places.length ? `${key} (${places.join(", ")})` : key));
+      return { code: "unknown_ref", feature: null, features: Object.keys(cited[ref]), message: `'${ref}' is not in the code map this run used: cited by ${by.join(", ")}` };
+    });
+  const mapped = new Set((maps?.repos ?? []).map(repoKey));
+  const unmapped_repos = [...new Set([...(file?.repos ?? []), ...(file?.unmapped ?? [])])].filter((r) => r.trim() && !mapped.has(repoKey(r)));
+  return { features: briefs, problems, code_map_used: !!file?.repos.length, unmapped_repos, unnamed_repo: !unmapped_repos.length && problems.length > 0 };
+}
+
+/** As oracle.engineering.check._repo_key: a repository name as owner/name (URL, ssh address and .git dropped). */
+function repoKey(name: string): string {
+  const key = name
+    .trim()
+    .toLowerCase()
+    .replace(/\/+$/, "")
+    .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]+\//, "")
+    .replace(/^[^/@\s]+@[^:/]+:/, "");
+  return key.replace(/\.git$/, "").replace(/^\/+|\/+$/g, "");
 }
 
 function briefsYaml(briefs: Brief[], attempt: number): string {
@@ -3826,8 +3884,15 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
         if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
       }
     }
-    // As the API: an owner's waiver of Stopped in the strategy is its own action.
-    const field = a.kind === "waive" && cp.kind === "roadmap_items" ? ((a.answers ?? []).some((c) => OWNER_WAIVES.includes(c)) ? "owner" : null) : (a.field ?? null);
+    // As the API: an owner's waiver of Stopped in the strategy is its own action; a feature set's Keep of one reason is that reason's own.
+    const field =
+      a.kind === "waive" && cp.kind === "roadmap_items"
+        ? (a.answers ?? []).some((c) => OWNER_WAIVES.includes(c))
+          ? "owner"
+          : null
+        : a.kind === "accept" && cp.kind === "feature_set" && (a.answers ?? []).length === 1
+          ? a.answers![0]
+          : (a.field ?? null);
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
     if (cp.kind === "feature_set" && stages && (a.kind === "edit" || a.kind === "add")) {
@@ -4402,7 +4467,7 @@ const SCOPE_ATTEMPT2_SET: FeatureSetSpec = {
 /** The held console approval: one blocking row (Bulk edit depends on the export left out). */
 const SCOPE_CONSOLE_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK], excluded: [EXPORT_OUT] };
 
-function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
+function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number, flags: Record<string, string[]> = {}): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
   const { from, now } = seedClock();
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}) };
   const full = { ...ctx, db: own, now };
@@ -4439,7 +4504,7 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
     if (s) f.text = s.summary;
     // A row the set leaves out reads as a name ("Address book export"), as the agents titled it.
     if (f.title === f.key) f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, " ");
-    f.flags = [];
+    f.flags = [...(flags[f.key] ?? [])];
   }
   prepareScope(scope);
   const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
@@ -4453,12 +4518,14 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
 /**
  * The "scope-review" scenario (C7): the default company plus three Baseline to PRD runs at
  * their feature set: saved-addresses (attempt 1: one blocking dependency, one feature with no
- * goal, one with low confidence, and a commenter's suggestion), saved-addresses-next (attempt
+ * goal, one with low confidence that is also new, and a commenter's suggestion), saved-addresses-next (attempt
  * 2, for the Changed filter) and address-book (approved in SwarmCloud's console while one
- * blocking row is open, so the approval is held).
+ * blocking row is open, so the approval is held). With `kept`, that row is also new and a likely
+ * duplicate, both kept by one call staged before each reason had its own.
  */
-export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
-  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1);
+export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false) {
+  // Pick address in one step is new as well as low in confidence: one feature, two calls.
+  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
   const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
   if (commenter) {
     db.drafts![first.cp.id] = {
@@ -4493,7 +4560,32 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     "address-book-export": [],
     "address-sharing": [],
   };
-  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1);
+  // kept: Bulk edit is new and a likely duplicate as well as blocked, both kept with one call
+  // staged before each reason had its own (field-less, answering both), as an older draft holds it.
+  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1, kept ? { "bulk-edit": ["new_feature", "duplicate_of_existing"] } : {});
+  const approver = (ctx.members ?? []).find((x) => x.email === "approver@example.com");
+  if (kept && approver) {
+    db.drafts![held.cp.id] = {
+      revision: 1,
+      note: null,
+      actions: [
+        {
+          id: ctx.uuid(),
+          item_key: "bulk-edit",
+          kind: "accept",
+          field: null,
+          value: null,
+          answers: ["new_feature", "duplicate_of_existing"],
+          note: null,
+          state: "staged",
+          created_by: approver.id,
+          updated_by: approver.id,
+          updated_at: "2026-10-17T07:30:00Z",
+        },
+      ],
+      log: [{ revision: 1, by: displayName(approver.email) }],
+    };
+  }
   held.cp.console = {
     answered_by: "lead@example.com",
     answered_at: "2026-10-17T07:40:00Z",

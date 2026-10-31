@@ -37,7 +37,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.export.pdf import PdfUnavailable, html_to_pdf
+from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
 from oracle.simple import changes, drafts, one_pager
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
@@ -321,7 +321,8 @@ async def remind_simple_one_pager_reviewers(
 @router.get("/one-pagers/{doc}/pdf", name="export_simple_one_pager",
             response_class=Response)  # fmt: skip
 async def export_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> Response:
-    """The one-pager as a branded one-page PDF (its published lines)."""
+    """The one-pager as a branded one-page PDF (its published lines). One that runs past
+    its page says so in ``X-Oracle-Overflow-Pages`` (the page count), never in the PDF."""
     html, stem = await _run(db, one_pager.pdf_html(db, principal, doc))
     await db.commit()
     try:
@@ -331,5 +332,8 @@ async def export_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> 
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{stem}.pdf"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{stem}.pdf"',
+            **overflow_headers(content),
+        },
     )

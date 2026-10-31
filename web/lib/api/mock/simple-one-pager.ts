@@ -22,7 +22,7 @@ import { planByMonth } from "@/lib/simple-home";
 import { planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
-import { annotate } from "./one-pager-checks";
+import { annotate, resolved, type Cites } from "./one-pager-checks";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 
 type Role = Schemas["Me"]["role"];
@@ -44,6 +44,8 @@ export interface OnePagerCtx {
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
   /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
   planPages?: string[];
+  /** e2e-pdf-export ("one-pager-overflow"): the pages the one-pager runs to past its one (the API lays it out). */
+  overflowPages?: number;
 }
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -95,6 +97,12 @@ export interface OnePagerDb {
   held?: { blocks: OnePagerDb["blocks"]; checks: string[] } | null;
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
   approval?: { approved_in: string; waiting_on: { id: string; name: string }[]; blocked_by?: string[] } | null;
+  /** The one_pager job is still writing the page: `blocks` are Oracle's quick read (built_by "extract"). */
+  writing?: boolean;
+  /** The page is Oracle's quick read with no one_pager job writing it (it failed or was never queued). */
+  quickRead?: boolean;
+  /** The PRD version's citations (title, excerpt) by id: a measure's source (one_pager_checks.measures). */
+  cites?: Cites;
 }
 
 const DOC_ID = stableUuid("simple-one-pager-doc");
@@ -230,6 +238,58 @@ export function seedNotInPrdOnePager(): OnePagerDb {
   const db = seedOnePager();
   db.sections = db.sections.filter((x) => x.key !== "not-doing");
   db.blocks = db.blocks.map((b) => (b.key === "not_doing" ? { ...b, lines: [], missing: true } : b));
+  return db;
+}
+
+/**
+ * The "one-pager-run-prd" scenario (CLD's production pass, 2026-10-30): a Goal-traced PRD a
+ * Baseline to PRD run wrote, its lines carrying [c:id] citations, read while the one_pager
+ * job still writes the page (`writing`): Oracle's quick read, stored as an older build
+ * stored it (raw tokens, one cut to "[c…"). The read resolves them (one_pager._tidy). Invented data.
+ */
+export function seedRunPrdOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  db.writing = true;
+  db.cites = {
+    c1: { title: "Library owner interviews", excerpt: null },
+    c4: { title: "Upload log export", excerpt: "photos given an album within 24 hours of upload, per library per week" },
+    c11: { title: "Sorting habits study", excerpt: null },
+  };
+  db.sections = [
+    { key: "problem", heading: "Problem", body: "Owners of small photo libraries lose an hour a week finding new photos (about 9 minutes per day) [c:c1]. Every feature below serves sorting time [c:c4]:" },
+    { key: "brief-items", heading: "Features by milestone", body: "| Milestone | Feature | Goal | Outcome |\n|---|---|---|---|\n| [M1](#milestone-m1) | [F-10 Auto albums](#feature-auto-albums) | Faster sorting | Albums by event [c:c4] |\n| | [F-12 Face groups](#feature-face-groups) | Faster sorting | People found in one tap [c:c1] |\n| | [F-13 Album names](#feature-album-names) | Faster sorting | Albums named by place and date [c:c1] |" },
+    { key: "non-goals", heading: "Non-goals", body: "Editing stays where it is, so F-11 Photo editing is out [c:c1]. Prints are not planned, so F-14 Print orders waits for next year; and F-15 Shared albums is out too [c:c11]." },
+    { key: "top-risks", heading: "Top risks", body: "- Albums may group the wrong photos: owners move a photo in one tap [c:c11].\n- F-40 may slip past M1 [c:c4].\n- F-50 requires login before albums show [c:c4]." },
+    { key: "audience", heading: "Who has it", body: "- **Primary:** Owners of small photo libraries who add a few hundred photos a week [c:c1].\n- **Job story:** When a batch of photos lands, I want them grouped by event, so I can find one in seconds [c:c1].\n- **Owner:** The person who pays for the library and sets who may edit it [c:c4].\n- **Not the target:** Studios with their own photo tools [c:c11]." },
+    { key: "success", heading: "Success measures", body: "- Photos sorted within a day from 40% to 80%, counted as: [c:c4] [c:c11]\n- Time to find a photo from 90s to 20s [c:c1]\n- Albums renamed by hand from 30% to 10%" },
+    { key: "sources-data", heading: "Data points", body: "- Time to find a photo: measured as seconds from opening the library to opening the photo; source: [c:c1]" },
+  ];
+  const problem = "Owners of small photo libraries lose an hour a week finding new photos (about 9 minutes per day) [c:c1]. Every feature below serves sorting time [c:c4]: Primary: Owners of small photo libraries who add a few hundred photos a week [c:c1].";
+  db.blocks = [
+    { key: "problem", title: "Problem and who has it", rules: "At most 60 words", kind: "text", lines: [
+      { id: "problem-1", text: `${problem.split(" ").slice(0, 26).join(" ")} [c…`, full: problem, keys: ["problem", "audience"] },
+    ] },
+    { key: "bets", title: "What we will build", rules: "3-5 bets", kind: "lines", lines: [
+      { id: "bets-1", text: "M1: F-10 Auto albums", keys: ["brief-items"] },
+      { id: "bets-2", text: "F-12 Face groups: Faster sorting", keys: ["brief-items"] },
+      { id: "bets-3", text: "F-13 Album names: Faster sorting", keys: ["brief-items"] },
+    ] },
+    { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", lines: [
+      { id: "outcomes-1", text: "Photos sorted within a day from 40% to 80%, counted as: [c:c4] [c:c11]", keys: ["success"], metric: { name: "Photos sorted within a day", from: "40%", to: "80%" } },
+      { id: "outcomes-2", text: "Time to find a photo from 90s to 20s [c:c1]", keys: ["success"], metric: { name: "Time to find a photo", from: "90s", to: "20s [c:c1]" } },
+      { id: "outcomes-3", text: "Albums renamed by hand from 30% to 10%", keys: ["success"], metric: { name: "Albums renamed by hand", from: "30%", to: "10%" } },
+    ] },
+    { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", lines: [
+      { id: "not_doing-1", text: "Editing stays where it is, so F-11 Photo editing is out [c:c1].", keys: ["non-goals"] },
+      { id: "not_doing-2", text: "Prints are not planned, so F-14 Print orders waits for next year; and F-15 Shared albums is out too [c:c11].", keys: ["non-goals"] },
+    ] },
+    { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", lines: [
+      { id: "risks-1", text: "Albums may group the wrong photos: owners move a photo in one tap [c:c11].", keys: ["top-risks"] },
+      { id: "risks-2", text: "F-40 may slip past M1 [c:c4].", keys: ["top-risks"] },
+      { id: "risks-3", text: "F-50 requires login before albums show [c:c4].", keys: ["top-risks"] },
+    ] },
+    { key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] },
+  ];
   return db;
 }
 
@@ -433,10 +493,12 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       key: b.key, title: b.title, rules: b.rules, kind: b.kind, who: null, missing: !!b.missing && b.lines.length === 0,
       lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
-        const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");
+        // As one_pager._tidy: a stored line's citations resolved, as the PRD's PDF resolves them.
+        const text = edited ? db.draft!.lines[l.id] : resolved(uncomment(l.text)).split(/\s+/).filter(Boolean).join(" ");
+        const metric = l.metric ? { name: resolved(l.metric.name).trim(), from: resolved(l.metric.from).trim(), to: resolved(l.metric.to).trim() } : null;
         const flow = b.key === "bets" ? onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(l.id))) : null;
         return {
-          id: l.id, text, full: edited ? null : l.full ?? null, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
+          id: l.id, text, full: edited || !l.full ? null : resolved(l.full), source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : metric,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
           // S10: each bet carries its visual, keyed by its line: an edit keeps the flow. Its
           // brief is the published words (the API's bet_line): never a draft's.
@@ -449,7 +511,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       }),
     }));
   // Reads clearly (2026-10-30): as one_pager_checks.annotate on the PRD's sections.
-  const looks = annotate(blocks, db.sections);
+  const looks = annotate(blocks, db.sections, db.cites);
   return {
     document: db.doc,
     version: db.version,
@@ -458,7 +520,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     decider: ctx.decider ? { id: ctx.decider, name: ctx.names[ctx.decider] ?? "someone" } : null,
     span_start: span?.[0] ?? null,
     span_end: span?.[1] ?? null,
-    built_by: "oracle",
+    built_by: (db.writing || db.quickRead) && !held ? "extract" : "oracle",
+    writing: !!db.writing && !held,
     built_at: "2026-10-20T15:05:00Z",
     blocks,
     timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
@@ -500,10 +563,18 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   if (p[2] === "one-pagers" && m === "GET") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
     if (p[4] === "pdf") {
-      const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : ["One page"];
-      return new Response(`%PDF-1.7\n${pages.map((t, i) => `% page ${i + 1}: ${t}\n`).join("")}`, {
+      const over = !ctx.planPages?.length && ctx.overflowPages ? ctx.overflowPages : 0;
+      const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : over ? Array.from({ length: over }, (_, i) => `Page ${i + 1}`) : ["One page"];
+      // The page's lines as the read resolves them (the API's PDF renders one_pager.read).
+      const lines = onePager(db, ctx).blocks.flatMap((b) => b.lines.map((l) => `% line: ${l.text}\n`));
+      // As the API: a one-pager past its page says so in X-Oracle-Overflow-Pages, never in the PDF.
+      return new Response(`%PDF-1.7\n${pages.map((t, i) => `% page ${i + 1}: ${t}\n`).join("")}${lines.join("")}`, {
         status: 200,
-        headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${db.doc.slug}-v${db.version}-one-pager.pdf"` },
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": `attachment; filename="${db.doc.slug}-v${db.version}-one-pager.pdf"`,
+          ...(over ? { "x-oracle-overflow-pages": String(over) } : {}),
+        },
       });
     }
     return json(200, onePager(db, ctx));

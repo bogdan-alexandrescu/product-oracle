@@ -205,8 +205,15 @@ export function Menu({
   // qa-docs-75: a panel opening over what it must not cover (the review panel's totals) moves
   // left of it, as long as it stays on screen.
   useLayoutEffect(() => {
-    if (!open || !avoid || !pop.current) return;
+    if (!open || !pop.current) return;
     const p = pop.current.getBoundingClientRect();
+    // e2e-pdf-export: a panel opening past the screen's left edge (a phone's More sheet) moves
+    // back onto it.
+    if (p.left < 8) {
+      setShift(8 - p.left);
+      return;
+    }
+    if (!avoid) return;
     const other = [...document.querySelectorAll<HTMLElement>(avoid)].find((el) => el.checkVisibility());
     if (!other) return;
     const o = other.getBoundingClientRect();

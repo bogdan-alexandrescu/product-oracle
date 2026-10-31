@@ -153,6 +153,16 @@ export function EngReview({
           </ul>
         </div>
       )}
+      {!!check.unmapped_repos?.length && (
+        <p data-testid="briefs-unmapped" className="mb-4 text-[15px] text-text2">
+          No code map covers {check.unmapped_repos.join(", ")}: {check.unmapped_repos.length > 1 ? "their" : "its"} work is described as assumptions.
+        </p>
+      )}
+      {check.unnamed_repo && (
+        <p data-testid="briefs-unnamed" className="mb-4 text-[15px] text-text2">
+          No code map of this run holds some cited ids, and the briefs do not say which repository they come from.
+        </p>
+      )}
       <Split
         inspector={
           feature && (

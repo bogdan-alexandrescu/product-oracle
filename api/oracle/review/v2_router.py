@@ -553,6 +553,8 @@ async def export_publication(
 def _published_file(
     row: DocumentPublication, fmt: str, layer: str, content: str | bytes, audience: str = ""
 ) -> Response:
+    from oracle.export.pdf import overflow_headers
+
     suffix = "" if layer == "full" else f"-{layer}"
     if audience:
         suffix += f"-{audience}"
@@ -561,7 +563,10 @@ def _published_file(
     return Response(
         content=content,
         media_type=MEDIA[fmt],
-        headers={"Content-Disposition": f'attachment; filename="{name}.{fmt}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}.{fmt}"',
+            **overflow_headers(content),
+        },
     )
 
 

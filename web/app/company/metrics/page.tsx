@@ -152,8 +152,10 @@ function Metrics() {
         status={!writer && !records && <ViewOnly />}
         action={
           // qa-company-20: while the empty state shows its own Add button, the header has none.
+          // As Market, the header's Add waits for the list: shown while it loads, it swapped
+          // the tab strip for one with the button, then back once the list came back empty.
           writer &&
-          !(listQ.data && rows.length === 0) && (
+          rows.length > 0 && (
             <Button variant="primary" icon="plus" onClick={() => setForm("add")}>
               Add metric
             </Button>

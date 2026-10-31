@@ -43301,7 +43301,7 @@
           "simple"
         ],
         "summary": "Export Simple One Pager",
-        "description": "The one-pager as a branded one-page PDF (its published lines).",
+        "description": "The one-pager as a branded one-page PDF (its published lines). One that runs past\nits page says so in ``X-Oracle-Overflow-Pages`` (the page count), never in the PDF.",
         "operationId": "export_simple_one_pager",
         "security": [
           {
@@ -61152,6 +61152,14 @@
             "type": "array",
             "title": "Repos",
             "default": []
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unmapped",
+            "default": []
           }
         },
         "type": "object",
@@ -69712,6 +69720,14 @@
               }
             ],
             "title": "Summary"
+          },
+          "code_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Code Names",
+            "default": []
           },
           "source": {
             "anyOf": [
@@ -91900,6 +91916,11 @@
               "oracle"
             ],
             "title": "Built By"
+          },
+          "writing": {
+            "type": "boolean",
+            "title": "Writing",
+            "default": false
           },
           "built_at": {
             "type": "string",

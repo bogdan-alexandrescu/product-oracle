@@ -12558,7 +12558,8 @@ export interface paths {
         };
         /**
          * Export Simple One Pager
-         * @description The one-pager as a branded one-page PDF (its published lines).
+         * @description The one-pager as a branded one-page PDF (its published lines). One that runs past
+         *     its page says so in ``X-Oracle-Overflow-Pages`` (the page count), never in the PDF.
          */
         get: operations["export_simple_one_pager"];
         put?: never;
@@ -18599,6 +18600,11 @@ export interface components {
              * @default []
              */
             repos: components["schemas"]["RepoRef"][];
+            /**
+             * Unmapped
+             * @default []
+             */
+            unmapped: string[];
         };
         /** CommentCreate */
         CommentCreate: {
@@ -21682,6 +21688,11 @@ export interface components {
             problems_total?: number | null;
             /** Summary */
             summary?: string | null;
+            /**
+             * Code Names
+             * @default []
+             */
+            code_names: string[];
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
         };
@@ -30024,6 +30035,11 @@ export interface components {
              * @enum {string}
              */
             built_by: "extract" | "oracle";
+            /**
+             * Writing
+             * @default false
+             */
+            writing: boolean;
             /**
              * Built At
              * Format: date-time

@@ -1,4 +1,3 @@
-import { MOCK_COMPANY_NAME } from "../lib/api/mock/branding";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
@@ -14,6 +13,8 @@ import { expect, test, type Locator, type Page } from "./test";
 const URL = "/simple/roadmap";
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const FORMATS = ["timeline", "gantt", "board", "waterfall"] as const;
+/** The company's name, as an owner types it in Branding (the seed's placeholder is never printed). */
+const COMPANY = "Northwind Labs";
 
 const card = (page: Page, key: string): Locator => page.locator(`[data-testid="board-card"][data-item="${key}"]`);
 const column = (page: Page, h: "now" | "next" | "later"): Locator => page.locator(`[data-horizon-column="${h}"]`);
@@ -142,7 +143,18 @@ for (const [where, use] of [
        * header lacks the company or the filters; no_claim = the picture's pixels.
        */
       test("every format exports as PNG and PDF, branded, with its filters", async ({ page }) => {
-        await open(page, "timeline");
+        // e2e-pdf-export: no export prints the seed's placeholder name, so the owner names the
+        // company in Branding first.
+        await login(page);
+        await page.goto("/settings/company");
+        const branding = page.getByTestId("branding-panel");
+        await branding.getByLabel("Display name").fill(COMPANY);
+        await branding.getByRole("button", { name: "Save branding" }).click();
+        await expect(branding.getByRole("status")).toHaveText("Saved");
+        await page.goto(URL);
+        await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+        await page.getByTestId("format-timeline").click();
+        await expect(page.getByTestId("format-timeline")).toHaveAttribute("aria-pressed", "true");
         // qa-shell-24: a phone's pickers sit behind the Filters button.
         const toggle = page.getByTestId("filters-toggle");
         if (await toggle.isVisible()) await toggle.click();
@@ -173,7 +185,7 @@ for (const [where, use] of [
           "pdf:Roadmap · Waterfall",
         ]);
         for (const d of drawn) {
-          expect(d.brand).toBe(MOCK_COMPANY_NAME);
+          expect(d.brand).toBe(COMPANY);
           expect(d.filters).toBe("Grouped by goal · Goal: Faster activation");
         }
       });

@@ -24,6 +24,15 @@ _NOT_CODES = {"UTF", "SHA", "ISO", "MD", "TLS", "SSL", "RFC", "Q", "H", "V"}
 _JOINER = re.compile(r"[ \t]*(?:,|/|&|,?[ \t]+(?:and|or))[ \t]*")
 # A name after a code: an optional separator, then a capital.
 _NAME_AFTER = re.compile(r"[ \t]*(?:[:·–—-][ \t]*)?(\w)")
+# A name in brackets or after a separator, which may start with a number or hold commas
+# ("M3 (200 teams and 50 seats, and onboarding at scale)", "G1 (activation)"): a word that
+# is no code and no reference, or a number then a word; never "(see below)", "(40%)", "(M3)".
+_NAME_MARKED = re.compile(
+    r"[ \t]*(?:\(|[:·–—])[ \t]*"
+    r"(?:(?!(?:[A-Z]{1,3}-\d|[A-Z]\d|(?:see|cf|e\.g|i\.e)\b))[A-Za-z]|\d[\d,.]*[ \t]+[A-Za-z])"
+)
+# The warning codes of this check (a run sends a draft with either back to the writer).
+CODES = ("unnamed_code", "codes_not_listed")
 # Run of codes this long or longer must be a list.
 RUN = 3
 
@@ -72,15 +81,22 @@ def findings(body: str, heading: str = "") -> Findings:
             after = _NAME_AFTER.match(body, m.end())
             # "the legacy deploy path (F-28)": named before it.
             in_parens = body[m.start() - 1 : m.end() + 1] == f"({code})"
-            if not in_parens and not (after and after.group(1).isupper()):
+            marked = _NAME_MARKED.match(body, m.end())
+            if not in_parens and not marked and not (after and after.group(1).isupper()):
                 out.unnamed.append(code)
     return out
+
+
+def _plain(heading: str) -> str:
+    """A heading without its {#id}."""
+    return re.sub(r"\s*\{#[^}]*\}\s*$", "", heading).strip()
 
 
 def check(sections: Iterable[ParsedSection]) -> list[VersionWarning]:
     """Warnings for a draft's sections (the Sources and data points sections hold source
     references, not prose, and are not read)."""
     unnamed: dict[str, list[str]] = {}
+    headings: dict[str, str] = {}
     runs: dict[str, list[list[str]]] = {}
     for s in sections:
         if s.section_key.startswith("sources"):
@@ -88,6 +104,7 @@ def check(sections: Iterable[ParsedSection]) -> list[VersionWarning]:
         found = findings(s.body_md, s.heading)
         if found.unnamed:
             unnamed[s.section_key] = found.unnamed
+            headings[s.section_key] = _plain(s.heading) or s.section_key
         if found.runs:
             runs[s.section_key] = found.runs
     warnings: list[VersionWarning] = []
@@ -95,9 +112,10 @@ def check(sections: Iterable[ParsedSection]) -> list[VersionWarning]:
         warnings.append(
             VersionWarning(
                 code="unnamed_code",
-                message="codes used without their name on first mention (write "
-                "'F-28 Retire the legacy deploy path', not 'F-28'): "
-                + "; ".join(f"{k} ({', '.join(v)})" for k, v in unnamed.items()),
+                message="These codes have no name where the section first uses them: "
+                + "; ".join(f"{headings[k]}: {', '.join(v)}" for k, v in unnamed.items())
+                + ". Write each with its name the first time: 'F-28 Retire the legacy "
+                "deploy path', or 'M3 (its name)' when the name holds numbers or commas.",
                 section_keys=list(unnamed),
             )
         )

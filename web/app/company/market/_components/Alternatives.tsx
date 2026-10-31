@@ -48,14 +48,14 @@ export function Alternatives({
   onOpenChange: (id: string) => void;
   adding: boolean;
   onAdding: (open: boolean) => void;
-  /** Whether the list is known to be empty (its own Add button shows), so the header drops its one (qa-company-20). */
-  onEmpty?: (empty: boolean) => void;
+  /** Whether the list is known to be empty (its own Add button shows), so the header drops its one (qa-company-20); null while it loads. */
+  onEmpty?: (empty: boolean | null) => void;
 }) {
   const zone = useCompanyZone();
   const mayAdd = useMe().can("create_competitor");
   const list = useQuery("competitors", () => unwrap(api.GET("/v1/competitors")));
   const rows = list.data ?? [];
-  const empty = !!list.data && list.data.length === 0;
+  const empty = list.data ? list.data.length === 0 : null;
   useEffect(() => {
     onEmpty?.(empty);
   }, [empty, onEmpty]);

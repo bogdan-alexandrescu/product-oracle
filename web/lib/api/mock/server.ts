@@ -73,6 +73,7 @@ import {
   routeRuns,
   scopeStop,
   seedEngCheckRun,
+  seedEngCheckUnmappedRun,
   seedEngDatesRuns,
   seedBaselineReviewRun,
   seedEngReviewRun,
@@ -155,7 +156,7 @@ import {
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
-import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -517,6 +518,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * problem (C6, saved-addresses);
  * "scope-review" as the default company plus three runs at their feature set (C7: attempt 1
  * with three rows that need a person, attempt 2, and a held console approval);
+ * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
+ * duplicate, both kept by one older call that answers the two;
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
  * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
@@ -1357,6 +1360,22 @@ function seedEngDates(): Db {
   return db;
 }
 
+/** "eng-check-unmapped" scenario: the "eng-check" run whose briefs cite ids of a repository with no code map. */
+function seedEngCheckUnmapped(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-check-unmapped", () => seedEngCheckUnmappedRun(db.runs!, runsContext(db)));
+  return db;
+}
+
+/** "eng-check-unnamed" scenario: as "eng-check-unmapped", but the briefs do not name the repository with no map. */
+function seedEngCheckUnnamed(): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-check-unnamed", () => seedEngCheckUnmappedRun(db.runs!, runsContext(db), false));
+  return db;
+}
+
 /** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
 function seedEngCheckNoLead(): Db {
   const db = seed();
@@ -1425,9 +1444,9 @@ function seedFeatureSet(): Db {
 }
 
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
-function seedScopeReview(): Db {
+function seedScopeReview(kept = false): Db {
   const db = seed();
-  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db)));
+  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept));
   return db;
 }
 
@@ -2767,14 +2786,18 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
-          : scenario === "scope-review"
-            ? seedScopeReview
+          : scenario === "scope-review" || scenario === "scope-review-kept"
+            ? () => seedScopeReview(scenario === "scope-review-kept")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"
             ? seedEngCheck
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
+          : scenario === "eng-check-unmapped"
+            ? seedEngCheckUnmapped
+          : scenario === "eng-check-unnamed"
+            ? seedEngCheckUnnamed
           : scenario === "eng-dates"
             ? seedEngDates
           : scenario === "roadmap-items-console-held"
@@ -5573,7 +5596,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   // "one-pager-no-owner": the PRD was imported by a service token (no owner yet).
   // "one-pager-needs-look": Oracle's build failed its checks twice (oracle.simple.quality).
   // "one-pager-not-in-prd": Oracle marked a block the PRD lacks "Not in the PRD yet".
-  db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
+  // "one-pager-run-prd": a run's Goal-traced PRD, its lines cited, while Oracle writes the page.
+  // "one-pager-quick-read": the same PRD, its one_pager job failed: the quick read stays.
+  db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
+    ? seedRunPrdOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-quick-read"
+    ? { ...seedRunPrdOnePager(), writing: false, quickRead: true }
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
     ? seedNeedsLookOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-not-in-prd"
     ? seedNotInPrdOnePager()
@@ -5629,6 +5658,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         planPages: onePagerDb.doc.slug === PLAN_PRD_SLUG && db.simple_roadmap?.plan && !db.simple_roadmap.plan.undated
           ? planMilestones().map((m) => `${m.code} ${m.name}`)
           : undefined,
+        overflowPages: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow" ? 2 : undefined,
       },
       r,
       p,

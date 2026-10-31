@@ -124,13 +124,11 @@ def ended_page() -> str:
 
 async def company(db) -> str | None:
     """The company's name for a link holder, or None when it has none (never the "Our"
-    that :func:`oracle.roadmap.public.company_name` puts before "roadmap")."""
-    from oracle.models import Tenant
-    from oracle.tenancy import current_tenant
+    that :func:`oracle.roadmap.public.company_name` puts before "roadmap"); never the
+    seed's placeholder."""
+    from oracle.branding import export_name
 
-    tenant = await db.get(Tenant, current_tenant(db))
-    name = (tenant.name or "").strip() if tenant is not None else ""
-    return name or None
+    return await export_name(db) or None
 
 
 def day_with_year(moment: datetime, zone: str) -> str:

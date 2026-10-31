@@ -52,6 +52,7 @@ function seedBriefs(): TechBrief[] {
         used: true,
         // A shared map built from the synced docs only (F5-2, until the checkout exists).
         repos: [{ repo: "example/shop-app", commit: "3f2c9a1", as_of: "2026-10-18T10:00:00Z", partial: true }],
+        unmapped: [],
       },
       approach:
         "Compute the total in the pricing module as soon as the cart changes, and show it in the checkout summary from the first step.",
@@ -84,7 +85,7 @@ function seedBriefs(): TechBrief[] {
       prd: { slug: "usage-alerts", version: 1 },
       run_id: RUN,
       status: "approved",
-      code_map: { used: false, repos: [] },
+      code_map: { used: false, repos: [], unmapped: [] },
       approach: "Check each account's spend against its thresholds when usage is recorded, and send one alert per crossing.",
       touches: [{ area: "usage recording", kind: "module", change: "change", ref: null }],
       reuse: [],
@@ -107,7 +108,7 @@ function seedBriefs(): TechBrief[] {
       prd: { slug: PRD, version: 2 },
       run_id: RUN,
       status: "approved",
-      code_map: { used: false, repos: [] },
+      code_map: { used: false, repos: [], unmapped: [] },
       approach: "Keep each checkout step's fields in the session so going back shows what the buyer typed.",
       touches: [{ area: "checkout form", kind: "module", change: "change", ref: null }],
       reuse: [],

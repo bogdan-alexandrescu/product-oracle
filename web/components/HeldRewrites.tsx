@@ -20,7 +20,8 @@ export function useHeldRewrites(doc: string) {
     { keepPrevious: true },
   );
   const rows = q.data ?? [];
-  return { rows, open: rows.filter((p) => p.status === "open").length, reload: () => setKey((k) => k + 1) };
+  // refresh: a quiet re-read (the page's live refresh), the rows kept until it answers.
+  return { rows, open: rows.filter((p) => p.status === "open").length, reload: () => setKey((k) => k + 1), refresh: q.reload };
 }
 
 /** "Held rewrites" with a badge counting the ones still waiting for a decision. */

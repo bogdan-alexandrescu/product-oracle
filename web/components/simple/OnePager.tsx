@@ -13,6 +13,8 @@ import { quoteLine } from "@/components/simple/quote-line";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
+import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
+import { downloadedNote } from "@/lib/export-note";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type View = Schemas["OnePagerOut"];
@@ -139,13 +141,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   // 2026-10-30: the bets whose flow was asked for here ("Draw the flow"): their flow row shows while Oracle draws.
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
-  const [saved, setSaved] = useState(false);
-  // qa-simple-prd-25: "PDF downloaded" shows a few seconds, then goes.
-  useEffect(() => {
-    if (!saved) return;
-    const t = window.setTimeout(() => setSaved(false), 4000);
-    return () => window.clearTimeout(t);
-  }, [saved]);
+  // e2e-pdf-export: what the download says ("PDF downloaded", and its pages past one).
+  const [saved, setSaved] = useDownloadNote();
   // qa-simple-prd-24: leaving full screen (Esc) ends presenting too.
   useEffect(() => {
     const on = () => {
@@ -295,7 +292,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   async function exportPdf() {
     setError(null);
     try {
-      const blob = await unwrap(api.GET("/v1/simple/one-pagers/{doc}/pdf", { params: { path: { doc } }, parseAs: "blob" })) as Blob;
+      const call = api.GET("/v1/simple/one-pagers/{doc}/pdf", { params: { path: { doc } }, parseAs: "blob" });
+      const blob = (await unwrap(call)) as Blob;
       const name = `${v.document.title.replace(/[\\/:*?"<>|]+/g, " ").trim()} v${v.version} one-pager.pdf`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -303,7 +301,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setSaved(true);
+      setSaved(downloadedNote("PDF", (await call).response, "shorten it to fit one"));
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -374,9 +372,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       </Link>
     </>
   );
-  const toast = saved && (
-    <p role="status" className="simple-noprint fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-[15px] font-semibold shadow-md">PDF downloaded</p>
-  );
+  const toast = <DownloadNote note={saved} className="simple-noprint" />;
 
   return (
     <div
@@ -424,6 +420,18 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
             {heldChecks.map((c) => <li key={c.text}>{c.text}</li>)}
           </ul>
         </div>
+      )}
+      {v.writing && !presenting && (
+        // The one_pager job is still writing the page: until then it is Oracle's quick read.
+        <p role="status" data-testid="one-pager-writing" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
+          Oracle is still writing this one-pager. Until then you see the PRD&apos;s own lines.
+        </p>
+      )}
+      {!v.writing && v.built_by === "extract" && !presenting && (
+        // The one_pager job failed or was never queued: the quick read is all there is.
+        <p role="status" data-testid="one-pager-quick-read" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
+          Oracle has not written this one-pager yet. You see the PRD&apos;s own lines.
+        </p>
       )}
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}

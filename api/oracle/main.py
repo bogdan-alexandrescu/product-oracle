@@ -176,6 +176,8 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # e2e-pdf-export: the web reads a one-page export's overflow to tell the person.
+        expose_headers=["X-Oracle-Overflow-Pages"],
     )
 
     @app.exception_handler(DraftError)

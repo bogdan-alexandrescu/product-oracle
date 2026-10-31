@@ -142,8 +142,8 @@ from oracle.baseline.goals import target_words
 from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.claude_accounts.pool import readable_refusal
 from oracle.decisions import capture as decisions_capture
+from oracle.docs import named_codes, visibility, written
 from oracle.docs import service as docs_service
-from oracle.docs import visibility, written
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError, is_uuid
 from oracle.docs.schemas import ImportProblem, VersionSource
@@ -2815,6 +2815,9 @@ async def _prompt_context(
         if scope is not None:
             scope_rows = await feature_set.scope_items(db, scope.id)
             scope_yaml = await feature_set.scope_yaml_async(scope, scope_rows)
+    # SwarmCloud reaches Oracle only through the credential it attaches; the local
+    # runtime's agents are Oracle's own.
+    mcp_reachable = attached or (runtime.can_reach_oracle and runtime.name != "swarmcloud")
     return flows.PromptContext(
         run_id=str(run.id),
         document=document,
@@ -2833,9 +2836,7 @@ async def _prompt_context(
         previous_seq=segment.seq if previous_attempt is not None else None,
         previous_files=previous_files,
         previous_problems=previous_problems,
-        # SwarmCloud reaches Oracle only through the credential it attaches; the local
-        # runtime's agents are Oracle's own.
-        mcp_reachable=attached or (runtime.can_reach_oracle and runtime.name != "swarmcloud"),
+        mcp_reachable=mcp_reachable,
         mcp_attached=attached,
         prior_files=prior_files,
         kind=kind,
@@ -2844,6 +2845,11 @@ async def _prompt_context(
         extra_lines=[
             *await extensions.prompt_lines(db, run),
             *await eng_check.prompt_lines(db, run.id, segment.name),
+            *(
+                await eng_check.run_architect_lines(db, run, mcp_reachable=mcp_reachable)
+                if flows.BRIEFS_FILE in _flow(run).segment(segment.name).outputs
+                else []
+            ),
             *await eng_dates.prompt_lines(db, run, segment.name),
             *_regenerate_note(run, hidden),
         ],
@@ -4661,6 +4667,11 @@ async def _import_draft(db: AsyncSession, run: Run, kind: str, markdown: str) ->
             "created": result.created,
             "warnings": [w.code for w in result.version.warnings],
         }
+        # #306: codes the draft uses without their names, in the warning's plain words;
+        # a run sends such a draft back to the writer before a person reviews it.
+        code_names = [w.message for w in result.version.warnings if w.code in named_codes.CODES]
+        if code_names:
+            out["code_names"] = code_names
         source = result.version.source
         if source is not None:
             out["source"] = source.model_dump(mode="json")
@@ -5128,7 +5139,7 @@ async def _advance(
     if (
         wait is not None
         and imported is not None
-        and imported.get("problems")
+        and (imported.get("problems") or imported.get("code_names"))
         and knobs.checkpoints.get(sdef.checkpoint, True)
         and await _send_back(
             db, run, segment, segments, wait, imported, await _target_kind(db, run), checkpoint_kind
@@ -5408,7 +5419,10 @@ async def _send_back(
     (:func:`_hold_plan`). Returns False, leaving the review to the person, when the wait
     does not qualify (an earlier segment's checkpoint has one round and no revise step),
     too little of the credential is left for the revision (the tail rule), or SwarmCloud
-    did not take the answer."""
+    did not take the answer.
+
+    A draft imported with codes it does not name (#306, ``code_names``) goes back the same
+    way, with those codes as findings (:func:`workflow.code_name_findings`)."""
     found = _send_back_entry(run, segment, wait)
     if found is None:
         return False
@@ -5416,19 +5430,28 @@ async def _send_back(
     round_ = int(wait.get("round") or 1)
     step = wait["step_id"]
     name = flows.draft_file(kind)
+    refused = bool(imported.get("problems"))
+    trouble = workflow.code_name_trouble(list(imported.get("warnings") or []))
+    why = "was refused at import" if refused else trouble
     left = _left(wf)
     steps = workflow.agent_steps_after(wf.get("segments") or [], segment.seq, False, round_)
     tail = workflow.tail_seconds(steps, get_runtime_settings())
     if left < tail:
         _note(
             segment,
-            f"{name} was refused at import. With {_duration(left)} of the run's credential "
+            f"{name} {why}. With {_duration(left)} of the run's credential "
             f"left, under the {_duration(tail)} the revision needs, Oracle did not send it "
             f"back to the writer: {checkpoint} waits for a person.",
         )
         return False
-    findings = workflow.import_findings(
-        name, imported.get("problems") or [], imported.get("problems_total")
+    findings = (
+        workflow.import_findings(
+            name, imported.get("problems") or [], imported.get("problems_total")
+        )
+        if refused
+        else workflow.code_name_findings(
+            name, list(imported.get("code_names") or []), list(imported.get("warnings") or [])
+        )
     )
     payload = {"verdict": NOT_YET, "findings": findings}
     # The same id for the same wait: a post repeated after a lost response is a replay.
@@ -5444,18 +5467,20 @@ async def _send_back(
             log.warning("run %s: refused draft not sent back on %s: %s", run.id, step, exc)
             _note(
                 segment,
-                f"{name} was refused at import, and Oracle could not send it back to the "
+                f"{name} {why}, and Oracle could not send it back to the "
                 f"writer (SwarmCloud: {_shown(exc)}): {checkpoint} waits for a person.",
             )
             return False
+    still = "is still refused," if refused else f"still {trouble}, the import says which codes and"
     _note(
         segment,
-        f"{name} was refused at import, so Oracle sent the draft back to the writer before "
-        f"asking a person: it answered {step} (round {round_}) with NOT_YET and the import's "
-        "problems as findings. This is Oracle's answer, not a person's decision: nothing is "
+        f"{name} {why}, so Oracle sent the draft back to the writer before "
+        f"asking a person: it answered {step} (round {round_}) with NOT_YET and the "
+        f"{'import' if refused else 'unnamed code'}'s problems as findings. This is "
+        "Oracle's answer, not a person's decision: nothing is "
         "approved, and the run's agents may not write to Oracle until a person's answer "
-        "counts. The revision is imported when the next review opens; if it is still "
-        f"refused, {checkpoint} waits in the Inbox.",
+        f"counts. The revision is imported when the next review opens; if it {still} "
+        f"{checkpoint} waits in the Inbox.",
     )
     await audit.record(
         db,
@@ -9118,6 +9143,7 @@ async def _problem_findings(db: AsyncSession, run: Run, cp: Checkpoint) -> list[
         flows.draft_file(await _target_kind(db, run)),
         None,
         list(imported.get("problems") or []),
+        list(imported.get("code_names") or []),
     )
 
 
