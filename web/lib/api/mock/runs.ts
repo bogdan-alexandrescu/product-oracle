@@ -180,7 +180,7 @@ export interface RunsContext {
     run: Pick<RunOut, "id" | "document_kind" | "source" | "template" | "theme">,
     /** A person's Retry import: the version's `imported_again`. */
     again?: string,
-  ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems">;
+  ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems" | "code_names">;
   /** The run's open baseline proposals (RunOut.open_proposals). */
   openProposals?: (runId: string) => number;
   /** B6: the confirmed and proposed goals not measurable (an approved baseline_confirm's vague_goals). */
@@ -1358,7 +1358,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   }
   if ((def.outputs.includes("prd.md") || def.outputs.includes("roadmap.md") || def.outputs.includes("update.md") || def.outputs.includes("pricing.md")) && r.document_slug) {
     const imp = ctx.importDraft(r.document_slug, r);
-    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
+    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null };
     r.document_id = imp.document_id ?? null;
     // As the API (fill_document): once the draft imports, the run's scopes and orders name the document.
     for (const x of ctx.db.scopes?.[r.id] ?? []) x.document_id ??= r.document_id;
@@ -2204,7 +2204,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     // run creator's; its history says who imported it again, and when (owner, 2026-10-25).
     const again = `imported again by ${displayName(ctx.userName ?? "admin@example.com")} on ${companyStamp(ctx.now())}`;
     const imp = ctx.importDraft(r.document_slug, r, again);
-    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
+    s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null };
     r.document_id = imp.document_id ?? null;
     review.payload = { ...review.payload, import: s.draft_import };
     return done();
@@ -2391,7 +2391,7 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
     status: "succeeded",
     cost_usd: 8.1,
     artifacts: ["prd.md"],
-    draft_import: { document_id: done.document_id, slug: "checkout-redesign", version: 2, created: true, warnings: [], error: null, problems: [], summary: null },
+    draft_import: { document_id: done.document_id, slug: "checkout-redesign", version: 2, created: true, warnings: [], error: null, problems: [], code_names: [], summary: null },
   });
   db.artifacts[`${done.id}|1|prd.md`] = fileContent("prd.md", "next_draft", 1);
   done.checkpoints.push({
@@ -2766,7 +2766,7 @@ export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
       Object.assign(s, { status: "succeeded", cost_usd: 1, started_at: at, finished_at: at });
       if (s.name !== "prd_draft") continue;
       s.artifacts = ["prd.md"];
-      s.draft_import = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems: [], summary, source: null, prd_links: null };
+      s.draft_import = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems: [], code_names: [], summary, source: null, prd_links: null };
       db.artifacts[`${id}|${s.seq}|prd.md`] = fileContent("prd.md", s.name, 1, document);
       r.checkpoints.push({
         id: ctx.uuid(), run_id: id, kind: "prd_review", status: "approved", approver_role: "approver", segment_seq: s.seq,

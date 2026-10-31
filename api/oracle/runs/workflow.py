@@ -167,8 +167,36 @@ def import_findings(
     return rejection.findings(name, problems, total)
 
 
+def code_name_trouble(warnings: list[str]) -> str:
+    """What a draft does wrong with its codes, in plain words, by the import's warning
+    codes (oracle.docs.named_codes.CODES)."""
+    parts = []
+    if "unnamed_code" in warnings:
+        parts.append("uses codes without their names")
+    if "codes_not_listed" in warnings:
+        parts.append("writes three or more codes in a row instead of a list")
+    return " and ".join(parts) or "uses codes without their names"
+
+
+def code_name_findings(name: str, code_names: list[str], warnings: list[str]) -> list[str]:
+    """The review findings for a draft imported with codes it does not name or list (#306,
+    oracle.docs.named_codes): a lead line saying which rule it breaks, then the import's
+    warning per rule. Nothing when the draft writes its codes well."""
+    if not code_names:
+        return []
+    return [
+        f"Oracle imported {name}, but it {code_name_trouble(warnings)}, so it sent the "
+        "draft back before a person reviews it. Fix each line below and write the whole "
+        "file again; keep the rest as it is.",
+        *code_names,
+    ]
+
+
 def check_problems(
-    name: str, items_check: dict[str, Any] | None, import_problems: list[dict[str, Any]]
+    name: str,
+    items_check: dict[str, Any] | None,
+    import_problems: list[dict[str, Any]],
+    code_names: list[str] | None = None,
 ) -> list[str]:
     """One line per problem Oracle's check found in ``name`` that the agents must fix:
     the items check's blocking reasons (D2 Product reasons: label and sentence; to-confirm
@@ -192,6 +220,8 @@ def check_problems(
     if import_problems:
         problems = [ImportProblem.model_validate(p) for p in import_problems]
         out.append(rejection.summary(name, problems))
+    # Codes an imported draft uses without their names (#306): the import's warnings.
+    out += code_names or []
     return out
 
 
@@ -200,11 +230,14 @@ def _blocking(reason: dict[str, Any]) -> bool:
 
 
 def check_findings(
-    name: str, items_check: dict[str, Any] | None, import_problems: list[dict[str, Any]]
+    name: str,
+    items_check: dict[str, Any] | None,
+    import_problems: list[dict[str, Any]],
+    code_names: list[str] | None = None,
 ) -> list[str]:
     """A person's NOT_YET at the last segment's review: a lead line and the problems
     Oracle's check found in ``name`` (:func:`check_problems`), or nothing when none."""
-    lines = check_problems(name, items_check, import_problems)
+    lines = check_problems(name, items_check, import_problems, code_names)
     if not lines:
         return []
     return [f"Oracle's check found these problems in {name}; fix each one:", *lines]

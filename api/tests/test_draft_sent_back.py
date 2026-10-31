@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.models import AuditEvent
 from oracle.runs import flows, service
 from oracle.runs.models import Checkpoint
+from oracle.swarm.fake import _default_content
 from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
 from tests.swarmcloud_fake import FakeSwarmCloud
@@ -341,3 +342,83 @@ async def test_a_send_back_whose_commit_was_lost_is_replayed_once(client, owner,
     assert pending(run)["payload"]["wait"]["step_id"] == "next_draft-review2"
     assert len(swarm.answers) == 1
     assert len(await _audit(tenant_id, "run.draft_sent_back")) == 1
+
+
+# e2e-draft-codes: a draft that imports but names a code nowhere goes back to the writer
+# too, with the codes to name; the milestone's name reads like prose (invented data).
+UNNAMED_PRD = _default_content("prd.md", "next_draft", 1).replace(
+    "Serves G1 (activation).",
+    "Serves G1 first; it is not expected to move at M3 200 teams and 50 seats, and "
+    "onboarding at scale.",
+)
+
+
+async def test_a_draft_with_unnamed_codes_goes_back_to_the_writer_first(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    swarm.step_files[WRITER] = {"prd.md": UNNAMED_PRD}
+    run = await _feedback_run(client, auth, tenant_id, swarm)
+
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "running", run
+    assert await _checkpoints(tenant_id, run["id"]) == []
+    [answer] = swarm.answers
+    assert answer["step_id"] == "next_draft-review1"
+    assert answer["payload"]["verdict"] == "NOT_YET"
+    findings = answer["payload"]["findings"]
+    assert "codes" in findings[0] and "prd.md" in findings[0]
+    [line] = [f for f in findings if "Goal trace" in f]
+    assert "G1" in line and "M3" in line
+    assert any("M3 (its name)" in f for f in findings)
+    # Imported, never refused: no "Draft rejected"; the run's note says what Oracle did.
+    seg = run["segments"][0]
+    assert run["draft_rejected"] is None and run["sent_back"] is None
+    assert seg["attempts"][-1]["note_by"] == "Oracle"
+    assert any("Oracle sent" in n and "back to the writer" in n for n in run["notes"])
+    # e2e-draft-codes review: the note reads as one plain sentence (no stray ", and,").
+    [note] = [n for n in run["notes"] if "Oracle sent" in n]
+    assert "uses codes without their names, so Oracle sent" in note
+    assert note.endswith(
+        "if it still uses codes without their names, the import says which codes and "
+        "prd_review waits in the Inbox."
+    ), note
+    [event] = await _audit(tenant_id, "run.draft_sent_back")
+    assert event.actor == "oracle" and event.data["findings"] == findings
+
+    # revise1 names its codes: imported when review2 opens, for the person.
+    await tick(client, auth)
+    revise = swarm.workflows["wf_1"].step("next_draft-revise1")
+    assert "M3" in revise.staged["prd.md"]
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
+    cp = pending(run)
+    assert cp["payload"]["wait"]["step_id"] == "next_draft-review2"
+    # The draft sent back was imported (version 2); the revision is version 3.
+    assert cp["payload"]["import"]["version"] == 3
+    assert "unnamed_code" not in cp["payload"]["import"]["warnings"]
+    assert len(swarm.answers) == 1
+
+
+async def test_codes_still_unnamed_after_the_revision_say_which_at_the_review(client, owner):
+    tenant_id, auth = owner
+    swarm = on()
+    swarm.step_files[WRITER] = {"prd.md": UNNAMED_PRD}
+    swarm.step_files["next_draft-revise1"] = {"prd.md": UNNAMED_PRD}
+    run = await _feedback_run(client, auth, tenant_id, swarm)
+    await tick(client, auth)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "awaiting_checkpoint" and run["waiting_on"] == "prd_review"
+    cp = pending(run)
+    assert cp["payload"]["wait"]["step_id"] == "next_draft-review2"
+    # Imported, never refused: the person reads which codes still lack names.
+    imported = cp["payload"]["import"]
+    # The same text again: no new version.
+    assert imported["version"] == 2 and "unnamed_code" in imported["warnings"]
+    [names] = imported["code_names"]
+    assert "Goal trace: G1, M3" in names
+    assert [a["step_id"] for a in swarm.answers] == ["next_draft-review1"]
+    # A person's request for changes passes the same lines on to the writer.
+    run = await decide(client, auth, run, "changes_requested", note="Name the milestone")
+    assert any("Goal trace: G1, M3" in f for f in swarm.answers[-1]["payload"]["findings"])

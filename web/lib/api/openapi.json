@@ -69713,6 +69713,14 @@
             ],
             "title": "Summary"
           },
+          "code_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Code Names",
+            "default": []
+          },
           "source": {
             "anyOf": [
               {
