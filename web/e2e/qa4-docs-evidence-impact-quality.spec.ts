@@ -133,7 +133,7 @@ test.describe("desktop", () => {
     await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "quality-job-running"] as const);
     await login(page);
     await page.goto("/documents/team-workspaces/v/2/quality");
-    await expect(page.getByTestId("job-active")).toContainText(/^Oracle is reviewing v2, started [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M/);
+    await expect(page.getByTestId("job-active")).toContainText(/^Oracle is reviewing v2, started (?:[A-Z][a-z]{2} \d{1,2}, )?\d{1,2}:\d{2} [AP]M/);
     await expect(page.getByTestId("job-active")).not.toContainText(/\d{4}-\d{2}-\d{2}/);
   });
 

@@ -103,12 +103,12 @@ test.describe("desktop", () => {
       const b = (await panel(page).getByTestId("stat-open-feedback").boundingBox())!;
       return Math.abs(a.y - b.y) < 2;
     };
-    expect(await sameRow()).toBe(true);
+    await expect.poll(sameRow).toBe(true);
 
     await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
     await expect(progress).toHaveText(/^\d+ of 20 sections reviewed$/);
     await expect(stat.locator("dt")).toHaveText("Reviewed");
-    expect(await sameRow()).toBe(true);
+    await expect.poll(sameRow).toBe(true);
 
     await page.goto(CHECKOUT);
     await expect(sectionStrip(page).getByTestId("review-progress")).toHaveText(/^\d+ of 11 sections reviewed$/);
