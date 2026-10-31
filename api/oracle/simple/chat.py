@@ -47,7 +47,7 @@ from oracle.decisions.models import Decision, DecisionReview
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.docs.models import Document, DocumentVersion
 from oracle.members.names import display_name
-from oracle.roadmap.models import ProductTrack, RoadmapItem
+from oracle.roadmap.models import DraftRoadmap, ProductTrack, RoadmapItem
 from oracle.simple import change_words, changes, constraints, dates, drafts, service, targets
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
@@ -245,17 +245,23 @@ class Reply:
         self.no_change = False
 
 
+# The most of a meeting PRD's text the reader is given (its start; a PRD runs a few pages).
+PRD_TEXT = 12000
+
+
 @dataclass
 class MeetingPrd:
     """meet-chat-right-prd: what a meeting's chat reads: the meeting's PRD (``number``: its
     version under review, else its newest) and its items: on its roadmap, or, while that
-    version is not approved, on the version's draft roadmap (a run's items-only roadmap)."""
+    version is not approved, on the version's draft roadmap (a run's items-only roadmap,
+    that version's own when it is ready); ``text``: that version's markdown."""
 
     document: Document
     number: int | None
     approved: bool
     draft: bool
     ids: set[uuid.UUID]
+    text: str = ""
 
     def source(self) -> str:
         n = f" (draft {self.number})" if self.number else ""
@@ -284,25 +290,28 @@ async def meeting_prd(db: AsyncSession, read: service.Read, rules: Any) -> Meeti
     prd = await db.get(Document, prd_id) if prd_id is not None else None
     if prd is None:
         return None
-    newest = (
-        await db.execute(
-            select(DocumentVersion.number, DocumentVersion.approved_at)
-            .where(DocumentVersion.document_id == prd.id)
-            .order_by(DocumentVersion.number.desc())
-            .limit(1)
-        )
-    ).first()
-    approved = newest is not None and newest[1] is not None
+    newest = await db.scalar(
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id == prd.id)
+        .order_by(DocumentVersion.number.desc())
+        .limit(1)
+    )
+    # The version under review is the newest; its number is named even when its own draft
+    # roadmap is not ready yet and an older version's draft gives the items.
+    number = newest.number if newest is not None else None
+    text = newest.markdown[:PRD_TEXT] if newest is not None else ""
+    approved = newest is not None and newest.approved_at is not None
     on_roadmap = [e for e in read.entries if e.row.prd_document_id == prd.id
                   and e.row.draft_roadmap_id is None]  # fmt: skip
-    got = await draft_items.latest_ready(db, prd.id)
+    got = None
+    if newest is not None:
+        own = await db.scalar(select(DraftRoadmap).where(
+            DraftRoadmap.prd_version_id == newest.id, DraftRoadmap.status == "ready"))  # fmt: skip
+        got = (own, await draft_items.draft_items(db, own)) if own is not None else None
+    got = got or await draft_items.latest_ready(db, prd.id)
     if got is None or (approved and on_roadmap):
-        return MeetingPrd(prd, newest[0] if newest else None, approved, False,
-                          {e.row.id for e in on_roadmap})  # fmt: skip
-    row, rows = got
-    number = await db.scalar(
-        select(DocumentVersion.number).where(DocumentVersion.id == row.prd_version_id)
-    )
+        return MeetingPrd(prd, number, approved, False, {e.row.id for e in on_roadmap}, text)
+    _, rows = got
     known = read.by_id()
     drafts_ = [known.get(r.id) or _draft_entry(read, prd, r) for r in rows]
     await service._prd_headings(db, [e for e in drafts_ if e.row.id not in known])
@@ -315,7 +324,7 @@ async def meeting_prd(db: AsyncSession, read: service.Read, rules: Any) -> Meeti
         )
     keys = {e.row.item_key for e in drafts_}
     ids = {e.row.id for e in drafts_} | {e.row.id for e in on_roadmap if e.row.item_key not in keys}
-    return MeetingPrd(prd, number, approved, True, ids)
+    return MeetingPrd(prd, number, approved, True, ids, text)
 
 
 class Ctx:
@@ -1098,7 +1107,8 @@ async def thread(
             messages.append(ChatMessageOut(
                 id=m.id, author_kind="person" if person else "oracle", author_id=m.author_id,
                 author_name=names.get(m.author_id, "someone") if person else "Oracle",  # type: ignore[arg-type]
-                body=body, at=m.created_at if person else (m.edited_at or m.created_at),
+                body=body,
+                at=(r.answered_at if r is not None and r.answered_at else m.created_at),
                 kind=kind,  # type: ignore[arg-type]
                 cards=by_msg.get(m.id, []), reply_to=m.reply_to, choices=choices,
                 picked=r.picked if r is not None else None, retry=kind == "failed",
@@ -1427,6 +1437,7 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             # and where its items come from (``items`` are its items only).
             context["meeting"].update({
                 "prd": c.prd.document.title, "prd_version": c.prd.number,
+                "prd_text": c.prd.text,
                 "approved": c.prd.approved,
                 "items_from": "draft roadmap" if c.prd.draft else "roadmap",
             })  # fmt: skip
@@ -1611,8 +1622,9 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
         # a change it could not build keeps its own reply.
         reply = Reply("note", MEETING_ASK)
     msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
-    # Oracle's line is dated when Oracle wrote it, not when the line was asked.
-    msg.edited_at = datetime.now(UTC)
+    # Oracle's line is dated when Oracle wrote it, not when the line was asked; kept on its
+    # read, never as the line's edited_at (a discussion view would call it "edited").
+    read.answered_at = datetime.now(UTC)
     if reply.kind == "answer" and isinstance(answer, dict):
         msg.citations = _talk().source_of(c, answer.get("source"))
         if not msg.citations and c.prd is not None:
