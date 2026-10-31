@@ -108,7 +108,7 @@ function NewRequestDialog({
   );
   // A rejected (or archived) goal has left the baseline: it is no goal to file a request under.
   const offered = (goals.data ?? []).filter((g) => g.status !== "rejected");
-  const myName = me?.email ? displayName(me.email) : "";
+  const myName = me?.email ? displayName(me.email, me.name) : "";
   const owner = can("create_request");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
