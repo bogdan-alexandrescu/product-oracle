@@ -46,6 +46,16 @@ async function openRegenerate(page: Page) {
 test.describe("desktop", () => {
   test.use({ viewport: DESKTOP });
 
+  test("qa4fix-docs: the overview's changed-sections warning names the sections by heading", async ({ page }) => {
+    await openDoc(page, "team-workspaces");
+    const inspector = page.getByTestId("version-inspector");
+    await expect(inspector.getByRole("listitem").filter({ hasText: "Sections approved in v1" })).toHaveText(
+      "Sections approved in v1 changed in this version: 3. Scope",
+    );
+    const chip = page.getByTestId("versions-table").getByText("1 warning");
+    await expect(chip).toHaveAttribute("title", "Sections approved in v1 changed in this version: 3. Scope");
+  });
+
   test("qa4-docs-8: the engineering spec the PRD has is listed under Engineering specs", async ({ page }) => {
     await openDoc(page, "checkout-redesign");
     const specs = page.getByTestId("engineering-specs");
