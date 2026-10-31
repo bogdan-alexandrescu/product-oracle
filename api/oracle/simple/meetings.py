@@ -58,7 +58,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import drafts, minutes
+from oracle.simple import change_words, drafts, minutes
 from oracle.simple.models import (
     SimpleChange,
     SimpleDraft,
@@ -616,6 +616,10 @@ async def describe(db: AsyncSession, c: SimpleChange) -> tuple[str, list[dict]]:
     elif not name:
         name = str((c.after or {}).get("title") or t.get("title") or "")
     words = drafts.OP_WORDS.get(c.op) or c.op.replace("_", " ").capitalize()
+    if c.op == "change_horizon" and name:
+        # qa4-simple-decide-12: a move says where to ("Moved Sample data import to Later").
+        said = change_words.phrase(c.op, t, c.before or {}, c.after or {}, name)
+        return said[:1].upper() + said[1:], subjects
     return f"{words} {name}".strip(), subjects
 
 
@@ -637,7 +641,11 @@ async def after_change(
     if c is None:
         return None
     title, subjects = await describe(db, c)
-    if verb:
+    if verb in ("Accepted", "Declined") and c.by is not None:
+        # qa4-simple-decide-12: an accepted or declined proposal says whose it was.
+        who = (await _names(db, {c.by})).get(c.by)
+        title = f"{verb} {who}'s proposal: {title}" if who else f"{verb}: {title}"
+    elif verb:
         title = f"{verb}: {title}"
     elif c.status == "proposed":
         title = f"Proposed: {title}"

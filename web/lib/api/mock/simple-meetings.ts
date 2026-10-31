@@ -612,6 +612,8 @@ const OP_WORDS: Record<string, string> = {
 };
 
 /** A change in words and the subjects it names (as meetings.describe). */
+const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
+
 function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
   const subjects: Decision["subjects"] = [];
   let name = "";
@@ -633,6 +635,9 @@ function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
     }
   } else if (!name) name = String(c.after.title ?? c.target.title ?? "");
   const words = OP_WORDS[c.op] ?? c.op.replace(/_/g, " ");
+  // qa4-simple-decide-12 (meetings.describe): a move says where to.
+  const h = HORIZON_TO[String(c.after.horizon)];
+  if (c.op === "change_horizon" && name && h) return [`Moved ${name} to ${h}`, subjects];
   return [`${words} ${name}`.trim(), subjects];
 }
 
@@ -663,7 +668,9 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   const out = (await res.clone().json()) as Schemas["SimpleChangeResult"];
   const c = out.change;
   const [words, subjects] = describe(ctx, c);
-  const title = verb ? `${verb}: ${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
+  // qa4-simple-decide-12 (meetings.after_change): an accepted or declined proposal says whose.
+  const whose = verb && c.by_name ? `${verb} ${c.by_name}'s proposal: ` : verb ? `${verb}: ` : null;
+  const title = whose ? `${whose}${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
   const prd = prds(ctx).find((x) => x.slug === m.prd)!;
   record(db, ctx, m, title, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
   const line = ctx.onePager.changes.find((x) => x.id === c.id);

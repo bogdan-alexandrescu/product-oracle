@@ -206,7 +206,7 @@ async def test_every_action_is_a_meeting_decision(client):
     rows = await meeting_decisions(w)
     titles = [d.title for d in rows]
     # qa4-simple-decide-12: a move says where to; an accepted or declined proposal says whose.
-    who = w.ctx.users["commenter"].name
+    who = w.ctx.users["commenter"].name or w.ctx.users["commenter"].email
     assert titles == [
         "Renamed Edit_Title A",
         "Proposed: Moved Change_Horizon A to Next",

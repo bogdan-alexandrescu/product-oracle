@@ -96,7 +96,7 @@ for (const phone of [false, true]) {
         await steps(page).getByRole("button", { name: "3 Decisions" }).click();
         const pending = page.getByRole("region", { name: "Pending proposals" });
         await pending.getByRole("button", { name: "Accept" }).click();
-        await expect(allDecisions(page)).toContainText("Accepted: Moved Team invite nudges");
+        await expect(allDecisions(page)).toContainText(/Accepted .+'s proposal: Moved Team invite nudges to (Now|Next|Later)/);
         await expect(pending).toContainText("No proposal waits.");
         await page.getByRole("textbox", { name: "Comment" }).fill("Keep the checklist to five steps");
         await page.getByRole("button", { name: "Add comment" }).click();
