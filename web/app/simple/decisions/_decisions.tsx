@@ -394,6 +394,18 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
           <ul className="list-disc pl-5">{minutes.waits.map((w, i) => <li key={i}>{w.what}{w.on.length ? ` · on ${w.on.map((p) => p.name).join(", ")}` : ""}</li>)}</ul>
         </div>
       )}
+      {/* qa4-simple-decide-32: the notes and comments the meeting's minutes list. */}
+      {(["note", "comment"] as const).map((kind) => {
+        const notes = (g.notes ?? []).filter((n) => n.kind === kind);
+        return notes.length > 0 && (
+          <div key={kind}>
+            <h3 className="text-[18px] leading-[26px] font-[650]">{kind === "note" ? "Notes" : "Comments"}</h3>
+            <ul className="list-disc pl-5 [overflow-wrap:anywhere]" data-testid={`meeting-group-${kind}s`}>
+              {notes.map((n) => <li key={n.id}>{n.text} · {n.by_name}</li>)}
+            </ul>
+          </div>
+        );
+      })}
       <h3 className="text-[18px] leading-[26px] font-[650]">Decisions</h3>
       {g.decisions.length ? <Rows rows={g.decisions} /> : <p className="simple-meta">None.</p>}
     </section>

@@ -115665,6 +115665,14 @@
             "type": "array",
             "title": "Decisions"
           },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingNote"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
           "delivery": {
             "anyOf": [
               {

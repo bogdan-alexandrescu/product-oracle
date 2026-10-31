@@ -2132,6 +2132,7 @@ async def decisions_page(
             minutes=await _named(db, minutes) if minutes else None,
             decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
+            notes=[n for n in await _notes_out(db, m) if n.kind in ("note", "comment")],
             delivery=await delivery_out(db, m) if m.minutes_state == "sent" else None,
             can_retry_delivery=m.minutes_state == "sent" and may_retry(principal, m),
         ))  # fmt: skip

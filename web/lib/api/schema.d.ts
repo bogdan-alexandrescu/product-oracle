@@ -38459,6 +38459,11 @@ export interface components {
             minutes: components["schemas"]["SimpleMinutes"] | null;
             /** Decisions */
             decisions: components["schemas"]["SimpleDecisionRow"][];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["SimpleMeetingNote"][];
             delivery?: components["schemas"]["SimpleDelivery"] | null;
             /**
              * Can Retry Delivery

@@ -923,6 +923,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
       const whole = !!prd && !goal && m.prd === prd.slug;
       return {
         meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)),
+        // qa4-simple-decide-32 (as decisions_page): the meeting's notes and comments, as its minutes list them.
+        notes: (m.notes ?? []).filter((n) => n.kind === "note" || n.kind === "comment"),
         delivery: m.minutes_state === "sent" ? deliveryOut(ctx, m) : null, can_retry_delivery: mayRetry(ctx, m),
       };
     }),

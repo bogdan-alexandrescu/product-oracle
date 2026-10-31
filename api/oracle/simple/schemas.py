@@ -1813,6 +1813,8 @@ class SimpleMeetingGroup(BaseModel):
     meeting: SimpleMeetingBrief
     minutes: SimpleMinutes | None
     decisions: list[SimpleDecisionRow]
+    # qa4-simple-decide-32: the meeting's notes and comments, as its minutes list them.
+    notes: list[SimpleMeetingNote] = []
     # How the sent minutes went out (email, Slack), and whether the caller may Retry.
     delivery: SimpleDelivery | None = None
     can_retry_delivery: bool = False

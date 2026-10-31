@@ -200,7 +200,7 @@ async def test_decisions_page_meeting_lists_its_comments(client):
     assert r.status_code == 200, r.text
     [g] = r.json()["meetings"]
     assert [(n["kind"], n["text"], n["by_name"]) for n in g["notes"]] == [
-        ("comment", "Keep the beta", w.ctx.users["approver"].name)
+        ("comment", "Keep the beta", "approver@example.com")
     ]
 
 
