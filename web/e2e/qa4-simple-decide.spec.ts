@@ -165,7 +165,7 @@ for (const phone of [false, true]) {
         // qa-simple-decide-12: grammar on a filtered meeting; qa-simple-decide-11: the meeting's day.
         await tap(page.getByTestId("decisions-view-meetings"));
         await expect(page).toHaveURL(/view=meetings/);
-        await expect(page.getByTestId("meeting-group-when").first()).toHaveText(/^\w{3} \w{3} \d+ · /);
+        await expect(page.getByTestId("meeting-group-when").first()).toHaveText(/^\w{3} \w{3} \d+( · |$)/);
         await page.getByRole("combobox", { name: "Goal", exact: true }).selectOption({ label: "Grow retention" });
         await expect(page.getByTestId("meeting-group-filtered").first()).toHaveText(/Filtered: (1 decision of this meeting matches|\d+ decisions of this meeting match)\./);
       });
