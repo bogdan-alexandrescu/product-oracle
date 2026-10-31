@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button, Sheet } from "@/components/ds";
 import { api, ApiError, unwrap } from "@/lib/api/client";
@@ -18,7 +18,23 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * every section is approved by someone else, that the run review waits for them). Hidden when no
  * run review points at this version (404).
  */
-export function RunReviewBar({ doc, n, refreshKey, onDecided }: { doc: string; n: number; refreshKey: string; onDecided: () => void }) {
+export function RunReviewBar({
+  doc,
+  n,
+  refreshKey,
+  onDecided,
+  onOpen,
+  liveTick = 0,
+}: {
+  doc: string;
+  n: number;
+  refreshKey: string;
+  onDecided: () => void;
+  /** Whether a run review waits on this version (the page then refreshes on an interval). */
+  onOpen?: (open: boolean) => void;
+  /** The page's live refresh count: each new one re-reads the bar in place, under the same key. */
+  liveTick?: number;
+}) {
   const { can } = useMe();
   const q = useQuery(
     `run-review|${doc}|${n}|${refreshKey}`,
@@ -32,12 +48,21 @@ export function RunReviewBar({ doc, n, refreshKey, onDecided }: { doc: string; n
     },
     { keepPrevious: true },
   );
+  const { reload } = q;
+  useEffect(() => {
+    if (liveTick) void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTick]);
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const r = q.data;
+  const open = r?.status === "pending";
+  useEffect(() => {
+    onOpen?.(open);
+  }, [open, onOpen]);
   if (!r) return null;
 
   const { total, reviewed } = r.sections;
