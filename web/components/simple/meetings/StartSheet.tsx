@@ -93,7 +93,15 @@ function Body({ prd, occurrence, ritual, origin, prefer, from, onClose }: { prd?
   );
   const live = useQuery("simple-meetings", () => unwrap(api.GET("/v1/simple/meetings")));
   if (q.loading && !q.data) return <Loading />;
-  if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
+  // qa4-simple-prd-1: never a bare server message: why the review cannot start here, and what to do.
+  if (q.error || !q.data)
+    return (
+      <ErrorNote>
+        {prd && (!q.error || /no such|not found/i.test(q.error))
+          ? "This PRD can't be reviewed: it was deleted or you can't read it. Close this and start the review from Meetings."
+          : "The review's details didn't load. Close this and try again."}
+      </ErrorNote>
+    );
   return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} prefer={prefer} from={from} live={live.data?.live ?? []} onClose={onClose} />;
 }
 

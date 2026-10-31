@@ -86,7 +86,7 @@ for (const phone of [false, true]) {
         // qa-simple-decide-27: no way back to the One-pagers list inside the stage; Detailed opens in a new tab.
         const stage = page.getByRole("region", { name: "Stage" });
         await expect(stage.getByRole("link", { name: "One-pagers" })).toHaveCount(0);
-        const detailed = stage.getByRole("link", { name: /Open the detailed view/ }).first();
+        const detailed = stage.getByRole("link", { name: /Open in Detailed/ }).first();
         if (await detailed.count()) await expect(detailed).toHaveAttribute("target", "_blank");
         // qa-simple-decide-9 / -28: roadmap spans on one line with a year when not this one; Cut asks first.
         await tap(steps(page).getByRole("button", { name: "2 Roadmap" }));

@@ -62,7 +62,9 @@ export function PlanByMonth({
   const after = `after ${calendarDay(plan.end, { month: "short" })}`;
   const holders = plan.rows.filter((r) => !r.estimated && r.end > plan.end).map((r) => (r.milestone ? `in ${rowName(r)}` : "with no milestone"));
   const holderText = holders.length > 1 ? `${holders.slice(0, -1).join(", ")} and ${holders.at(-1)}` : (holders[0] ?? "");
-  const edgeLine = `${plan.past_edge} ${plan.past_edge === 1 ? "commitment" : "commitments"}${holderText ? ` ${holderText}` : ""} ${plan.past_edge === 1 ? "ends" : "end"} ${after}`;
+  // qa4-simple-prd-15: the one-pager counts "roadmap items" in its rows, so its footnote does too.
+  const edgeWord = legend ? ["roadmap item", "roadmap items"] : ["commitment", "commitments"];
+  const edgeLine = `${plan.past_edge} ${plan.past_edge === 1 ? edgeWord[0] : edgeWord[1]}${holderText ? ` ${holderText}` : ""} ${plan.past_edge === 1 ? "ends" : "end"} ${after}`;
   return (
     <div data-testid={testId} className="flex flex-col gap-1">
       <div className={`${GRID} items-end`}>
@@ -97,8 +99,13 @@ export function PlanByMonth({
               >
                 <span className="flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2">
                   {/* qa-docs-10: the label wraps in full, never cutting the name or its count. */}
-                  <span className="font-semibold [overflow-wrap:anywhere]" data-testid={`${testId}-label`}>{label}</span>
+                  <span className="font-semibold [overflow-wrap:anywhere]" data-testid={`${testId}-label`}>
+                    {/* qa4-simple-prd-14: a label wraps between its name and its count, never mid-phrase. */}
+                    {named ? label : (<><span className="whitespace-nowrap">{rowName(r)} ·</span> <span className="whitespace-nowrap">{n}</span></>)}
+                  </span>
                   {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
+                  {/* qa4-simple-prd-15: a row with no milestone date that runs past the edge says when it ends. */}
+                  {!when && legend && !r.estimated && r.end > plan.end && <span className="simple-small" data-testid={`${testId}-ends`}>ends {after}</span>}
                 </span>
                 <span className="relative h-7">
                   {grid}

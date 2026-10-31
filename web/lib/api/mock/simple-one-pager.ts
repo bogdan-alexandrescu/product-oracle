@@ -21,6 +21,7 @@ import type { Schemas } from "@/lib/api/client";
 import { planByMonth } from "@/lib/simple-home";
 import { planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
+import { companyDayIso } from "./connections";
 import { stableUuid } from "./ids";
 import { annotate } from "./one-pager-checks";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
@@ -66,6 +67,10 @@ interface SeedLine {
 export interface OnePagerDb {
   doc: { id: string; slug: string; title: string };
   version: number;
+  /** qa4-simple-prd-22: a PRD other than the seed keys its bets' flows by its own slug, so it shares none. */
+  flowKey?: string;
+  /** When `version` was approved (null: never published); unset, the seed's day. */
+  published_at?: string | null;
   sections: Sec[];
   /** `missing`: Oracle marked the block "Not in the PRD yet" (nothing of the PRD maps to it). */
   blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[]; missing?: boolean }[];
@@ -434,13 +439,13 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
         const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");
-        const flow = b.key === "bets" ? onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(l.id))) : null;
+        const flow = b.key === "bets" ? onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(db.flowKey ? `${db.flowKey}/${l.id}` : l.id))) : null;
         return {
           id: l.id, text, full: edited ? null : l.full ?? null, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
           // S10: each bet carries its visual, keyed by its line: an edit keeps the flow. Its
           // brief is the published words (the API's bet_line): never a draft's.
-          ...(b.key === "bets" ? { flow_subject: betSubject(l.id, uncomment(l.text).split(/\s+/).filter(Boolean).join(" ")), flow } : {}),
+          ...(b.key === "bets" ? { flow_subject: betSubject(db.flowKey ? `${db.flowKey}/${l.id}` : l.id, uncomment(l.text).split(/\s+/).filter(Boolean).join(" ")), flow } : {}),
           decisions: [...(db.decisions?.[l.id] ?? [])],
           measure: null, measure_source: null, footnotes: [],
           // 2026-10-30: a bet with no flow offers "Draw the flow" to those who change the PRD (visuals.may_revise).
@@ -453,7 +458,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   return {
     document: db.doc,
     version: db.version,
-    published_at: "2026-10-20T15:00:00Z",
+    published_at: db.published_at === undefined ? "2026-10-20T15:00:00Z" : db.published_at,
     owner: owner ? { id: owner, name: ctx.names[owner] ?? "Owner" } : null,
     decider: ctx.decider ? { id: ctx.decider, name: ctx.names[ctx.decider] ?? "someone" } : null,
     span_start: span?.[0] ?? null,
@@ -464,7 +469,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
       (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
-      new Date(mockNowMs()).toISOString().slice(0, 10),
+      // qa4-simple-prd-10: the company's day, as the API's slice (and the notes' times) read it.
+      companyDayIso(new Date(mockNowMs())),
     ),
     // As the API: the sections the page's lines rest on.
     sections: db.sections.filter((s) => db.blocks.some((b) => b.lines.some((l) => l.keys.includes(s.key)))).map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),

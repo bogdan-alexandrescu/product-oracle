@@ -203,7 +203,7 @@ test.describe("desktop, no plan", () => {
     await page.getByRole("button", { name: "Propose wording for “Single sign-on setup" }).click();
     await page.getByLabel("New wording for").fill("Single sign-on, later");
     await page.getByRole("button", { name: "Propose", exact: true }).click();
-    const note = page.getByRole("note").filter({ hasText: "You propose new wording for “Single sign-on setup" }).filter({ visible: true });
+    const note = page.getByRole("note").filter({ hasText: "You proposed new wording for “Single sign-on setup" }).filter({ visible: true });
     await expect(note).toBeVisible();
     await expect(note).not.toContainText("Commenter proposes");
     await note.getByRole("button", { name: "Withdraw" }).click();

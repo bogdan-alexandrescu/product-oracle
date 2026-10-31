@@ -76,7 +76,7 @@ for (const phone of [false, true]) {
         const note = notes(page).filter({ hasText: "You changed “A setup checklist" }).filter({ visible: true });
         await expect(note).toBeVisible();
         await note.getByRole("button", { name: "See before/after" }).click();
-        await expect(note.getByLabel("Before and after")).toContainText("In “What we will build”");
+        await expect(note.getByLabel("Before and after")).not.toContainText("In “What we will build”");  // qa4-simple-prd-18: the line's before/after once, no repeat box
         await expect(note.getByLabel("Before and after")).toContainText("A setup checklist with the next two steps");
         await note.getByRole("button", { name: "Undo" }).click();
         await expect(line).toHaveAttribute("data-state", "published");
@@ -131,7 +131,7 @@ for (const phone of [false, true]) {
         await page.getByLabel("New wording for").fill("Invite suggestions from shared contacts");
         await page.getByRole("button", { name: "Propose", exact: true }).click();
         await expect(page.locator('[data-line="bets-2"]')).toHaveAttribute("data-state", "proposal");
-        const mine = notes(page).filter({ hasText: "You propose new wording for “Invite suggestions" }).filter({ visible: true });
+        const mine = notes(page).filter({ hasText: "You proposed new wording for “Invite suggestions" }).filter({ visible: true });
         await expect(mine).toBeVisible();
         await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
         // The account menu lives in the desktop rail: switch people there, then back to
@@ -142,7 +142,7 @@ for (const phone of [false, true]) {
         await login(page);
         await page.setViewportSize(size);
         await page.goto(URL);
-        const note = notes(page).filter({ hasText: "proposes new wording for “Invite suggestions" }).filter({ visible: true });
+        const note = notes(page).filter({ hasText: "proposed new wording for “Invite suggestions" }).filter({ visible: true });
         await note.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" }).click();
         await expect(note).toHaveAttribute("data-widened", "true");
         // S10: Oracle drafted the bet's visual with the proposal.

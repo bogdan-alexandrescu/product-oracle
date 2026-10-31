@@ -453,6 +453,9 @@ export function FlowPanel({
   const v = q.data;
   const flow = old ?? v.flow;
   const open = v.comments.filter((c) => c.addressed_in === null);
+  // qa4-simple-prd-33: a reader who may not comment (a viewer) is not offered "Comment": the same
+  // panel reads as the flow's comments, notes and versions.
+  const commentWord = v.can_comment ? "Comment" : "See comments";
   const title = (f: Flow, what: string) => (
     <>
       {code ? <><Code code={code} className="mr-0.5 align-[2px]" />{" "}</> : null}
@@ -603,7 +606,7 @@ export function FlowPanel({
   // view, after the screen on a phone; elsewhere (qa-simple-prd-p3-22) it opens them full screen.
   const commentButton = inlineComments ? (
     <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-      Comment
+      {commentWord}
     </button>
   ) : (
     <button
@@ -614,7 +617,7 @@ export function FlowPanel({
         setFull(true);
       }}
     >
-      Comment
+      {commentWord}
     </button>
   );
   const exitFull = () => {
@@ -627,8 +630,8 @@ export function FlowPanel({
     <div ref={openedRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${f.title} · flow`} data-testid="flow-detail" className="fixed inset-0 z-[60] flex flex-col bg-surface text-[15px] leading-[22px] text-text outline-none">
       <div className="flex flex-none items-center gap-2.5 border-b border-line px-3 py-2.5">
         <button type="button" data-first className={BTN_GHOST} onClick={() => setView(null)}>
-          <Icon d={ICONS.back} size={18} />
-          Back
+          {/* qa4-simple-prd-30: the flow's sheet closes with "Close", as the storyboard's does. */}
+          Close
         </button>
         <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · flow</h2>
         <button type="button" className={BTN} onClick={() => setFull(true)}>
@@ -708,7 +711,7 @@ export function FlowPanel({
           <div className="flex flex-none items-center gap-2 border-b border-line px-3 py-2.5">
             <h2 className="min-w-0 flex-1 text-[17px] leading-6 font-[650] break-words">{f.title} · flow</h2>
             <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-              Comment
+              {commentWord}
             </button>
             <button type="button" className={BTN_SOLID} data-first aria-label="Exit full screen" onClick={exitFull}>
               Exit
@@ -737,7 +740,7 @@ export function FlowPanel({
               {older}
             </span>
             <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
-              Comment
+              {commentWord}
             </button>
             <button type="button" className={BTN_SOLID} data-first onClick={exitFull}>
               Exit full screen

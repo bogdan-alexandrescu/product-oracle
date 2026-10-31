@@ -78,7 +78,7 @@ for (const [where, use] of [
       await expect(line(page, "bets-1")).toContainText("A setup checklist with the next two steps");
       const note = notes(page).filter({ hasText: "You changed “A setup checklist" });
       await note.getByRole("button", { name: "See before/after" }).click();
-      await expect(note.getByLabel("Before and after")).toContainText("In “What we will build”");
+      await expect(note.getByLabel("Before and after")).not.toContainText("In “What we will build”");  // qa4-simple-prd-18: the line's before/after once, no repeat box
     });
 
     /*
@@ -94,13 +94,13 @@ for (const [where, use] of [
       await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
       await page.getByRole("button", { name: "Propose", exact: true }).click();
       await expect(line(page, "bets-1")).toHaveAttribute("data-state", "proposal");
-      const mine = notes(page).filter({ hasText: "You propose new wording for “A setup checklist" });
+      const mine = notes(page).filter({ hasText: "You proposed new wording for “A setup checklist" });
       await expect(mine).toBeVisible();
       await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
 
       await switchPerson(page, ADMIN.email);
       await page.goto(URL);
-      const theirs = notes(page).filter({ hasText: "proposes new wording for “A setup checklist" });
+      const theirs = notes(page).filter({ hasText: "proposed new wording for “A setup checklist" });
       await theirs.getByRole("button", { name: "Accept" }).click();
       await expect(line(page, "bets-1")).toHaveAttribute("data-state", "edited");
       await expect(line(page, "bets-1")).toContainText("A setup checklist with the next two steps");
