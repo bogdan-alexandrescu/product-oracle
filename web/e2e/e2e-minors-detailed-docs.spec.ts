@@ -89,7 +89,17 @@ for (const [name, viewport] of VIEWPORTS) {
       await expect(risks).toContainText("see “How long does a checkout session last” and an open question");
       await expect(risks).not.toContainText("questions.json");
       await expect(risks).not.toContainText("otr-q1");
+      // Review minors 21: a code in capitals reads as its question too.
+      await expect(risks).not.toContainText("OTR-Q1");
       await expect(risks).not.toContainText("src-q1");
+    });
+
+    test(`review 19: an approach with " - " asides reads as one paragraph, not a list (${name})`, async ({ page }) => {
+      await login(page);
+      await openTechBrief(page, "Show the full price early");
+      const approach = page.getByTestId("brief-approach");
+      await expect(approach).toContainText("as soon as the cart changes - before tax is known - and show it in the checkout summary");
+      await expect(approach.getByRole("listitem")).toHaveCount(0);
     });
 
     test(`22: the recommendation is not greyed while a new one is on its way (${name})`, async ({ page }) => {

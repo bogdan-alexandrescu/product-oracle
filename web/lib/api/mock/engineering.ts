@@ -53,8 +53,9 @@ function seedBriefs(): TechBrief[] {
         // A shared map built from the synced docs only (F5-2, until the checkout exists).
         repos: [{ repo: "example/shop-app", commit: "3f2c9a1", as_of: "2026-10-18T10:00:00Z", partial: true }],
       },
+      // Prose with two " - " asides (review minors 19): one paragraph, never a list.
       approach:
-        "Compute the total in the pricing module as soon as the cart changes, and show it in the checkout summary from the first step.",
+        "Compute the total in the pricing module as soon as the cart changes - before tax is known - and show it in the checkout summary from the first step.",
       touches: [
         { area: "web/checkout/summary", kind: "module", change: "change", ref: "module:checkout-web" },
         { area: "GET /v1/quotes", kind: "api", change: "new", ref: null },
@@ -119,7 +120,7 @@ function seedBriefs(): TechBrief[] {
         {
           risk: "The session may end mid-checkout",
           level: "low",
-          mitigation: "Keep the fields as long as a session lasts (questions.json); see otr-q1 and src-q1",
+          mitigation: "Keep the fields as long as a session lasts (questions.json); see OTR-Q1 and src-q1",
         },
       ],
       questions: [{ id: "otr-q1", question: "How long does a checkout session last?", why: "Sets when saved fields are lost", blocking: false }],
