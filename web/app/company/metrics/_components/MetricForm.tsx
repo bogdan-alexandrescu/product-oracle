@@ -270,7 +270,7 @@ export function MetricForm({
           </div>
           {unitPick === COUNT && (
             <label className={LABEL}>
-              <span id="metric-noun-label">Counted noun</span>
+              <span id="metric-noun-label">Count of what</span>
               <input
                 data-field="unit"
                 aria-labelledby="metric-noun-label"
