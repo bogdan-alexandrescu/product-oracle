@@ -155,6 +155,7 @@ import {
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
+import { rdAlertsOnePager } from "./rundecide"; // MOCK-HOOK
 import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
@@ -4724,7 +4725,8 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
     if (known) return known;
     const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
     if (!d) return undefined;
-    return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals });
+    const base = d.slug === "usage-alerts" ? rdAlertsOnePager(seedOnePager()) : seedOnePager(); // MOCK-HOOK mk-rundecide: the Usage alerts body
+    return (others[d.id] = { ...base, doc: { id: d.id, slug: d.slug, title: d.title }, visuals: d.slug === "usage-alerts" ? undefined /* MOCK-HOOK */ : db.simple_visuals });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;

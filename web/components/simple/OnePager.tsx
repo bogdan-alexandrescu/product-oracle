@@ -10,7 +10,7 @@ import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeli
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
-import { RdPrdRunSection, RdReviewBar, RdStatus, useMk } from "@/components/simple/mock/RunDecideMock"; // MOCK-HOOK
+import { RdDraftChip, RdDraftNotes, RdPrdRunSection, RdReviewBar, RdStatus, useMk } from "@/components/simple/mock/RunDecideMock"; // MOCK-HOOK
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
@@ -654,7 +654,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
               <MarginNote {...{ n, quote: words.get(n.line_id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide }} />
             </div>
           ))}
-          {v.notes.length === 0 && <p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>}
+          {v.notes.length === 0 && <RdDraftNotes fallback={<p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>} /> /* MOCK-HOOK */}
         </aside>
       </div>
       )}
@@ -717,8 +717,9 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
         <h1 className="text-[34px] leading-[42px] font-bold tracking-[-.01em]">{v.document.title}</h1>
       )}
       <div data-testid="one-pager-meta" className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[15px] leading-[22px] text-text2">
-        {/* MOCK-HOOK */ mk.rd2 && <RdStatus />}
-        {approved && !mk.rd2 /* MOCK-HOOK */ && (
+        {/* MOCK-HOOK */ (mk.rd2 || mk.rd1 === "c" || mk.rd3) && <RdStatus />}
+        {/* MOCK-HOOK */ mk.draft && <RdDraftChip />}
+        {approved && !mk.rd2 && mk.rd1 !== "c" && !mk.rd3 /* MOCK-HOOK */ && (
           <span className="inline-flex h-6 items-center gap-[5px] rounded-xl bg-pass-bg px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap text-pass">
             <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -729,7 +730,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
         {/* qa-simple-prd-9: the same state the One-pagers list names. */}
         {approved && draft && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
         {/* qa-simple-prd-p3-16: never approved, it shows the status the list shows ("In review", "Draft"). */}
-        {!approved && !mk.rd2 /* MOCK-HOOK */ && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
+        {!approved && !mk.rd2 && mk.rd1 !== "c" && !mk.rd3 /* MOCK-HOOK */ && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
         <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
         {sep}
         {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}

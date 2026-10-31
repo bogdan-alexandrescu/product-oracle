@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
-import { NEEDED, RUN_MAIN, RUNS_MORE, type MockRun, type Needed, type RunStop } from "@/lib/api/mock/rundecide";
+import { NEEDED, NEEDED_MORE, RD_STATE, RUN_MAIN, RUNS_MORE, type MockRun, type Needed, type RunStop } from "@/lib/api/mock/rundecide";
 
 /** MOCK-HOOK: the address's switches, read after mount (no Suspense needed). */
 export function useMk() {
@@ -27,12 +27,35 @@ export function useMk() {
   };
 }
 
+/** MOCK-HOOK: what one mock part did, for the others on the page (the PRD's status, the meeting's list). */
+const bus = new EventTarget();
+function useBus<T>(name: string): T | null {
+  const [v, setV] = useState<T | null>(null);
+  useEffect(() => {
+    const f = (e: Event) => setV((e as CustomEvent<T>).detail);
+    bus.addEventListener(name, f);
+    return () => bus.removeEventListener(name, f);
+  }, [name]);
+  return v;
+}
+function emit(name: string, detail: unknown) {
+  bus.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 /** MOCK-HOOK: "Tue Oct 20". */
 export function day(iso: string) {
   const d = new Date(`${iso}T12:00:00Z`);
-  return `${DAY[d.getUTCDay()]} ${MON[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  return `${DAY[d.getUTCDay()]}\u00a0${MON[d.getUTCMonth()]}\u00a0${d.getUTCDate()}`;
+}
+
+/** MOCK-HOOK: a built row's moment as its own day, in the workspace's time zone (as the built rows show it). */
+// eslint-disable-next-line no-restricted-syntax -- MOCK-HOOK: the built rows show the workspace zone (Pacific in the mock data)
+const PT = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" });
+function localDay(at: string) {
+  const p = Object.fromEntries(PT.formatToParts(new Date(at)).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
 }
 
 function runs(many: boolean): MockRun[] {
@@ -48,7 +71,7 @@ function Mark({ children }: { children: ReactNode }) {
 }
 
 /** MOCK-HOOK: one stop of a run as a decision row, with its name and day (and, opened, its trail). */
-function StopRow({ run, s, open, mark, showRun }: { run: MockRun; s: RunStop; open: boolean; mark?: boolean; showRun?: boolean }) {
+function StopRow({ run, s, open, mark, showRun, onPrd }: { run: MockRun; s: RunStop; open: boolean; mark?: boolean; showRun?: boolean; onPrd?: boolean }) {
   const [shown, setShown] = useState(open);
   return (
     <li className="flex !items-start gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0" data-testid="run-stop-row">
@@ -78,10 +101,15 @@ function StopRow({ run, s, open, mark, showRun }: { run: MockRun; s: RunStop; op
                 {t.note && <span className="block text-text2">“{t.note}”</span>}
               </li>
             ))}
-            <li>
-              <Link href={`/simple/one-pagers/${run.prdSlug}`} className="simple-link">
-                Open {run.prd}
-              </Link>
+            <li className="flex flex-wrap gap-x-4">
+              {!onPrd && (
+                <Link href={`/simple/one-pagers/${run.prdSlug}`} className="simple-link">
+                  Open {run.prd}
+                </Link>
+              )}
+              <button type="button" className="simple-more !mt-0" onClick={() => setShown(false)}>
+                Hide what happened
+              </button>
             </li>
           </ol>
         )}
@@ -125,7 +153,7 @@ export function RdMixed({ other }: { other: OtherRow[] }) {
   type Item = { at: string; node: ReactNode };
   const items: Item[] = [
     ...other.map((r) => ({
-      at: (r.decided_at ?? r.created_at).slice(0, 10),
+      at: localDay(r.decided_at ?? r.created_at),
       node: (
         <li key={r.id} className="flex !items-start gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0">
           <span aria-hidden className="simple-ico simple-ico-done">
@@ -135,7 +163,7 @@ export function RdMixed({ other }: { other: OtherRow[] }) {
             <span className="break-words">
               <span className="simple-code">{r.code ?? `D-${r.number}`}</span> <b className="font-[650]">{r.title}</b>
             </span>
-            <span className="simple-meta">{[r.chosen, r.approver?.name ?? "No approver", day((r.decided_at ?? r.created_at).slice(0, 10))].filter(Boolean).join(" · ")}</span>
+            <span className="simple-meta">{[r.chosen, r.approver?.name ?? "No approver", day(localDay(r.decided_at ?? r.created_at))].filter(Boolean).join(" · ")}</span>
           </span>
         </li>
       ),
@@ -184,7 +212,7 @@ export function RdPrdRunSection() {
       {shown ? (
         <ul className="mt-3">
           {RUN_MAIN.stops.map((s) => (
-            <StopRow key={s.id} run={RUN_MAIN} s={s} open={false} />
+            <StopRow key={s.id} run={RUN_MAIN} s={s} open={false} onPrd />
           ))}
         </ul>
       ) : (
@@ -201,8 +229,9 @@ export function RdPrdRunSection() {
 /** MOCK-HOOK RD2: the PRD's status words while a run's review is on it. */
 export function RdStatus() {
   const mk = useMk();
-  if (!mk.rd2) return null;
-  const done = mk.phase === "done";
+  const live = useBus<string>("rd2-done");
+  if (!mk.rd2 && mk.rd1 !== "c" && !mk.rd3) return null;
+  const done = mk.phase === "done" || !!live;
   const approved = done && (mk.rd2 === "a" || mk.rd2 === "b");
   return approved ? (
     <span data-testid="rd2-status" className="inline-flex h-6 items-center gap-[5px] rounded-xl bg-pass-bg px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap text-pass">
@@ -219,14 +248,18 @@ export function RdStatus() {
 /** MOCK-HOOK RD2: the run's PRD review, as the approver meets it on the PRD. */
 export function RdReviewBar() {
   const mk = useMk();
-  const [step, setStep] = useState<"" | "open" | "done" | "next">("");
+  const [step, setStep0] = useState<"" | "open" | "done" | "next">("");
+  const setStep = (x: typeof step) => {
+    setStep0(x);
+    if (x === "done") emit("rd2-done", mk.rd2);
+  };
   if (!mk.rd2) return null;
   const st = step || (mk.phase === "done" ? "done" : mk.phase === "next" ? "next" : mk.open ? "open" : "");
   const v = mk.rd2;
   const box = "rounded-[14px] border border-line bg-surface p-4 shadow-sm";
   const draftNote = mk.draft && (
     <p className="simple-small mt-2 rounded-lg bg-warn-bg px-3 py-2 text-warn" data-testid="rd2-draft">
-      Draft 4 has 3 changes from Thursday&apos;s review meeting. They are not in version 3 and stay unapproved.
+      Draft 4 has 3 changes from Thursday&apos;s review meeting, listed at the side. They are not in version 3 and stay unapproved.
     </p>
   );
   if (st === "done") {
@@ -240,13 +273,13 @@ export function RdReviewBar() {
             {v === "a" && (
               <>
                 <b className="font-[650]">You approved version 3.</b>
-                <span className="simple-meta">The PRD reads Approved everywhere. {RUN_MAIN.name} goes on to its dates · Admin · Sat Oct 31</span>
+                <span className="simple-meta">The PRD reads Approved everywhere. {RUN_MAIN.name} goes on to its dates · Admin · Fri Oct 30</span>
               </>
             )}
             {v === "b" && (
               <>
                 <b className="font-[650]">You approved the PRD, version 3.</b>
-                <span className="simple-meta">Second of two steps · {RUN_MAIN.name} goes on to its dates · Admin · Sat Oct 31</span>
+                <span className="simple-meta">Second of two steps · {RUN_MAIN.name} goes on to its dates · Admin · Fri Oct 30</span>
               </>
             )}
             {v === "c" && (
@@ -258,11 +291,7 @@ export function RdReviewBar() {
           </span>
         </p>
         {v === "a" && draftNote}
-        {v === "c" && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="simple-button simple-button-primary">Start review meeting</button>
-          </div>
-        )}
+        {v === "c" && <p className="simple-small mt-2">To approve the PRD, use Start review above.</p>}
       </section>
     );
   }
@@ -270,13 +299,12 @@ export function RdReviewBar() {
     return (
       <section className={box} aria-label="The run's PRD review" data-testid="rd2-bar">
         <p className="simple-meta inline-flex items-center gap-1.5">
-          <Icon name="check" size={16} stroke={1.7} /> Run review approved by you (Admin) · Sat Oct 31
+          <Icon name="check" size={16} stroke={1.7} /> Run review approved by you (Admin) · Fri Oct 30
         </p>
         <h2 className="simple-h2 mt-2">Next stop: approve the PRD</h2>
-        <p className="simple-small">Approving makes version 3 the PRD everyone builds from. Or take it to a review meeting to change it first.</p>
+        <p className="simple-small">Approving makes version 3 the PRD everyone builds from. To change it first, use Start review above.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className="simple-button simple-button-primary" onClick={() => setStep("done")}>Approve the PRD</button>
-          <button type="button" className="simple-button">Start review meeting</button>
         </div>
       </section>
     );
@@ -323,8 +351,13 @@ export function RdReviewBar() {
 
 /* ------------------------------------------------------------------ RD3 */
 
-function NeededRow({ n, decided, onDecide, open, showPrd }: { n: Needed; decided?: string; onDecide?: () => void; open?: boolean; showPrd?: boolean }) {
+const ANSWER = "Not in the first release; look again in the spring";
+const AT = "Fri Oct 30, 6:42 PM";
+
+/** MOCK-HOOK RD3: one decision needed, decided the way the built questions are (Decide as recommended, Another answer, Ask Oracle). */
+function NeededRow({ n, decided, open, onOpen, onDecide, onCancel, showPrd }: { n: Needed; decided?: string; open?: boolean; onOpen?: () => void; onDecide?: (answer: string) => void; onCancel?: () => void; showPrd?: boolean }) {
   const late = n.due < "2026-11-04";
+  const [text, setText] = useState(open ? ANSWER : "");
   return (
     <li className="flex flex-wrap !items-start gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0" data-testid="needed-row">
       <span aria-hidden className={`simple-ico ${decided ? "simple-ico-done" : ""}`}>
@@ -340,34 +373,42 @@ function NeededRow({ n, decided, onDecide, open, showPrd }: { n: Needed; decided
           <span className="simple-meta">
             <span className={late ? "font-semibold text-crit" : ""}>Due {day(n.due)}</span> · {n.mine ? "You decide" : `${n.owner} decides`}
             {showPrd ? " · Usage alerts PRD" : ""}
-            {n.rec ? ` · PRD suggests: ${n.rec}` : ""}
+            {n.rec ? ` · Recommended: ${n.rec}` : ""}
+          </span>
+        )}
+        {!decided && onDecide && !open && (
+          <span className="mt-2 flex flex-wrap items-center gap-2">
+            {n.rec && (
+              <button type="button" className={`simple-button ${n.mine ? "simple-button-primary" : ""}`} onClick={() => onDecide(n.rec!)}>
+                {n.mine ? "Decide as recommended" : `Decide for ${n.owner}`}
+              </button>
+            )}
+            <button type="button" className="simple-button" onClick={onOpen}>Another answer</button>
+            <button type="button" className="simple-button simple-button-quiet">Ask Oracle</button>
           </span>
         )}
         {open && !decided && (
-          <span className="mt-2 flex flex-wrap items-center gap-2" role="group" aria-label={`Decide ${n.code}`}>
-            {n.rec && <button type="button" className="simple-button simple-button-primary" onClick={onDecide}>{n.rec}</button>}
-            <input className="simple-select min-w-[200px] flex-1" placeholder="Another answer" aria-label="Another answer" />
+          <span className="mt-2 flex flex-wrap items-center gap-2" role="group" aria-label={`Another answer for ${n.code}`}>
+            <input className="simple-select min-w-[220px] flex-1" placeholder="Your answer" aria-label="Your answer" value={text} onChange={(e) => setText(e.target.value)} />
+            <button type="button" className="simple-button simple-button-primary" onClick={() => onDecide?.(text || "Decided")}>Decide</button>
+            <button type="button" className="simple-button simple-button-quiet" onClick={onCancel}>Cancel</button>
           </span>
         )}
       </span>
-      {!decided && !open && onDecide && (
-        <button type="button" className="simple-button" onClick={onDecide}>
-          Decide
-        </button>
-      )}
       {decided && <button type="button" className="simple-button simple-button-quiet">Undo</button>}
     </li>
   );
 }
 
-/** MOCK-HOOK RD3: the PRD's decisions needed, with one being decided (open) or decided (done). */
-function NeededList({ list, who, showPrd }: { list: Needed[]; who: string; showPrd?: boolean }) {
+/** MOCK-HOOK RD3: the PRD's decisions needed, with one answered another way (open) or decided (done). */
+function NeededList({ list, who, showPrd, onDecided }: { list: Needed[]; who: string; showPrd?: boolean; onDecided?: () => void }) {
   const mk = useMk();
   const [open, setOpen] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<Record<string, string>>({});
   const target = list[0]?.code;
-  const isOpen = (c: string) => open === c || (mk.open && !done && mk.phase !== "done" && c === target);
-  const isDone = (c: string) => done === c || (mk.phase === "done" && c === target);
+  const preset = mk.phase === "done" && target ? { [target]: ANSWER } : {};
+  const answers = { ...preset, ...done };
+  const isOpen = (c: string) => open === c || (mk.open && !answers[c] && c === target);
   return (
     <ul>
       {list.map((n) => (
@@ -376,16 +417,67 @@ function NeededList({ list, who, showPrd }: { list: Needed[]; who: string; showP
           n={n}
           showPrd={showPrd}
           open={isOpen(n.code)}
-          decided={isDone(n.code) ? `${n.rec ?? "Decided"} · ${who} · Sat Oct 31, 10:42 AM` : undefined}
-          onDecide={() => (isOpen(n.code) ? setDone(n.code) : setOpen(n.code))}
+          decided={answers[n.code] ? `${answers[n.code]} · ${who} · ${AT}` : undefined}
+          onOpen={() => setOpen(n.code)}
+          onCancel={() => setOpen(null)}
+          onDecide={(answer) => {
+            setDone((d) => ({ ...d, [n.code]: answer }));
+            setOpen(null);
+            emit("rd3-decided", { code: n.code, title: n.title, answer });
+            if (onDecided) {
+              RD_STATE.decided += 1;
+              onDecided();
+            }
+          }}
         />
       ))}
     </ul>
   );
 }
 
+/** MOCK-HOOK RD3 b: the meeting's "All decisions" lists what its agenda decided. */
+export function RdMeetingDecided({ fallback }: { fallback: ReactNode }) {
+  const mk = useMk();
+  const live = useBus<{ code: string; title: string; answer: string }>("rd3-decided");
+  const d = live ?? (mk.rd3 && mk.phase === "done" ? { code: NEEDED[0]!.code, title: NEEDED[0]!.title, answer: ANSWER } : null);
+  if (!d) return <>{fallback}</>;
+  return (
+    <ul className="mt-2 space-y-2">
+      <li data-testid="meeting-decision">
+        <strong>{d.code}</strong> {d.title}
+        <span className="block text-sm text-text-faint">{d.answer} · Admin · Oct 30, 6:42 PM</span>
+      </li>
+    </ul>
+  );
+}
+
+/** MOCK-HOOK RD2 hard case (&draft=1): the PRD's draft and its changes in the side panel. */
+export function RdDraftChip() {
+  return <span className="text-[14px] font-semibold text-text">draft in progress</span>;
+}
+const DRAFT_CHANGES = [
+  { line: "What we will build", text: "Weekly alert digest: send on Monday mornings, not Friday", who: "Priya Shah" },
+  { line: "Not doing", text: "Add: alerts in the mobile app", who: "Marco Ruiz" },
+  { line: "Outcomes", text: "Tickets about surprise limits: to 30 a month, not 40", who: "Lena Ford" },
+];
+export function RdDraftNotes({ fallback }: { fallback: ReactNode }) {
+  const mk = useMk();
+  if (!mk.draft) return <>{fallback}</>;
+  return (
+    <ul className="mt-2 space-y-3" data-testid="rd2-draft-notes">
+      {DRAFT_CHANGES.map((c) => (
+        <li key={c.text} className="rounded-[12px] border border-line bg-surface p-3">
+          <span className="simple-meta block">{c.line} · draft 4 · Thursday&apos;s review meeting</span>
+          <span className="block text-[15px] leading-[22px]">{c.text}</span>
+          <span className="simple-meta block">{c.who}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** MOCK-HOOK RD3 a: Simple Home's "Waiting for you" carries the PRD's decisions the person owns. */
-export function RdHomeWaiting() {
+export function RdHomeWaiting({ onDecided }: { onDecided?: () => void }) {
   const mk = useMk();
   if (mk.rd3 !== "a") return null;
   const mine = NEEDED.filter((n) => n.mine);
@@ -396,7 +488,7 @@ export function RdHomeWaiting() {
         <span className="simple-meta">{mine.length} decisions you own · also on its review meeting&apos;s agenda</span>
       </header>
       <div className="mt-3">
-        <NeededList list={mine} who="Admin" />
+        <NeededList list={mine} who="Admin" onDecided={onDecided} />
       </div>
     </section>
   );
@@ -414,24 +506,29 @@ export function RdAgenda({ fallback }: { fallback: ReactNode }) {
   );
 }
 
-/** MOCK-HOOK RD3 c: a section per PRD on Simple › Decisions. */
+/** MOCK-HOOK RD3 c: a section per PRD on Simple › Decisions (&many=1: three PRDs). */
 export function RdPrdSections() {
   const mk = useMk();
   if (mk.rd3 !== "c") return null;
+  const prds = [{ prd: "Usage alerts PRD", slug: "usage-alerts", list: NEEDED }, ...(mk.many ? NEEDED_MORE : [])];
   return (
-    <section className="simple-card" aria-label="Decisions needed: Usage alerts PRD" data-testid="rd3-section">
-      <header className="flex flex-wrap items-baseline gap-x-3">
-        <h2 className="simple-h2 flex-1">Usage alerts PRD: decisions needed</h2>
-        <span className="simple-meta">
-          {NEEDED.length} open · {NEEDED.filter((n) => n.mine).length} yours ·{" "}
-          <Link href="/simple/one-pagers/usage-alerts" className="simple-link">
-            Open the PRD
-          </Link>
-        </span>
-      </header>
-      <div className="mt-3">
-        <NeededList list={NEEDED} who="Admin" />
-      </div>
-    </section>
+    <>
+      {prds.map((p, i) => (
+        <section key={p.slug} className="simple-card" aria-label={`Decisions needed: ${p.prd}`} data-testid={i === 0 ? "rd3-section" : "rd3-section-more"}>
+          <header className="flex flex-wrap items-baseline gap-x-3">
+            <h2 className="simple-h2 flex-1">{p.prd}: decisions needed</h2>
+            <span className="simple-meta">
+              {p.list.length} open · {p.list.filter((n) => n.mine).length} yours ·{" "}
+              <Link href={`/simple/one-pagers/${p.slug}`} className="simple-link">
+                Open the PRD
+              </Link>
+            </span>
+          </header>
+          <div className="mt-3">
+            <NeededList list={p.list} who="Admin" />
+          </div>
+        </section>
+      ))}
+    </>
   );
 }

@@ -1,4 +1,5 @@
 import type { Schemas } from "../client";
+import { RD_STATE } from "./rundecide"; // MOCK-HOOK
 import { mockNowMs } from "./clock";
 import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
@@ -225,7 +226,9 @@ export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: str
 /** GET /v1/simple/decisions/waiting: `others` is the decision log's judgement calls waiting for me. */
 export function waitingOut(ctx: QuestionsCtx, db: QuestionsDb, others: number): Schemas["SimpleDecisionsWaitingOut"] {
   const c = questionsCounts(ctx, db);
-  return { count: c.waiting_count + others, late: c.late_count, questions: c.mine, others, approvals_waiting: c.approvals_waiting };
+  // MOCK-HOOK mk-rundecide RD3 a: Home and its badge count the Usage alerts PRD's decisions you own too.
+  const rd3a = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("rd3") === "a" ? 3 - RD_STATE.decided : 0; // MOCK-HOOK
+  return { count: c.waiting_count + others + rd3a /* MOCK-HOOK */, late: c.late_count, questions: c.mine, others, approvals_waiting: c.approvals_waiting };
 }
 
 async function readBody(req: Request): Promise<Record<string, unknown>> {

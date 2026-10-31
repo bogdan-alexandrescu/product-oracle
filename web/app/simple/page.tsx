@@ -552,7 +552,7 @@ export default function SimpleHome() {
         </section>
       )}
 
-      {!reads && <RdHomeWaiting /> /* MOCK-HOOK */}
+      {!reads && <RdHomeWaiting onDecided={reloadAll} /> /* MOCK-HOOK */}
       {!reads && !decisionsEmpty && (
         <HomeCard
           id="decisions"

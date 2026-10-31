@@ -90,6 +90,9 @@ export const RUNS_MORE: MockRun[] = [
   },
 ];
 
+// MOCK-HOOK: how many of RD3 a's items were decided on this page (Home's count goes down).
+export const RD_STATE = { decided: 0 };
+
 // MOCK-HOOK: the Usage alerts PRD's own "Decisions needed" (each with an owner and a due day).
 export type Needed = { code: string; title: string; owner: string; due: string; mine: boolean; rec?: string };
 export const NEEDED: Needed[] = [
@@ -100,4 +103,61 @@ export const NEEDED: Needed[] = [
   { code: "N5", title: "Day the weekly digest goes out", owner: "Marco Ruiz", due: "2026-11-12", mine: false },
   { code: "N6", title: "How long alert history is kept", owner: "Admin", due: "2026-11-18", mine: true, rec: "90 days" },
   { code: "N7", title: "Alert sound on phones", owner: "Ama Owusu", due: "2026-12-02", mine: false },
+];
+
+// MOCK-HOOK: the Usage alerts PRD's own body (version 3), so the run, its stops and its
+// decisions needed sit on a PRD that says the same things.
+type OnePagerLike = { sections: { key: string; heading: string; body: string }[]; blocks: { key: string; title: string; rules: string; kind: string; lines: unknown[] }[] };
+export function rdAlertsOnePager<T extends OnePagerLike>(base: T): T {
+  const line = (id: string, text: string, keys: string[]) => ({ id, text, keys });
+  const sections = [
+    { key: "problem", heading: "Problem", body: "Workspace admins hit a plan limit without warning, and their team is blocked mid-task." },
+    { key: "who", heading: "Who has it", body: "Admins of paid workspaces with ten or more people." },
+    { key: "build", heading: "What we will build", body: "- An alert at 80% and 100% of each limit, by email and in the app\n- A weekly alert digest for admins\n- Quiet hours that follow each workspace's time zone" },
+    { key: "outcomes", heading: "Outcomes", body: "- Tickets about surprise limits from 120 to 40 a month\n- Admins who raise a limit before hitting it from 12% to 35%" },
+    { key: "not-doing", heading: "Not doing", body: "- Text messages\n- Alerts for single users" },
+    { key: "risks", heading: "Risks and open decisions", body: "- Too many alerts and admins mute them all\n- Decide the daily alert limit per workspace" },
+  ];
+  const blocks = [
+    { key: "problem", title: "Problem and who has it", rules: "At most 60 words", kind: "text", lines: [line("problem-1", "Workspace admins hit a plan limit without warning, and their team is blocked mid-task.", ["problem", "who"])] },
+    { key: "bets", title: "What we will build", rules: "3-5 bets", kind: "lines", lines: [
+      line("bets-1", "An alert at 80% and 100% of each limit, by email and in the app", ["build"]),
+      line("bets-2", "A weekly alert digest for admins", ["build"]),
+      line("bets-3", "Quiet hours that follow each workspace's time zone", ["build"]),
+    ] },
+    { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", lines: [
+      { ...line("outcomes-1", "Tickets about surprise limits from 120 to 40 a month", ["outcomes"]), metric: { name: "Tickets about surprise limits", from: "120 a month", to: "40 a month" } },
+      { ...line("outcomes-2", "Admins who raise a limit before hitting it from 12% to 35%", ["outcomes"]), metric: { name: "Admins who raise a limit before hitting it", from: "12%", to: "35%" } },
+    ] },
+    { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", lines: [line("not_doing-1", "Text messages", ["not-doing"]), line("not_doing-2", "Alerts for single users", ["not-doing"])] },
+    { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", lines: [
+      line("risks-1", "Too many alerts and admins mute them all", ["risks"]),
+      line("risks-2", "Decide the daily alert limit per workspace", ["risks"]),
+    ] },
+    ...base.blocks.filter((b) => b.key === "timeline"),
+  ];
+  const item = (title: string, horizon: string, start: string, end: string, milestone: [string, string] | null) => ({ title, horizon, start, end, estimated: false, milestone });
+  const slice = [
+    item("Alert at 80% and 100%", "now", "2026-11-02", "2026-11-20", ["M1", "2026-11-20"]),
+    item("Alert emails", "now", "2026-11-02", "2026-11-20", ["M1", "2026-11-20"]),
+    item("Quiet hours by time zone", "now", "2026-11-09", "2026-11-27", ["M1", "2026-11-20"]),
+    item("Weekly alert digest", "next", "2026-11-23", "2026-12-04", ["M2", "2026-12-04"]),
+    item("Alert history", "later", "2026-12-07", "2027-01-15", null),
+  ];
+  return { ...base, sections, blocks, slice } as T;
+}
+
+// MOCK-HOOK: other PRDs' decisions needed, for RD3 c's heavy case (&many=1).
+export const NEEDED_MORE: { prd: string; slug: string; list: Needed[] }[] = [
+  { prd: "Team billing PRD", slug: "team-billing", list: [
+    { code: "N1", title: "Bill seats monthly or yearly first?", owner: "Jonas Berg", due: "2026-11-05", mine: false, rec: "Monthly first" },
+    { code: "N2", title: "Who gets the invoice email", owner: "Admin", due: "2026-11-09", mine: true, rec: "Workspace admins and billing contacts" },
+    { code: "N3", title: "Refunds for removed seats?", owner: "Jonas Berg", due: "2026-11-16", mine: false },
+    { code: "N4", title: "Tax ID on invoices", owner: "Ama Owusu", due: "2026-11-20", mine: false, rec: "Optional field" },
+  ] },
+  { prd: "Status page PRD", slug: "status-page", list: [
+    { code: "N1", title: "Public or signed-in only?", owner: "Admin", due: "2026-11-06", mine: true, rec: "Signed-in only" },
+    { code: "N2", title: "How often the page checks each service", owner: "Marco Ruiz", due: "2026-11-13", mine: false, rec: "Every minute" },
+    { code: "N3", title: "Email people when a service is down?", owner: "Ama Owusu", due: "2026-11-24", mine: false },
+  ] },
 ];

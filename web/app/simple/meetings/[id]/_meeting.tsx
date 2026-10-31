@@ -20,7 +20,7 @@ import { usePhone } from "../../priorities/priorities";
 import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
-import { RdAgenda } from "@/components/simple/mock/RunDecideMock"; // MOCK-HOOK
+import { RdAgenda, RdMeetingDecided } from "@/components/simple/mock/RunDecideMock"; // MOCK-HOOK
 
 // Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
 type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[]; agenda?: MeetingAgenda };
@@ -275,7 +275,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           <section aria-label="All decisions" className="simple-card">
             <h2 className="simple-h2">All decisions</h2>
             {m.meeting_decisions.length === 0 ? (
-              <p className="simple-small">None yet.</p>
+              <RdMeetingDecided fallback={<p className="simple-small">None yet.</p>} /> /* MOCK-HOOK */
             ) : (
               <ul className="mt-2 space-y-2">
                 {m.meeting_decisions.map((d) => (
