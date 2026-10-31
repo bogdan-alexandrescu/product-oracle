@@ -11,7 +11,7 @@ import { login } from "./helpers";
 
 const DOC = "/documents/example-labs-roadmap";
 // Internal words that must never reach the Public page.
-const MARKERS = ["Platform roadmap, autumn", "Falcon alerts rework", "Billing ledger v2", "Northwind", "Dependencies and owners", "ENG-512", "Admin", "Partner API beta"];
+const MARKERS = ["Platform roadmap, autumn", "Falcon alerts rework", "Billing ledger v2", "Northwind", "Dependencies and owners", "ENG-512", "Avery Stone", "Partner API beta"];
 
 async function sharing(page: Page, email?: string) {
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "sharing"));
@@ -67,7 +67,7 @@ test("check the Public version, then share it with a passcode", async ({ page })
   await expect(preview.getByText("Planned", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Mark as checked" }).click();
-  await expect(page.getByTestId("public-check")).toContainText("Checked by Admin");
+  await expect(page.getByTestId("public-check")).toContainText("Checked by Avery Stone");
 
   // Back on the document: the Public link needs the owner and the check, both there now.
   await page.getByRole("link", { name: "Back to the roadmap" }).click();
@@ -103,7 +103,7 @@ test("a text changed after the check lapses it", async ({ page }) => {
   await draft.getByRole("button", { name: "Exclude" }).click();
   await expect(draft.getByTestId("public-state")).toHaveText("Excluded");
   await page.getByRole("button", { name: "Mark as checked" }).click();
-  await expect(page.getByTestId("public-check")).toContainText("Checked by Admin");
+  await expect(page.getByTestId("public-check")).toContainText("Checked by Avery Stone");
   const approved = rows.filter({ hasText: "Falcon alerts rework" });
   await approved.getByRole("button", { name: "Edit" }).click();
   await approved.getByLabel("Public description").fill("A notice before you reach any plan limit.");

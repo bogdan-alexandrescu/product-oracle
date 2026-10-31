@@ -34,7 +34,7 @@ test("New request: file one with a goal; it shows as New with its goal chip, sel
   const dialog = page.getByRole("dialog", { name: "New request" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel("Channel").locator("option:checked")).toHaveText("In app");
-  await expect(dialog.getByLabel("Asked by")).toHaveValue("Admin");
+  await expect(dialog.getByLabel("Asked by")).toHaveValue("Avery Stone");
   await dialog.getByRole("button", { name: "File request" }).click();
   await expect(dialog.getByText("Give the request a title")).toBeVisible();
 
@@ -74,13 +74,13 @@ test("New request: only an owner names someone else as the requester", async ({ 
   await openRequests(page);
   await page.getByRole("button", { name: "New request" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New request" });
-  await expect(dialog.getByLabel("Asked by")).toHaveValue("Commenter");
+  await expect(dialog.getByLabel("Asked by")).toHaveValue("Theo Brandt");
   await expect(dialog.getByLabel("Asked by")).not.toBeEditable();
   await dialog.getByLabel("Title").fill(TITLE);
   await dialog.getByLabel("What it is and why").fill(WHY);
   await dialog.getByRole("button", { name: "File request" }).click();
   await expect(dialog).toBeHidden();
-  await expect(row(page, TITLE)).toContainText("Commenter");
+  await expect(row(page, TITLE)).toContainText("Theo Brandt");
 });
 
 test("Empty Requests: the empty state points to New request", async ({ page }) => {

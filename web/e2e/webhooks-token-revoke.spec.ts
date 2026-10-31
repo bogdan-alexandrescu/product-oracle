@@ -68,6 +68,6 @@ test("webhooks: Take over in the Inbox makes the revoked token's webhook the own
 
   await openSettings(page, "nav-webhooks");
   const row = page.getByTestId("webhook-row").filter({ hasText: "CI export hook" });
-  await expect(row).toContainText("Admin");
+  await expect(row).toContainText("Avery Stone");
   await expect(row).toContainText("Paused");
 });

@@ -61,7 +61,7 @@ test("answer, review, ready: answer my question, review the critical one, then d
   await expect(batches).toHaveCount(2);
   await expect(batches.nth(0)).toContainText("Batch 1 · 3 questions · asked Oct 20");
   await expect(batches.nth(1)).toContainText("Batch 2 · 2 questions · asked Oct 21");
-  await expect(bubble(page, WAITING_ON_APPROVER)).toContainText("Waiting on Approver");
+  await expect(bubble(page, WAITING_ON_APPROVER)).toContainText("Waiting on Priya Raman");
   await expect(bubble(page, WAITING_ON_APPROVER).getByRole("button", { name: "Ask someone else" })).toBeVisible();
 
   // Answer the question asked of me: my answer shows as my decision; Answered goes up by one.
@@ -130,14 +130,14 @@ test("next questions: ask the preview, one of them of the approver, who finds it
   await expect(rows).toHaveCount(3);
   const prompts = await rows.getByTestId("next-prompt").allTextContents();
   const picked = prompts[1];
-  await rows.nth(1).getByRole("combobox").selectOption({ label: "Approver" });
+  await rows.nth(1).getByRole("combobox").selectOption({ label: "Priya Raman" });
   await next.getByRole("button", { name: "Ask these" }).click();
 
   const batches = thread(page).getByTestId("batch");
   await expect(batches).toHaveCount(3);
   await expect(batches.nth(2)).toContainText("Batch 3 · 3 questions");
   for (const prompt of prompts) await expect(batches.nth(2)).toContainText(prompt);
-  await expect(bubble(page, picked)).toContainText("Asked Approver");
+  await expect(bubble(page, picked)).toContainText("Asked Priya Raman");
   await expect(next).toContainText("Oracle has 9 more questions");
 
   await signOut(page);

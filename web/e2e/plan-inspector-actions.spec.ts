@@ -45,10 +45,10 @@ test("Ask on the slip card asks a teammate about the item; their Inbox row names
   const ask = inspector(page).getByTestId("ask-teammate");
   await expect(ask).toContainText(`Ask a teammate about “${SLIP}”`);
   await ask.getByLabel("Find a person").fill("comm");
-  await ask.getByRole("option", { name: /Commenter/ }).click();
+  await ask.getByRole("option", { name: /Theo Brandt/ }).click();
   await ask.getByLabel("Question").fill(question);
   await ask.getByRole("button", { name: "Ask", exact: true }).click();
-  await expect(ask).toContainText("Asked Commenter");
+  await expect(ask).toContainText("Asked Theo Brandt");
 
   await signOut(page);
   await login(page, "commenter@example.com");
@@ -80,11 +80,11 @@ test("Ask on the slip card pre-fills the engineering lead when there is exactly 
   const ask = inspector(page).getByTestId("ask-teammate");
   // The person is set (with Change), not a picker to search.
   await expect(ask.getByRole("button", { name: "Change" })).toBeVisible();
-  await expect(ask).toContainText("Approverapprover@example.com");
+  await expect(ask).toContainText("Priya Ramanapprover@example.com");
   await expect(ask.getByLabel("Find a person")).toHaveCount(0);
   await ask.getByLabel("Question").fill("Does ENG-405's new date hold?");
   await ask.getByRole("button", { name: "Ask", exact: true }).click();
-  await expect(ask).toContainText("Asked Approver");
+  await expect(ask).toContainText("Asked Priya Raman");
 
   // A second lead: nobody is pre-filled.
   await page.goto("/settings/members");
@@ -192,7 +192,7 @@ test("Record a decision on a Plan item opens Propose decision about the item", a
   await dialog.getByLabel("Decision", { exact: true }).fill("Ship the digest after Beta");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Move Beta to Dec 9");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Ship Beta without the digest");
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: "Approver · approver@example.com" });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: "Priya Raman · approver@example.com" });
   await dialog.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("decision-inspector").filter({ visible: true })).toContainText(`Roadmap item ${SLIP}`);

@@ -94,7 +94,7 @@ test("remove: Google access not removed yet shows on the member until it is", as
   await expect(row.getByTestId("member-access")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Remove commenter@example.com" }).click();
-  await page.getByRole("dialog", { name: "Remove Commenter?" }).getByRole("button", { name: "Remove member" }).click();
+  await page.getByRole("dialog", { name: "Remove Theo Brandt?" }).getByRole("button", { name: "Remove member" }).click();
   await expect(row).toHaveAttribute("data-status", "disabled");
   await expect(row.getByTestId("member-access")).toHaveText("Access not removed yet");
   await page.reload();

@@ -86,7 +86,7 @@ test.describe("desktop", () => {
     await expect(admin.getByText("Moved Alert history export (AE) to rank 1")).toBeVisible();
     expect((await codes(admin))[0]).toBe("alert-export");
     await expect(row(admin, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
-    await expect(row(admin, "alert-export").getByTestId("prio-override")).toContainText("Moved by Admin: “Two large customers asked for it this month”");
+    await expect(row(admin, "alert-export").getByTestId("prio-override")).toContainText("Moved by Avery Stone: “Two large customers asked for it this month”");
 
     await admin.getByRole("switch", { name: "Compare with Oracle" }).click();
     const oracle = admin.getByRole("region", { name: "Oracle's order" });
@@ -94,7 +94,7 @@ test.describe("desktop", () => {
     await expect(admin.getByRole("region", { name: "Your order" })).toBeVisible();
     expect(await codes(admin, "oracle-row")).toEqual(ORACLE);
     await expect(oracle.locator('[data-code="alert-export"]').getByTestId("oracle-why")).toHaveText(
-      "Yours: #1. Admin moved it: “Two large customers asked for it this month”",
+      "Yours: #1. Avery Stone moved it: “Two large customers asked for it this month”",
     );
 
     await admin.getByRole("button", { name: "Undo" }).click();
@@ -124,7 +124,7 @@ test.describe("desktop", () => {
     await expect(row(cory, "price-tiers").getByRole("button", { name: /^Drag / })).toHaveCount(0);
     await expect(row(cory, "alert-sso").getByRole("button", { name: /^Drag / })).toBeVisible();
     const card = row(cory, "alert-mobile").getByTestId("prio-proposal");
-    await expect(card).toContainText("Commenter proposes rank 3: “Push is what the beta users asked for” · waiting for Admin");
+    await expect(card).toContainText("Theo Brandt proposes rank 3: “Push is what the beta users asked for” · waiting for Avery Stone");
     await expect(card.getByRole("button", { name: "Accept" })).toHaveCount(0);
     await expect(card).toHaveAttribute("data-wide", "false");
     await card.getByRole("button", { name: "Open the flow for Mobile alert push" }).click();
@@ -140,7 +140,7 @@ test.describe("desktop", () => {
     await cory.keyboard.press("ArrowUp");
     await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     await cory.getByRole("tab", { name: "Ranked list" }).click();
-    await expect(row(cory, "setup-import").getByTestId("prio-proposal")).toContainText("Commenter proposes goal value 6.5");
+    await expect(row(cory, "setup-import").getByTestId("prio-proposal")).toContainText("Theo Brandt proposes goal value 6.5");
     await expect(row(cory, "setup-import").getByTestId("flow-none")).toHaveCount(0);
 
     const admin = await as(page, "admin@example.com");
@@ -224,7 +224,7 @@ test.describe("desktop", () => {
     await expect(draft.getByRole("button", { name: "Propose a merge…" })).toBeDisabled();
     const cards = draft.getByTestId("prio-proposal");
     await expect(cards).toHaveCount(1);
-    await expect(cards.nth(0)).toContainText("Commenter proposes confirming it · waiting for Admin");
+    await expect(cards.nth(0)).toContainText("Theo Brandt proposes confirming it · waiting for Avery Stone");
     await expect(cards.nth(0).getByRole("button", { name: "Accept" })).toHaveCount(0);
 
     const admin = await as(page, "admin@example.com");
@@ -312,7 +312,7 @@ test.describe("phone", () => {
     await expect(admin.getByRole("region", { name: "Oracle's order" })).toHaveCount(0);
     await admin.getByRole("radio", { name: "Oracle's" }).click();
     const oracle = admin.getByRole("region", { name: "Oracle's order" });
-    await expect(oracle.locator('[data-code="alert-mobile"]').getByTestId("oracle-why")).toHaveText("Yours: #3. Admin moved it: “Needed for the audit in November”");
+    await expect(oracle.locator('[data-code="alert-mobile"]').getByTestId("oracle-why")).toHaveText("Yours: #3. Avery Stone moved it: “Needed for the audit in November”");
     await admin.getByRole("radio", { name: "Yours" }).click();
     await expect(admin.getByRole("list", { name: "Ranked list" })).toBeVisible();
 

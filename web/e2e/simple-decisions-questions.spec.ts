@@ -65,7 +65,7 @@ for (const phone of [false, true]) {
         await expect(region(page, "Waiting for others")).toContainText("Q7 Legal input on health notes");
         await expect(region(page, "Waiting for others")).toContainText("No decider yet");
         await expect(outside(page, "Q1")).toContainText("Q1 Data retention period");
-        await expect(outside(page, "Q1")).toContainText("Keep 90 days · Admin");
+        await expect(outside(page, "Q1")).toContainText("Keep 90 days · Avery Stone");
         await expect(page.getByTestId("decisions-approvals")).toContainText("1 approval for Oracle's own work waits in your Inbox.");
         await expect(page.getByTestId("decisions-approvals").getByRole("link", { name: "Open the Inbox" })).toBeVisible();
         await expect(region(page, "Review: Usage alerts")).toBeVisible();
@@ -111,14 +111,14 @@ for (const phone of [false, true]) {
         await q3.getByRole("button", { name: "Ask someone to answer" }).click();
         // qa-simple-decide-16: the current decider is marked, not offered again.
         const who = q3.getByRole("group", { name: "Who answers Q3" });
-        await expect(who.getByRole("button", { name: "Already Approver" })).toBeDisabled();
-        await who.getByRole("button", { name: "Admin", exact: true }).click();
-        await expect(page.getByText("Admin decides Q3")).toBeVisible();
+        await expect(who.getByRole("button", { name: "Already Priya Raman" })).toBeDisabled();
+        await who.getByRole("button", { name: "Avery Stone", exact: true }).click();
+        await expect(page.getByText("Avery Stone decides Q3")).toBeVisible();
         await q2.getByRole("button", { name: "Name a decider" }).click();
-        await q2.getByRole("group", { name: "Who decides Q2" }).getByRole("button", { name: "Approver" }).click();
-        await expect(page.getByText("Approver decides Q2")).toBeVisible();
+        await q2.getByRole("group", { name: "Who decides Q2" }).getByRole("button", { name: "Priya Raman" }).click();
+        await expect(page.getByText("Priya Raman decides Q2")).toBeVisible();
         await expect(needs.locator('[data-code="Q2"]')).toHaveCount(0);
-        await expect(recommended.locator('[data-code="Q2"]')).toContainText("Approver decides");
+        await expect(recommended.locator('[data-code="Q2"]')).toContainText("Priya Raman decides");
 
         await page.reload();
         await expect(page.getByRole("group", { name: "Show decisions as" }).getByRole("button", { name: "Board" })).toHaveAttribute("aria-pressed", "true");
@@ -157,8 +157,8 @@ for (const phone of [false, true]) {
         await waiting(page, 0);
         await expect(page.getByRole("button", { name: "Decide as recommended" })).toHaveCount(0);
         await row(page, "Q6").getByRole("button", { name: "Propose as recommended" }).click();
-        await expect(page.getByText("Sent to Admin to decide")).toBeVisible();
-        await expect(row(page, "Q6").getByTestId("question-pending")).toHaveText("Commenter proposed: 5 invites");
+        await expect(page.getByText("Sent to Avery Stone to decide")).toBeVisible();
+        await expect(row(page, "Q6").getByTestId("question-pending")).toHaveText("Theo Brandt proposed: 5 invites");
 
         await decisions(page, "viewer@example.com", true);
         await expect(region(page, "Waiting for others")).toContainText("Q5 Reminder default time");
@@ -179,13 +179,13 @@ for (const phone of [false, true]) {
         await expect(row(page, "Q5").getByTestId("question-answers")).toContainText("Another answer:");
         await row(page, "Q5").getByRole("group", { name: "Answers for Q5" }).getByRole("button", { name: "Noon", exact: true }).click();
         await expect(page.getByText("Decided Q5: Noon")).toBeVisible();
-        await expect(outside(page, "Q5")).toContainText("Noon · Admin");
+        await expect(outside(page, "Q5")).toContainText("Noon · Avery Stone");
 
         await row(page, "Q6").getByRole("button", { name: "Another answer" }).click();
         await row(page, "Q6").getByRole("button", { name: "Something else…" }).click();
         await row(page, "Q6").getByLabel("Your answer to Q6").fill("Ten invites");
         await row(page, "Q6").getByRole("button", { name: "Decide", exact: true }).click();
-        await expect(outside(page, "Q6")).toContainText("Ten invites · Admin");
+        await expect(outside(page, "Q6")).toContainText("Ten invites · Avery Stone");
         await waiting(page, 7);
       });
 
@@ -249,7 +249,7 @@ for (const phone of [false, true]) {
         await due.getByTestId("question-row").first().getByRole("button", { name: "Decide as recommended" }).click();
         await expect(region(page, "Decisions in this meeting")).toContainText("Q5 Reminder default time");
         const q5 = due.locator('[data-code="Q5"]');
-        await expect(q5.getByTestId("question-decided")).toContainText("Decided in this meeting: 9:00 in each person's zone · Admin ·");
+        await expect(q5.getByTestId("question-decided")).toContainText("Decided in this meeting: 9:00 in each person's zone · Avery Stone ·");
         await q5.getByRole("button", { name: "Undo" }).click();
         await expect(q5.getByRole("button", { name: "Decide as recommended" })).toBeVisible();
         await expect(q5.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");

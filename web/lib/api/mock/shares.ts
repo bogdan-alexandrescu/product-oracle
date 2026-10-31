@@ -11,7 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { formatInZone } from "@/lib/dates";
-import { displayName as personName } from "@/lib/names";
+import { mockName as personName } from "./people";
 
 import { NO_GOAL_FLAG } from "./audience";
 import type { SectionSeed } from "./fixtures";

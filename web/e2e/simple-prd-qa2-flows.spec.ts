@@ -169,7 +169,7 @@ test.describe("desktop", () => {
     await open(page);
     await page.getByRole("button", { name: "Start review" }).click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
-    await expect(sheet.getByRole("checkbox", { name: "Admin" })).toBeVisible();
+    await expect(sheet.getByRole("checkbox", { name: "Avery Stone" })).toBeVisible();
     const looks = await sheet.evaluate((root) => {
       const box = root.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
       const radio = root.querySelector<HTMLInputElement>('input[type="radio"]')!;

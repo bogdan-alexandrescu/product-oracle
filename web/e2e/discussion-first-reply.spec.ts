@@ -55,7 +55,7 @@ async function startPrivateWithApprover(page: Page, first: string, askOracle: bo
   await openStart(page);
   await form(page).getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
   await form(page).getByRole("searchbox", { name: "Find a person" }).fill("approver");
-  await form(page).getByRole("option", { name: /Approver/ }).click();
+  await form(page).getByRole("option", { name: /Priya/ }).click();
   await expect(form(page).getByTestId("oracle-rule")).toHaveText("Oracle replies when you @mention it");
   if (askOracle) {
     await form(page).getByRole("checkbox", { name: "Ask Oracle" }).check();

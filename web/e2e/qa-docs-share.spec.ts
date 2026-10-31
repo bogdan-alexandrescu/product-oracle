@@ -153,9 +153,9 @@ test.describe("desktop", () => {
       await expect(page.getByTestId("shared-about")).toHaveText(
         /^Shared by .+ · Link ends [A-Z][a-z]{2} \d{1,2}, \d{4}$/,
       );
-      // qa-docs-71: the person who made the link (signed in as Admin), not the company alone.
+      // qa-docs-71: the person who made the link (signed in as Avery Stone), not the company alone.
       await expect(page.getByTestId("shared-about")).toContainText(
-        "Shared by Admin at ",
+        "Shared by Avery Stone at ",
       );
       await expect(page).toHaveTitle(/Platform roadmap, autumn/);
       // The bar matches the frame's page in its scheme (qa-docs-11: dark when the reader prefers dark).

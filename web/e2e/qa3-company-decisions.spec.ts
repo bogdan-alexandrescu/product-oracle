@@ -6,7 +6,7 @@ import { login } from "./helpers";
  * Third QA pass on Company › Decisions, driven through the UI on the default mock scenario.
  * The mock seeds five judgement calls: D-1 "Publish Checkout redesign PRD v2" (recorded when a
  * version was published), D-5 "Ship usage caps before anomaly detection" (proposed by
- * Commenter, Approver is its approver, "Caps first" is Oracle's pick). Each test names the
+ * Theo Brandt, Priya Raman is its approver, "Caps first" is Oracle's pick). Each test names the
  * finding it protects.
  */
 
@@ -131,8 +131,8 @@ test.describe("desktop", () => {
     await expect(pick.locator("option", { hasText: APPROVER })).toHaveCount(0);
     // qa4-company-12: the submit names who it goes to.
     await expect(form.getByRole("button", { name: "Reassign to the new approver" })).toBeDisabled();
-    await pick.selectOption({ label: "Admin · admin@example.com" });
-    const submit = form.getByRole("button", { name: "Reassign to Admin" });
+    await pick.selectOption({ label: "Avery Stone · admin@example.com" });
+    const submit = form.getByRole("button", { name: "Reassign to Avery Stone" });
     await expect(submit).toBeEnabled();
     await form.getByLabel("Reason").fill("Approver is away this week");
     await submit.click();
@@ -158,7 +158,7 @@ test.describe("desktop", () => {
   test("qa-company-31: where a decision came from is a line of meta, not a chip", async ({ page }) => {
     await openCaps(page);
     await expect(inspector(page)).not.toContainText("Recorded by hand");
-    await expect(inspector(page).getByTestId("decision-origin")).toHaveText("Added by Commenter");
+    await expect(inspector(page).getByTestId("decision-origin")).toHaveText("Added by Theo Brandt");
     await row(page, PUBLISH).click();
     await expect(inspector(page)).toContainText(PUBLISH);
     await expect(inspector(page).getByTestId("decision-origin")).toHaveText("Recorded when a version was published");

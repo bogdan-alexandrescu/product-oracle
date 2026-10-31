@@ -15,6 +15,7 @@ import type { ChangeOut, ChangeStatus, ChangeVerb } from "@/lib/api/discussion-c
 
 import { companyDayInWords } from "./connections";
 import { IN_CHAT, IN_CHAT_CODE, type LiveReply } from "./live";
+import { mockName } from "./people";
 import { readableRefusal } from "./refusal";
 
 type Role = Schemas["MemberOut"]["role"];
@@ -529,10 +530,9 @@ function addProposals(rows: ChangeRow[], made: ChangeRow[]) {
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 const atLeast = (role: Role, min: Role) => RANK[role] >= RANK[min];
 
-/** "first.last@example.com" -> "First Last" (oracle.members.names). */
+/** A member's name (oracle.members.names): a seeded member's own, else "first.last@example.com" -> "First Last". */
 export function displayName(email: string): string {
-  const words = email.split("@")[0].split(/[._+-]+/).filter(Boolean);
-  return words.length ? words.map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") : email;
+  return mockName(email);
 }
 
 const json = (status: number, body: unknown) =>

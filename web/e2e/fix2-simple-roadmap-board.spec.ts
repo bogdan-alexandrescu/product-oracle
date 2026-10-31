@@ -146,7 +146,7 @@ test.describe("desktop, format", () => {
 
   /**
    * qa-simple-roadmap-25: a commenter's board move is a proposal that names who proposed
-   * it by name ("Proposed by Commenter: move to Now"), not their role alone; fails_when =
+   * it by name ("Proposed by Theo Brandt: move to Now"), not their role alone; fails_when =
    * the line reads "Proposed: move to Now · Commenter" with no "Proposed by".
    */
   test("a proposal names who made it, not just the horizon", async ({ page }) => {

@@ -22,7 +22,7 @@ const RUN = "7a11c0de-0000-4000-8000-0000000000f5";
 const COMMENTER = "commenter@example.com";
 const APPROVER = "approver@example.com";
 const MOVE = "Move Saved carts above Guided setup: Gut feeling";
-const ASK = "Ask Approver: How long should a saved cart last?";
+const ASK = "Ask Priya Raman: How long should a saved cart last?";
 const APPLY_WHY_NOT = "Approvers apply this change.";
 const DECISION = "Ship saved carts before guided setup?";
 

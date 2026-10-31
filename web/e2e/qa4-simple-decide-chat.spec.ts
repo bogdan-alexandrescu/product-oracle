@@ -26,7 +26,7 @@ async function meetings(page: Page) {
 }
 
 /** The owner starts a review of Guided setup with `also` attending (the default rule). */
-async function startReview(page: Page, also: string[] = ["Commenter"]) {
+async function startReview(page: Page, also: string[] = ["Theo Brandt"]) {
   await meetings(page);
   await tap(page.getByRole("button", { name: "Start review" }).first());
   const s = sheet(page);
@@ -66,7 +66,7 @@ for (const phone of [false, true]) {
 
     test(`qa4-simple-decide-1: a viewer reads the owner's applied note with no Undo (${where})`, async ({ page }) => {
       // fails_when: the viewer's copy of an applied card offers "Undo this change"
-      await startReview(page, ["Viewer"]);
+      await startReview(page, ["Lena Ortiz"]);
       const url = await chatPage(page);
       await say(chat(page), "note: keep reminders quiet on weekends");
       const card = chat(page).getByTestId("chat-card").filter({ hasText: "keep reminders quiet on weekends" }).last();
@@ -118,7 +118,7 @@ for (const phone of [false, true]) {
 
     test(`qa4-simple-decide-30: a viewer's hint names who makes changes by the rule in force (${where})`, async ({ page }) => {
       // fails_when: under "Everyone except viewers" the viewer is told the presenter alone makes changes
-      await startReview(page, ["Viewer"]);
+      await startReview(page, ["Lena Ortiz"]);
       const url = await chatPage(page);
       await switchTo(page, "viewer@example.com");
       await page.goto(url);
