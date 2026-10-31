@@ -39736,12 +39736,24 @@ export interface components {
              */
             flow_steps: string[];
         };
+        /** SimpleStartMember */
+        SimpleStartMember: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Can Change */
+            can_change: boolean;
+        };
         /** SimpleStartOptions */
         SimpleStartOptions: {
             /** Prds */
             prds: components["schemas"]["SimpleStartPrd"][];
             /** Members */
-            members: components["schemas"]["SimplePersonRef"][];
+            members: components["schemas"]["SimpleStartMember"][];
             /**
              * Length Min
              * @default 60

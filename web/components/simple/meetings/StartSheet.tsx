@@ -125,6 +125,8 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
   const { me } = useMe();
   // qa-simple-decide-35: someone besides the presenter attends.
   const others = people.filter((id) => id !== me?.user_id);
+  // qa4-simple-decide-14: only attendees whose role may change things can be picked (never a viewer).
+  const changers = others.filter((id) => options.members.find((m) => m.id === id)?.can_change);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const liveOne = chosen ? live.find((m) => m.prd.slug === chosen.document.slug) : undefined;
@@ -242,7 +244,8 @@ function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, 
               <div className="ml-6 mt-1" aria-label="Who else changes things">
                 {/* qa-simple-decide-26: the list is the attendees ticked above; empty, it says so. */}
                 {others.length === 0 && <p className="simple-small" data-testid="start-named-empty">Tick attendees above to pick them here.</p>}
-                {others.map((id) => (
+                {others.length > 0 && changers.length === 0 && <p className="simple-small" data-testid="start-named-empty">Viewers can&apos;t change things; tick someone else above.</p>}
+                {changers.map((id) => (
                   <label key={id} className={CHOICE}>
                     <input type="checkbox" className={CHECK} checked={named.includes(id)} disabled={!named.includes(id) && named.length >= 2} onChange={() => toggleNamed(id)} />
                     {name(id)}

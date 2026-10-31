@@ -95,6 +95,7 @@ from oracle.simple.schemas import (
     SimplePersonRef,
     SimpleSendIn,
     SimpleSlackState,
+    SimpleStartMember,
     SimpleStartOptions,
     SimpleStartPrd,
     SimpleUpcomingMeeting,
@@ -393,7 +394,10 @@ async def options(
             raise MeetingError(404, "No such scheduled review")
     return SimpleStartOptions(
         prds=prds,
-        members=[SimplePersonRef(id=u.id, name=names[u.id]) for u in members],
+        members=[
+            SimpleStartMember(id=u.id, name=names[u.id], can_change=has_role(u.role, "commenter"))
+            for u in members
+        ],
         length_min=occ.length_min if occ else DEFAULT_LENGTH,
         occurrence=occ,
     )

@@ -1744,9 +1744,15 @@ class SimpleStartPrd(BaseModel):
     default_attendee_ids: list[uuid.UUID]
 
 
+class SimpleStartMember(SimplePersonRef):
+    # qa4-simple-decide-14: whether this person's role may change things in a review's
+    # chat in any mode (a viewer never may), so the sheet offers only them.
+    can_change: bool
+
+
 class SimpleStartOptions(BaseModel):
     prds: list[SimpleStartPrd]
-    members: list[SimplePersonRef]
+    members: list[SimpleStartMember]
     length_min: int = 60
     occurrence: SimpleUpcomingMeeting | None = None
 

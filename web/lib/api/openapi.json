@@ -118808,6 +118808,30 @@
         "title": "SimpleSlice",
         "description": "plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;\nan item in one milestone has one slice, F-05). Its dates are Oracle's placement inside\nthe milestone by the PRD's order words (``estimated``)."
       },
+      "SimpleStartMember": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "can_change"
+        ],
+        "title": "SimpleStartMember"
+      },
       "SimpleStartOptions": {
         "properties": {
           "prds": {
@@ -118819,7 +118843,7 @@
           },
           "members": {
             "items": {
-              "$ref": "#/components/schemas/SimplePersonRef"
+              "$ref": "#/components/schemas/SimpleStartMember"
             },
             "type": "array",
             "title": "Members"

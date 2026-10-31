@@ -1000,7 +1000,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
         starters: [...new Set([...(x.decider ? [x.decider] : []), ...owners(ctx)])].map((i) => ref(ctx, i)),
         default_attendee_ids: [...new Set([ctx.me.id, ...(x.decider ? [x.decider] : []), ...x.reviewers])],
       })),
-      members: ctx.members.map((x) => ({ id: x.id, name: x.name })),
+      // qa4-simple-decide-14: as the API, whether the role may change things (not a viewer).
+      members: ctx.members.map((x) => ({ id: x.id, name: x.name, can_change: x.role !== "viewer" })),
       length_min: occ?.length_min ?? 60,
       occurrence: occ,
     };
