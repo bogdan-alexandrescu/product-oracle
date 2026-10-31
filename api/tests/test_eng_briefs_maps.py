@@ -46,8 +46,10 @@ def test_unknown_ids_are_grouped_one_line_each_with_the_features_citing_them():
     summary = check._summarize(UNMAPPED, FEATURES, MAP_IDS, {REPO})
     unknown = [p for p in summary["problems"] if p["code"] == "unknown_ref"]
     assert [p["message"] for p in unknown] == [
-        "'model:cart' is not in the code map this run used: cited by feature-b",
-        "'module:storefront' is not in the code map this run used: cited by feature-a, feature-b",
+        "'model:cart' is not in the code map this run used: cited by feature-b "
+        "(touches[1].ref)",
+        "'module:storefront' is not in the code map this run used: cited by feature-a "
+        "(reuse), feature-b (touches[0].ref)",
     ]
     assert unknown[1]["features"] == ["feature-a", "feature-b"]
     assert unknown[1]["feature"] is None
@@ -67,6 +69,40 @@ def test_the_check_names_the_repository_with_no_map():
         "example-org/legacy"
     ]
     assert check._summarize(SAMPLE, FEATURES, MAP_IDS, {"org/app"})["unmapped_repos"] == []
+
+
+def test_a_repository_named_as_a_url_or_with_git_is_the_map_s_repository():
+    # protects=a repository the briefs name as a URL, an ssh address or with .git matches
+    # the map's owner/name; fails_when=exact matching shows a false "No code map covers".
+    for name in (
+        "https://github.com/org/app",
+        "https://github.com/org/app.git/",
+        "git@github.com:org/app.git",
+        "org/app.git",
+        "Org/App",
+    ):
+        named = SAMPLE.replace('"org/app"', f'"{name}"')
+        assert check._summarize(named, FEATURES, MAP_IDS, {"org/app"})["unmapped_repos"] == []
+    assert check._summarize(SAMPLE, FEATURES, MAP_IDS, {"https://github.com/org/app.git"})[
+        "unmapped_repos"
+    ] == []
+    other = SAMPLE.replace('"org/app"', '"https://github.com/org/app-web"')
+    assert check._summarize(other, FEATURES, MAP_IDS, {"org/app"})["unmapped_repos"] == [
+        "https://github.com/org/app-web"
+    ]
+
+
+def test_unknown_ids_with_no_repository_named_still_say_no_map_covers_them():
+    # protects=a brief citing a third repository's ids without naming it still tells the
+    # stop that no map covers them; fails_when=only grouped ids show, with no no-map line.
+    unnamed = UNMAPPED.replace('  unmapped: ["example-org/shop"]\n', "")
+    summary = check._summarize(unnamed, FEATURES, MAP_IDS, {REPO})
+    assert summary["unmapped_repos"] == []
+    assert summary["unnamed_repo"] is True
+    # Named, or no unknown ids: no such line.
+    assert check._summarize(UNMAPPED, FEATURES, MAP_IDS, {REPO})["unnamed_repo"] is False
+    assert check._summarize(SAMPLE, FEATURES, MAP_IDS, {"org/app"})["unnamed_repo"] is False
+    assert check._summarize(None, FEATURES, MAP_IDS)["unnamed_repo"] is False
 
 
 def test_unmapped_must_be_a_list_of_text():
@@ -105,6 +141,12 @@ def test_the_architect_lines_list_the_citable_ids_the_rule_and_the_self_check():
     assert "Cite only ids in this run's code maps" in lines
     assert "under assumptions" in lines and "code_map.unmapped" in lines
     assert "Before you finish" in lines
+    # A runtime that cannot reach Oracle's MCP cannot read the rest: ids not shown are
+    # not cited, and get_code_map is not offered.
+    offline = "\n".join(check.architect_lines([(map_id, content)], mcp_reachable=False))
+    assert "module:m39" in offline and "and 5 more" in offline
+    assert "get_code_map" not in offline
+    assert "ids not shown here cannot be cited" in offline
     none = "\n".join(check.architect_lines([]))
     assert "no code map" in none and "used: false" in none
 

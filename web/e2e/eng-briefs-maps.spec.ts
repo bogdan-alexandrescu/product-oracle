@@ -16,13 +16,19 @@ import { login } from "./helpers";
  * - "unmapped": protects=one line above the briefs names the repository with no map and says
  *   its work is described as assumptions; fails_when=the line is missing or sits below the
  *   briefs; no_claim=the architect's prompt (API tests).
+ * - "located": protects=each feature on an unknown id's line says where it cites it (a touch's ref
+ *   or reuse); fails_when=the grouped line names the features only.
+ * - "url": protects=a repository the briefs name as a URL with .git matches the map's owner/name;
+ *   fails_when=it is listed as having no map.
+ * - "unnamed": protects=briefs citing a repository's ids without naming it still get a line
+ *   saying no code map holds them; fails_when=only the grouped ids show.
  * - "phone": the same at 390 px, with nothing scrolling sideways.
  */
 
 const withScenario = (page: Page, scenario: string) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
 
-async function openCheck(page: Page) {
-  await withScenario(page, "eng-check-unmapped");
+async function openCheck(page: Page, scenario = "eng-check-unmapped") {
+  await withScenario(page, scenario);
   await login(page, "commenter@example.com");
   await page.goto("/inbox");
   const inboxRow = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "Engineering check" });
@@ -35,9 +41,10 @@ async function checkScreen(page: Page) {
   const problems = page.getByTestId("briefs-problem");
   await expect(problems.getByText("The briefs could not be read: send them back to the architect.")).toBeVisible();
   await expect(problems.getByRole("listitem")).toHaveText([
-    "'model:catalogue' is not in the code map this run used: cited by f.sample-data",
-    "'module:storefront' is not in the code map this run used: cited by f.guided-setup, f.sample-data, f.saved-carts",
+    "'model:catalogue' is not in the code map this run used: cited by f.sample-data (reuse)",
+    "'module:storefront' is not in the code map this run used: cited by f.guided-setup (touches[1].ref), f.sample-data (touches[0].ref), f.saved-carts (reuse)",
   ]);
+  await expect(page.getByTestId("briefs-unnamed")).toHaveCount(0);
   const unmapped = page.getByTestId("briefs-unmapped");
   await expect(unmapped).toHaveText("No code map covers example/shop-web: its work is described as assumptions.");
   const line = await unmapped.boundingBox();
@@ -48,6 +55,17 @@ async function checkScreen(page: Page) {
 test("grouped and unmapped: one line per unknown id with its features, and the repository with no map above the briefs", async ({ page }) => {
   await openCheck(page);
   await checkScreen(page);
+});
+
+test("unnamed: briefs that cite ids of a repository they do not name still say no code map holds them", async ({ page }) => {
+  await openCheck(page, "eng-check-unnamed");
+  await expect(page.getByTestId("briefs-problem").getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByTestId("briefs-unmapped")).toHaveCount(0);
+  const unnamed = page.getByTestId("briefs-unnamed");
+  await expect(unnamed).toHaveText("No code map of this run holds some cited ids, and the briefs do not say which repository they come from.");
+  const line = await unnamed.boundingBox();
+  const first = await page.getByTestId("brief-row").first().boundingBox();
+  expect(line && first && line.y + line.height <= first.y).toBeTruthy();
 });
 
 test("phone: at 390 px the same lines show and nothing scrolls sideways", async ({ page }) => {
