@@ -56,6 +56,15 @@ export function openCriticalGaps(s: Summary): Summary["gaps"] {
   return s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
 }
 
+/**
+ * How many critical questions are open: the listed ones, never fewer than the server's own
+ * count, so a count and a gate reason never read "0 critical" while the server still blocks
+ * (review minors 24).
+ */
+export function openCriticalCount(s: Summary): number {
+  return Math.max(s.readiness.open_critical, openCriticalGaps(s).length);
+}
+
 /** The intake's status, in the header's words. */
 export const STATUS: Record<Summary["intake"]["status"], { label: string; kind: ChipKind }> = {
   draft: { label: "Oracle is reading", kind: "na" },

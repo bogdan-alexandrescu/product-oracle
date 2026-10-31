@@ -831,8 +831,12 @@ function RunDecisions({ run }: { run: RunOut }) {
   const said = (d: Schemas["RunDecision"]) => {
     const by = run.checkpoints.find((c) => c.id === d.checkpoint_id)?.decided_by;
     const name = by ? people.data?.get(by)?.name : undefined;
-    if (!name || !d.decided_by_role) return d.summary;
-    return d.summary.replace(` by ${/^[aeiou]/.test(d.decided_by_role) ? "an" : "a"} ${d.decided_by_role}`, ` by ${name}`);
+    if (!name) return d.summary;
+    // The decision's own words, from its fields (review minors 2): "<what> · <how> · note: …",
+    // the role's place taken by the name whatever the role phrase reads.
+    const [what, , ...rest] = d.summary.split(" · ");
+    const how = `${d.status.replace("_", " ")} by ${name}${d.via === "swarmcloud_console" ? " in SwarmCloud's console" : ""}`;
+    return [what, how, ...rest].join(" · ");
   };
   return (
     <InspectorSection

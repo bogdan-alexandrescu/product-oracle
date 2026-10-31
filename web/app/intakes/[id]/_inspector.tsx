@@ -12,7 +12,7 @@ import { useMe, type Role } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { HARD_BLOCKERS, categoryNote, criticalCount, holdCount, openCriticalGaps, tally, unknownGaps, unknownNote, type Batch, type Gap, type Summary } from "./_lib";
+import { HARD_BLOCKERS, categoryNote, criticalCount, holdCount, openCriticalCount, openCriticalGaps, tally, unknownGaps, unknownNote, type Batch, type Gap, type Summary } from "./_lib";
 
 type Decision = Schemas["DecisionIn"]["decision"];
 
@@ -200,7 +200,7 @@ export function IntakeInspector({
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
   const missing = missingGaps(s);
-  const openCritical = openCriticalGaps(s).length;
+  const openCritical = openCriticalCount(s);
   const counts = tally(s, batches);
   const unknown = unknownGaps(batches);
   const title = readinessTitle(s);

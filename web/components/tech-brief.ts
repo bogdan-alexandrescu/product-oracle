@@ -48,8 +48,9 @@ export function readerText(text: string, questions: BriefQuestion[] = []): strin
   return text
     .replace(/\s*\((?:see |in |from )?[\w./-]+\.(?:json|ya?ml|md|txt|csv)\)/gi, "")
     .replace(/\b[\w./-]+\.(?:json|ya?ml)\b/gi, "the brief's notes")
-    .replace(/\b(?:[a-z]{2,6}-)?q\d+\b/g, (code) => {
-      const words = byId.get(code);
+    // A code in capitals ("OTR-Q1") is the same code (review minors 21); a bare "Q1" not asked is left as written.
+    .replace(/\b(?:[a-z]{2,6}-)?q\d+\b/gi, (code) => {
+      const words = byId.get(code) ?? byId.get(code.toLowerCase());
       if (words) return `“${words.replace(/[.?!]+$/, "")}”`;
       return code.includes("-") ? "an open question" : code;
     })
@@ -60,9 +61,13 @@ export function readerText(text: string, questions: BriefQuestion[] = []): strin
 /**
  * An approach's list items (production minors 19): "Do this: - one - two" or one "- item"
  * per line reads as its lead line and a list; text with fewer than two items has no list.
+ * Prose with " - " asides ("keep it simple - one table - no queue") is not a list: an inline
+ * list follows a colon (review minors 19).
  */
 export function approachParts(text: string): { lead: string; items: string[] } {
-  const parts = text.split(/(?:^|\n|\s)-\s+(?=\S)/);
+  const lines = text.split(/(?:^|\n)[ \t]*-\s+(?=\S)/);
+  const inline = /^([\s\S]*?:)\s+-\s+(?=\S)([\s\S]*)$/.exec(text);
+  const parts = lines.length >= 3 ? lines : inline ? [inline[1], ...inline[2].split(/\s-\s+(?=\S)/)] : [];
   if (parts.length < 3) return { lead: text, items: [] };
   const [lead, ...items] = parts;
   return { lead: lead.trim(), items: items.map((i) => i.trim()).filter(Boolean) };
