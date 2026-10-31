@@ -15,6 +15,7 @@ import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 import { api, unwrap } from "@/lib/api/client";
 import { loadInbox, onWaitingChanged } from "@/lib/waiting";
+import { RunTray, swVariant } from "@/app/simple/_home/run-stops"; // MOCK-HOOK
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
 
@@ -66,7 +67,7 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       .then(([inbox, waiting]) => {
         if (!alive) return;
         setCounts({
-          Decisions: waiting.count,
+          Decisions: waiting.count + (swVariant() === "c" ? inbox.checkpoints.filter((c) => c.can_decide && c.status === "pending").length : 0), // MOCK-HOOK
           Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
         });
       })
@@ -279,6 +280,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
             </Link>
           );
         })}
+        <RunTray /> {/* MOCK-HOOK */}
         <span className="flex-1" />
         {/* qa-simple-home-24: says whether the Ask panel is open, which it controls, and looks pressed while it is. */}
         <button
@@ -316,6 +318,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       {mounted &&
         createPortal(
           <>
+            <RunTray phone /> {/* MOCK-HOOK */}
             {/* z-39: last in the document now, it still paints under a page's own z-40 layers, as it did before the page. */}
             <nav
               aria-label="Simple"

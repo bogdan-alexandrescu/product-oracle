@@ -1576,6 +1576,19 @@ function launch(ctx: RunsContext, r: RunOut) {
   submit(ctx, r, first);
 }
 
+/** MOCK-HOOK: SW1 mock-ups: ?swn=0|1|3 keeps that many waiting stops (feature set, engineering check, dates first). */
+const SW_ORDER = ["feature_set", "eng_review", "eng_dates", "priority_order", "prd_review", "roadmap_items"]; // MOCK-HOOK
+export function swKeptRuns(ctx: RunsContext): Set<string> | null {
+  const swn = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("swn"); // MOCK-HOOK
+  if (swn == null) return null; // MOCK-HOOK
+  const waiting = ctx.db.runs.filter((r) => r.status === "awaiting_checkpoint" && r.waiting_on); // MOCK-HOOK
+  const rank = (k: string | null | undefined) => (SW_ORDER.indexOf(k ?? "") + 100) % 100; // MOCK-HOOK
+  const seen = new Set<string>(); // MOCK-HOOK
+  const one = waiting.sort((a, b) => rank(a.waiting_on) - rank(b.waiting_on)).filter((r) => !seen.has(r.waiting_on!) && seen.add(r.waiting_on!)); // MOCK-HOOK
+  return new Set(one.slice(0, Number(swn)).map((r) => r.id)); // MOCK-HOOK
+}
+const swKeep = (ctx: RunsContext) => { const kept = swKeptRuns(ctx); return (c: { run_id: string }) => !kept || kept.has(c.run_id); }; // MOCK-HOOK
+
 function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   const mine = (c: CheckpointOut, r: RunOut) => !ctx.mayDecide || ctx.mayDecide(c, r.flow);
   const checkpoints = ctx.db.runs.flatMap((r) =>
@@ -1593,7 +1606,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
         // D9: what it needs of me and how much, from the same review read.
         summary: inboxSummary(ctx, r, c),
       })),
-  ).filter((c) => c.can_decide); // qa-company-4: as the API's inbox, only the stops I may decide.
+  ).filter((c) => c.can_decide) // qa-company-4: as the API's inbox, only the stops I may decide.
+    .filter(swKeep(ctx)); // MOCK-HOOK
   // Decided, not delivered to the run yet: shown, nothing to decide, not in the total.
   const deliveries = ctx.db.runs.flatMap((r) =>
     r.checkpoints
@@ -1760,6 +1774,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       200,
       ctx.db.runs
         .filter((r) => !status || r.status === status)
+        .filter((r) => { const kept = swKeptRuns(ctx); return !kept || r.status !== "awaiting_checkpoint" || kept.has(r.id); }) // MOCK-HOOK
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
         .map((r) => {
           // As the API: the row's Decide follows the run page's can_decide for its waiting checkpoint.

@@ -1422,6 +1422,15 @@ function seedFeatureSet(): Db {
   return db;
 }
 
+/** MOCK-HOOK: SW1 mock-ups ("simple-waits"): the default seed plus runs waiting at a feature set, an engineering check, an order and dates. */
+function seedSimpleWaits(): Db {
+  const db = seed(); // MOCK-HOOK
+  seeded("sw-feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db))); // MOCK-HOOK
+  seeded("sw-eng-review", () => seedEngReviewRun(db.runs!, runsContext(db))); // MOCK-HOOK
+  seeded("sw-eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db))); // MOCK-HOOK
+  return db; // MOCK-HOOK
+}
+
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
 function seedScopeReview(): Db {
   const db = seed();
@@ -2765,6 +2774,8 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
+          : scenario === "simple-waits" // MOCK-HOOK
+            ? seedSimpleWaits // MOCK-HOOK
           : scenario === "scope-review"
             ? seedScopeReview
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
@@ -6265,6 +6276,23 @@ if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") 
   };
 }
 
+/**
+ * MOCK-HOOK: SW1 mock-ups' "calm" state (?calm=1 on the page): a company where nothing but the runs
+ * waits on the person (no decision, no broken link), as the owner's Home that says "Nothing waits on you today."
+ */
+async function swCalm(url: URL, res: Response): Promise<Response> {
+  if (typeof window === "undefined" || new URLSearchParams(window.location.search).get("calm") !== "1" || !res.ok) return res; // MOCK-HOOK
+  const p = url.pathname; // MOCK-HOOK
+  const edit = async (f: (j: Record<string, unknown>) => unknown) => new Response(JSON.stringify(f(await res.json())), { status: res.status, headers: res.headers }); // MOCK-HOOK
+  if (p === "/v1/simple/decisions/waiting") return edit((j) => ({ ...j, count: 0, late: 0, questions: [], others: 0 })); // MOCK-HOOK
+  if (p === "/v1/simple/roadmap") // MOCK-HOOK
+    return edit((j) => ({ ...j, items: (j.items as { flags: { state: string }[] }[]).map((i) => ({ ...i, flags: i.flags.filter((f) => f.state !== "red") })) })); // MOCK-HOOK
+  if (p === "/v1/simple/decisions") // MOCK-HOOK
+    return edit((j) => ({ ...j, waiting_count: 0, questions: (j.questions as Record<string, unknown>[]).map((q) => ({ ...q, waiting_for_me: false })) })); // MOCK-HOOK
+  if (p === "/v1/inbox") return edit((j) => ({ ...j, decisions: (j.decisions as { reason?: string }[]).filter((d) => d.reason !== "needs_decision") })); // MOCK-HOOK
+  return res; // MOCK-HOOK
+}
+
 export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).
   const url = new URL(req.url);
@@ -6283,7 +6311,7 @@ export async function mockFetch(req: Request): Promise<Response> {
   const next = queue.then(async () => {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
-    const res = await route(db, req);
+    const res = await swCalm(url, await route(db, req)); // MOCK-HOOK
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).
     if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
     // S9: a meeting chat's poll (every 2 s, in each attendee's tab) writes nothing, so it never

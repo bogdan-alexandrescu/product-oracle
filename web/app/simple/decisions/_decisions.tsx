@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { StopRow, useRunStops } from "@/app/simple/_home/run-stops"; // MOCK-HOOK
 
 import { Icon } from "@/components/ds/Icon";
 import { toast } from "@/components/ds/Toast";
@@ -222,10 +223,14 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
   const mine = open.filter((x) => x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose));
   const others = open.filter((x) => !mine.includes(x));
   const shown = all ? mine : mine.slice(0, FIRST);
+  const { stops, variant } = useRunStops(); // MOCK-HOOK
+  const runStops = variant === "c" ? (stops ?? []) : []; // MOCK-HOOK
   return (
     <>
-      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length)} source>
+      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length) + runStops.length /* MOCK-HOOK */} source>
+        {runStops.length > 0 && <ul>{runStops.map((s) => <StopRow key={s.id} s={s} />)}</ul> /* MOCK-HOOK */}
         {mine.length === 0 ? (
+          runStops.length > 0 ? null : /* MOCK-HOOK */
           <p className="simple-meta">
             Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
           </p>

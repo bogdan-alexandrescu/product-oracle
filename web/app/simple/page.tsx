@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
+import { RunsLine, StopCard, StopRow, useRunStops } from "@/app/simple/_home/run-stops"; // MOCK-HOOK
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { Icon } from "@/components/ds/Icon";
 import { setToastPlace, toast } from "@/components/ds/Toast";
@@ -228,7 +229,9 @@ export default function SimpleHome() {
   const hour = Number(formatInZone(now.toISOString(), zone, { hour: "numeric", hourCycle: "h23" }).replace(/\D.*$/, "")) || 9;
   // A person with no name is greeted plainly, never by their email's local part.
   const firstName = (me?.name ?? "").trim().split(/\s/)[0];
-  const decisionCount = waiting.data?.count ?? 0;
+  const { stops: runStops, variant: sw } = useRunStops(); // MOCK-HOOK
+  const stopN = sw ? (runStops?.length ?? 0) : 0; // MOCK-HOOK
+  const decisionCount = (waiting.data?.count ?? 0) + (sw === "c" ? stopN : 0); // MOCK-HOOK
   // Every broken link the tile counts: those I decide wait on me, the others I may propose fixes for.
   const brokenMine = broken.filter((b) => b.item.can_decide).length;
   const brokenOthers = broken.length - brokenMine;
@@ -236,6 +239,7 @@ export default function SimpleHome() {
     [decisionCount, "decision", "decisions"],
     [proposalRows === toDecide ? toDecide.length : 0, "proposal", "proposals"],
     [brokenMine, "broken link", "broken links"],
+    ...(sw && sw !== "c" ? ([[stopN, "run", "runs"]] as [number, string, string][]) : []), // MOCK-HOOK
   ]);
   const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
   const sentence = reads
@@ -247,13 +251,13 @@ export default function SimpleHome() {
         : `${waits} You can also propose fixes for ${brokenWords}.`;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
   const counted = [waiting, changes, roadmap, meeting].every((q) => q.data !== undefined || !!q.error);
-  const nothingToWalk = counted && decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
+  const nothingToWalk = counted && stopN + decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next; // MOCK-HOOK
   // qa-simple-home-16: nothing waits on me (no decision, no proposal): one line, not two empty cards and two 0 tiles.
   // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
   const decisionRows = waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined;
-  const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
+  const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0 && !(sw === "c" && stopN > 0); // MOCK-HOOK
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
-  const quiet = decisionsEmpty && proposalsEmpty && mineApart.length === 0;
+  const quiet = decisionsEmpty && proposalsEmpty && mineApart.length === 0 && stopN === 0; // MOCK-HOOK
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
@@ -537,6 +541,10 @@ export default function SimpleHome() {
         </section>
       )}
 
+      {/* MOCK-HOOK: SW1 a (a card per stop) and b (one line to Detailed) */}
+      {sw === "a" && runStops?.map((s) => <StopCard key={s.id} s={s} />) /* MOCK-HOOK */}
+      {sw === "b" && stopN > 0 && <RunsLine stops={runStops!} /> /* MOCK-HOOK */}
+
       {!reads && quiet && (
         <section aria-label="Waiting for you" data-testid="home-nothing-waits" className="simple-card">
           <p className="simple-small">
@@ -559,9 +567,11 @@ export default function SimpleHome() {
           all="/simple/decisions"
           allLabel="All decisions"
         >
+          {sw === "c" && stopN > 0 && <ul className="flex flex-col">{runStops!.map((s) => <StopRow key={s.id} s={s} />)}</ul> /* MOCK-HOOK */}
           <Block q={{ ...decisions, error: waiting.error ?? decisions.error, data: decisionRows }} testId="home-decisions">
             {(rows) =>
               rows.length === 0 ? (
+                sw === "c" && stopN > 0 ? null : /* MOCK-HOOK */
                 <p className="simple-small" data-testid="home-decisions-empty">
                   No decision waits on you.
                 </p>
