@@ -529,6 +529,8 @@ function Navs() {
           type="button"
           aria-expanded={more}
           aria-controls="more-sheet"
+          // qa4-shell-22: on a More page (Priorities, Runs, Settings…) the tab says so to screen readers too.
+          aria-current={moreActive && !more ? "page" : undefined}
           data-testid="tab-more"
           onClick={() => setMore((m) => !m)}
           className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
@@ -660,6 +662,18 @@ function withTab(h1: Element | undefined, words: string, pathname: string): stri
 }
 
 /**
+ * qa4-shell-13: a Settings page's browser tab names Settings too ("Members · Settings"), as
+ * Plan's and Company's name theirs. qa4-shell-14: a Simple page's says Simple
+ * ("Priorities · Simple"), so it is told apart from the Detailed page of the same name.
+ */
+function inSection(words: string, pathname: string): string {
+  if (!words) return words;
+  if (/^\/settings(\/|$)/.test(pathname) && words !== "Settings" && !words.endsWith(" · Settings")) return `${words} · Settings`;
+  if (modeOf(pathname) === "simple" && !words.endsWith(" · Simple")) return `${words} · Simple`;
+  return words;
+}
+
+/**
  * The open page's title, read from its H1 (PageHeader's title and suffix, "Checkout PRD v3")
  * and kept in step as the page loads; the destination's label until the page draws one.
  * `plain`: the title without the suffix, for the browser tab ("Checkout PRD").
@@ -678,7 +692,7 @@ function usePageTitle(pathname: string): { title: string; plain: string; drawn?:
       const title = h1Text(h1, false);
       // qa-shell-3: a section's tab (Plan, Company, Settings) is headed by the section's name;
       // the browser tab names the open tab too ("Dates · Plan"), so no two pages share one.
-      const plain = withTab(h1, h1Text(h1, true), pathname);
+      const plain = inSection(withTab(h1, h1Text(h1, true), pathname), pathname);
       // qa-docs-78: a page that draws its H1 on a phone too (PageHeader phoneTitle).
       const drawn = !!h1?.hasAttribute("data-phone-title");
       setRead((r) => (r?.title === title && r.plain === plain && r.drawn === drawn ? r : title ? { title, plain: plain || title, drawn } : null));
@@ -705,7 +719,7 @@ function usePageTitle(pathname: string): { title: string; plain: string; drawn?:
   const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
   if (read) return read;
   const fallback = hydrated ? fallbackTitle(pathname) : "";
-  return { title: fallback, plain: fallback };
+  return { title: fallback, plain: fallback === "Product Oracle" ? fallback : inSection(fallback, pathname) };
 }
 
 /** Public pages that set their own title (a customer's interview link, a shared roadmap). */
@@ -770,8 +784,8 @@ function PhoneHeader() {
   }
   if (bare(pathname)) return null;
   // Simple's Ask sheet (the owner's pick C): the whole screen over the header and the tab bar,
-  // with the panel's own head (Ask Oracle, New chat, close). It sits outside the sticky header,
-  // whose stacking would put it under the tab bar.
+  // with the panel's own head (Ask Oracle, New chat, close). Both modes' sheets sit outside the
+  // sticky header, whose stacking would put them under the tab bar (qa4-shell-1).
   const simple = pathname.startsWith("/simple");
   const sheet = simple ? (
     <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} bare>
@@ -820,9 +834,8 @@ function PhoneHeader() {
         </button>
       )}
       {me && <UserMenu placement="header" />}
-      {!simple && sheet}
     </header>
-    {simple && sheet}
+    {sheet}
     </>
   );
 }
@@ -935,11 +948,12 @@ function HopDock() {
           <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
         </button>
       )}
+      {/* qa4-shell-9: in dark the navy scrim is the page's own colour; a black one (not `black`, which follows the theme) dims it there too. */}
       {open && (
         <div
           aria-hidden
           data-testid="hop-backdrop"
-          className={`fixed inset-0 z-40 bg-hero/30 ${simple ? "min-[1240px]:hidden" : "min-[1600px]:hidden"}`}
+          className={`fixed inset-0 z-40 bg-hero/30 [:root[data-theme=dark]_&]:bg-[rgb(0_0_0/0.55)] dark:[:root:not([data-theme=light])_&]:bg-[rgb(0_0_0/0.55)] ${simple ? "min-[1240px]:hidden" : "min-[1600px]:hidden"}`}
           onClick={() => setPanelOpen(false)}
         />
       )}

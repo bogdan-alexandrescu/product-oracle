@@ -123,7 +123,9 @@ test.describe("phone", () => {
     await page.goto("/account");
     await expect(page.getByRole("heading", { level: 1, name: "My account" })).toBeVisible();
     await expect(more).toHaveClass(/bg-rail-active/);
-    await expect(page.getByTestId("tab-bar").locator('[aria-current="page"]')).toHaveCount(0);
+    // qa4-shell-22: More is the one current tab there, for screen readers too.
+    await expect(page.getByTestId("tab-bar").locator('[aria-current="page"]')).toHaveCount(1);
+    await expect(more).toHaveAttribute("aria-current", "page");
     await page.goto("/settings/members");
     await expect(more).toHaveClass(/bg-rail-active/);
   });

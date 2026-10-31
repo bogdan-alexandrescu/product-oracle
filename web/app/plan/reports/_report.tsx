@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Button, Chip, InfoTip, Label, Notice, Page, PageHeader, Panel } from "@/components/ds";
-import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap } from "@/lib/api/client";
+import { Button, Chip, InfoTip, Label, LinkButton, NotFoundPanel, Notice, Page, PageHeader, Panel } from "@/components/ds";
+import { LoadError, Loading } from "@/components/ui";
+import { ApiError, api, unwrap } from "@/lib/api/client";
 import { formatDay, zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -23,8 +23,15 @@ const path = (id: string) => ({ params: { path: { report_id: id } } });
  * Previous / Next report. Opening it marks it read (Done in my Inbox). The print stylesheet
  * drops the rail; on a phone the panels stack.
  */
+/** qa4-shell-4: what a report the API does not have says. */
+const REPORT_MISSING = "This report doesn't exist or was deleted.";
+
 export function ReportDetail({ id }: { id: string }) {
-  const q = useQuery(`alignment-report|${id}`, () => unwrap(api.GET("/v1/alignment-reports/{report_id}", path(id))));
+  const q = useQuery(`alignment-report|${id}`, () =>
+    unwrap(api.GET("/v1/alignment-reports/{report_id}", path(id))).catch((e: unknown) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, REPORT_MISSING) : e;
+    }),
+  );
   const listQ = useQuery("alignment-reports|all", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 200 } } })));
   const report = q.data;
   const unread = report != null && !report.read;
@@ -44,6 +51,23 @@ export function ReportDetail({ id }: { id: string }) {
   const newer = at > 0 ? list[at - 1] : null;
   const older = at >= 0 && at < list.length - 1 ? list[at + 1] : null;
 
+  // qa4-shell-4: a report that is not there gets the app's one not-found page.
+  if (!report && q.error === REPORT_MISSING)
+    return (
+      <NotFoundPanel
+        title="Report not found"
+        icon="search"
+        testId="report-not-found"
+        actions={
+          <LinkButton href="/plan/reports" variant="primary" icon="back">
+            Back to Reports
+          </LinkButton>
+        }
+      >
+        <p>{REPORT_MISSING}</p>
+      </NotFoundPanel>
+    );
+
   return (
     <Page>
       <PageHeader
@@ -56,7 +80,7 @@ export function ReportDetail({ id }: { id: string }) {
         }
         status={report && <Chip kind="line">{report.kind === "weekly" ? "Weekly" : "On demand"}</Chip>}
       />
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {q.error && <LoadError what="this report" error={q.error} onRetry={() => void q.reload()} />}
       {q.loading && !report && <Loading />}
       {report && (
         <div className="grid grid-cols-[minmax(0,1fr)_340px] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3 print:grid-cols-1">
