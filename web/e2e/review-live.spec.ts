@@ -93,7 +93,8 @@ for (const device of ["desktop", "phone"] as const) {
       await page.bringToFront();
       const item = panel.getByTestId("feedback-item").filter({ hasText: "Say how often a person is alerted." });
       await expect(item).toHaveCount(1, { timeout: 15_000 });
-      await expect(panel.getByTestId("feedback-item").filter({ hasText: "Oracle" }).first()).toBeVisible({ timeout: 15_000 });
+      // Oracle's suggestion answering it, on the item itself.
+      await expect(item.getByTestId("suggestion")).toContainText("Oracle", { timeout: 15_000 });
     });
 
     test("coming back to the window shows another reviewer's approval, the typed note kept", async ({ page, context }) => {
