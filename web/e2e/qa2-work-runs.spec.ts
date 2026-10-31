@@ -58,7 +58,7 @@ test("qa-onboarding-16, rirs-7: a waiting run offers one destructive action; onc
   await expect(header(page).getByTestId("run-status")).toHaveText("Cancelled");
   await expect(page.getByTestId("run-cancel")).toHaveCount(0);
   await page.getByTestId("run-delete").click();
-  const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding run" });
+  const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding PRD run" });
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toContainText("still working");
   await expect(dialog.getByTestId("delete-blocked")).toHaveCount(0);
@@ -95,9 +95,9 @@ test("qa-onboarding-31, rirs-20: no progress check before agents run; Refresh pr
   await expect(header(page).getByRole("button", { name: "Refresh progress" })).toHaveCount(0);
 });
 
-test("rirs-20: Delete on a finished run is a danger button", async ({ page }) => {
+test("rirs-20: Delete on a finished run is a secondary button (its confirm is the danger)", async ({ page }) => {
   await openRun(page, "Succeeded");
-  await expect(page.getByTestId("run-delete")).toHaveAttribute("data-variant", "danger");
+  await expect(page.getByTestId("run-delete")).toHaveAttribute("data-variant", "secondary");
 });
 
 test("rirs-6: who may decide a checkpoint, in words", async ({ page }) => {

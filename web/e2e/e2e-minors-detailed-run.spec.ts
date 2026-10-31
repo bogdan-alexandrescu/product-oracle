@@ -84,7 +84,7 @@ for (const size of SIZES) {
       const del = page.getByTestId("run-delete").filter({ visible: true }).first();
       await expect(del).toHaveAttribute("data-variant", "secondary");
       await del.click();
-      const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding run" });
+      const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding PRD run" });
       await expect(dialog.getByTestId("delete-what")).toHaveText(/^This removes the run's record: its steps, decisions and spend\./);
       await dialog.getByRole("button", { name: "Back" }).click();
       await expect(dialog).toHaveCount(0);
