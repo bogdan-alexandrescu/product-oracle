@@ -163,7 +163,7 @@ test("people are named: the approver menu and the inspector's People read names"
   await login(page);
   await page.goto("/company/decisions?state=all");
   await row(page, CAPS).click();
-  await expect(peopleRow(page, "Approver")).toContainText("Approver");
+  await expect(peopleRow(page, "Approver")).toContainText("Priya Raman");
   await expect(peopleRow(page, "Approver")).not.toContainText("@");
   await expect(peopleRow(page, "Contributors")).toContainText("Theo Brandt");
   await expect(peopleRow(page, "Contributors")).not.toContainText("@");
@@ -245,4 +245,20 @@ test.describe("phone", () => {
     await expect(approver).toBeInViewport();
     await expect(approver).toHaveAttribute("aria-invalid", "true");
   });
+});
+
+// qa5-mock-people review: a member whose name an owner clears reads by their email again, as the API names them.
+test("people are named: a cleared name reads by the email, not the old name", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  await page.getByTestId("member-row").filter({ hasText: APPROVER }).getByTestId("member-open").click();
+  const member = page.getByTestId("member-inspector");
+  await member.getByLabel("Name", { exact: true }).fill("");
+  await member.getByRole("button", { name: "Save" }).click();
+  await expect(member.getByRole("button", { name: "Saved" })).toBeVisible();
+
+  await page.goto("/company/decisions?state=all");
+  await row(page, CAPS).click();
+  await expect(peopleRow(page, "Approver")).toHaveText(/^Approver\s*Approver$/);
+  await expect(peopleRow(page, "Approver")).not.toContainText("Priya Raman");
 });
