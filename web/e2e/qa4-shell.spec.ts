@@ -80,6 +80,31 @@ test("qa4-shell-2, 3: PRDs that fail to load show the error and Try again only, 
   await expect(page.getByTestId("document-row").first()).toBeVisible();
 });
 
+test("qa4-shell-2 review: a reload that fails after a good load keeps the PRDs under the error", async ({ page }) => {
+  await login(page);
+  await page.goto("/documents");
+  const kept = page.getByTestId("document-row").filter({ hasText: "Saved carts PRD" });
+  await expect(kept).toBeVisible();
+  const rows = await page.getByTestId("document-row").count();
+  // Deleting a PRD reloads the list; that reload fails.
+  await failGets(page, "/v1/documents");
+  await kept.getByRole("button", { name: "Actions for Saved carts PRD" }).click();
+  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete Saved carts PRD" });
+  const external = dialog.getByLabel("Delete it here; the external copy stays where it is");
+  await expect(dialog.getByRole("button", { name: "Move to Trash" })).toBeVisible();
+  if (await external.isVisible()) await external.check();
+  await dialog.getByRole("button", { name: "Move to Trash" }).click();
+  await expect(dialog).toHaveCount(0);
+  const error = page.getByTestId("load-error");
+  await expect(error).toContainText("Couldn't load your PRDs.");
+  await expect(page.getByTestId("document-row")).toHaveCount(rows);
+  await stopFailing(page);
+  await error.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByTestId("load-error")).toHaveCount(0);
+  await expect(kept).toHaveCount(0);
+});
+
 test("qa4-shell-2, 3, 21: Runs that fail to load show the error and Try again only, no empty table", async ({ page }) => {
   await login(page);
   await failGets(page, "/v1/runs");
@@ -161,7 +186,8 @@ test("qa4-shell-5: Simple from New roadmap opens Simple's Roadmap", async ({ pag
 
 test("qa4-shell-6: Detailed to Simple and straight back returns to the page left", async ({ page }) => {
   await login(page);
-  for (const path of ["/requests", "/plan/dates"]) {
+  // Every Detailed page takes the same way back (review minor: Settings, Runs and Inbox too).
+  for (const path of ["/requests", "/plan/dates", "/settings/members", "/runs", "/inbox"]) {
     await page.goto(path);
     await modeSwitch(page, "Simple").click();
     await expect(page).toHaveURL(/\/simple(\/|$)/);
