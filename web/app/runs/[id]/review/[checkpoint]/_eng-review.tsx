@@ -25,6 +25,8 @@ const VERDICTS: { value: Verdict; label: string; needs?: string }[] = [
 const VERDICT_WORDS: Record<Verdict, string> = { feasible: "Feasible", feasible_with_changes: "Feasible with changes", not_feasible: "Not feasible as scoped" };
 const VERDICT_KIND = { feasible: "pass", feasible_with_changes: "warn", not_feasible: "crit" } as const;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+/** qa4-work-54: what a brief written without a code map means, in an owner's words. */
+const NO_CODE_MAP = "Oracle could not read the code, so this approach is a guess";
 
 /** The feature's actions in the shared draft, staged first. */
 function actionsOf(review: Review, key: string): Action[] {
@@ -160,6 +162,7 @@ export function EngReview({
               key={feature.key}
               feature={feature}
               codeMap={check.code_map_used}
+              titleOf={(key) => check.features.find((x) => x.key === key)?.title ?? key.replace(/^f\./, "").replace(/[-_]+/g, " ")}
               acts={actionsOf(review, feature.key)}
               stages={stages}
               suggests={suggests}
@@ -191,7 +194,7 @@ export function EngReview({
               const blocking = f.questions.filter((q) => q.blocking).length;
               const reasons = reasonsOf(f.key);
               const confirm = [
-                !check.code_map_used ? "No code map: approach rests on assumptions" : null,
+                !check.code_map_used ? NO_CODE_MAP : null,
                 f.depends_on.some((d) => notFeasible.has(d)) ? "Depends on a feature judged not feasible" : null,
               ].filter((x): x is string => !!x);
               return (
@@ -205,8 +208,8 @@ export function EngReview({
                   }`}
                 >
                   <button type="button" className="min-w-0 text-left font-semibold hover:underline" onClick={() => setSelected(f.key)}>
+                    {/* qa4-work-53: the feature's name only; its key is never shown. */}
                     {f.title}
-                    <span className="ml-1.5 font-mono text-sm font-normal text-text2">{f.key}</span>
                   </button>
                   <span className="min-w-0 text-text2">{f.approach}</span>
                   <span data-testid="brief-verdict">
@@ -296,6 +299,7 @@ export function EngReview({
 function BriefInspector({
   feature: f,
   codeMap,
+  titleOf,
   acts,
   stages,
   suggests,
@@ -306,6 +310,7 @@ function BriefInspector({
 }: {
   feature: Feature;
   codeMap: boolean;
+  titleOf: (key: string) => string;
   acts: Action[];
   stages: boolean;
   suggests: boolean;
@@ -338,8 +343,8 @@ function BriefInspector({
     <Inspector eyebrow="Feature · selected" title={f.title} label={`Brief: ${f.title}`} testId="brief-inspector">
       <InspectorSection label="Approach">
         <p>{f.approach}</p>
-        <p className="mt-1.5 text-sm text-text2">{codeMap ? "Code map used" : "No code map: assumptions"}</p>
-        {f.depends_on.length > 0 && <p className="mt-1.5 text-sm text-text2">Depends on {f.depends_on.join(", ")}</p>}
+        <p className="mt-1.5 text-sm text-text2">{codeMap ? "Oracle read the code for this approach" : NO_CODE_MAP}</p>
+        {f.depends_on.length > 0 && <p className="mt-1.5 text-sm text-text2">Depends on {f.depends_on.map(titleOf).join(", ")}</p>}
       </InspectorSection>
 
       <InspectorSection label="Feasibility">
@@ -448,7 +453,7 @@ function BriefInspector({
           })}
         </ul>
         {stages && (
-          <Button variant="ghost" className="mt-2" onClick={() => onAsk(`${f.title}: `)}>
+          <Button className="mt-2" onClick={() => onAsk(`${f.title}: `)}>
             Ask the architect
           </Button>
         )}

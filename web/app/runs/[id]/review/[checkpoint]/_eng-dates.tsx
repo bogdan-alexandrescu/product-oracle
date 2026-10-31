@@ -28,8 +28,31 @@ const CONFIDENCE_WORDS = { low: "Low", medium: "Medium", high: "High" } as const
 const HORIZON_WORDS = { next: "Next", later: "Later" } as const;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** "Nov 30 · est-shipping-step": a basis as the row shows it (a calendar day, no time zone). */
-const basisWords = (b: Basis) => `${DATE_RE.test(b.supports_date) ? formatDay(b.supports_date) : b.supports_date} · ${b.reference}`;
+const SLUG_RE = /^[a-z0-9]+(?:[-_][a-z0-9]+)+$/;
+const KIND_PREFIX = /^(?:est|estimate|cap|capacity|com|commit|commitment)$/;
+
+/**
+ * qa4-work-47: a basis reference in plain words. The architect writes a slug ("est-shipping-step",
+ * "cap-q4-checkout"); the row reads its words ("shipping step", "Q4 checkout"), never the key. A
+ * reference a person typed (a ticket such as "ENG-412", or a sentence) shows as written.
+ */
+function referenceWords(reference: string): string {
+  const ref = reference.trim();
+  if (!SLUG_RE.test(ref)) return ref;
+  const words = ref.split(/[-_]/);
+  if (words.length > 1 && KIND_PREFIX.test(words[0])) words.shift();
+  return words.map((w) => (/^[qh]\d$/.test(w) ? w.toUpperCase() : w)).join(" ");
+}
+
+/** "Nov 30 · Estimate: shipping step": a basis as the row shows it (a calendar day, no time zone). */
+const basisWords = (b: Basis) =>
+  `${DATE_RE.test(b.supports_date) ? formatDay(b.supports_date) : b.supports_date} · ${BASIS_KINDS.find((k) => k.value === b.kind)?.label ?? "Basis"}: ${referenceWords(b.reference)}`;
+
+/** qa4-work-49: a key ("shipping", "user-stories") in words: "Shipping", "User stories". */
+const keyWords = (key: string) => {
+  const w = key.trim().replace(/[-_]+/g, " ");
+  return w.charAt(0).toUpperCase() + w.slice(1);
+};
 
 /** A decision action of the date stop: Accept, a changed estimate, or No date. */
 const isDecision = (a: Action) => a.kind === "accept" || (a.kind === "edit" && (a.field === "estimate" || a.field === "no_date"));
@@ -177,7 +200,7 @@ export function EngDates({
       />
       {check.prd && (
         <p className="mb-3 text-text2" data-testid="dates-prd">
-          The Now items of {check.prd.document} v{check.prd.version}
+          The Now items of {(check.prd.document === run.document_slug && run.document_title) || keyWords(check.prd.document)} v{check.prd.version}
         </p>
       )}
       {check.problems.length > 0 && (
@@ -223,6 +246,7 @@ export function EngDates({
               const d = decisionOf(i, stagedOf(i.key));
               const suggested = decisionOf(i, actsOf(i.key).filter((a) => a.state === "suggested"));
               const reasons = reasonsOf(i.key);
+              const readsNoDate = d ? d.word === "No date" : !i.proposed;
               return (
                 <li
                   key={i.key}
@@ -235,7 +259,7 @@ export function EngDates({
                 >
                   <button type="button" className="min-w-0 text-left hover:underline" onClick={() => setSelected(i.key)}>
                     <span className="block font-semibold">{i.title}</span>
-                    {i.section && <span className="block text-sm text-text2">PRD section {i.section}</span>}
+                    {i.section && <span className="block text-sm text-text2">PRD section: {keyWords(i.section)}</span>}
                   </button>
                   <span className="tnum font-semibold" data-testid="date-size">
                     <span className="mr-1 font-normal text-text2 min-[901px]:sr-only">Size</span>
@@ -270,37 +294,47 @@ export function EngDates({
                     )}
                     {writes && (
                       <span className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`Date: ${i.title}`}>
+                        {/* qa4-work-51: the row's own choice shows as pressed on its button. */}
                         {i.proposed && (
-                          <Button disabled={busy} onClick={() => void act({ item_key: i.key, kind: "accept", value: null })}>
+                          <Button
+                            variant={d?.word === "Accepted" ? "solid" : "secondary"}
+                            aria-pressed={d?.word === "Accepted"}
+                            disabled={busy}
+                            onClick={() => void act({ item_key: i.key, kind: "accept", value: null })}
+                          >
                             Accept
                           </Button>
                         )}
-                        <Button disabled={busy} onClick={() => setChanging(i)}>
+                        <Button variant={d?.word === "Changed" ? "solid" : "secondary"} aria-pressed={d?.word === "Changed"} disabled={busy} onClick={() => setChanging(i)}>
                           Change
                         </Button>
-                        <Button disabled={busy} onClick={() => setNoDate(i)}>
-                          No date
-                        </Button>
-                        {stages && (
-                          <span className="relative">
-                            <Button
-                              variant="ghost"
-                              aria-label={`More for ${i.title}`}
-                              aria-expanded={more === i.key}
-                              onClick={() => setMore((m) => (m === i.key ? null : i.key))}
-                            >
-                              {/* An icon, as the shell's More: a text glyph (⋯) needs a font that has it, and without one Chromium crashed the lead's screen. */}
-                              <Icon name="more" size={16} />
-                            </Button>
-                            {more === i.key && (
-                              <span className="absolute top-full right-0 z-20 mt-1 rounded-button border border-line bg-surface p-1 shadow-tip">
-                                <Button variant="ghost" className="whitespace-nowrap" onClick={() => ask(i)}>
-                                  Ask the architect
-                                </Button>
-                              </span>
-                            )}
-                          </span>
-                        )}
+                        {/* qa4-work-50: a row that already reads No date offers to edit its reason, and the
+                            More menu keeps to the same line as that last button. */}
+                        <span className="inline-flex items-center gap-1.5">
+                          <Button disabled={busy} onClick={() => setNoDate(i)}>
+                            {readsNoDate ? "Edit reason" : "No date"}
+                          </Button>
+                          {stages && (
+                            <span className="relative">
+                              <Button
+                                variant="ghost"
+                                aria-label={`More for ${i.title}`}
+                                aria-expanded={more === i.key}
+                                onClick={() => setMore((m) => (m === i.key ? null : i.key))}
+                              >
+                                {/* An icon, as the shell's More: a text glyph (⋯) needs a font that has it, and without one Chromium crashed the lead's screen. */}
+                                <Icon name="more" size={16} />
+                              </Button>
+                              {more === i.key && (
+                                <span className="absolute top-full right-0 z-20 mt-1 rounded-button border border-line bg-surface p-1 shadow-tip">
+                                  <Button variant="ghost" className="whitespace-nowrap" onClick={() => ask(i)}>
+                                    Ask the architect
+                                  </Button>
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </span>
                       </span>
                     )}
                   </span>
@@ -319,7 +353,7 @@ export function EngDates({
         {check.others.length > 0 && (
           <details className="mt-3 rounded-panel border border-line bg-surface" data-testid="dates-others">
             <summary className="cursor-pointer px-4 py-2.5 font-semibold">
-              {[nextCount ? `Next ${nextCount}` : null, laterCount ? `Later ${laterCount}` : null].filter(Boolean).join(" · ")} · no dates (O4 Roadmap shape)
+              {[nextCount ? `Next ${nextCount}` : null, laterCount ? `Later ${laterCount}` : null].filter(Boolean).join(" · ")} (Next and Later items have no dates)
             </summary>
             <ul className="border-t border-line">
               {check.others.map((o) => (
@@ -391,6 +425,10 @@ export function EngDates({
       {noDate && (
         <NoDateSheet
           item={noDate}
+          initial={(() => {
+            const d = decisionOf(noDate, stagedOf(noDate.key));
+            return d ? (d.reason ?? "") : (noDate.no_date_reason ?? "");
+          })()}
           busy={busy}
           error={error}
           onClose={() => setNoDate(null)}
@@ -465,18 +503,20 @@ function ChangeSheet({
 /** No date: the item stays in Now without a date; a reason is required. */
 function NoDateSheet({
   item,
+  initial,
   busy,
   error,
   onClose,
   onSave,
 }: {
   item: Item;
+  initial: string;
   busy: boolean;
   error: string | null;
   onClose: () => void;
   onSave: (reason: string) => void;
 }) {
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(initial);
   return (
     <Sheet open title={`No date: ${item.title}`} onClose={onClose} testId="date-none">
       <form
@@ -532,10 +572,7 @@ function DatesInspector({
     <Inspector eyebrow="Now item · selected" title={i.title} label={`Dates: ${i.title}`} testId="dates-inspector">
       <InspectorSection label="Proposed date">
         {i.proposed ? (
-          <>
-            <p className="font-semibold">{basisWords(i.proposed)}</p>
-            <p className="mt-1 text-sm text-text2">{BASIS_KINDS.find((k) => k.value === i.proposed!.kind)?.label}</p>
-          </>
+          <p className="font-semibold">{basisWords(i.proposed)}</p>
         ) : (
           <p className="text-text2">No date proposed{i.no_date_reason ? `: ${i.no_date_reason}` : ""}</p>
         )}
@@ -551,7 +588,7 @@ function DatesInspector({
           </ul>
         )}
         {onAsk && (
-          <Button variant="ghost" className="mt-2" onClick={onAsk}>
+          <Button className="mt-2" onClick={onAsk}>
             Ask the architect
           </Button>
         )}
