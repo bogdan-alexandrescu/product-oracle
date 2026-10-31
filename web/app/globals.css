@@ -1313,3 +1313,6 @@ code .date-mark {
   --simple-m4-tag: #0d2e25;
   --simple-m4-tag-ink: #4cd9a0;
 }
+/* MOCK-HOOK: qd1=b, the three panels keep a usable height and the page scrolls */
+[data-qd1="b"] > div { min-height: calc(100dvh - 2rem); } /* MOCK-HOOK */
+[data-qd1="b"] > div > * { min-height: calc(100dvh - 2rem); } /* MOCK-HOOK */

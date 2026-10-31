@@ -16,6 +16,7 @@ import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
 import { HeldRewritesButton, HeldRewritesPanel, useHeldRewrites } from "@/components/HeldRewrites";
+import { useMockHook } from "@/lib/mock-hook"; // MOCK-HOOK
 import { DEFAULT_FILTERS, type FeedbackFilters, type PlacedComment } from "@/components/review/FeedbackList";
 import {
   OutlineRail,
@@ -164,6 +165,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   );
   const held = useHeldRewrites(doc);
   const [heldOpen, setHeldOpen] = useState(false);
+  const qd1 = useMockHook("qd1"); // MOCK-HOOK: a drawer, b page scrolls, c in the review column
+  const qd1Open = useMockHook("open") === "1"; // MOCK-HOOK
+  useEffect(() => { if (qd1Open) setHeldOpen(true); }, [qd1Open]); // MOCK-HOOK
   // Every feedback item on the document: the panel's list and every open-feedback count.
   const feedbackQ = useQuery(
     `feedback|${doc}|${refreshKey}`,
@@ -1381,7 +1385,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           <DraftNewItems doc={doc} slug={document_.slug} n={n} />
         )}
 
-        {heldOpen && (
+        {heldOpen && qd1 !== "a" && qd1 !== "c" && ( // MOCK-HOOK
           <HeldRewritesPanel
             doc={doc}
             rows={held.rows}
@@ -1427,6 +1431,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         {onDocument && (
         <div
           data-testid="prd-layout"
+          data-qd1={qd1 === "b" && heldOpen ? "b" : undefined} // MOCK-HOOK
           className={`grid items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3 ${
             rail ? "grid-cols-[minmax(0,1fr)_380px] min-[1280px]:grid-cols-[280px_minmax(0,1fr)_380px]" : "grid-cols-[minmax(0,1fr)_380px]"
           }`}
@@ -1515,13 +1520,24 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               data-testid="review-panel-column"
               className="scroll-mt-3 min-[1101px]:sticky min-[1101px]:top-4 min-[1101px]:flex min-[1101px]:max-h-[calc(100dvh-2rem)] min-[1101px]:flex-col"
             >
-              {panel("side")}
+              {qd1 === "c" && heldOpen ? ( // MOCK-HOOK
+                <div className="flex min-h-0 flex-col overflow-y-auto rounded-panel border border-line bg-surface shadow-panel [&>section]:mb-0 [&>section]:border-0 [&>section]:shadow-none" data-testid="held-in-column"> {/* MOCK-HOOK */}
+                  <HeldRewritesPanel doc={doc} rows={held.rows} headings={headings} canDecide={canDecide} onChanged={held.reload} onClose={() => setHeldOpen(false)} /> {/* MOCK-HOOK */}
+                </div> // MOCK-HOOK
+              ) : panel("side")} {/* MOCK-HOOK */}
             </div>
           </div>
         </div>
         )}
       </Page>
 
+      {qd1 === "a" && ( // MOCK-HOOK
+        <Sheet open={heldOpen} side title="Held rewrites" onClose={() => setHeldOpen(false)} testId="held-drawer"> {/* MOCK-HOOK */}
+          <div className="p-4 [&>section]:mb-0 [&>section]:border-0 [&>section]:p-0 [&>section]:shadow-none [&>section>div:first-child]:hidden"> {/* MOCK-HOOK */}
+            <HeldRewritesPanel doc={doc} rows={held.rows} headings={headings} canDecide={canDecide} onChanged={held.reload} onClose={() => setHeldOpen(false)} /> {/* MOCK-HOOK */}
+          </div> {/* MOCK-HOOK */}
+        </Sheet> // MOCK-HOOK
+      )} {/* MOCK-HOOK */}
       {/* Phone: Sections and Review, each opening a sheet. */}
       {onDocument && version && (
         <div

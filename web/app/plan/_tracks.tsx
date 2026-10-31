@@ -22,6 +22,8 @@ import { formatShortDate, plural } from "@/lib/format";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
 import { HORIZON_LABEL, HORIZONS, trackHealth, type Horizon } from "./_lib";
+import { StartRunAtOnce, StartRunDialog, StartRunStrip } from "./_mk-start-run"; // MOCK-HOOK
+import { useMockHook } from "@/lib/mock-hook"; // MOCK-HOOK
 
 export type Track = Schemas["TrackOverview"];
 type Milestone = Schemas["MilestoneOut"];
@@ -196,6 +198,8 @@ export function TrackPanel({
   const health = trackHealth(track.health);
   const off = busy;
   const actions = may.check || may.draftRoadmap || may.push;
+  const qd2 = useMockHook("qd2"); // MOCK-HOOK: a dialog, b strip on the card, c starts at once with Cancel run
+  const [qd2Open, setQd2Open] = useState(false); // MOCK-HOOK
 
   async function act<T>(call: () => Promise<T>, done: (out: T) => void) {
     setBusy(true);
@@ -464,7 +468,9 @@ export function TrackPanel({
               {may.draftRoadmap && (
                 <Button
                   disabled={off}
+                  data-testid="track-draft-roadmap" // MOCK-HOOK
                   onClick={() =>
+                    qd2 ? setQd2Open(true) : // MOCK-HOOK
                     void act(
                       () =>
                         unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", path)),
@@ -472,9 +478,12 @@ export function TrackPanel({
                     )
                   }
                 >
-                  Draft roadmap from this track
+                  {qd2 === "a" ? "Draft roadmap from this track…" : "Draft roadmap from this track"} {/* MOCK-HOOK */}
                 </Button>
               )}
+              {qd2Open && qd2 === "a" && <StartRunDialog trackId={track.id} prdTitle={track.title} onClose={() => setQd2Open(false)} />} {/* MOCK-HOOK */}
+              {qd2Open && qd2 === "b" && <StartRunStrip trackId={track.id} onClose={() => setQd2Open(false)} />} {/* MOCK-HOOK */}
+              {qd2Open && qd2 === "c" && <StartRunAtOnce trackId={track.id} onDone={() => {}} />} {/* MOCK-HOOK */}
               {may.push && pushOff && (
                 <span className="flex basis-full flex-wrap items-center gap-2">
                   <Button disabled aria-describedby={pushWhy} data-testid="track-push">

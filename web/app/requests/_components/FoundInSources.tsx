@@ -7,6 +7,9 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { plural } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { useMockHook } from "@/lib/mock-hook"; // MOCK-HOOK
+import { useRouter } from "next/navigation"; // MOCK-HOOK
+import { NewRequestDialog } from "./NewRequest"; // MOCK-HOOK
 
 type Candidate = Schemas["CandidateOut"];
 type Channel = Candidate["channel"];
@@ -43,6 +46,14 @@ export function FoundInSources({ refresh }: { refresh: string }) {
   const [filed, setFiled] = useState<Schemas["RequestOut"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const open = q.data ?? [];
+  const qd3 = useMockHook("qd3"); // MOCK-HOOK: a one form, b two forms with the same words, c files at once
+  const router = useRouter(); // MOCK-HOOK
+  async function fileAtOnce(c: Candidate) { // MOCK-HOOK: qd3=c
+    const request = await unwrap(api.POST("/v1/request-candidates/{candidate_id}/file", { params: { path: { candidate_id: c.id } }, body: { title: c.title, body: c.body ?? null, channel: c.channel, requester_name: c.requester_name ?? null, requester_kind: "unknown" } })); // MOCK-HOOK
+    setFiled(request); // MOCK-HOOK
+    q.setData((rows) => rows?.filter((r) => r.id !== c.id)); // MOCK-HOOK
+    router.push(`/requests?qd3=c&request=${encodeURIComponent(request.id)}`); // MOCK-HOOK
+  } // MOCK-HOOK
 
   async function dismiss(c: Candidate) {
     setError(null);
@@ -59,6 +70,7 @@ export function FoundInSources({ refresh }: { refresh: string }) {
       {filed && (
         <Notice tone="pass" testId="filed-notice">
           Filed &ldquo;{filed.title}&rdquo; as a new request.
+          {qd3 === "c" && <> It is open on the right: change anything there, or <button type="button" className="font-semibold underline">Undo</button>.</>} {/* MOCK-HOOK */}
         </Notice>
       )}
       {open.length > 0 && (
@@ -82,8 +94,8 @@ export function FoundInSources({ refresh }: { refresh: string }) {
                   </span>
                 </div>
                 <div className="flex flex-none gap-2">
-                  <Button variant="solid" onClick={() => setFiling(c)}>
-                    File as request
+                  <Button variant="solid" onClick={() => (qd3 === "c" ? void fileAtOnce(c) : setFiling(c))}> {/* MOCK-HOOK */}
+                    {qd3 === "c" ? "File it" : "File as request"} {/* MOCK-HOOK */}
                   </Button>
                   <Button variant="ghost" onClick={() => dismiss(c)}>
                     Dismiss
@@ -94,7 +106,16 @@ export function FoundInSources({ refresh }: { refresh: string }) {
           </ul>
         </Panel>
       )}
-      {filing && (
+      {filing && (qd3 === "a" || qd3 === "b") && ( // MOCK-HOOK
+        <NewRequestDialog // MOCK-HOOK
+          from={filing} // MOCK-HOOK
+          pickFound={qd3 === "b"} // MOCK-HOOK
+          onClose={() => setFiling(null)} // MOCK-HOOK
+          onOpenExisting={() => setFiling(null)} // MOCK-HOOK
+          onFiled={(request) => { setFiling(null); setFiled(request); q.setData((rows) => rows?.filter((r) => r.id !== filing.id)); }} // MOCK-HOOK
+        /> // MOCK-HOOK
+      )} {/* MOCK-HOOK */}
+      {filing && !(qd3 === "a" || qd3 === "b") && ( // MOCK-HOOK
         <FileDialog
           candidate={filing}
           onClose={() => setFiling(null)}

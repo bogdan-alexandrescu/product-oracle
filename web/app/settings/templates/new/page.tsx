@@ -13,6 +13,8 @@ import { ProblemList, TEMPLATE_SKELETON, TemplateBodyEditor, useTemplateCheck } 
 import { ApiError, api } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
 import { errorMessage } from "@/lib/use-query";
+import { useMockHook } from "@/lib/mock-hook"; // MOCK-HOOK
+import { keyFromName, TemplateCopyForm, TemplateFieldsForm } from "./_mk"; // MOCK-HOOK
 
 export default function NewTemplatePage() {
   const router = useRouter();
@@ -27,6 +29,7 @@ export default function NewTemplatePage() {
   const [keyError, setKeyError] = useState<string | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const live = useTemplateCheck(body);
+  const qd4 = useMockHook("qd4"); // MOCK-HOOK: a fields, b copy a template, c Markdown kept, key made from the name
   // qa-settings-28: why Create is disabled, said next to it.
   const reason = busy
     ? null
@@ -63,6 +66,8 @@ export default function NewTemplatePage() {
     }
   }
 
+  if (qd4 === "a") return <TemplateFieldsForm />; // MOCK-HOOK
+  if (qd4 === "b") return <TemplateCopyForm />; // MOCK-HOOK
   return (
     <>
       <PageHeader
@@ -97,6 +102,7 @@ export default function NewTemplatePage() {
           </Panel>
         </div>
         <Panel title="Details" bodyClassName="flex flex-col gap-3 p-4 max-[600px]:p-3" className="max-[1100px]:order-1">
+          {qd4 === "c" ? null : ( // MOCK-HOOK: c makes the key from the name
           <KeyField
             id="template-key"
             value={key}
@@ -107,9 +113,12 @@ export default function NewTemplatePage() {
             error={keyError}
             placeholder="launch-brief"
           />
+          )} {/* MOCK-HOOK */}
           <Field label="Name">
-            <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Launch brief" required />
+            <input className={INPUT} value={name} onChange={(e) => { setName(e.target.value); if (qd4 === "c") setKey(keyFromName(e.target.value)); }} placeholder="Launch brief" required /> {/* MOCK-HOOK: c */}
           </Field>
+          {qd4 === "c" && <p className="-mt-1 text-sm text-text2">{key ? <>Saved as <b className="font-semibold text-text">{key}</b>, made from the name.</> : "Its key is made from the name."}</p>} {/* MOCK-HOOK */}
+          {qd4 === "c" && <Notice tone="info">The block between the two <b>---</b> lines sets the theme, when Oracle suggests it and which sections make the brief. Each <b>## Heading {"{#key}"}</b> is a section; the grey <b>{"<!-- -->"}</b> line under it guides the writer.</Notice>} {/* MOCK-HOOK */}
           <fieldset className="flex flex-col gap-1.5">
             <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Kind</legend>
             <div className="flex gap-4 text-[15px]">

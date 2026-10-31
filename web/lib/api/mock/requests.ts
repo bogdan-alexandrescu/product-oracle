@@ -313,6 +313,9 @@ export function seedRequests(input: { ownerId: string; goals: { id: string }[]; 
       "Could I reorder what I bought last week in one click? I order the same things every Monday and build the basket again by hand each time."),
     found(2, "Pick a delivery slot", "slack", "#sales notes",
       "Two prospects asked whether buyers can choose a delivery slot at check-out. Both said it would decide whether they switch this quarter."),
+    // MOCK-HOOK: two more found items, so the list and the Start from picker hold a realistic few.
+    found(3, "Split one order across two cards", "support", "#support thread", "A buyer asked to pay half on the company card and half on their own. They abandoned the order when it would not let them."), // MOCK-HOOK
+    found(4, "Save a basket as a list", "meeting", "Weekly call with Example Grocers", "Their store managers want to keep a named list, like 'Monday restock', and add it to the basket in one go."), // MOCK-HOOK
   );
   return db;
 }

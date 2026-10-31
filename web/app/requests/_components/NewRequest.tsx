@@ -3,10 +3,11 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
-import { Button, Dialog } from "@/components/ds";
+import { Button, Dialog, SegmentedControl } from "@/components/ds"; // MOCK-HOOK: SegmentedControl
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
+import { useMockHook } from "@/lib/mock-hook"; // MOCK-HOOK
 import { formatAge } from "@/lib/format";
 import { displayName } from "@/lib/names";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -14,6 +15,9 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { CHANNEL_LABEL, STATE } from "./RequestList";
 
 type Request = Schemas["RequestOut"];
+type Found = Schemas["CandidateOut"]; // MOCK-HOOK
+type Kind = Schemas["RequestCreate"]["requester_kind"]; // MOCK-HOOK
+const KINDS: { value: Kind; label: string }[] = [{ value: "customer", label: "Customer" }, { value: "team", label: "Team" }, { value: "unknown", label: "Unknown" }]; // MOCK-HOOK
 
 /**
  * New request (#329): the button on the Requests header (qa-shell-10: the only one). #370: a role
@@ -38,6 +42,7 @@ export function NewRequestButton({
   const pathname = usePathname();
   const asked = useSearchParams().get("compose") === "request";
   const [open, setOpen] = useState(() => fromAddress && asked);
+  const qd3 = useMockHook("qd3"); // MOCK-HOOK
   const close = () => {
     setOpen(false);
     if (fromAddress && asked) router.replace(pathname);
@@ -51,6 +56,7 @@ export function NewRequestButton({
       </Button>
       {open && (
         <NewRequestDialog
+          pickFound={qd3 === "b"} // MOCK-HOOK
           onClose={close}
           onFiled={(request) => {
             close();
@@ -90,11 +96,15 @@ function filedAgo(at: string): string {
  * qa-work-37: before filing, a request already in the queue under the same title (not merged
  * away) is shown, with Open it (to merge or add to it there) or File anyway.
  */
-function NewRequestDialog({
+export function NewRequestDialog({ // MOCK-HOOK: exported for qd3=a
   onClose,
   onFiled,
   onOpenExisting,
+  from: given, // MOCK-HOOK: qd3=a|b, the found item it is filed from
+  pickFound, // MOCK-HOOK: qd3=b, the form offers the found items to start from
 }: {
+  from?: Found; // MOCK-HOOK
+  pickFound?: boolean; // MOCK-HOOK
   onClose: () => void;
   onFiled: (request: Request) => void;
   /** Opens a request already filed under this title, instead of filing a second. */
@@ -110,11 +120,14 @@ function NewRequestDialog({
   const offered = (goals.data ?? []).filter((g) => g.status !== "rejected");
   const myName = me?.email ? displayName(me.email) : "";
   const owner = can("create_request");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [from, setFrom] = useState<Found | undefined>(given); // MOCK-HOOK
+  const found = useQuery(`mk-found|${pickFound}`, () => (pickFound ? unwrap(api.GET("/v1/request-candidates")) : Promise.resolve([] as Found[]))); // MOCK-HOOK
+  const [title, setTitle] = useState(from?.title ?? ""); // MOCK-HOOK: prefilled from a found item
+  const [body, setBody] = useState(from?.body ?? ""); // MOCK-HOOK
   const [goalIds, setGoalIds] = useState<string[]>([]);
-  const [requester, setRequester] = useState(myName);
-  const [channel, setChannel] = useState<Request["channel"]>("in_app");
+  const [requester, setRequester] = useState(from ? from.requester_name ?? "" : myName); // MOCK-HOOK
+  const [channel, setChannel] = useState<Request["channel"]>(from?.channel ?? "in_app"); // MOCK-HOOK
+  const [kind, setKind] = useState<Kind>("unknown"); // MOCK-HOOK
   // In the app the requester is the signed-in member unless an owner names someone; another
   // channel's requester is whoever asked there.
   const named = owner || channel !== "in_app";
@@ -152,7 +165,9 @@ function NewRequestDialog({
           return;
         }
       }
-      const request = await unwrap(
+      const request = from // MOCK-HOOK: a found item files through its own route, same fields
+        ? await unwrap(api.POST("/v1/request-candidates/{candidate_id}/file", { params: { path: { candidate_id: from.id } }, body: { title: title.trim(), body: body.trim() || null, channel: channel as Found["channel"], requester_name: requester.trim() || null, requester_kind: kind } })) // MOCK-HOOK
+        : await unwrap(
         api.POST("/v1/requests", {
           body: {
             title: title.trim(),
@@ -160,7 +175,7 @@ function NewRequestDialog({
             channel,
             goal_ids: goalIds,
             requester_name: named ? requester.trim() || null : null,
-            requester_kind: "unknown",
+            requester_kind: kind, // MOCK-HOOK
           },
         }),
       );
@@ -195,6 +210,15 @@ function NewRequestDialog({
       }
     >
       <div className="flex flex-col gap-3">
+        {pickFound && (found.data?.length ?? 0) > 0 && ( // MOCK-HOOK: qd3=b, start from a found item
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text2"> {/* MOCK-HOOK */}
+            Start from {/* MOCK-HOOK */}
+            <select data-testid="start-from" className={INPUT} value={from?.id ?? ""} onChange={(e) => { const f = found.data?.find((x) => x.id === e.target.value); setFrom(f); setTitle(f?.title ?? ""); setBody(f?.body ?? ""); setChannel(f?.channel ?? "in_app"); setRequester(f ? f.requester_name ?? "" : myName); }}> {/* MOCK-HOOK */}
+              <option value="">A blank request</option> {/* MOCK-HOOK */}
+              {found.data?.map((f) => <option key={f.id} value={f.id}>Found: {f.title}</option>)} {/* MOCK-HOOK */}
+            </select> {/* MOCK-HOOK */}
+          </label> // MOCK-HOOK
+        )} {/* MOCK-HOOK */}
         <div className="flex flex-col gap-1">
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Title
@@ -281,6 +305,16 @@ function NewRequestDialog({
             </select>
           </label>
         </div>
+        <div className="flex flex-col gap-1"> {/* MOCK-HOOK: Customer or team, on every request form */}
+          <span className="text-sm font-semibold text-text2">Customer or team</span> {/* MOCK-HOOK */}
+          <SegmentedControl label="Customer or team" size="sm" items={KINDS} value={kind} onChange={setKind} /> {/* MOCK-HOOK */}
+        </div> {/* MOCK-HOOK */}
+        {from && ( // MOCK-HOOK: what filing shares, only when filed from a found item
+          <div data-testid="filing-from" className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 p-3"> {/* MOCK-HOOK */}
+            <p className="text-sm font-semibold">Found in {from.source.title ?? "your sources"}. Filing shares this item: everyone who can see Requests reads its title, link and this excerpt.</p> {/* MOCK-HOOK */}
+            {from.source.excerpt && <blockquote className="border-l-2 border-line-strong pl-3 text-sm break-words text-text2">{from.source.excerpt}</blockquote>} {/* MOCK-HOOK */}
+          </div> // MOCK-HOOK
+        )} {/* MOCK-HOOK */}
         {twin && sameTitle(twin.title, title) && (
           <div role="alert" data-testid="new-request-duplicate" className="flex flex-col gap-2 rounded-panel border border-warn bg-warn-bg px-3 py-2.5 text-sm text-text">
             <span>

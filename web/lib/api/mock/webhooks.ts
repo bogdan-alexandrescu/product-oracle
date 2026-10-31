@@ -304,6 +304,16 @@ export function seedWebhooks(ctx: Omit<WebhooksContext, "db">, scenario: string 
       body: { id: event.public_id, type: event.type }, redelivery_of: null, created_at: at(h), host: deploy.host, headers: null,
     });
   }
+  // MOCK-HOOK: a longer, mixed delivery log, so the Delivery log shows realistic volume.
+  const more: [string, DeliveryRow["status"], number | null, number][] = [ // MOCK-HOOK
+    ["approval.version_approved", "succeeded", 200, 1], ["run.checkpoint_waiting", "succeeded", 200, 2], ["webhook.test", "succeeded", 204, 3], ["draft.in_review", "failed", 502, 5], // MOCK-HOOK
+    ["run.awaiting_approval", "succeeded", 200, 7], ["approval.approvals_invalidated", "retrying", 503, 9], ["run.succeeded", "succeeded", 200, 12], ["approval.version_published", "succeeded", 200, 15], ["run.checkpoint_decided", "succeeded", 200, 18], // MOCK-HOOK
+  ]; // MOCK-HOOK
+  for (const [type, status, http, h] of more) { // MOCK-HOOK
+    const event: EventRow = { id: ctx.uuid(), public_id: publicId(), type, occurred_at: at(h), data: {} }; // MOCK-HOOK
+    db.events.push(event); // MOCK-HOOK
+    db.deliveries.push({ id: ctx.uuid(), webhook_id: deploy.id, event: event.id, status, attempts: status === "succeeded" ? 1 : 3, next_at: null, last_at: at(h), http_status: http, duration_ms: 120 + h * 7, error: null, response_excerpt: status === "succeeded" ? "ok" : "Bad Gateway", body: { id: event.public_id, type }, redelivery_of: null, created_at: at(h), host: deploy.host, headers: null }); // MOCK-HOOK
+  } // MOCK-HOOK
   const note = (user_id: string, kind: Notification["kind"], title: string, hookId: string, actor: string, h: number, reason?: string): Notification => ({
     id: ctx.uuid(), user_id, kind, title, document_id: null, version_number: null, section_key: null, comment_id: null, campaign_id: null,
     actor, data: { webhook_id: hookId, href: "/settings/webhooks", ...(reason ? { reason } : {}) }, read_at: null, created_at: at(h),
