@@ -4462,7 +4462,8 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
  * their feature set: saved-addresses (attempt 1: one blocking dependency, one feature with no
  * goal, one with low confidence that is also new, and a commenter's suggestion), saved-addresses-next (attempt
  * 2, for the Changed filter) and address-book (approved in SwarmCloud's console while one
- * blocking row is open, so the approval is held).
+ * blocking row is open, so the approval is held; that row's two reasons to confirm are kept by
+ * one older call).
  */
 export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   // Pick address in one step is new as well as low in confidence: one feature, two calls.
@@ -4501,7 +4502,32 @@ export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     "address-book-export": [],
     "address-sharing": [],
   };
-  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1);
+  // Bulk edit is new and low in confidence as well as blocked: both kept with one call staged
+  // before each reason had its own (field-less, answering both), as an older draft holds it.
+  const held = seedScopeRun(db, ctx, SCOPE_CONSOLE_RUN, "address-book", "2026-10-17T07:00:00Z", SCOPE_CONSOLE_SET, 1, { "bulk-edit": ["new_feature", "low_confidence"] });
+  const approver = (ctx.members ?? []).find((x) => x.email === "approver@example.com");
+  if (approver) {
+    db.drafts![held.cp.id] = {
+      revision: 1,
+      note: null,
+      actions: [
+        {
+          id: ctx.uuid(),
+          item_key: "bulk-edit",
+          kind: "accept",
+          field: null,
+          value: null,
+          answers: ["new_feature", "low_confidence"],
+          note: null,
+          state: "staged",
+          created_by: approver.id,
+          updated_by: approver.id,
+          updated_at: "2026-10-17T07:30:00Z",
+        },
+      ],
+      log: [{ revision: 1, by: displayName(approver.email) }],
+    };
+  }
   held.cp.console = {
     answered_by: "lead@example.com",
     answered_at: "2026-10-17T07:40:00Z",
