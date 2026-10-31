@@ -97,6 +97,22 @@ for (const device of ["desktop", "phone"] as const) {
       await expect(item.getByTestId("suggestion")).toContainText("Oracle", { timeout: 15_000 });
     });
 
+    test("the owner's own change request and Oracle's suggestion on it show in the owner's Feedback", async ({ page }) => {
+      // protects=the case as reported: the owner requests changes on their own page and Oracle's
+      // suggestion answers it there, without a reload; fails_when=the owner's panel lacks the
+      // item or its suggestion until a reload; no_claim=how Oracle writes a suggestion (llm-jobs specs).
+      await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "run-review"]);
+      await login(page);
+      await page.goto(RUN_VERSION);
+      await verdict(page, "metrics", "Request changes", "Say who is alerted first.");
+
+      if (device === "phone") await page.getByTestId("phone-review").click();
+      const panel = page.getByRole("complementary", { name: "Review panel" }).filter({ visible: true });
+      const item = panel.getByTestId("feedback-item").filter({ hasText: "Say who is alerted first." });
+      await expect(item).toHaveCount(1, { timeout: 15_000 });
+      await expect(item.getByTestId("suggestion")).toContainText("Oracle", { timeout: 15_000 });
+    });
+
     test("coming back to the window shows another reviewer's approval, the typed note kept", async ({ page, context }) => {
       // protects=a refresh on window focus (no run review, so no interval); fails_when=the owner's
       // page keeps the section Not reviewed after focus, or the note being typed is reset;
