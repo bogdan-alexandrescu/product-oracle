@@ -255,7 +255,9 @@ class MeetingPrd:
     """meet-chat-right-prd: what a meeting's chat reads: the meeting's PRD (``number``: its
     version under review, else its newest) and its items: on its roadmap, or, while that
     version is not approved, on the version's draft roadmap (a run's items-only roadmap,
-    that version's own when it is ready); ``text``: that version's markdown."""
+    that version's own when it is ready); ``text``: that version's markdown, or the PRD as
+    the meeting's one-pager shows the asker (qa5-chat-working-draft: its working draft's
+    edited sections, for whoever sees that draft)."""
 
     document: Document
     number: int | None
@@ -281,9 +283,47 @@ def _draft_entry(read: service.Read, prd: Document, row: RoadmapItem) -> service
     )  # fmt: skip
 
 
-async def meeting_prd(db: AsyncSession, read: service.Read, rules: Any) -> MeetingPrd | None:
+async def shown_text(
+    db: AsyncSession, principal: Any, prd: Document, saved: DocumentVersion | None
+) -> str:
+    """qa5-chat-working-draft: the PRD's text as the meeting's one-pager shows it to
+    ``principal`` (oracle.simple.one_pager.read): with an open working draft they see, the
+    draft's base with its edited sections (what submitting it imports), so an answer never
+    contradicts the screen; else ``saved``'s, the version under review."""
+    from oracle.docs.models import Section
+    from oracle.simple import one_pager
+
+    text = saved.markdown if saved is not None else ""
+    d = await one_pager._open_draft(db, prd)
+    patched = ((d.overlay or {}).get("sections") or {}) if d is not None else {}
+    if not patched or d is None or d.base_version_id is None:
+        return text
+    if not one_pager.sees_draft(principal, d, await one_pager.who(db, prd)):
+        return text
+    base = await db.get(DocumentVersion, d.base_version_id)
+    if base is None:
+        return text
+    secs = list(
+        await db.scalars(
+            select(Section).where(Section.version_id == base.id).order_by(Section.ordinal)
+        )
+    )
+    try:
+        return one_pager.patched_markdown(base, secs, patched)
+    except ChangeError:
+        # A section the patch cannot find in the markdown: its sections as the one-pager
+        # lists them, each with its edited body.
+        return "\n\n".join(
+            f"## {x.heading}\n\n{patched.get(x.section_key, x.body_md).strip()}" for x in secs
+        )
+
+
+async def meeting_prd(
+    db: AsyncSession, read: service.Read, rules: Any, principal: Any = None
+) -> MeetingPrd | None:
     """The meeting's PRD and its items, added to ``read`` when they are on a draft roadmap
-    (None: no meeting, or a meeting module that names no PRD)."""
+    (None: no meeting, or a meeting module that names no PRD); ``principal`` given, its
+    text is the PRD as the meeting shows them (:func:`shown_text`)."""
     from oracle.review.models import DocumentReviewPolicy
     from oracle.roadmap import draft_items
 
@@ -300,7 +340,11 @@ async def meeting_prd(db: AsyncSession, read: service.Read, rules: Any) -> Meeti
     # The version under review is the newest; its number is named even when its own draft
     # roadmap is not ready yet and an older version's draft gives the items.
     number = newest.number if newest is not None else None
-    text = newest.markdown[:PRD_TEXT] if newest is not None else ""
+    text = (
+        await shown_text(db, principal, prd, newest)
+        if principal is not None
+        else (newest.markdown if newest is not None else "")
+    )[:PRD_TEXT]
     approved = newest is not None and newest.approved_at is not None
     on_roadmap = [e for e in read.entries if e.row.prd_document_id == prd.id
                   and e.row.draft_roadmap_id is None]  # fmt: skip
@@ -361,7 +405,7 @@ class Ctx:
         self.page_document = await chat_actions.page_document(self.db, self.page)
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
-        self.prd = await meeting_prd(self.db, self.read, self.meeting)
+        self.prd = await meeting_prd(self.db, self.read, self.meeting, self.principal)
         if self.prd is not None:
             # The plan's milestones of the meeting's PRD only (never another PRD's M1).
             tracks = set(await self.db.scalars(
