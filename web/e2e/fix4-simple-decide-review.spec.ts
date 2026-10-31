@@ -56,7 +56,7 @@ for (const phone of [false, true]) {
       await expect(box.getByTestId("meeting-comment")).toContainText("We should wait for legal first");
       await endIt(page);
       const comments = page.getByTestId("minutes-comments");
-      await expect(comments).toContainText("We should wait for legal first · Admin");
+      await expect(comments).toContainText("We should wait for legal first · Avery Stone");
       // Still a comment, not a decision.
       await expect(page.getByRole("list", { name: "Decisions taken" })).toHaveCount(0);
     });
@@ -78,7 +78,7 @@ test.describe("desktop", () => {
     const row = page.getByTestId("meeting-group").first().getByTestId("decision-row").filter({ hasText: "Sign-in choice" });
     await expect(row.locator(".simple-code")).toHaveText("Q8");
     await expect(row.locator("b")).toHaveText("Sign-in choice: Google at launch");
-    await expect(row.locator(".simple-meta")).toHaveText(/^Yes, at launch · Admin · /);
+    await expect(row.locator(".simple-meta")).toHaveText(/^Yes, at launch · Avery Stone · /);
   });
 
   test("the meeting chat says what it did not understand and reads each line", async ({ page }) => {

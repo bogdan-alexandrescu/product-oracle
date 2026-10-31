@@ -8,7 +8,7 @@ import { login, section, signOut } from "./helpers";
  * "pricing" scenario is the default company (Company zone America/Los_Angeles) plus a second
  * owner, Riley Park (riley@example.com), made-up deals ("Account 3" … "Account 14"), and two
  * pricing memos: "Team plan pricing", approved and not decided, and "Starter plan price",
- * decided as a pricing decision. The pricing owner is the earliest owner, Admin.
+ * decided as a pricing decision. The pricing owner is the earliest owner, Avery Stone.
  * Each test states its card: protects / fails_when / no_claim.
  */
 
@@ -119,7 +119,7 @@ test("10b: Import CSV on Win and loss: the dry run lists 3 rows to create and 1 
 });
 
 test("10c: the pricing owner clicks Decide on the approved memo, decides it in Company › Decisions and sees it Decided", async ({ page }) => {
-  // protects=the pricing owner (Admin, the earliest owner) opens the approved memo, clicks
+  // protects=the pricing owner (Avery Stone, the earliest owner) opens the approved memo, clicks
   // Decide, lands on its proposed decision in Company › Decisions with the memo's two
   // options, picks one, writes the reason and the expected outcome, sees it decided, and the
   // memo then reads Decided with its D-number and chosen option on Pricing; fails_when=Decide
@@ -150,13 +150,13 @@ test("10c: the pricing owner clicks Decide on the approved memo, decides it in C
   await expect(row.getByTestId("memo-decision")).toContainText("Flat price per team");
 });
 
-test("10d: another owner sees Waiting for Admin to decide, and no Decide button", async ({ page }) => {
+test("10d: another owner sees Waiting for Avery Stone to decide, and no Decide button", async ({ page }) => {
   // protects=an owner who is not the pricing owner opens the approved memo and reads "Waiting
-  // for Admin to decide" in its header, with no Decide button; fails_when=Decide shows for
+  // for Avery Stone to decide" in its header, with no Decide button; fails_when=Decide shows for
   // them or the line names nobody; no_claim=the API's 403 for them (tests/test_pricing_memo.py).
   await login(page, SECOND_OWNER);
   await openMemo(page, "Team plan pricing");
-  await expect(page.getByTestId("pricing-waiting")).toHaveText("Waiting for Admin to decide");
+  await expect(page.getByTestId("pricing-waiting")).toHaveText("Waiting for Avery Stone to decide");
   await expect(page.getByRole("button", { name: "Decide" })).toHaveCount(0);
 });
 
@@ -197,11 +197,11 @@ test("10f: an owner sets the Pricing owner on Settings › Company; after a relo
   // protects=an owner picks Riley Park as the pricing owner on Settings › Company, saves,
   // reloads and sees Riley Park chosen; the approved memo then waits for Riley Park;
   // fails_when=the field is missing, the choice is not saved, or the memo header still names
-  // Admin; no_claim=the API's validation of a non-owner (tests/test_pricing_memo.py).
+  // Avery Stone; no_claim=the API's validation of a non-owner (tests/test_pricing_memo.py).
   await login(page);
   await page.goto("/settings/company");
   const field = page.getByTestId("pricing-owner-panel").getByRole("combobox", { name: "Decides prices" });
-  await expect(field.locator("option:checked")).toHaveText("Admin");
+  await expect(field.locator("option:checked")).toHaveText("Avery Stone");
   await field.selectOption({ label: "Riley Park" });
   await page.getByTestId("pricing-owner-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("pricing-owner-panel").getByRole("status")).toHaveText("Saved");

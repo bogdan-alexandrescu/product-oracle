@@ -123,7 +123,7 @@ for (const scheme of ["light", "dark"] as const) {
       // With others in it, the box is there to tick, enabled.
       await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
       await form.getByRole("searchbox", { name: "Find a person" }).fill("approver");
-      await form.getByRole("option", { name: /Approver/ }).click();
+      await form.getByRole("option", { name: /Priya Raman/ }).click();
       await expect(form.getByRole("checkbox", { name: "Ask Oracle" })).toBeEnabled();
     });
 

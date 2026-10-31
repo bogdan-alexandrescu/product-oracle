@@ -41,7 +41,7 @@ test("an invited viewer reads the discussion and the row moves to Done", async (
   await inboxAs(page, VIEWER);
   const row = group(page, "new").locator("tr[data-row]").filter({ hasText: TITLE });
   await expect(row).toContainText("Invited");
-  await expect(row).toContainText("by Commenter");
+  await expect(row).toContainText("by Theo Brandt");
   await expect(row.getByRole("button", { name: "Join" })).toHaveCount(0);
   const before = Number(await badge(page).innerText());
   await row.getByRole("link", { name: "Read" }).click();
@@ -79,7 +79,7 @@ test("an approver reviews the changes proposed in a discussion", async ({ page }
 test("a mention shows its excerpt in quotes", async ({ page }) => {
   await inboxAs(page, APPROVER);
   const row = group(page, "new").locator("tr[data-row]").filter({ hasText: "Mentioned you" });
-  await expect(row).toContainText("“Approver, can guests keep a cart for 30 days?”");
+  await expect(row).toContainText("“Priya, can guests keep a cart for 30 days?”");
   await expect(row).toContainText(TITLE);
   await expect(row.getByRole("link", { name: "Open" })).toBeVisible();
 });

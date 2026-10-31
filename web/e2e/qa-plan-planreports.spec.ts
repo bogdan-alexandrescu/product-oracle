@@ -137,7 +137,7 @@ test("qa-plan-26, qa-plan-27: a withdrawn basis says who withdrew it, its reason
   await expect(dialog).toBeHidden();
   await filter.getByRole("button", { name: /^Withdrawn/ }).click();
   await expect(filter.getByRole("button", { name: /^Withdrawn/ })).toHaveText(/^Withdrawn\s*1$/);
-  await expect(row("ENG-412")).toContainText(/Withdrawn by Admin, [A-Z][a-z]{2} \d{1,2}/);
+  await expect(row("ENG-412")).toContainText(/Withdrawn by Avery Stone, [A-Z][a-z]{2} \d{1,2}/);
   await expect(row("ENG-412")).not.toContainText("Verified by");
   await expect(row("ENG-412")).not.toContainText("re-estimated");
   const reason = page.getByTestId("dates-table").locator('[data-reason-for="ENG-412"]').filter({ visible: true });
@@ -159,7 +159,7 @@ test("qa-plan-26: on a phone the withdrawal reason has its own line too", async 
   await dialog.getByLabel("Reason").fill("The team re-estimated");
   await dialog.getByRole("button", { name: "Withdraw date basis" }).click();
   await page.getByTestId("dates-filter").getByRole("button", { name: /^Withdrawn/ }).click();
-  await expect(row).toContainText("Withdrawn by Admin");
+  await expect(row).toContainText("Withdrawn by Avery Stone");
   const reason = page.getByTestId("dates-table").locator('[data-reason-for="ENG-412"]').filter({ visible: true });
   await expect(reason).toContainText("The team re-estimated");
   expect((await reason.boundingBox())!.y).toBeGreaterThanOrEqual((await row.boundingBox())!.y + (await row.boundingBox())!.height - 1);

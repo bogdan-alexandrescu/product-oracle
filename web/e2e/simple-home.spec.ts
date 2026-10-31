@@ -169,7 +169,7 @@ for (const phone of [false, true]) {
         await expect(proposals.getByTestId("home-proposal")).toHaveCount(3);
         await expect(page.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
         const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
-        await expect(card(page, "plan").getByTestId("home-broken-deciders")).toContainText(/Admin\b.*decides? the fixes you propose here/);
+        await expect(card(page, "plan").getByTestId("home-broken-deciders")).toContainText(/Avery Stone\b.*decides? the fixes you propose here/);
         await broken.getByRole("button", { name: "Propose: move the dependents" }).first().click();
         await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
         // A long list: the top three, the rest behind "more".

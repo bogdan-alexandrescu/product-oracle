@@ -8,7 +8,7 @@ import { expect, test, type Page } from "./test";
  * (1366x820) and a phone (390x844), light and dark, against the mock (invented data).
  *
  * Card walk-prd-owner-span (P4): protects = an approved PRD's page header names the document's
- * owner (Guided setup was brought in by the Approver: "Owner Approver", never the company's
+ * owner (Guided setup was brought in by Priya Raman: "Owner Priya Raman", never the company's
  * first owner) and its span from its dated milestones (Oct 5, 2026 – Jan 15, 2027, the last
  * milestone), never a period out to an estimated or unmilestoned end; fails_when = the header
  * names the company owner, reads "No owner yet", or runs to Mar 12, 2027; no_claim = how the
@@ -43,8 +43,8 @@ for (const phone of [false, true]) {
         await login(page, "viewer@example.com");
         await page.goto("/simple/prds/guided-setup");
         const meta = page.getByTestId("one-pager-meta");
-        await expect(meta).toContainText("Owner Approver");
-        await expect(meta).not.toContainText("Owner Admin");
+        await expect(meta).toContainText("Owner Priya Raman");
+        await expect(meta).not.toContainText("Owner Avery Stone");
         await expect(meta).not.toContainText("No owner yet");
         await expect(meta).toContainText("Oct 5, 2026 → Jan 15, 2027");
         await expect(meta).not.toContainText("Mar 12, 2027");

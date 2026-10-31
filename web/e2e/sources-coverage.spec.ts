@@ -16,8 +16,8 @@ const SEEDED_NAMES = [
   "Customer calls",
   "Product docs",
   "Drive folders",
-  "Approver drive",
-  "Viewer repo",
+  "Priya's drive",
+  "Lena's repo",
 ];
 
 function table(page: Page): Locator {

@@ -150,10 +150,10 @@ test("members: an invite with a Name shows it on its row", async ({ page }) => {
 test("members: an invite row's tooltip names who invited them and the resends", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members");
-  await expect(inviteRow(page, "new.hire@example.com").getByTestId("invite-who")).toHaveAttribute("title", "Invited by Admin on Oct 15, 2026");
+  await expect(inviteRow(page, "new.hire@example.com").getByTestId("invite-who")).toHaveAttribute("title", "Invited by Avery Stone on Oct 15, 2026");
   const old = inviteRow(page, "old.invite@example.com");
   await old.getByRole("button", { name: "Resend invite for old.invite@example.com" }).click();
-  await expect(old.getByTestId("invite-who")).toHaveAttribute("title", "Invited by Admin on Sep 20, 2026 · resent once");
+  await expect(old.getByTestId("invite-who")).toHaveAttribute("title", "Invited by Avery Stone on Sep 20, 2026 · resent once");
 });
 
 test("members: Holds and See them open the approver's approvals", async ({ page }) => {

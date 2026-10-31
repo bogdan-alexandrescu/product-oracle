@@ -162,7 +162,7 @@ test("qa-settings-10: Remove keeps its label while the preview loads", async ({ 
 test("qa-settings-5 / qa-settings-6 / qa-settings-7: one name rule, one read-only role chip, Engineering lead apart", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members");
-  await expect(memberRow(page, "viewer@example.com").getByTestId("member-name")).toHaveText("Viewer");
+  await expect(memberRow(page, "viewer@example.com").getByTestId("member-name")).toHaveText("Lena Ortiz");
   await expect(memberRow(page, "viewer@example.com").getByTestId("member-email")).toHaveText("viewer@example.com");
 
   // The only owner's own role and the removed member's: the same chip, no greyed select.
@@ -182,7 +182,7 @@ test("qa-settings-5 (viewer) / qa-settings-8: the viewer reads the same name; a 
   await login(page, "viewer@example.com");
   await page.goto("/settings/members");
   const people = page.getByTestId("people-readonly");
-  await expect(people.getByTestId("person-row").filter({ hasText: "viewer@example.com" })).toContainText("Viewer");
+  await expect(people.getByTestId("person-row").filter({ hasText: "viewer@example.com" })).toContainText("Lena Ortiz");
   await people.getByLabel("Find a person").fill("zzzz");
   await expect(people.getByTestId("people-no-match")).toContainText("Nobody matches “zzzz”");
   await people.getByRole("button", { name: "Clear search" }).click();

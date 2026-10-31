@@ -59,12 +59,12 @@ for (const phone of [false, true]) {
         const s = sheet(page);
         await expect(s.getByRole("region", { name: "What is reviewed" })).toContainText("The PRD, its roadmap slice, its open decisions");
         await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
-        await expect(s.getByRole("checkbox", { name: "Admin" })).toBeChecked();
-        await expect(s.getByRole("checkbox", { name: "Approver" })).toBeChecked();
-        await expect(s.getByRole("checkbox", { name: "Commenter" })).not.toBeChecked();
-        await s.getByRole("checkbox", { name: "Commenter" }).check();
+        await expect(s.getByRole("checkbox", { name: "Avery Stone" })).toBeChecked();
+        await expect(s.getByRole("checkbox", { name: "Priya Raman" })).toBeChecked();
+        await expect(s.getByRole("checkbox", { name: "Theo Brandt" })).not.toBeChecked();
+        await s.getByRole("checkbox", { name: "Theo Brandt" }).check();
         await s.getByRole("radio", { name: "Presenter plus one or two people" }).check();
-        await s.getByLabel("Who else changes things").getByRole("checkbox", { name: "Commenter" }).check();
+        await s.getByLabel("Who else changes things").getByRole("checkbox", { name: "Theo Brandt" }).check();
         await expect(s.getByLabel("Length")).toHaveValue("60");
         await s.getByLabel("Length").selectOption("45");
         await s.getByRole("button", { name: "Start", exact: true }).click();
@@ -73,7 +73,7 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("timer", { name: "Meeting clock" })).toContainText("/ 45:00");
         // qa-simple-decide-29: on a phone the attendees and the mode fold into one row.
         if (phone) await page.getByTestId("meeting-people-toggle").click();
-        await expect(page.getByLabel("Attendees")).toContainText("Commenter");
+        await expect(page.getByLabel("Attendees")).toContainText("Theo Brandt");
         await expect(page.getByTestId("change-mode").getByRole("combobox")).toHaveValue("named");
         await page.getByTestId("meeting-screen").getByRole("link", { name: "Meetings" }).click();
         await expect(page.getByRole("region", { name: "Live" })).toContainText("Review: Guided setup");
@@ -84,14 +84,14 @@ for (const phone of [false, true]) {
         await page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" }).first().click();
         await expect(sheet(page).getByTestId("start-occurrence")).toContainText(/Weekly goals check-in|Monthly roadmap refresh|Quarterly goals review/);
         // The ritual's attendees (the owners and approvers) are checked.
-        await expect(sheet(page).getByRole("checkbox", { name: "Approver" })).toBeChecked();
+        await expect(sheet(page).getByRole("checkbox", { name: "Priya Raman" })).toBeChecked();
         await sheet(page).getByRole("button", { name: "Close" }).click();
         await page.goto("/simple/prds/guided-setup");
         await page.getByRole("button", { name: "Start review" }).click();
         await expect(sheet(page).getByRole("region", { name: "What is reviewed" })).toContainText("Guided setup");
         await expect(sheet(page).getByLabel("PRD")).toHaveCount(0);
         // qa-simple-decide-35: a review needs one attendee besides the presenter.
-        await sheet(page).getByRole("checkbox", { name: "Commenter" }).check();
+        await sheet(page).getByRole("checkbox", { name: "Theo Brandt" }).check();
         await sheet(page).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.goto("/simple/roadmap");
@@ -99,7 +99,7 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Start review" }).click();
         await expect(sheet(page).getByLabel("PRD")).toBeVisible();
         await sheet(page).getByLabel("PRD").selectOption({ label: "Usage alerts PRD" });
-        await sheet(page).getByRole("checkbox", { name: "Commenter" }).check();
+        await sheet(page).getByRole("checkbox", { name: "Theo Brandt" }).check();
         await sheet(page).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Usage alerts" })).toBeVisible();
       });
@@ -124,9 +124,9 @@ for (const phone of [false, true]) {
         await page.goto("/simple/meetings");
         await page.getByRole("region", { name: "Live" }).getByRole("link", { name: "Join" }).first().click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await expect(page.getByLabel("Attendees")).not.toContainText("Commenter");
+        await expect(page.getByLabel("Attendees")).not.toContainText("Theo Brandt");
         await page.getByRole("button", { name: "Join" }).click();
-        await expect(page.getByLabel("Attendees")).toContainText("Commenter");
+        await expect(page.getByLabel("Attendees")).toContainText("Theo Brandt");
         await expect(page.getByRole("button", { name: "Join" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: /^Approve and publish one-pager edits/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);

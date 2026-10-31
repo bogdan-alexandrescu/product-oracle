@@ -168,17 +168,17 @@ test.describe("desktop", () => {
     await moveUp(page, "F-1");
     const log = page.getByTestId("change-log");
     await expect(log.getByRole("listitem")).toHaveCount(1);
-    await expect(log).toContainText("Approver");
+    await expect(log).toContainText("Priya Raman");
     await expect(log).not.toContainText(APPROVER);
-    await expect(log.getByTitle(APPROVER)).toHaveText("Approver");
+    await expect(log.getByTitle(APPROVER)).toHaveText("Priya Raman");
 
     await rowOf(page, "F-1").getByTestId("feature-name").click();
     const change = page.getByTestId("your-change");
-    await expect(change).toContainText("Approver");
+    await expect(change).toContainText("Priya Raman");
     await expect(change).not.toContainText(APPROVER);
-    await expect(change.getByTitle(APPROVER)).toHaveText("Approver");
+    await expect(change.getByTitle(APPROVER)).toHaveText("Priya Raman");
     await expect(rowOf(page, "F-1").getByTestId("override-chip")).toHaveText(
-      "Moved by Approver",
+      "Moved by Priya Raman",
     );
   });
 });

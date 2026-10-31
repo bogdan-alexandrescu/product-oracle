@@ -28,7 +28,7 @@
  * askers (one a member), a stop choice on its feature and a theme with a suggested problem.
  */
 import type { Schemas } from "@/lib/api/client";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 import { mockUuid } from "./ids";
 import { SPENT } from "./llm-jobs";
 import { readableRefusal } from "./refusal";

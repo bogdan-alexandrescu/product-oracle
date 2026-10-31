@@ -167,7 +167,7 @@ test.describe("phone", () => {
     await expect(page.getByText("Moved Alert history export (AE) to rank 1")).toBeVisible();
     expect((await codes(page))[0]).toBe("alert-export");
     await expect(row(page, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
-    await expect(row(page, "alert-export").getByTestId("prio-override")).toContainText("Moved by Admin: “Two large customers asked for it”");
+    await expect(row(page, "alert-export").getByTestId("prio-override")).toContainText("Moved by Avery Stone: “Two large customers asked for it”");
     await page.getByRole("button", { name: "Undo" }).click();
     await expect.poll(() => codes(page)).toEqual(ORACLE);
   });

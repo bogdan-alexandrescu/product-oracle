@@ -15,6 +15,7 @@ import type { ChangeOut, ChangeStatus, ChangeVerb } from "@/lib/api/discussion-c
 
 import { companyDayInWords } from "./connections";
 import { IN_CHAT, IN_CHAT_CODE, type LiveReply } from "./live";
+import { mockName } from "./people";
 import { readableRefusal } from "./refusal";
 
 type Role = Schemas["MemberOut"]["role"];
@@ -529,10 +530,9 @@ function addProposals(rows: ChangeRow[], made: ChangeRow[]) {
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 const atLeast = (role: Role, min: Role) => RANK[role] >= RANK[min];
 
-/** "first.last@example.com" -> "First Last" (oracle.members.names). */
+/** A member's name (oracle.members.names): a seeded member's own, else "first.last@example.com" -> "First Last". */
 export function displayName(email: string): string {
-  const words = email.split("@")[0].split(/[._+-]+/).filter(Boolean);
-  return words.length ? words.map((w) => w[0].toUpperCase() + w.slice(1)).join(" ") : email;
+  return mockName(email);
 }
 
 const json = (status: number, body: unknown) =>
@@ -645,9 +645,9 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
   ] as const)
     db.participants.push({ discussion_id: id, user_id, added_via, left_at: null, last_read_at: null, created_at: at(0) });
   const lines: [string, string, string[]][] = [
-    [commenter, "Viewer, guests lose their cart today. Should we keep it?", [viewer]],
+    [commenter, "Lena, guests lose their cart today. Should we keep it?", [viewer]],
     [approver, "Only with a clear expiry.", []],
-    [commenter, "Approver, can guests keep a cart for 30 days?", [approver]],
+    [commenter, "Priya, can guests keep a cart for 30 days?", [approver]],
   ];
   const ids = lines.map(([author, body, mentions], i) => {
     const mid = ctx.uuid();
@@ -1893,7 +1893,7 @@ export function seedDiscussionChangeKinds(
     },
   );
   const titles: Record<string, string> = { [features.moved.id]: features.moved.title, [features.above.id]: features.above.title };
-  const names: LabelNames = { entity: (x) => titles[x] ?? null, member: (x) => (x === approver ? "Approver" : null) };
+  const names: LabelNames = { entity: (x) => titles[x] ?? null, member: (x) => (x === approver ? "Priya Raman" : null) };
   const row = (kind: string, payload: Record<string, unknown>, rationale: string): ChangeRow => ({
     id: ctx.uuid(),
     discussion_id: id,

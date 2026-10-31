@@ -10,7 +10,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { addDays, calendarDay, dayIn } from "@/lib/dates";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 
 type MetricOut = Schemas["MetricOut"];
 type VarianceOut = Schemas["VarianceOut"];

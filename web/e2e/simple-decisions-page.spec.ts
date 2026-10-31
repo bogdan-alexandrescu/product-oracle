@@ -35,9 +35,9 @@ for (const phone of [false, true]) {
         // qa-simple-decide-6: a prose summary; qa-simple-decide-1: the comment is no decision.
         await expect(past).toContainText("1 decision taken.");
         await expect(past).not.toContainText("Comment:");
-        await expect(past).toContainText("Attendees: Admin, Approver, Commenter");
+        await expect(past).toContainText("Attendees: Avery Stone, Priya Raman, Theo Brandt");
         await expect(past).toContainText("D-3: Should muted teams still get the weekly digest?");
-        await expect(past).toContainText("Draft the quiet hours copy · Commenter · by");
+        await expect(past).toContainText("Draft the quiet hours copy · Theo Brandt · by");
         await expect(past).toContainText("Usage alerts: the working draft is not approved yet");
         const rows = past.getByTestId("decision-row");
         await expect(rows).toHaveCount(1);
@@ -47,7 +47,7 @@ for (const phone of [false, true]) {
         // qa-simple-decide-20: D-3 is listed once, beside its meeting, not here as well.
         await expect(outside.getByTestId("decision-row")).toHaveCount(3);
         await expect(outside.getByTestId("decision-row").first()).toContainText("Q1 Data retention period");
-        await expect(outside.getByTestId("decision-row").first()).toContainText("Keep 90 days · Admin");
+        await expect(outside.getByTestId("decision-row").first()).toContainText("Keep 90 days · Avery Stone");
         await expect(outside).not.toContainText("D-3");
         await expect(outside).toContainText("D-1 Start guided setup with the checklist");
 

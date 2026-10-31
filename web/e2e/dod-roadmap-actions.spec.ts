@@ -392,6 +392,6 @@ test.describe("phone, proposals", () => {
     await c.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: tx, clientY: ty });
     await expect(toast(page, /^Moved 'Alert history export' to Now proposed: it waits for .+ in Needs a decision$/)).toBeVisible();
     await expect(page.locator('[data-horizon-column="next"]').locator('[data-item="alert-export"]')).toBeVisible();
-    await expect(c.getByTestId("board-pending")).toContainText("Proposed by Commenter: move to Now");
+    await expect(c.getByTestId("board-pending")).toContainText("Proposed by Theo Brandt: move to Now");
   });
 });

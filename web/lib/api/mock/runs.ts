@@ -5,7 +5,7 @@
  * estimate, as the API's FakeRuntime does.
  */
 import type { Schemas } from "@/lib/api/client";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { companyDayInWords, companyDayIso, companyStamp } from "./connections";

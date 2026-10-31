@@ -26,7 +26,7 @@ test("qa4-docs-share-1: Escape in the reviewer picker closes the picker only; th
   const sheet = await openSettings(page);
   await sheet.getByRole("button", { name: "Choose the decider" }).click();
   await sheet.getByRole("option", { name: /approver@example\.com/ }).click();
-  await expect(sheet.getByTestId("decider")).toContainText("Approver");
+  await expect(sheet.getByTestId("decider")).toContainText("Priya Raman");
   await sheet.getByRole("checkbox", { name: "2. Problem" }).check();
 
   const add = sheet.getByRole("button", { name: "Add a mandatory reviewer" });
@@ -37,7 +37,7 @@ test("qa4-docs-share-1: Escape in the reviewer picker closes the picker only; th
   await expect(sheet.getByTestId("person-picker")).toHaveCount(0);
   await expect(sheet).toBeVisible();
   await expect(add).toBeFocused();
-  await expect(sheet.getByTestId("decider")).toContainText("Approver");
+  await expect(sheet.getByTestId("decider")).toContainText("Priya Raman");
   await expect(sheet.getByRole("checkbox", { name: "2. Problem" })).toBeChecked();
 
   // A second Escape, with no picker open, closes the sheet as before.

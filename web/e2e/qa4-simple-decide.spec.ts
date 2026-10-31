@@ -38,7 +38,7 @@ async function meetings(page: Page) {
   await expect(page.getByRole("region", { name: "Upcoming" })).toBeVisible();
 }
 
-async function startReview(page: Page, also: string[] = ["Commenter"]) {
+async function startReview(page: Page, also: string[] = ["Theo Brandt"]) {
   await meetings(page);
   await tap(page.getByRole("button", { name: "Start review" }).first());
   const s = sheet(page);
@@ -107,7 +107,7 @@ for (const phone of [false, true]) {
         await box.getByRole("textbox", { name: "Comment" }).fill("We should wait for legal first");
         await tap(box.getByRole("button", { name: "Add comment" }));
         await expect(box.getByTestId("meeting-comment")).toContainText("We should wait for legal first");
-        await expect(box.getByTestId("meeting-comment")).toContainText(/Admin · \w{3} \w{3} \d+, \d+:\d{2} [AP]M/);
+        await expect(box.getByTestId("meeting-comment")).toContainText(/Avery Stone · \w{3} \w{3} \d+, \d+:\d{2} [AP]M/);
         await expect(page.getByRole("region", { name: "Decisions in this meeting" })).not.toContainText("Comment:");
         // qa-simple-decide-21: the chat page link in the accent colour.
         const link = page.getByTestId("meeting-chat-page-link");
@@ -202,9 +202,9 @@ test.describe("desktop", () => {
     await tap(page.getByRole("button", { name: "Start review" }).first());
     const s = sheet(page);
     await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
-    await expect(s.getByRole("checkbox", { name: "Approver" })).toBeChecked();
-    await s.getByRole("checkbox", { name: "Approver" }).uncheck();
-    await expect(s.getByRole("checkbox", { name: "Approver" })).not.toBeChecked();
+    await expect(s.getByRole("checkbox", { name: "Priya Raman" })).toBeChecked();
+    await s.getByRole("checkbox", { name: "Priya Raman" }).uncheck();
+    await expect(s.getByRole("checkbox", { name: "Priya Raman" })).not.toBeChecked();
     await s.getByRole("radio", { name: "Presenter plus one or two people" }).check();
     await expect(s.getByTestId("start-named-empty")).toHaveText("Tick attendees above to pick them here.");
   });
@@ -215,13 +215,13 @@ test.describe("desktop", () => {
     const others = page.getByTestId("questions-others");
     await expect(others).toBeVisible();
     // qa-simple-decide-14
-    const q7 = others.getByTestId("question-row").filter({ hasText: "Approver decides" }).first();
+    const q7 = others.getByTestId("question-row").filter({ hasText: "Priya Raman decides" }).first();
     await expect(q7.getByRole("button", { name: "Decide as recommended" })).toHaveCount(0);
-    await expect(q7.getByRole("button", { name: "Decide for Approver" })).not.toHaveClass(/simple-button-primary/);
+    await expect(q7.getByRole("button", { name: "Decide for Priya Raman" })).not.toHaveClass(/simple-button-primary/);
   });
 
   test("a viewer in a meeting: the chat and the notes hint say what a viewer can do", async ({ page }) => {
-    await startReview(page, ["Commenter", "Viewer"]);
+    await startReview(page, ["Theo Brandt", "Lena Ortiz"]);
     const at = new URL(page.url()).pathname;
     await page.goto("/simple/meetings");
     await signOut(page);

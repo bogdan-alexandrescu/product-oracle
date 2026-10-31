@@ -172,7 +172,7 @@ test("only the designated decider approves or sends back the run review; others 
   await login(page);
   await page.goto(VERSION);
   await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 0 of 3 sections reviewed");
-  await expect(bar(page)).toContainText("Approver decides (designated decider)");
+  await expect(bar(page)).toContainText("Priya Raman decides (designated decider)");
   await expect(bar(page).getByRole("button")).toHaveCount(0);
 
   await signOut(page);
@@ -194,7 +194,7 @@ test("with a designated decider, someone else's last section approval leaves the
   await page.goto(VERSION);
   for (const key of KEYS) await approveSection(page, key);
   await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 3 of 3 sections reviewed");
-  await expect(bar(page)).toContainText("Every section is approved · waits for Approver, the designated decider");
+  await expect(bar(page)).toContainText("Every section is approved · waits for Priya Raman, the designated decider");
   await expect(bar(page).getByRole("button")).toHaveCount(0);
 
   await signOut(page);

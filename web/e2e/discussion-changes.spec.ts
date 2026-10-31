@@ -88,7 +88,7 @@ test("a commenter cannot stage, sees why, and suggests the change", async ({ pag
   await expect(stage).toHaveAttribute("title", STAGE_WHY_NOT);
   await expect(row.getByRole("button", { name: "Edit" })).toBeVisible();
   await row.getByRole("button", { name: "Suggest" }).click();
-  await expect(row.getByTestId("change-by")).toHaveText("Suggested by Commenter");
+  await expect(row.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
   await expect(row.getByRole("button", { name: "Suggest" })).toHaveCount(0);
   await expect(header(page)).toHaveText("From this discussion · 2 changes");
 });
@@ -117,7 +117,7 @@ test("an approver edits the horizon and stages it: 1 handled, with a line in the
   await edited.getByRole("button", { name: "Stage" }).click();
   await expect(header(page)).toHaveText("From this discussion · 1 change");
   await expect(card(page).getByTestId("changes-handled").locator("summary")).toHaveText("1 handled");
-  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText("Approver staged: Edit problem: name the plan thresholds the caps read");
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText("Priya Raman staged: Edit problem: name the plan thresholds the caps read");
 });
 
 // protects=criterion 13.4 (private staging): in a private discussion Stage asks for the
@@ -141,7 +141,7 @@ test("in a private discussion, an approver's Stage asks for the reason everyone 
   await form.getByRole("button", { name: "Stage" }).click();
   await expect(header(page)).toHaveText("From this discussion · 1 change");
   await expect(card(page).getByTestId("changes-handled").locator("summary")).toHaveText("1 handled");
-  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Approver staged: ${EDIT}`);
+  await expect(thread(page).getByTestId("discussion-system-line")).toHaveText(`Priya Raman staged: ${EDIT}`);
 });
 
 // protects=criterion 13.5 (viewers read, #370): a viewer sees the changes and no control at
@@ -179,7 +179,7 @@ test("Propose a change offers only the subject's kinds", async ({ page }) => {
   await form.getByRole("textbox", { name: "What to change" }).fill("Add a handover step for the first admin.");
   await form.getByRole("button", { name: "Propose" }).click();
   const mine = change(page, "Edit problem: add a handover step for the first admin");
-  await expect(mine.getByTestId("change-by")).toHaveText("Suggested by Commenter");
+  await expect(mine.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
   await expect(header(page)).toHaveText("From this discussion · 1 change");
 });
 
@@ -210,5 +210,5 @@ test("sharing a panel chat brings its change into the discussion's card, suggest
   await expect(row).toHaveAttribute("data-kind", "section_edit");
   await expect(row).toHaveAttribute("data-status", "suggested");
   await expect(row).toContainText("Change problem");
-  await expect(row.getByTestId("change-by")).toHaveText("Suggested by Commenter");
+  await expect(row.getByTestId("change-by")).toHaveText("Suggested by Theo Brandt");
 });

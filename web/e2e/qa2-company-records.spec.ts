@@ -8,7 +8,7 @@ import { login } from "./helpers";
  * Second QA pass on Company › Metrics, Decisions and Market, driven through the UI on the
  * default mock scenario as the owner: no metrics, no alternatives, no pricing memos and no
  * win or loss records yet, and five judgement calls (no checkpoint records). D-5 "Ship usage
- * caps before anomaly detection" waits on Approver. Each test names the finding it protects.
+ * caps before anomaly detection" waits on Priya Raman. Each test names the finding it protects.
  */
 
 const CAPS = "Ship usage caps before anomaly detection";
@@ -139,7 +139,7 @@ test.describe("desktop", () => {
     await login(page);
     await page.goto("/company/decisions?state=all");
     const caps = row(page, CAPS);
-    await expect(caps.locator('[data-col="approver"]')).toHaveText("Approver");
+    await expect(caps.locator('[data-col="approver"]')).toHaveText("Priya Raman");
     const ref = caps.getByText(/^D-\d+$/);
     const title = caps.getByText(CAPS, { exact: true });
     const [refFont, refColor, titleColor] = await Promise.all([

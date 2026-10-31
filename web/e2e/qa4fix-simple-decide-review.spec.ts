@@ -27,7 +27,7 @@ test.describe("desktop", () => {
     await tap(page.getByRole("button", { name: "Start review" }).first());
     const sheet = page.getByRole("dialog", { name: "Start a review" });
     await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-    await sheet.getByRole("checkbox", { name: "Commenter", exact: true }).check();
+    await sheet.getByRole("checkbox", { name: "Theo Brandt", exact: true }).check();
     await tap(sheet.getByRole("button", { name: "Start", exact: true }));
     await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 
@@ -48,9 +48,9 @@ test.describe("desktop", () => {
     const panel = page.getByTestId("hop-panel").filter({ visible: true });
     await expect(panel.getByTestId("ask-chat")).toBeVisible();
 
-    await panel.getByRole("textbox", { name: "Message Oracle" }).fill("make Approver the decider of New plan tiers");
+    await panel.getByRole("textbox", { name: "Message Oracle" }).fill("make Priya Raman the decider of New plan tiers");
     await tap(panel.getByRole("button", { name: "Send" }));
-    const card = panel.getByTestId("chat-card").filter({ hasText: "Make Approver the decider of New plan tiers" }).last();
+    const card = panel.getByTestId("chat-card").filter({ hasText: "Make Priya Raman the decider of New plan tiers" }).last();
     await tap(card.getByRole("button", { name: "Apply", exact: true }));
     await expect(card.getByTestId("chat-card-outcome")).toContainText("Applied by you");
     await expect(card.getByRole("button", { name: "Undo this change" })).toBeVisible();

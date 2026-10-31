@@ -291,7 +291,7 @@ test("evidence: every link names who made it", async ({ page }) => {
   await page.getByRole("grid", { name: "Sections" }).getByRole("row", { name: /Goal trace/ }).click();
   const links = page.getByRole("complementary", { name: "1. Goal trace" }).getByTestId("evidence-link");
   await expect(links).toHaveCount(4);
-  for (const l of await links.all()) await expect(l).toContainText("Admin · ");
+  for (const l of await links.all()) await expect(l).toContainText("Avery Stone · ");
 });
 
 test("evidence: the coverage chips turn phone-sized at 600 px, as the rest of the screen", async ({ page }) => {

@@ -22,7 +22,7 @@ import { expect, test, type Page } from "./test";
  *
  * Card meeting-approve: protects = the presenter marks the required reviewer absent, the
  * owner approves, and the screen reads "Approved in Review: Guided setup · not yet
- * published: Waiting on Approver's approval" (the one-pager's draft bar and the decision
+ * published: Waiting on Priya Raman's approval" (the one-pager's draft bar and the decision
  * say the same); a commenter gets no Approve, no
  * End and no presence or change-mode control; fails_when = the waiting text is missing or
  * someone without `can` gets the controls; no_claim = the Inbox request to the reviewer.
@@ -46,7 +46,7 @@ async function start(page: Page) {
   await page.goto("/simple/prds/guided-setup");
   await page.getByRole("button", { name: "Start review" }).click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
-  await sheet.getByRole("checkbox", { name: "Commenter" }).check();
+  await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 }
@@ -70,7 +70,7 @@ for (const phone of [false, true]) {
         await expect(stage.getByRole("region", { name: "Roadmap slice" })).toContainText("Setup checklist");
         await expect(stage.getByRole("region", { name: "Roadmap slice" })).not.toContainText("Weekly alert digest");
         await steps(page).getByRole("button", { name: "3 Decisions" }).click();
-        await expect(stage.getByRole("region", { name: "Pending proposals" })).toContainText("Commenter proposes: ");
+        await expect(stage.getByRole("region", { name: "Pending proposals" })).toContainText("Theo Brandt proposes: ");
         // prd-decisions A3: the Decisions step opens on "On the agenda"; "Open decisions" shows only when some are open.
         await expect(stage.getByRole("region", { name: "On the agenda" })).toBeVisible();
         await expect(page.getByRole("region", { name: "Chat" })).toBeVisible();
@@ -112,17 +112,17 @@ for (const phone of [false, true]) {
         await start(page);
         // qa-simple-decide-29: on a phone the attendees fold behind one row.
         if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
-        await page.getByRole("button", { name: "Mark Approver away" }).click();
-        await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Approver");
+        await page.getByRole("button", { name: "Mark Priya Raman away" }).click();
+        await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Priya Raman");
         await page.getByRole("button", { name: "Edit “Invite suggestions from the admin's" }).click();
         await page.getByLabel("New wording for").fill("Invite suggestions from a shared calendar");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
         await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
         await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
-        await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toContainText("not yet published: Waiting on Approver's approval");
-        await expect(allDecisions(page)).toContainText("Approved Guided setup (not yet published: Waiting on Approver's approval)");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("Approved in Review: Guided setup · not yet published: Waiting on Approver's approval");
+        await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toContainText("not yet published: Waiting on Priya Raman's approval");
+        await expect(allDecisions(page)).toContainText("Approved Guided setup (not yet published: Waiting on Priya Raman's approval)");
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval");
         const url = page.url();
         await page.goto("/simple/meetings");
         await switchTo(page, "commenter@example.com");
@@ -139,9 +139,9 @@ for (const phone of [false, true]) {
         if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
         const mode = page.getByTestId("change-mode");
         await mode.getByRole("combobox").selectOption("named");
-        await expect(mode.getByRole("button", { name: "Approver changes things" })).toHaveAttribute("aria-pressed", "true");
-        await mode.getByRole("button", { name: "Commenter changes things" }).click();
-        await expect(mode.getByRole("button", { name: "Commenter changes things" })).toHaveAttribute("aria-pressed", "true");
+        await expect(mode.getByRole("button", { name: "Priya Raman changes things" })).toHaveAttribute("aria-pressed", "true");
+        await mode.getByRole("button", { name: "Theo Brandt changes things" }).click();
+        await expect(mode.getByRole("button", { name: "Theo Brandt changes things" })).toHaveAttribute("aria-pressed", "true");
         await mode.getByRole("combobox").selectOption("presenter");
         await expect(mode.getByRole("combobox")).toHaveValue("presenter");
         const url = page.url();

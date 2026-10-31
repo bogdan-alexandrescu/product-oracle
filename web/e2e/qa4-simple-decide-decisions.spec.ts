@@ -5,7 +5,7 @@ import { expect, test, type Page } from "./test";
  * QA pass 4, simple-decide lane: Simple's Decisions page (List, Board, By meeting) on the
  * mock's invented data, driven through the UI at the owner's 1512 px window and on a phone.
  *
- * protects = qa4-simple-decide-6 (the Board says "Decide for Approver" as the List does),
+ * protects = qa4-simple-decide-6 (the Board says "Decide for Priya Raman" as the List does),
  * -8 (the Board's first column says it holds questions missing a decider or a recommendation),
  * -9 (the Board's decided column says "Decided questions" on a phone's tab too), -10 (a row's
  * "Blocks" line in plain words), -21 (a meeting's date line does not repeat the PRD's name its
@@ -26,16 +26,16 @@ for (const phone of [false, true]) {
   test.describe(phone ? "phone" : "desktop", () => {
     test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1512, height: 900 } });
 
-    test("qa4-simple-decide-6: the Board says Decide for Approver on the Approver's question, as the List does", async ({ page }) => {
+    test("qa4-simple-decide-6: the Board says Decide for Priya Raman on the approver's question, as the List does", async ({ page }) => {
       await decisions(page, "list");
-      await expect(row(page, "Q7").getByRole("button", { name: "Decide for Approver" })).toBeVisible();
+      await expect(row(page, "Q7").getByRole("button", { name: "Decide for Priya Raman" })).toBeVisible();
       await page.getByTestId("decisions-view-board").click();
       await expect(page.getByTestId("questions-board")).toBeVisible();
       if (phone) await page.getByTestId("board-tab-recommended").click();
       const q7 = row(page, "Q7");
       await expect(q7).toBeVisible();
-      await expect(q7.getByRole("button", { name: "Decide for Approver" })).toBeVisible();
-      await expect(q7.getByRole("button", { name: "Decide for Approver" })).not.toHaveClass(/simple-button-primary/);
+      await expect(q7.getByRole("button", { name: "Decide for Priya Raman" })).toBeVisible();
+      await expect(q7.getByRole("button", { name: "Decide for Priya Raman" })).not.toHaveClass(/simple-button-primary/);
       await expect(q7.getByRole("button", { name: "Decide as recommended" })).toHaveCount(0);
     });
 

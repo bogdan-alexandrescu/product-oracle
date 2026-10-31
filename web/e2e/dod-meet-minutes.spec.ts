@@ -7,7 +7,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * minutes land once its owner ends it and sends them, desktop (1440x900) and phone
  * (390x844), on the mock's invented PRD "Guided setup".
  *
- * Card dod-meet-minutes-inbox: protects = an attendee (Approver) finds the sent minutes in
+ * Card dod-meet-minutes-inbox: protects = an attendee (Priya Raman) finds the sent minutes in
  * their own Inbox as a "Meeting minutes" row naming the meeting and its decisions, shown and
  * not counted as waiting; Open leads to the Decisions page by that meeting, where the
  * minutes' summary reads; fails_when = the Inbox has no row for the minutes (the API sends
@@ -48,7 +48,7 @@ async function endOne(page: Page) {
   await tap(page.getByRole("button", { name: "Start review" }).first());
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await expect(sheet.getByRole("checkbox", { name: "Approver" })).toBeChecked();
+  await expect(sheet.getByRole("checkbox", { name: "Priya Raman" })).toBeChecked();
   await tap(sheet.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));

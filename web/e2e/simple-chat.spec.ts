@@ -7,7 +7,7 @@ import { ADMIN, signOut } from "./helpers";
 
 /*
  * Simple S9: change by chat in a meeting, in the "simple-chat" mock scenario: the invented
- * Weekly plan review, presented by the owner (Admin), with the approver, the commenter and
+ * Weekly plan review, presented by the owner (Avery Stone), with the approver, the commenter and
  * the viewer attending. Each person signs in, in a tab of their own of one browser context
  * (each tab keeps its own sign-in), and opens the meeting's chat (/simple/meetings/{id}/chat:
  * this lane's host of MeetingChat; S8's meeting page owns /simple/meetings/{id} and renders
@@ -86,7 +86,7 @@ for (const phone of [false, true]) {
 
       // The approver's tab sees it applied.
       await approver.bringToFront();
-      await expect(mine.getByTestId("chat-card-outcome")).toContainText("Applied by Admin");
+      await expect(mine.getByTestId("chat-card-outcome")).toContainText("Applied by Avery Stone");
       await expect(mine.getByTestId("chat-card-decision")).toBeVisible();
     });
 
@@ -110,21 +110,21 @@ for (const phone of [false, true]) {
 
       await owner.bringToFront();
       await owner.getByLabel("Who changes things").selectOption("named");
-      await owner.getByTestId("chat-mode").getByLabel("Commenter").check();
+      await owner.getByTestId("chat-mode").getByLabel("Theo Brandt").check();
       await expect(owner.getByLabel("Who changes things")).toHaveValue("named");
-      await expect(owner.getByTestId("chat-mode").getByLabel("Commenter")).toBeChecked();
+      await expect(owner.getByTestId("chat-mode").getByLabel("Theo Brandt")).toBeChecked();
       await approver.bringToFront();
       await expect(card.getByTestId("chat-card-why-not")).toHaveText("Only the presenter and the people they named apply changes in this meeting");
 
       await owner.bringToFront();
-      await owner.getByTestId("chat-mode").getByLabel("Approver").check();
-      await expect(owner.getByTestId("chat-mode").getByLabel("Approver")).toBeChecked();
+      await owner.getByTestId("chat-mode").getByLabel("Priya Raman").check();
+      await expect(owner.getByTestId("chat-mode").getByLabel("Priya Raman")).toBeChecked();
       await approver.bringToFront();
-      await expect(approver.getByTestId("chat-rules")).toContainText("Presenter plus Commenter, Approver");
+      await expect(approver.getByTestId("chat-rules")).toContainText("Presenter plus Theo Brandt, Priya Raman");
       await owner.bringToFront();
       await approver.bringToFront();
       await tap(card.getByRole("button", { name: "Propose" }));
-      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by you");
+      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Avery Stone by you");
       await expect(card.getByTestId("chat-card-decision")).toHaveCount(0);
     });
 

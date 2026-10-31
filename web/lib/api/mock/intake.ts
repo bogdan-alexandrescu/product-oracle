@@ -24,7 +24,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 import { baselineReviewStatus } from "./baseline";
 import { companyDayIso, mockSettingValue } from "./connections";
 import { templateNameOf } from "./lane-f";

@@ -75,7 +75,7 @@ for (const phone of [false, true]) {
         await minutes.getByLabel("Summary").fill("We moved the checklist to Next and keep it first.");
         await minutes.getByRole("button", { name: "Add action item" }).click();
         await minutes.getByLabel("Action item 1", { exact: true }).fill("Write the checklist copy");
-        await minutes.getByLabel("Owner of action item 1").selectOption({ label: "Approver" });
+        await minutes.getByLabel("Owner of action item 1").selectOption({ label: "Priya Raman" });
         await minutes.getByLabel("Due date of action item 1").fill("2026-11-02");
         await minutes.getByRole("button", { name: "Save minutes" }).click();
         await expect(minutes.getByRole("button", { name: "Save minutes" })).toBeDisabled();
@@ -102,12 +102,12 @@ for (const phone of [false, true]) {
         await expect(sent).toContainText("Email · not sent (not picked)");
         await expect(sent).toContainText("Slack · not posted (not picked)");
         await expect(page.getByTestId("minutes-summary")).toHaveText("We moved the checklist to Next and keep it first.");
-        await expect(page.getByRole("region", { name: "Minutes" })).toContainText("Write the checklist copy · Approver · by Mon Nov 2");
+        await expect(page.getByRole("region", { name: "Minutes" })).toContainText("Write the checklist copy · Priya Raman · by Mon Nov 2");
         await sent.getByRole("link", { name: "Open the Decisions page" }).click();
         await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
         const group = page.getByRole("region", { name: "Review: Guided setup" });
         await expect(group).toContainText("We moved the checklist to Next and keep it first.");
-        await expect(group).toContainText("Write the checklist copy · Approver · by Mon Nov 2");
+        await expect(group).toContainText("Write the checklist copy · Priya Raman · by Mon Nov 2");
         await expect(page.getByRole("region", { name: "Outside meetings" })).toHaveCount(0);
       });
 

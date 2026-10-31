@@ -108,8 +108,8 @@ test.describe("desktop · Decisions", () => {
     await q2.getByRole("button", { name: "Name a decider" }).click();
     const people = q2.getByTestId("question-people");
     await expect(people).toContainText("Only the people who may decide are listed.");
-    await expect(people.getByRole("button", { name: "Approver" })).toBeVisible();
-    await expect(people.getByRole("button", { name: "Viewer" })).toHaveCount(0);
+    await expect(people.getByRole("button", { name: "Priya Raman" })).toBeVisible();
+    await expect(people.getByRole("button", { name: "Lena Ortiz" })).toHaveCount(0);
     await expect(q2.getByRole("button", { name: "Name a decider" })).toHaveCount(0);
     const q3 = row(page, "Q3");
     await q3.getByRole("button", { name: "Ask someone to answer" }).click();
