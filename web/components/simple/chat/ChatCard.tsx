@@ -170,7 +170,8 @@ export function ChatCard({
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const applyShown = !actionsOnly || !card.fixes.some((f) => f.op === card.op && same(f.target, card.target));
   const applyLabel =
-    cutting && (red.length > 0 || cutsDependents)
+    // qa4-simple-roadmap-12: "keep the dependents" only when items wait on it.
+    cutsDependents
       ? card.may === "propose"
         ? "Propose: cut it, keep the dependents"
         : "Cut it, keep the dependents"

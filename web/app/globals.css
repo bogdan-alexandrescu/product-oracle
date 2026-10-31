@@ -1183,6 +1183,11 @@ code .date-mark {
   --prd-m3-bg: #fdf3dc;
   --prd-m3-fill: #f7e1b0;
   --prd-pm: #5b6878;
+  /* The roadmap's estimated (hatched) bars and their outlines (dark values below, qa4-simple-roadmap-6). */
+  --simple-hatch-bg: var(--accent-soft);
+  --simple-hatch-line: var(--accent-mid);
+  --simple-est-stripe: rgba(125, 142, 163, 0.35);
+  --simple-bar-outline: var(--line-strong);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -1211,6 +1216,11 @@ code .date-mark {
     --prd-m3-bg: #3a2a0c;
     --prd-m3-fill: #574015;
     --prd-pm: #9aa8b8;
+    /* qa4-simple-roadmap-6: 3:1 on the dark chart. */
+    --simple-hatch-bg: #10294a;
+    --simple-hatch-line: #4f86c0;
+    --simple-est-stripe: rgba(159, 176, 196, 0.6);
+    --simple-bar-outline: #8fa3ba;
   }
 }
 :root[data-theme="dark"] {
@@ -1239,6 +1249,10 @@ code .date-mark {
   --prd-m3-bg: #3a2a0c;
   --prd-m3-fill: #574015;
   --prd-pm: #9aa8b8;
+  --simple-hatch-bg: #10294a;
+  --simple-hatch-line: #4f86c0;
+  --simple-est-stripe: rgba(159, 176, 196, 0.6);
+  --simple-bar-outline: #8fa3ba;
 }
 @media print {
   .simple-noprint { display: none !important; }

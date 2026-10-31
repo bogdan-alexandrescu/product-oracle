@@ -36,6 +36,7 @@ import {
   type Roadmap,
   type Scale,
   whereAttr,
+  yearSpan,
 } from "./_lib";
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
@@ -675,7 +676,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   name gets the row's space first; the chips after it shrink (finding 7). */}
               {r.place != null && (
                 <span className="tnum flex-none text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
-                  {ordinal(r.place)}
+                  {/* qa4-simple-roadmap-23: the number says what it is. */}
+                  {ordinal(r.place)} to return
                 </span>
               )}
               <span
@@ -724,8 +726,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
           >
             <defs>
               <pattern id="simple-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <rect width="8" height="8" fill="var(--accent-soft)" />
-                <line x1="0" y1="0" x2="0" y2="8" stroke="var(--accent-mid)" strokeWidth="4" />
+                <rect width="8" height="8" fill="var(--simple-hatch-bg)" />
+                <line x1="0" y1="0" x2="0" y2="8" stroke="var(--simple-hatch-line)" strokeWidth="4" />
               </pattern>
               {format === "waterfall" &&
                 PHASES.map((p) => (
@@ -1056,7 +1058,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
   const fill = closedItem(item) ? "var(--na-bg)" : pulled ? "url(#simple-pulled)" : kind === "estimated" ? "url(#simple-hatch)" : kind === "draft" ? "var(--surface)" : "var(--accent)";
   // finding 17: an undated (draft/estimated) bar's outline uses the line token, not the accent,
   // so it keeps contrast against a dark background the way a dated bar's accent-ink does.
-  const stroke = red ? "var(--crit)" : amber || pulled ? "var(--warn)" : kind === "dated" ? "var(--accent-ink)" : "var(--line-strong)";
+  const stroke = red ? "var(--crit)" : amber || pulled ? "var(--warn)" : kind === "dated" ? "var(--accent-ink)" : "var(--simple-bar-outline)";
   const s = item.suggestion;
   // The suggestion's handle sits left of the bar (a broken link's callout is on its right).
   const left = Math.min(x, s ? sc.x(s.start_date) : x) - 14;
@@ -1067,7 +1069,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
   const phaseWords = phased ? `, ${phases.map((p) => `${phaseWord(p.key)} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
   const sliced = !phased && planned(item);
   const fixed = closedItem(item) || planned(item);
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "Estimated by Oracle" : sourceWord(item.source)}${phaseWords}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${item.estimated ? "Estimated by Oracle" : sourceWord(item.source)}${phaseWords}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
   // finding 49: the suggestion's dashed outline is clamped to the chart's own width (its dates
   // can run past the chart's span); a small arrow says it continues past the edge.
   const sx = sc.x(s?.start_date ?? start);
@@ -1190,7 +1192,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
             data-item={item.key}
             role="button"
             tabIndex={0}
-            aria-label={`Oracle suggests dates for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}
+            aria-label={`Oracle suggests dates for ${item.title}: ${yearSpan(s.start_date, s.end_date, " to ")}`}
             className="cursor-pointer"
             transform={`translate(${mark}, ${y + h / 2})`}
             onClick={() => onSuggestion(item, { x: sc.x(s.start_date), y: y + h })}

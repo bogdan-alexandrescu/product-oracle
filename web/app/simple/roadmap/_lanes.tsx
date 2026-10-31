@@ -31,6 +31,7 @@ import {
   type Roadmap,
   type Scale,
   type Slice,
+  yearSpan,
 } from "./_lib";
 import { CALL_H, RH } from "./_pitch";
 import { ellipsize, monthTick, ordinal, PreviewGhost, previewSpan, useAppliedFlash, usePreview, type Layout } from "./_timeline";
@@ -402,7 +403,7 @@ function Defs() {
       </pattern>
       <pattern id="lanes-estimated" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
         <rect width="7" height="7" fill="var(--na-bg)" />
-        <rect width="2" height="7" fill="var(--line-strong)" opacity="0.35" />
+        <rect width="2" height="7" fill="var(--simple-est-stripe)" />
       </pattern>
       <marker id="lanes-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
         <path d="M0,0 L8,4 L0,8 z" fill="var(--line-strong)" />
@@ -1041,7 +1042,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const left = Math.min(x0, s ? sc.x(s.start_date) : x0) - 14;
   const mark = left >= 10 ? left : Math.min(width - 10, Math.max(sc.x(s?.end_date ?? end), x1) + sc.px + 12);
   // QA2 finding 14: a reader's words, not the API's raw enum (sourceWord, from ./_lib).
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${sourceWord(item.estimated ? "estimated" : item.source)}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${yearSpan(start, end, " to ")}, ${sourceWord(item.estimated ? "estimated" : item.source)}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
   const strokeOf = (base: string) => (red ? "var(--crit)" : amber ? "var(--warn)" : base);
   const strokeW = red || amber || open ? 2.5 : 1.5;
   // fix4 qa-simple-roadmap-31: the suggestion's outline is drawn under the pill (its fill hides
@@ -1069,7 +1070,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             pointerEvents="none"
           >
             {/* QA2 finding 21: an empty dashed box says what it is on hover. */}
-            <title>{`Oracle suggests dates for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}</title>
+            <title>{`Oracle suggests dates for ${item.title}: ${yearSpan(s.start_date, s.end_date, " to ")}`}</title>
           </rect>
         );
       })()}
@@ -1218,7 +1219,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             data-item={item.key}
             role="button"
             tabIndex={0}
-            aria-label={`Oracle's date suggestion for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}
+            aria-label={`Oracle's date suggestion for ${item.title}: ${yearSpan(s.start_date, s.end_date, " to ")}`}
             className="cursor-pointer"
             transform={`translate(${mark}, ${y + BAR_H / 2})`}
             onClick={() => onSuggestion(item, { x: sc.x(s.start_date), y: y + BAR_H })}
@@ -1499,7 +1500,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
               const name = textWidth(l.title, 14, 700);
               const count = `${l.count} ${l.count === 1 ? "item" : "items"}`;
               const words = name + 4 + textWidth(count, 12.5, 400);
-              const chipW = textWidth("open below", 12, 650) + 16;
+              const chipW = textWidth("Listed below", 12, 650) + 16;
               const midY = g.top + 8 + g.head / 2;
               return (
                 <g
@@ -1541,7 +1542,8 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                     <g data-testid="lane-open-chip">
                       <rect x={W - chipW} y={midY - 10} width={chipW} height={20} rx={10} fill="var(--accent-soft)" />
                       <text x={W - chipW / 2} y={midY} textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={650} fill="var(--accent-ink)">
-                        open below
+                        {/* qa4-simple-roadmap-35: says what is below: the lane's items. */}
+                        Listed below
                       </text>
                     </g>
                   )}
@@ -1585,7 +1587,8 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
             <b className="text-[16px] leading-6 font-bold">{openLane.title}</b>
             {/* fix4 qa-simple-roadmap-45: "at once" counts the lane's bars as drawn (its rows of runs), not its pieces. */}
             <span className="text-[14px] leading-5 text-text-faint" data-testid="lane-list-count">
-              {openLane.count} {openLane.count === 1 ? "item" : "items"}, up to {runs[lanes.indexOf(openLane)]?.rows ?? 1} at once
+              {/* qa4-simple-roadmap-33: the count alone, no "up to 1 at once". */}
+              {openLane.count} {openLane.count === 1 ? "item" : "items"}
             </span>
           </div>
           <ul>
@@ -1602,9 +1605,9 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                     data-code={p.code ?? undefined}
                     data-open={open === item.id ? "true" : undefined}
                     onClick={() => onOpen(item, { x: 0, y: 0 })}
-                    className={`grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-left text-[14px] leading-[19px] ${open === item.id ? "bg-accent-soft" : ""}`}
+                    className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-left text-[14px] leading-[19px] ${open === item.id ? "bg-accent-soft" : ""}`}
                   >
-                    {p.code ? <span className="rounded-[6px] border border-line bg-surface2 px-[5px] font-mono text-[12px] leading-[17px] font-semibold whitespace-nowrap text-text">{p.code}</span> : <span />}
+                    {/* qa4-simple-roadmap-32: the name only, no feature code. */}
                     <span className={`min-w-0 ${closedItem(item) ? "text-text2 line-through" : ""}`}>
                       {p.name}
                       {item.draft && !closedItem(item) && <span className="ml-1.5 rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">Draft</span>}

@@ -17,6 +17,7 @@ export type ToastAsk = {
 type Shown = ToastAsk & { id: number };
 
 let show: ((ask: ToastAsk) => void) | null = null;
+let hide: ((message: string) => void) | null = null;
 /** Where a toast sits when it does not say (a page sets it while it is open: Simple's Home, "rail"). */
 let pagePlace: ToastAsk["place"];
 
@@ -34,6 +35,11 @@ export function toast(ask: ToastAsk) {
   show?.(ask);
 }
 
+/** Closes the toast on screen if it still says `message` (a message about a state that is gone, qa4-simple-roadmap-43). */
+export function clearToast(message: string) {
+  hide?.(message);
+}
+
 /** Draws what `toast` says (one per app: the shell mounts it). */
 export function ToastHost() {
   const [shown, setShown] = useState<Shown | null>(null);
@@ -45,8 +51,10 @@ export function ToastHost() {
   const left = useRef(LIFETIME_MS);
   useEffect(() => {
     show = (ask) => setShown({ place: pagePlace, ...ask, id: ++next.current });
+    hide = (message) => setShown((s) => (s?.message === message ? null : s));
     return () => {
       show = null;
+      hide = null;
     };
   }, []);
   useEffect(() => {

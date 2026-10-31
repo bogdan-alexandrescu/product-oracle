@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { Button, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
+import { Button, clearToast, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
@@ -54,6 +54,7 @@ import {
   type Lane,
   type Roadmap,
   type Where,
+  yearSpan,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
 
@@ -148,7 +149,8 @@ function ganttLegend(data: Roadmap, noWork: { start: string; end: string; label?
  * work in its own lane as the chart draws it. */
 function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadmap; byGoal: boolean; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void; only: { key: string; title: string } | null }) {
   const count = (id: string) => (suggestions.data?.suggestions ?? []).filter((s) => s.goal.id === id).length;
-  const known = (id: string) => suggestions.data?.goals.find((g) => g.goal.id === id)?.goal;
+  // qa4-simple-roadmap-10: a goal its plan names (no id of its own here) is found by its title.
+  const known = (id: string, title?: string) => suggestions.data?.goals.find((g) => g.goal.id === id || (!!title && g.goal.title === title))?.goal;
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const shown = (i: Item | undefined): i is Item => !!i && !closedItem(i) && !pmItem(i);
   const goals = new Map<string, { title: string; metric: string | null; items: number; broken: number }>();
@@ -182,7 +184,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
   const filteredOut = only && !cards.length && !empty.length;
   if (!cards.length && !empty.length && !filteredOut) return null;
   const open = (id: string, title: string) => {
-    const g = known(id);
+    const g = known(id, title);
     return g ? (
       <button type="button" data-testid="goal-counter-suggestions" onClick={() => onGoal(g)} className="text-sm font-semibold text-accent-ink hover:underline">
         {/* QA2 24: no "0 suggested features": with none yet, the button says what it opens. */}
@@ -193,7 +195,8 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
   };
   return (
     <ul className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4" data-testid="goal-counters">
-      {cards.slice(0, 4).map(([id, g]) => (
+      {/* qa4-simple-roadmap-10: a card for every goal with a lane (the grid wraps past four). */}
+      {cards.map(([id, g]) => (
         <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
           <p className="truncate text-[15px] font-semibold" title={g.title}>
             {g.title}
@@ -203,7 +206,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadm
             {g.metric ?? "No metric yet"}
           </p>
           <p className="mt-0.5 text-sm">
-            <b className="tnum">{g.items}</b> items
+            <b className="tnum">{g.items}</b> {g.items === 1 ? "item" : "items"}
             {g.broken > 0 && (
               <span className="text-crit">
                 {" "}
@@ -240,7 +243,8 @@ function Select({ label, value, options, onChange, all = "All", testId }: { labe
     <label className="flex items-center gap-1.5 text-sm text-text2">
       {label}
       {/* D1: as wide as its choice ("All"), so the filters sit on one line. */}
-      <select value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} className="h-8 max-w-[11rem] rounded-lg border border-line-strong bg-surface px-2 text-sm text-text [field-sizing:content]">
+      {/* qa4-simple-roadmap-46: named by its label's word alone, not every option's text. */}
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} className="h-8 max-w-[11rem] rounded-lg border border-line-strong bg-surface px-2 text-sm text-text [field-sizing:content]">
         <option value="">{all}</option>
         {options.map(([v, t]) => (
           <option key={v} value={v}>
@@ -329,6 +333,16 @@ function DecisionTray({
   top: number;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
+  // qa4-simple-roadmap-14: Escape closes the drawer, focus back on its button.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      onClose();
+      document.querySelector<HTMLElement>('[data-testid="needs-decision"]')?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   // qa-simple-home-14: Home's "All proposals" (?review=proposals) lands on the Proposals part.
   const proposalsRef = useRef<HTMLElement>(null);
   const atProposals = useSearchParams().get("review") === "proposals";
@@ -417,7 +431,8 @@ function DecisionTray({
             {brokenItems.map((i) => (
               <li key={i.id} className="border-b border-line py-2" data-testid="tray-broken">
                 <p className="text-[15px] font-medium">{i.title}</p>
-                {broken(i).map((f) => (
+                {/* qa4-simple-roadmap-38: its broken links only; its other flags are listed once, under Other flags. */}
+                {brokenLinks(i).map((f) => (
                   <div key={`${f.kind}-${f.subject}`}>
                     <FlagLine flag={f} />
                     <FixButtons item={i} flag={f} items={byId} act={act} canChange={canChange} />
@@ -458,7 +473,7 @@ function DecisionTray({
               <li key={s.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date" data-item={i.id}>
                 <div className="min-w-0 flex-1 text-[15px]">
                   <span>
-                    {i.title}: {shortDay(s.start_date)} – {shortDay(s.end_date)}
+                    {i.title}: {yearSpan(s.start_date, s.end_date)}
                   </span>
                   {parts.length > 0 && (
                     <span className="block" data-testid="tray-date-slices">
@@ -575,6 +590,7 @@ export function SimpleRoadmap() {
   // D3: on a phone, the milestone whose end the weeks hide to the right ("Swipe sideways for M3").
   const [offscreen, setOffscreen] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  const swapped = useRef<string | null>(null);
   const svg = useRef<SVGSVGElement | null>(null);
 
   const qs = useMemo(() => {
@@ -828,7 +844,7 @@ export function SimpleRoadmap() {
     if (f.from) parts.push(`From ${qName(f.from)}`);
     if (f.to) parts.push(`To ${qName(f.to)}`);
     if (data?.roadmap) parts.push(`Roadmap: ${data.roadmap.title}`);
-    if (!f.roadmap && !f.prd && !f.goal && !f.track && !f.from && !f.to) parts.push("every roadmap");
+    if (!f.roadmap && !f.prd && !f.goal && !f.track && !f.from && !f.to) parts.push("All roadmaps"); // qa4-simple-roadmap-48
     return parts.join(" · ");
   };
 
@@ -838,7 +854,7 @@ export function SimpleRoadmap() {
     if (format !== "board" && !svg.current) return;
     setExporting(true);
     try {
-      const pic = format === "board" ? boardPicture(boardColumns(data), data.today) : chartPicture(svg.current!, labels);
+      const pic = format === "board" ? boardPicture(boardColumns(laned ?? data), data.today) : chartPicture(svg.current!, labels);
       const title = `Roadmap · ${FORMAT_WORDS[format]}${format === "gantt" ? ` (${unit})` : ""}`;
       await exportView(kind, pic, { title, filters: filterWords(), brand: await brandOf() }, data.today, `roadmap-${format}`);
     } catch {
@@ -1016,8 +1032,14 @@ export function SimpleRoadmap() {
   const setRange = (from: string, to: string) => {
     if (from && to && from > to) {
       setF({ ...f, from: quarterOf(to).start, to: addDays(nextQuarter(quarterOf(from).start), -1) });
-      toast({ message: `From was after To, so they were swapped: ${quarterOf(to).label} to ${quarterOf(from).label}` });
-    } else setF({ ...f, from, to });
+      swapped.current = `From was after To, so they were swapped: ${quarterOf(to).label} to ${quarterOf(from).label}`;
+      toast({ message: swapped.current });
+    } else {
+      // qa4-simple-roadmap-43: the swap's message goes once the range changes again.
+      if (swapped.current) clearToast(swapped.current);
+      swapped.current = null;
+      setF({ ...f, from, to });
+    }
   };
   const filtered = !!(f.prd || f.goal || f.track || f.from || f.to);
   const clearFilters = () => {
@@ -1211,7 +1233,7 @@ export function SimpleRoadmap() {
           </div>
         ) : format === "board" ? (
           <Board
-            data={data}
+            data={laned ?? data}
             phone={phone}
             canDrag={canChange}
             proposals={allProposals}

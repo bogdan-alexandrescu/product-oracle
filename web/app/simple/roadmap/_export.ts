@@ -5,8 +5,10 @@
  * logo, name and accent, the public disclaimer) and a line naming the filters, with the
  * theme's colours resolved, onto a canvas; the PDF is one page holding that picture.
  */
+import { calendarDay } from "@/lib/dates";
+
 import type { BoardColumn } from "./_board";
-import { brokenLinks, shortDay, spanWords } from "./_lib";
+import { brokenLinks, spanWords } from "./_lib";
 
 const SCALE = 2;
 const HEAD = 88;
@@ -132,7 +134,7 @@ export function framed(pic: Picture, head: ExportHead, today: string): { markup:
     `<g transform="translate(${pad}, ${HEAD})">${pic.body}</g>` +
     `<line x1="${pad}" x2="${width - pad}" y1="${height - FOOT}" y2="${height - FOOT}" stroke="var(--line)"/>` +
     `<text x="${pad}" y="${height - 13}" font-size="11" fill="var(--text2)">${esc(cut(b?.disclaimer ?? "", 120))}</text>` +
-    `<text x="${width - pad}" y="${height - 13}" font-size="11" text-anchor="end" fill="var(--text2)">${esc(`${shortDay(today)}${b?.mark ? " · Made with Product Oracle" : ""}`)}</text>` +
+    `<text x="${width - pad}" y="${height - 13}" font-size="11" text-anchor="end" fill="var(--text2)">${esc(`${calendarDay(today, { month: "short", day: "numeric", year: "numeric" })}${b?.mark ? " · Made with Product Oracle" : ""}`)}</text>` +
     `</svg>`;
   return { markup: markup.replace(/var\((--[a-z0-9-]+)\)/g, (_, name: string) => style.getPropertyValue(name).trim() || "#000"), width, height };
 }

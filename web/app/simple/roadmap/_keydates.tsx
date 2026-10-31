@@ -78,6 +78,11 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
     });
   };
 
+  const missing = [
+    ...(!addable.some((r) => r.roadmap.id === rm) ? ["a roadmap"] : []),
+    ...(!adding.name.trim() ? ["a name"] : []),
+    ...(!adding.date ? ["a date"] : []),
+  ];
   const field = "h-8 rounded-lg border border-line bg-bg px-2 text-[15px]";
   // fix4 qa-simple-roadmap-36: each field has its label in view (the date field's own format
   // is the browser's: a native date input writes the day its own way).
@@ -144,8 +149,9 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
               <span aria-hidden className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 bg-accent-ink" />
               <div className="min-w-0 flex-1">
                 {/* fix4 qa-simple-roadmap-36: one line: the name (its whole in title= when cut), its day and the badge, each kept whole. */}
-                <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
-                  <span className="min-w-0 truncate" title={k.name}>
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 font-medium">
+                  {/* qa4-simple-roadmap-37: the name wraps, never cut mid-word. */}
+                  <span className="min-w-0 break-words" title={k.name}>
                     {k.name}
                   </span>
                   <span className="flex-none whitespace-nowrap text-text2" data-testid="key-date-day">
@@ -219,8 +225,14 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
               <input aria-label="New key date's note" className={`${field} w-full font-normal text-text`} placeholder="Optional" value={adding.note} onChange={(e) => setAdding({ ...adding, note: e.target.value })} />
             </div>
           </div>
-          <div className="flex justify-end">
-            <Button type="submit" variant="solid" disabled={!adding.name.trim() || !adding.date || !addable.some((r) => r.roadmap.id === rm)}>
+          <div className="flex items-center justify-end gap-2">
+            {/* qa4-simple-roadmap-18: a disabled Add says what is missing. */}
+            {missing.length > 0 && (
+              <span className="text-sm text-text2" data-testid="key-date-missing">
+                Needs {missing.join(" and ")}
+              </span>
+            )}
+            <Button type="submit" variant="solid" disabled={missing.length > 0}>
               {applies ? "Add" : "Propose"}
             </Button>
           </div>

@@ -22,6 +22,7 @@ import {
   type Change,
   type Flag,
   type Item,
+  yearSpan,
 } from "./_lib";
 
 /** What a change asks the engine, built by the page and sent through `act`. */
@@ -285,7 +286,7 @@ export function SuggestionPopover({
       className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
     >
       <p className="text-sm font-semibold">
-        Oracle suggests {shortDay(s.start_date)} – {shortDay(s.end_date)}
+        Oracle suggests {yearSpan(s.start_date, s.end_date)}
       </p>
       <p className="mt-1 text-sm text-text2">{s.basis}</p>
       {editing ? (
@@ -346,10 +347,11 @@ export function SuggestionPopover({
   );
 }
 
-function names(ids: string[], items: Map<string, Item>): string {
+function names(ids: string[], items: Map<string, Item>, empty = "Nothing"): string {
   const t = ids.map((id) => items.get(id)?.title).filter(Boolean);
   // fix4 qa-simple-roadmap-42: empty values read like "No owner yet", capitalised.
-  return t.length ? t.join(", ") : "No other items";
+  // qa4-simple-roadmap-42: "Nothing" / "None", not "No other items".
+  return t.length ? t.join(", ") : empty;
 }
 
 const OP_WORDS: Record<string, string> = {
@@ -797,9 +799,7 @@ export function FloatingCard({
                         style={{ background: milestoneInk(x.milestone) }}
                       />
                       <span>
-                        <b className="font-semibold">
-                          {x.code} {x.name}
-                        </b>
+                        <b className="font-semibold">{x.name}</b>
                         <span className="block text-sm text-text2">
                           {x.milestone} {x.milestone_name}
                           {x.start_date && x.end_date
@@ -847,7 +847,7 @@ export function FloatingCard({
           <dt className="text-text2">Depends on</dt>
           <dd data-testid="card-depends">{names(item.depends_on, items)}</dd>
           <dt className="text-text2">Needed by</dt>
-          <dd data-testid="card-needed">{names(item.needed_by, items)}</dd>
+          <dd data-testid="card-needed">{names(item.needed_by, items, "None")}</dd>
         </dl>
         <div>
           {item.flags.length > 0 && (

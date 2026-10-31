@@ -100,6 +100,8 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
 /** What a rail count counts, said in words (its label and tooltip). */
 function countWords(label: string, n: number): string {
   if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
+  // qa4-simple-roadmap-9: Roadmap counts changes and drafts sent to you, not the page's "Needs a decision".
+  if (label === "Roadmap") return `${n} ${n === 1 ? "change or draft" : "changes or drafts"} waiting on you`;
   return `${n} waiting on you`;
 }
 

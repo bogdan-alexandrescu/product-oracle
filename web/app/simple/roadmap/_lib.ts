@@ -36,6 +36,9 @@ export function spanWords(start: string, end: string, today: string = start, eac
   return `${shortDay(start)}, ${ys} – ${shortDay(end)}, ${ye}`;
 }
 
+/** qa4-simple-roadmap-19: a span with its year whenever an end is not in this year (or it spans two). */
+export const yearSpan = (start: string, end: string, sep = " – "): string => spanWords(start, end, `${new Date().getUTCFullYear()}-01-01`).replace(" – ", sep);
+
 export function quarterOf(day: string): { start: string; label: string } {
   const d = new Date(ms(day));
   const q = Math.floor(d.getUTCMonth() / 3);

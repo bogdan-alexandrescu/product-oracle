@@ -53,6 +53,8 @@ export function boardLegend(data: Roadmap, phone: boolean, canDrag: boolean): Le
   return out;
 }
 
+const itemsWords = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
+
 const LONG_PRESS_MS = 450;
 /** A held card this close to the screen's top or bottom scrolls the page (px), this far a frame. */
 const EDGE = 64;
@@ -396,7 +398,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {item.looks_like.length > 0 && (
             <p className="mt-1 text-sm text-warn" data-testid="board-looks-like">
-              Looks like {`${item.looks_like[0].code} ${item.looks_like[0].title}`.trim()}
+              {/* qa4-simple-roadmap-32: the name only, no feature code. */}
+              Looks like {item.looks_like[0].title}
             </p>
           )}
           {red && (
@@ -434,12 +437,14 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           <header className="flex items-baseline gap-2 px-1 pb-2">
             <h2 className="text-lg font-semibold">{c.label}</h2>
             <span className="text-sm text-text2" data-testid="column-window">
-              {boardSpanWords(c.window.start, c.window.end, data.today)}
+              {/* qa4-simple-roadmap-20: a column's window always carries its year, as Next and Later do. */}
+              {spanWords(c.window.start, c.window.end, "")}
             </span>
             {/* fix4 qa-simple-roadmap-32: the cut cards under the line are counted too. */}
             <span className="tnum ml-auto text-sm whitespace-nowrap text-text2" data-testid="column-count">
-              {c.groups.reduce((n, g) => n + g.items.length, 0)}
-              {c.below.length > 0 && ` · ${c.below.length} below the line`}
+              {/* qa4-simple-roadmap-21: plain words ("1 item, 1 cut"). */}
+              {itemsWords(c.groups.reduce((n, g) => n + g.items.length, 0))}
+              {c.below.length > 0 && `, ${c.below.length} cut`}
             </span>
           </header>
           {c.groups.map((g) => (
@@ -459,7 +464,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
                     onClick={() => onGoal(g.key, g.title)}
                     className="flex h-6 flex-none items-center gap-0.5 rounded-full border border-accent-mid bg-surface px-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-soft"
                   >
-                    ✦<span className="tnum">{goalSuggestions?.get(g.key)}</span>
+                    {/* qa4-simple-roadmap-22: what the count is, in words. */}
+                    ✦ <span className="tnum">{goalSuggestions?.get(g.key)}</span> suggested {goalSuggestions?.get(g.key) === 1 ? "feature" : "features"}
                   </button>
                 )}
               </h3>
