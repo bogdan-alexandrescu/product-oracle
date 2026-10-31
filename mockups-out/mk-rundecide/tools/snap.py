@@ -1,6 +1,6 @@
 import os, re, time, hashlib, urllib.request
 from urllib.parse import urljoin
-OUT = "/workspace/att_b6adb80d0140404591d9/work/repo/mockups-out/mk-rundecide"
+OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 BASE = "http://localhost:3393"
 JS = r"""
 () => {
@@ -27,13 +27,13 @@ JS = r"""
 THEME = """<script>/* mockup hooks: ?theme=light|dark, and the frame's scroll */(function(){var t=new URLSearchParams(location.search).get('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);addEventListener('load',function(){document.querySelectorAll('[data-mk-scroll]').forEach(function(e){e.scrollTop=+e.getAttribute('data-mk-scroll')});window.scrollTo(0,%d)})})();</script>"""
 
 def snap(page, name, w, h, req=None):
-    zoom = w != page.evaluate("innerWidth")
-    if zoom:
-        page.evaluate(f"document.documentElement.style.zoom = String(innerWidth/{w})"); time.sleep(0.8)
+    old = page.viewport_size
+    if (old["width"], old["height"]) != (w, h):
+        page.set_viewport_size({"width": w, "height": h}); time.sleep(0.8)
     page.screenshot(path=f"{OUT}/frames/{name}.png")
     r = page.evaluate(JS)
-    if zoom:
-        page.evaluate("document.documentElement.style.zoom = ''")
+    if (old["width"], old["height"]) != (w, h):
+        page.set_viewport_size(old); time.sleep(0.4)
     css = r["css"]
     def font(m):
         u = m.group(1)

@@ -4,15 +4,15 @@
  "decisions": [
   {
    "code": "RD1",
-   "name": "A run's decisions in Simple \u203a Decisions",
-   "question": "How should the stops people approve in a run appear in Simple \u203a Decisions?",
-   "common": "Every run stop is a decision with the person's name, their role and the day (\"Priya Shah (owner) \u00b7 Tue Oct 20\"), never \"approved by an owner\". The note given at the stop shows on the row. A stop that was sent back and then approved is one row that says so and opens to show both steps.",
+   "name": "A run's decisions in Simple › Decisions",
+   "question": "How should the stops people approve in a run appear in Simple › Decisions?",
+   "common": "Every run stop is a decision with the person's name, their role and the day (\"Priya Shah (owner) · Tue Oct 20\"), never \"approved by an owner\". The note given at the stop shows on the row. A stop that was sent back and then approved is one row that says so and opens to show both steps.",
    "proposals": [
     {
      "letter": "A",
      "name": "A Runs group",
      "recommended": true,
-     "what": "Simple \u203a Decisions gets a Runs card after the meetings, one block per run (\"Usage alerts plan \u00b7 Usage alerts PRD \u00b7 5 decisions\"). Each stop is a row: feature set, engineering check, order, PRD review, dates.",
+     "what": "Simple › Decisions gets a Runs card after the meetings, one block per run (\"Usage alerts plan · Usage alerts PRD · 5 decisions\"). Each stop is a row: feature set, engineering check, order, PRD review, dates.",
      "why": "A run's stops belong together and are read together: what was approved, then what came after it. Kept in one block they read as one story, and they do not crowd out the decisions made in meetings and on PRD questions.",
      "plus": "The five stops read in order, under the run's name, with no extra mark needed. Many runs stay easy to scan, one block each.",
      "cost": "One more card on a long page. A run decision is not next to a meeting decision from the same day.",
@@ -23,15 +23,15 @@
       },
       {
        "file": "frames/rd1-a-open.html",
-       "caption": "Clicked \"Show what happened\" on the engineering check: sent back by Marco Ruiz on Wed Oct 21 with his reason, approved Thu Oct 22."
+       "caption": "Clicked \"Show what happened\" on the engineering check: sent back by Marco Ruiz on Wed Oct 21 with his reason, approved Thu Oct 22; \"Hide what happened\" folds it again."
       },
       {
        "file": "frames/rd1-a-many-1512.html",
-       "caption": "Hard case at 1512: four runs, 17 stops. Each run is its own block, so the meetings above keep their place."
+       "caption": "Hard case, on a wide screen: four runs, 17 stops. Each run is its own block, so the meetings above keep their place."
       },
       {
        "file": "frames/rd1-a-rest-390.html",
-       "caption": "Phone 390: the same card, one stop per row."
+       "caption": "On a phone: the same card, one stop per row."
       }
      ]
     },
@@ -49,15 +49,15 @@
       },
       {
        "file": "frames/rd1-b-open.html",
-       "caption": "Clicked \"Show what happened\" on the engineering check: the sent-back step and the approval, in place."
+       "caption": "Clicked \"Show what happened\" on the engineering check: the sent-back step and the approval, in place, with \"Hide what happened\"."
       },
       {
        "file": "frames/rd1-b-many-1512.html",
-       "caption": "Hard case at 1512: four runs mixed in. Q1 Data retention period and D-2 are hard to find between run rows."
+       "caption": "Hard case, on a wide screen: four runs mixed in. Q1 Data retention period and D-2 are hard to find between run rows."
       },
       {
        "file": "frames/rd1-b-rest-390.html",
-       "caption": "Phone 390: the mark and the run name take a second line on every row."
+       "caption": "On a phone: the mark and the run name take a second line on every row."
       }
      ]
     },
@@ -65,17 +65,17 @@
      "letter": "C",
      "name": "Only on the PRD",
      "recommended": false,
-     "what": "Simple \u203a Decisions lists no run stops; one line at its foot says they are on the run's PRD. The PRD page gets a \"Decided in its run\" section, folded until opened.",
+     "what": "Simple › Decisions lists no run stops; one line at its foot says they are on the run's PRD. The PRD page gets a \"Decided in its run\" section, folded until opened.",
      "plus": "Decisions stays about people's product calls. The run's choices sit beside the PRD they shaped.",
      "cost": "Someone looking for \"who approved the dates?\" in Decisions finds nothing and must know which PRD to open. Across many runs there is no one place to see them.",
      "frames": [
       {
        "file": "frames/rd1-c-rest.html",
-       "caption": "At rest: Simple \u203a Decisions ends with a line pointing to the run's PRD; no run stop is listed."
+       "caption": "At rest: Simple › Decisions ends with a line pointing to the run's PRD; no run stop is listed."
       },
       {
        "file": "frames/rd1-c-prd.html",
-       "caption": "Followed that link: the Usage alerts PRD shows \"Decided in its run\", folded."
+       "caption": "Followed that link: the Usage alerts PRD shows \"Decided in its run\", folded. Its status still reads In review, as it does today."
       },
       {
        "file": "frames/rd1-c-open.html",
@@ -83,11 +83,11 @@
       },
       {
        "file": "frames/rd1-c-open-1512.html",
-       "caption": "Hard case at 1512: the engineering check opened to show it was sent back first. Only this PRD's run is here."
+       "caption": "Hard case, on a wide screen: the engineering check opened to show it was sent back first. Only this PRD's run is here."
       },
       {
        "file": "frames/rd1-c-prd-390.html",
-       "caption": "Phone 390: the folded section on the PRD."
+       "caption": "On a phone: the folded section on the PRD."
       }
      ]
     }
@@ -97,7 +97,7 @@
    "code": "RD2",
    "name": "Approving the run's PRD review",
    "question": "What should approving the run's PRD review do to the PRD?",
-   "common": "The run's PRD review waits on the PRD page for its approver, with Send back and Approve, and an optional note that the run's next steps read. The status by the title always says what is true (\"In review\" or \"Approved\").",
+   "common": "The run's PRD review waits on the PRD page for its approver, with Send back and Approve, and an optional note that the run's next steps read. The status by the title always says what is true (\"In review\" or \"Approved\"). These frames replay the run's PRD review stop as if it were still waiting, with you (Admin) as its approver, on Fri Oct 30; in RD1 the same stop is already approved by Lena Ford.",
    "proposals": [
     {
      "letter": "A",
@@ -121,15 +121,15 @@
       },
       {
        "file": "frames/rd2-a-done.html",
-       "caption": "Clicked \"Approve review and PRD\": the status reads Approved and the run goes on to its dates."
+       "caption": "Clicked \"Approve review and PRD\": the status by the title now reads Approved, and the run goes on to its dates."
       },
       {
        "file": "frames/rd2-a-draft-1512.html",
-       "caption": "Hard case at 1512: a draft 4 with 3 changes from Thursday's meeting exists; the confirm warns they stay unapproved."
+       "caption": "Hard case, on a wide screen: draft 4 is in progress, its 3 changes from Thursday's meeting listed at the side; the confirm warns they stay unapproved."
       },
       {
        "file": "frames/rd2-a-open-390.html",
-       "caption": "Phone 390: the review and its confirm."
+       "caption": "On a phone: the review and its confirm."
       }
      ]
     },
@@ -137,7 +137,7 @@
      "letter": "B",
      "name": "Separate Approve step",
      "recommended": true,
-     "what": "Approving the run's review lets the run go on. Right after, the bar becomes the run's next stop, \"Approve the PRD\", with Approve the PRD or Start review meeting.",
+     "what": "Approving the run's review lets the run go on. Right after, the bar becomes the run's next stop, \"Approve the PRD\". To change the PRD first, the approver uses Start review, already at the top of the page.",
      "why": "It keeps two different yeses apart (\"the run may go on\" and \"this is the PRD we build from\") but asks the second at once, in the same place, so the PRD is not left \"In review\" by accident. The approver can still take it to a meeting when the PRD needs changes first.",
      "plus": "Clear about what each click does; the meeting is one click away when changes are needed.",
      "cost": "Two clicks where A has one, and a second stop on every run.",
@@ -156,19 +156,19 @@
       },
       {
        "file": "frames/rd2-b-next.html",
-       "caption": "Clicked \"Approve review\": the run's review is approved; the next stop asks to approve the PRD or start a review meeting."
+       "caption": "Clicked \"Approve review\": the run's review is approved; the next stop asks to approve the PRD, or to use Start review above to change it first."
       },
       {
        "file": "frames/rd2-b-done.html",
-       "caption": "Clicked \"Approve the PRD\": the status reads Approved; second of two steps."
+       "caption": "Clicked \"Approve the PRD\": the status by the title now reads Approved; second of two steps."
       },
       {
        "file": "frames/rd2-b-next-1512.html",
-       "caption": "At 1512: the second step waiting, with the meeting as the other way."
+       "caption": "On a wide screen: the second step waiting; Start review stays the one button for a meeting."
       },
       {
        "file": "frames/rd2-b-open-390.html",
-       "caption": "Phone 390: the buttons wrap under the words."
+       "caption": "On a phone: the buttons wrap under the words."
       }
      ]
     },
@@ -176,7 +176,7 @@
      "letter": "C",
      "name": "Meeting stays the place",
      "recommended": false,
-     "what": "Approving the run's review only lets the run go on. The bar says so, and afterwards the PRD stays \"In review\" with a Start review meeting button; a PRD is approved only in its meeting.",
+     "what": "Approving the run's review only lets the run go on. The bar says so, and afterwards the PRD stays \"In review\" and the bar points to Start review at the top of the page; a PRD is approved only in its meeting.",
      "plus": "One way to approve a PRD, the meeting, where changes are made in its chat.",
      "cost": "The approver says yes and the PRD still reads In review everywhere until someone holds a meeting. For a PRD that needs no changes, that meeting is pure overhead.",
      "frames": [
@@ -194,15 +194,15 @@
       },
       {
        "file": "frames/rd2-c-done.html",
-       "caption": "Clicked \"Approve review\": the run goes on, the PRD still reads In review, Start review meeting is offered."
+       "caption": "Clicked \"Approve review\": the run goes on, the PRD still reads In review, and the bar says to use Start review above."
       },
       {
        "file": "frames/rd2-c-done-1512.html",
-       "caption": "At 1512: the same result; the status by the title is unchanged."
+       "caption": "On a wide screen: the same result; the status by the title is unchanged."
       },
       {
        "file": "frames/rd2-c-open-390.html",
-       "caption": "Phone 390: the review bar and its confirm."
+       "caption": "On a phone: the review bar and its confirm."
       }
      ]
     }
@@ -212,7 +212,7 @@
    "code": "RD3",
    "name": "A PRD's Decisions needed",
    "question": "How should a PRD's Decisions needed reach the person who decides each one?",
-   "common": "Each item keeps its code, its words, who decides it and its due day (red when it is near); the PRD's suggestion shows when it has one. Deciding takes the suggestion or another answer, and a decided item shows the answer, who and when, with Undo.",
+   "common": "Each item keeps its code, its words, who decides it and its due day (red when it is near); the recommended answer shows when there is one. Deciding uses the same buttons as the questions Simple already has: Decide as recommended (or Decide for the person who owns it), Another answer, Ask Oracle. A decided item shows the answer, who and when, with Undo.",
    "proposals": [
     {
      "letter": "A",
@@ -221,19 +221,19 @@
      "what": "The items you own show on Simple Home under Waiting for you, and every item is on the PRD's review meeting agenda, soonest first, whoever owns it.",
      "why": "The owner learns an item waits before the meeting, and the meeting still covers all of them. These are the two places Simple already uses for what someone must decide.",
      "plus": "Nobody misses an item due before the next meeting; the meeting can still close the rest.",
-     "cost": "Home gets one more card, and the same item shows in two places (decided in one, it is gone from both).",
+     "cost": "Home gets one more card, and the same item shows in two places (decided in one, it is decided in both). Home's count and the Decisions badge grow by the PRD's items.",
      "frames": [
       {
        "file": "frames/rd3-a-rest.html",
-       "caption": "At rest: Home shows \"Waiting for you: Usage alerts PRD\", the three items Admin owns, N1 due Tue Nov 3 in red."
+       "caption": "At rest: Home shows \"Waiting for you: Usage alerts PRD\", the three items Admin owns, N1 due Tue Nov 3 in red. The tile and the Decisions badge count 12: nine as before, plus these three."
       },
       {
        "file": "frames/rd3-a-open.html",
-       "caption": "Clicked Decide on N1: the PRD's suggestion or another answer."
+       "caption": "Clicked \"Another answer\" on N1 and typed \"Not in the first release; look again in the spring\"."
       },
       {
        "file": "frames/rd3-a-done.html",
-       "caption": "Clicked \"Not in the first release\": N1 shows the answer, Admin and the time, with Undo."
+       "caption": "Clicked Decide: N1 shows the answer, Admin and the time, with Undo; the tile and the badge drop to 11."
       },
       {
        "file": "frames/rd3-a-agenda.html",
@@ -241,11 +241,11 @@
       },
       {
        "file": "frames/rd3-a-rest-1512.html",
-       "caption": "Hard case at 1512: the PRD's card comes first on Home and pushes the nine other decisions waiting below the fold."
+       "caption": "Hard case, on a wide screen: the PRD's card comes first on Home and pushes the other decisions waiting below the fold."
       },
       {
        "file": "frames/rd3-a-rest-390.html",
-       "caption": "Phone 390: the card's rows."
+       "caption": "On a phone: the card's rows, the buttons under each item."
       }
      ]
     },
@@ -263,15 +263,15 @@
       },
       {
        "file": "frames/rd3-b-open.html",
-       "caption": "Clicked Decide on N1 in the meeting."
+       "caption": "Clicked \"Another answer\" on N1 in the meeting and typed the answer."
       },
       {
        "file": "frames/rd3-b-done.html",
-       "caption": "Clicked \"Not in the first release\": decided by Admin in this meeting, with Undo."
+       "caption": "Clicked Decide: N1 is decided by Admin in this meeting, with Undo, and shows under All decisions beside it."
       },
       {
        "file": "frames/rd3-b-agenda-1512.html",
-       "caption": "At 1512: the agenda beside the meeting chat."
+       "caption": "On a wide screen: the agenda beside the meeting chat."
       },
       {
        "file": "frames/rd3-b-home.html",
@@ -279,7 +279,7 @@
       },
       {
        "file": "frames/rd3-b-agenda-390.html",
-       "caption": "Phone 390: the agenda, one item per row."
+       "caption": "On a phone: the agenda, one item per row."
       }
      ]
     },
@@ -287,29 +287,29 @@
      "letter": "C",
      "name": "A Decisions section per PRD",
      "recommended": false,
-     "what": "Simple \u203a Decisions gets a section per PRD (\"Usage alerts PRD: decisions needed\") at the top, with every item, its owner and its due day.",
+     "what": "Simple › Decisions gets a section per PRD (\"Usage alerts PRD: decisions needed\") at the top, with every item, its owner and its due day.",
      "plus": "All of a PRD's open items in one list, with a link to the PRD.",
-     "cost": "Someone has to open Decisions to see them; not on Home or on the meeting agenda. With many PRDs the sections push \"Waiting for you\" down.",
+     "cost": "Someone has to open Decisions to see them; not on Home or on the meeting agenda. With several PRDs (three in the hard case, 14 items) the sections push \"Waiting for you\" far down.",
      "frames": [
       {
        "file": "frames/rd3-c-rest.html",
-       "caption": "At rest: the Usage alerts PRD section on top of Simple \u203a Decisions: seven open, three yours."
+       "caption": "At rest: the Usage alerts PRD section on top of Simple › Decisions: seven open, three yours."
       },
       {
        "file": "frames/rd3-c-open.html",
-       "caption": "Clicked Decide on N1."
+       "caption": "Clicked \"Another answer\" on N1 and typed the answer."
       },
       {
        "file": "frames/rd3-c-done.html",
-       "caption": "Clicked \"Not in the first release\": N1 decided by Admin, with Undo."
+       "caption": "Clicked Decide: N1 decided by Admin, with Undo."
       },
       {
        "file": "frames/rd3-c-rest-1512.html",
-       "caption": "Hard case at 1512: the section pushes Waiting for you below the fold."
+       "caption": "Hard case, on a wide screen, with three PRDs: Usage alerts' seven items end and Team billing's begin; Status page's come after, and Waiting for you sits below all of them."
       },
       {
        "file": "frames/rd3-c-rest-390.html",
-       "caption": "Phone 390: the section on a phone."
+       "caption": "On a phone: the section, the buttons under each item."
       }
      ]
     }
