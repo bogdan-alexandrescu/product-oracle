@@ -97,6 +97,8 @@ export interface OnePagerDb {
   approval?: { approved_in: string; waiting_on: { id: string; name: string }[]; blocked_by?: string[] } | null;
   /** The one_pager job is still writing the page: `blocks` are Oracle's quick read (built_by "extract"). */
   writing?: boolean;
+  /** The page is Oracle's quick read with no one_pager job writing it (it failed or was never queued). */
+  quickRead?: boolean;
   /** The PRD version's citations (title, excerpt) by id: a measure's source (one_pager_checks.measures). */
   cites?: Cites;
 }
@@ -255,7 +257,7 @@ export function seedRunPrdOnePager(): OnePagerDb {
     { key: "problem", heading: "Problem", body: "Owners of small photo libraries lose an hour a week finding new photos (about 9 minutes per day) [c:c1]. Every feature below serves sorting time [c:c4]:" },
     { key: "brief-items", heading: "Features by milestone", body: "| Milestone | Feature | Goal | Outcome |\n|---|---|---|---|\n| [M1](#milestone-m1) | [F-10 Auto albums](#feature-auto-albums) | Faster sorting | Albums by event [c:c4] |\n| | [F-12 Face groups](#feature-face-groups) | Faster sorting | People found in one tap [c:c1] |\n| | [F-13 Album names](#feature-album-names) | Faster sorting | Albums named by place and date [c:c1] |" },
     { key: "non-goals", heading: "Non-goals", body: "Editing stays where it is, so F-11 Photo editing is out [c:c1]. Prints are not planned, so F-14 Print orders waits for next year; and F-15 Shared albums is out too [c:c11]." },
-    { key: "top-risks", heading: "Top risks", body: "- Albums may group the wrong photos: owners move a photo in one tap [c:c11].\n- F-40 may slip past M1 [c:c4]." },
+    { key: "top-risks", heading: "Top risks", body: "- Albums may group the wrong photos: owners move a photo in one tap [c:c11].\n- F-40 may slip past M1 [c:c4].\n- F-50 requires login before albums show [c:c4]." },
     { key: "audience", heading: "Who has it", body: "- **Primary:** Owners of small photo libraries who add a few hundred photos a week [c:c1].\n- **Job story:** When a batch of photos lands, I want them grouped by event, so I can find one in seconds [c:c1].\n- **Owner:** The person who pays for the library and sets who may edit it [c:c4].\n- **Not the target:** Studios with their own photo tools [c:c11]." },
     { key: "success", heading: "Success measures", body: "- Photos sorted within a day from 40% to 80%, counted as: [c:c4] [c:c11]\n- Time to find a photo from 90s to 20s [c:c1]\n- Albums renamed by hand from 30% to 10%" },
     { key: "sources-data", heading: "Data points", body: "- Time to find a photo: measured as seconds from opening the library to opening the photo; source: [c:c1]" },
@@ -282,6 +284,7 @@ export function seedRunPrdOnePager(): OnePagerDb {
     { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", lines: [
       { id: "risks-1", text: "Albums may group the wrong photos: owners move a photo in one tap [c:c11].", keys: ["top-risks"] },
       { id: "risks-2", text: "F-40 may slip past M1 [c:c4].", keys: ["top-risks"] },
+      { id: "risks-3", text: "F-50 requires login before albums show [c:c4].", keys: ["top-risks"] },
     ] },
     { key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] },
   ];
@@ -515,7 +518,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     decider: ctx.decider ? { id: ctx.decider, name: ctx.names[ctx.decider] ?? "someone" } : null,
     span_start: span?.[0] ?? null,
     span_end: span?.[1] ?? null,
-    built_by: db.writing && !held ? "extract" : "oracle",
+    built_by: (db.writing || db.quickRead) && !held ? "extract" : "oracle",
     writing: !!db.writing && !held,
     built_at: "2026-10-20T15:05:00Z",
     blocks,

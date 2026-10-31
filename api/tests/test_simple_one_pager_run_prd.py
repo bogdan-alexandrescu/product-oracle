@@ -87,6 +87,7 @@ Editing stays where it is, so F-11 Photo editing is out [c:c1]. Prints are not p
 
 - Albums may group the wrong photos: owners move a photo in one tap [c:c11].
 - F-40 may slip past M1 [c:c4].
+- F-50 requires login before albums show [c:c4].
 
 # Full version {#full}
 
@@ -192,6 +193,14 @@ async def test_quick_read_never_shows_a_citation_token(client):
     assert block(view, "bets")["lines"][0]["text"] == "F-10 Auto albums"
 
 
+async def test_only_a_cut_citation_is_dropped():
+    # A cut one ends in "…" or holds its ":"; text that only ends in "[c" is the PRD's own.
+    assert checks.resolved("sorting time [c…") == "sorting time"
+    assert checks.resolved("sorting time [c:c") == "sorting time"
+    assert checks.resolved("Pick a size [c") == "Pick a size [c"
+    assert checks.resolved("Grades [a] to [c") == "Grades [a] to [c"
+
+
 async def test_stored_quick_read_with_tokens_reads_clean(client):
     ctx = await run_world(client)
     await get(client, ctx, "owner", "photo-sorting")
@@ -239,6 +248,11 @@ async def test_who_has_it_from_labelled_lines(client):
     # Unlabelled leads read as before.
     sec.body_md = "- New workspace admins: set up alone [c:c1]\n- Team leads: invite later"
     assert checks.who_has_it([sec]) == "New workspace admins; Team leads"
+    # Labelled lines among unlabelled leads: the Primary's words, never the labels.
+    sec.body_md = "- Primary: Owners of small photo libraries [c:c1]\n- New admins: set up alone"
+    assert checks.who_has_it([sec]) == "Owners of small photo libraries"
+    sec.body_md = "- Owner: Library owners who pay [c:c1]\n- New admins: set up alone"
+    assert checks.who_has_it([sec]) == "Library owners who pay; New admins"
 
 
 async def test_measure_from_its_source_never_ids(client):
@@ -257,18 +271,33 @@ async def test_measure_from_its_source_never_ids(client):
     sec = Section(section_key="s", heading="Success", level=3, ordinal=1, content_hash="x",
                   body_md="- Photos sorted within a day, counted as: [c:c4] [c:c11]", body_text="")  # fmt: skip
     assert checks.measures([sec]) == []
+    # A long excerpt is cut short, never the whole quote.
+    long = "photos given an album " + "within a day of upload " * 20
+    found = checks.measures([sec], {"c4": ("Upload log export", long)})
+    assert len(found[0].measure.split()) <= 21 and found[0].measure.endswith("…"), found
+    assert found[0].measure.startswith("photos given an album within a day")
 
 
 async def test_code_named_right_after_it(client):
     ctx = await run_world(client)
     view = await get(client, ctx, "owner", "photo-sorting")
     codes = [x for x in view["needs_look"] if x["kind"] == "code"]
-    assert [x["text"] for x in codes] == ["F-40 has no name in the PRD."]
+    assert [x["text"] for x in codes] == [
+        "F-40 has no name in the PRD.",
+        "F-50 has no name in the PRD.",
+    ]
+    risks = [x["text"] for x in block(view, "risks")["lines"]]
+    assert "F-50 requires login before albums show." in risks, risks
     sec = Section(section_key="n", heading="Non-goals", level=2, ordinal=1, content_hash="x",
                   body_md="Editing stays, so F-11 Photo editing is out. And F-14 Print orders waits; F-40 may slip.",
                   body_text="")  # fmt: skip
     names = checks.glossary([sec])
     assert names == {"F-11": "Photo editing", "F-14": "Print orders"}
+    # A lowercase word after a code is the sentence going on, never its name.
+    sec.body_md = "We keep F-12 depends on F-10. F-50 requires login. F-31 really helps. F-40 blocks F-41."
+    names = checks.glossary([sec])
+    assert names == {}, names
+    assert checks.with_names("F-50 requires login", names) == ("F-50 requires login", ["F-50"])
     assert (
         checks.with_names("so F-11 Photo editing is out", names)[0]
         == "so F-11 Photo editing is out"

@@ -14,14 +14,17 @@ import { expect, test, type Page } from "./test";
  *   one quiet line says Oracle is still writing the page; who has it is a sentence (the
  *   Primary's words), never "Primary; Job story; …"; an outcome whose definition is only
  *   citation ids shows its source's words and name; one with none says so; a code named
- *   right after it in prose is not a "Needs a look" item; fails_when=any of those reads as
+ *   right after it in prose is not a "Needs a look" item, one followed by a lowercase word
+ *   ("F-50 requires login") is; when the job did not write the page, one line says it is
+ *   the quick read; fails_when=any of those reads as
  *   on production; no_claim=the API's reading (api/tests/test_simple_one_pager_run_prd.py).
  */
 const URL = "/simple/one-pagers/guided-setup";
 const WRITING = "Oracle is still writing this one-pager. Until then you see the PRD's own lines.";
+const QUICK_READ = "Oracle has not written this one-pager yet. You see the PRD's own lines.";
 
-async function open(page: Page, email?: string) {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "one-pager-run-prd"] as const);
+async function open(page: Page, email?: string, scenario = "one-pager-run-prd") {
+  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, scenario] as const);
   await login(page, email);
   await page.goto(URL);
 }
@@ -43,6 +46,10 @@ async function readsCleanly(page: Page) {
   );
   await expect(outcomes.locator('[data-line="outcomes-3"]').getByTestId("outcome-measure")).toHaveText("How it is measured is not in the PRD yet");
   await expect(article.getByRole("region", { name: "Not doing" })).toContainText("so F-11 Photo editing is out");
+  // A lowercase word after a code is the sentence, never a name put beside the code.
+  const risks = article.getByRole("region", { name: "Risks and open decisions" });
+  await expect(risks).toContainText("F-50 requires login before albums show.");
+  await expect(risks).not.toContainText("F-50 requires login requires");
   // Export PDF exports the same resolved words.
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export PDF" }).click();
@@ -59,7 +66,17 @@ for (const phone of [false, true]) {
       await open(page);
       await readsCleanly(page);
       const look = page.getByRole("region", { name: "Needs a look" });
-      await expect(look.getByRole("listitem")).toHaveText(["F-40 has no name in the PRD. In: Top risks"]);
+      await expect(look.getByRole("listitem")).toHaveText([
+        "F-40 has no name in the PRD. In: Top risks",
+        "F-50 has no name in the PRD. In: Top risks",
+      ]);
+    });
+
+    test("when Oracle's job did not write the page, one line says it is the quick read", async ({ page }) => {
+      await open(page, "viewer@example.com", "one-pager-quick-read");
+      await expect(page.getByTestId("one-pager-quick-read")).toHaveText(QUICK_READ);
+      await expect(page.getByTestId("one-pager-writing")).toHaveCount(0);
+      await expect(page.getByRole("article", { name: "One-pager" })).not.toContainText("[c");
     });
 
     test("a viewer reads the same clean page, with no Needs a look", async ({ page }) => {
