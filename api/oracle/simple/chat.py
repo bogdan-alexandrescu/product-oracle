@@ -11,7 +11,8 @@ decider apply, approvers and commenters propose), so a card can never do what a 
 could not. Discard writes nothing.
 
 **Threads** are Oracle's discussions (G1): one shared thread per meeting (subject the
-meeting's screen, private to its attendees), and one per person for the Ask panel. The
+meeting's screen, keyed ``meeting_chat:<id>`` apart from Oracle's Ask panel on that page,
+private to its attendees), and one per person for the Ask panel. The
 person's line and Oracle's reply are discussion messages; the cards hang off the reply
 (``simple_chat_cards``). Oracle's reply here is deterministic (no model call), so it costs
 no llm budget.
@@ -873,11 +874,20 @@ def page_of(page: str | None) -> str:
     return path if path == "/simple" or path.startswith("/simple/") else "/simple"
 
 
+def meeting_key(meeting_id: Any) -> str:
+    """A meeting chat's own subject key (meet-chat-own-key): never the meeting page's screen
+    key, which Oracle's Ask panel on that page uses for its own discussion."""
+    return f"meeting_chat:{meeting_id}"
+
+
 def _key(meeting_id: uuid.UUID | None, me: uuid.UUID, page: str | None = None) -> tuple[str, str]:
-    """A meeting's one shared thread; else the person's Ask thread on one page (the walk:
-    a thread per person and page, so a page shows only its own lines; the old per-person
-    thread, ``/simple/ask/<me>``, stays readable but is no page's)."""
-    path = f"/simple/meetings/{meeting_id}" if meeting_id else f"/simple/ask/{me}{page_of(page)}"
+    """A meeting's one shared thread (its subject the meeting's page, its key its own); else
+    the person's Ask thread on one page (the walk: a thread per person and page, so a page
+    shows only its own lines; the old per-person thread, ``/simple/ask/<me>``, stays readable
+    but is no page's)."""
+    if meeting_id:
+        return f"/simple/meetings/{meeting_id}", meeting_key(meeting_id)
+    path = f"/simple/ask/{me}{page_of(page)}"
     return path, f"screen:{path}"
 
 
