@@ -8,15 +8,16 @@ import { login } from "./helpers";
  * A feature-set call keeps every reason it was asked for. The "scope-review" scenario's
  * saved-addresses run (web/lib/api/mock/runs.ts seedScopeReviewRuns): Pick address in one step
  * needs a call for two reasons, "Low confidence" and "New, not in the baseline"; five of the
- * eight features are handled, so the bar starts at "5 of 8 handled". In the address-book run,
- * Bulk edit is blocked by its left-out dependency and its two reasons to confirm are kept by one
+ * eight features are handled, so the bar starts at "5 of 8 handled". In the "scope-review-kept"
+ * scenario's address-book run, Bulk edit is blocked by its left-out dependency and its two reasons to confirm are kept by one
  * older call that answers both.
  */
 
 const PICK = "Pick address in one step";
 
 async function openReview(page: Page, run = SCOPE_REVIEW_RUN) {
-  await page.addInitScript((key) => localStorage.setItem(key, "scope-review"), MOCK_SCENARIO_KEY);
+  const scenario = run === SCOPE_CONSOLE_RUN ? "scope-review-kept" : "scope-review";
+  await page.addInitScript(([key, name]) => localStorage.setItem(key, name), [MOCK_SCENARIO_KEY, scenario] as const);
   await login(page, "approver@example.com");
   await page.goto(`/runs/${run}`);
   await page.getByTestId("checkpoint-feature_set").getByRole("link", { name: "Review feature set" }).click();
