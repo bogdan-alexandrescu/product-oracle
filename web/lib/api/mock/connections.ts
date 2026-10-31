@@ -21,6 +21,8 @@ type ConnectionRow = Schemas["ConnectionOut"];
 interface ConnDb {
   connections: ConnectionRow[];
   settings: Record<string, unknown>;
+  /** Connection.user_id: whose each connection is (the person's email), by connection id. */
+  owners?: Record<string, string>;
 }
 
 const STORAGE_KEY = "po-mock-connections-v1";
@@ -335,10 +337,12 @@ function seedConnections(): ConnectionRow[] {
 /**
  * Whether `email` reads connection `c` as theirs. The API keeps each person's connections
  * (Connection.user_id): the seeded ones are the owner's (MOCK_LOGIN), so another member, an
- * invited one too, starts with none; the rows the tests connect stay everyone's, as before.
+ * invited one too, starts with none; a connection a person makes is theirs alone. A row a
+ * test stored without an owner stays everyone's.
  */
-function yours(c: ConnectionRow, email: string | undefined): boolean {
-  return !SEEDED_IDS.includes(c.id) || email === undefined || email === MOCK_LOGIN.email;
+function yours(db: ConnDb, c: ConnectionRow, email: string | undefined): boolean {
+  const owner = db.owners?.[c.id] ?? (SEEDED_IDS.includes(c.id) ? MOCK_LOGIN.email : undefined);
+  return owner === undefined || email === undefined || email === owner;
 }
 
 /** A company setting as the mock stores it (its default when unset). */
@@ -377,12 +381,14 @@ function identity(provider: string, token: string): { account_id: string; label:
 
 function upsert(
   db: ConnDb,
+  email: string | undefined,
   provider: string,
   auth_mode: "oauth" | "token",
   who: { account_id: string; label: string; scopes: string[] },
   label?: string | null,
 ): ConnectionRow {
-  let row = db.connections.find((c) => c.provider === provider && c.account_id === who.account_id);
+  // As the API: one row per person, provider and account.
+  let row = db.connections.find((c) => c.provider === provider && c.account_id === who.account_id && yours(db, c, email));
   if (!row) {
     row = {
       // The mock's one Fireflies account is the one the Sources page's Fireflies source reads.
@@ -400,6 +406,7 @@ function upsert(
       updated_at: now(),
     };
     db.connections.push(row);
+    if (email !== undefined) db.owners = { ...db.owners, [row.id]: email };
   }
   Object.assign(row, {
     auth_mode,
@@ -440,7 +447,7 @@ export function setupFacts(email?: string): { connections: number; domains: stri
   const db = load();
   const domains = ("company_email_domains" in db.settings ? db.settings.company_email_domains : SETTING_DEFAULTS.company_email_domains) as string[];
   return {
-    connections: db.connections.filter((c) => c.status === "active" && yours(c, email)).length,
+    connections: db.connections.filter((c) => c.status === "active" && yours(db, c, email)).length,
     domains,
     horizons: "planning_horizons" in db.settings,
     timezone: "company_timezone" in db.settings ? String(db.settings.company_timezone) : null,
@@ -511,7 +518,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
   }
 
   if (p[1] === "connections") {
-    if (!p[2] && m === "GET") return json(200, db.connections.filter((c) => yours(c, email)).map((c) => out(db, c)));
+    if (!p[2] && m === "GET") return json(200, db.connections.filter((c) => yours(db, c, email)).map((c) => out(db, c)));
     if (p[2] === "providers" && m === "GET") return json(200, PROVIDERS);
     if (p[2] === "google" && p[3] === "picker-config" && m === "GET") return json(200, MOCK_PICKER_CONFIG);
     const provider = PROVIDERS.find((x) => x.key === p[2]);
@@ -529,11 +536,11 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
       }
       const who = identity(provider.key, token.trim());
       if (typeof who === "string") return json(400, { detail: who });
-      const existing = db.connections.find((c) => c.provider === provider.key && c.account_id === who.account_id);
+      const existing = db.connections.find((c) => c.provider === provider.key && c.account_id === who.account_id && yours(db, c, email));
       if (provider.key === "fireflies" && existing && (existing.endpoint_url ?? null) !== endpoint && role !== "owner") {
         return json(403, { detail: "This Fireflies account is connected through an endpoint an owner set; only an Oracle owner can change it" });
       }
-      const row = upsert(db, provider.key, "token", who, label);
+      const row = upsert(db, email, provider.key, "token", who, label);
       if (provider.key === "fireflies") row.endpoint_url = endpoint;
       return json(200, out(db, row));
     }
@@ -542,19 +549,20 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
         return json(409, { detail: `Sign-in with ${provider.name} is not configured; paste a token instead` });
       }
       const who = identity(provider.key, "oauth-token");
-      if (typeof who !== "string") upsert(db, provider.key, "oauth", who);
+      if (typeof who !== "string") upsert(db, email, provider.key, "oauth", who);
       return json(200, { url: `/settings/connections?connected=${provider.key}` });
     }
 
     if (p[3] === "notion" && p[4] === "pages" && m === "GET") {
       // The Sources page's mock Notion connection, or one connected on Settings > Connections.
-      const own = db.connections.find((c) => c.id === p[2]);
+      const own = db.connections.find((c) => c.id === p[2] && yours(db, c, email));
       if (p[2] !== MOCK_NOTION_CONNECTION_ID && !own) return json(404, { detail: "Connection not found" });
       if (own && own.provider !== "notion") return json(409, { detail: "This is not a Notion connection" });
       return notionPages(new URL(req.url, "http://mock"));
     }
 
-    const row = db.connections.find((c) => c.id === p[2]);
+    // As the API's get_own: another person's connection is not found.
+    const row = db.connections.find((c) => c.id === p[2] && yours(db, c, email));
     if (!row) return json(404, { detail: "Connection not found" });
     if (p[3] === "google" && p[4] === "shared-drives" && m === "GET") {
       if (row.provider !== "google") return json(404, { detail: "Not your Google connection" });
@@ -579,6 +587,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
     }
     if (!p[3] && m === "DELETE") {
       db.connections = db.connections.filter((c) => c.id !== row.id);
+      if (db.owners) delete db.owners[row.id];
       return json(204, undefined);
     }
     if (p[3] === "reconnect" && m === "POST") {
@@ -591,7 +600,7 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string, email
       if (!token && reconnectReason(row.provider, row.scopes)) {
         // Signs in again for drive.readonly, as the real API's authorize_url would.
         const who = identity(row.provider, "oauth-token");
-        if (typeof who !== "string") upsert(db, row.provider, "oauth", { ...who, account_id: row.account_id });
+        if (typeof who !== "string") upsert(db, email, row.provider, "oauth", { ...who, account_id: row.account_id });
         return json(200, { connection: out(db, row), authorize_url: `/settings/connections?connected=${row.provider}` });
       }
       Object.assign(row, { status: "active", last_error: null, updated_at: now() });
