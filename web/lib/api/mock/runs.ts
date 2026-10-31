@@ -2152,7 +2152,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (decision === "changes_requested" && !text && !reviewed && !sent.length && !scopeEdited) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
     // A confirmed console answer is its author's, as the API names it, not the confirmer's.
-    const author = confirming ? ((ctx.members ?? []).find((x) => x.email === cp.console?.answered_by)?.id ?? null) : ctx.userId;
+    const answerer = confirming ? (ctx.members ?? []).find((x) => x.email === cp.console?.answered_by) : undefined;
+    const author = confirming ? (answerer?.id ?? null) : ctx.userId;
     Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
     if (decision === "changes_requested") cp.review = reviewed ? documentReview(ctx, r, cp, reviewed, text) : buildReview(ctx, r, cp, staged, text);
     if (edited) {
@@ -2181,7 +2182,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
     if (cp.kind === "eng_review" && decision === "approved") approveEngCheck(ctx, r, cp, staged);
     if (cp.kind === "eng_dates" && decision === "approved") approveEngDates(cp, staged);
-    cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: confirming ? "swarmcloud_console" : "oracle", by: author } };
+    cp.payload = { ...cp.payload, decided: { role: (confirming ? answerer?.role : ctx.userRole) ?? null, via: confirming ? "swarmcloud_console" : "oracle", by: author } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
       const at = ctx.now();
@@ -3203,7 +3204,7 @@ function consoleHeldRun(): RunOut {
   cp.run_id = run.id;
   cp.payload = { ...cp.payload, items_check: items.items_check };
   cp.console = {
-    answered_by: "lead@example.com",
+    answered_by: "approver@example.com",
     answered_at: "2026-10-20T10:00:00Z",
     via: null,
     verdict: "MERGE",

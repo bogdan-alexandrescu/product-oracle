@@ -6,7 +6,6 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react
 import { createPortal, flushSync } from "react-dom";
 
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
-import { peopleByIds } from "@/components/PersonPicker";
 import { decisionSentence, runLabel } from "@/lib/labels";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
@@ -833,12 +832,9 @@ function RunDecisions({ run }: { run: RunOut }) {
     () => unwrap(api.GET("/v1/runs/{run_id}/decisions", { params: { path: { run_id: run.id } } })),
     { keepPrevious: true },
   );
-  // The list reads as the agents read it (roles, no names); the page names who decided.
-  const deciders = run.checkpoints.map((c) => c.decided_by).filter((x): x is string => !!x);
-  const people = useQuery(`run-deciders|${[...new Set(deciders)].sort().join(",")}`, () => peopleByIds(deciders), { keepPrevious: true });
+  // Who decided, as the API names them: a confirmed console answer is its author's, not the confirmer's.
   const said = (d: Schemas["RunDecision"]) => {
-    const by = run.checkpoints.find((c) => c.id === d.checkpoint_id)?.decided_by;
-    const name = by ? people.data?.get(by)?.name : undefined;
+    const name = d.decided_by_name;
     const checkpoint = d.kind === "baseline_confirm" ? "The baseline" : (CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "This checkpoint");
     return decisionSentence(d, checkpoint, name);
   };
