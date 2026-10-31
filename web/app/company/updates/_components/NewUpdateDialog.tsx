@@ -37,6 +37,10 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const chosen = templateOf(template)!;
+  // qa4-company-31: a period that starts after it ends is said at once, and the paid button waits for a valid one.
+  const backwards = !!period.from && !!period.to && period.from > period.to;
+  // qa4-company-30: a title another update already has is said under the field.
+  const taken = !!title.trim() && updates.some((u) => u.title.trim().toLowerCase() === title.trim().toLowerCase());
   const observing = useAutonomyLevel("external_messages") === "observe";
   // qa-company-18: Draft with Oracle is a paid run: the dialog says what it costs before it
   // starts, from the flow catalog (each step's roles at the template's depth, as the run's
@@ -60,7 +64,7 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
     e.preventDefault();
     if (!title.trim()) return setError("Give the update a title");
     if (!period.from || !period.to) return setError("Choose the period's first and last day");
-    if (period.from > period.to) return setError("The period starts after it ends");
+    if (period.from > period.to) return;
     setBusy(true);
     setError(null);
     try {
@@ -136,10 +140,26 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
               </label>
             </div>
             <p className="text-sm text-text2">From the day after the last approved {chosen.name.toLowerCase()}, through today.</p>
+            {backwards && (
+              <p className="text-sm font-medium text-crit" data-testid="update-period-error">
+                The period starts after it ends.
+              </p>
+            )}
           </fieldset>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Title
-            <input className={INPUT} value={title} maxLength={200} onChange={(e) => setCustomTitle(e.target.value)} />
+            <input
+              className={INPUT}
+              value={title}
+              maxLength={200}
+              aria-describedby={taken ? "update-title-taken" : undefined}
+              onChange={(e) => setCustomTitle(e.target.value)}
+            />
+            {taken && (
+              <span id="update-title-taken" data-testid="update-title-taken" className="text-sm font-medium text-warn">
+                An update with this title already exists. Change the title so the two are easy to tell apart.
+              </span>
+            )}
           </label>
           {observing ? (
             <AutonomyNote testId="update-observing" onFollow={onClose}>
@@ -165,7 +185,7 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" disabled={busy}>
+            <Button type="submit" variant="primary" disabled={busy || backwards} title={backwards ? "Fix the period first" : undefined}>
               {observing
                 ? busy
                   ? "Starting…"
