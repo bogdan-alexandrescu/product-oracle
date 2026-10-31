@@ -71,6 +71,8 @@ interface StoredCard {
   flag?: Schemas["SimpleItemFlags"] | null;
   change_id: string | null;
   decided_by_name: string | null;
+  /** Who applied it (the API's decided_by; not sent): they may undo it. */
+  decided_by?: string | null;
   decided_at: string | null;
   decision_id: string | null;
   /** Chat actions: what Undo restores (the agenda before, the decision made). */
@@ -1281,7 +1283,7 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
 function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): string | null {
   const m = meetingOf(chat, c);
   const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
-  if (bar || LOCAL_OPS.has(c.op) || c.op === "add_feature_ask" || c.op === "suggest_feature") return bar;
+  if (bar || LOCAL_OPS.has(c.op) || c.op === "add_feature_ask" || c.op === "suggest_feature" || c.decided_by === ctx.id) return bar;
   const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
   const decides = c.item_id ? !!item?.can_decide : ctx.role === "owner";
   return decides ? null : "Only someone who may change this item undoes it";
@@ -1289,8 +1291,9 @@ function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): strin
 
 function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   const check = c.flag !== undefined ? { flags: c.flag ? [c.flag] : [] } : asIf(db, c);
-  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, ...rest } = c;
+  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, decided_by: _by, ...rest } = c;
   void _undo;
+  void _by;
   void _flag;
   void _thread;
   void _meeting;
@@ -1454,7 +1457,7 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   }
   Object.assign(c, {
     status: result.change.status === "applied" ? "applied" : "proposed", change_id: result.change.id,
-    decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: now(),
+    decided_by_name: ctx.names[ctx.id] ?? "someone", decided_by: ctx.id, decided_at: now(),
   });
   if (n != null) Object.assign(c, { op: use.op, target: use.target, before: use.before, after: use.after });
   const meeting = meetingOf(chat, c);
@@ -1577,7 +1580,7 @@ function applyLocal(c: StoredCard, meeting: Meeting | null, ctx: ChatCtx, s8?: C
       meeting.decisions.push({ id: decision, title: text, card_id: c.id, at });
     } else if (s8) undo.decision_id = s8.decide(null, text, decider, (c.target.document_id as string | undefined) ?? null);
   }
-  Object.assign(c, { status: "applied", change_id: crypto.randomUUID(), decided_by_name: by, decided_at: at, decision_id: decision, undo });
+  Object.assign(c, { status: "applied", change_id: crypto.randomUUID(), decided_by_name: by, decided_by: ctx.id, decided_at: at, decision_id: decision, undo });
   const change = {
     id: c.change_id, session_id: null, document_id: null, draft_ids: [], op: c.op, target: c.target, before: c.before, after: c.after, status: "applied", by: ctx.id, by_name: by, at,
     decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: true,
