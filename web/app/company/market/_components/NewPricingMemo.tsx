@@ -7,8 +7,9 @@ import { Button } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { addMonths, todayIn, useCompanyZone } from "@/lib/dates";
+import { useFlowCost } from "@/lib/flow-cost";
 import { formatMoney } from "@/lib/format";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { errorMessage } from "@/lib/use-query";
 
 import { Modal } from "./Modal";
 
@@ -36,15 +37,7 @@ export function NewPricingMemo({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   // qa4-company-32: the run's cost from the flow catalog (each step's roles at standard depth,
   // as the run's estimate counts them), and who approves it over the approval threshold.
-  const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
-  const cost = (() => {
-    const c = catalog.data;
-    const flow = c?.flows.find((f) => f.key === "pricing_memo");
-    if (!c || !flow) return null;
-    const base = flow.segments.reduce((sum, seg) => sum + seg.roles.reduce((n, r) => n + (c.roles.find((x) => x.key === r)?.base_usd ?? 0), 0), 0);
-    const usd = Math.round(base * (c.depths.standard ?? 1) * 100) / 100;
-    return { usd, over: usd > c.approval_threshold_usd, threshold: c.approval_threshold_usd };
-  })();
+  const cost = useFlowCost("pricing_memo");
 
   async function submit(e: FormEvent) {
     e.preventDefault();

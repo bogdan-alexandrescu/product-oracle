@@ -8,8 +8,9 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
 import { todayIn, useCompanyZone } from "@/lib/dates";
+import { useFlowCost } from "@/lib/flow-cost";
 import { formatMoney } from "@/lib/format";
-import { errorMessage, useQuery } from "@/lib/use-query";
+import { errorMessage } from "@/lib/use-query";
 
 import { DOC, type DocKind, type DocRef } from "./lib";
 
@@ -68,14 +69,7 @@ export function DraftSheet({
   const dirty = !!changed.trim() || years !== "5" || span.from !== initialSpan.from || span.to !== initialSpan.to;
   // qa-company-24: Draft with Oracle is a paid run: the button says what it costs, as New
   // update's does (the flow catalog's roles at standard depth, as the run's estimate counts them).
-  const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
-  const cost = (() => {
-    const c = catalog.data;
-    const flow = c?.flows.find((f) => f.key === "strategy_draft");
-    if (!c || !flow) return null;
-    const base = flow.segments.reduce((sum, seg) => sum + seg.roles.reduce((n, r) => n + (c.roles.find((x) => x.key === r)?.base_usd ?? 0), 0), 0);
-    return Math.round(base * (c.depths.standard ?? 1) * 100) / 100;
-  })();
+  const cost = useFlowCost("strategy_draft")?.usd ?? null;
   const valid = vision ? Number.isInteger(yearsN) && yearsN >= 1 && yearsN <= 10 : !!span.from && !!span.to && span.to > span.from;
 
   /** The document's slug: the existing one, or a new one from the built-in template. */

@@ -8,8 +8,8 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
 import { useCompanyZone } from "@/lib/dates";
+import { useFlowCost } from "@/lib/flow-cost";
 import { formatMoney } from "@/lib/format";
-import { useQuery } from "@/lib/use-query";
 import { errorMessage } from "@/lib/use-query";
 
 import { TEMPLATES, defaultPeriod, defaultTitle, templateOf, todayIso, type Period, type Update, type UpdateTemplate } from "./lib";
@@ -45,15 +45,7 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
   // qa-company-18: Draft with Oracle is a paid run: the dialog says what it costs before it
   // starts, from the flow catalog (each step's roles at the template's depth, as the run's
   // estimate counts them), and who approves it when it is over the approval threshold.
-  const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
-  const cost = (() => {
-    const c = catalog.data;
-    const flow = c?.flows.find((f) => f.key === "update_draft");
-    if (!c || !flow) return null;
-    const base = flow.segments.reduce((sum, seg) => sum + seg.roles.reduce((n, r) => n + (c.roles.find((x) => x.key === r)?.base_usd ?? 0), 0), 0);
-    const usd = Math.round(base * (c.depths[chosen.depth] ?? 1) * 100) / 100;
-    return { usd, over: usd > c.approval_threshold_usd, threshold: c.approval_threshold_usd };
-  })();
+  const cost = useFlowCost("update_draft", chosen.depth);
 
   function pick(t: UpdateTemplate) {
     setTemplate(t);
