@@ -129,7 +129,7 @@ for (const scheme of ["light", "dark"] as const) {
 
 test("rirs-29: one Oracle read action, named plainly, and the read in plain words", async ({ page }) => {
   await openIntake(page);
-  await expect(readLine(page)).toContainText("2 things Oracle assumed (private to you), ");
+  await expect(readLine(page)).toContainText("Oracle assumed 2 things (only you see them); ");
   await expect(readLine(page)).not.toContainText("inference");
   await expect(readLine(page).getByRole("button", { name: "Read the brief again" })).toBeVisible();
   const header = page.locator("header[data-page-header]").filter({ visible: true });

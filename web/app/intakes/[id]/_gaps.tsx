@@ -36,7 +36,9 @@ export const GAP_STATUS: Record<RankedGap["status"], { label: string; kind: Chip
 
 // A control the signed-in role can never use is hidden (owner rule, #370); the note says who acts.
 const ADD_REASON = "A commenter adds gaps";
-const TRIAGE_REASON = "An approver triages gaps";
+const TRIAGE_REASON = "An approver sorts gaps";
+/** qa4-work-12: the button says what it changes, not "Triage". */
+const SORT_LABEL = "Set importance and owner";
 
 /** A section key as a person reads it: "success_metrics" is "Success metrics". */
 function sectionWords(key: string): string {
@@ -177,7 +179,7 @@ function Triage({
         <input value={sections} onChange={(e) => setSections(e.target.value)} className={`${TEXTAREA} h-9`} />
       </label>
       <label className={FIELD_LABEL}>
-        Stop condition
+        Closed when
         <textarea rows={2} maxLength={500} value={stop} onChange={(e) => setStop(e.target.value)} className={TEXTAREA} />
       </label>
       <div className="flex min-w-0 flex-col gap-1.5">
@@ -264,13 +266,13 @@ function GapRow({
         {/* qa-work-30: the PRD sections it touches in words ("Metrics"), not raw keys. */}
         {gap.section_keys.length > 0 && (
           <span className="break-words" data-testid="gap-sections">
-            {gap.section_keys.length === 1 ? "Section" : "Sections"}: {gap.section_keys.map(sectionWords).join(", ")}
+            {gap.section_keys.length === 1 ? "PRD section" : "PRD sections"}: {gap.section_keys.map(sectionWords).join(", ")}
           </span>
         )}
         {owner && <span>Owner: {owner.name}</span>}
         {researching && <span className="font-semibold text-accent-ink">Research proposed</span>}
       </div>
-      {gap.stop_condition && <p className="text-[13px] break-words text-text2">Stop when: {gap.stop_condition}</p>}
+      {gap.stop_condition && <p className="text-[13px] break-words text-text2">Closed when: {gap.stop_condition}</p>}
       {error && <InlineError>{error}</InlineError>}
       {triaging ? (
         <Triage
@@ -285,7 +287,11 @@ function GapRow({
       ) : (
         (approver || (commenter && open && !researching)) && (
           <div className="flex flex-wrap gap-1.5">
-            {approver && <Button onClick={() => setTriaging(true)}>Triage</Button>}
+            {approver && (
+              <Button title="Change its importance, owner, PRD sections and when it counts as closed" onClick={() => setTriaging(true)}>
+                {SORT_LABEL}
+              </Button>
+            )}
             {commenter && open && !researching && (
               <Button icon="search" disabled={busy} onClick={research}>
                 Research this
@@ -310,8 +316,8 @@ function GapRow({
 
 /** Who acts on the gap controls the signed-in role does not see; nothing for approvers and owners. */
 function roleNote(canAdd: boolean, canTriage: boolean): string | null {
-  if (!canAdd) return `You can read the gaps. ${ADD_REASON} and asks for research; an approver triages them.`;
-  if (!canTriage) return `${TRIAGE_REASON}: importance, owner, sections, stop condition, defer and reopen.`;
+  if (!canAdd) return `You can read the gaps. ${ADD_REASON} and asks for research; an approver sorts them.`;
+  if (!canTriage) return `${TRIAGE_REASON}: importance, owner, PRD sections, when it is closed, defer and reopen.`;
   return null;
 }
 

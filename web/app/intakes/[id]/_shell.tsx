@@ -350,12 +350,42 @@ export function BeforeDrafting({ id }: { id: string }) {
   );
 }
 
-/** The header's way back; rirs-25: at least 24 px tall, so a thumb hits it on a phone. */
+/** The places a brief is opened from that the back link names; anywhere else it leads to PRDs. */
+const CAME_FROM: { path: string; label: string }[] = [{ path: "/inbox", label: "Inbox" }];
+
+/** The entry before this one in the tab's history (the Navigation API), when the browser has it. */
+function previousUrl(): URL | null {
+  const nav = (window as unknown as { navigation?: { currentEntry?: { index: number } | null; entries(): { url: string | null }[] } }).navigation;
+  const index = nav?.currentEntry?.index ?? -1;
+  if (!nav || index < 1) return null;
+  const url = nav.entries()[index - 1]?.url;
+  if (!url) return null;
+  const prev = new URL(url);
+  return prev.origin === window.location.origin ? prev : null;
+}
+
+const noSubscribe = () => () => undefined;
+const placeOf = (href: string, path: string) => href === path || href.startsWith(`${path}/`) || href.startsWith(`${path}?`);
+
+/** The previous entry's path and query when it is one of CAME_FROM, else "". */
+function cameFrom(): string {
+  const prev = previousUrl();
+  const href = prev ? `${prev.pathname}${prev.search}` : "";
+  return href && CAME_FROM.some((p) => placeOf(href, p.path)) ? href : "";
+}
+
+/**
+ * The header's way back; rirs-25: at least 24 px tall, so a thumb hits it on a phone.
+ * qa4-work-10: opened from the Inbox it reads "Inbox" and goes back there; else "PRDs".
+ */
 function BackToPrds() {
+  // The way back as "<href>" when it is a named place, else "" (the server's answer too).
+  const back = useSyncExternalStore(noSubscribe, cameFrom, () => "");
+  const from = back ? { href: back, label: CAME_FROM.find((p) => placeOf(back, p.path))!.label } : null;
   return (
-    <Link href="/documents" data-testid="intake-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
+    <Link href={from?.href ?? "/documents"} data-testid="intake-back" className="inline-flex min-h-6 items-center gap-1 py-0.5 hover:text-text hover:underline">
       <Icon name="back" size={16} />
-      PRDs
+      {from?.label ?? "PRDs"}
     </Link>
   );
 }

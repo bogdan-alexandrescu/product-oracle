@@ -125,6 +125,8 @@ function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number];
   const who = mine ? "You" : (people.get(answer.answered_by ?? "")?.name ?? "Someone");
   const myInitials = useMyInitials();
   const kind = answer.kind === "answer" && answer.knowledge_state !== "unknown" ? (answer.knowledge_state === "user_decision" ? "pass" : "acc") : "na";
+  // qa4-work-6: "I don't know" (or a hand-over) says itself; no second "Unknown" tag.
+  const label = knowledgeLabel(answer, mine, who);
   return (
     <div data-testid="answer" className="ml-10 flex min-w-0 gap-2.5 max-[600px]:ml-4">
       <Avatar name={who} initials={mine ? myInitials : undefined} tone={mine ? "me" : "default"} />
@@ -135,7 +137,7 @@ function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number];
           <time dateTime={answer.created_at} title={when(answer.created_at)} className="text-text">
             {dayMonth(answer.created_at)}
           </time>
-          <Chip kind={kind}>{knowledgeLabel(answer, mine, who)}</Chip>
+          {label && <Chip kind={kind}>{label}</Chip>}
         </div>
         <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
           {answer.kind === "answer"
@@ -197,6 +199,9 @@ function QuestionBubble({
     }
   }
   const open = q.status === "asked" || q.status === "delegated";
+  // A deferred question may still be answered (answers.py ANSWERABLE): it offers Answer again.
+  const deferred = q.status === "deferred";
+  const answerable = open || deferred;
   const mine = q.asked_to === me.id;
   const { can } = useMe();
   // #370: who asked and the intake's author may move a question; at the handler's role
@@ -205,8 +210,8 @@ function QuestionBubble({
   const mayAnswer = can("answer_question", mine || can("update_question"));
   const waitingReview = gap?.status === "answered_pending_review";
   const last = card.answers[card.answers.length - 1];
-  /** An answer stands on it (not a hand-over to someone else): Answer becomes Change answer. */
-  const standing = !!last && last.kind !== "delegate";
+  /** An answer stands on it (not a hand-over, not a deferral): Answer becomes Change answer. */
+  const standing = !!last && last.kind !== "delegate" && last.kind !== "defer";
   // Answered "I don't know": the API lets an approver write the answer later (answers.py).
   const unsure = q.status === "answered" && last?.kind === "dont_know";
   const mayChange = unsure && can("update_question");
@@ -226,7 +231,7 @@ function QuestionBubble({
   const actions = (className = "") => (
     <div data-testid="question-actions" className={`${className} flex flex-wrap items-center gap-2`}>
       {open && !mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
-      {(open ? mayAnswer : mayChange) && mode !== "answer" && (
+      {(answerable ? mayAnswer : mayChange) && mode !== "answer" && (
         <Button variant={mine && !standing ? "solid" : "secondary"} onClick={() => setMode("answer")}>
           {standing ? "Change answer" : "Answer"}
         </Button>
@@ -260,7 +265,7 @@ function QuestionBubble({
             {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
           {/* qa-docs-86: an open question's actions sit in its card, not below it. */}
-          {open && !standing && !waiting && actions("mt-2.5")}
+          {answerable && !standing && !waiting && actions("mt-2.5")}
         </article>
       </div>
       {transcript.map((m) =>
@@ -272,11 +277,14 @@ function QuestionBubble({
           <PendingBubble key={m.id} message={m} />
         ) : null,
       )}
-      {card.answers.map((a) => (
-        <AnswerBubble key={a.id} answer={a} people={people} me={me} />
-      ))}
+      {/* qa4-work-3: a deferral is the question's state (its Deferred tag), not an answer. */}
+      {card.answers
+        .filter((a) => a.kind !== "defer")
+        .map((a) => (
+          <AnswerBubble key={a.id} answer={a} people={people} me={me} />
+        ))}
       {/* qa-work-28: an answered question (an "I don't know" too) offers Change answer after its answers. */}
-      {(open || unsure) && standing && !waiting && <div className="ml-10 max-[600px]:ml-4">{actions()}</div>}
+      {(answerable || unsure) && standing && !waiting && <div className="ml-10 max-[600px]:ml-4">{actions()}</div>}
       {thinking && (
         <p data-testid="oracle-typing" role="status" className="ml-10 text-sm text-text2 max-[600px]:ml-4">
           Oracle is thinking…
@@ -304,10 +312,16 @@ function QuestionBubble({
           />
         )}
         {open && waiting && onTurn && !thinking && <FollowUpReply onTurn={turn} />}
-        {(open || unsure) && !waiting && mode === "answer" && (
+        {(answerable || unsure) && !waiting && mode === "answer" && (
           <div className="rounded-panel border border-line bg-surface p-3">
             <AnswerQuestion
-              question={open ? asInbox(card, s) : { ...asInbox(card, s), answer_paths: ["answer"] }}
+              question={
+                open
+                  ? asInbox(card, s)
+                  : deferred
+                    ? { ...asInbox(card, s), answer_paths: asInbox(card, s).answer_paths.filter((p) => p !== "defer") }
+                    : { ...asInbox(card, s), answer_paths: ["answer"] }
+              }
               sendAnswer={onTurn && mine ? (body) => turn(body, false) : undefined}
               onCancel={() => setMode(null)}
               onSettled={() => {
@@ -317,7 +331,7 @@ function QuestionBubble({
             />
           </div>
         )}
-        {open && mode === "reassign" && (
+        {answerable && mode === "reassign" && (
           <div className="rounded-button border border-line bg-surface p-2" role="group" aria-label="Ask someone else">
             <PersonPicker autoFocus exclude={q.asked_to ? [q.asked_to] : []} onPick={reassign} />
             <Button variant="ghost" onClick={() => setMode(null)}>

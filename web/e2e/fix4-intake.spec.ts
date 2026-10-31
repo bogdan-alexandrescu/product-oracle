@@ -102,7 +102,7 @@ test("qa-work-30: the Gaps tab names a gap's section in words, never the raw key
   await openSaved(page);
   await page.getByRole("tab", { name: /^Gaps/ }).click();
   const row = page.getByTestId("gap-row").filter({ hasText: "No baseline for repeat checkout time" });
-  await expect(row.getByTestId("gap-sections")).toHaveText("Section: Metrics");
+  await expect(row.getByTestId("gap-sections")).toHaveText("PRD section: Metrics");
   await expect(row).not.toContainText(/\bmetrics\b/);
 });
 
@@ -148,8 +148,8 @@ test("qa-onboarding-22, 23, qa-work-3, 31: a new company's first brief, from New
   await expect(readLine(page)).toContainText("Oracle assumed", { timeout: 25_000 });
   const gaps = await gapsTabCount(page);
   expect(gaps).toBeGreaterThan(0);
-  await expect(readLine(page)).toContainText(`${gaps} open gap${gaps === 1 ? "" : "s"}`);
-  await expect(readLine(page)).not.toContainText("0 open gaps");
+  await expect(readLine(page)).toContainText(`${gaps} gap${gaps === 1 ? "" : "s"} still open`);
+  await expect(readLine(page)).not.toContainText("no gaps open");
   await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 analyses left today");
 
   // qa-onboarding-23: the estimate in the baseline dialog's words.
