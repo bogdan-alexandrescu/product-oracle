@@ -39,19 +39,33 @@ export function LegendKeys({ entries, className = "" }: { entries: LegendEntry[]
   );
 }
 
+/** qa4-simple-roadmap-29: one wording per mark, whichever view's legend names it (the Timeline's
+ * legend in _lanes.tsx says the same words). */
+export const MARK_WORDS = {
+  estimated: "Estimated dates",
+  suggestion: "Dates Oracle suggests (? opens them)",
+  pm: "No engineering work",
+  slices: "One bar per part of a feature",
+} as const;
+
 /** fix4 qa-simple-roadmap-7: the board's legend names the marks its cards draw, and only those shown. */
 export function boardLegend(data: Roadmap, phone: boolean, canDrag: boolean): LegendEntry[] {
   const open = data.items.filter((i) => !closedItem(i));
   const out: LegendEntry[] = [];
   if (canDrag) out.push({ key: "drag", swatch: null, words: `Drag a card to another column${phone ? " (press and hold first)" : ""} to change its horizon` });
   if (open.some((i) => barKind(i) === "estimated"))
-    out.push({ key: "estimated", swatch: <i aria-hidden className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid" />, words: "Estimated dates" });
+    out.push({ key: "estimated", swatch: <i aria-hidden className="inline-block h-3 w-[18px] flex-none rounded border border-dashed border-accent-mid" />, words: MARK_WORDS.estimated });
   if (open.some((i) => barKind(i) === "draft")) out.push({ key: "draft", swatch: <i aria-hidden className={`${LEGEND_SWATCH} border-dashed border-line-strong`} />, words: "Draft" });
   if (data.items.some((i) => brokenLinks(i).length > 0))
     out.push({ key: "broken", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ borderColor: "var(--crit)", borderWidth: 2 }} />, words: "A broken link" });
   if (data.items.some(closedItem)) out.push({ key: "cut", swatch: <i aria-hidden className="inline-block w-[18px] flex-none border-t border-dashed border-line-strong" />, words: "Below the line: cut" });
   return out;
 }
+
+/** qa4-simple-roadmap-8: the lane PM-owned work (no engineering) takes, grouped by goal (the
+ * Timeline's own lane key); it is no goal, so nothing is added or suggested under it. */
+export const PM_LANE = "pm-owned";
+const goalLane = (key: string) => key !== "none" && key !== PM_LANE && !key.startsWith("plan-goal:");
 
 const itemsWords = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 
@@ -451,11 +465,11 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
             <div key={g.key} className="mb-2" data-testid="board-group">
               <h3
                 className="flex items-center gap-1 truncate px-1 pb-1 text-sm font-semibold text-text2"
-                data-add-where={dropTargets && data.group === "goal" && g.key !== "none" ? whereAttr("goal", g.key) : undefined}
+                data-add-where={dropTargets && data.group === "goal" && goalLane(g.key) ? whereAttr("goal", g.key) : undefined}
                 data-add-label={g.title}
               >
                 <span className="min-w-0 flex-1 truncate">{g.title}</span>
-                {onGoal && data.group === "goal" && g.key !== "none" && !!goalSuggestions?.get(g.key) && (
+                {onGoal && data.group === "goal" && goalLane(g.key) && !!goalSuggestions?.get(g.key) && (
                   <button
                     type="button"
                     data-testid="goal-suggestions-open"
