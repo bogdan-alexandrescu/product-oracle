@@ -24,6 +24,7 @@ export function RunReviewBar({
   refreshKey,
   onDecided,
   onOpen,
+  liveTick = 0,
 }: {
   doc: string;
   n: number;
@@ -31,6 +32,8 @@ export function RunReviewBar({
   onDecided: () => void;
   /** Whether a run review waits on this version (the page then refreshes on an interval). */
   onOpen?: (open: boolean) => void;
+  /** The page's live refresh count: each new one re-reads the bar in place, under the same key. */
+  liveTick?: number;
 }) {
   const { can } = useMe();
   const q = useQuery(
@@ -45,6 +48,11 @@ export function RunReviewBar({
     },
     { keepPrevious: true },
   );
+  const { reload } = q;
+  useEffect(() => {
+    if (liveTick) void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTick]);
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState("");

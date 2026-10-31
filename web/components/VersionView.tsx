@@ -1422,7 +1422,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           <RunReviewBar
             doc={doc}
             n={n}
-            refreshKey={`${refreshKey}|${sections.filter((x) => x.verdict).length}|${version.approved_at ?? ""}|${liveTick}`}
+            refreshKey={`${refreshKey}|${sections.filter((x) => x.verdict).length}|${version.approved_at ?? ""}`}
+            liveTick={liveTick}
             onDecided={() => void Promise.all([verQ.reload(), docQ.reload()])}
             onOpen={setRunReviewOpen}
           />
