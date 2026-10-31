@@ -79,7 +79,7 @@ test("answer, review, ready: answer my question, review the critical one, then d
   await form.getByRole("button", { name: "Send answer" }).click();
   const reply = mine.getByTestId("answer");
   await expect(reply).toContainText("Repeat checkout time: 95 s today, 45 s by March.");
-  await expect(reply).toContainText("Your decision");
+  await expect(reply).toContainText("Your answer");
   await expect(answered(page)).toContainText("3");
 
   // The critical blocker answered below the owner role waits for review, and holds the draft.

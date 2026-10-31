@@ -210,7 +210,7 @@ test("inspector per feature: a note typed for one feature never saves against an
   await expect(inspector(page)).toHaveAccessibleName("Brief: Saved carts");
   await expect(inspector(page).getByRole("textbox", { name: "Note: what changes" })).toHaveCount(0);
   await expect(inspector(page).getByRole("button", { name: "Save verdict" })).toHaveCount(0);
-  await expect(row(page, "f.saved-carts").getByTestId("brief-verdict")).toHaveText("Decide");
+  await expect(row(page, "f.saved-carts").getByTestId("brief-verdict")).toHaveText("Not decided");
 });
 
 test("check once: the lead's row says Waiting, an approver sees the check on its line only", async ({ page }) => {
@@ -239,7 +239,7 @@ test("commenter suggests: with no lead named a commenter suggests, an approver s
   await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
   await expect(inspector(page).getByTestId("verdict-now")).toContainText("Feasible (suggested)");
   await expect(inspector(page).getByTestId("suggestion")).toContainText("Feasible");
-  await expect(row(page, "f.sample-data").getByTestId("brief-verdict")).toHaveText("Decide");
+  await expect(row(page, "f.sample-data").getByTestId("brief-verdict")).toHaveText("Not decided");
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("0 of 3 decided · 1 blocking question");
   await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
   const screen = page.url();

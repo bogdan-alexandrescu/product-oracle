@@ -58,7 +58,7 @@ test("qa-onboarding-16, rirs-7: a waiting run offers one destructive action; onc
   await expect(header(page).getByTestId("run-status")).toHaveText("Cancelled");
   await expect(page.getByTestId("run-cancel")).toHaveCount(0);
   await page.getByTestId("run-delete").click();
-  const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding PRD run" });
+  const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding run" });
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toContainText("still working");
   await expect(dialog.getByTestId("delete-blocked")).toHaveCount(0);
