@@ -1339,6 +1339,7 @@ function seedEngReview(): Db {
 function seedEngCheck(): Db {
   const db = seed();
   db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  if (typeof localStorage !== "undefined" && localStorage.getItem("po-mock-eng-n")) db.members.find((x) => x.email === "commenter@example.com")!.name = "Sam Okafor"; // MOCK-HOOK: the mock-ups' lead has a person's name
   seeded("eng-check", () => seedEngCheckRun(db.runs!, runsContext(db)));
   return db;
 }
@@ -2533,7 +2534,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     reviewDecider: (c) => runReviewDecider(db, c),
     draftRefusal: (flow, kind) => draftRefusal((db.autonomy ??= emptyAutonomy()), flow, kind),
-    members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
+    members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, name: x.name })), // MOCK-HOOK (name, for the mock-ups' lead)
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
     ask: (q) => {
       const at = now();

@@ -1,12 +1,12 @@
 import json, os, re, sys, urllib.request
-from swarm_browser import live
 
 B = "http://localhost:3393"
-OUT = "/workspace/att_ead0c3e65b904cb1b8e4/work/repo/mockups-out/mk-engcheck"
+OUT = os.path.dirname(os.path.abspath(__file__))
 FR, AS = OUT + "/frames", OUT + "/assets"
 os.makedirs(FR, exist_ok=True); os.makedirs(AS, exist_ok=True)
 REVIEW = open(os.environ["TMPDIR"] + "/cap/url.txt").read().strip()
 RET = "f.returns-portal"
+OWN = bool(os.environ.get("MOCK_OWN_BROWSER"))
 
 SNAP_JS = r"""() => {
   for (const el of document.querySelectorAll('input')) { el.setAttribute('value', el.value); if (el.checked) el.setAttribute('checked',''); }
@@ -17,10 +17,23 @@ SNAP_JS = r"""() => {
   for (const el of document.querySelectorAll('[data-mock-scroll]')) el.removeAttribute('data-mock-scroll');
   doc.querySelectorAll('script, noscript, link[rel=preload], link[rel=modulepreload], link[as=script], link[rel=stylesheet], style, iframe, nextjs-portal').forEach(e => e.remove());
   doc.style.removeProperty('zoom');
+  if (window.__vh) window.__vh.undo();  // no layout is read until redo, so no scroll clamps
   let css = '';
   for (const ss of document.styleSheets) { const base = ss.href || location.href; try { for (const r of ss.cssRules) css += r.cssText.replace(/url\(\s*["']?([^"')]+)["']?\s*\)/g, (m, u) => u.startsWith('data:') ? m : 'url(' + new URL(u, base).href + ')') + '\n'; } catch (e) {} }
+  if (window.__vh) window.__vh.redo();
   const imgs = [...doc.querySelectorAll('img[src]')].map(e => e.getAttribute('src'));
   return { html: doc.outerHTML, css, imgs, sx: window.scrollX, sy: window.scrollY };
+}"""
+
+VH_JS = r"""z => {
+  const ch = [];
+  for (const ss of document.styleSheets) { let rules; try { rules = ss.cssRules; } catch (e) { continue; }
+    const walk = rs => { for (const r of rs) { if (r.cssRules) walk(r.cssRules); if (!r.style) continue;
+      for (const prop of [...r.style]) { const v = r.style.getPropertyValue(prop); if (!/\d(d|s|l)?vh/.test(v)) continue;
+        ch.push([r.style, prop, v, v.replace(/([\d.]+)((d|s|l)?vh)/g, (m, n, u) => (parseFloat(n) / z) + u), r.style.getPropertyPriority(prop)]); } } };
+    walk(rules); }
+  window.__vh = { undo: () => ch.forEach(([st, p, o, n, pr]) => st.setProperty(p, o, pr)), redo: () => ch.forEach(([st, p, o, n, pr]) => st.setProperty(p, n, pr)) };
+  window.__vh.redo();
 }"""
 
 def fetch(url, name):
@@ -30,6 +43,10 @@ def fetch(url, name):
     return "../assets/" + name
 
 def save(page, name, vw, vh):
+    page.mouse.move(vw - 4, 4); page.wait_for_timeout(200)  # no row left lit by a hover
+    # At the very end of the page the sticky bar lifts off the bottom (the page's own bottom
+    # padding shows under it); stop just short of the end.
+    page.evaluate("() => { const m = document.documentElement.scrollHeight - innerHeight; if (m > 0 && scrollY >= m - 2) scrollTo(0, m - 40); }"); page.wait_for_timeout(150)
     d = page.evaluate(SNAP_JS)
     css = d["css"]
     def rep(m):
@@ -57,7 +74,7 @@ def start(page, n=9):
     page.goto(B + "/login?next=%2Fhome")
     page.evaluate("n => {localStorage.clear(); localStorage.setItem('po-mock-scenario','eng-check'); localStorage.setItem('po-mock-eng-n', String(n)); localStorage.setItem('oracle-theme','light')}", n)
     page.reload()
-    page.get_by_label("Email").fill("commenter@example.com")
+    page.get_by_label("Email").fill("commenter@example.com")  # the eng-check scenario's engineering lead, named Sam Okafor for the mock-ups
     page.get_by_label("Password").fill("demo")
     page.get_by_role("button", name="Sign in").click()
     page.wait_for_url("**/home")
@@ -66,8 +83,16 @@ def open_review(page, q, zoom=None):
     page.goto(REVIEW + "?" + q)
     page.get_by_test_id("decision-bar").wait_for()
     page.wait_for_timeout(700)
-    if zoom:
+    if zoom and OWN:
+        page.set_viewport_size({"width": 1512, "height": 945}); page.wait_for_timeout(500)
+    elif OWN and page.viewport_size["width"] == 1512:
+        page.set_viewport_size({"width": 1440, "height": 900}); page.wait_for_timeout(500)
+    elif zoom:
+        # The gate owns the window (1440 x 900), so 1512 x 945 is a CSS zoom. Under zoom a vh is
+        # still 1/100 of 900 px, so the PNG scales every vh length by 1/zoom (no band at the
+        # bottom); the HTML snapshot keeps the original rules (it opens at 1512 x 945 itself).
         page.evaluate("z => document.documentElement.style.zoom = String(z)", zoom)
+        page.evaluate(VH_JS, zoom)
         page.wait_for_timeout(300)
 
 def insp(page): return page.get_by_test_id("brief-inspector")
@@ -161,12 +186,14 @@ def frames_desktop(page, only):
                 pass
             if st in ("mid", "result"):
                 box.scroll_into_view_if_needed(); box.fill(ANS); pause(page, 300)
+                if L == "a" and st == "mid": page.evaluate("scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - innerHeight - 40))"); pause(page)
             if st == "result":
                 box.locator("xpath=..").get_by_role("button", name="Answer").click(); pause(page)
                 if L == "c":
                     pass
                 else:
                     page.get_by_test_id("answer").first.scroll_into_view_if_needed(); pause(page)
+                if L == "a": page.evaluate("scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - innerHeight - 40))"); pause(page)
             save(page, name, *W)
         name = f"ec2-{L}-hard-1512"
         if want(name):
@@ -179,7 +206,8 @@ def frames_desktop(page, only):
                 page.get_by_role("button", name=re.compile("^Show 3 answered")).click(); pause(page)
                 page.locator('[data-testid="all-questions"] [data-answered="true"]').first.evaluate("e => window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 220)")
             elif L == "a":
-                page.get_by_test_id("answer").first.scroll_into_view_if_needed()
+                page.get_by_test_id("answer").first.scroll_into_view_if_needed(); pause(page)
+                page.evaluate("scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - innerHeight - 40))")
             else:
                 page.evaluate("scrollTo(0,0)")
             pause(page)
@@ -200,12 +228,37 @@ def frames_phone(page, only):
         start(page); open_review(page, "ec1=c"); save(page, "ec1-c-phone-390", *P)
     if want("ec1-d-phone"):
         start(page); open_review(page, "ec1=d"); save(page, "ec1-d-phone-390", *P)
+    for L in "abc":
+        # the returns feature on a phone, its first blocking question just answered
+        name = f"ec2-{L}-phone-390"
+        if not want(name): continue
+        start(page); open_review(page, f"ec1=b&ec2={L}&sel={RET}")
+        box = page.get_by_role("textbox", name=re.compile("^Answer: Does the shipping provider")).first
+        box.scroll_into_view_if_needed(); box.fill(ANS); pause(page, 300)
+        box.locator("xpath=..").get_by_role("button", name="Answer").click(); pause(page)
+        if L == "c":
+            page.get_by_test_id("all-questions").evaluate("e => window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 64)")
+        else:
+            page.get_by_test_id("answer").first.evaluate("e => window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 200)")
+        pause(page)
+        save(page, name, *P)
 
 if __name__ == "__main__":
     mode = sys.argv[1]; only = sys.argv[2:]
-    pw, browser, ctx = live()
+    if OWN:
+        # Own Chromium (when the live browser is gone): run under swarm-test-browsers, scrollbars shown.
+        from playwright.sync_api import sync_playwright
+        pw = sync_playwright().start()
+        browser = pw.chromium.launch(channel="chromium", ignore_default_args=["--hide-scrollbars"])
+        phone = dict(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, device_scale_factor=1)
+        ctx = browser.new_context(**(phone if mode == "phone" else dict(viewport={"width": 1440, "height": 900})))
+    else:
+        from swarm_browser import live
+        pw, browser, ctx = live()
     page = ctx.new_page()
     try:
         (frames_phone if mode == "phone" else frames_desktop)(page, only)
     finally:
-        page.close(); pw.stop()
+        page.close()
+        if OWN: browser.close()
+        pw.stop()

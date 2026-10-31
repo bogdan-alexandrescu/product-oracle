@@ -3894,7 +3894,8 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
   const person = (id: string | null): Schemas["ReviewPerson"] | null => {
     if (!id) return null;
     const found = people.get(id);
-    return { id, name: found ? displayName(found.email) : "Someone", role: found?.role ?? null };
+    const mockName = (found as { name?: string | null } | undefined)?.name === "Sam Okafor" ? "Sam Okafor" : null; // MOCK-HOOK: the mock-ups' lead
+    return { id, name: found ? displayName(found.email, mockName) : "Someone", role: found?.role ?? null }; // MOCK-HOOK (mockName)
   };
   const seg = r.segments.find((s) => s.seq === cp.segment_seq);
   const check = cp.kind === "roadmap_items" ? (seg?.items_check ?? null) : null;

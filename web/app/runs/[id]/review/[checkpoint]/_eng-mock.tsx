@@ -144,7 +144,7 @@ export function MockEngBody(p: MockProps) {
     return (
       <>
         {strip}
-        <nav aria-label="Features" className="mb-3 flex flex-wrap items-center gap-1.5">
+        <nav aria-label="Features" className="mx-auto mb-3 flex max-w-[860px] flex-wrap items-center gap-1.5">
           {p.features.map((x, i) => {
             const v = verdictOf(p.actsOf(x.key));
             return (
@@ -312,7 +312,7 @@ function QCount({ f, acts, short }: { f: Feature; acts: Action[]; short?: boolea
   return (
     <span className="text-sm" data-testid="brief-questions">
       {open ? <Chip kind="crit">{open} blocking</Chip> : null}{" "}
-      <span className="text-text2">
+      <span className="whitespace-nowrap text-text2">
         {done} of {f.questions.length} answered
       </span>
     </span>
@@ -339,17 +339,17 @@ function Decide({ f, actsOf, writes, busy, onAct, wide, inline }: MockProps & { 
     <>
       <div className={`flex flex-wrap items-start gap-x-6 gap-y-3 ${wide ? "" : "flex-col"}`}>
         <div>
-          {!inline && <div className="mb-1.5 text-[13px] font-semibold text-text2">Verdict</div>}
+          <div className="mb-1.5 text-[13px] font-semibold text-text2">Verdict</div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Verdict">
             {VERDICTS.map((v) => (
-              <Button key={v.value} variant={current?.verdict === v.value ? "primary" : "secondary"} disabled={busy || !writes} onClick={() => pick(v.value)}>
+              <Button key={v.value} variant={(picking ?? current?.verdict) === v.value ? "solid" : "secondary"} aria-pressed={(picking ?? current?.verdict) === v.value} disabled={busy || !writes} onClick={() => pick(v.value)}>
                 {v.label}
               </Button>
             ))}
           </div>
         </div>
         <div>
-          {!inline && <div className="mb-1.5 text-[13px] font-semibold text-text2">Size</div>}
+          <div className="mb-1.5 text-[13px] font-semibold text-text2">Size</div>
           <SegmentedControl
             label="Size"
             size="sm"
