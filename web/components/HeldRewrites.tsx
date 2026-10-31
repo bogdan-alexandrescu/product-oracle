@@ -62,20 +62,18 @@ export function HeldRewritesPanel({
   // its Held rewrites button, or from the page; not while a dialog, a menu or another
   // field has the key.
   const ref = useRef<HTMLElement>(null);
-  const close = useRef(onClose);
-  close.current = onClose;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       const t = e.target instanceof Element ? e.target : null;
       const inside = !!t && !!ref.current?.contains(t);
       if (!inside && t?.closest('[role="dialog"], [role="menu"], input, textarea, select, [contenteditable="true"]')) return;
-      close.current();
+      onClose();
     };
     // On window: a menu's or a sheet's own Escape (on document) runs first and takes it.
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [onClose]);
   return (
     <section ref={ref} aria-label="Held rewrites" data-testid="held-rewrites" className="mb-4 rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">
       <div className="flex items-center gap-2">

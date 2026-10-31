@@ -76625,6 +76625,14 @@
             "type": "string",
             "title": "Rationale"
           },
+          "section_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Section Keys",
+            "default": []
+          },
           "rater_id": {
             "anyOf": [
               {
