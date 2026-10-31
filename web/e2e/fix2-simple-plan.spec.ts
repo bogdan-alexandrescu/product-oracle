@@ -264,10 +264,13 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     const t = page.getByRole("status").filter({ hasText: "Sent" });
     await expect(t).toBeVisible();
     const tb = (await t.boundingBox())!;
-    for (const b of await sheet.getByRole("button").all()) {
-      const bb = await b.boundingBox();
-      if (bb) expect(overlap(tb, bb)).toBe(0);
-    }
+    // Every button the sheet shows once the toast is up, read at once: the sheet redraws after
+    // Send, so a list of locators taken first can name a button that is gone by its turn.
+    const buttons = await sheet.getByRole("button").evaluateAll((els) =>
+      els.map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0).map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
+    );
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const bb of buttons) expect(overlap(tb, bb)).toBe(0);
   });
 
   /*
