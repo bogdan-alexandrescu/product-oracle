@@ -500,7 +500,7 @@ async function body(req: Request): Promise<Record<string, unknown>> {
 }
 
 // MOCK-HOOK mk-qa4-review: the frames seed Guided setup from the URL once per page load:
-// ?mkdraft=working|submitted (the owner's 2 edits) &mkprop=1 (a commenter's proposal). Invented people.
+// ?mkdraft=working|submitted (the owner's 2 edits) &mkprop=1 (a commenter's proposal). Invented people. // MOCK-HOOK
 let mkSeeded = false; // MOCK-HOOK
 export const MK_PEOPLE: Record<string, string> = { Admin: "Jo Rivera", Approver: "Rae Okafor", Commenter: "Sam Ortiz" }; // MOCK-HOOK
 async function mkSeed(db: OnePagerDb, ctx: OnePagerCtx) { // MOCK-HOOK

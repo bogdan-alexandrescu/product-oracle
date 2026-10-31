@@ -487,6 +487,7 @@ export function Campaigns({ doc }: { doc: string }) {
   const { can } = useMe();
   const canEdit = can("create_review_campaign");
   const [mkQv2, setMkQv2] = useState<string | null>(null); // MOCK-HOOK
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK: reads the mock-up's URL switch once
   useEffect(() => setMkQv2(new URLSearchParams(window.location.search).get("qv2")), []); // MOCK-HOOK
   const q = useQuery(`campaigns|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/campaigns", { params: { path: { doc } } })));
   const [asking, setAsking] = useState(false);

@@ -14,6 +14,7 @@ export type MkInReview = { line_id: string; before: string; after: string; by_na
 
 export function useMk() {
   const [q, setQ] = useState(() => new URLSearchParams());
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK: reads the mock-up's URL switch once
   useEffect(() => setQ(new URLSearchParams(window.location.search)), []);
   return {
     qv1: q.get("qv1"),
@@ -149,6 +150,7 @@ export function Qv1InlineAsk({ v, onCancel, onSend, busy }: { v: View; onCancel:
 export function Qv2Bar({ v, variant, listOpen }: { v: View; variant: string; listOpen: boolean }) {
   const items = ((v as unknown as { mk_in_review?: MkInReview[] }).mk_in_review ?? []);
   const [open, setOpen] = useState(listOpen);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK: reads the mock-up's URL switch once
   useEffect(() => setOpen(listOpen), [listOpen]);
   const [follow, setFollow] = useState(false);
   const n = v.changes_in_review;
@@ -193,6 +195,7 @@ export function Qv2LineMark({ v, lineId }: { v: View; lineId: string }) {
   const items = ((v as unknown as { mk_in_review?: MkInReview[] }).mk_in_review ?? []).filter((c) => c.line_id === lineId);
   const list = useMk().list;
   const [open, setOpen] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK: reads the mock-up's URL switch once
   useEffect(() => setOpen(list), [list]);
   if (!items.length) return null;
   return (

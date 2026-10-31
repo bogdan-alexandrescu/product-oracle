@@ -144,6 +144,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const [mkSend, setMkSend] = useState(false); // MOCK-HOOK QV1 a: the Send for approval dialog
   const [mkMenu, setMkMenu] = useState(false); // MOCK-HOOK QV1 b / QV3 a: a header menu is open
   const [mkShow, setMkShow] = useState<"draft" | "published" | null>(null); // MOCK-HOOK QV3: what is presented
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK: reads the mock-up's URL switch once
   useEffect(() => { if (mk.open && mk.qv1 === "a") setMkSend(true); if (mk.open && (mk.qv1 === "b" || mk.qv3 === "a")) setMkMenu(true); if (mk.present) { setPresenting(true); setMkShow(mk.show); } }, [mk.open, mk.qv1, mk.qv3, mk.present, mk.show]); // MOCK-HOOK
   const [saved, setSaved] = useState(false);
   // qa-simple-prd-25: "PDF downloaded" shows a few seconds, then goes.
