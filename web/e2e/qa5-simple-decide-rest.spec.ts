@@ -23,8 +23,8 @@ async function tap(l: Locator) {
   await l.click();
 }
 
-async function openSheet(page: Page) {
-  await login(page);
+async function openSheet(page: Page, signIn = true) {
+  if (signIn) await login(page);
   await page.goto("/simple/meetings");
   await expect(page.getByRole("region", { name: "Upcoming" })).toBeVisible();
   await tap(page.getByRole("button", { name: "Start review" }).first());
@@ -35,8 +35,8 @@ const steps = (page: Page) => page.getByRole("navigation", { name: "Steps" });
 const decisions = (page: Page) => page.getByRole("region", { name: "Decisions in this meeting" });
 const MOMENT = /(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}:\d{2} [AP]M/;
 
-async function startReview(page: Page) {
-  await openSheet(page);
+async function startReview(page: Page, signIn = true) {
+  await openSheet(page, signIn);
   const s = sheet(page);
   await s.getByRole("checkbox", { name: "Commenter" }).check();
   await tap(s.getByRole("button", { name: "Start", exact: true }));
@@ -115,6 +115,25 @@ for (const phone of [false, true]) {
         await expect(margin).toContainText("No changes waiting. Version 4 is published; “Decided in” under a line links to the decision that changed it.");
         await expect(margin).not.toContainText("No changes yet");
       }
+    });
+
+    test("review: a later meeting that published nothing does not say its edits were published", async ({ page }) => {
+      test.skip(phone, "the margin is a desktop column");
+      test.setTimeout(60_000);
+      await startReview(page);
+      await editLine(page);
+      await tap(page.getByRole("button", { name: "Approve and publish one-pager edits (1)" }));
+      await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
+      await expect(decisions(page)).toContainText("Approved Guided setup (published)");
+      await tap(page.getByRole("button", { name: "End meeting" }));
+      await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
+      await expect(page.getByTestId("end-screen")).toBeVisible();
+      // A second review of the same PRD: its line still reads "Decided in" the first one's decision.
+      await startReview(page, false);
+      await expect(page.getByTestId("line-decisions").first()).toContainText("Decided in");
+      const margin = page.getByRole("complementary", { name: "Changes and proposals" });
+      await expect(margin).toContainText("No changes yet. An edit or a proposed wording shows here beside its line.");
+      await expect(margin).not.toContainText("No changes waiting");
     });
 
     test("qa4-simple-decide-26/27: the one-pager's actions, title and card share one left edge; the card pads once", async ({ page }) => {
