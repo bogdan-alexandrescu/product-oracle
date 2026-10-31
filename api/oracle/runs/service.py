@@ -1201,20 +1201,50 @@ CHECKPOINT_TITLES = {
 _LISTED = ("approved", "changes_requested", "skipped")
 
 
-def _record_decider(cp: Checkpoint, role: str | None, via: str) -> None:
-    """Who decided ``cp``, by role, and where (:func:`list_decisions`); kept on the
-    checkpoint as it is decided, so a later change of the member's role does not alter
-    what the run's agents read."""
-    cp.payload = {**copy.deepcopy(cp.payload or {}), "decided": {"role": role, "via": via}}
+def _record_decider(
+    cp: Checkpoint, role: str | None, via: str, by: uuid.UUID | str | None = None
+) -> None:
+    """Who decided ``cp``: their role, the member or token (``by``, named when the list
+    is read) and where (:func:`list_decisions`); kept on the checkpoint as it is decided,
+    so a later change of the member's role does not alter what the run's agents read."""
+    mark = {"role": role, "via": via, "by": str(by) if by else None}
+    cp.payload = {**copy.deepcopy(cp.payload or {}), "decided": mark}
+
+
+def _decider_of(cp: Checkpoint) -> uuid.UUID | None:
+    """The member or token :func:`list_decisions` names for ``cp``: the one kept with its
+    role; for a decision recorded before that, who decided it, except a confirmed console
+    answer (its confirmer is not its author)."""
+    payload = cp.payload or {}
+    mark = payload.get("decided")
+    if isinstance(mark, dict) and "by" in mark:
+        try:
+            return uuid.UUID(mark["by"]) if mark["by"] else None
+        except (TypeError, ValueError):
+            return None
+    console = ((payload.get("wait") or {}).get("console")) or {}
+    if isinstance(console, dict) and console.get("confirmed_by"):
+        return None
+    return cp.decided_by
 
 
 def decision_summary(
-    kind: str, status: str, role: str | None, via: str, note: str | None, delivered: bool
+    kind: str,
+    status: str,
+    role: str | None,
+    via: str,
+    note: str | None,
+    delivered: bool,
+    name: str | None = None,
 ) -> str:
-    """One line: "Feature set · approved by an approver · note: Keep bulk import out"."""
+    """One line: "Feature set · approved by Ana Example, an approver · note: Keep bulk
+    import out"; the role alone when nobody is named."""
     what = status.replace("_", " ")
-    if role:
-        what += f" by {'an' if role[0] in 'aeiou' else 'a'} {role}"
+    article = f"{'an' if role and role[0] in 'aeiou' else 'a'} {role}" if role else None
+    if name:
+        what += f" by {name}, {article}" if article else f" by {name}"
+    elif article:
+        what += f" by {article}"
     if via == "swarmcloud_console":
         what += " in SwarmCloud's console"
     parts = [CHECKPOINT_TITLES.get(kind, kind), what]
@@ -1223,6 +1253,22 @@ def decision_summary(
     if not delivered:
         parts.append("not delivered to the run yet")
     return " · ".join(parts)
+
+
+async def _people_named(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    """Who decided, as the decisions list names them: a member's name, else their email;
+    an API token's name."""
+    if not ids:
+        return {}
+    rows = (await db.execute(select(User.id, User.name, User.email).where(User.id.in_(ids)))).all()
+    out: dict[uuid.UUID, str] = {i: (name or "").strip() or email for i, name, email in rows}
+    if rest := ids - set(out):
+        out.update(
+            (
+                await db.execute(select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(rest)))
+            ).all()
+        )
+    return out
 
 
 async def list_decisions(
@@ -1253,9 +1299,12 @@ async def list_decisions(
                     )
                 ).all()
             )
+    by = {cp.id: _decider_of(cp) for cp in decided}
+    people = await _people_named(db, {i for i in by.values() if i})
     out: list[RunDecision] = []
     for cp in decided:
         payload = cp.payload or {}
+        who = people.get(by[cp.id]) if by[cp.id] else None
         mark = payload.get("decided")
         if isinstance(mark, dict):
             role, via = mark.get("role"), mark.get("via") or "oracle"
@@ -1279,12 +1328,13 @@ async def list_decisions(
                 status=cp.status,  # type: ignore[arg-type]
                 decided_at=cp.decided_at,
                 decided_by_role=role,
+                decided_by_name=who,
                 via=via,
                 note=cp.note,
                 edits=extra.get("edits"),
                 review=cp.review or extra.get("review"),
                 delivered=delivered,
-                summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered),
+                summary=decision_summary(cp.kind, cp.status, role, via, cp.note, delivered, who),
             )
         )
     far = datetime.max.replace(tzinfo=UTC)
@@ -7418,6 +7468,7 @@ async def _take_answer(
             reason=reason,
             needs="redo_or_continue" if counted else "confirm",
             role=member.role if member is not None else None,
+            member_id=str(member.id) if member is not None else None,
         )
         wait["console"] = console
         _set_wait(cp, wait)
@@ -7470,7 +7521,12 @@ async def _take_answer(
     cp.decided_at = record.answered_at or _now()
     cp.note = applied
     if not ours:
-        _record_decider(cp, member.role if member is not None else None, "swarmcloud_console")
+        _record_decider(
+            cp,
+            member.role if member is not None else None,
+            "swarmcloud_console",
+            member.id if member is not None else None,
+        )
     if member is not None:
         cp.decided_by = member.id
     elif ours and record.on_behalf_of:
@@ -7979,10 +8035,15 @@ async def decide_checkpoint(
     via = "swarmcloud_console" if decision in ("confirm", "redo", "continue") else "oracle"
     # Who decided, as the run's agents read it (list_decisions): the Inbox's decider, or
     # for a confirmed console answer its author, by role.
-    decider: tuple[str | None, str] = (principal.role, "oracle")
+    decider: tuple[str | None, str, str | uuid.UUID | None] = (
+        principal.role,
+        "oracle",
+        principal.id,
+    )
     if decision in ("confirm", "redo", "continue"):
         if decision == "confirm":
-            decider = ((wait.get("console") or {}).get("role"), "swarmcloud_console")
+            held = wait.get("console") or {}
+            decider = (held.get("role"), "swarmcloud_console", held.get("member_id"))
         decision, note, redo = _console_choice(cp, wait, decision, note)
         if decision == "confirm":
             # A console change request where the workflow has no revision step: now
@@ -9809,6 +9870,7 @@ async def _hold_console_approval(
         reason=CONSOLE_BLOCKED,
         needs="confirm",
         role=member.role if member is not None else None,
+        member_id=str(member.id) if member is not None else None,
         blocking=True,
     )
     wait["console"] = console

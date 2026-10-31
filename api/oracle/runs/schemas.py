@@ -896,7 +896,7 @@ class CheckpointOut(BaseModel):
 
 class RunDecision(BaseModel):
     """A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
-    who decided by role only (no names reach the agents), when, and what. A console
+    who decided (the person's name beside their role), when, and what. A console
     answer is a decision once it is followed: one held for an approver is still pending
     and not listed."""
 
@@ -908,6 +908,9 @@ class RunDecision(BaseModel):
     status: Literal["approved", "changes_requested", "skipped"]
     decided_at: datetime | None = None
     decided_by_role: Role | None = None
+    # The person who decided: their name, else their email (an API token's name for a
+    # token); None for a skipped checkpoint or one nobody is recorded for.
+    decided_by_name: str | None = None
     # oracle: the Inbox, the web app or MCP; swarmcloud_console: SwarmCloud's console.
     via: Literal["oracle", "swarmcloud_console"] = "oracle"
     note: str | None = None
@@ -918,7 +921,7 @@ class RunDecision(BaseModel):
     # False while the decision is recorded in Oracle and not delivered to the run yet.
     delivered: bool = True
     # The decision in one line, as the run page shows it:
-    # "Feature set · approved by an approver · note: Keep bulk import out of v1".
+    # "Feature set · approved by Ana Example, an approver · note: Keep bulk import out of v1".
     summary: str
 
 

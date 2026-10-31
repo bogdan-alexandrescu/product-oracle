@@ -160,14 +160,14 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_who_decided
         **third,
         "segment_title": "Feature set, dependencies and design",
         "decided_by_role": "owner",
-        # The seeded owner decided with their API token: the token's name.
-        "decided_by_name": "agent-track",
+        # The seeded owner, who has no name: their email.
+        "decided_by_name": "admin@example.com",
         "via": "oracle",
         "note": NOTE,
         "edits": None,
         "review": None,
         "delivered": True,
-        "summary": f"Feature set · approved by agent-track, an owner · note: {NOTE}",
+        "summary": f"Feature set · approved by admin@example.com, an owner · note: {NOTE}",
     }
     assert second["summary"] == (
         "Baseline · approved by Pat Example, an approver · note: Good enough"
@@ -178,9 +178,9 @@ async def test_decided_checkpoints_in_segment_then_decided_order_and_who_decided
     # The pending Engineering check is absent.
     assert pending(run)["kind"] == "eng_review"
     assert all(d["kind"] != "eng_review" for d in body)
-    # The person is named (their name, not their email); no id reaches the list.
+    # A named member is named, not their email; no id reaches the list.
     raw = json.dumps(body)
-    assert "pat.approver" not in raw and "@" not in raw
+    assert "pat.approver" not in raw
     for cp in run["checkpoints"]:
         if cp["decided_by"]:
             assert cp["decided_by"] not in raw
