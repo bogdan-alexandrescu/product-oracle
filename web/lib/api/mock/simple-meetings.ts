@@ -96,6 +96,8 @@ interface Meeting {
   started_at: string;
   ended_at: string | null;
   ended_by: string | null;
+  /** meet-chat-right-prd review: it ended by itself, idle past MEETING_IDLE (meetings._settle). */
+  ended_by_itself?: boolean;
   minutes: Minutes | null;
   minutes_state: "drafting" | "ready" | "sent" | null;
   /** The minutes job while drafting (meetings._minutes_job). */
@@ -425,6 +427,23 @@ function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Sc
   }];
 }
 
+/** As changes.MEETING_IDLE: a live meeting with nothing done for this long ends by itself. */
+export const MEETING_IDLE_MS = 4 * 60 * 60_000;
+
+/**
+ * As meetings._settle: a live meeting idle past MEETING_IDLE (no chat line, note or decision
+ * since) ends by itself, its presenter's minutes ready.
+ */
+function settleIdle(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
+  if (m.status !== "live") return;
+  const done = [m.started_at, ...(m.notes ?? []).map((n) => n.at), ...db.decisions.filter((d) => d.meeting_id === m.id).map((d) => d.at)];
+  const last = Math.max(...done.map((x) => (x ? Date.parse(x) : 0)));
+  if (mockNowMs() - last < MEETING_IDLE_MS) return;
+  Object.assign(m, { status: "ended", ended_at: new Date(mockNowMs()).toISOString(), ended_by: m.presenter_id, ended_by_itself: true });
+  m.minutes = extract(ctx, db, m);
+  m.minutes_state = "ready";
+}
+
 /** A "minutes-later" job whose time came: it answers (Oracle's minutes) or fails. */
 function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
   if (!m.minutes_due || m.minutes_state !== "drafting" || mockNowMs() < m.minutes_due.at) return;
@@ -695,9 +714,11 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
   return {
     find(id) {
       const m = find(id);
+      // As meetings.meeting_rules: an idle meeting ends by itself when its chat is read.
+      if (m) settleIdle(open().ctx, meetings(), m);
       return m
         ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended",
-            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: false }
+            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: !!m.ended_by_itself }
         : null;
     },
     setMode(id, mode, people) {
