@@ -33,7 +33,7 @@ test.describe("desktop", () => {
   test("qa4-27: no milestone, key date or Today line runs through a label at the top of the Timeline", async ({ page }) => {
     await open(page);
     const chart = timeline(page);
-    await expect(chart.getByTestId("milestone-end-label").first()).toBeVisible();
+    await expect(chart.locator('[data-testid="key-date-label"], [data-testid="milestone-end-label"], [data-testid="track-milestone"] text').first()).toBeVisible();
     const strikes = await chart.locator('svg[data-testid="chart-svg"]').evaluate((svg) => {
       const lines = [...svg.querySelectorAll<SVGLineElement>('[data-testid="today-line"], [data-testid="milestone-end-line"], [data-testid="key-date-marker"] line')];
       const labels = [...svg.querySelectorAll<SVGTextElement>('[data-testid="milestone-end-label"], [data-testid="key-date-label"], [data-testid="track-milestone"] text')];

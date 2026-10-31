@@ -54,8 +54,10 @@ test.describe("desktop", () => {
         .poll(() => words.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1), { message: `${key}'s sentence is whole on hover` })
         .toBe(true);
       const box = (await c.boundingBox())!;
+      // The Week scale scrolls sideways: the pill stays within the chart's scrolled days, never cut at their end.
+      const end = await page.getByTestId("chart-scroll").evaluate((el) => el.getBoundingClientRect().left - el.scrollLeft + el.scrollWidth);
       expect(box.x, `${key}'s pill starts inside the chart`).toBeGreaterThanOrEqual(chart.x - 1);
-      expect(box.x + box.width, `${key}'s pill ends inside the chart`).toBeLessThanOrEqual(chart.x + chart.width + 1);
+      expect(box.x + box.width, `${key}'s pill ends inside the chart`).toBeLessThanOrEqual(end + 1);
       await page.mouse.move(0, 0);
       await words.focus();
       await expect
