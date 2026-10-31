@@ -119,7 +119,8 @@ export function MeetingChat({
             {rules.ended && " · The meeting has ended"}
           </p>}
           {rulesControl && rules.is_presenter && !rules.ended && <ModeControl meetingId={meetingId} rules={rules} onSaved={(r) => setThread((t) => (t ? { ...t, rules: r } : t))} />}
-          {!rules.ended && (
+          {/* Review minor: the hint is the "Everyone except viewers" rule's own, as the start sheet's. */}
+          {!rules.ended && rules.change_mode === "everyone" && (
             <p className="simple-small text-text2" data-testid="chat-rules-hint">
               {RULES_HINT}
             </p>
