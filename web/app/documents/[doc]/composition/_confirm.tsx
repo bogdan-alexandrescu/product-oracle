@@ -140,7 +140,7 @@ export function ConfirmStep({
   const trimmed = reason.trim();
   // qa4-docs-16: the same modules as the revision in force are no new revision (unless the
   // company policy changed since: a new revision is how a PRD takes it up).
-  const same = !!diff && !!data.current && !diff.material && !diff.reordered && !data.policy_changed_at;
+  const same = !!preview && preview.valid && !!diff && !!data.current && !diff.material && !diff.reordered && !data.policy_changed_at;
   const ready = !!preview && preview.valid && !same && trimmed.length >= 1 && trimmed.length <= 2000 && !busy;
   const label = same ? "Nothing changed" : status === "confirmed" ? `Confirm revision ${next}` : "Save working draft";
   const titleOf = titler(preview?.modules, before);
