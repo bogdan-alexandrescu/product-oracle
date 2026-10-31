@@ -15,7 +15,12 @@ const PHONE = { width: 390, height: 844 };
 
 /** From the rail, as a person gets there. */
 async function openRequests(page: Page) {
-  await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
+  if ((page.viewportSize()?.width ?? 1280) > 600) await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
+  else {
+    // A phone: Requests is under the tab bar's More.
+    await page.getByTestId("tab-bar").getByTestId("tab-more").click();
+    await page.getByRole("dialog", { name: "More" }).getByRole("link", { name: "Requests" }).click();
+  }
   await expect(page).toHaveURL(/\/requests$/);
   await expect(page.getByRole("heading", { name: "Requests", level: 1 })).toBeAttached();
 }

@@ -337,7 +337,8 @@ function Words({ request, canEdit, busy, run }: { request: Request; canEdit: boo
   return (
     <div className="flex flex-col gap-2 text-[15px]">
       <p className="whitespace-pre-wrap">{request.body ?? "No description"}</p>
-      {request.requester_name && <p className="text-sm text-text2">From {request.requester_name}</p>}
+      {/* qa4-work-19: the queue's and the form's word for the person who asked. */}
+      {request.requester_name && <p data-testid="request-asked-by" className="text-sm text-text2">Asked by {request.requester_name}</p>}
       {canEdit && (
         <span className="flex flex-wrap items-center gap-2">
           <Button
@@ -600,13 +601,12 @@ function Decision({
                 {a === "qualify" ? "Qualify" : a === "merge" ? "Merge" : "Disqualify"}
               </Button>
             ))}
-            <Button
-              disabled={busy || !!blocked.reopen}
-              title={blocked.reopen ?? undefined}
-              onClick={() => done(() => unwrap(api.POST("/v1/requests/{request_id}/reopen", { ...path, body: lock })))}
-            >
-              Reopen
-            </Button>
+            {/* qa4-work-20: Reopen only where it can act, on a Merged or Disqualified request. */}
+            {!blocked.reopen && (
+              <Button disabled={busy} onClick={() => done(() => unwrap(api.POST("/v1/requests/{request_id}/reopen", { ...path, body: lock })))}>
+                Reopen
+              </Button>
+            )}
           </div>
           {reasonShown && (
             <p data-testid="decide-reason" className="text-sm text-text2">
