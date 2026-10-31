@@ -188,6 +188,22 @@ async def test_start_sheet_says_who_may_change_things(client):
         assert can[uid(w, who)] is True, who
 
 
+async def test_decisions_page_meeting_lists_its_comments(client):
+    """qa4-simple-decide-32: the Decisions page's meeting card lists the comments made in the
+    meeting, as its minutes do; an open question stays in the minutes' own list."""
+    w = await world()
+    m = await start(client, w)
+    r = await client.post(f"{MEETINGS}/{m['id']}/comments", json={"text": "Keep the beta"},
+                          headers=w.ctx.as_("approver"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    [g] = r.json()["meetings"]
+    assert [(n["kind"], n["text"], n["by_name"]) for n in g["notes"]] == [
+        ("comment", "Keep the beta", w.ctx.users["approver"].name)
+    ]
+
+
 async def test_every_action_is_a_meeting_decision(client):
     w = await world()
     m = await start(client, w)
