@@ -16,8 +16,13 @@ Test cards (protects / fails_when / no_claim):
   a chat kind (one an earlier build left in a meeting chat) reads as an answer with its
   body, and the chat answers 200; fails_when=GET chat answers 500 on an unknown kind;
   no_claim=how the stray line got there.
+- test_the_sweep_names_the_chat_engine_once: protects=the reply sweep's skip of the Simple
+  chat's own lines uses oracle.simple.chat.ENGINE itself, so a rename can't drift;
+  fails_when=discussions.replies spells the engine name as its own literal; no_claim=the
+  engine's value.
 """
 
+import inspect
 import uuid
 from datetime import timedelta
 
@@ -137,3 +142,10 @@ async def test_oracles_ask_on_the_meeting_page_is_still_answered(
     assert r.json()["reply"] is not None
     out = await replies.run_pending(ctx.tenant_id)
     assert (out.ran, out.completed) == (1, 1)
+
+
+def test_the_sweep_names_the_chat_engine_once():
+    from oracle.simple import chat
+
+    assert replies.SIMPLE_CHAT is chat.ENGINE
+    assert repr(chat.ENGINE) not in inspect.getsource(replies)
