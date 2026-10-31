@@ -4402,7 +4402,7 @@ const SCOPE_ATTEMPT2_SET: FeatureSetSpec = {
 /** The held console approval: one blocking row (Bulk edit depends on the export left out). */
 const SCOPE_CONSOLE_SET: FeatureSetSpec = { features: [SAVED, LOOKUP, BULK], excluded: [EXPORT_OUT] };
 
-function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
+function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug: string, created_at: string, spec: FeatureSetSpec, attempt: number, flags: Record<string, string[]> = {}): { run: RunOut; scope: StoredScope; cp: CheckpointOut } {
   const { from, now } = seedClock();
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), drafts: (db.drafts ??= {}) };
   const full = { ...ctx, db: own, now };
@@ -4439,7 +4439,7 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
     if (s) f.text = s.summary;
     // A row the set leaves out reads as a name ("Address book export"), as the agents titled it.
     if (f.title === f.key) f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, " ");
-    f.flags = [];
+    f.flags = [...(flags[f.key] ?? [])];
   }
   prepareScope(scope);
   const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;
@@ -4453,12 +4453,13 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
 /**
  * The "scope-review" scenario (C7): the default company plus three Baseline to PRD runs at
  * their feature set: saved-addresses (attempt 1: one blocking dependency, one feature with no
- * goal, one with low confidence, and a commenter's suggestion), saved-addresses-next (attempt
+ * goal, one with low confidence that is also new, and a commenter's suggestion), saved-addresses-next (attempt
  * 2, for the Changed filter) and address-book (approved in SwarmCloud's console while one
  * blocking row is open, so the approval is held).
  */
 export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
-  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1);
+  // Pick address in one step is new as well as low in confidence: one feature, two calls.
+  const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
   const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
   if (commenter) {
     db.drafts![first.cp.id] = {
