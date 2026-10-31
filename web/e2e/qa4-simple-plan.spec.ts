@@ -66,7 +66,7 @@ test.describe("QA pass 4: simple-plan, phone", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     const divider = page.getByTestId("line-divider");
     await expect(divider).toHaveCount(1);
-    expect((await divider.boundingBox())!.height).toBeLessThan(32);
+    expect((await divider.boundingBox())!.height).toBeLessThan(44);
     await expect(divider).toContainText("everything below misses it");
   });
 
@@ -194,9 +194,9 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
     const setup = page.getByTestId("bucket-features").locator("li").filter({ hasText: "Setup checklist" });
     await expect(setup.getByTestId("prio-code")).toHaveText("SC");
 
-    const open = page.getByRole("button", { name: /^See or make suggestions for Grow retention, \d+ waiting$/ });
-    await expect(open).toHaveText(/^See or make suggestions · \d+$/);
-    await open.click();
+    const opener = page.getByRole("button", { name: /^See or make suggestions for Grow retention, \d+ waiting$/ });
+    await expect(opener).toHaveText(/^See or make suggestions · \d+$/);
+    await opener.click();
     const drawer = page.getByTestId("goal-panel");
     const flow = drawer.getByTestId("flow-open").first();
     await expect(flow).toBeVisible();

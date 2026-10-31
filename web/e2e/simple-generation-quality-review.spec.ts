@@ -29,7 +29,7 @@ async function openGrowRetention(page: Page, email?: string) {
   await scenario(page, "simple-suggest-needs-look");
   await login(page, email);
   await page.goto("/simple");
-  await page.getByRole("button", { name: "Suggestions for Grow retention", exact: true }).click();
+  await page.getByRole("button", { name: /^Suggestions for Grow retention(, \d+ waiting)?$/ }).click();
   const drawer = page.getByTestId("goal-panel");
   await expect(drawer).toBeVisible();
   return drawer;
