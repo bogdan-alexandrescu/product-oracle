@@ -508,7 +508,8 @@ def test_the_version_reports_name_the_company_time():
 
     doc = Document(slug="saved-addresses", title="Saved addresses PRD", kind="prd")
     md = jobs.reports_markdown(doc, _reports(), AUCKLAND)
-    assert "Product Oracle · saved-addresses · version 2 · generated Oct 13, 2026, 9:00 AM NZDT" in md
+    stamp = "generated Oct 13, 2026, 9:00 AM NZDT"
+    assert f"Product Oracle · saved-addresses · version 2 · {stamp}" in md
     assert "- Invite funnel, October, file, added 2026-10-13" in md
     assert "UTC" not in md
 

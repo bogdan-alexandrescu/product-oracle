@@ -59,7 +59,8 @@ async def test_exports_never_print_the_placeholder_company(client):
     assert full.status_code == 200 and PLACEHOLDER not in full.text
     body = {"display_name": NAME, "accent": None, "oracle_mark": True,
             "public_disclaimer": "Plans can change."}  # fmt: skip
-    assert (await client.put("/v1/branding", json=body, headers=ctx.as_("owner"))).status_code == 200
+    put = await client.put("/v1/branding", json=body, headers=ctx.as_("owner"))
+    assert put.status_code == 200
     html = await _one_pager_html(ctx)
     assert NAME in html and PLACEHOLDER not in html
     full = await client.get(FULL, params={"format": "html"}, headers=ctx.as_("viewer"))
