@@ -12,6 +12,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import {
+  DEFAULT_THRESHOLD_PCT,
   DIRECTION_LABEL,
   KIND_LABEL,
   SOURCE_LABEL,
@@ -143,7 +144,7 @@ export function MetricInspector({
         )}
         <InspectorRow value={metric.unit}>Unit</InspectorRow>
         <InspectorRow value={DIRECTION_LABEL[metric.direction]}>Good direction</InspectorRow>
-        <InspectorRow value={metric.threshold_pct != null ? `${metric.threshold_pct}%` : "Default"}>Threshold</InspectorRow>
+        <InspectorRow value={metric.threshold_pct != null ? `${metric.threshold_pct}%` : `Default (${DEFAULT_THRESHOLD_PCT}%)`}>Threshold</InspectorRow>
         <InspectorRow value={metric.owner_name ?? "—"}>Owner</InspectorRow>
         {metric.definitions.length > 1 && (
           <p className="text-sm text-text2">

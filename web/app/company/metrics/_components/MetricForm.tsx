@@ -15,6 +15,7 @@ export type Person = Schemas["PersonOut"];
 
 const LABEL = "flex flex-col gap-1 text-sm font-semibold text-text2";
 const FIELD_ERROR = "text-[13px] font-medium text-crit";
+const COUNT = "count";
 
 type Field = "title" | "description" | "unit" | "drives" | "owner" | "query" | "threshold";
 
@@ -69,7 +70,10 @@ export function MetricForm({
   const [title, setTitle] = useState(metric?.title ?? "");
   const [description, setDescription] = useState(metric?.description ?? "");
   const [kind, setKind] = useState<Metric["kind"]>(metric?.kind ?? "output");
-  const [unit, setUnit] = useState(metric?.unit ?? "");
+  // qa4-company-39: a unit from the list, or "Count of…" and the counted noun typed in.
+  const [unitPick, setUnitPick] = useState(!metric?.unit || UNITS.includes(metric.unit) ? (metric?.unit ?? "") : COUNT);
+  const [noun, setNoun] = useState(metric?.unit && !UNITS.includes(metric.unit) ? metric.unit : "");
+  const unit = unitPick === COUNT ? noun : unitPick;
   const [direction, setDirection] = useState<Metric["direction"]>(metric?.direction ?? "up");
   const [drives, setDrives] = useState(metric?.drives_metric_id ?? "");
   const [goal, setGoal] = useState(metric?.goal_id ?? "");
@@ -110,7 +114,7 @@ export function MetricForm({
     const d = description.trim().length;
     if (d === 0) out.description = "Say what the metric counts.";
     else if (d < 3) out.description = "Write at least 3 characters.";
-    if (!unit.trim()) out.unit = "Give a unit, such as % or teams.";
+    if (!unit.trim()) out.unit = unitPick === COUNT ? "Name what is counted, such as teams." : "Give a unit, such as % or teams.";
     if (kind === "input" && !drives) out.drives = "Pick the output this input drives.";
     if (!owner) out.owner = "Pick who explains its changes.";
     if (source === "posthog" && !query.trim()) out.query = "Write the query Oracle runs each week.";
@@ -230,30 +234,31 @@ export function MetricForm({
                 <option value="input">Input: a lever</option>
               </select>
             </div>
+            {/* qa4-company-39: a select like Kind and Good direction (the goal editor's units), then "Count of…" for a counted noun. */}
             <label className={LABEL}>
               <span>
                 <span id="metric-unit-label">Unit</span>
                 <Required />
               </span>
-              <input
-                data-field="unit"
+              <select
+                data-field={unitPick === COUNT ? undefined : "unit"}
                 aria-labelledby="metric-unit-label"
                 aria-required="true"
                 className={INPUT}
-                list="metric-units"
-                value={unit}
-                maxLength={40}
-                aria-invalid={!!errors.unit}
-                aria-describedby={errors.unit ? "metric-unit-error" : undefined}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder="% or teams"
-              />
-              <FieldError field="unit" errors={errors} />
-              <datalist id="metric-units">
+                value={unitPick}
+                aria-invalid={!!errors.unit && unitPick !== COUNT}
+                aria-describedby={errors.unit && unitPick !== COUNT ? "metric-unit-error" : undefined}
+                onChange={(e) => setUnitPick(e.target.value)}
+              >
+                <option value="">Pick a unit</option>
                 {UNITS.map((u) => (
-                  <option key={u} value={u} />
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
                 ))}
-              </datalist>
+                <option value={COUNT}>Count of…</option>
+              </select>
+              {unitPick !== COUNT && <FieldError field="unit" errors={errors} />}
             </label>
             <label className={LABEL}>
               Good direction
@@ -263,6 +268,24 @@ export function MetricForm({
               </select>
             </label>
           </div>
+          {unitPick === COUNT && (
+            <label className={LABEL}>
+              <span id="metric-noun-label">Counted noun</span>
+              <input
+                data-field="unit"
+                aria-labelledby="metric-noun-label"
+                aria-required="true"
+                className={INPUT}
+                value={noun}
+                maxLength={40}
+                aria-invalid={!!errors.unit}
+                aria-describedby={errors.unit ? "metric-unit-error" : undefined}
+                onChange={(e) => setNoun(e.target.value)}
+                placeholder="teams or accounts"
+              />
+              <FieldError field="unit" errors={errors} />
+            </label>
+          )}
           {/* qa-company-39: Output and Input in plain words. */}
           <p id="metric-kind-help" data-testid="metric-kind-help" className="-mt-1 text-[13px] text-text2">
             {kind === "output"
@@ -304,7 +327,8 @@ export function MetricForm({
                 value={goalId}
                 onChange={(e) => setGoal(e.target.value)}
               >
-                <option value="">{goalChoices.length || unit.trim() ? "No goal" : "Pick a unit to see goals measured in it"}</option>
+                {/* qa4-company-38: the help line under it says why the list is empty; the option does not repeat it. */}
+                <option value="">No goal</option>
                 {goalChoices.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.title}
@@ -314,7 +338,7 @@ export function MetricForm({
               {/* qa-company-40: an empty list says why. */}
               <span id="metric-goal-help" data-testid="metric-goal-help" className="text-[13px] font-normal">
                 {goalChoices.length
-                  ? "Confirmed goals measured in the same unit. Each weekly value becomes the goal’s current value."
+                  ? "Confirmed goals measured in the same unit. The latest weekly value becomes the goal’s current value."
                   : unit.trim()
                     ? `No confirmed goal is measured in ${unit.trim()} yet.`
                     : "Pick a unit to see goals measured in it."}

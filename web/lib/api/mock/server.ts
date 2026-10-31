@@ -11,7 +11,7 @@ import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
-import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -2428,6 +2428,7 @@ function metricsContext(db: Db, me: MemberRow): MetricsContext {
       db.baseline.entities
         .filter((e) => e.type === "goal")
         .map((e) => ({ id: e.id, title: e.title, unit: typeof e.attrs.unit === "string" ? e.attrs.unit : null, confirmed: e.status === "confirmed" })),
+    readIntoGoal: (goalId, day, value, note) => readMetricIntoGoal(db.baseline, goalId, day, value, note),
   };
 }
 
@@ -5744,7 +5745,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (input?.kind === "pricing") return startPricing(db, me, input);
   }
   if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
-  const handled = await laneF(db, req, p, m, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
+  const handled = await laneF(db, req, p, m, me.role, localStorage.getItem(MOCK_SCENARIO_KEY), { id: me.id, name: memberName(me) });
   // E1: a draft started from the template's empty skeleton has nothing to derive yet.
   if (handled?.status === 201 && p[1] === "drafts" && p.length === 2 && m === "POST") {
     const started = (await handled.clone().json()) as { document_id?: string; version?: number };

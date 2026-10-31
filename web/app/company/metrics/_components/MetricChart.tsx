@@ -11,6 +11,14 @@ const PAD = 8;
 export function MetricChart({ metric }: { metric: MetricDetail }) {
   const values = metric.values.slice(-52);
   if (values.length === 0) return <p className="text-sm text-text2">No weekly values yet</p>;
+  // qa4-company-41: one value is no line; say it in words until there is a second week.
+  if (values.length === 1)
+    return (
+      <p className="text-[15px]" data-testid="metric-chart-one">
+        Week of {weekText(values[0].week_start)}: <span className="tnum font-semibold">{valueText(values[0].value, metric.unit)}</span>
+        <span className="block text-[13px] text-text2">The chart starts once there are two weeks.</span>
+      </p>
+    );
   const nums = values.map((v) => v.value);
   const typical = typicalChange(nums);
   const prev = nums.length > 1 ? nums[nums.length - 2] : null;
@@ -21,7 +29,9 @@ export function MetricChart({ metric }: { metric: MetricDetail }) {
   const x = (i: number) => PAD + (values.length > 1 ? (i * (W - 2 * PAD)) / (values.length - 1) : (W - 2 * PAD) / 2);
   const y = (v: number) => PAD + (H - 2 * PAD) * (1 - (v - min) / (max - min || 1));
   const line = values.map((v, i) => `${x(i).toFixed(1)},${y(v.value).toFixed(1)}`).join(" ");
-  const shadeFrom = x(Math.max(0, values.length - 6)) - 3;
+  // Only when there are weeks before the last 6: shading every week marks nothing.
+  const shaded = values.length > 6;
+  const shadeFrom = x(values.length - 6) - 3;
   const changes = values.flatMap((v, i) => (i > 0 && v.definition_version !== values[i - 1].definition_version ? [i] : []));
   const first = values[0];
   const last = values[values.length - 1];
@@ -33,7 +43,7 @@ export function MetricChart({ metric }: { metric: MetricDetail }) {
         role="img"
         aria-label={`${values.length} weekly values from the week of ${weekText(first.week_start)} to the week of ${weekText(last.week_start)}, last ${valueText(last.value, metric.unit)}`}
       >
-        <rect x={shadeFrom} y={0} width={W - shadeFrom} height={H} fill="var(--surface2)" />
+        {shaded && <rect x={shadeFrom} y={0} width={W - shadeFrom} height={H} fill="var(--surface2)" />}
         {band && (
           <rect x={0} y={y(band.high)} width={W} height={Math.max(1, y(band.low) - y(band.high))} fill="var(--accent)" opacity={0.12}>
             <title>{`Normal range ${valueText(Math.round(band.low * 100) / 100, metric.unit)} to ${valueText(Math.round(band.high * 100) / 100, metric.unit)}`}</title>
@@ -48,7 +58,7 @@ export function MetricChart({ metric }: { metric: MetricDetail }) {
         <circle cx={x(values.length - 1)} cy={y(last.value)} r={3} fill="var(--accent)" />
       </svg>
       <figcaption className="text-[13px] text-text2">
-        Week of {weekText(first.week_start)} to week of {weekText(last.week_start)}. Shaded: the last 6 weeks.
+        Week of {weekText(first.week_start)} to week of {weekText(last.week_start)}.{shaded && " Shaded: the last 6 weeks."}
         {band && " The band is the normal range."}
         {changes.length > 0 && " Dashed: the definition changed."}
       </figcaption>

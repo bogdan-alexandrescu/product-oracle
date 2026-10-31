@@ -1553,6 +1553,29 @@ export function addThreeWayConflict(s: BaselineState, uuid: () => string) {
   });
 }
 
+/**
+ * A linked output metric's weekly value (oracle.metrics.pull._goal_measurement and link_goal):
+ * the goal's measurement on the week's Sunday (removed with a null value), then its latest
+ * measurement by day becomes the goal's current, through the "reading" writer: applied even
+ * to a locked goal, never locking it.
+ */
+export function readMetricIntoGoal(s: BaselineState, goalId: string, day: string, value: number | null, note: string) {
+  const goal = s.entities.find((e) => e.id === goalId && e.type === "goal");
+  if (!goal) return;
+  const rows = (s.measurements ??= []);
+  const at = rows.findIndex((x) => x.entity_id === goalId && x.measured_on === day);
+  if (value == null) {
+    if (at >= 0) rows.splice(at, 1);
+  } else if (at >= 0) {
+    Object.assign(rows[at], { value, note, evidence_id: null, recorded_by: null });
+  } else {
+    rows.push({ id: newId(), entity_id: goalId, value, measured_on: day, note, evidence_id: null, recorded_by: null, created_at: now() });
+  }
+  const latest = rows.filter((x) => x.entity_id === goalId).sort((a, b) => b.measured_on.localeCompare(a.measured_on))[0];
+  goal.attrs = { ...goal.attrs, current: latest ? latest.value : null, current_as_of: latest ? latest.measured_on : null };
+  goal.updated_at = now();
+}
+
 /** Makes the seeded activation goal owned by the given member (the mock's members get their ids after the seed). */
 export function attributeGoalOwner(s: BaselineState, userId: string) {
   const g = s.entities.find((e) => e.key === "g.activation");
