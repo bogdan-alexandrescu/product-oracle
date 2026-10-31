@@ -20,7 +20,7 @@ const STOP = new Set(
  * The text as the PRD's PDF reads it (one_pager_checks.resolved): no [c:id] marker left
  * (oracle.docs.parser.strip_citations), and none an older quick read cut at its end.
  */
-export const resolved = (t: string) => (t ?? "").replace(/(?<![ \t])[ \t]*\[c:[^\]\s[]+\]/g, "").replace(/[ \t]*\[c(?:…|:[^\]\s]*…?)$/, "");
+export const resolved = (t: string) => (t ?? "").replace(/(?<![ \t])[ \t]*\[c:[^\]\s[]+\]/g, "").replace(/[ \t]*\[c(?:(?=…$)|:[^\]\s…]*(?=…?$))/, "");
 const plainKeep = (t: string) => (t ?? "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`]+|\{#[^}]*\}|<!--.*?-->/g, "").split(/\s+/).filter(Boolean).join(" ");
 const plain = (t: string) => plainKeep(resolved(t));
 const plainOf = (t: string) => plain(t);

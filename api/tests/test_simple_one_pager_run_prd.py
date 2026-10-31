@@ -195,7 +195,8 @@ async def test_quick_read_never_shows_a_citation_token(client):
 
 async def test_only_a_cut_citation_is_dropped():
     # A cut one ends in "…" or holds its ":"; text that only ends in "[c" is the PRD's own.
-    assert checks.resolved("sorting time [c…") == "sorting time"
+    assert checks.resolved("sorting time [c…") == "sorting time…"
+    assert checks.resolved("sorting time [c:c4…") == "sorting time…"
     assert checks.resolved("sorting time [c:c") == "sorting time"
     assert checks.resolved("Pick a size [c") == "Pick a size [c"
     assert checks.resolved("Grades [a] to [c") == "Grades [a] to [c"

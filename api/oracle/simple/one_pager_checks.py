@@ -59,7 +59,7 @@ class Look:
 
 
 # A citation an older quick read cut ("time [c…", "time [c:c"): only at the line's end.
-_CUT_CITE = re.compile(r"[ \t]*\[c(?:…|:[^\]\s]*…?)$")
+_CUT_CITE = re.compile(r"[ \t]*\[c(?:(?=…$)|:[^\]\s…]*(?=…?$))")
 
 
 def resolved(text: str) -> str:
