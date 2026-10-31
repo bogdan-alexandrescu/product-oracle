@@ -80,7 +80,9 @@ for (const [device, size] of [
 test("qa4-simple-home-9: skipping every step, the walk counts decisions as Home's tile, a meeting agenda item apart", async ({ page }) => {
   // fails_when: the summary says "10 decisions" (an agenda item counted as a decision) while Home's tile says 9
   await signIn(page, "simple-chat");
-  const tile = Number((await page.getByTestId("home-summary-decisions").locator(".simple-number").textContent())!.trim());
+  const number = page.getByTestId("home-summary-decisions").locator(".simple-number");
+  await expect(number).toHaveText(/^\d+$/);
+  const tile = Number((await number.textContent())!.trim());
   await tap(page.getByRole("button", { name: "Walk me through it" }));
   const progress = page.getByTestId("walk-progress");
   await expect(progress).toHaveText(/^1 of \d+$/);
