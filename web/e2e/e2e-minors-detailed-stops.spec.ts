@@ -12,8 +12,9 @@ import { login, openSection } from "./helpers";
  *   or an Approve that can never open; no_claim=the API's briefs check.
  * - "send back" (9): protects=Send back to architect is a secondary button; fails_when=it is the
  *   grey ghost that reads as disabled; no_claim=its decide call.
- * - "long key" (10): protects=a feature's key stays inside its own cell; fails_when=it runs into
- *   the Approach column; no_claim=other columns.
+ * - "long key" (10): protects=a feature with a long key stays inside its own cell, the key never
+ *   shown (qa4-work-53); fails_when=the key shows or the name runs into the Approach column;
+ *   no_claim=other columns.
  * - "answered" (11): protects=an answered question shows the answer, who answered and Edit, no
  *   empty box; Edit reopens it filled; fails_when=the empty box and Answer stay under the answer.
  * - "not decided" (12): protects=a row with no verdict reads "Not decided" as text; fails_when=a
@@ -95,16 +96,15 @@ for (const [name, viewport] of [
       await expect(sendBack).toHaveAttribute("data-variant", "secondary");
     });
 
-    test("long key: a feature's key stays inside its own cell", async ({ page }) => {
+    test("long key: a feature with a long key stays inside its own cell, its key never shown", async ({ page }) => {
+      // qa4-work-53 (train AF): the row shows the feature's name only, so a long key cannot run out of it.
       await openCheck(page, "eng-check-long-key");
       const row = briefRow(page, "f.guided_setup_with_test_order_and_sample_catalogue");
-      const key = row.getByTestId("brief-key");
-      await expect(key).toBeVisible();
+      await expect(row).toBeVisible();
+      await expect(row).not.toContainText("f.guided_setup_with_test_order_and_sample_catalogue");
       const cell = await box(row.getByRole("button").first());
-      const k = await box(key);
-      expect(k.x + k.width, "the key runs out of its cell").toBeLessThanOrEqual(cell.x + cell.width + 1);
       const approach = await box(row.getByText("Reuse the onboarding checklist and add the test-order step."));
-      if (viewport === DESKTOP) expect(k.x + k.width, "the key runs into Approach").toBeLessThanOrEqual(approach.x);
+      if (viewport === DESKTOP) expect(cell.x + cell.width, "the name runs into Approach").toBeLessThanOrEqual(approach.x);
       const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(sideways).toBeLessThanOrEqual(0);
     });

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { Button, Chip, Inspector, InspectorSection, Ring, SegmentedControl } from "@/components/ds";
+import { Button, Chip, Inspector, InspectorSection, Numeral, Ring, SegmentedControl } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -32,8 +32,13 @@ import {
   type Ui,
 } from "./_scope-lib";
 
-/** Runs a fix, saying what went wrong in place. */
-export function FixButtons({ fixes, small = true }: { fixes: Fix[]; small?: boolean }) {
+/**
+ * Runs a fix, saying what went wrong in place. `inColumn`: in a row's column, headed Suggest for a
+ * commenter (qa4-work-39), a suggestion shows its short label there ("Include dependency") so it
+ * fits the column; its name stays "Suggest Include dependency", and a phone's card, which has no
+ * column heading, shows it whole.
+ */
+export function FixButtons({ fixes, small = true, inColumn = false }: { fixes: Fix[]; small?: boolean; inColumn?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
@@ -42,6 +47,7 @@ export function FixButtons({ fixes, small = true }: { fixes: Fix[]; small?: bool
         <Button
           key={f.label}
           title={f.title}
+          aria-label={inColumn && f.short ? f.label : undefined}
           // qa-work-12: short labels on one line ("Include dependency"); the buttons wrap as a group.
           className={`min-h-8 max-w-full whitespace-nowrap ${small ? "h-8 px-2.5 text-sm max-[600px]:h-10" : ""}`}
           disabled={busy}
@@ -58,7 +64,14 @@ export function FixButtons({ fixes, small = true }: { fixes: Fix[]; small?: bool
             }
           }}
         >
-          {f.label}
+          {inColumn && f.short ? (
+            <>
+              <span className="max-[600px]:hidden">{f.short}</span>
+              <span className="hidden max-[600px]:inline">{f.label}</span>
+            </>
+          ) : (
+            f.label
+          )}
         </Button>
       ))}
       {error && (
@@ -503,7 +516,8 @@ export function ScopeInspector({
       stats={[
         // rirs-11: the stats row is light, so the ring's figure takes the page's text colour, not the hero's.
         { label: "Confidence", figure: <Ring value={pct(f.confidence)} size={44} /> },
-        { label: "Requirements", value: f.requirements.filter((q) => q.decision === "keep").length, of: f.requirements.length },
+        // qa4-work-43: the count says what it counts ("2 of 2", Requirements kept), never a bare fraction.
+        { label: "Requirements kept", figure: <Numeral value={f.requirements.filter((q) => q.decision === "keep").length} unit={` of ${f.requirements.length}`} />, testId: "stat-requirements" },
       ]}
     >
       {f.text && (
@@ -557,20 +571,37 @@ export function ScopeInspector({
             {proposed}. {mode === "approver" ? "Pick one to decide." : "Not decided yet."}
           </p>
         )}
-        <SegmentedControl
-          label="Decision"
-          size="sm"
-          value={undecided ? null : f.decision}
-          items={[
-            // rirs-13: only an approver decides here; a commenter suggests with the buttons above.
-            { value: "include", label: "Include", disabled: mode !== "approver" },
-            { value: "exclude", label: "Leave out", disabled: mode !== "approver" },
-            { value: "defer", label: "Defer to a later PRD", disabled: mode !== "approver" },
-          ]}
-          onChange={(v) =>
-            v === "exclude" ? ui.leaveOut(f) : v === "include" ? (onlyBlocked ? setBlockedOn(f.key) : void includeFeature(mode, ops, f)) : void setDecision(mode, ops, f, v)
-          }
-        />
+        {mode === "approver" ? (
+          <SegmentedControl
+            label="Decision"
+            size="sm"
+            value={undecided ? null : f.decision}
+            items={[
+              { value: "include", label: "Include" },
+              { value: "exclude", label: "Leave out" },
+              { value: "defer", label: "Defer to a later PRD" },
+            ]}
+            onChange={(v) =>
+              v === "exclude" ? ui.leaveOut(f) : v === "include" ? (onlyBlocked ? setBlockedOn(f.key) : void includeFeature(mode, ops, f)) : void setDecision(mode, ops, f, v)
+            }
+          />
+        ) : (
+          // rirs-13, qa4-work-45: only an approver decides; a commenter gets the same choices as
+          // suggestions, a viewer no buttons at all, never a control they cannot use.
+          mode === "commenter" && (
+            <FixButtons
+              fixes={(
+                [
+                  ["include", { label: "Suggest Include", run: () => includeFeature(mode, ops, f) }],
+                  ["exclude", { label: "Suggest Leave out", run: () => ui.leaveOut(f) }],
+                  ["defer", { label: "Suggest Defer to a later PRD", run: () => setDecision(mode, ops, f, "defer") }],
+                ] as const
+              )
+                .filter(([value]) => undecided || value !== f.decision)
+                .map(([, fix]) => fix)}
+            />
+          )
+        )}
         {onlyBlocked && blockedOn === f.key && (
           <p className="mt-1.5 text-sm text-text2" role="status" data-testid="include-blocked">
             Fix what blocks it first, above.
@@ -599,8 +630,9 @@ export function ScopeInspector({
         <div className="flex flex-wrap items-center gap-1.5">
           {f.goals.length ? (
             f.goals.map((g) => (
-              <Chip key={g.key} kind="acc">
-                {goalTitle(g.key)} · {g.contribution ?? 1}/3
+              // qa4-work-43: how much the feature helps the goal, in words, not a bare "1/3".
+              <Chip key={g.key} kind="acc" data-testid="inspector-goal">
+                {goalTitle(g.key)} · contribution {g.contribution ?? 1} of 3
               </Chip>
             ))
           ) : (

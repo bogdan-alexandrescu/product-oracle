@@ -39,14 +39,33 @@ export function runLabel(run: RunNamed, title?: string | null): string {
   return named ? `${named} · ${run.flow_title}` : run.flow_title;
 }
 
+type RunDecision = Schemas["RunDecision"];
+
 /**
- * A run decision's line naming who decided (review minors 2): "<what> · <how> · note: …" with
- * the "how" built from the decision's fields, so the name stands in for the role whatever the
- * role phrase reads; no name, the API's line as it is.
+ * qa4-work-29: a decision as a sentence, from its fields (the API's summary is the terse line
+ * the run's agents read): "PRD review was skipped: it was turned off when the run started."
+ * `checkpoint` is its name as the page writes it ("The baseline", "Feature set and
+ * dependencies"). Review minors 2: where the page knows who decided, `name` stands in for the
+ * role ("approved by Ana Example", never "by an owner"); else the role, as the agents read it.
  */
-export function decisionLine(d: Pick<Schemas["RunDecision"], "summary" | "status" | "via">, name: string | null | undefined): string {
-  if (!name) return d.summary;
-  const [what, , ...rest] = d.summary.split(" · ");
-  const how = `${d.status.replace("_", " ")} by ${name}${d.via === "swarmcloud_console" ? " in SwarmCloud's console" : ""}`;
-  return [what, how, ...rest].join(" · ");
+export function decisionSentence(
+  d: Pick<RunDecision, "status" | "via" | "note" | "delivered" | "decided_by_role">,
+  checkpoint: string,
+  name?: string | null,
+): string {
+  const role = d.decided_by_role;
+  const by = name ? ` by ${name}` : role ? ` by ${/^[aeiou]/i.test(role) ? "an" : "a"} ${role}` : "";
+  const via = d.via === "swarmcloud_console" ? " in SwarmCloud's console" : "";
+  const done = (t: string) => (/[.!?]$/.test(t) ? t : `${t}.`);
+  const what =
+    d.status === "approved"
+      ? `${checkpoint} was approved${by}${via}`
+      : d.status === "skipped"
+        ? `${checkpoint} was skipped${by}${via}`
+        : `Changes were asked for at ${checkpoint === "The baseline" ? "the baseline" : checkpoint}${by}${via}`;
+  let out: string;
+  if (!d.note) out = `${what}.`;
+  else if (d.status === "skipped" && /^Turned off when the run started/.test(d.note)) out = `${what}: it was turned off when the run started.`;
+  else out = `${what}. Note: ${done(d.note)}`;
+  return d.delivered === false ? `${out} Not delivered to the run yet.` : out;
 }

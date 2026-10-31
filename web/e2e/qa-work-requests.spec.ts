@@ -128,7 +128,7 @@ test("qa-work-16: New request offers the list's goals and a Channel select", asy
   const options = await channel.locator("option").allTextContents();
   for (const c of ["In app", "Support", "Sales", "Slack"]) expect(options).toContain(c);
   await channel.selectOption({ label: "Support" });
-  await dialog.getByLabel("Requester").fill("A buyer");
+  await dialog.getByLabel("Asked by").fill("A buyer");
   await dialog.getByLabel("Title").fill("Pay by invoice");
   await dialog.getByLabel("What it is and why").fill("Finance teams want an invoice, not a card.");
   await dialog.getByRole("button", { name: "File request" }).click();

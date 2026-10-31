@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { decisionLine } from "../lib/labels";
+import { decisionSentence } from "../lib/labels";
 import { login } from "./helpers";
 
 /**
@@ -63,14 +63,14 @@ for (const size of SIZES) {
       await baseline.getByRole("button", { name: "Approve and continue" }).click();
       const items = inspector(page).getByTestId("run-decisions").getByTestId("run-decision");
       await expect(items).toHaveCount(1);
-      await expect(items.nth(0)).toHaveText("Baseline · approved by Admin · note: Name an owner for every goal");
+      await expect(items.nth(0)).toHaveText("The baseline was approved by Admin. Note: Name an owner for every goal.");
 
       await page.getByRole("button", { name: "Refresh progress" }).click();
       const featureSet = page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" });
       await featureSet.getByLabel("Note for the agents").fill("Split bulk import into its own feature");
       await featureSet.getByRole("button", { name: "Request changes" }).click();
       await expect(items).toHaveCount(2);
-      await expect(items.nth(1)).toHaveText("Feature set · changes requested by Admin · note: Split bulk import into its own feature");
+      await expect(items.nth(1)).toHaveText("Changes were asked for at Feature set and dependencies by Admin. Note: Split bulk import into its own feature.");
       const sent = page.getByTestId("sent-review").filter({ visible: true }).first();
       await expect(sent).toContainText("Sent back · Split bulk import into its own feature · View review");
       await expect(sent).not.toContainText("0 entries");
@@ -114,12 +114,13 @@ for (const size of SIZES) {
   });
 }
 
-test("review minors 2: the decider's name stands in for the role whatever the role phrase reads", () => {
-  // Another wording of the role than "by an owner": the name still replaces it, never the role kept.
-  const d = { summary: "Feature set · approved by the engineering lead · note: Keep bulk import out", status: "approved", via: "oracle" } as const;
-  expect(decisionLine(d, "Ana Example")).toBe("Feature set · approved by Ana Example · note: Keep bulk import out");
-  expect(decisionLine({ summary: "Baseline · changes requested in SwarmCloud's console", status: "changes_requested", via: "swarmcloud_console" }, "Ana Example")).toBe(
-    "Baseline · changes requested by Ana Example in SwarmCloud's console",
+test("review minors 2: the decider's name stands in for the role, whatever the role", () => {
+  // Built from the decision's fields (qa4-work-29's sentence), never by replacing words in the API's line.
+  const d = { status: "approved", via: "oracle", note: "Keep bulk import out", delivered: true, decided_by_role: "approver" } as const;
+  expect(decisionSentence(d, "Feature set and dependencies", "Ana Example")).toBe("Feature set and dependencies was approved by Ana Example. Note: Keep bulk import out.");
+  expect(decisionSentence({ status: "changes_requested", via: "swarmcloud_console", note: null, delivered: true, decided_by_role: "owner" }, "The baseline", "Ana Example")).toBe(
+    "Changes were asked for at the baseline by Ana Example in SwarmCloud's console.",
   );
-  expect(decisionLine(d, null)).toBe(d.summary);
+  // No name known: the role, as the agents read it.
+  expect(decisionSentence(d, "Feature set and dependencies", null)).toBe("Feature set and dependencies was approved by an approver. Note: Keep bulk import out.");
 });

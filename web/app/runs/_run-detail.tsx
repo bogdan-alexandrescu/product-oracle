@@ -7,7 +7,7 @@ import { createPortal, flushSync } from "react-dom";
 
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
 import { peopleByIds } from "@/components/PersonPicker";
-import { decisionLine, runLabel } from "@/lib/labels";
+import { decisionSentence, runLabel } from "@/lib/labels";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
@@ -381,7 +381,8 @@ export function RunDetail({ id }: { id: string }) {
               ) : (
                 // The run waits on a checkpoint this member decides: scroll to its decision and focus it.
                 // rirs-21: it goes to the one decision below (no second decision of its own).
-                <Button icon="chevron-down" onClick={toDecision} title="Go to the decision below" data-testid="run-go-decide">
+                // qa4-work-26: a jump to the decision, not a menu: no chevron.
+                <Button onClick={toDecision} title="Go to the decision below" data-testid="run-go-decide">
                   Decide
                 </Button>
               ))}
@@ -607,7 +608,9 @@ function limitText(run: RunOut): string | null {
 
 /**
  * rirs-19: what Resume lets go on, beside it: "Spent $14.20, past its limit. Estimate $9.00,
- * limit $13.50 (150%). The PRD review is held until you resume it. Resuming allows up to $4.50 more; …"
+ * limit $13.50 (150%). The PRD review is held until you resume it. …"
+ * qa4-work-25: what Resume allows, in the shown numbers: "Resuming lets it spend up to $18.70 in
+ * total, $4.50 more. Cancel run stops it."
  */
 function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
   const last = [...run.segments].reverse().find((s) => s.status === "succeeded");
@@ -621,7 +624,11 @@ function OverrunHeld({ run, mayResume }: { run: RunOut; mayResume: boolean }) {
   const who = mayResume ? "you resume it" : "an owner resumes it";
   // A resumed run may spend half its estimate more before it pauses again (the 1.5× rule).
   const limit = limitText(run);
-  const more = run.estimate_usd != null ? ` Resuming allows up to ${usd(run.estimate_usd * 0.5)} more; Cancel run stops it.` : "";
+  const allowance = run.estimate_usd != null ? run.estimate_usd * 0.5 : null;
+  const more =
+    allowance != null
+      ? ` Resuming lets it spend up to ${usd(run.spent_usd + allowance)} in total, ${usd(allowance)} more. Cancel run stops it.`
+      : "";
   return (
     <Notice testId="run-overrun-held">
       {`Spent ${usd(run.spent_usd)}${limit ? `, past its limit. ${limit}` : ""}. ${next} is held until ${who}.${more}`}
@@ -678,7 +685,8 @@ function RunInspector({ run }: { run: RunOut }) {
   return (
     <Inspector
       label="Run"
-      eyebrow={waiting ? "Checkpoint · waiting" : `Run · ${runStatusLabel(run).toLowerCase()}`}
+      // qa4-work-28: the state as the header's tag says it, in sentence case.
+      eyebrow={waiting ? "Checkpoint · Waiting" : `Run · ${runStatusLabel(run)}`}
       title={waiting ? CHECKPOINT_LABEL[waiting] : (runDocName(run) ?? run.flow_title)}
       chips={
         <>
@@ -831,7 +839,8 @@ function RunDecisions({ run }: { run: RunOut }) {
   const said = (d: Schemas["RunDecision"]) => {
     const by = run.checkpoints.find((c) => c.id === d.checkpoint_id)?.decided_by;
     const name = by ? people.data?.get(by)?.name : undefined;
-    return decisionLine(d, name);
+    const checkpoint = d.kind === "baseline_confirm" ? "The baseline" : (CHECKPOINT_LABEL[d.kind as keyof typeof CHECKPOINT_LABEL] ?? "This checkpoint");
+    return decisionSentence(d, checkpoint, name);
   };
   return (
     <InspectorSection
@@ -851,7 +860,7 @@ function RunDecisions({ run }: { run: RunOut }) {
       ) : q.data.length === 0 ? (
         <p className="text-sm text-text2">No decisions yet.</p>
       ) : (
-        <ol className="space-y-1.5 text-[13px] leading-5 text-text">
+        <ol className="space-y-1.5 text-sm text-text">
           {q.data.map((d) => (
             <li key={d.checkpoint_id} data-testid="run-decision" className="break-words">
               {said(d)}
@@ -1127,7 +1136,10 @@ function SegmentItem({
             ) : s.checkpoint_on ? (
               // qa-work-21: a stop still to come is plain text, not a pill that looks like a button.
               <span title={`Stops for ${CHECKPOINT_LABEL[kind].toLowerCase()}`} className="min-w-0 text-[13px] text-text2 break-words" data-testid="segment-checkpoint">
-                <span className="sr-only">Stops for </span>
+                {/* qa4-work-31: on a phone the column has no header, so the prefix shows. */}
+                <span className="sr-only max-[600px]:not-sr-only" data-testid="segment-checkpoint-prefix">
+                  Stops for:{" "}
+                </span>
                 {CHECKPOINT_LABEL[kind]}
               </span>
             ) : (
@@ -2215,6 +2227,7 @@ function CheckpointRow({
   /** D3: stage a waiver in the shared draft (the approver role or above). */
   onWaive?: (body: ActionIn) => Promise<void>;
 }) {
+  const noteId = useId();
   // D8: the note is saved to the shared draft as I type; the line under it says how it went.
   const saved = review?.note ?? "";
   const canSave = !!review?.can_stage;
@@ -2319,14 +2332,20 @@ function CheckpointRow({
           </LinkButton>
         </p>
       )}
+      {/* qa4-work-30: a visible label above the box, with whether the note is needed; it stays as I type. */}
+      <label htmlFor={noteId} className="mt-2.5 block text-[13px] leading-4 font-semibold text-text2" data-testid="note-label">
+        Note for the agents{" "}
+        <span className="font-normal">
+          {redoOrContinue ? "(optional, added to the findings)" : staged ? "(optional with staged changes)" : "(required to request changes)"}
+        </span>
+      </label>
       <textarea
+        id={noteId}
         ref={noteRef}
-        aria-label="Note for the agents"
-        placeholder={redoOrContinue ? "Note (optional, added to the findings)" : staged ? "Note (optional with staged changes)" : "Note (required to request changes)"}
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
-        className={`${INPUT} mt-2.5 placeholder:text-text2`}
+        className={`${INPUT} mt-1.5 placeholder:text-text2`}
       />
       {status && (
         <p className={`mt-1 text-sm ${status === "failed" ? "text-crit" : "text-text2"}`} data-testid="note-status" aria-live="polite">

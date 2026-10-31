@@ -220,6 +220,9 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     else groups.push({ label, rows: [f] });
   }
 
+  // qa4-work-44: rows are numbered in the list as shown (1, 2, 3 under Needs you), never by their place in All.
+  const numbers = new Map(groups.flatMap((g) => g.rows).map((f, i) => [f.key, i + 1]));
+
   // The bar's staged changes: rows a person changed, requirements added, accepts and waivers.
   const chips: StagedChip[] = [];
   for (const f of scope.features) {
@@ -351,7 +354,13 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               <SegmentedControl<Group> label="Group by" size="sm" value={group} onChange={setGroup} items={[{ value: "goal", label: "Goal" }, { value: "reason", label: "Reason" }]} />
             </span>
           </div>
-          <div role="table" aria-label="Features" className="min-w-0 rounded-panel border border-line bg-surface max-[600px]:border-0 max-[600px]:bg-transparent" data-testid="scope-table">
+          {/* qa4-work-46: on a phone each group's heading has room above it, as the desktop's band does. */}
+          <div
+            role="table"
+            aria-label="Features"
+            className="min-w-0 rounded-panel border border-line bg-surface max-[600px]:flex max-[600px]:flex-col max-[600px]:gap-5 max-[600px]:border-0 max-[600px]:bg-transparent"
+            data-testid="scope-table"
+          >
             <div role="row" className={`grid ${COLS} items-center gap-x-2 border-b border-line px-2 py-2 text-[13px] font-semibold text-text2 max-[600px]:hidden`}>
               <span role="columnheader" aria-label="Requirements" />
               <span role="columnheader">#</span>
@@ -361,7 +370,8 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               <span role="columnheader">Confidence</span>
               <span role="columnheader">Requirements</span>
               <span role="columnheader">{needsWord} because</span>
-              <span role="columnheader">Your call</span>
+              {/* qa4-work-45: a commenter suggests, a viewer reads the decision; only an approver makes the call. */}
+              <span role="columnheader">{mode === "approver" ? "Your call" : mode === "commenter" ? "Suggest" : "Decision"}</span>
             </div>
             {rows.length === 0 && (
               <p className="px-4 py-6 text-sm text-text2" data-testid="scope-empty">
@@ -383,6 +393,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
                   <FeatureRow
                     key={f.id}
                     f={f}
+                    number={numbers.get(f.key) ?? f.position}
                     scope={scope}
                     review={review}
                     mode={mode}
@@ -451,6 +462,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
 
 function FeatureRow({
   f,
+  number,
   scope,
   review,
   mode,
@@ -466,6 +478,7 @@ function FeatureRow({
   onSelect,
 }: {
   f: Feature;
+  number: number;
   scope: Scope;
   review: Review | null;
   mode: Mode;
@@ -509,7 +522,7 @@ function FeatureRow({
           </button>
         </span>
         <span role="cell" className="tnum text-sm text-text max-[600px]:hidden" data-testid="row-number">
-          {f.position}
+          {number}
         </span>
         <span role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5 max-[600px]:basis-full">
           <button
@@ -555,8 +568,9 @@ function FeatureRow({
         <span role="cell" className="max-[600px]:hidden">
           <Ring value={pct(f.confidence)} size={32} stroke={4} />
         </span>
-        <span role="cell" className="tnum text-sm max-[600px]:hidden" title={`${kept} of ${f.requirements.length} requirements kept`}>
-          {kept}/{f.requirements.length}
+        {/* qa4-work-43: the count says what it counts, never a bare "2/2". */}
+        <span role="cell" className="tnum text-sm max-[600px]:hidden" title={`${kept} of ${f.requirements.length} requirements kept`} data-testid="row-requirements">
+          {kept} of {f.requirements.length} kept
         </span>
         <span role="cell" className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
           {open.map((r) => (
@@ -616,7 +630,7 @@ function YourCall({ f, scope, review, mode, ops, ui }: { f: Feature; scope: Scop
   );
   if (f.edited) return done(changeText(f), () => ops.patch(f, { revert: true }));
   const open = openReasons(f);
-  if (open.length) return <FixButtons fixes={fixesFor(open[0], f, scope, mode, ops, ui)} />;
+  if (open.length) return <FixButtons fixes={fixesFor(open[0], f, scope, mode, ops, ui)} inColumn />;
   // A call per reason: the row's Undo takes back all of them, one after another, so the last
   // reload reads them all gone.
   const answers = actionsOn(review, f.key).filter((a) => a.state === "staged" && (a.kind === "accept" || a.kind === "waive"));

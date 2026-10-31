@@ -46,14 +46,30 @@ test("qa-work-2: an I don't know answer counts as open (owner 2026-10-29), and t
   );
 });
 
+/*
+ * qa4fix-work review: the before-drafting brief has three questions open (Pain evidence, Success
+ * metric, Company-goal alignment), so its chip settles on "Waiting for answers", never "Waiting
+ * for a decision". The old check matched a first frame that read the thread as empty before
+ * it loaded ("Nothing asked yet"); every text the chip shows is recorded, so that frame fails.
+ */
 test("qa-work-2 (review): a brief with critical questions not asked yet does not wait for a decision", async ({ page }) => {
   await page.addInitScript((key) => {
     if (!localStorage.getItem(key)) localStorage.setItem(key, "before-drafting");
+    const seen: string[] = [];
+    (window as unknown as { chipTexts: string[] }).chipTexts = seen;
+    new MutationObserver(() => {
+      const text = document.querySelector('[data-testid="intake-status"]')?.textContent ?? null;
+      if (text !== null && seen[seen.length - 1] !== text) seen.push(text);
+    }).observe(document, { subtree: true, childList: true, characterData: true });
   }, MOCK_SCENARIO_KEY);
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
   await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeAttached();
-  await expect(page.getByTestId("intake-status")).toHaveText("Nothing asked yet");
+  await expect(page.getByTestId("intake-thread").getByTestId("question").first()).toBeVisible();
+  await expect(page.getByTestId("intake-status")).toHaveText("Waiting for answers");
+  const seen = await page.evaluate(() => (window as unknown as { chipTexts: string[] }).chipTexts);
+  expect(seen).not.toContain("Nothing asked yet");
+  expect(seen).not.toContain("Waiting for a decision");
 });
 
 test("qa-work-2 (review): the chip with a critical gap open and nothing asked yet", () => {
@@ -102,7 +118,7 @@ test("qa-work-30: the Gaps tab names a gap's section in words, never the raw key
   await openSaved(page);
   await page.getByRole("tab", { name: /^Gaps/ }).click();
   const row = page.getByTestId("gap-row").filter({ hasText: "No baseline for repeat checkout time" });
-  await expect(row.getByTestId("gap-sections")).toHaveText("Section: Metrics");
+  await expect(row.getByTestId("gap-sections")).toHaveText("PRD section: Metrics");
   await expect(row).not.toContainText(/\bmetrics\b/);
 });
 
@@ -148,8 +164,8 @@ test("qa-onboarding-22, 23, qa-work-3, 31: a new company's first brief, from New
   await expect(readLine(page)).toContainText("Oracle assumed", { timeout: 25_000 });
   const gaps = await gapsTabCount(page);
   expect(gaps).toBeGreaterThan(0);
-  await expect(readLine(page)).toContainText(`${gaps} open gap${gaps === 1 ? "" : "s"}`);
-  await expect(readLine(page)).not.toContainText("0 open gaps");
+  await expect(readLine(page)).toContainText(`${gaps} gap${gaps === 1 ? "" : "s"} still open`);
+  await expect(readLine(page)).not.toContainText("no gaps open");
   await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 analyses left today");
 
   // qa-onboarding-23: the estimate in the baseline dialog's words.
