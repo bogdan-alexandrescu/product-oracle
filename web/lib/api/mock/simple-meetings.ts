@@ -98,6 +98,8 @@ interface Meeting {
   last_change_at?: string | null;
   ended_at: string | null;
   ended_by: string | null;
+  /** meet-chat-right-prd review: it ended by itself, idle past MEETING_IDLE (meetings._settle). */
+  ended_by_itself?: boolean;
   minutes: Minutes | null;
   minutes_state: "drafting" | "ready" | "sent" | null;
   /** The minutes job while drafting (meetings._minutes_job). */
@@ -434,13 +436,14 @@ export const MEETING_IDLE_MS = 4 * 60 * 60_000;
  * As meetings._settle and the ticker's idle sweep (meetings.end_idle): a live meeting with
  * no change through its session for MEETING_IDLE_MS (its last change, else its start, as
  * changes.close_idle; an Approve or a chat decision is no change) ends, with Oracle's quick
- * minutes, by its presenter, whether or not anyone opened it.
+ * minutes, by its presenter, whether or not anyone opened it; its chat then says it ended by
+ * itself (meet-chat-right-prd review, meetings.ended_by_itself).
  */
 function endIdle(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
   if (m.status !== "live") return;
   const last = Date.parse(m.last_change_at ?? m.started_at);
   if (mockNowMs() - last < MEETING_IDLE_MS) return;
-  Object.assign(m, { status: "ended", ended_at: iso(mockNowMs()), ended_by: m.presenter_id });
+  Object.assign(m, { status: "ended", ended_at: iso(mockNowMs()), ended_by: m.presenter_id, ended_by_itself: true });
   m.minutes = extract(ctx, db, m);
   m.minutes_state = "ready";
 }
@@ -716,7 +719,12 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
   return {
     find(id) {
       const m = find(id);
-      return m ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended" } : null;
+      // As meetings.meeting_rules: an idle meeting ends by itself when its chat is read.
+      if (m) endIdle(open().ctx, meetings(), m);
+      return m
+        ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended",
+            prd: m.prd, ended_at: m.ended_at, ended_by: m.ended_by, ended_by_itself: !!m.ended_by_itself }
+        : null;
     },
     setMode(id, mode, people) {
       const m = find(id);

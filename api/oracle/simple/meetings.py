@@ -57,6 +57,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
+from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts, minutes
 from oracle.simple.models import (
@@ -133,6 +134,12 @@ class MeetingRules:
     change_mode: Literal["everyone", "presenter", "named"]
     change_people: list[uuid.UUID]
     ended: bool
+    # meet-chat-right-prd: the meeting's PRD (its chat reads only it), and how it ended:
+    # who ended it, or by itself (its session idle past MEETING_IDLE), and when.
+    prd_document_id: uuid.UUID | None = None
+    ended_at: datetime | None = None
+    ended_by: uuid.UUID | None = None
+    ended_by_itself: bool = False
 
     def may_change(self, user_id: uuid.UUID | None) -> bool:
         """Whether ``user_id`` may change things through the meeting: never once ended;
@@ -157,14 +164,34 @@ def _rules(m: SimpleMeeting) -> MeetingRules:
         change_mode=m.change_mode,  # type: ignore[arg-type]
         change_people=list(m.change_people or []),
         ended=m.status == "ended",
+        prd_document_id=m.prd_document_id,
+        ended_at=m.ended_at,
+        ended_by=m.ended_by,
     )
+
+
+async def ended_by_itself(db: AsyncSession, meeting_id: uuid.UUID) -> bool:
+    """Whether the meeting ended by itself (_settle: its time ran out), not by a person."""
+    return (
+        await db.scalar(
+            select(AuditEvent.id)
+            .where(
+                AuditEvent.action == "simple_meeting.ended_idle", AuditEvent.entity_id == meeting_id
+            )
+            .limit(1)
+        )  # fmt: skip
+    ) is not None
 
 
 async def meeting_rules(db: AsyncSession, meeting_id: uuid.UUID) -> MeetingRules | None:
     m = await db.get(SimpleMeeting, meeting_id)
-    if m is not None:
-        await _settle(db, [m])
-    return _rules(m) if m is not None else None
+    if m is None:
+        return None
+    await _settle(db, [m])
+    rules = _rules(m)
+    if m.status == "ended":
+        rules.ended_by_itself = await ended_by_itself(db, m.id)
+    return rules
 
 
 async def rules_for_session(db: AsyncSession, session_id: uuid.UUID) -> MeetingRules | None:

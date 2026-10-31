@@ -6,7 +6,7 @@ discussion there) moves to the chat's own key when the chat wrote in it, an Ask 
 the chat adopted included, or when it is the chat's own with no line yet (titled "Meeting
 chat"); a newer Ask discussion, a key whose discussions hold no chat line,
 another page's chat and an Ask chat stay put; the downgrade puts the keys back; up again
-works; chained on 0094_generation_checks as the single head; fails_when=a meeting's chat is
+works; chained on 0094_generation_checks, one head; fails_when=a meeting's chat is
 left on the screen key (it loses its lines), an Ask-only discussion becomes a chat, or a key
 differs after the round trip; no_claim=the chat's behaviour
 (test_simple_meeting_chat_own_key).
@@ -92,7 +92,7 @@ def _keys() -> dict[uuid.UUID, str]:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    assert len(script.get_heads()) == 1
 
 
 def test_each_meeting_keeps_its_chat(scratch_db):

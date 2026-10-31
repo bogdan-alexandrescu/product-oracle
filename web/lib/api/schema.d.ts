@@ -17973,6 +17973,14 @@ export interface components {
             ask_only: boolean;
             /** Ended */
             ended: boolean;
+            /** Ended At */
+            ended_at?: string | null;
+            ended_by?: components["schemas"]["SimplePersonRef"] | null;
+            /**
+             * Ended By Itself
+             * @default false
+             */
+            ended_by_itself: boolean;
         };
         /** ChatStopOut */
         ChatStopOut: {

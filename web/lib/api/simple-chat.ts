@@ -118,6 +118,10 @@ export type ChatRules = {
   may_apply: boolean;
   ask_only: boolean;
   ended: boolean;
+  /** meet-chat-right-prd: when it ended and who ended it, or by itself once its time ran out. */
+  ended_at?: string | null;
+  ended_by?: PersonRef | null;
+  ended_by_itself?: boolean;
 };
 
 /** `understood`: false when Oracle's plan reader did not know the last line (with only_understood, nothing was written). */
