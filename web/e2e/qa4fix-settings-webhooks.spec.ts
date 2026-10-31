@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { WEBHOOK_RECEIVER, WEBHOOKS_SCENARIO, type ReceivedCall } from "../lib/api/mock/webhooks";
+import { WEBHOOK_RECEIVER, WEBHOOKS_SCENARIO } from "../lib/api/mock/webhooks";
 import { expect, test, type Page } from "./test";
 
 import { login } from "./helpers";
@@ -11,7 +11,7 @@ import { login } from "./helpers";
 
 /** The mock's outbox posts each delivery here; it answers 200. Without it a send can't connect. */
 async function stubReceiver(page: Page) {
-  await page.exposeFunction(WEBHOOK_RECEIVER, (_call: ReceivedCall) => ({ status: 200, body: "ok" }));
+  await page.exposeFunction(WEBHOOK_RECEIVER, () => ({ status: 200, body: "ok" }));
 }
 
 const scenario = (page: Page, name: string) => page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, name]);
