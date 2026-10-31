@@ -100,7 +100,8 @@ export function SimpleDecisions() {
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap gap-3 max-[600px]:w-full" role="group" aria-label="Filters">
+        {/* qa4-simple-decide-35: the filters wrap among themselves, so the view switch keeps its place beside them when Ask Oracle narrows the page. */}
+        <div className="flex min-w-0 flex-1 flex-wrap gap-3 max-[600px]:w-full" role="group" aria-label="Filters">
           <Filter label="PRD" value={prd} options={d?.prds ?? []} onChange={(v) => set("prd", v)} all="All PRDs" />
           <Filter label="Goal" value={goal} options={d?.goals ?? []} onChange={(v) => set("goal", v)} all="All goals" />
           <Filter label="Meeting" value={meeting} options={d?.meeting_options ?? []} onChange={(v) => set("meeting", v)} all="All meetings" />
@@ -197,7 +198,8 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
         <span aria-hidden className="simple-ico">
           <Icon name="flag" size={20} stroke={1.7} />
         </span>
-        <h2 className="simple-h2 min-w-0 flex-1">{label}</h2>
+        {/* qa4-simple-decide-35: the card's title keeps one line; the source line wraps under it instead. */}
+        <h2 className="simple-h2 flex-1 whitespace-nowrap">{label}</h2>
         {count > 0 && (
           <span data-testid={`${testId}-count`} className="simple-count tnum">
             {count}

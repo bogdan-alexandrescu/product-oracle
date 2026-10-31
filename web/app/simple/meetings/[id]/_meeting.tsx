@@ -457,7 +457,22 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
   const change = (body: Schemas["SimpleChangeIn"], words: string) =>
     act(async () => {
       const r = await unwrap(api.POST("/v1/simple/changes", { body: { ...body, session_id: m.session_id } }));
-      setSaid(r.change.status === "proposed" ? `Proposed: ${words[0]!.toLowerCase()}${words.slice(1)}. It waits on its decider.` : `${words}.`);
+      const c = r.change;
+      setSaid(c.status === "proposed" ? `Proposed: ${words[0]!.toLowerCase()}${words.slice(1)}. It waits on its decider.` : `${words}.`);
+      // The rest of qa4-simple-decide-16: an applied move or cut is undone from its toast, like a decided question.
+      if (c.can_undo)
+        toast({
+          message: words,
+          action: {
+            label: "Undo",
+            onClick: () =>
+              void act(async () => {
+                await unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: c.id } } }));
+                setSaid(`Undone: ${words[0]!.toLowerCase()}${words.slice(1)}.`);
+                toast({ message: "Undone" });
+              }),
+          },
+        });
     });
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;

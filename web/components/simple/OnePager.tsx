@@ -12,7 +12,7 @@ import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useCompanyZone } from "@/lib/dates";
+import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
@@ -465,7 +465,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
       {/* qa4-simple-prd-5: presenting, the header sits over the page's own centred column. */}
-      <div className={`mx-auto flex ${presenting && !planShown ? "max-w-[852px] px-4" : "max-w-[1180px] px-12"} flex-col gap-5 pt-[26px] max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
+      <div className={`mx-auto flex ${presenting && !planShown ? "max-w-[852px] px-4 max-[767px]:px-4" : sessionId ? "max-w-[1180px] px-0" : "max-w-[1180px] px-12 max-[767px]:px-4"} flex-col gap-5 pt-[26px] max-[767px]:gap-3.5 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
         <PrdHeader
           inMeeting={!!sessionId}
           v={v}
@@ -493,9 +493,10 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           margin stay under it inside a review meeting, and whenever there is something to review
           (a working draft, changes in review or margin notes; BGD 2026-10-28), so the people
           Remind sends here can read and decide them. */}
+      {/* qa4-simple-decide-26/27: in a meeting the stage pads the page once; the card, its title and actions share one left edge. */}
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
-      <div className={`mx-auto grid gap-6 px-4 py-6 ${presenting ? "max-w-[852px]" : "max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]"}`} data-testid="one-pager-columns">
-        <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
+      <div className={`mx-auto grid gap-6 py-6 ${sessionId && !presenting ? "px-0" : "px-4"} ${presenting ? "max-w-[852px]" : "max-w-[1180px] md:grid-cols-[minmax(0,820px)_var(--simple-margin)]"}`} data-testid="one-pager-columns">
+        <article aria-label="One-pager" className={`rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] ${sessionId && !presenting ? "px-4" : "px-6"} py-8 shadow-sm md:col-start-1 md:px-12`}>
           {prdLooks.length > 0 && !presenting && <NeedsALook items={prdLooks} blocks={v.blocks} sections={v.sections} />}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             // qa4-simple-prd-21: the first section starts at the card's own top padding.
@@ -685,7 +686,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                         )}
                       </div>
                       {/* Phone: the margin notes move under their line. */}
-                      <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId }} />)}</div>
+                      <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />)}</div>
                     </li>
                   ))}
                   {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">{b.missing ? "Not in the PRD yet" : "Not written yet"}</li>}
@@ -706,10 +707,18 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           {v.notes.length === 0 && <p className="text-sm font-semibold uppercase tracking-wide text-text-faint">Changes and proposals</p>}
           {[...v.notes].sort((a, b) => (numbers.get(a.line_id) ?? 0) - (numbers.get(b.line_id) ?? 0)).map((n) => (
             <div key={n.change_id} data-note-for={n.line_id} data-change={n.change_id} className="absolute inset-x-0">
-              <MarginNote {...{ n, quote: words.get(n.line_id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId }} />
+              <MarginNote {...{ n, quote: words.get(n.line_id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting: !!sessionId }} />
             </div>
           ))}
-          {v.notes.length === 0 && <p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>}
+          {/* qa4-simple-decide-25: in a meeting, once its edits are published, the margin says where they went. */}
+          {v.notes.length === 0 &&
+            (sessionId && v.blocks.some((b) => b.lines.some((l) => l.decisions.length > 0)) ? (
+              <p className="mt-1 text-base text-text2" data-testid="margin-published">
+                No changes waiting. Version {v.version} is published; “Decided in” under a line links to the decision that changed it.
+              </p>
+            ) : (
+              <p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>
+            ))}
         </aside>
       </div>
       )}
@@ -762,7 +771,8 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
       {!phone && (
         <div className="flex items-center gap-2.5">
           {!presenting && !inMeeting && <BackLink />}
-          <span className="flex-1" />
+          {/* qa4-simple-decide-26: in a meeting the actions start at the card's left edge, not over the margin. */}
+          {!inMeeting && <span className="flex-1" />}
           {actions}
         </div>
       )}
@@ -834,8 +844,12 @@ function placeNotes(el: HTMLElement | null) {
   el.style.minHeight = `${Math.round(floor)}px`;
 }
 
+/** A meeting's moment, "Fri Oct 30, 8:18 PM" (as the meeting screen's momentWords), no zone letters. */
+const meetingMoment = (at: string, zone: string) =>
+  `${formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
+
 function MarginNote({
-  n, quote: line, busy, diff, setDiff, wide, setWide, undo, decide, meId,
+  n, quote: line, busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting,
 }: {
   n: Note;
   quote: string;
@@ -847,8 +861,11 @@ function MarginNote({
   undo: (n: Note) => void;
   decide: (n: Note, a: "accept" | "decline") => void;
   meId: string | null;
+  inMeeting: boolean;
 }) {
   const zone = useCompanyZone();
+  // qa4-simple-decide-19: in a meeting, its one moment format ("Fri Oct 30, 8:18 PM"); the meeting names the zone.
+  const when = (at: string) => (inMeeting ? meetingMoment(at, zone) : clock(at, zone));
   // The note names its line by the words it had (they stay put while the line changes).
   const quote = quoteLine(n.before) || line;
   const widened = wide === n.change_id;
@@ -874,8 +891,8 @@ function MarginNote({
     >
       <p>
         {n.kind === "change"
-          ? `${who} changed ${quote} · ${clock(n.at, zone)}${n.meeting_title ? `, in ${n.meeting_title}` : n.in_meeting ? ", in the meeting" : ""}`
-          : `${who} proposed new wording for ${quote} · ${clock(n.at, zone)}`}
+          ? `${who} changed ${quote} · ${when(n.at)}${n.meeting_title ? `, in ${n.meeting_title}` : n.in_meeting ? ", in the meeting" : ""}`
+          : `${who} proposed new wording for ${quote} · ${when(n.at)}`}
       </p>
       {/* qa-simple-prd-35: a proposal shows its words at once. */}
       {n.kind === "proposal" && <p className="mt-1 text-[15px]" data-testid="proposal-words">“{n.after}”</p>}

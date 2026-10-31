@@ -683,6 +683,20 @@ async function body(req: Request): Promise<Record<string, unknown>> {
  */
 export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], run: (r: Request) => Promise<Response | null>): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
+  // qa4-simple-decide-16 (changes_router.undo_simple_change): undoing a change made in a live
+  // meeting is that meeting's decision too, "Undone: <what it did>".
+  if (p[4] === "undo") {
+    const m = db.meetings.find((x) => x.status === "live" && db.decisions.some((d) => d.meeting_id === x.id && d.change_ids.includes(p[3]!)));
+    if (!m) return null;
+    const res = await run(req);
+    if (!res || !res.ok) return res;
+    const c = ((await res.clone().json()) as Schemas["SimpleChangeResult"]).change;
+    m.last_change_at = iso(mockNowMs());
+    const [words, subjects] = describe(ctx, c);
+    const prd = prds(ctx).find((x) => x.slug === m.prd)!;
+    record(db, ctx, m, `${c.status === "declined" ? "Withdrawn" : "Undone"}: ${words}`, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
+    return res;
+  }
   const isCreate = p.length === 3;
   const verb = p[4] === "accept" ? "Accepted" : p[4] === "decline" ? "Declined" : null;
   if (!isCreate && !verb) return null;

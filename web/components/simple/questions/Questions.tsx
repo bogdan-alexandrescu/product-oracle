@@ -344,7 +344,10 @@ export function QuestionRow({
   }, [open]);
   const done = q.column === "decided" || mode === "decided";
   const recommended = !!q.recommendation && writes && !done;
-  const at = q.decided_at ? formatInZone(q.decided_at, zone, { hour: "numeric", minute: "2-digit" }) : null;
+  // qa4-simple-decide-19: a meeting's one moment format ("Fri Oct 30, 8:18 PM"), no zone letters: the meeting names its zone.
+  const at = q.decided_at
+    ? `${formatInZone(q.decided_at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(q.decided_at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`
+    : null;
   // qa-simple-decide-44: the answer itself, not "as recommended".
   const here = [`Decided in this meeting${q.chosen ? `: ${q.chosen}` : ""}`, q.decided_by?.name, at].filter(Boolean).join(" · ");
   const another = (label: string) => (
