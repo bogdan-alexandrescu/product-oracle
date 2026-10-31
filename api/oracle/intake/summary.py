@@ -400,6 +400,17 @@ async def template_hint(
                 modules[key] = hint
             if gap.id not in hint.gap_ids:
                 hint.gap_ids.append(gap.id)
+    # Production minors 23: the template the brief chose (New PRD's pick) is the one the
+    # draft uses, so the side panel names it; the recommendation only when none was chosen.
+    chosen = next((t for t in rec.templates if t.key == intake.draft_template), None)
+    if chosen is not None:
+        return TemplateHint(
+            key=chosen.key,
+            name=chosen.name,
+            reason="The template chosen for this PRD.",
+            theme=intake.draft_theme,
+            modules=list(modules.values()),
+        )
     return TemplateHint(
         key=rec.template.key,
         name=rec.template.name,

@@ -1094,7 +1094,9 @@ function Priorities() {
     {
       key: "goal",
       header: "Goal",
-      width: "112px",
+      // Wide enough that a goal's code and a word of its name share a line: a name wraps
+      // between words, never inside one ("Scalin g").
+      width: "160px",
       // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
       wrap: true,
       cell: (f) =>
@@ -1299,7 +1301,8 @@ function Priorities() {
           counts && (
             <>
               {capsReady && !canSnapshot && !canOverride && <ViewOnly />}
-              <Chip kind="acc">{counts.features} ranked</Chip>
+              {/* The run's order lists its own features, not the whole live ranking. */}
+              <Chip kind="acc">{cmp ? `${features.length} in the run's order` : `${counts.features} ranked`}</Chip>
               {counts.no_goal > 0 && <Chip kind="crit">{counts.no_goal} no goal</Chip>}
               {counts.unscored > 0 && <Chip kind="warn">{counts.unscored} unscored</Chip>}
               {counts.in_cycles > 0 && <Chip kind="warn">{counts.in_cycles} in a cycle</Chip>}

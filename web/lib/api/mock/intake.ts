@@ -27,6 +27,7 @@ import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
 import { displayName } from "@/lib/names";
 import { baselineReviewStatus } from "./baseline";
 import { companyDayIso, mockSettingValue } from "./connections";
+import { templateNameOf } from "./lane-f";
 import type { V2Db } from "./v2";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -311,6 +312,7 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
     } as Schemas["Coverage"];
   });
   const scope = ((intake.analysis as { scope?: string[] }).scope ?? []).filter((s) => typeof s === "string");
+  const chosenName = templateNameOf(intake.template);
   return {
     intake: intakeOut(intake, db),
     pinned: { version: versions.length, snapshot_id: last?.snapshot_id ?? null, as_of: last?.as_of ?? null, versions },
@@ -337,7 +339,10 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
     top_uncertainties: open.slice(0, 5),
     gaps: out,
     next_actions: gaps.filter((g) => g.importance === "critical").flatMap(nextActions),
-    template: { key: "oracle-default", name: "Goal-traced PRD", reason: "A cross-functional build: the goal-traced PRD agrees the problem, then the prioritized solution, then launch.", theme: null, modules },
+    // As the API (production minors 23): the template the brief chose, else the recommendation.
+    template: chosenName
+      ? { key: intake.template!, name: chosenName, reason: "The template chosen for this PRD.", theme: intake.theme ?? null, modules }
+      : { key: "oracle-default", name: "Goal-traced PRD", reason: "A cross-functional build: the goal-traced PRD agrees the problem, then the prioritized solution, then launch.", theme: null, modules },
     readiness: { open_critical: critical.length, blocking_gap_ids: blocking, gate: blocking.length ? "blocked" : "clear", private_blocking_gap_ids: [] },
     batch: {
       current: batches.length ? Math.max(...batches) : null,

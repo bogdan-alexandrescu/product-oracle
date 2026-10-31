@@ -190,8 +190,11 @@ export function DeleteDialog({
   remove,
   onClose,
   onDeleted,
+  what,
 }: {
   title: string;
+  /** What deleting removes, in words, where the title alone does not say it. */
+  what?: string;
   dependents: () => Promise<Schemas["DependentsOut"]>;
   remove: (query: { reason?: string | null; confirm_published?: boolean }) => Promise<Schemas["TrashEntryOut"]>;
   onClose: () => void;
@@ -244,6 +247,7 @@ export function DeleteDialog({
         </>
       }
     >
+      {what && <p data-testid="delete-what">{what}</p>}
       <p>It waits in Settings › Trash for 30 days, where an owner can restore it; then it is gone.</p>
       {!deps && !error && <p className="text-text2">Finding what depends on it…</p>}
       {deps && (

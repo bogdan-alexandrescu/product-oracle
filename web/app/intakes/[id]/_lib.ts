@@ -48,6 +48,14 @@ export const OPEN_GAP = new Set<Gap["status"]>(["unknown", "asked", "under_inves
 /** Gap statuses that settle a critical question (the API's engine.DECIDED). */
 export const DECIDED_GAP = new Set<Gap["status"]>(["answered", "validated", "accepted_risk"]);
 
+/**
+ * The critical questions still open, as the inspector lists them: the one source the
+ * "Critical open" count, the chips and each line read (production minors 24).
+ */
+export function openCriticalGaps(s: Summary): Gap[] {
+  return s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
+}
+
 /** The intake's status, in the header's words. */
 export const STATUS: Record<Summary["intake"]["status"], { label: string; kind: ChipKind }> = {
   draft: { label: "Oracle is reading", kind: "na" },
@@ -61,7 +69,8 @@ export const STATUS: Record<Summary["intake"]["status"], { label: string; kind: 
 /** An answer's knowledge state in plain words (§5 step 3: an inference is never shown as a fact). */
 export function knowledgeLabel(a: Answer, mine: boolean, name: string): string {
   if (a.kind !== "answer") return "Unknown";
-  if (a.knowledge_state === "user_decision") return mine ? "Your decision" : `${name}'s decision`;
+  // Production minors 28: what a person wrote reads as their answer.
+  if (a.knowledge_state === "user_decision") return mine ? "Your answer" : `${name}'s answer`;
   if (a.knowledge_state === "verified_fact") return "Verified fact";
   if (a.knowledge_state === "hypothesis") return "Hypothesis";
   if (a.knowledge_state === "ai_inference") return "Oracle's inference";
@@ -129,7 +138,7 @@ export function unknownGaps(batches: Batch[] | undefined): Set<string> {
  */
 export function statusChip(s: Summary, counts: Tally): { label: string; kind: ChipKind } {
   if (s.intake.status === "awaiting_answers" && counts.open === 0 && counts.answered === 0) return { label: "Nothing asked yet", kind: "warn" };
-  if (s.intake.status === "awaiting_answers" && counts.open === 0 && s.readiness.open_critical > 0) return { label: "Waiting for a decision", kind: "warn" };
+  if (s.intake.status === "awaiting_answers" && counts.open === 0 && openCriticalGaps(s).length > 0) return { label: "Waiting for a decision", kind: "warn" };
   return STATUS[s.intake.status];
 }
 

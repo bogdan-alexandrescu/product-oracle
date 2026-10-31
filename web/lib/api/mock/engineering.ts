@@ -104,15 +104,25 @@ function seedBriefs(): TechBrief[] {
       id: stableUuid("tech-brief/keep-form-state"),
       request_id: stableUuid("tech-brief-request/keep-form-state"),
       feature: { key: "keep-form-state", title: "Keep form state on back navigation", entity_id: stableUuid("feature/keep-form-state") },
-      prd: { slug: PRD, version: 2 },
+      // Written for v1; the PRD is at v2 now (production minors 18).
+      prd: { slug: PRD, version: 1 },
       run_id: RUN,
       status: "approved",
       code_map: { used: false, repos: [] },
-      approach: "Keep each checkout step's fields in the session so going back shows what the buyer typed.",
-      touches: [{ area: "checkout form", kind: "module", change: "change", ref: null }],
+      // As the architect writes it (production minors 19-21): a list run into one line,
+      // nothing mapped (no code map), a file name and question codes in a mitigation.
+      approach:
+        "Keep each checkout step's fields in the session so going back shows what the buyer typed: - Save the fields when a step is left - Fill them in again when the step opens - Clear them when the order is placed",
+      touches: [],
       reuse: [],
-      risks: [],
-      questions: [],
+      risks: [
+        {
+          risk: "The session may end mid-checkout",
+          level: "low",
+          mitigation: "Keep the fields as long as a session lasts (questions.json); see otr-q1 and src-q1",
+        },
+      ],
+      questions: [{ id: "otr-q1", question: "How long does a checkout session last?", why: "Sets when saved fields are lost", blocking: false }],
       answers: [],
       size: "s",
       size_why: "One component, if the assumption holds",

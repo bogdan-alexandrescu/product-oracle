@@ -417,6 +417,12 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               revision={review.revision}
               savedNote={review.note ?? null}
               canDecide={mode === "approver" && !!review.can_decide}
+              // Approving with calls still open leaves them as the agents proposed: said before it goes.
+              approveAsk={
+                s.needs_you > 0
+                  ? `${plural(s.needs_you, "feature")} still ${s.needs_you === 1 ? "needs" : "need"} you. Approving leaves ${s.needs_you === 1 ? "it" : "them"} as the agents proposed.`
+                  : null
+              }
               canNote={!!review.can_stage}
               onReload={reload}
               onDecided={() => {

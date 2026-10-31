@@ -1961,6 +1961,11 @@ function compare(db: Db, snap: SnapshotRow): Schemas["CompareOut"] {
   };
 }
 
+/** A built-in template's name by key (the intake summary's chosen template; the intake mock has no lane-f state). */
+export function templateNameOf(key: string | null | undefined): string | null {
+  return key ? (TEMPLATE_SEEDS.find((t) => t.key === key)?.name ?? null) : null;
+}
+
 function state(db: Db, scenario?: string | null): LaneFState {
   db.lane_f ??= seeded("lane-f", () => seedState(scenario));
   return db.lane_f;

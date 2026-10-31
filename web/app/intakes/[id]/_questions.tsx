@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AnswerQuestion, type InboxQuestion } from "@/components/AnswerQuestion";
 import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl, initialsOf } from "@/components/ds";
 import { PersonPicker, findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
 import { plural } from "@/lib/format";
 import { useMe, type Role } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -211,6 +211,18 @@ function QuestionBubble({
   const unsure = q.status === "answered" && last?.kind === "dont_know";
   const mayChange = unsure && can("update_question");
 
+  /** Production minors 27: a deferred question is asked again of the same person. */
+  async function undoDefer() {
+    if (!q.asked_to) return;
+    setError(null);
+    try {
+      await unwrap(api.PATCH("/v1/questions/{question_id}", { params: { path: { question_id: q.id } }, body: { asked_to: q.asked_to } }));
+      onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+
   async function reassign(p: Person) {
     setError(null);
     try {
@@ -255,7 +267,19 @@ function QuestionBubble({
               </span>
             )}
             <span data-testid="asked-to">{mine ? "Asked you" : `Asked ${nameOf(people, me, q.asked_to)}`}</span>
-            {q.status === "deferred" && <Chip kind="na">Deferred</Chip>}
+            {q.status === "deferred" && (
+              <span data-testid="question-deferred" className="inline-flex items-center gap-1.5">
+                <Chip kind="na">Deferred</Chip>
+                {mayMove && q.asked_to && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <Button variant="ghost" onClick={undoDefer} aria-label={`Undo defer: ${q.prompt}`}>
+                      Undo
+                    </Button>
+                  </>
+                )}
+              </span>
+            )}
             {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
             {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
@@ -308,6 +332,8 @@ function QuestionBubble({
           <div className="rounded-panel border border-line bg-surface p-3">
             <AnswerQuestion
               question={open ? asInbox(card, s) : { ...asInbox(card, s), answer_paths: ["answer"] }}
+              // Production minors 28: the question is in its card right above; it is not repeated.
+              showPrompt={false}
               sendAnswer={onTurn && mine ? (body) => turn(body, false) : undefined}
               onCancel={() => setMode(null)}
               onSettled={() => {
@@ -364,7 +390,8 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
         for (const p of defaults.values()) all.set(p.user_id, p);
         setWriters([...all.values()].sort((a, b) => a.name.localeCompare(b.name)));
         setPreview({ cards: out.questions, remaining: out.remaining, held: out.held ?? null });
-        setChosen({});
+        // Production minors 25: a pick is kept by question id when the list is read again
+        // (another answer refreshes it); Ask these only sends the picks of the questions shown.
         setError(null);
       })
       .catch((e) => live && setError(errorMessage(e)));
@@ -511,14 +538,25 @@ export function QuestionsTab({
     setFollowUp(on);
     localStorage.setItem(FOLLOW_UP_KEY, on ? "on" : "off");
   }
-  const turn: Turn = async (questionId, body, skip) => {
-    if (!interview) throw new Error("Your interview is still loading; try again.");
+  // Production minors 26: one turn at a time, as the API takes them; an answer sent while
+  // Oracle still reads the one before waits for it, and never fails for it.
+  const turns = useRef<Promise<unknown>>(Promise.resolve());
+  const turn: Turn = (questionId, body, skip) => {
+    const next = turns.current.then(() => takeTurn(questionId, body, skip));
+    turns.current = next.catch(() => undefined);
+    return next;
+  };
+  const takeTurn: Turn = async (questionId, body, skip) => {
+    if (!interview) throw new ApiError(409, "Your interview is still loading. Wait a moment, then send again.");
     const out = await unwrap(
       api.POST("/v1/interviews/{interview_id}/turns", {
         params: { path: { interview_id: interview.id } },
         body: { question_id: questionId, body, skip_follow_up: skip },
       }),
-    );
+    ).catch((e: unknown) => {
+      if (e instanceof ApiError && e.status === 429) throw new ApiError(429, "Oracle is still reading your last answer. Wait a moment, then send again.");
+      throw e;
+    });
     setInterview((iv) => (iv ? { ...iv, messages: [...iv.messages, ...out.messages] } : iv));
     if (!out.recorded) return false;
     setFocus(out.next_question_id ?? null);

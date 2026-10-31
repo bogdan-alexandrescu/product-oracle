@@ -12,7 +12,7 @@ import { useMe, type Role } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { DECIDED_GAP, HARD_BLOCKERS, categoryNote, criticalCount, holdCount, tally, unknownGaps, unknownNote, type Batch, type Gap, type Summary } from "./_lib";
+import { HARD_BLOCKERS, categoryNote, criticalCount, holdCount, openCriticalGaps, tally, unknownGaps, unknownNote, type Batch, type Gap, type Summary } from "./_lib";
 
 type Decision = Schemas["DecisionIn"]["decision"];
 
@@ -137,7 +137,16 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
 
 /** Critical questions still open that hold nothing (none is a blocker): what the draft lacks. */
 function missingGaps(s: Summary): Summary["gaps"] {
-  return s.readiness.blocking_gap_ids.length ? [] : s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
+  return s.readiness.blocking_gap_ids.length ? [] : openCriticalGaps(s);
+}
+
+/** Where an open critical question stands, from its gap (production minors 24). */
+function gapStanding(g: Gap, asked: boolean): string | null {
+  if (g.status === "answered_pending_review") return "Answered: waiting for review.";
+  if (g.status === "under_investigation") return "Being researched.";
+  if (g.status === "deferred") return "Deferred.";
+  if (g.status === "unknown" && !asked) return "Not asked yet: ask it from Next questions.";
+  return asked ? null : "Asked: waiting for an answer.";
 }
 
 /** Where the brief stands, as the inspector's chip says it: archived, blocked, open critical questions, or ready. */
@@ -191,6 +200,7 @@ export function IntakeInspector({
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
   const missing = missingGaps(s);
+  const openCritical = openCriticalGaps(s).length;
   const counts = tally(s, batches);
   const unknown = unknownGaps(batches);
   const title = readinessTitle(s);
@@ -204,7 +214,7 @@ export function IntakeInspector({
       stats={[
         { label: "Open", value: counts.open, testId: "stat-open" },
         { label: "Answered", value: counts.answered, testId: "stat-answered" },
-        { label: "Critical open", value: gate.open_critical, tone: gate.open_critical ? "crit" : undefined, testId: "stat-critical" },
+        { label: "Critical open", value: openCritical, tone: openCritical ? "crit" : undefined, testId: "stat-critical" },
       ]}
     >
       <InspectorSection testId="ready-to-draft">
@@ -242,14 +252,22 @@ export function IntakeInspector({
                       qa-docs-23: the thread is the one place to answer; this takes you there. */}
                   {(() => {
                     const q = questionFor?.(g.id);
-                    return q && onAnswer ? (
-                      <div className="mt-1">
-                        <Button variant="secondary" aria-label={`Go to question: ${g.statement}`} onClick={() => onAnswer(q)}>
-                          Go to question
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-[13px] text-text2">Not asked yet: ask it from Next questions.</span>
+                    const standing = gapStanding(g, !!q);
+                    return (
+                      <>
+                        {standing && (
+                          <span data-testid="missing-gap-standing" className="text-[13px] text-text2">
+                            {standing}
+                          </span>
+                        )}
+                        {q && onAnswer && (
+                          <div className="mt-1">
+                            <Button variant="secondary" aria-label={`Go to question: ${g.statement}`} onClick={() => onAnswer(q)}>
+                              Go to question
+                            </Button>
+                          </div>
+                        )}
+                      </>
                     );
                   })()}
                 </li>

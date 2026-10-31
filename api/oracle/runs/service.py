@@ -616,9 +616,19 @@ class _Refs:
     # qa-company-17: each document's own title, so a run is named as its document's page
     # names it ("Investor update · October 2026"), not by its slug in words.
     titles: dict[uuid.UUID, str] = field(default_factory=dict)
+    # A run whose new document is not imported yet (a brief's Draft with Oracle) is named
+    # by the title the person typed on its brief, the one the import gives the document:
+    # never by its slug in words. By run id.
+    pending: dict[uuid.UUID, str] = field(default_factory=dict)
 
     def get(self, document_id: uuid.UUID | None) -> str | None:
         return self.slugs.get(document_id) if document_id else None
+
+    def title(self, run: Run) -> str | None:
+        """The run's document's title: its own, or the brief's before the import."""
+        if run.document_id:
+            return self.titles.get(run.document_id)
+        return self.pending.get(run.id)
 
 
 def _source_id(run: Run) -> uuid.UUID | None:
@@ -647,7 +657,28 @@ async def _refs(
         if any(r.error for r in runs) or any(s.error for s in segments or [])
         else company_time.DEFAULT_ZONE
     )
-    return _Refs(slugs, kinds, sources, zone, titles)
+    return _Refs(slugs, kinds, sources, zone, titles, await _pending_titles(db, runs))
+
+
+async def _pending_titles(db: AsyncSession, runs: list[Run]) -> dict[uuid.UUID, str]:
+    """By run id: the brief's title of each run started from a brief whose document is
+    not imported yet (:func:`_intake_title`, the title the import gives it)."""
+    from oracle.v2.models import ProductIntake
+
+    wanted: dict[uuid.UUID, uuid.UUID] = {}
+    for r in runs:
+        raw = None if r.document_id else (r.knobs or {}).get("intake_id")
+        if raw and is_uuid(str(raw)):
+            wanted[r.id] = uuid.UUID(str(raw))
+    if not wanted:
+        return {}
+    rows = await db.execute(
+        select(ProductIntake.id, ProductIntake.title).where(
+            ProductIntake.id.in_(set(wanted.values()))
+        )
+    )
+    titles = dict(rows.tuples().all())
+    return {run_id: titles[i] for run_id, i in wanted.items() if titles.get(i)}
 
 
 def _progress(run: Run, segments: list[RunSegment]) -> RunProgress:
@@ -682,7 +713,7 @@ def _summary(
         document_slug=refs.get(run.document_id)
         if run.document_id
         else run.knobs.get("document_slug"),
-        document_title=refs.titles.get(run.document_id) if run.document_id else None,
+        document_title=refs.title(run),
         document_kind=(refs.kinds.get(run.document_id) if run.document_id else None)
         or flow.target_kind,  # type: ignore[arg-type]
         source=refs.sources.get(source_id) if source_id else None,
@@ -6341,10 +6372,11 @@ def _searching(run: Run) -> str | None:
                 "run."
             )
         else:
+            # Plain words: the earlier workflow may well have succeeded; only its unused
+            # steps are stopped, never a failure.
             says.append(
-                f"Oracle cancels workflow {e['id']} ({e.get('label')}), given up on earlier, "
-                "and reads its status and cost on every tick until it ends, counting its "
-                "spend on the run."
+                "Oracle is stopping the unused steps of an earlier workflow of this run, and "
+                "counts what it spent on the run until it ends."
             )
     return " ".join(says)
 
@@ -10861,7 +10893,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
             flow=run.flow,  # type: ignore[arg-type]
             flow_title=_flow(run).title,
             document_slug=refs.get(run.document_id),
-            document_title=refs.titles.get(run.document_id) if run.document_id else None,
+            document_title=refs.title(run),
             segment_title=sdef.title if sdef else None,
         )
 
