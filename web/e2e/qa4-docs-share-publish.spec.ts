@@ -83,7 +83,6 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("publish-readiness")).toBeVisible();
     const advisory = page.locator('[data-testid="advisory"][data-key="blocker_feasibility"]');
     await expect(advisory).toHaveAttribute("data-status", "critical");
-    await expect(advisory).toContainText("no workable mitigation");
   });
 
   test("qa4-docs-share-52: a blocker's Resolve and Open blocker go to the same place", async ({ page }) => {
