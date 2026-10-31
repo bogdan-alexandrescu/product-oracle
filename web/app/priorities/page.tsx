@@ -1050,7 +1050,9 @@ function Priorities() {
     {
       key: "rank",
       header: "#",
-      width: "44px",
+      // Two digits; the room it frees keeps the Feature column wide enough beside the docked
+      // inspector where the page's scrollbar takes about 15 px (Windows, Linux; qa-plan-5).
+      width: "32px",
       phone: "meta",
       cell: (f) => (
         <b className="tnum font-semibold max-[600px]:text-text">
@@ -1106,7 +1108,7 @@ function Priorities() {
       // Wide enough that a goal's code and a word of its name share a line: a name wraps
       // between words, never inside one ("Scalin g"); no wider, so the Feature column keeps its
       // room beside the docked inspector and an approver's move column (qa-plan-5).
-      width: "128px",
+      width: "124px",
       // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
       wrap: true,
       cell: (f) =>
