@@ -3,7 +3,7 @@
 // Engineering check's features in the layout `?ec1=a|b|c|d` picks, and their questions as
 // `?ec2=a|b|c` picks; `&sel=<feature key>` selects a feature at load.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Button, Chip, SegmentedControl } from "@/components/ds";
 import { INPUT } from "@/components/ui";
@@ -28,8 +28,8 @@ const KIND = { feasible: "pass", feasible_with_changes: "warn", not_feasible: "c
 
 /** MOCK-HOOK: a URL switch, read once on the client. */
 export function useMockParam(name: string): string | null {
-  const [v, setV] = useState<string | null>(null); // MOCK-HOOK
-  useEffect(() => setV(new URLSearchParams(window.location.search).get(name)), [name]); // MOCK-HOOK
+  // The review mounts only on the client, after its data loads, so the URL is there. // MOCK-HOOK
+  const [v] = useState<string | null>(() => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get(name))); // MOCK-HOOK
   return v; // MOCK-HOOK
 }
 
