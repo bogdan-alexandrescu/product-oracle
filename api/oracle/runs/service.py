@@ -1256,8 +1256,8 @@ def decision_summary(
 
 
 async def _people_named(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
-    """Who decided, as the decisions list names them: a member's name, else their email;
-    an API token's name."""
+    """Who decided, as the decisions list names them: a member's name, else their email
+    (a personal API token decides as its member); a service token's name."""
     if not ids:
         return {}
     rows = (await db.execute(select(User.id, User.name, User.email).where(User.id.in_(ids)))).all()
@@ -8043,7 +8043,14 @@ async def decide_checkpoint(
     if decision in ("confirm", "redo", "continue"):
         if decision == "confirm":
             held = wait.get("console") or {}
-            decider = (held.get("role"), "swarmcloud_console", held.get("member_id"))
+            role, member_id = held.get("role"), held.get("member_id")
+            if member_id is None and held.get("answered_by"):
+                # Held before its author's id was kept: matched by email, as when it was
+                # recorded.
+                member, _ = await _console_member(db, cp, held["answered_by"], flow=run.flow)
+                if member is not None:
+                    role, member_id = role or member.role, member.id
+            decider = (role, "swarmcloud_console", member_id)
         decision, note, redo = _console_choice(cp, wait, decision, note)
         if decision == "confirm":
             # A console change request where the workflow has no revision step: now

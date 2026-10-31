@@ -908,8 +908,9 @@ class RunDecision(BaseModel):
     status: Literal["approved", "changes_requested", "skipped"]
     decided_at: datetime | None = None
     decided_by_role: Role | None = None
-    # The person who decided: their name, else their email (an API token's name for a
-    # token); None for a skipped checkpoint or one nobody is recorded for.
+    # The person who decided: their name, else their email (a personal API token acts as
+    # its member, so names them; a service token, which acts for nobody, by its own name);
+    # None for a skipped checkpoint or one nobody is recorded for.
     decided_by_name: str | None = None
     # oracle: the Inbox, the web app or MCP; swarmcloud_console: SwarmCloud's console.
     via: Literal["oracle", "swarmcloud_console"] = "oracle"
