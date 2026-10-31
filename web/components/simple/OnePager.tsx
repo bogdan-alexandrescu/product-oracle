@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button, LinkButton } from "@/components/ds";
-import { clock, FlowPanel } from "@/components/simple/FlowVisual";
+import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
@@ -12,7 +12,7 @@ import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { useCompanyZone } from "@/lib/dates";
 import { DownloadNote, useDownloadNote } from "@/components/DownloadNote";
 import { downloadedNote } from "@/lib/export-note";
 import { useMe } from "@/lib/me";
@@ -843,10 +843,6 @@ function placeNotes(el: HTMLElement | null) {
   }
   el.style.minHeight = `${Math.round(floor)}px`;
 }
-
-/** A meeting's moment, "Fri Oct 30, 8:18 PM" (as the meeting screen's momentWords), no zone letters. */
-const meetingMoment = (at: string, zone: string) =>
-  `${formatInZone(at, zone, { weekday: "short", month: "short", day: "numeric" }).replace(",", "")}, ${formatInZone(at, zone, { hour: "numeric", minute: "2-digit" }).replace(/ (?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "")}`;
 
 function MarginNote({
   n, quote: line, busy, diff, setDiff, wide, setWide, undo, decide, meId, inMeeting,

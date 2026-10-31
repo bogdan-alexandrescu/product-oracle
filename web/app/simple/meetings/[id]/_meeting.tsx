@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, confirmInPage, toast } from "@/components/ds";
 import { setToastPlace } from "@/components/ds/Toast";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
+import { MeetingClock } from "@/components/simple/FlowVisual";
 import { OnePager } from "@/components/simple/OnePager";
 import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple/questions/Questions";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -318,13 +319,16 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
         <section aria-label="Stage" className="min-w-0">
           {/* Read again whenever the meeting moves on (Approve, Undo, a change by chat): its
               version and its draft bar follow what was published. */}
+          {/* qa4-simple-decide-19: the one-pager's flows read the meeting's time format too. */}
           {step === 0 && (
-            <OnePager
-              doc={m.prd.slug}
-              sessionId={m.session_id}
-              refresh={`${m.meeting_decisions.length}|${m.drafts.map((d) => `${d.status}-${d.waiting_on.length}-${d.changes}`).join()}`}
-              onChanged={() => void reload()}
-            />
+            <MeetingClock.Provider value>
+              <OnePager
+                doc={m.prd.slug}
+                sessionId={m.session_id}
+                refresh={`${m.meeting_decisions.length}|${m.drafts.map((d) => `${d.status}-${d.waiting_on.length}-${d.changes}`).join()}`}
+                onChanged={() => void reload()}
+              />
+            </MeetingClock.Provider>
           )}
           {step === 1 && <RoadmapSlice m={m} reload={reload} />}
           {step === 2 && <DecisionsStep m={m} reload={reload} />}

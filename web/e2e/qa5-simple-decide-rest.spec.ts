@@ -90,6 +90,10 @@ for (const phone of [false, true]) {
       const note = page.getByRole("note", { name: /^Change to/ }).filter({ visible: true });
       await expect(note.locator("p").first()).toContainText(MOMENT);
       await expect(note.locator("p").first()).not.toContainText(/\b(PT|PDT|PST)\b/);
+      // The line's flow thumbnail, too: "drawn Mon Oct 26, 8:00 AM".
+      const drawn = page.getByRole("group", { name: /^User flow of/ }).filter({ visible: true }).first();
+      await expect(drawn).toContainText(new RegExp(`drawn ${MOMENT.source}`));
+      await expect(drawn).not.toContainText(/\b(PT|PDT|PST)\b/);
       await tap(steps(page).getByRole("button", { name: "3 Decisions" }));
       const q5 = page.getByRole("region", { name: "On the agenda", exact: true }).locator('[data-code="Q5"]');
       await tap(q5.getByRole("button", { name: "Decide as recommended" }));
