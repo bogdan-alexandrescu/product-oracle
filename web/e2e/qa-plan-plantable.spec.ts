@@ -1,6 +1,5 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -13,13 +12,6 @@ import { login } from "./helpers";
  * - qa-plan-33: History has one line per event.
  * - prod-6: Why it needs you says what changed in words, never "feature:x changed".
  */
-
-
-// qa4-plan-3: the Plan reads the roadmap document's approval; "plan-decider" has usage-alerts-roadmap v1
-// approved (by default it is in review, so the Plan's rows are a draft's).
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "plan-decider"] as const);
-});
 
 const rows = (page: Page) => page.getByTestId("plan-row").filter({ visible: true });
 const row = (page: Page, title: string) => rows(page).filter({ hasText: title });
@@ -97,8 +89,8 @@ test("an item's History has one line per event", async ({ page }) => {
   await openPlan(page);
   await row(page, "Threshold alerts on spend").getByTestId("plan-title").click();
   const lines = inspector(page).getByTestId("plan-history").getByTestId("plan-history-version");
-  // qa-plan-17, qa4-plan-3: the history gives the roadmap document's own approval date.
-  await expect(lines).toHaveText(["Added to Now in version 1 from PRD v1, approved Oct 5"]);
+  // qa-plan-17: the roadmap is never approved by default, so its item history agrees.
+  await expect(lines).toHaveText(["Added to Now in draft 1 from PRD v1"]);
 });
 
 test("Why it needs you says what changed in words", async ({ page }) => {

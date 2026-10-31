@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -16,9 +16,6 @@ const rows = (page: Page) => page.getByTestId("plan-row").filter({ visible: true
 const row = (page: Page, title: string) => rows(page).filter({ hasText: title });
 const inspector = (page: Page) => page.getByTestId("plan-inspector").filter({ visible: true });
 const track = (page: Page) => page.getByTestId("plan-track").filter({ visible: true }).filter({ hasText: "Usage alerts" });
-
-/** qa4-plan-3: the Plan reads the roadmap's approval; "roadmap-diff" has v1 approved and a draft 2. */
-const approvedWithDraft = (page: Page) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "roadmap-diff"] as const);
 
 async function openPlan(page: Page) {
   await login(page);
@@ -57,10 +54,9 @@ test.describe("desktop", () => {
   });
 
   test("qa-plan-29: Next reads who decides in one sentence, on the row and in the inspector", async ({ page }) => {
-    await approvedWithDraft(page);
     await openPlan(page);
     await expect(row(page, "Daily alert digest email").getByTestId("plan-next")).toHaveText("Owners decide on the slip");
-    await expect(row(page, "Alert rules API").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" })).toBeVisible();
+    await expect(row(page, "One-page checkout").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" })).toBeVisible();
     await row(page, "Daily alert digest email").getByTestId("plan-title").click();
     await expect(inspector(page).getByTestId("plan-why-next")).toHaveText("Owners decide on the slip");
     await expect(inspector(page)).not.toContainText("Decide on slip");
@@ -68,13 +64,11 @@ test.describe("desktop", () => {
 
   test("qa-plan-29: a viewer reads Waiting on approvers to review the PRD", async ({ page }) => {
     await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, "viewer"] as const);
-    await approvedWithDraft(page);
     await openPlan(page);
-    await expect(row(page, "Alert rules API").getByTestId("plan-next")).toHaveText("Waiting on approvers to review the PRD");
+    await expect(row(page, "One-page checkout").getByTestId("plan-next")).toHaveText("Waiting on approvers to review the PRD");
   });
 
   test("qa-plan-30: state pills hold one line; the rest sits below, outside the pill", async ({ page }) => {
-    await approvedWithDraft(page);
     await openPlan(page);
     for (const [title, whole, pill] of [
       ["Spend forecast for the month", "Proposed · Next → Now", "Proposed"],
@@ -151,7 +145,6 @@ test.describe("phone", () => {
   });
 
   test("qa-plan-9: an owner reaches Edit plan and the live roadmap on a phone", async ({ page }) => {
-    await approvedWithDraft(page);
     await openPlan(page);
     await expect(page.getByTestId("plan-live-version").filter({ visible: true })).toHaveText("Usage alerts roadmap v1");
     const edit = page.getByTestId("plan-edit").filter({ visible: true });
@@ -166,7 +159,7 @@ test.describe("phone", () => {
     const groups = page.getByTestId("plan-group").filter({ visible: true });
     await expect(groups.first()).toBeVisible();
     const texts = (await groups.allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
-    expect(texts).toEqual(["Now · 5", "Next · 1", "Later · 1"]);
+    expect(texts).toEqual(["Now · 7", "Next · 1", "Later · 2"]);
   });
 
   test("qa-plan-32: the item sheet shows the title once and no second scrollbar", async ({ page }) => {

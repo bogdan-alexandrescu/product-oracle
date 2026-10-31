@@ -14,7 +14,7 @@ import { useQuery } from "@/lib/use-query";
 
 import { GoalsPanel } from "../home/_goals-panel";
 import { useGoals } from "../home/_use-goals";
-import { approvedRoadmaps, draftOnlyRoadmaps, EditPlanButton, PlanChanges, roadmapName, useRoadmapDocs } from "./_edit-plan";
+import { approvedRoadmaps, EditPlanButton, PlanChanges, roadmapName, useRoadmapDocs } from "./_edit-plan";
 import { PlanInspector } from "./_inspector";
 import type { PlanItem } from "./_lib";
 import { PrdCards } from "./_prd-cards";
@@ -132,8 +132,6 @@ export default function PlanPage() {
   }, []);
   const counts = data?.counts;
   const roadmaps = approvedRoadmaps(data?.items);
-  // qa4-plan-3: a roadmap with no approved version on the Plan (only a draft's rows) says so.
-  const unapproved = draftOnlyRoadmaps(data?.items);
   // qa-plan-21: each roadmap by its title, never its slug (read again when the live version moves).
   const roadmapDocs = useRoadmapDocs(roadmaps.map((r) => `${r.slug}@${r.version}`).join(","));
   const reload = q.reload;
@@ -243,11 +241,6 @@ export default function PlanPage() {
                   {roadmaps.map((r) => (
                     <span key={r.slug} data-testid="plan-live-version" className="text-sm text-text2">
                       {roadmapName(r.slug, roadmapDocs)} v{r.version}
-                    </span>
-                  ))}
-                  {unapproved.map((r) => (
-                    <span key={r.slug} data-testid="plan-unapproved-version" className="text-sm text-text2">
-                      {roadmapName(r.slug, roadmapDocs)} v{r.version}: not approved yet
                     </span>
                   ))}
                   {canWrite && <EditPlanButton roadmaps={roadmaps} docs={roadmapDocs} onOpened={setOpened} />}

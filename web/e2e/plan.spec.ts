@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_PLAN_TABS_KEY } from "../app/plan/_tabs";
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { login } from "./helpers";
 
@@ -10,15 +10,11 @@ import { login } from "./helpers";
  *
  * The mock's GET /v1/plan (lib/api/mock/roadmap.ts, routePlan) stands in for the API's
  * (api/oracle/plan, its rules proven by api/tests/test_plan.py): a tracked PRD (Usage alerts,
- * whose roadmap v1 is in review by default; in the "roadmap-diff" scenario v1 is approved and
- * its draft 2 changes, moves and drops items), a PRD waiting at the feature set checkpoint
- * (Saved carts), one at the engineering check with a lead named (Clinic outreach) and a
- * never-approved PRD with no roadmap (Checkout redesign). No test here proves the API's rules;
- * each proves what a person sees and does on the screen.
+ * whose roadmap draft 2 changes, moves and drops items), a PRD waiting at the feature set
+ * checkpoint (Saved carts), one at the engineering check with a lead named (Clinic outreach)
+ * and a never-approved PRD with a roadmap draft (Checkout redesign). No test here proves the
+ * API's rules; each proves what a person sees and does on the screen.
  */
-
-/** qa4-plan-3: the Plan reads the roadmap's approval, so the approved plan needs v1 approved. */
-const approvedWithDraft = (page: Page) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "roadmap-diff"] as const);
 
 async function asRole(page: Page, role: "viewer" | "commenter" | "approver") {
   await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
@@ -84,8 +80,8 @@ test("PRD cards: stage lines say who the run waits for", async ({ page }) => {
   await expect(card(page, "Saved carts PRD").getByTestId("plan-prd-figure")).toHaveText("9 features");
   await expect(card(page, "Usage alerts PRD").getByTestId("plan-prd-stage")).toHaveText("Approved v1");
   await expect(card(page, "Usage alerts PRD").getByTestId("plan-prd-figure")).toHaveText("At risk");
-  // qa4-plan-4: Checkout redesign has no roadmap document, so no roadmap draft either.
-  await expect(card(page, "Checkout redesign PRD").getByTestId("plan-prd-stage")).toHaveText("Draft 2 in review");
+  await expect(card(page, "Checkout redesign PRD").getByTestId("plan-prd-stage")).toHaveText("Draft 2 in review · roadmap draft 2");
+  await expect(card(page, "Checkout redesign PRD").getByTestId("plan-prd-figure")).toHaveText("3 items");
   await expect(card(page, "Usage alerts PRD").getByRole("link", { name: "Usage alerts PRD" })).toHaveAttribute("href", "/documents/usage-alerts");
   await expect(card(page, "Usage alerts PRD").getByRole("img", { name: /^Journey 9 of 9/ })).toBeVisible();
   // Seven PRDs in play: five cards, then "+2 more" to the PRDs list.
@@ -117,15 +113,15 @@ test("PRD cards: the engineering check waits for the engineering lead", async ({
 // alone shows no suffix, an outcome change "· changed"); fails_when = a count or group is
 // wrong, or a note counts as a change; no_claim = the diff (api/tests/test_plan.py).
 test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Proposed", async ({ page }) => {
-  await approvedWithDraft(page);
   await openPlan(page);
-  await expect(groups(page)).toHaveText(["Now · 6", "Later · 1"]);
-  await expect(rows(page)).toHaveCount(7);
+  await expect(groups(page)).toHaveText(["Now · 7", "Next · 1", "Later · 2"]);
+  await expect(rows(page)).toHaveCount(10);
   const state = (title: string) => row(page, title).getByTestId("plan-state");
   await expect(state("Alert rules API")).toHaveText("Proposed");
   await expect(state("Alert rules API")).toHaveAttribute("data-dashed", "true");
   await expect(state("Usage dashboard")).toHaveText("Proposed · changed");
   await expect(state("Spend forecast for the month")).toHaveText("Proposed · Next → Now");
+  await expect(state("One-page checkout")).toHaveText("Proposed · new");
   await expect(state("Daily alert digest email")).toHaveText("At risk");
   await expect(state("Threshold alerts on spend")).toHaveText("On track");
   await expect(row(page, "Budgets per team")).toContainText("Dropped in draft 2");
@@ -136,30 +132,30 @@ test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Pro
   await expect(row(page, "Alerts in the team chat").getByTestId("plan-engineering")).toHaveText("ENG-431 · unverified");
   await expect(row(page, "Budgets per team").getByTestId("plan-engineering")).toHaveText("—");
   await expect(row(page, "Daily alert digest email").getByTestId("plan-next")).toHaveText("Owners decide on the slip");
-  await expect(row(page, "Alert rules API").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" })).toHaveAttribute(
+  await expect(row(page, "One-page checkout").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" })).toHaveAttribute(
     "href",
-    "/documents/usage-alerts/v/1",
+    "/documents/checkout-redesign/v/2",
   );
   await expect(row(page, "Spend forecast for the month").getByTestId("plan-goal")).toHaveText("No goal");
   await expect(row(page, "Threshold alerts on spend").getByTestId("plan-goal")).toHaveText("Raise activation");
   await expect(row(page, "Threshold alerts on spend").getByTestId("plan-prd")).toHaveText("Usage alerts");
+  await expect(row(page, "One-page checkout").getByTestId("plan-prd")).toHaveText("Checkout redesign");
 
   const group = page.getByRole("group", { name: "Group by" });
   await group.getByRole("button", { name: "Goal" }).click();
-  await expect(groups(page)).toHaveText(["Raise activation · 4", "Grow paid conversion · 1", "Cut early churn · 1", "No goal · 1"]);
+  await expect(groups(page)).toHaveText(["Raise activation · 4", "Grow paid conversion · 3", "Cut early churn · 1", "No goal · 2"]);
   await group.getByRole("button", { name: "PRD" }).click();
-  await expect(groups(page)).toHaveText(["Usage alerts PRD · 7"]);
+  await expect(groups(page)).toHaveText(["Usage alerts PRD · 7", "Checkout redesign PRD · 3"]);
   await group.getByRole("button", { name: "Horizon" }).click();
-  await expect(groups(page)).toHaveText(["Now · 6", "Later · 1"]);
+  await expect(groups(page)).toHaveText(["Now · 7", "Next · 1", "Later · 2"]);
 });
 
 // protects = "Approved only" hides every Proposed row and is kept after a reload (per viewer,
 // in the browser); fails_when = a draft row stays, or the choice is lost; no_claim = the
 // API's scope filter (api/tests/test_plan.py).
 test("Approved only hides every Proposed row, and the choice is kept", async ({ page }) => {
-  await approvedWithDraft(page);
   await openPlan(page);
-  await expect(page.getByTestId("plan-count-proposed")).toHaveText("3 proposed");
+  await expect(page.getByTestId("plan-count-proposed")).toHaveText("6 proposed");
   const scope = page.getByRole("group", { name: "Plan scope" });
   await expect(scope.getByRole("button", { name: "Approved + drafts" })).toHaveAttribute("aria-pressed", "true");
   await scope.getByRole("button", { name: "Approved only" }).click();
@@ -179,9 +175,8 @@ test("Approved only hides every Proposed row, and the choice is kept", async ({ 
 // protects = selecting a row opens its inspector (first row on load), with Open in PRD at the
 // item's section, Open in roadmap at the item's anchor, Tracker in a new tab, the history and
 // the goal's distance to go; fails_when = a link points elsewhere; no_claim = the targets'
-// pages.
+// pages (the mock's roadmap draft for Checkout redesign has no document).
 test("selecting a row opens the inspector with its links", async ({ page }) => {
-  await approvedWithDraft(page);
   await openPlan(page);
   const inspector = page.getByTestId("plan-inspector").filter({ visible: true });
   await expect(inspector).toContainText("Item");
@@ -199,8 +194,9 @@ test("selecting a row opens the inspector with its links", async ({ page }) => {
   await expect(tracker).toHaveAttribute("target", "_blank");
   await expect(tracker).toHaveAttribute("rel", "noopener noreferrer");
   await expect(inspector.getByTestId("plan-why")).toContainText("ENG-405 targets Dec 9");
-  // qa-plan-17, qa4-plan-3: the history gives the roadmap document's own approval date.
-  await expect(inspector.getByTestId("plan-history")).toContainText("Added to Now in version 1 from PRD v1, approved Oct 5");
+  // qa-plan-17: the roadmap is never approved by default (the Documents tab agrees), so its
+  // item history says so too, instead of a date that contradicted it.
+  await expect(inspector.getByTestId("plan-history")).toContainText("Added to Now in draft 1 from PRD v1");
   await expect(inspector.getByTestId("plan-item-goal")).toContainText("Grow paid conversion");
   await expect(inspector.getByTestId("plan-item-goal")).toContainText("to go");
 });
@@ -250,7 +246,7 @@ test("phone: rows are cards, a tap opens the sheet, no sideways scroll", async (
   await login(page);
   await page.goto("/plan");
   await expect(rows(page).first()).toBeVisible();
-  await expect(groups(page)).toHaveText(["Now · 5", "Next · 1", "Later · 1"]);
+  await expect(groups(page)).toHaveText(["Now · 7", "Next · 1", "Later · 2"]);
   const first = row(page, "Daily alert digest email");
   // A card: the state chip beside the title, PRD, goal, engineering and Next below it.
   const [title, chip] = await Promise.all([first.getByTestId("plan-title").boundingBox(), first.getByTestId("plan-state").boundingBox()]);

@@ -1418,11 +1418,11 @@ function planHistory(ctx: PlanContext, db: RoadmapDb, q: URLSearchParams): Respo
     // qa-plan-17: v1's own approval reads the roadmap document's real versions, so this
     // agrees with the Documents tab (never approved by default; approved once a scenario
     // approves it) instead of a date hardcoded here regardless of that.
-    const state = alertsRoadmapState(ctx);
-    const versions: Schemas["ItemVersion"][] = [{ version: 1, prd_version: 1, horizon: a.horizon, approved_at: state.approvedAt }];
-    // qa4-plan-3: a version 2 only when the roadmap document has one (and the Plan shows its rows).
+    const roadmapDoc = ctx.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+    const v1ApprovedAt = (roadmapDoc && ctx.versions.find((v) => v.document_id === roadmapDoc.id && v.number === 1)?.approved_at) ?? null;
+    const versions: Schemas["ItemVersion"][] = [{ version: 1, prd_version: 1, horizon: a.horizon, approved_at: v1ApprovedAt }];
     const d = ALERTS_DRAFT[key];
-    if (state.approved && state.draft2 && (!d || d.change.kind !== "dropped")) versions.push({ version: 2, prd_version: 1, horizon: d?.horizon ?? a.horizon, approved_at: null });
+    if (!d || d.change.kind !== "dropped") versions.push({ version: 2, prd_version: 1, horizon: d?.horizon ?? a.horizon, approved_at: null });
     return out(versions);
   }
   if (roadmap === CHECKOUT_ROADMAP_SLUG) {
@@ -1430,18 +1430,6 @@ function planHistory(ctx: PlanContext, db: RoadmapDb, q: URLSearchParams): Respo
     return out(d ? [{ version: 2, prd_version: 2, horizon: d.horizon, approved_at: null }] : []);
   }
   return notFound(`document '${roadmap}'`);
-}
-
-/**
- * qa4-plan-3: usage-alerts-roadmap as its document stands (the Documents tab's state): whether
- * v1 is approved (and when), and whether an unapproved version 2 follows it. The Plan reads
- * this, as the API reads the roadmap's versions, instead of taking v1 as approved.
- */
-function alertsRoadmapState(ctx: RoadmapContext): { approved: boolean; approvedAt: string | null; draft2: boolean } {
-  const doc = ctx.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
-  const versions = doc ? ctx.versions.filter((v) => v.document_id === doc.id) : [];
-  const approvedAt = versions.find((v) => v.number === 1)?.approved_at ?? null;
-  return { approved: approvedAt != null, approvedAt, draft2: versions.some((v) => v.number === 2 && !v.approved_at) };
 }
 
 /** As oracle.plan.service.HEALTH_WORD: a card's word for its track's health. */
@@ -1510,8 +1498,6 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
   };
 
   const items: PlanItem[] = [];
-  const roadmapDoc = (slug: string) => ctx.documents.find((d) => d.slug === slug && d.kind === "roadmap");
-  const roadmapState = alertsRoadmapState(ctx);
   const edited = alerts ? editedPlan(ctx, ALERTS_ROADMAP_SLUG) : null;
   if (alerts && edited) {
     // #346: a proposed version the decider approved is the live plan (draft 2 is superseded).
@@ -1519,22 +1505,14 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       const s: PlanSeedItem = { ...(ALERTS_APPROVED.find((a) => a.key === e.key) ?? { section: "behaviour" }), key: e.key, title: e.title, horizon: e.horizon };
       items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: edited.version }, "approved", null));
     }
-  } else if (alerts && roadmapState.approved) {
+  } else if (alerts) {
     for (const s of ALERTS_APPROVED) {
-      // Draft 2's twins only while the roadmap document has an unapproved version 2.
-      const d = scope === "all" && roadmapState.draft2 ? ALERTS_DRAFT[s.key] : undefined;
+      const d = scope === "all" ? ALERTS_DRAFT[s.key] : undefined;
       if (d && d.change.kind !== "dropped") items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 2 }, "draft", d.change, d.horizon));
       else items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 1 }, "approved", d?.change ?? null));
     }
-  } else if (alerts && scope === "all") {
-    // qa4-plan-3: as oracle.plan.service.build, a roadmap with no approved version has no
-    // approved rows: its latest version's items are a draft's (new, proposed), and Approved
-    // only lists none of them, as the Documents tab, Launches and Edit plan say.
-    for (const s of ALERTS_APPROVED) items.push(row(s, alerts, 1, { slug: ALERTS_ROADMAP_SLUG, version: 1 }, "draft", { kind: "new", fields: [], notes: [] }));
   }
-  // qa4-plan-4: the Checkout redesign PRD has no roadmap document, so (as the API lists only
-  // roadmap documents' versions) it has no roadmap rows and its card names no roadmap draft.
-  if (checkout && scope === "all" && roadmapDoc(CHECKOUT_ROADMAP_SLUG)) {
+  if (checkout && scope === "all") {
     for (const s of CHECKOUT_DRAFT) items.push(row(s, checkout, 2, { slug: CHECKOUT_ROADMAP_SLUG, version: 2 }, "draft", { kind: "new", fields: [], notes: [] }));
   }
 
@@ -1570,10 +1548,10 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       card = { ...base, stage: "idea", stage_label: "Brief", journey_step: 1 };
     } else {
       const review = d.status === "in_review";
-      const draft = d.slug === "checkout-redesign" && roadmapDoc(CHECKOUT_ROADMAP_SLUG) ? " · roadmap draft 2" : "";
+      const draft = d.slug === "checkout-redesign" ? " · roadmap draft 2" : "";
       const label = approved != null ? `Approved v${approved} · draft ${latest}` : `Draft ${latest}`;
       card = { ...base, stage: review ? "in_review" : "draft", stage_label: review ? `${label} in review${draft}` : label, journey_step: 8 };
-      if (d.slug === "checkout-redesign" && scope === "all" && draft) card.figure = `${CHECKOUT_DRAFT.length} items`;
+      if (d.slug === "checkout-redesign" && scope === "all") card.figure = `${CHECKOUT_DRAFT.length} items`;
     }
     order.set(d.id, (card.waiting_for_viewer ? 0 : 2) + (card.track?.health === "at_risk" || card.track?.health === "off_track" ? 0 : 1));
     prds.push(card);

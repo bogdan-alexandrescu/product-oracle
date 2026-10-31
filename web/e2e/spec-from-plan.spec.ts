@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -10,12 +10,6 @@ import { login } from "./helpers";
  * with a draft prd_to_spec run, opened for its estimate. The API's rules (the brief fed to the
  * agents, the default approvers, the states) are proven by api/tests/test_spec_from_plan.py.
  */
-
-// qa4-plan-3: an approved item needs the roadmap approved; the Plan reads the document's state
-// ("plan-decider" has usage-alerts-roadmap v1 approved; by default it is in review).
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "plan-decider"] as const);
-});
 
 const asRole = (page: Page, role: "viewer" | "commenter" | "approver") =>
   page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);

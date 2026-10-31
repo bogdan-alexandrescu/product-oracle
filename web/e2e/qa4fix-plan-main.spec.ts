@@ -1,17 +1,12 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
- * QA round 4 fixes on the main Plan page (qa4-plan-3, -4, -18, -20 to -27, -30): the roadmap
+ * QA round 4 fixes on the main Plan page (qa4-plan-18, -20, -21, -23 to -27, -30): the roadmap
  * table, the track card, the inspector and Edit plan, driven through the UI on the mock layer as
- * an owner would, on a desktop (1440x900) and a phone (390x844). By default usage-alerts-roadmap
- * v1 is in review; "plan-decider" has it approved, "roadmap-diff" approved with a draft 2.
+ * an owner would, on a desktop (1440x900) and a phone (390x844).
  */
-
-const inScenario = (page: Page, s: "plan-decider" | "roadmap-diff") =>
-  page.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_SCENARIO_KEY, s] as const);
 
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
@@ -31,7 +26,6 @@ async function openPlan(page: Page) {
 }
 
 async function openEditPlan(page: Page) {
-  await inScenario(page, "plan-decider");
   await openPlan(page);
   await page.getByTestId("plan-edit").click();
   await expect(editItem(page, "Budgets per team")).toBeVisible();
@@ -123,11 +117,10 @@ test.describe("desktop", () => {
   });
 
   test("qa4-plan-27: an item's History reads as plain sentences", async ({ page }) => {
-    await inScenario(page, "roadmap-diff");
     await openPlan(page);
     await row(page, "Spend forecast for the month").getByTestId("plan-title").click();
     const lines = inspector(page).getByTestId("plan-history").getByTestId("plan-history-version");
-    await expect(lines).toHaveText(["Added to Next in version 1 from PRD v1, approved Oct 5", "Moved to Now in draft 2 from PRD v1"]);
+    await expect(lines).toHaveText(["Added to Next in draft 1 from PRD v1", "Moved to Now in draft 2 from PRD v1"]);
     await expect(inspector(page).getByTestId("plan-history")).not.toContainText("· in a draft");
   });
 
@@ -136,70 +129,6 @@ test.describe("desktop", () => {
     const eng = row(page, "Spend forecast for the month").getByTestId("plan-engineering");
     await expect(eng).toHaveText("Issue 418 · Nov 30 ✓");
     await expect(eng).not.toContainText("acme/app");
-  });
-});
-
-test.describe("desktop: one approval state", () => {
-  test.use({ viewport: DESKTOP });
-
-  test("qa4-plan-3: a roadmap in review is not approved on the Plan, as on Documents", async ({ page }) => {
-    await openPlan(page);
-    await expect(page.getByTestId("plan-unapproved-version")).toHaveText("Usage alerts roadmap v1: not approved yet");
-    await expect(page.getByTestId("plan-live-version")).toHaveCount(0);
-    await expect(page.getByTestId("plan-edit")).toHaveCount(0);
-    await expect(row(page, "Threshold alerts on spend").getByTestId("plan-state")).toHaveText("Proposed · new");
-    await expect(row(page, "Daily alert digest email").getByTestId("plan-state")).toHaveText("Proposed · new");
-    await row(page, "Threshold alerts on spend").getByTestId("plan-title").click();
-    await expect(inspector(page).getByTestId("plan-history").getByTestId("plan-history-version")).toHaveText(["Added to Now in draft 1 from PRD v1"]);
-
-    // Approved only lists none of its items.
-    await page.getByRole("group", { name: "Plan scope" }).getByRole("button", { name: "Approved only" }).click();
-    await expect(rows(page)).toHaveCount(0);
-    await expect(page.getByTestId("plan-table")).toContainText("No roadmap items yet");
-    await page.getByRole("group", { name: "Plan scope" }).getByRole("button", { name: "Approved + drafts" }).click();
-    await expect(rows(page).first()).toBeVisible();
-
-    // The Documents tab says the same.
-    await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
-    const doc = page.getByTestId("roadmap-row").filter({ hasText: "Usage alerts roadmap" });
-    await expect(doc).toContainText("In review");
-    await expect(doc.getByTestId("roadmap-approved-version")).toHaveCount(0);
-  });
-
-  test("qa4-plan-3: once the roadmap is approved, the Plan shows it approved and offers Edit plan", async ({ page }) => {
-    await inScenario(page, "plan-decider");
-    await openPlan(page);
-    await expect(page.getByTestId("plan-live-version")).toHaveText("Usage alerts roadmap v1");
-    await expect(page.getByTestId("plan-unapproved-version")).toHaveCount(0);
-    await expect(row(page, "Threshold alerts on spend").getByTestId("plan-state")).toHaveText("On track");
-    await page.getByTestId("plan-edit").click();
-    await expect(page.getByTestId("plan-changes").filter({ visible: true })).toContainText("Changes to approved version 1 of Usage alerts roadmap");
-  });
-
-  test("qa4-plan-4: a PRD with no roadmap document shows no roadmap draft on the Plan", async ({ page }) => {
-    await openPlan(page);
-    const card = page.getByTestId("plan-prd-card").filter({ hasText: "Checkout redesign PRD" });
-    await expect(card.getByTestId("plan-prd-stage")).toHaveText("Draft 2 in review");
-    await expect(card).not.toContainText("roadmap draft");
-    await expect(row(page, "One-page checkout")).toHaveCount(0);
-    await page.getByRole("group", { name: "Group by" }).getByRole("button", { name: "PRD" }).click();
-    await expect(page.getByTestId("plan-group").filter({ visible: true })).toHaveText(["Usage alerts PRD · 7"]);
-    // Documents lists no Checkout redesign roadmap either.
-    await page.getByTestId("plan-tabs").filter({ visible: true }).getByRole("link", { name: "Roadmap documents" }).click();
-    await expect(page.getByTestId("roadmap-row").filter({ hasText: "Checkout redesign" })).toHaveCount(0);
-  });
-
-  test("qa4-plan-22: approved version 1 and draft 2 are named one way on the table, Edit plan and History", async ({ page }) => {
-    await inScenario(page, "roadmap-diff");
-    await openPlan(page);
-    await expect(row(page, "Budgets per team").getByTestId("plan-state")).toHaveText("Dropped in draft 2 (was Planned)");
-    await row(page, "Budgets per team").getByTestId("plan-title").click();
-    await expect(inspector(page).getByTestId("plan-history").getByTestId("plan-history-version")).toHaveText(["Added to Later in version 1 from PRD v1, approved Oct 5"]);
-    await page.getByTestId("plan-edit").click();
-    const changes = page.getByTestId("plan-changes").filter({ visible: true });
-    await expect(changes).toContainText("Changes to approved version 1 of Usage alerts roadmap");
-    await expect(changes).not.toContainText("In review, not approved");
-    await expect(changes.locator('[data-testid="edit-lane"][data-horizon="later"]')).toContainText("Budgets per team");
   });
 });
 

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -16,13 +16,6 @@ import { login } from "./helpers";
 async function asRole(page: Page, role: "viewer" | "commenter" | "approver") {
   await page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
 }
-
-
-// qa4-plan-3: the Plan reads the roadmap document's approval; "plan-decider" has usage-alerts-roadmap v1
-// approved (by default it is in review, so the Plan's rows are a draft's).
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "plan-decider"] as const);
-});
 
 const rows = (page: Page) => page.getByTestId("plan-row").filter({ visible: true });
 const row = (page: Page, title: string) => rows(page).filter({ hasText: title });
