@@ -940,7 +940,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   }
   if (p[3] === "options" && method === "GET") {
     const prdQ = q.get("prd");
-    const list = prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : ps;
+    // As the API's, every PRD by its title.
+    const list = (prdQ ? ps.filter((x) => x.slug === prdQ || x.id === prdQ) : [...ps]).sort((a, b) => a.title.localeCompare(b.title));
     if (prdQ && !list.length) return json(404, { detail: "No such PRD" });
     const occQ = q.get("occurrence");
     const occ = occQ ? upcoming(ctx, db, occQ)[0] : null;
