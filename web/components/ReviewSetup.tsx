@@ -70,7 +70,7 @@ function today(): string {
 /** Why a form refuses a due date before today. */
 const PAST_DUE = "Pick today or a later day for the due date.";
 
-/** qa4-docs-share-34, -36: a due date whose day has passed reads Overdue, the same everywhere here. */
+/** qa4-docs-share-36: an open campaign whose due day has passed reads Overdue. */
 const pastDue = (at: string | null | undefined) => !!at && at.slice(0, 10) < today();
 
 /** The names of the people with these ids, loaded once per set of ids. */
@@ -398,9 +398,8 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
                     Reviewer {people.get(id)?.name ?? "…"}
                   </Chip>
                 ))}
-                {s.due_at && (
-                  <Chip kind={s.overdue || pastDue(s.due_at) ? "warn" : "line"}>{`${s.overdue || pastDue(s.due_at) ? "Overdue" : "Due"} ${formatDay(s.due_at)}`}</Chip>
-                )}
+                {/* The API's overdue: past its due date and not approved yet (an approved section is not overdue). */}
+                {s.due_at && <Chip kind={s.overdue ? "warn" : "line"}>{`${s.overdue ? "Overdue" : "Due"} ${formatDay(s.due_at)}`}</Chip>}
               </div>
             )}
           </li>
