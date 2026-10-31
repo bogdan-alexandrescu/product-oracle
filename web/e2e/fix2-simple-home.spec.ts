@@ -172,7 +172,7 @@ test("qa-simple-home-24: one change in review reads 'until it is approved'", asy
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
   await signOut(page);
   await signIn(page, EMAILS.viewer, null);
-  await expect(page.getByTestId("home-in-review")).toHaveText("1 change is in review. You see the published plan until it is approved.");
+  await expect(page.getByTestId("home-in-review")).toHaveText("1 change is not approved yet. You see the published plan until it is.");
 });
 
 test("qa-simple-home-25 and -36: a viewer with no name is greeted plainly, with no gap for a walk", async ({ page }) => {

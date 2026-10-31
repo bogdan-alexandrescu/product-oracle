@@ -76,11 +76,15 @@ const SETUP_STEPS: Record<string, string> = {
 /** An item code before a name ("F-06 Weekly alert digest"): Simple says the name alone (qa-simple-home-13). */
 const withoutCodes = (text: string) => text.replace(/\b[A-Z]{1,3}-\d{1,4}\s+/g, "");
 
-/** The sentence under a broken link's item, without the item's name the heading already says (qa-simple-home-11). */
+/**
+ * The sentence under a broken link's item, without the item's name the heading already says
+ * (qa-simple-home-11; qa4-simple-home-28: quoted straight or curly, or not quoted at all).
+ */
 function problemWords(reason: string, title: string): string {
-  const own = [`'${title}' `, `'${title.length <= 40 ? title : `${title.slice(0, 39)}…`}' `].find((p) => reason.startsWith(p));
+  const names = [title, title.length <= 40 ? title : `${title.slice(0, 39)}…`];
+  const own = names.flatMap((t) => [`'${t}' `, `‘${t}’ `, `${t} `]).find((p) => reason.startsWith(p));
   const rest = own ? reason.slice(own.length) : reason;
-  const plain = rest.replace(/(^|[\s(])'([^']+?)'(?=[\s,.)]|$)/g, "$1$2");
+  const plain = rest.replace(/(^|[\s(])'([^']+?)'(?=[\s,.)]|$)/g, "$1$2").replace(/(^|[\s(])‘([^’]+?)’(?=[\s,.)]|$)/g, "$1$2");
   return plain.charAt(0).toUpperCase() + plain.slice(1);
 }
 
@@ -206,6 +210,7 @@ export default function SimpleHome() {
     for (const b of broken) if (b.item.can_decide) ids.add(b.item.id);
     return ids;
   }, [toDecide, broken]);
+  const proposedGoals = (goals.data ?? []).filter((g) => g.type === "goal" && g.status === "proposed").length;
   const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
   // A new company (no goals yet) leads with its setup; an established company's Simple Home keeps
   // its picked design (Detailed Home keeps the checklist behind its Set up chip).
@@ -223,7 +228,8 @@ export default function SimpleHome() {
     () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").flatMap(planInputs), roadmap.data.today, roadmap.data.windows.now.end) : null),
     [roadmap.data, planPrd],
   );
-  const draft = (drafts.data ?? []).find((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
+  // qa4-simple-home-12: every working draft of mine, each with its own count (one roadmap's draft never hides another's).
+  const myDrafts = (drafts.data ?? []).filter((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
   const proposalRows = toDecide.length > 0 || decidesAll ? toDecide : mine;
   const proposalTitle = toDecide.length > 0 || decidesAll ? "Proposals on your items" : "Your proposals waiting";
   // A decider's own proposals on items others decide wait too: their own card.
@@ -265,9 +271,15 @@ export default function SimpleHome() {
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
-      ["decisions", waiting.data ? decisionCount : null, "decisions waiting for you", "decisions"],
-      ["proposals", changes.data ? proposalRows.length : null, proposalRows === toDecide ? "proposals on your items" : "of your proposals waiting", "proposals"],
-      ["broken-links", roadmap.data ? broken.length : null, "broken links", "broken links"],
+      // qa4-simple-home-25: one is said in the singular ("1 proposal on your items").
+      ["decisions", waiting.data ? decisionCount : null, decisionCount === 1 ? "decision waiting for you" : "decisions waiting for you", decisionCount === 1 ? "decision" : "decisions"],
+      [
+        "proposals",
+        changes.data ? proposalRows.length : null,
+        proposalRows === toDecide ? (proposalRows.length === 1 ? "proposal on your items" : "proposals on your items") : proposalRows.length === 1 ? "of your proposals waits" : "of your proposals waiting",
+        proposalRows.length === 1 ? "proposal" : "proposals",
+      ],
+      ["broken-links", roadmap.data ? broken.length : null, broken.length === 1 ? "broken link" : "broken links", broken.length === 1 ? "broken link" : "broken links"],
     ] as const
   ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty : !proposalsEmpty));
   // The goal band's weights as their share of the score ("50% of the score").
@@ -285,6 +297,22 @@ export default function SimpleHome() {
     for (const b of broken) by.set(b.item.id, [...(by.get(b.item.id) ?? []), b]);
     return [...by.values()];
   }, [broken]);
+  // qa4-simple-home-5: links whose "Move the dependents" moves the same items after the same
+  // dependency are one move: its control and sentence sit under the first; the others point to it.
+  const shiftKey = (b: BrokenLink) => (b.flag.fixes.includes("shift_dependents") && b.dependency ? `${b.dependency.id}|${[...(b.flag.moves ?? [])].sort().join(",")}` : null);
+  const shiftLeader = new Map<string, BrokenLink>();
+  for (const b of broken) {
+    const key = shiftKey(b);
+    if (key && !shiftLeader.has(key)) shiftLeader.set(key, b);
+  }
+  const movedWith = (b: BrokenLink): BrokenLink | undefined => {
+    const key = shiftKey(b);
+    const lead = key ? shiftLeader.get(key) : undefined;
+    return lead && lead !== b ? lead : undefined;
+  };
+  /** qa4-simple-home-18: my proposal moving this item's dependents already, made on another item it moves. */
+  const coveredBy = (b: BrokenLink): Change | undefined =>
+    mine.find((c) => c.op === "shift_dependents" && c.target.item_id !== b.item.id && (b.flag.moves ?? []).includes(String(c.target.item_id)) && b.flag.fixes.includes("shift_dependents"));
   const brokenDeciders = [...new Set(broken.filter((b) => !b.item.can_decide).flatMap((b) => (b.item.deciders.length ? b.item.deciders : ["the decider"])))];
 
   const proposalRow = (c: Change) => (
@@ -386,6 +414,7 @@ export default function SimpleHome() {
     });
     const late = ids.flatMap((id) => {
       const i = fresh?.items.find((x) => x.id === id);
+      // qa4-simple-home-11: the item named once ("Weekly alert digest ends Dec 21, after …").
       return (i?.flags ?? []).filter((f) => f.kind === "outside_milestone" && f.state === "red").map((f) => `${i!.title} ${problemWords(f.reason, i!.title).replace(/^./, (x) => x.toLowerCase())}`);
     });
     return `: ${joinAnd(moved)}.${late.length ? ` ${late.join(". ")}.` : ""}`;
@@ -506,12 +535,18 @@ export default function SimpleHome() {
             )
           }
         </Block>
+        {/* qa4-simple-home-6: a goal still proposed is not on Home: said, so Detailed's extra goal is no surprise. */}
+        {proposedGoals > 0 && (
+          <p data-testid="home-goals-proposed" className="simple-small mt-2">
+            {proposedGoals === 1 ? "1 proposed goal is not shown here until it is confirmed." : `${proposedGoals} proposed goals are not shown here until they are confirmed.`}
+          </p>
+        )}
       </section>
 
-      {!reads && (tilesShown.length > 0 || draft) && (
+      {!reads && (tilesShown.length > 0 || myDrafts.length > 0) && (
         <section aria-label="Summary" data-testid="home-summary" className="simple-card">
           {tilesShown.length > 0 && (
-          <ul className="grid gap-3 max-[600px]:gap-2" style={{ gridTemplateColumns: `repeat(${tilesShown.length}, minmax(0, 1fr))` }}>
+          <ul className="grid gap-3 max-[600px]:gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(tilesShown.length, 3)}, minmax(0, 1fr))` }}>
             {tilesShown.map(([id, n, label, short]) => (
               <li key={id}>
                 <a
@@ -528,8 +563,8 @@ export default function SimpleHome() {
             ))}
           </ul>
           )}
-          {draft && (
-            <p data-testid="home-draft" className="flex flex-wrap items-center justify-between gap-3">
+          {myDrafts.map((draft) => (
+            <p key={draft.id} data-testid="home-draft" className="flex flex-wrap items-center justify-between gap-3">
               <span>
                 Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}. It publishes as v
                 {(draft.base_version ?? 0) + 1} when{" "}
@@ -542,7 +577,7 @@ export default function SimpleHome() {
                 Open draft
               </Link>
             </p>
-          )}
+          ))}
         </section>
       )}
 
@@ -550,12 +585,22 @@ export default function SimpleHome() {
         <section aria-label="Waiting for you" data-testid="home-nothing-waits" className="simple-card">
           <p className="simple-small">
             Nothing waits on you.{" "}
-            {decidesAll
-              ? "Decisions and proposals on your items show here when they come."
-              : "You can propose a change from the roadmap, or comment on a one-pager."}{" "}
-            <Link href="/simple/roadmap" className="simple-link">
-              Open the roadmap
-            </Link>
+            {/* qa4-simple-home-17: the same message as the greeting when broken links are open to proposals. */}
+            {brokenOthers > 0 ? (
+              <>
+                You can propose fixes for {brokenWords} in the plan below.{" "}
+                <a href="#broken-links" className="simple-link">
+                  Go to the broken links
+                </a>
+              </>
+            ) : (
+              <>
+                {decidesAll ? "Decisions and proposals on your items show here when they come." : "You can propose a change from the roadmap, or comment on a one-pager."}{" "}
+                <Link href="/simple/roadmap" className="simple-link">
+                  Open the roadmap
+                </Link>
+              </>
+            )}
           </p>
         </section>
       )}
@@ -689,12 +734,13 @@ export default function SimpleHome() {
                   {r.span.label}
                 </p>
               )}
-              {/* In the plan's card, filled with it: above the goal band it pushed everything down. */}
+              {/* In the plan's card, filled with it: above the goal band it pushed everything down.
+                  qa4-simple-home-16: the count holds unsent working drafts too, so it never says "in review". */}
               {r.changes_in_review > 0 && (
                 <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
                   {r.changes_in_review === 1
-                    ? "1 change is in review. You see the published plan until it is approved."
-                    : `${r.changes_in_review} changes are in review. You see the published plan until they are approved.`}
+                    ? "1 change is not approved yet. You see the published plan until it is."
+                    : `${r.changes_in_review} changes are not approved yet. You see the published plan until they are.`}
                 </p>
               )}
               {planPrd === undefined ? (
@@ -714,6 +760,12 @@ export default function SimpleHome() {
                       Broken links{brokenRoadmaps.length ? ` · ${brokenRoadmaps.join(", ")}` : ""}
                     </span>
                   </h3>
+                  {/* qa4-simple-home-21: a reader is told who fixes these and that they cannot. */}
+                  {reads && (
+                    <p data-testid="home-broken-readers" className="simple-small">
+                      {(brokenDeciders.length ? joinAnd(brokenDeciders) : "The owners").replace(/^./, (x) => x.toUpperCase())} {brokenDeciders.length === 1 ? "fixes" : "fix"} these; you can&apos;t change the roadmap.
+                    </p>
+                  )}
                   {/* qa-simple-home-9: who decides the fixes I may only propose, said once. */}
                   {!reads && brokenDeciders.length > 0 && (
                     <p data-testid="home-broken-deciders" className="simple-small">
@@ -738,6 +790,11 @@ export default function SimpleHome() {
                                 onFix={fix}
                                 moves={b.flag.fixes.includes("shift_dependents") ? shiftMoves(b, roadmap.data?.items ?? []) : []}
                                 proposed={mine.find((c) => FIX_OPS.has(c.op) && c.target.item_id === b.item.id && (c.target.subject ?? null) === (b.flag.subject ?? null))}
+                                movedWith={movedWith(b)?.item.title}
+                                coveredBy={(() => {
+                                  const c = coveredBy(b);
+                                  return c ? { title: itemTitle(c.target.item_id), waitingFor: c.routed_to.map((id) => nameOf(id, "the decider")).join(", ") || "the decider" } : undefined;
+                                })()}
                                 nameOf={nameOf}
                               />
                             ))}
@@ -1014,6 +1071,8 @@ function BrokenRow({
   onFix,
   moves,
   proposed,
+  movedWith,
+  coveredBy,
   nameOf,
 }: {
   b: BrokenLink;
@@ -1023,6 +1082,10 @@ function BrokenRow({
   moves: Schemas["SimpleRoadmapItem"][];
   /** My proposal waiting on this link (GET /v1/simple/changes: proposed, by me, its item and subject). */
   proposed?: Change;
+  /** qa4-simple-home-5: the item above whose "Move the dependents" moves this one too (its control is there). */
+  movedWith?: string;
+  /** qa4-simple-home-18: my waiting proposal on another item that moves this one too. */
+  coveredBy?: { title: string; waitingFor: string };
   nameOf: (id: string, fallback: string) => string;
 }) {
   const [noting, setNoting] = useState(false);
@@ -1040,6 +1103,8 @@ function BrokenRow({
         : "the decider"
     : "";
   const showFixes = !reads && !proposed;
+  // One "Move the dependents" per move (qa4-simple-home-5), none once my proposal elsewhere makes it (qa4-simple-home-18).
+  const shifts = b.flag.fixes.includes("shift_dependents") && !movedWith && !coveredBy;
   return (
     <li data-testid="home-broken" className="flex flex-col gap-2">
       <span className="text-text">
@@ -1051,14 +1116,24 @@ function BrokenRow({
           You proposed: {FIX_WORDS[proposed.op as FixOp] ?? OP_WORDS[proposed.op] ?? proposed.op} · waiting for {waitingFor}
         </span>
       )}
-      {showFixes && b.flag.fixes.includes("shift_dependents") && b.dependency && moves.length > 0 && (
+      {showFixes && coveredBy && (
+        <span data-testid="home-broken-covered" className="simple-small">
+          Your proposal to move the dependents of {coveredBy.title} moves this one too · waiting for {coveredBy.waitingFor}
+        </span>
+      )}
+      {showFixes && !coveredBy && movedWith && (
+        <span data-testid="home-broken-moved-with" className="simple-small">
+          {applies ? FIX_WORDS.shift_dependents : `Propose: ${FIX_WORDS.shift_dependents.toLowerCase()}`} on {movedWith} above moves this one too.
+        </span>
+      )}
+      {showFixes && shifts && b.dependency && moves.length > 0 && (
         <span id={moveId} data-testid="home-broken-moves" className="simple-small">
           Moving the dependents starts {joinAnd(moves.map((m) => m.title))} after {b.dependency.title} ends.
         </span>
       )}
       {showFixes && (
         <span data-testid="home-row-actions" className="flex flex-wrap items-center gap-2">
-          {b.flag.fixes.includes("shift_dependents") && (
+          {shifts && (
             <button type="button" className="simple-button" aria-describedby={moveId} onClick={() => void onFix(b, "shift_dependents")}>
               {label(FIX_WORDS.shift_dependents)}
             </button>
