@@ -358,9 +358,14 @@
 
 html {
   background: var(--bg);
-  /* qa4-docs-share-19: the scrollbar's room is kept even while a sheet or dialog stops the
-     page scrolling, so opening one never shifts the header and rail sideways. */
-  scrollbar-gutter: stable;
+}
+/* qa4-docs-share-19: the scrollbar's room is kept even while a sheet or dialog stops the
+   page scrolling, so opening one never shifts the header and rail sideways. Wider screens
+   only: a phone's scrollbar floats over the page and takes no room. */
+@media (min-width: 640px) {
+  html {
+    scrollbar-gutter: stable;
+  }
 }
 body {
   background: var(--bg);
