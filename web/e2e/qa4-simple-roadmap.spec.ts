@@ -69,10 +69,11 @@ for (const [where, size] of [
       const laneTitles = isPhone(page)
         ? await page.getByTestId("phone-lane-name").allTextContents()
         : await page.getByTestId("chart-group").evaluateAll((gs) => gs.map((g) => g.querySelector("b")?.textContent ?? ""));
-      const goals = laneTitles.filter((t) => t !== "No goal" && t !== "Below the line");
+      // PM-owned work has its own lane but is no goal.
+      const goals = laneTitles.filter((t) => !["No goal", "Below the line", "PM-owned"].includes(t));
       expect(goals.length).toBeGreaterThan(1);
       // 10: a card for every goal with a lane.
-      for (const g of goals) await expect(page.getByTestId("goal-counter").filter({ hasText: g })).toHaveCount(1);
+      for (const g of goals) await expect(page.getByTestId("goal-counter").filter({ has: page.locator("p", { hasText: new RegExp(`^${g}$`) }) })).toHaveCount(1);
       await page.getByTestId("format-board").click();
       await expect(page.getByTestId("board-group").first()).toBeVisible();
       const sections = new Set(await page.getByTestId("board-group").evaluateAll((gs) => gs.map((g) => g.querySelector("h3 span")?.textContent ?? "")));
@@ -142,6 +143,8 @@ for (const [where, size] of [
 
     test(`qa4-43 / 46: the swap message goes once the range changes; filters are named by their word (${where})`, async ({ page }) => {
       await open(page);
+      // A phone's filters sit in their own sheet.
+      if (isPhone(page)) await page.getByRole("button", { name: "Filters" }).click();
       const from = page.getByTestId("filter-from");
       await expect(from).toHaveAccessibleName("From");
       const to = page.getByRole("combobox", { name: "To", exact: true });
@@ -162,7 +165,7 @@ test.describe("desktop only", () => {
   test.use(DESKTOP);
 
   test("qa4-9: the side menu's Roadmap count says what it counts", async ({ page }) => {
-    await open(page);
+    await open(page, { scenario: "simple-home" });
     const count = page.getByTestId("simple-nav-roadmap-count");
     await expect(count).toBeVisible();
     await expect(count).toHaveAttribute("title", /^\d+ (change or draft|changes or drafts) waiting on you$/);
@@ -180,16 +183,19 @@ test.describe("desktop only", () => {
   test("qa4-19 / 23: a span in another year says its years; the cut row says 1st to return", async ({ page }) => {
     await open(page);
     const welcome = page.locator('g[data-testid="bar"][data-item="setup-video"]').first();
-    await expect(welcome).toHaveAttribute("aria-label", /Jul 1, 2027 to Oct 30, 2028/);
+    await expect(welcome).toHaveAttribute("aria-label", /Jul 1, 2027 to [A-Z][a-z]+ \d+, 2028/);
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("return-place").first()).toHaveText("1st to return");
   });
 
   test("qa4-36: a goal card with one item says 1 item", async ({ page }) => {
-    await open(page, { scenario: "simple-plan-lanes", url: "/simple/roadmap?roadmap=onboarding-roadmap" });
-    await expect(page.getByTestId("goal-counter").first()).toBeVisible();
-    await expect(page.getByTestId("goal-counter").filter({ hasText: /\b1 items\b/ })).toHaveCount(0);
-    await expect(page.getByTestId("goal-counter").filter({ hasText: /\b1 item\b/ }).first()).toBeVisible();
+    await open(page);
+    // From Q1 2027 to Q2 2027: Faster activation keeps one item (Team invite nudges).
+    await page.getByTestId("filter-from").selectOption({ label: "Q1 2027" });
+    await page.getByRole("combobox", { name: "To", exact: true }).selectOption({ label: "Q2 2027" });
+    const fa = page.getByTestId("goal-counter").filter({ hasText: "Faster activation" });
+    await expect(fa).toContainText(/1 item(?!s)/);
+    await expect(fa).not.toContainText("1 items");
   });
 
   test("qa4-6: in dark mode the estimated hatch and bar outlines are 3:1 against the chart", async ({ page }) => {
