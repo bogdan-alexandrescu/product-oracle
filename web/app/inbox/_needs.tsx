@@ -190,11 +190,11 @@ export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
 );
 
 /**
- * qa-company-20: Sources that need attention: one action (Edit or "View only"), so the item
- * takes the room the action column leaves, its reason on up to two lines.
+ * qa-company-20: Sources that need attention: its reason wraps rather than being cut.
  */
 export const SOURCE_COLUMNS: Column<Need>[] = NEED_COLUMNS.map((c) =>
-  c.key === "item" ? { ...c, wrap: true } : c.key === "act" ? { ...c, width: "120px" } : c,
+  // qa4-work-35: the same widths as the table above, so For and Age line up.
+  c.key === "item" ? { ...c, wrap: true } : c,
 );
 
 export function NeedTable({
@@ -1285,7 +1285,8 @@ const ROLE_WORD: Record<InboxOut["checkpoints"][number]["approver_role"], string
  */
 function baselineLabel(title: string, summary: { need_you: number; blocking: number; handled: number }): string {
   if (summary.need_you === 0 && summary.blocking === 0) {
-    return summary.handled > 0 ? `${title}: all ${plural(summary.handled, "item")} handled` : `${title}: nothing left to decide`;
+    // qa4-work-38: it still waits on an approval, so the line says what is needed.
+    return summary.handled > 0 ? `${title}: all ${plural(summary.handled, "item")} handled, approve to continue` : `${title}: approve to continue`;
   }
   const parts = [summary.need_you > 0 && `${summary.need_you} need you`, summary.blocking > 0 && `${summary.blocking} not decided`].filter(Boolean);
   return `${title}: ${parts.join(", ")}`;
