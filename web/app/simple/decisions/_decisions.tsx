@@ -16,6 +16,7 @@ import { useQuery } from "@/lib/use-query";
 
 import { DeliveryLine, emailWords, slackWords } from "../meetings/_delivery";
 import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
+import { RdMixed, RdPrdOnlyNote, RdPrdSections, RdRunsGroup, useMk } from "@/components/simple/mock/RunDecideMock"; // MOCK-HOOK
 
 type Row = Schemas["SimpleDecisionRow"];
 type Group = Schemas["SimpleMeetingGroup"];
@@ -97,6 +98,7 @@ export function SimpleDecisions() {
   // qa-simple-decide-20: the API leaves out an open decision a shown meeting lists as its open question.
   const other = d?.other ?? [];
   const zone = useCompanyZone();
+  const mk = useMk(); // MOCK-HOOK
   return (
     <SimplePage title="Decisions" lead={`${LEADS[view]} Dates are in ${zoneName(zone)}.`}>
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -109,6 +111,7 @@ export function SimpleDecisions() {
       </div>
       {q.loading && !d && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {d && <RdPrdSections /> /* MOCK-HOOK */}
       {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} />}
       {d && view === "board" && <Board questions={questions} actions={actions} />}
       {d && view !== "board" && (
@@ -134,7 +137,9 @@ export function SimpleDecisions() {
           {d.meetings.map((g) => (
             <MeetingGroup key={g.meeting.id} g={g} reload={() => q.reload()} filtered={!!(prd || goal)} rowNumbers={new Set([...d.meetings.flatMap((x) => x.decisions), ...other].map((r) => r.number))} />
           ))}
-          {other.length > 0 && (
+          {d && <RdRunsGroup /> /* MOCK-HOOK */}
+          {mk.rd1 === "b" && <RdMixed other={other} /> /* MOCK-HOOK */}
+          {other.length > 0 && mk.rd1 !== "b" /* MOCK-HOOK */ && (
             <section className="simple-card" aria-label="Outside meetings">
               <h2 className="simple-h2">Outside meetings</h2>
               <Rows rows={other} />
@@ -142,6 +147,7 @@ export function SimpleDecisions() {
           )}
         </>
       )}
+      {d && <RdPrdOnlyNote /> /* MOCK-HOOK */}
       {d && d.approvals_waiting > 0 && (
         <p className="simple-plumb" data-testid="decisions-approvals">
           <Icon name="flag" size={16} stroke={1.7} />

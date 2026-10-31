@@ -20,6 +20,7 @@ import { usePhone } from "../../priorities/priorities";
 import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
+import { RdAgenda } from "@/components/simple/mock/RunDecideMock"; // MOCK-HOOK
 
 // Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
 type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[]; agenda?: MeetingAgenda };
@@ -846,7 +847,7 @@ function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown
         )}
       </header>
       {due.length === 0 ? (
-        <p className="simple-meta">No decision is due.</p>
+        <RdAgenda fallback={<p className="simple-meta">No decision is due.</p>} /> /* MOCK-HOOK */
       ) : (
         <ul>
           {(all ? due : due.slice(0, AGENDA_FIRST)).map((q) => (

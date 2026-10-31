@@ -34,6 +34,7 @@ import {
 } from "@/lib/simple-home";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, loadInbox, waitingChanged } from "@/lib/waiting";
+import { RdHomeWaiting } from "@/components/simple/mock/RunDecideMock"; // MOCK-HOOK
 
 type Change = Schemas["SimpleChangeOut"];
 type Decision = Schemas["DecisionOut"];
@@ -551,6 +552,7 @@ export default function SimpleHome() {
         </section>
       )}
 
+      {!reads && <RdHomeWaiting /> /* MOCK-HOOK */}
       {!reads && !decisionsEmpty && (
         <HomeCard
           id="decisions"
