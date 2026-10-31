@@ -24,6 +24,17 @@ export function approvedRoadmaps(items: Schemas["PlanItem"][] | undefined): Plan
   return [...out].map(([slug, version]) => ({ slug, version }));
 }
 
+/**
+ * qa4-plan-3: the roadmaps on the Plan with no approved version, only a draft's rows (each at the
+ * draft's version): the Plan says they are not approved yet, and Edit plan has nothing to edit.
+ */
+export function draftOnlyRoadmaps(items: Schemas["PlanItem"][] | undefined): PlanRoadmap[] {
+  const approved = new Set(approvedRoadmaps(items).map((r) => r.slug));
+  const out = new Map<string, number>();
+  for (const i of items ?? []) if (i.origin === "draft" && !approved.has(i.roadmap.slug)) out.set(i.roadmap.slug, Math.max(i.roadmap.version, out.get(i.roadmap.slug) ?? 0));
+  return [...out].map(([slug, version]) => ({ slug, version }));
+}
+
 /** The roadmap documents by slug: their titles and approval state (qa-plan-17, qa-plan-21). */
 export function useRoadmapDocs(after = ""): Map<string, DocumentSummary> {
   // `after` reads them again (a version approved here changes a document's approved version).

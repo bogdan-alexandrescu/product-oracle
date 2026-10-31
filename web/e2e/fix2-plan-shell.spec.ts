@@ -10,6 +10,13 @@ import { login } from "./helpers";
  * as a person would, on a desktop (1440x900) and a phone (390x844).
  */
 
+
+// qa4-plan-3: the Plan reads the roadmap document's approval; "roadmap-diff" has usage-alerts-roadmap v1
+// approved and a draft 2 (by default it is in review, so the Plan's rows are a draft's).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, "roadmap-diff"] as const);
+});
+
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
@@ -123,7 +130,7 @@ test.describe("desktop", () => {
     const next = row(page, "Daily alert digest email").getByTestId("plan-next");
     // fix4 qa-plan-29: who decides reads in one sentence.
     await expect(next).toHaveText("Owners decide on the slip");
-    const review = row(page, "One-page checkout").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" });
+    const review = row(page, "Alert rules API").getByTestId("plan-next").getByRole("link", { name: "Review the PRD" });
     expect((await box(review)).height).toBeLessThanOrEqual(30);
   });
 
