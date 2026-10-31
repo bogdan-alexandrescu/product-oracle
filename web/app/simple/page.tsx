@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
@@ -117,6 +117,14 @@ export default function SimpleHome() {
   const [stamp, setStamp] = useState(0);
   // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
   const [walking, setWalking] = useState(false);
+  // qa4-simple-home-10: Done gives the focus back to "Walk me through it".
+  const walkButton = useRef<HTMLButtonElement>(null);
+  const backToWalk = useRef(false);
+  useEffect(() => {
+    if (walking || !backToWalk.current) return;
+    walkButton.current?.focus();
+    if (walkButton.current) backToWalk.current = false;
+  });
   const k = (name: string) => `simple-home|${name}|${stamp}`;
   // qa-simple-home-30: Home's toasts sit bottom-left over the rail, clear of the rows' buttons.
   useEffect(() => setToastPlace("rail"), []);
@@ -416,7 +424,7 @@ export default function SimpleHome() {
         </p>
         {!walking && capsReady && !reads && counted && !nothingToWalk && (
           <div>
-            <button type="button" className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
+            <button type="button" ref={walkButton} className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
               Walk me through it
             </button>
           </div>
@@ -432,6 +440,7 @@ export default function SimpleHome() {
       {walking && (
         <Walk
           onDone={() => {
+            backToWalk.current = true;
             setWalking(false);
             reloadAll();
           }}

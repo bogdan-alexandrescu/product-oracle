@@ -221,7 +221,9 @@ export function Walk({ onDone }: { onDone: () => void }) {
   const skipped = [...lastOf.values()].filter((d) => d.skipped).map((d) => steps?.[d.step]).filter((s): s is Step => !!s);
   const left = joinAnd(
     [
-      count(skipped.filter((s) => s.kind === "decision" || s.kind === "agenda_decision").length, "decision", "decisions"),
+      // qa4-simple-home-9: a meeting's agenda item is not one of Home's decisions: counted apart.
+      count(skipped.filter((s) => s.kind === "decision").length, "decision", "decisions"),
+      count(skipped.filter((s) => s.kind === "agenda_decision").length, "meeting agenda item", "meeting agenda items"),
       count(skipped.filter((s) => s.kind === "broken_link").length, "broken link", "broken links"),
       count(skipped.filter((s) => s.kind === "proposal").length, "proposal", "proposals"),
     ].filter((x) => !x.startsWith("0 ")),
