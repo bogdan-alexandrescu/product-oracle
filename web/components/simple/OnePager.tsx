@@ -583,6 +583,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                                 // qa-simple-prd-p3-1: hidden, a touch on it opens nothing. qa-simple-prd-p3-25: on a desktop it
                                 // always sits in the room kept at the line's end, so showing it moves no words.
                                 data-edit-for={l.id}
+                                // qa4-simple-prd-35: one Tab stop per line, its words; the keyboard edits from the line's sources (Enter on it).
+                                tabIndex={-1}
                                 className={`simple-noprint flex-none text-sm whitespace-nowrap underline focus:opacity-100 max-md:min-h-11 max-md:min-w-11 max-md:px-3 ${
                                   tapped === l.id
                                     ? "opacity-100 max-md:static md:absolute md:top-0 md:right-0"
@@ -655,6 +657,20 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                               );
                             })}
                             {l.decisions.length > 0 && <p className="mb-2 text-sm text-text2">Decided in {l.decisions.map((d) => `D-${d.number} ${d.title}`).join(", ")}</p>}
+                            {(v.can_edit || v.can_propose) && !presenting && (
+                              <button
+                                type="button"
+                                className="mr-3 text-sm underline"
+                                onClick={() => {
+                                  setOpen(null);
+                                  setDiscarding(false);
+                                  setEditing(l.id);
+                                  setDraftText(l.words ?? l.full ?? l.text);
+                                }}
+                              >
+                                {v.can_edit ? "Edit this line" : "Propose wording"}
+                              </button>
+                            )}
                             <Link className="underline" href={`/documents/${v.document.slug}#${l.source_keys[0]}`}>Open the detailed view</Link>
                             <button type="button" className="ml-3 text-sm underline" onClick={() => setOpen(null)}>Close</button>
                           </div>
