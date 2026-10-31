@@ -26,8 +26,9 @@ const VIEWER = "viewer@example.com";
 const DESKTOP = { width: 1512, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
-async function signIn(page: Page, email: string, size = DESKTOP) {
-  await page.context().addInitScript((key) => localStorage.setItem(key, "simple-home"), MOCK_SCENARIO_KEY);
+/** Signs in on the Simple Home scenario, or with `seed` false on the mock's default data (QA's goals). */
+async function signIn(page: Page, email: string, size = DESKTOP, seed = true) {
+  if (seed) await page.context().addInitScript((key) => localStorage.setItem(key, "simple-home"), MOCK_SCENARIO_KEY);
   await page.setViewportSize(size);
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
@@ -58,7 +59,7 @@ for (const [device, size] of [
   test.describe(device, () => {
     test(`qa4-simple-home-4, -6 (${device}): goal cards read the same way, each opens its suggestions, a proposed goal is said`, async ({ page }) => {
       // fails_when: no goal card shows Suggestions, the second card has no "From", or the proposed goal is missing with no word
-      await signIn(page, ADMIN.email, size);
+      await signIn(page, ADMIN.email, size, false);
       const goals = home(page).getByTestId("home-goal");
       await expect(goals).toHaveCount(2);
       for (const g of await goals.all()) await expect(g.getByTestId("home-goal-path")).toHaveText(/^From .+ · now .+ · target .+$/);
@@ -78,7 +79,8 @@ for (const [device, size] of [
       for (const item of await items.all()) {
         const title = (await item.locator(".text-crit").first().textContent())!.trim();
         for (const row of await item.getByTestId("home-broken").all()) {
-          const said = (await row.evaluate((el) => (el.firstElementChild as HTMLElement).innerText)).trim();
+          // The sentence as seen: its screen-reader prefix (the item's name) is not drawn.
+          const said = (await row.evaluate((el) => [...el.firstElementChild!.childNodes].filter((n) => !(n instanceof HTMLElement && n.classList.contains("sr-only"))).map((n) => n.textContent).join(""))).trim();
           expect(said.startsWith(title), `"${said}" names ${title} again`).toBe(false);
           expect(said).not.toContain(`‘${title}’`);
         }
@@ -177,14 +179,13 @@ test.describe("a commenter", () => {
   test("qa4-simple-home-18: a move proposed on one item is not offered again on the item it also moves", async ({ page }) => {
     // fails_when: Mobile alert push still offers "Propose: move the dependents" after it was proposed on Weekly alert digest
     await signIn(page, COMMENTER);
-    const offers = home(page).getByTestId("home-broken").getByRole("button", { name: "Propose: move the dependents" });
-    const n = await offers.count();
-    expect(n).toBeGreaterThan(0);
-    await tap(offers.first());
+    const propose = (title: string) => brokenItem(page, title).getByRole("button", { name: "Propose: move the dependents" });
+    await tap(propose("Weekly alert digest"));
     await expect(page.getByText(/^Proposed: /)).toBeVisible();
     await expect(home(page).getByTestId("home-broken-proposed")).toHaveCount(1);
-    // Every other row the proposal moves says so and offers no second one.
-    await expect(offers).toHaveCount(0);
+    // Mobile alert push, which the proposal moves too, says so and offers no second one.
+    await expect(brokenItem(page, "Mobile alert push").getByTestId("home-broken-covered")).toContainText("Your proposal to move the dependents of Weekly alert digest moves this one too");
+    await expect(propose("Mobile alert push")).toHaveCount(0);
   });
 });
 
