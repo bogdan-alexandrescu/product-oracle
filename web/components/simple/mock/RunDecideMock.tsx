@@ -239,13 +239,13 @@ export function RdReviewBar() {
             {v === "a" && (
               <>
                 <b className="font-[650]">You approved version 3.</b>
-                <span className="simple-meta">The PRD reads Approved everywhere. {RUN_MAIN.name} goes on to its dates · Lena Ford · Sat Oct 31</span>
+                <span className="simple-meta">The PRD reads Approved everywhere. {RUN_MAIN.name} goes on to its dates · Admin · Sat Oct 31</span>
               </>
             )}
             {v === "b" && (
               <>
                 <b className="font-[650]">You approved the PRD, version 3.</b>
-                <span className="simple-meta">Second of two steps · {RUN_MAIN.name} goes on to its dates · Lena Ford · Sat Oct 31</span>
+                <span className="simple-meta">Second of two steps · {RUN_MAIN.name} goes on to its dates · Admin · Sat Oct 31</span>
               </>
             )}
             {v === "c" && (
@@ -268,8 +268,8 @@ export function RdReviewBar() {
   if (st === "next") {
     return (
       <section className={box} aria-label="The run's PRD review" data-testid="rd2-bar">
-        <p className="simple-meta">
-          <Icon name="check" size={16} stroke={1.7} /> Run review approved by you · Sat Oct 31
+        <p className="simple-meta inline-flex items-center gap-1.5">
+          <Icon name="check" size={16} stroke={1.7} /> Run review approved by you (Admin) · Sat Oct 31
         </p>
         <h2 className="simple-h2 mt-2">Next stop: approve the PRD</h2>
         <p className="simple-small">Approving makes version 3 the PRD everyone builds from. Or take it to a review meeting to change it first.</p>
@@ -283,7 +283,7 @@ export function RdReviewBar() {
   return (
     <section className={box} aria-label="The run's PRD review" data-testid="rd2-bar">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1">
+        <p className="min-w-[260px] flex-1">
           <b className="font-[650]">{RUN_MAIN.name} waits for your review of version 3.</b>
           <span className="simple-meta block">
             {v === "a" && "Approving it approves this version of the PRD too."}
@@ -408,7 +408,7 @@ export function RdAgenda({ fallback }: { fallback: ReactNode }) {
   return (
     <div data-testid="rd3-agenda">
       <p className="simple-meta mb-2">From the Usage alerts PRD&apos;s &ldquo;Decisions needed&rdquo; · {NEEDED.length} decisions · due by {day(NEEDED[NEEDED.length - 1]!.due)}</p>
-      <NeededList list={NEEDED} who="decided in this meeting" />
+      <NeededList list={NEEDED} who="Admin, in this meeting" />
     </div>
   );
 }
