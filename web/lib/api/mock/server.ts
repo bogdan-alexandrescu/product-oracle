@@ -1063,7 +1063,7 @@ function seedSimpleHomeScenario(): Db {
   const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
   const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
   const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
-  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
@@ -1119,7 +1119,7 @@ function seedSimpleHomeDecidersScenario(): Db {
   const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
   const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
   const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
-  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
   seedSimpleProposal(db.simple_roadmap!, who, "edit_title", "price-tiers", { title: "New plan tiers" }, { title: "New plan tiers, yearly" }, "2026-10-26T15:00:00Z");
   return db;
 }

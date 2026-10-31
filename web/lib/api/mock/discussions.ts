@@ -645,9 +645,9 @@ export function seedDiscussionInbox(ctx: Omit<DiscussionsContext, "me" | "db">, 
   ] as const)
     db.participants.push({ discussion_id: id, user_id, added_via, left_at: null, last_read_at: null, created_at: at(0) });
   const lines: [string, string, string[]][] = [
-    [commenter, "Viewer, guests lose their cart today. Should we keep it?", [viewer]],
+    [commenter, "Lena, guests lose their cart today. Should we keep it?", [viewer]],
     [approver, "Only with a clear expiry.", []],
-    [commenter, "Approver, can guests keep a cart for 30 days?", [approver]],
+    [commenter, "Priya, can guests keep a cart for 30 days?", [approver]],
   ];
   const ids = lines.map(([author, body, mentions], i) => {
     const mid = ctx.uuid();
@@ -1893,7 +1893,7 @@ export function seedDiscussionChangeKinds(
     },
   );
   const titles: Record<string, string> = { [features.moved.id]: features.moved.title, [features.above.id]: features.above.title };
-  const names: LabelNames = { entity: (x) => titles[x] ?? null, member: (x) => (x === approver ? "Approver" : null) };
+  const names: LabelNames = { entity: (x) => titles[x] ?? null, member: (x) => (x === approver ? "Priya Raman" : null) };
   const row = (kind: string, payload: Record<string, unknown>, rationale: string): ChangeRow => ({
     id: ctx.uuid(),
     discussion_id: id,
