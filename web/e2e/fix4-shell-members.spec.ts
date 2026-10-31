@@ -31,7 +31,8 @@ const emailWhole = (email: Locator) =>
   email.evaluate((el) => {
     const range = document.createRange();
     range.selectNodeContents(el);
-    return range.getClientRects().length === 1 && el.getAttribute("title") === el.textContent;
+    const tops = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top));
+    return tops.every((t) => Math.abs(t - tops[0]) <= 1) && el.getAttribute("title") === el.textContent;
   });
 
 /** The status cell's content stays inside the cell, so it never covers Last sign-in. */
