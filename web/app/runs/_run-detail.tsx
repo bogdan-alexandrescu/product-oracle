@@ -6,7 +6,8 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react
 import { createPortal, flushSync } from "react-dom";
 
 import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
-import { runLabel } from "@/lib/labels";
+import { peopleByIds } from "@/components/PersonPicker";
+import { decisionLine, runLabel } from "@/lib/labels";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
@@ -282,7 +283,8 @@ export function RunDetail({ id }: { id: string }) {
   // Imports a segment's refused draft again (the review still waits for a person).
   const retryImport = (seq: number) =>
     act(() => unwrap(api.POST("/v1/runs/{run_id}/segments/{seq}/retry-draft-import", { params: { path: { run_id: id, seq } } })));
-  const done = run.segments.filter((s) => s.status === "succeeded").length;
+  // A segment reused from earlier (skipped as reused) counts as done, as the API's progress counts it.
+  const done = run.segments.filter((s) => s.status === "succeeded" || s.status === "skipped").length;
   const decideCp = run.checkpoints.find((c) => c.status === "pending" && c.can_decide);
   const deciding = !!decideCp;
   // D1: Decide opens the Roadmap items review screen.
@@ -410,6 +412,8 @@ export function RunDetail({ id }: { id: string }) {
                 op="delete_run"
                 // qa-onboarding-16: the dialog names the run, not its flow: "Delete the Team onboarding PRD run".
                 title={`the ${runName(run)} run`}
+                // Deleting a run removes its record only, never the document it wrote.
+                what={`This removes the run's record: its steps, decisions and spend.${run.document_id ? ` ${runDocName(run)} stays as it is.` : ""}`}
                 dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [] })}
                 remove={(query) => unwrap(api.DELETE("/v1/runs/{run_id}", { params: { path: { run_id: run.id }, query: { reason: query.reason } } }))}
                 onDeleted={() => router.push("/runs")}
@@ -821,6 +825,14 @@ function RunDecisions({ run }: { run: RunOut }) {
     () => unwrap(api.GET("/v1/runs/{run_id}/decisions", { params: { path: { run_id: run.id } } })),
     { keepPrevious: true },
   );
+  // The list reads as the agents read it (roles, no names); the page names who decided.
+  const deciders = run.checkpoints.map((c) => c.decided_by).filter((x): x is string => !!x);
+  const people = useQuery(`run-deciders|${[...new Set(deciders)].sort().join(",")}`, () => peopleByIds(deciders), { keepPrevious: true });
+  const said = (d: Schemas["RunDecision"]) => {
+    const by = run.checkpoints.find((c) => c.id === d.checkpoint_id)?.decided_by;
+    const name = by ? people.data?.get(by)?.name : undefined;
+    return decisionLine(d, name);
+  };
   return (
     <InspectorSection
       label="Decisions"
@@ -842,7 +854,7 @@ function RunDecisions({ run }: { run: RunOut }) {
         <ol className="space-y-1.5 text-[13px] leading-5 text-text">
           {q.data.map((d) => (
             <li key={d.checkpoint_id} data-testid="run-decision" className="break-words">
-              {d.summary}
+              {said(d)}
             </li>
           ))}
         </ol>
@@ -1332,15 +1344,26 @@ function ReviewScreenLine({ run, cp }: { run: RunOut; cp: CheckpointOut }) {
   const dates = datesCheck(cp);
   const blocking = (cp.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
   const toDecide = datesToDecide(cp);
+  // The architect's briefs could not be read (file-level problems): nothing to decide, only Send back.
+  const unreadable = !!check && check.problems.length > 0;
   return (
     <div id="decide" tabIndex={-1} className="flex flex-wrap items-center gap-2" data-testid="review-screen-line">
       <span className="font-semibold">
-        {check && plural(check.features.length, "feature")}
-        {check && blocking > 0 && ` · ${blocking} blocking`}
+        {unreadable && "The briefs could not be read"}
+        {check && !unreadable && plural(check.features.length, "feature")}
+        {check && !unreadable && blocking > 0 && ` · ${blocking} blocking`}
         {dates && plural(dates.items.length, "Now item")}
         {dates && ` · ${toDecide} to decide`}
       </span>
-      <span className="text-text2">{cp.can_decide ? "Waiting for you" : "Waits for the engineering lead"}</span>
+      <span className="text-text2">
+        {unreadable
+          ? cp.can_decide
+            ? "Send them back to the architect"
+            : "The engineering lead sends them back to the architect"
+          : cp.can_decide
+            ? "Waiting for you"
+            : "Waits for the engineering lead"}
+      </span>
       <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} variant={cp.can_decide ? "primary" : "secondary"}>
         {cp.can_decide ? "Review" : "View"}
       </LinkButton>
@@ -2017,7 +2040,7 @@ function AppliedEditsLine({ cp }: { cp: CheckpointOut }) {
   );
 }
 
-/** D4: "Sent back · 3 entries · View review": the review.yaml the agents got, opened in place. */
+/** D4: "Sent back · 3 entries · View review" (or "Sent back · <note> · View review"): the review.yaml the agents got, opened in place. */
 function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
   const [text, setText] = useState<string | null>(null);
   const entries = Array.isArray(cp.review?.items) ? cp.review.items.length : 0;
@@ -2039,7 +2062,15 @@ function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
         </pre>
       )}
       <p className="text-text2">
-        Sent back · {entries} {entries === 1 ? "entry" : "entries"} ·{" "}
+        {/* A send-back without entries says what was sent back (its note), never "0 entries". */}
+        Sent back ·{" "}
+        {entries > 0 ? (
+          `${entries} ${entries === 1 ? "entry" : "entries"} · `
+        ) : cp.kind !== "baseline_confirm" && cp.note ? (
+          <span className="text-text" data-testid="sent-back-what">
+            {cp.note} ·{" "}
+          </span>
+        ) : null}
         <button type="button" className="font-medium text-accent-ink hover:underline" aria-expanded={text != null} onClick={() => void toggle()}>
           View review
         </button>
@@ -2531,18 +2562,19 @@ function ConsolePanel({ answer: c, held = false }: { answer: ConsoleAnswer; held
  * qa-work-27: a run's only page action besides deciding is Delete, so it is a plain button (not a
  * menu holding one item); shown only to roles that may delete (#370), the dialog DeleteMenu's.
  */
-function DeleteButton(props: Parameters<typeof DeleteMenu>[0]) {
+function DeleteButton(props: Parameters<typeof DeleteMenu>[0] & { what?: string }) {
   const { can } = useMe();
   const [open, setOpen] = useState(false);
   if (!can(props.op)) return null;
   return (
     <>
-      <Button variant="danger" onClick={() => setOpen(true)} data-testid="run-delete">
+      {/* Secondary: deleting a run's record is never the page's main action. */}
+      <Button variant="secondary" onClick={() => setOpen(true)} data-testid="run-delete">
         Delete
       </Button>
       {open &&
         createPortal(
-          <DeleteDialog title={props.title} dependents={props.dependents} remove={props.remove} onClose={() => setOpen(false)} onDeleted={props.onDeleted} />,
+          <DeleteDialog title={props.title} what={props.what} dependents={props.dependents} remove={props.remove} onClose={() => setOpen(false)} onDeleted={props.onDeleted} />,
           document.body,
         )}
     </>

@@ -1376,6 +1376,38 @@ function seedEngCheckUnnamed(): Db {
   return db;
 }
 
+/** The "eng-check" run with its Engineering check's briefs changed by `change` (the scenarios below). */
+function seedEngCheckWith(label: string, change: (check: { features: { key: string }[]; problems: unknown[]; code_map_used: boolean }) => void): Db {
+  const db = seed();
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded(label, () => {
+    const r = seedEngCheckRun(db.runs!, runsContext(db));
+    const cp = r.checkpoints.find((c) => c.status === "pending" && c.kind === "eng_review")!;
+    const payload = cp.payload as { briefs_check: Parameters<typeof change>[0] };
+    payload.briefs_check = JSON.parse(JSON.stringify(payload.briefs_check));
+    change(payload.briefs_check);
+    return r;
+  });
+  return db;
+}
+
+/**
+ * "eng-check-unreadable" scenario: the "eng-check" run whose architect left no briefs file, so
+ * its Engineering check has no features and one file-level problem (as oracle.engineering.check's
+ * MISSING): the only way on is Send back.
+ */
+const seedEngCheckUnreadable = () =>
+  seedEngCheckWith("eng-check-unreadable", (check) => {
+    check.features = [];
+    check.problems = [{ code: "missing_file", message: "the segment left no tech_briefs.yaml" }];
+  });
+
+/** "eng-check-long-key" scenario: the "eng-check" run whose first brief has a long key with no break in it. */
+const seedEngCheckLongKey = () =>
+  seedEngCheckWith("eng-check-long-key", (check) => {
+    check.features[0].key = "f.guided_setup_with_test_order_and_sample_catalogue";
+  });
+
 /** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
 function seedEngCheckNoLead(): Db {
   const db = seed();
@@ -2655,7 +2687,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
         doc = {
           id: uuid(),
           slug,
-          title: fromPrd?.title ?? "Example product PRD",
+          title: fromPrd?.title ?? ctx.briefTitle?.(run.id) ?? "Example product PRD",
           status: "draft",
           kind: run.document_kind ?? "prd",
           template: run.template ?? null,
@@ -2739,6 +2771,11 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   };
   // C1 lane 2: the PRD a brief's run imports links the requests behind the brief (the API's
   // runs._link_requests, at segment end and on retry-draft-import).
+  // The brief a run was started from names its new document (the API's _intake_title).
+  ctx.briefTitle = (runId) => {
+    const [intakeId] = Object.entries(db.v2?.intake_runs ?? {}).find(([, r]) => r.run_id === runId) ?? [];
+    return (intakeId && db.v2?.intakes.find((i) => i.id === intakeId)?.title) || null;
+  };
   const importDraft = ctx.importDraft;
   ctx.importDraft = (slug, run, again) => {
     const imp = importDraft(slug, run, again);
@@ -2798,6 +2835,10 @@ function load(): Db {
             ? seedEngCheckUnmapped
           : scenario === "eng-check-unnamed"
             ? seedEngCheckUnnamed
+          : scenario === "eng-check-unreadable"
+            ? seedEngCheckUnreadable
+          : scenario === "eng-check-long-key"
+            ? seedEngCheckLongKey
           : scenario === "eng-dates"
             ? seedEngDates
           : scenario === "roadmap-items-console-held"

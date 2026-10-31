@@ -22,7 +22,7 @@ test("approvals with their notes are listed in the run's Decisions, as the agent
   await baseline.getByRole("button", { name: "Approve and continue" }).click();
   const items = section.getByTestId("run-decision");
   await expect(items).toHaveCount(1);
-  await expect(items.nth(0)).toHaveText("Baseline · approved by an owner · note: Name an owner for every goal");
+  await expect(items.nth(0)).toHaveText("Baseline · approved by Admin · note: Name an owner for every goal");
 
   // The feature set, approved with the note the later segments must respect.
   await page.getByRole("button", { name: "Refresh progress" }).click();
@@ -30,8 +30,8 @@ test("approvals with their notes are listed in the run's Decisions, as the agent
   await featureSet.getByLabel("Note for the agents").fill("Keep bulk import out of v1");
   await featureSet.getByRole("button", { name: "Approve and continue" }).click();
   await expect(items).toHaveCount(2);
-  await expect(items.nth(1)).toHaveText("Feature set · approved by an owner · note: Keep bulk import out of v1");
+  await expect(items.nth(1)).toHaveText("Feature set · approved by Admin · note: Keep bulk import out of v1");
   await expect(section).not.toContainText("No decisions yet");
-  // No member's name: the role only, as the agents see it.
+  // The page names who decided (the agents' list keeps the role); never an email.
   await expect(section).not.toContainText("@");
 });

@@ -95,9 +95,9 @@ test("qa-onboarding-31, rirs-20: no progress check before agents run; Refresh pr
   await expect(header(page).getByRole("button", { name: "Refresh progress" })).toHaveCount(0);
 });
 
-test("rirs-20: Delete on a finished run is a danger button", async ({ page }) => {
+test("rirs-20: Delete on a finished run is a secondary button (its confirm is the danger)", async ({ page }) => {
   await openRun(page, "Succeeded");
-  await expect(page.getByTestId("run-delete")).toHaveAttribute("data-variant", "danger");
+  await expect(page.getByTestId("run-delete")).toHaveAttribute("data-variant", "secondary");
 });
 
 test("rirs-6: who may decide a checkpoint, in words", async ({ page }) => {

@@ -49,7 +49,7 @@ test("Oracle follows up: a short answer gets one follow-up; Skip records it; off
   // Skip, record my answer records what was written; the follow-up stays in the thread.
   await first.getByRole("button", { name: "Skip, record my answer" }).click();
   await expect(first.getByTestId("answer")).toContainText("Checkout time.");
-  await expect(first.getByTestId("answer")).toContainText("Your decision");
+  await expect(first.getByTestId("answer")).toContainText("Your answer");
   await expect(follow).toContainText(MOCK_TEAM_FOLLOW_UP);
   // Oracle moves to the next question asked of me.
   await expect(second.getByLabel("Your answer")).toBeVisible();

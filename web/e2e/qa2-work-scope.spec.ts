@@ -197,7 +197,7 @@ test.describe("phone", () => {
   test("rirs-24: the run's full name shows on the page, wrapped", async ({ page }) => {
     await seeded(page, "feature-set");
     await openReview(page);
-    const name = page.getByRole("link", { name: "Saved addresses PRD · Baseline to PRD", exact: true });
+    const name = page.getByRole("link", { name: "Saved addresses · Baseline to PRD", exact: true });
     await expect(name).toHaveAttribute("data-testid", "review-back");
     await expect(name).toBeVisible();
     expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

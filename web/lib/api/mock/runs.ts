@@ -174,6 +174,11 @@ export interface RunsContext {
   sourceVersion: (documentId: string, number: number | null) => VersionSource | string;
   /** E1 part B: the PRD version's draft items a Build roadmap run may reuse, or null. */
   draftItemsToReuse?: (documentId: string, version: number) => { version: number; ready_at: string | null } | null;
+  /**
+   * The title the person typed on the brief a run was started from (Draft with Oracle), the one
+   * its import gives a new document: as the API's _Refs.pending. Absent or null: no brief.
+   */
+  briefTitle?: (runId: string) => string | null;
   /** Imports a run's draft as the document's next version. */
   importDraft: (
     slug: string,
@@ -440,8 +445,10 @@ function json(status: number, body: unknown): Response {
 const fail = (status: number, detail: string) => json(status, { detail });
 
 /** qa-company-17: the run's document by its own title, as the API's RunSummary.document_title. */
-function docTitle(ctx: RunsContext, r: { document_id?: string | null }): string | null {
-  return (r.document_id && ctx.documents.find((d) => d.id === r.document_id)?.title) || null;
+function docTitle(ctx: RunsContext, r: { id: string; document_id?: string | null }): string | null {
+  if (r.document_id) return ctx.documents.find((d) => d.id === r.document_id)?.title || null;
+  // A brief's run before its import: the title the person typed, never the slug in words.
+  return ctx.briefTitle?.(r.id) ?? null;
 }
 
 function summary(r: RunOut): Schemas["RunSummary"] {

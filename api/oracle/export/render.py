@@ -109,6 +109,9 @@ class ExportVersion:
     # (unverified, withdrawn) that ``sections`` carry a marker after.
     stored_sections: list[Section] = field(default_factory=list)
     date_marks: list = field(default_factory=list)
+    # A template or theme preview: its times month first ("Oct 30, 1:28 PM PDT"), as people
+    # read them on a page, not an export's "2026-10-30 13:28 PDT" (production minors 22).
+    dates_in_words: bool = False
     # The Company time zone the export's dates are shown in (#463).
     zone: str = company_time.DEFAULT_ZONE
     # O5: the company's branding (oracle.branding.Brand): the header's logo and the accent.
@@ -1141,6 +1144,14 @@ def build_themed_context(ev: ExportVersion) -> dict:
     if features.get("appendix_break"):
         body_classes.append("appendix-break")
     running = running_header(theme.css)
+
+    def when(value: datetime | None) -> str:
+        if value is None:
+            return ""
+        if ev.dates_in_words:
+            return company_time.moment_in_words(value, ev.zone)
+        return _format_dt(value, ev.zone)
+
     return {
         "title": ev.title,
         "slug": ev.document.slug,
@@ -1148,9 +1159,9 @@ def build_themed_context(ev: ExportVersion) -> dict:
         "number": v.number,
         "latest_number": ev.latest_number,
         "status": ev.status,
-        "as_of": v.snapshot or _format_dt(ev.date, ev.zone),
-        "imported_at": _format_dt(v.created_at, ev.zone),
-        "approved_at": _format_dt(v.approved_at, ev.zone),
+        "as_of": v.snapshot or when(ev.date),
+        "imported_at": when(v.created_at),
+        "approved_at": when(v.approved_at),
         "snapshot": v.snapshot,
         "template": ev.document.template,
         "template_name": ev.template_name,

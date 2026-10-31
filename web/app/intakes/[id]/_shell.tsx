@@ -19,7 +19,7 @@ import { DraftSheet } from "./_draft-sheet";
 import { FindingsTab } from "./_findings";
 import { GapsTab } from "./_gaps";
 import { IntakeInspector, readiness, readinessTitle } from "./_inspector";
-import { OPEN_GAP, dayMonth, gateReason, statusChip, tally, unknownNote, type Batch, type Summary } from "./_lib";
+import { OPEN_GAP, dayMonth, gateReason, openCriticalCount, statusChip, tally, unknownNote, type Batch, type Summary } from "./_lib";
 import { ProposalsTab } from "./_proposals";
 import { QuestionsTab } from "./_questions";
 import { ReadLine } from "./_read";
@@ -172,7 +172,7 @@ export function BeforeDrafting({ id }: { id: string }) {
   const mayDelete = can("delete_intake");
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
-  const reason = blocked ? gateReason(gate.blocking_gap_ids.length, gate.open_critical) : null;
+  const reason = blocked ? gateReason(gate.blocking_gap_ids.length, openCriticalCount(s)) : null;
   // qa-work-2: the chip and the counts read one tally of the asked questions.
   const status = statusChip(s, tally(s, batchesQ.data ?? undefined));
   const openGaps = s.gaps.filter((g) => OPEN_GAP.has(g.status)).length;
@@ -380,7 +380,7 @@ function PhoneReadiness({ summary: s, batches, onOpen }: { summary: Summary; bat
         </Chip>
       </div>
       <p className="text-sm text-text2" data-testid="intake-readiness-counts">
-        {counts.open} open · {counts.answered} answered · {s.readiness.open_critical} critical open
+        {counts.open} open · {counts.answered} answered · {openCriticalCount(s)} critical open
       </p>
       {note && <p className="text-[13px] text-text2">{note}</p>}
       <Button className="w-full" onClick={onOpen}>

@@ -422,9 +422,9 @@ function ChangeSheet({
   const [date, setDate] = useState(current?.supports_date ?? "");
   const ready = !!reference.trim() && DATE_RE.test(date);
   return (
-    <Sheet open title={`Change the date: ${item.title}`} onClose={onClose} testId="date-change">
+    <Sheet open dialog title={`Change the date: ${item.title}`} onClose={onClose} testId="date-change">
       <form
-        className="space-y-3 px-4 py-3"
+        className="space-y-3 px-4 py-3 sm:w-[560px] sm:max-w-full"
         onSubmit={(e) => {
           e.preventDefault();
           if (ready) onSave({ kind, reference: reference.trim(), supports_date: date });
@@ -478,9 +478,9 @@ function NoDateSheet({
 }) {
   const [reason, setReason] = useState("");
   return (
-    <Sheet open title={`No date: ${item.title}`} onClose={onClose} testId="date-none">
+    <Sheet open dialog title={`No date: ${item.title}`} onClose={onClose} testId="date-none">
       <form
-        className="space-y-3 px-4 py-3"
+        className="space-y-3 px-4 py-3 sm:w-[560px] sm:max-w-full"
         onSubmit={(e) => {
           e.preventDefault();
           if (reason.trim()) onSave(reason.trim());

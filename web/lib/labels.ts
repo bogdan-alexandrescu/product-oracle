@@ -30,10 +30,23 @@ function slugWords(slug: string): string {
 type RunNamed = Pick<RunOut, "flow_title"> & Partial<Pick<RunOut, "document_slug" | "document_kind">> & { document_title?: string | null };
 
 /**
- * A run by its document and its flow: "Usage alerts PRD · Roadmap from an approved PRD"; the
- * flow alone for a run with no document. `title` is the document's title where the caller has it.
+ * A run by its document's own title and its flow: "Usage alerts · Roadmap from an approved PRD"
+ * (no kind word added: the title is the document's, as written); the flow alone for a run with
+ * no document. `title` is the document's title where the caller has it.
  */
 export function runLabel(run: RunNamed, title?: string | null): string {
-  const named = title ?? run.document_title ?? (run.document_slug ? slugWords(run.document_slug) : null);
-  return named ? `${docLabel({ title: named, kind: run.document_kind })} · ${run.flow_title}` : run.flow_title;
+  const named = (title ?? run.document_title)?.trim() || (run.document_slug ? slugWords(run.document_slug) : null);
+  return named ? `${named} · ${run.flow_title}` : run.flow_title;
+}
+
+/**
+ * A run decision's line naming who decided (review minors 2): "<what> · <how> · note: …" with
+ * the "how" built from the decision's fields, so the name stands in for the role whatever the
+ * role phrase reads; no name, the API's line as it is.
+ */
+export function decisionLine(d: Pick<Schemas["RunDecision"], "summary" | "status" | "via">, name: string | null | undefined): string {
+  if (!name) return d.summary;
+  const [what, , ...rest] = d.summary.split(" · ");
+  const how = `${d.status.replace("_", " ")} by ${name}${d.via === "swarmcloud_console" ? " in SwarmCloud's console" : ""}`;
+  return [what, how, ...rest].join(" · ");
 }
