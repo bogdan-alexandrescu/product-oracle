@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 
 /*
  * Fourth QA pass on Company › Decisions (Detailed), driven through the UI on the default mock
@@ -157,8 +157,9 @@ test.describe("desktop", () => {
     await expect(dialog).toHaveCount(0);
     await expect(row(page, title)).toContainText("Proposed");
 
-    // A commenter, in another tab of the same browser, opens it.
-    const other = await page.context().newPage();
+    // A commenter signs in on the same browser and opens it.
+    await signOut(page);
+    const other = page;
     await login(other, COMMENTER);
     await other.goto("/company/decisions?state=all");
     await row(other, title).click();

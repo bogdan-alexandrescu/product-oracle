@@ -149,11 +149,11 @@ test.describe("desktop", () => {
     await dialog.getByRole("radio", { name: /^Board update/ }).check();
     const draft = dialog.getByRole("button", { name: /^Draft with Oracle/ });
     await expect(draft).toBeEnabled();
-    await dialog.getByLabel("From").fill("2026-10-20");
-    await dialog.getByLabel("To").fill("2026-10-01");
+    await dialog.getByLabel("From", { exact: true }).fill("2026-10-20");
+    await dialog.getByLabel("To", { exact: true }).fill("2026-10-01");
     await expect(dialog.getByTestId("update-period-error")).toHaveText("The period starts after it ends.");
     await expect(draft).toBeDisabled();
-    await dialog.getByLabel("To").fill("2026-10-21");
+    await dialog.getByLabel("To", { exact: true }).fill("2026-10-21");
     await expect(dialog.getByTestId("update-period-error")).toHaveCount(0);
     await expect(draft).toBeEnabled();
   });
