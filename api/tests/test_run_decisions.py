@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import select, update
 
 from oracle.auth.models import User
+from oracle.auth.service import create_api_token
 from oracle.mcp.curated import CURATED
 from oracle.runs import flows
 from oracle.runs.models import Checkpoint
@@ -359,6 +360,49 @@ async def test_a_held_console_approval_is_absent_until_an_approver_confirms_it(
     assert d["summary"].startswith(
         "Baseline · approved by viewer.console@example.com, a viewer in SwarmCloud's console"
     )
+
+
+async def test_a_console_approval_held_before_its_author_was_kept_names_them(
+    client, owner, swarmcloud
+):
+    """A console answer held before the hold kept its author's id (only their email): the
+    approver who confirms it still lists the console's author, matched by that email."""
+    tenant_id, auth = owner
+    swarm = swarmcloud
+    await _member(tenant_id, "viewer.console@example.com", "viewer")
+    run = await _at_baseline(client, auth, swarm)
+    cp = pending(run)
+    swarm.steps_per_poll = 0
+    swarm.console_answer("wf_1", "baseline-review1", "MERGE", by="viewer.console@example.com")
+    await tick(client, auth)
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(Checkpoint, uuid.UUID(cp["id"]))
+        wait = dict(row.payload["wait"])
+        wait["console"] = {k: v for k, v in wait["console"].items() if k != "member_id"}
+        row.payload = {**row.payload, "wait": wait}
+        await s.commit()
+    run = await get(client, auth, run["id"])
+    run = await decide(client, auth, run, "confirm")
+    [d] = await decisions(client, auth, run["id"])
+    assert d["via"] == "swarmcloud_console" and d["decided_by_role"] == "viewer"
+    assert d["decided_by_name"] == "viewer.console@example.com"
+
+
+async def test_a_personal_tokens_decision_names_its_owner(client, owner, runtime):
+    """A personal API token acts as its member: the decision names the member, not the
+    token."""
+    tenant_id, auth = owner
+    await named(tenant_id, "approver", "pat.approver@example.com", "Pat Example")
+    async with tenant_session(tenant_id) as s:
+        pat = await s.scalar(select(User).where(User.email == "pat.approver@example.com"))
+        _, raw = await create_api_token(s, "pat-laptop", user_id=pat.id)
+        await s.commit()
+    run = await started(client, auth)
+    run = await at(client, auth, run["id"], "baseline_confirm")
+    run = await decide(client, {"Authorization": f"Bearer {raw}"}, run, note=NOTE)
+    [d] = await decisions(client, auth, run["id"])
+    assert d["decided_by_role"] == "approver" and d["decided_by_name"] == "Pat Example"
+    assert d["summary"].startswith("Baseline · approved by Pat Example, an approver")
 
 
 async def test_a_counted_console_answer_is_listed_as_the_consoles(client, owner, swarmcloud):

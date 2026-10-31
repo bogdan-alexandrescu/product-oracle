@@ -1,6 +1,7 @@
 import { expect, test } from "./test";
 
-import { login } from "./helpers";
+import { login, openSeeded, seedConsoleHeld } from "./helpers";
+import { CONSOLE_HELD_RUN_ID } from "../lib/api/mock/runs";
 
 // D11 Checkpoint decisions over MCP: the run page's inspector lists each decision of the
 // run in the words the run's agents read through get_checkpoint_review.
@@ -34,4 +35,22 @@ test("approvals with their notes are listed in the run's Decisions, as the agent
   await expect(section).not.toContainText("No decisions yet");
   // The page names who decided (the agents' list names them too, beside the role); never an email.
   await expect(section).not.toContainText("@");
+});
+
+// decider-names-api review: protects = a console approval an approver confirms is listed as its
+// author's, by the name the API gives, not the confirmer's; fails_when = the page names whoever
+// confirmed it (the checkpoint's decided_by).
+test("a confirmed console approval names who answered in the console, not who confirmed it", async ({ page }) => {
+  await login(page);
+  await openSeeded(page, seedConsoleHeld, `/runs/${CONSOLE_HELD_RUN_ID}`);
+  const decide = page.getByRole("group", { name: "Decide: Roadmap items" });
+  const reason = decide.getByTestId("gate-reason").filter({ hasText: "Usage export" });
+  await reason.getByRole("button", { name: "Waive…" }).click();
+  await reason.getByRole("textbox").fill("Section lands in the next PRD version");
+  await reason.getByRole("button", { name: "Waive", exact: true }).click();
+  await decide.getByRole("button", { name: "Confirm approval" }).click();
+  await expect(page.getByTestId("segment-roadmap_items").getByTestId("checkpoint-roadmap_items")).toContainText("Approved");
+
+  const section = page.getByRole("complementary", { name: "Run" }).filter({ visible: true }).getByTestId("run-decisions");
+  await expect(section.getByTestId("run-decision")).toHaveText(["Roadmap items was approved by Approver in SwarmCloud's console."]);
 });
