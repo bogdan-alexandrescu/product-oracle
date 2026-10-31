@@ -32,6 +32,8 @@ export type BrandingDb = {
   revision: number;
   /** The logos' bytes, base64, by sha256. */
   assets: Record<string, string>;
+  /** An owner saved the display name (the API's stored display_name); unset, it reads as the company's name. */
+  named?: boolean;
 };
 
 /** The mock company's name (fixtures: "Example Co"). */
@@ -158,7 +160,7 @@ export async function routeBranding(b: BrandingDb, role: Role, req: Request, p: 
     if (role !== "owner") return forbidden();
     const checked = validate(JSON.parse((await req.text()) || "null") as Partial<BrandingIn> | null);
     if ("detail" in checked) return json(422, { detail: checked.detail });
-    Object.assign(b, checked.ok);
+    Object.assign(b, checked.ok, { named: true });
     b.revision += 1;
     return json(200, brandingOut(b, role));
   }
@@ -202,9 +204,22 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&
 export function brandHeaderHtml(b: BrandingDb, background = "#ffffff"): string {
   const logo = b.logo_dark && darkBackground(background) ? b.logo_dark : b.logo;
   const bytes = logo ? b.assets[logo.sha256] : undefined;
-  const img = bytes ? `<img class="brand-logo" src="data:image/png;base64,${bytes}" alt="${esc(b.display_name)}" height="40">` : "";
-  return `<header class="brand-header">${img}<span class="brand-name">${esc(b.display_name)}</span></header>`;
+  const name = exportName(b);
+  const img = bytes ? `<img class="brand-logo" src="data:image/png;base64,${bytes}" alt="${esc(name)}" height="40">` : "";
+  if (!img && !name) return "";
+  return `<header class="brand-header">${img}${name ? `<span class="brand-name">${esc(name)}</span>` : ""}</header>`;
 }
+
+/**
+ * The name an export prints (as the API's oracle.branding.export_name): the saved display name,
+ * else the company's, never the seed's placeholder (e2e-pdf-export: none is printed then).
+ */
+export function exportName(b: BrandingDb): string {
+  return b.named || b.display_name !== SEED_PLACEHOLDER_NAME ? b.display_name : "";
+}
+
+/** The API seed's stand-in company name (oracle.models.PLACEHOLDER_NAME). */
+export const SEED_PLACEHOLDER_NAME = "Example Co";
 
 /** The accent mapped onto the export's tokens, when one is set. */
 export function brandStyleHtml(b: BrandingDb): string {

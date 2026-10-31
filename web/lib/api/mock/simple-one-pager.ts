@@ -44,6 +44,8 @@ export interface OnePagerCtx {
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
   /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
   planPages?: string[];
+  /** e2e-pdf-export ("one-pager-overflow"): the pages the one-pager runs to past its one (the API lays it out). */
+  overflowPages?: number;
 }
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -500,10 +502,16 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   if (p[2] === "one-pagers" && m === "GET") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
     if (p[4] === "pdf") {
-      const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : ["One page"];
+      const over = !ctx.planPages?.length && ctx.overflowPages ? ctx.overflowPages : 0;
+      const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : over ? Array.from({ length: over }, (_, i) => `Page ${i + 1}`) : ["One page"];
+      // As the API: a one-pager past its page says so in X-Oracle-Overflow-Pages, never in the PDF.
       return new Response(`%PDF-1.7\n${pages.map((t, i) => `% page ${i + 1}: ${t}\n`).join("")}`, {
         status: 200,
-        headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${db.doc.slug}-v${db.version}-one-pager.pdf"` },
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": `attachment; filename="${db.doc.slug}-v${db.version}-one-pager.pdf"`,
+          ...(over ? { "x-oracle-overflow-pages": String(over) } : {}),
+        },
       });
     }
     return json(200, onePager(db, ctx));

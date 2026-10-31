@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { InlineError, Menu } from "@/components/review/parts";
 import { Button, Chip } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
+import { downloadedNote } from "@/lib/export-note";
 import { formatDate } from "@/lib/format";
 
 // O1f: Full (as before), Brief and Deck. Full keeps its labels ("Export PDF").
@@ -45,17 +46,23 @@ type Format = "html" | "pdf" | "md" | "pptx";
 export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: number; hasBrief?: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // e2e-pdf-export: a download closes the menu and says so a few seconds, as the one-pager's.
+  const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => {
+    if (!saved) return;
+    const t = window.setTimeout(() => setSaved(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [saved]);
 
-  async function download(layer: Layer, format: Format) {
+  async function download(layer: Layer, format: Format, label: string, close: () => void) {
     setBusy(`${layer}.${format}`);
     setError(null);
     try {
-      const blob = await unwrap<Blob>(
-        api.GET("/v1/documents/{doc}/versions/{n}/export", {
-          params: { path: { doc, n }, query: { format, layer } },
-          parseAs: "blob",
-        }),
-      );
+      const call = api.GET("/v1/documents/{doc}/versions/{n}/export", {
+        params: { path: { doc, n }, query: { format, layer } },
+        parseAs: "blob",
+      });
+      const blob = await unwrap<Blob>(call);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -64,6 +71,8 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      close();
+      setSaved(downloadedNote(label, (await call).response, "shorten it, or pick a theme without a page limit"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed.");
     } finally {
@@ -76,29 +85,41 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
   // row's own (MD, PPTX). The panel opens clear of the review panel's totals.
   const COLUMN: Record<Format, string> = { pdf: "col-start-2", html: "col-start-3", md: "col-start-4", pptx: "col-start-4" };
   return (
-    <Menu label="Export" avoid='[data-testid="review-panel"]'>
-      <div className="flex flex-col gap-2.5">
-        <div className="grid grid-cols-[auto_repeat(3,minmax(3.5rem,auto))] items-center gap-x-1.5 gap-y-2.5">
-          {groups.map((g) => (
-            <div key={g.layer} role="group" aria-label={`Export ${g.label.toLowerCase()}`} className="contents">
-              <span className="col-start-1 pr-2.5 text-[13px] font-semibold tracking-[0.02em] text-text2">{g.label}</span>
-              {g.formats.map((f) => (
-                <Button
-                  key={f.format}
-                  disabled={busy !== null}
-                  onClick={() => download(g.layer, f.format)}
-                  aria-label={g.layer === "full" ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`}
-                  className={`${COLUMN[f.format]} min-w-14`}
-                >
-                  {busy === `${g.layer}.${f.format}` ? "…" : f.label}
-                </Button>
+    <>
+      <Menu label="Export" avoid='[data-testid="review-panel"]'>
+        {(close) => (
+          <div className="flex flex-col gap-2.5">
+            <div className="grid grid-cols-[auto_repeat(3,minmax(3.5rem,auto))] items-center gap-x-1.5 gap-y-2.5">
+              {groups.map((g) => (
+                <div key={g.layer} role="group" aria-label={`Export ${g.label.toLowerCase()}`} className="contents">
+                  <span className="col-start-1 pr-2.5 text-[13px] font-semibold tracking-[0.02em] text-text2">{g.label}</span>
+                  {g.formats.map((f) => (
+                    <Button
+                      key={f.format}
+                      disabled={busy !== null}
+                      onClick={() => download(g.layer, f.format, f.label, close)}
+                      aria-label={g.layer === "full" ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`}
+                      className={`${COLUMN[f.format]} min-w-14`}
+                    >
+                      {busy === `${g.layer}.${f.format}` ? "…" : f.label}
+                    </Button>
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
-        </div>
-        {error && <InlineError>{error}</InlineError>}
-      </div>
-    </Menu>
+            {error && <InlineError>{error}</InlineError>}
+          </div>
+        )}
+      </Menu>
+      {saved && (
+        <p
+          role="status"
+          className="fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-[15px] font-semibold shadow-md"
+        >
+          {saved}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -141,7 +162,11 @@ export function ApproveButton({
     setSaving(true);
     setError(null);
     try {
-      await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } }));
+      await unwrap(
+        api.POST("/v1/documents/{doc}/versions/{n}/approve", {
+          params: { path: { doc, n } },
+        }),
+      );
       setConfirming(false);
       onApproved();
     } catch (e) {
@@ -156,14 +181,7 @@ export function ApproveButton({
     // (and where to fix it) takes a line of its own below them, right-aligned (left on a phone).
     return (
       <div className="contents" data-testid="approve-blocked">
-        <Button
-          variant="primary"
-          icon="check"
-          disabled
-          aria-describedby="approve-blocked-reason"
-          title={blockedReason}
-          className="max-[600px]:mr-auto"
-        >
+        <Button variant="primary" icon="check" disabled aria-describedby="approve-blocked-reason" title={blockedReason} className="max-[600px]:mr-auto">
           Approve version
         </Button>
         <span className="flex basis-full justify-end max-[600px]:justify-start">

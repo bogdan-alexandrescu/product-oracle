@@ -5622,6 +5622,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         planPages: onePagerDb.doc.slug === PLAN_PRD_SLUG && db.simple_roadmap?.plan && !db.simple_roadmap.plan.undated
           ? planMilestones().map((m) => `${m.code} ${m.name}`)
           : undefined,
+        overflowPages: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow" ? 2 : undefined,
       },
       r,
       p,

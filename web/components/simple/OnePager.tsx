@@ -13,6 +13,7 @@ import { quoteLine } from "@/components/simple/quote-line";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
+import { downloadedNote } from "@/lib/export-note";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type View = Schemas["OnePagerOut"];
@@ -139,11 +140,12 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   // 2026-10-30: the bets whose flow was asked for here ("Draw the flow"): their flow row shows while Oracle draws.
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
-  const [saved, setSaved] = useState(false);
+  // e2e-pdf-export: what the download says ("PDF downloaded", and its pages past one).
+  const [saved, setSaved] = useState<string | null>(null);
   // qa-simple-prd-25: "PDF downloaded" shows a few seconds, then goes.
   useEffect(() => {
     if (!saved) return;
-    const t = window.setTimeout(() => setSaved(false), 4000);
+    const t = window.setTimeout(() => setSaved(null), 4000);
     return () => window.clearTimeout(t);
   }, [saved]);
   // qa-simple-prd-24: leaving full screen (Esc) ends presenting too.
@@ -295,7 +297,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   async function exportPdf() {
     setError(null);
     try {
-      const blob = await unwrap(api.GET("/v1/simple/one-pagers/{doc}/pdf", { params: { path: { doc } }, parseAs: "blob" })) as Blob;
+      const call = api.GET("/v1/simple/one-pagers/{doc}/pdf", { params: { path: { doc } }, parseAs: "blob" });
+      const blob = (await unwrap(call)) as Blob;
       const name = `${v.document.title.replace(/[\\/:*?"<>|]+/g, " ").trim()} v${v.version} one-pager.pdf`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -303,7 +306,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setSaved(true);
+      setSaved(downloadedNote("PDF", (await call).response, "shorten it to fit one"));
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -375,7 +378,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     </>
   );
   const toast = saved && (
-    <p role="status" className="simple-noprint fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-[15px] font-semibold shadow-md">PDF downloaded</p>
+    <p role="status" className="simple-noprint fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-[15px] font-semibold shadow-md">{saved}</p>
   );
 
   return (
