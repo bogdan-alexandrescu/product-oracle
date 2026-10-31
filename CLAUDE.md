@@ -28,3 +28,5 @@ For every new or existing feature:
 
 SwarmCloud lanes cannot deploy: they prove the feature with a Playwright test that drives
 the built app's UI.
+
+SwarmCloud lanes follow docs/agents/lane-rules.md and .claude/rules/oracle-product.md.
