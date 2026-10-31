@@ -12,7 +12,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * version and day move on, and the margin says where the edits went. -26: in a meeting the
  * one-pager's actions, title and card share one left edge. -27: on a phone the one-pager card
  * pads once, so its text has room. -35: with Ask Oracle open at 1440 "Waiting for you" stays on
- * one line and the List/Board/By meeting switch stays beside the filters.
+ * one line and the List/Board/By meeting switch stays beside the filters. -32: By meeting, a
+ * meeting's card lists the comments its minutes list.
  */
 
 const sheet = (page: Page) => page.getByRole("dialog", { name: "Start a review" });
@@ -147,5 +148,19 @@ for (const phone of [false, true]) {
         expect(sw.y).toBeLessThan(filters.y + filters.height);
         expect(sw.x).toBeGreaterThan(filters.x);
       });
+
+    test("qa4-simple-decide-32: By meeting, a meeting's card lists the comments its minutes list", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/meetings");
+      await tap(page.getByTestId("meetings-past").getByRole("link", { name: "Review: Usage alerts" }).first());
+      await expect(page.getByTestId("end-screen")).toBeVisible();
+      const inMinutes = await page.getByTestId("minutes-comments").locator("li").allInnerTexts();
+      expect(inMinutes.length).toBeGreaterThan(0);
+      await page.goto("/simple/decisions");
+      await page.getByTestId("decisions-view-meetings").click();
+      const group = page.getByTestId("meeting-group").filter({ has: page.getByRole("link", { name: "Review: Usage alerts" }) });
+      await expect(group.getByRole("heading", { name: "Comments" })).toBeVisible();
+      await expect(group.getByTestId("meeting-group-comments").locator("li")).toHaveText(inMinutes);
+    });
   });
 }
