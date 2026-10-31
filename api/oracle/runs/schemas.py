@@ -302,6 +302,9 @@ class DraftImport(BaseModel):
     # How many problems there were when only the first are kept (rejection.MAX_PROBLEMS).
     problems_total: int | None = None
     summary: str | None = None
+    # #306: an imported draft's codes without their names, one plain line per rule
+    # (oracle.docs.named_codes); the findings when Oracle sends the draft back.
+    code_names: list[str] = []
     # Provenance recorded on the version (a roadmap's PRD version).
     source: VersionSource | None = None
     prd_links: PrdLinks | None = None

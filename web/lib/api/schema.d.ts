@@ -21682,6 +21682,11 @@ export interface components {
             problems_total?: number | null;
             /** Summary */
             summary?: string | null;
+            /**
+             * Code Names
+             * @default []
+             */
+            code_names: string[];
             source?: components["schemas"]["VersionSource"] | null;
             prd_links?: components["schemas"]["PrdLinks"] | null;
         };
