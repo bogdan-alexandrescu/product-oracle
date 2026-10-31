@@ -9,7 +9,8 @@ export type ToastAsk = {
   /** One action beside the message ("Undo"); the toast closes when it is pressed. */
   action?: { label: string; onClick: () => void };
   /** "corner": bottom-right on a desktop, clear of a wide chart (Simple's Roadmap, #34);
-   * "rail": bottom-left on a desktop, over Simple's rail, clear of the main column's buttons
+   * "rail": bottom-left on a desktop, just right of Simple's rail (qa4-simple-home-11: never over
+   * its Ask Oracle and account), clear of the main column's buttons on the right
    * (qa-simple-home-30); a phone keeps the centred strip. Every other toast stays centred. */
   place?: "corner" | "rail";
 };
@@ -65,7 +66,7 @@ export function ToastHost() {
     // While a sheet or a modal dialog is open, the message moves to the top, clear of its controls;
     // the Roadmap's own messages sit in the corner on a desktop.
     <div
-      className={`pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? " min-[601px]:inset-x-auto min-[601px]:left-4 min-[601px]:justify-start min-[601px]:px-0" : ""}`}
+      className={`pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}${shown?.place === "rail" ? " min-[601px]:inset-x-auto min-[601px]:left-[calc(var(--simple-rail-width,232px)+16px)] min-[601px]:justify-start min-[601px]:px-0" : ""}`}
     >
       {shown && (
         <div

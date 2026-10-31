@@ -266,7 +266,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
   const paid = entity("goal", "g.paid-conversion", "Grow paid conversion", {
     body: "More trial accounts move to a paid plan.",
     attrs: {
-      weight: 0.3, metric: "Trial to paid rate", unit: "%", comparison: "at_least", target: 12, current: 9.4,
+      // qa4-simple-home-6: its starting value, as activation has one (the first of its monthly reads below).
+      weight: 0.3, metric: "Trial to paid rate", unit: "%", comparison: "at_least", target: 12, start: 11.2, current: 9.4,
       current_as_of: "2026-10-01", horizon: "medium", due: "2027-06-30",
     },
     confidence: 0.66,

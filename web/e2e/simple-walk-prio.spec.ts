@@ -274,7 +274,7 @@ test("the changes-in-review notice never pushes the goal band down", async ({ pa
   await expect(page.getByTestId("home-in-review")).toHaveCount(0);
   const before = (await goals.boundingBox())!;
   await expect(page.getByTestId("home-in-review")).toBeVisible({ timeout: 8000 });
-  await expect(page.getByTestId("home-in-review")).toHaveText(/^(1 change is in review\. You see the published plan until it is approved\.|\d+ changes are in review\. You see the published plan until they are approved\.)$/);
+  await expect(page.getByTestId("home-in-review")).toHaveText(/^(1 change is not approved yet\. You see the published plan until it is\.|\d+ changes are not approved yet\. You see the published plan until they are\.)$/);
   expect(Math.abs((await goals.boundingBox())!.y - before.y)).toBeLessThanOrEqual(1);
   await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
 });

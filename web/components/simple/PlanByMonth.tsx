@@ -96,8 +96,11 @@ export function PlanByMonth({
                 className={`${GRID} items-center rounded-md py-1 hover:bg-surface2`}
               >
                 <span className="flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2">
-                  {/* qa-docs-10: the label wraps in full, never cutting the name or its count. */}
-                  <span className="font-semibold [overflow-wrap:anywhere]" data-testid={`${testId}-label`}>{label}</span>
+                  {/* qa-docs-10: the label wraps in full, never cutting the name or its count; on Home (named),
+                      qa4-simple-home-7: one line, an ellipsis when it does not fit, the whole label in its tooltip. */}
+                  <span className={`font-semibold ${named ? "max-w-full min-w-0 truncate" : "[overflow-wrap:anywhere]"}`} title={named ? label : undefined} data-testid={`${testId}-label`}>
+                    {label}
+                  </span>
                   {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
                 </span>
                 <span className="relative h-7">

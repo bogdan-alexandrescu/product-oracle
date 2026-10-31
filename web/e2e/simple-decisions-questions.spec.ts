@@ -57,7 +57,7 @@ for (const phone of [false, true]) {
         await expect(first.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
         await expect(first.getByTestId("question-due")).toHaveAttribute("data-late", "true");
         await expect(first).toContainText("Blocks M1: F-03 Health log");
-        await expect(first).toContainText("Guided setup recommends: 9:00 in each person's zone");
+        await expect(first).toContainText("Recommended in Guided setup: 9:00 in each person's zone");
         await expect(mine.getByTestId("question-row").nth(1).getByTestId("question-due")).toHaveText("Due Mon Oct 26");
         await mine.getByRole("button", { name: "Show 4 more" }).click();
         await expect(mine.getByTestId("question-row")).toHaveCount(9);
@@ -71,7 +71,7 @@ for (const phone of [false, true]) {
         await expect(region(page, "Review: Usage alerts")).toBeVisible();
         // Ask Oracle opens Simple's Ask panel with the question in its box.
         await row(page, "Q5").getByRole("button", { name: "Ask Oracle" }).click();
-        await expect(page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true })).toHaveValue(/^Q5 Reminder default time in Guided setup: what should we decide\?/);
+        await expect(page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true })).toHaveValue(/^What should we decide on Reminder default time, in Guided setup/);
       });
 
       /**
