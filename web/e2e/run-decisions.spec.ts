@@ -32,6 +32,6 @@ test("approvals with their notes are listed in the run's Decisions, as the agent
   await expect(items).toHaveCount(2);
   await expect(items.nth(1)).toHaveText("Feature set and dependencies was approved by Admin. Note: Keep bulk import out of v1.");
   await expect(section).not.toContainText("No decisions yet");
-  // The page names who decided (the agents' list keeps the role); never an email.
+  // The page names who decided (the agents' list names them too, beside the role); never an email.
   await expect(section).not.toContainText("@");
 });
