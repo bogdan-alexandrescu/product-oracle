@@ -30,6 +30,7 @@ from tests.test_mcp import api_token, mcp_client
 from tests.test_roadmap import (
     ITEMS,
     PRD,
+    PRD_TITLE,
     ROADMAP,
     ROADMAP_MD,
     approved_prd,
@@ -114,6 +115,35 @@ async def test_dependents_resolver_lists_what_goes_along(client, owner, runtime)
     runs = {d["id"] for d in body["items"] if d["type"] == "run"}
     assert run["id"] in runs
     assert body["published"] is False
+
+
+async def test_dependents_name_each_run_by_its_day_and_what_it_wrote(client, owner, runtime):
+    """qa4-docs-26: the delete dialog says which run goes and which document it wrote."""
+    _, auth, run = await _world(client, owner, runtime)
+    body = (await client.get(f"/v1/documents/{PRD}/dependents", headers=auth)).json()
+    roadmap = next(d for d in body["items"] if d["slug"] == ROADMAP)
+    item = next(d for d in body["items"] if d["id"] == run["id"])
+    assert item["wrote"] == roadmap["title"]
+    assert datetime.fromisoformat(item["created_at"]) <= datetime.now(UTC)
+
+
+async def test_regenerate_estimate_names_inputs_by_title_and_version_never_slug(
+    client, owner, runtime
+):
+    """qa4-docs-23: "Checkout redesign PRD, latest version (v1)", no slug in brackets."""
+    tenant_id, auth = owner
+    await seed_baseline(tenant_id)
+    await approved_prd(client, auth)
+    await built_roadmap(client, auth, runtime)
+    est = await client.post(f"/v1/documents/{PRD}/regenerate/estimate", json={}, headers=auth)
+    assert est.status_code == 200, est.text
+    assert est.json()["inputs"] == [f"{PRD_TITLE}, latest version (v1)"]
+    est = await client.post(f"/v1/documents/{ROADMAP}/regenerate/estimate", json={}, headers=auth)
+    assert est.status_code == 200, est.text
+    inputs = est.json()["inputs"]
+    assert inputs[1] == f"{PRD_TITLE}, approved version (v1)"
+    assert inputs[0].endswith(", latest version (v1)")
+    assert not any(PRD in i or ROADMAP in i for i in inputs)
 
 
 async def test_delete_a_prd_trashes_its_dependents_and_restore_brings_them_back(
@@ -425,7 +455,7 @@ async def test_regenerate_a_roadmap_estimates_runs_and_imports_the_next_version(
     assert body["flow"] == "prd_to_roadmap" and body["kind"] == "roadmap"
     assert body["estimate_usd"] > 0
     assert body["needs_owner_approval"] is False
-    assert any(PRD in i for i in body["inputs"])
+    assert any(PRD_TITLE in i for i in body["inputs"])
 
     runtime.script["roadmap_items"] = [Outcome(artifacts={"roadmap_items.yaml": ITEMS})]
     runtime.script["roadmap_draft"] = [
