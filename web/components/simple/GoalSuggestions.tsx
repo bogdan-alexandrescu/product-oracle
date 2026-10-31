@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation"; // MOCK-HOOK
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
@@ -123,6 +124,8 @@ const CONFIDENCE: Record<string, string> = { high: "bg-pass-bg text-pass", mediu
 /** The optional reason before a reject. */
 function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (reason: string) => void; onClose: () => void }) {
   const [reason, setReason] = useState("");
+  const qp3c = useSearchParams().get("qp3") === "c" && s.looks_like.length > 0; // MOCK-HOOK
+  const [dup, setDup] = useState<string>(""); // MOCK-HOOK
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
       <div
@@ -140,6 +143,14 @@ function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (
             onReject(reason);
           }}
         >
+          {qp3c && ( // MOCK-HOOK
+            <fieldset className="mb-3 flex flex-col gap-1 text-[length:var(--simple-small)]">{/* MOCK-HOOK */}
+              <legend className="mb-1 font-medium">Is it the same as a feature you have?</legend>{/* MOCK-HOOK */}
+              {[...s.looks_like.map((m) => ({ id: m.id, label: `Same as ${`${m.code} ${m.title}`.trim()}` })), { id: "", label: "No, another reason" }].map((o) => ( // MOCK-HOOK
+                <label key={o.id || "none"} className="flex items-center gap-2"><input type="radio" name={`dup-${s.id}`} checked={dup === o.id} onChange={() => { setDup(o.id); setReason(o.id ? o.label : ""); }} />{o.label}</label> // MOCK-HOOK
+              ))}{/* MOCK-HOOK */}
+            </fieldset> // MOCK-HOOK
+          )}{/* MOCK-HOOK */}
           <label className="block text-[length:var(--simple-small)] font-medium" htmlFor={`reject-${s.id}`}>
             Why (optional)
           </label>
@@ -172,6 +183,19 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
   const accepts = s.can_accept && can("accept_goal_suggestion", true);
   const rejects = s.can_reject && can("reject_goal_suggestion", true);
   const phone = usePhone();
+  const qp3 = useSearchParams().get("qp3"); // MOCK-HOOK
+  const [dupMenu, setDupMenu] = useState(useSearchParams().get("dup") === "1"); // MOCK-HOOK
+  const [dupAsk, setDupAsk] = useState<string | null>(null); // MOCK-HOOK qp3=b: the look-alike whose decline is being confirmed
+  const dupName = (m: GoalSuggestion["looks_like"][number]) => `${m.code} ${m.title}`.trim(); // MOCK-HOOK
+  const declineAsDup = (m: GoalSuggestion["looks_like"][number]) => // MOCK-HOOK
+    void run(async () => { // MOCK-HOOK
+      const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: `Same as ${dupName(m)}` } }); // MOCK-HOOK
+      toast({ // MOCK-HOOK
+        message: r.data ? `Declined ${s.title} as a duplicate of ${dupName(m)}` : detailOf(r.error), // MOCK-HOOK
+        action: r.data ? { label: "Undo", onClick: () => void (api.POST as unknown as (p: string, o: object) => Promise<unknown>)("/v1/simple/goal-suggestions/{suggestion_id}/reopen", { params: { path: { suggestion_id: s.id } } }).then(() => a.reload()) } : undefined, // MOCK-HOOK
+      }); // MOCK-HOOK
+      await a.reload(); // MOCK-HOOK
+    }); // MOCK-HOOK
   const [wide, setWide] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -230,9 +254,34 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
               ))}
             </ul>
           )}
-          {s.looks_like.map((m) => (
+          {qp3 === "a" || qp3 === "c" ? ( // MOCK-HOOK
+            s.looks_like.length > 0 && ( // MOCK-HOOK
+              <p className="mt-1 text-warn" data-testid="suggestion-looks-like">{/* MOCK-HOOK */}
+                Looks like{" "}{/* MOCK-HOOK */}
+                {s.looks_like.map((m, k) => ( // MOCK-HOOK
+                  <span key={m.id}>{k > 0 && (k === s.looks_like.length - 1 ? " and " : ", ")}<Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold underline" data-testid="looks-like-link">{dupName(m)}</Link></span> // MOCK-HOOK
+                ))}{/* MOCK-HOOK */}
+              </p> // MOCK-HOOK
+            ) // MOCK-HOOK
+          ) : qp3 === "b" ? ( // MOCK-HOOK
+            s.looks_like.map((m) => ( // MOCK-HOOK
+              <div key={m.id} className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-warn" data-testid="suggestion-looks-like">{/* MOCK-HOOK */}
+                <span>Looks like <Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold underline" data-testid="looks-like-link">{dupName(m)}</Link></span>{/* MOCK-HOOK */}
+                {rejects && dupAsk !== m.id && <Button disabled={busy} onClick={() => setDupAsk(m.id)} data-testid="mk-dup">Duplicate</Button>}{/* MOCK-HOOK */}
+                {dupAsk === m.id && ( // MOCK-HOOK
+                  <span role="group" aria-label="Confirm" className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-warn bg-warn-bg px-2 py-1.5 text-text">{/* MOCK-HOOK */}
+                    <span>Decline {s.title} as a duplicate of {dupName(m)}?</span>{/* MOCK-HOOK */}
+                    <Button variant="danger" disabled={busy} onClick={() => declineAsDup(m)}>Decline as duplicate</Button>{/* MOCK-HOOK */}
+                    <Button variant="ghost" onClick={() => setDupAsk(null)}>Cancel</Button>{/* MOCK-HOOK */}
+                  </span> // MOCK-HOOK
+                )}{/* MOCK-HOOK */}
+              </div> // MOCK-HOOK
+            )) // MOCK-HOOK
+          ) : ( // MOCK-HOOK
+          s.looks_like.map((m) => (
             <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}`))} />
-          ))}
+          ))
+          )}{/* MOCK-HOOK */}
         </div>
         {(accepts || rejects || s.flow) && (
           <span className="flex flex-wrap items-center gap-2">
@@ -246,6 +295,19 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
                 Reject
               </Button>
             )}
+            {qp3 === "a" && rejects && s.looks_like.length > 0 && ( // MOCK-HOOK
+              <span className="relative">{/* MOCK-HOOK */}
+                <Button disabled={busy} aria-expanded={dupMenu} aria-haspopup="menu" onClick={() => setDupMenu(!dupMenu)} data-testid="mk-dup">Duplicate of… ▾</Button>{/* MOCK-HOOK */}
+                {dupMenu && ( // MOCK-HOOK
+                  <span role="menu" className="absolute left-0 top-full z-10 mt-1 flex w-72 flex-col rounded-lg border border-line bg-surface p-1 shadow-lg">{/* MOCK-HOOK */}
+                    <span className="px-2 py-1 text-text2">Decline it as the same as:</span>{/* MOCK-HOOK */}
+                    {s.looks_like.map((m) => ( // MOCK-HOOK
+                      <button key={m.id} type="button" role="menuitem" onClick={() => { setDupMenu(false); declineAsDup(m); }} className="rounded-md px-2 py-1.5 text-left font-semibold text-text hover:bg-surface2">{dupName(m)}</button> // MOCK-HOOK
+                    ))}{/* MOCK-HOOK */}
+                  </span> // MOCK-HOOK
+                )}{/* MOCK-HOOK */}
+              </span> // MOCK-HOOK
+            )}{/* MOCK-HOOK */}
             {s.flow && (
               <button type="button" aria-expanded={wide} onClick={() => setWide(!wide)} className="font-semibold text-accent-ink hover:underline" data-testid="flow-open">
                 {wide ? "Hide the flow" : "Show the flow"}
@@ -474,13 +536,46 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
   // can open the same form.
   const [formOpen, setFormOpen] = useState(() => !(start !== "form" && !!state?.can_decide));
   const suggests = can("create_goal_suggestion");
+  const qp3 = useSearchParams().get("qp3"); // MOCK-HOOK
+  const [menu, setMenu] = useState(false); // MOCK-HOOK qp3=c: the "Add a suggestion" menu
+  const more = async () => { // MOCK-HOOK
+    setTab("oracle"); // MOCK-HOOK
+    setAsking(true); // MOCK-HOOK
+    try { await a.suggest(state?.goal ?? goal); } finally { setAsking(false); } // MOCK-HOOK
+  }; // MOCK-HOOK
+  const chat = () => { onChat?.(); askWith(`Suggest a feature for ${(state?.goal ?? goal).title}: `); }; // MOCK-HOOK
+  const chatLink = <button type="button" data-testid="suggest-from-chat" onClick={chat} className="self-start text-[length:var(--simple-small)] text-text2 underline hover:text-text">Or ask Oracle in the chat</button>; // MOCK-HOOK
+  const formEl = (open: boolean) => <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open={open} onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={async () => { await a.reload(); setTab("people"); setFormOpen(false); }} />; // MOCK-HOOK
   const tabs = [
     { key: "people" as const, label: `People · ${people.length}` },
     { key: "oracle" as const, label: `✦ Oracle · ${oracle.length}` },
   ];
   return (
     <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
-      {suggests && (
+      {suggests && qp3 === "b" && ( // MOCK-HOOK
+        <> {/* MOCK-HOOK */}
+          <div className="flex flex-wrap items-center gap-2" data-testid="mk-actions">{/* MOCK-HOOK */}
+            {!formOpen && <Button variant="secondary" data-testid="suggest-form-open" onClick={() => setFormOpen(true)}>+ Suggest a feature</Button>}{/* MOCK-HOOK */}
+            <Button variant="secondary" disabled={asking || !!state?.pending} onClick={() => void more()}>✦ Get more from Oracle</Button>{/* MOCK-HOOK */}
+            <button type="button" data-testid="suggest-from-chat" onClick={chat} className="text-[length:var(--simple-small)] text-text2 underline hover:text-text">Ask in the chat</button>{/* MOCK-HOOK */}
+          </div> {/* MOCK-HOOK */}
+          {formOpen && formEl(true)}{/* MOCK-HOOK */}
+        </> // MOCK-HOOK
+      )}{/* MOCK-HOOK */}
+      {suggests && qp3 === "c" && ( // MOCK-HOOK
+        <div className="relative self-start">{/* MOCK-HOOK */}
+          <Button variant="secondary" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)} data-testid="mk-add">Add a suggestion ▾</Button>{/* MOCK-HOOK */}
+          {menu && ( // MOCK-HOOK
+            <div role="menu" className="absolute left-0 top-full z-10 mt-1 flex w-72 flex-col rounded-lg border border-line bg-surface p-1 shadow-lg">{/* MOCK-HOOK */}
+              {([["Write one yourself", () => { setFormOpen(true); setTab("people"); }], ["Get more from Oracle", () => void more()], ["Ask Oracle in the chat", chat]] as [string, () => void][]).map(([l, f]) => ( // MOCK-HOOK
+                <button key={l} type="button" role="menuitem" onClick={() => { setMenu(false); f(); }} className="rounded-md px-2 py-1.5 text-left font-semibold hover:bg-surface2">{l}</button> // MOCK-HOOK
+              ))}{/* MOCK-HOOK */}
+            </div> // MOCK-HOOK
+          )}{/* MOCK-HOOK */}
+        </div> // MOCK-HOOK
+      )}{/* MOCK-HOOK */}
+      {suggests && qp3 === "c" && formOpen && formEl(true)}{/* MOCK-HOOK */}
+      {suggests && !qp3 && ( // MOCK-HOOK
         <>
           <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open={formOpen} onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={async () => {
             await a.reload();
@@ -516,6 +611,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
       </div>
       {tab === "people" ? (
         <div role="tabpanel" aria-label="People's suggestions" className="flex flex-col gap-2">
+          {suggests && qp3 === "a" && formEl(formOpen)}{/* MOCK-HOOK */}
           {people.length ? (
             <ul className="flex flex-col gap-2">
               {people.map((s) => (
@@ -531,7 +627,8 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
         </div>
       ) : (
         <div role="tabpanel" aria-label="Oracle's suggestions" className="flex flex-col gap-2">
-          {suggests && (
+          {suggests && qp3 === "a" && <Button variant="solid" className="self-start" disabled={asking || !!state?.pending} onClick={() => void more()}>✦ Get more Oracle suggestions</Button>}{/* MOCK-HOOK */}
+          {suggests && !qp3 && ( // MOCK-HOOK
             <Button
               className="self-start"
               disabled={asking || !!state?.pending}
@@ -563,6 +660,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
           )}
         </div>
       )}
+      {suggests && qp3 === "a" && chatLink}{/* MOCK-HOOK */}
     </div>
   );
 }

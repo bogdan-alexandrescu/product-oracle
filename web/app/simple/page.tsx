@@ -8,6 +8,7 @@ import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRo
 import { Walk } from "@/app/simple/_home/walk";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { Icon } from "@/components/ds/Icon";
+import { Dialog } from "@/components/ds/Dialog"; // MOCK-HOOK
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
@@ -184,6 +185,11 @@ export default function SimpleHome() {
   // S7: Oracle's suggested features under each goal of the band (an accept reloads Home).
   const suggestions = useGoalSuggestions(reloadAll);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  const [qp4, setQp4] = useState<string | null>(null); // MOCK-HOOK
+  useEffect(() => setQp4(new URLSearchParams(window.location.search).get("qp4")), []); // MOCK-HOOK
+  const [mkSummary, setMkSummary] = useState<Change | null>(null); // MOCK-HOOK qp4=b: the proposal whose Accept shows its moves first
+  const [mkAll, setMkAll] = useState<string | null>(null); // MOCK-HOOK qp4=a: the row whose every move shows
+  const [mkOpenGoal, setMkOpenGoal] = useState<string | null>(null); // MOCK-HOOK qp4=c: the goal card opened in place
   const proposes = can("create_simple_change");
   const decidesAll = can("accept_simple_change");
   const reads = !proposes;
@@ -279,23 +285,56 @@ export default function SimpleHome() {
   }, [broken]);
   const brokenDeciders = [...new Set(broken.filter((b) => !b.item.can_decide).flatMap((b) => (b.item.deciders.length ? b.item.deciders : ["the decider"])))];
 
+  /** MOCK-HOOK qp4: what a keyed change moves, item by item: its dates before and after. */
+  const mkMoves = (c: Change) => // MOCK-HOOK
+    Object.entries(c.after as Record<string, unknown>) // MOCK-HOOK
+      .filter(([, v]) => !!v && typeof v === "object" && "start_date" in (v as object)) // MOCK-HOOK
+      .map(([id, v]) => { // MOCK-HOOK
+        const a = v as { start_date?: string; end_date?: string }; // MOCK-HOOK
+        const b = ((c.before as Record<string, unknown>)[id] ?? {}) as { start_date?: string; end_date?: string }; // MOCK-HOOK
+        const span = (x: { start_date?: string; end_date?: string }) => `${x.start_date ? calendarDay(x.start_date) : "undated"} – ${x.end_date ? calendarDay(x.end_date) : "undated"}`; // MOCK-HOOK
+        return { id, title: itemTitle(id), before: span(b), after: span(a) }; // MOCK-HOOK
+      }); // MOCK-HOOK
+  const mkMoveList = (c: Change, cut?: number) => { // MOCK-HOOK
+    const moves = mkMoves(c); // MOCK-HOOK
+    const shown = cut && moves.length > cut + 1 ? moves.slice(0, cut) : moves; // MOCK-HOOK
+    return ( // MOCK-HOOK
+      <ul className="simple-small mt-1 flex flex-col gap-1" data-testid="mk-moves">{/* MOCK-HOOK */}
+        {shown.map((m) => ( // MOCK-HOOK
+          <li key={m.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">{/* MOCK-HOOK */}
+            <span className="font-medium text-text">{m.title}</span>{/* MOCK-HOOK */}
+            <del className="rounded bg-crit-bg px-1.5 text-crit">{m.before}</del>{/* MOCK-HOOK */}
+            <span aria-hidden>→</span>{/* MOCK-HOOK */}
+            <ins className="rounded bg-pass-bg px-1.5 text-pass no-underline">{m.after}</ins>{/* MOCK-HOOK */}
+          </li> // MOCK-HOOK
+        ))}{/* MOCK-HOOK */}
+        {shown.length < moves.length && ( // MOCK-HOOK
+          <li><button type="button" className="font-semibold text-accent-ink underline" onClick={() => setMkAll(c.id)}>and {moves.length - shown.length} more</button></li> // MOCK-HOOK
+        )}{/* MOCK-HOOK */}
+      </ul> // MOCK-HOOK
+    ); // MOCK-HOOK
+  }; // MOCK-HOOK
   const proposalRow = (c: Change) => (
     <HomeRow
       key={c.id}
       testId="home-proposal"
       lead={<Avatar name={c.by_name} />}
       title={`${OP_WORDS[c.op] ?? c.op}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
-      meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
+      meta={qp4 === "a" && mkMoves(c).length > 0 ? ( // MOCK-HOOK
+        <>{`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}{mkMoveList(c, mkAll === c.id ? undefined : 2)}</>// MOCK-HOOK
+      ) : `${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
       change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
       thumb={NEW_FLOW_OPS.has(c.op)}
       inlineActions
       actions={
-        c.can_decide ? (
+        qp4 === "c" && c.can_decide ? ( // MOCK-HOOK
+          <Link href={REVIEW} className="simple-button simple-button-primary" data-testid="mk-review">Review on the roadmap</Link> // MOCK-HOOK
+        ) : c.can_decide ? ( // MOCK-HOOK
           <>
             <button
               type="button"
               className="simple-button simple-button-primary"
-              onClick={() => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted")}
+              onClick={() => (qp4 === "b" && mkMoves(c).length > 0 ? setMkSummary(c) : void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted"))} // MOCK-HOOK
             >
               Accept
             </button>
@@ -408,6 +447,12 @@ export default function SimpleHome() {
   return (
     <SimplePage title="Home">
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
+      {mkSummary && ( // MOCK-HOOK
+        <Dialog title={`Accept: ${OP_WORDS[mkSummary.op] ?? mkSummary.op}`} testId="mk-summary" onClose={() => setMkSummary(null)} actions={<button type="button" className="simple-button simple-button-primary" onClick={() => { const c = mkSummary; setMkSummary(null); void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted"); }}>{`Accept and move ${mkMoves(mkSummary).length} ${mkMoves(mkSummary).length === 1 ? "item" : "items"}`}</button>}>{/* MOCK-HOOK */}
+          <p className="simple-small">{mkSummary.by_name} proposed this{mkSummary.reason ? `: “${mkSummary.reason}”` : "."} These dates change:</p>{/* MOCK-HOOK */}
+          {mkMoveList(mkSummary)}{/* MOCK-HOOK */}
+        </Dialog> // MOCK-HOOK
+      )}{/* MOCK-HOOK */}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
         <p className="simple-lead max-[600px]:min-h-[2lh]">
@@ -467,14 +512,32 @@ export default function SimpleHome() {
                       </div>
                     )}
                     {/* qa-simple-home-26: the goal opens its features on the roadmap; its code (qa-simple-home-13) only in the tooltip. */}
+                    {qp4 && (qp4 === "c" || !roadmap.data?.items.some((i) => i.goal?.id === g.id) && qp4 === "a") ? ( // MOCK-HOOK
+                      <span className="font-semibold text-text" data-testid="home-goal-link">{g.name}</span> // MOCK-HOOK
+                    ) : ( // MOCK-HOOK
                     <Link
-                      href={goalHref(g.id)}
+                      href={qp4 === "b" ? `/simple/priorities?goal=${encodeURIComponent(g.name)}` : goalHref(g.id)} // MOCK-HOOK
                       data-testid="home-goal-link"
                       title={g.code ? `${g.code} · ${g.name}` : g.name}
                       className="font-semibold text-text hover:underline"
                     >
                       {g.name}
                     </Link>
+                    )}{/* MOCK-HOOK */}
+                    {qp4 === "a" && ( // MOCK-HOOK
+                      <span className="simple-small" data-testid="mk-goal-planned">{(() => { const n = roadmap.data?.items.filter((i) => i.goal?.id === g.id).length ?? 0; return n ? `${n} planned · opens on the roadmap` : "Nothing planned yet"; })()}</span> // MOCK-HOOK
+                    )}{/* MOCK-HOOK */}
+                    {qp4 === "c" && ( // MOCK-HOOK
+                      <button type="button" aria-expanded={mkOpenGoal === g.id} onClick={() => setMkOpenGoal(mkOpenGoal === g.id ? null : g.id)} className="simple-small self-start font-semibold text-accent-ink underline" data-testid="mk-goal-open">{/* MOCK-HOOK */}
+                        {mkOpenGoal === g.id ? "Hide what's planned" : `What's planned (${roadmap.data?.items.filter((i) => i.goal?.id === g.id).length ?? 0})`}{/* MOCK-HOOK */}
+                      </button> // MOCK-HOOK
+                    )}{/* MOCK-HOOK */}
+                    {qp4 === "c" && mkOpenGoal === g.id && ( // MOCK-HOOK
+                      <ul className="simple-small flex flex-col gap-0.5" data-testid="mk-goal-items">{/* MOCK-HOOK */}
+                        {(roadmap.data?.items.filter((i) => i.goal?.id === g.id) ?? []).map((i) => <li key={i.id}><Link href={`/simple/roadmap?goal=${encodeURIComponent(i.goal?.key ?? "")}`} className="underline">{i.title}</Link> · {calendarDay(i.start.date)} – {calendarDay(i.end.date)}</li>)}{/* MOCK-HOOK */}
+                        {!roadmap.data?.items.some((i) => i.goal?.id === g.id) && <li>Nothing planned yet. Ask for suggestions below.</li>}{/* MOCK-HOOK */}
+                      </ul> // MOCK-HOOK
+                    )}{/* MOCK-HOOK */}
                     {g.path && (
                       <span data-testid="home-goal-path" className="simple-small tnum">
                         {g.path}

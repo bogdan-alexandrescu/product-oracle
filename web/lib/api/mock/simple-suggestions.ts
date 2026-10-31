@@ -244,6 +244,10 @@ export async function routeGoalSuggestions(
   if (!s) return json(404, { detail: "No such suggestion" });
   const body = (await req.json().catch(() => ({}))) as { roadmap_id?: string | null; session_id?: string | null; reason?: string | null };
   if ((p[4] === "reject" || p[4] === "accept") && !goalDecider(db, s.goal, ctx).mine) return json(403, { detail: "Only the decider accepts or rejects suggestions" });
+  if (p[4] === "reopen" && s.status === "rejected") { // MOCK-HOOK qp3: Undo of a duplicate's decline
+    Object.assign(s, { status: "open", reason: null, decided_by_name: null, decided_at: null }); // MOCK-HOOK
+    return json(200, out(db, s, ctx)); // MOCK-HOOK
+  } // MOCK-HOOK
   if (p[4] === "reject") {
     if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
     const reason = (body.reason ?? "").trim();

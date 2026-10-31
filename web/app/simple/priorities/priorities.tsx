@@ -386,7 +386,12 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
 }
 
 function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
-  const rows = byLine(data);
+  const qp1 = useSearchParams().get("qp1"); // MOCK-HOOK
+  const qp2 = useSearchParams().get("qp2"); // MOCK-HOOK
+  const mkGoal = useSearchParams().get("goal"); // MOCK-HOOK qp4=b: a Home goal card opens the list for its goal
+  const rows = (qp1 === "a" ? data.rows : byLine(data)).filter((r) => !mkGoal || goalOfRow(data)(r) === mkGoal); // MOCK-HOOK
+  const setParamsMk = useSetParams(); // MOCK-HOOK
+  const maxScore = Math.max(0.01, ...rows.map((r) => r.score ?? 0)); // MOCK-HOOK
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const maxValue = Math.max(1, ...rows.map((r) => r.goal_value ?? 0));
@@ -454,13 +459,35 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
   }
   return (
     <>
+    {mkGoal && ( // MOCK-HOOK
+      <p className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-accent-ink" data-testid="mk-goal-filter">{/* MOCK-HOOK */}
+        <span>Showing <b>{mkGoal}</b> only: {rows.length ? `${rows.length} of ${data.rows.length} features` : "nothing for this goal is planned yet"}</span>{/* MOCK-HOOK */}
+        <button type="button" className="font-semibold underline" onClick={() => setParamsMk({ goal: null })}>Show all</button>{/* MOCK-HOOK */}
+      </p> // MOCK-HOOK
+    )}{/* MOCK-HOOK */}
     <LineCaption data={data} />
     <p className="mb-2 text-[length:var(--simple-small)] text-text2" data-testid="prio-score-help">
       {SCORE_WORDS}
     </p>
+    {qp1 === "d" && apart ? ( // MOCK-HOOK
+      <div className="grid items-start gap-4 lg:grid-cols-2" data-testid="mk-qp1-columns">{/* MOCK-HOOK */}
+        {[true, false].map((makes) => ( // MOCK-HOOK
+          <section key={String(makes)} aria-label={makes ? "Makes the line" : "Misses the line"}>{/* MOCK-HOOK */}
+            <MkPartHead data={data} makes={makes} n={makes ? split : rows.length - split} />{/* MOCK-HOOK */}
+            <ol className="flex flex-col gap-[var(--simple-gap)]">{makes ? rows.slice(0, split).flatMap(item) : rows.slice(split).flatMap((r, k) => item(r, k + split))}</ol>{/* MOCK-HOOK */}
+          </section> // MOCK-HOOK
+        ))}{/* MOCK-HOOK */}
+      </div> // MOCK-HOOK
+    ) : ( // MOCK-HOOK
     <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
-      {rows.flatMap((r, i) => {
-        const divider = i === split ? [<LineDivider key="the-line" data={data} />] : [];
+      {rows.flatMap(item)}
+    </ol>
+    )}{/* MOCK-HOOK */}
+    </>
+  );
+  function item(r: Row, i: number) { // MOCK-HOOK: the row's callback, named so qp1=d can split it
+        const heads = qp1 === "b" && apart; // MOCK-HOOK
+        const divider = qp1 === "d" && apart ? [] : heads ? [...(i === 0 ? [<MkPartHead key="makes" data={data} makes n={split} li />] : []), ...(i === split ? [<MkPartHead key="misses" data={data} makes={false} n={rows.length - split} li />] : [])] : i === split ? [<LineDivider key="the-line" data={data} />] : []; // MOCK-HOOK
         // Any of the feature's items (a proposal on its later item shows here too).
         const proposals = data.proposals.filter((p) => p.feature_id === r.feature_id && (p.op === "override_priority" || p.op === "estimate_feature"));
         const target = drag && drag.to === i && drag.from !== i;
@@ -503,7 +530,7 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
               {/* qa-simple-plan-32: a row the reader cannot move keeps the handle's column; why is said under it. */}
               {mayChange && !r.can_reorder && <span aria-hidden data-testid="prio-no-handle" className="min-w-11 sm:min-w-[22px]" />}
               <span className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums" data-testid="prio-rank">
-                {r.rank}
+                {qp1 === "c" && apart ? i + 1 : r.rank}{/* MOCK-HOOK */}
               </span>
               <span
                 aria-label={r.above_line ? "Above the line" : "Below the line"}
@@ -524,10 +551,11 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
                 </span>
               )}
               {words && <MovedTag words={words} />}
+              {qp1 === "c" && apart && r.rank !== i + 1 && <span data-testid="mk-rank" title="Its rank by score" className="flex-none whitespace-nowrap rounded-full border border-line-strong px-2 text-[length:var(--simple-small)] text-text2">rank {r.rank}</span>}{/* MOCK-HOOK */}
               <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2">
                 {/* The chips stay together, wrapping as one group. */}
                 <span className="flex flex-none flex-wrap items-center gap-1.5">
-                  {!r.above_line && <MissesTag data={data} row={r} />}
+                  {!r.above_line && (qp1 === "a" ? <MissesTag data={data} compact /> : qp1 ? null : <MissesTag data={data} row={r} />)}{/* MOCK-HOOK */}
                   {goalOf(r) ? (
                     <span data-testid="prio-goal">{goalOf(r)}</span>
                   ) : (
@@ -538,12 +566,13 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
                 </span>
                 {r.milestone && <span className="whitespace-nowrap">Milestone {r.milestone}</span>}
                 {/* qa-simple-plan-3: the confidence the score is worked out with, beside the numbers. */}
-                {r.effort != null && (
+                {r.effort != null && !qp2 && ( // MOCK-HOOK
                   <span data-testid="prio-confidence" className="whitespace-nowrap tabular-nums" title={SCORE_WORDS}>
                     confidence {fmt(r.confidence, 2)}
                   </span>
                 )}
                 {/* The numbers say what they are and wrap as one group. */}
+                {qp2 ? <MkNumbers r={r} v={qp2} maxValue={maxValue} maxScore={maxScore} /> : ( // MOCK-HOOK
                 <span data-testid="prio-numbers" className="flex items-center gap-1 whitespace-nowrap tabular-nums">
                   <span aria-hidden className="h-2 w-16 flex-none overflow-hidden rounded-full border border-line bg-surface2">
                     <span className="block h-full rounded-full bg-accent" style={{ width: `${((r.goal_value ?? 0) / maxValue) * 100}%` }} />
@@ -560,6 +589,7 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
                     </>
                   )}
                 </span>
+                )}{/* MOCK-HOOK */}
               </span>
             </div>
             {mayChange && !r.can_reorder && (
@@ -589,10 +619,7 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
             ))}
           </li>,
         ];
-      })}
-    </ol>
-    </>
-  );
+  } // MOCK-HOOK
 }
 
 /**
@@ -1624,6 +1651,44 @@ function MissesTag({ data, row, compact = false }: { data: Out; row?: Row; compa
     </span>
   );
 }
+
+/** MOCK-HOOK qp1=b/d: a part's heading, "Makes Customer conference · Nov 14 · 5 features, in rank order". */
+function MkPartHead({ data, makes, n, li = false }: { data: Out; makes: boolean; n: number; li?: boolean }) { // MOCK-HOOK
+  const Tag = li ? "li" : "h3"; // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <Tag data-testid="mk-part-head" className={`flex flex-wrap items-baseline gap-x-2 ${li ? "pt-2" : "mb-2"} ${makes ? "" : "mt-2 border-t-2 border-accent-ink pt-3"}`}>{/* MOCK-HOOK */}
+      <span className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">{makes ? "Makes" : "Misses"} {lineLabel(data)}</span>{/* MOCK-HOOK */}
+      <span className="text-[length:var(--simple-small)] text-text2">{n} {n === 1 ? "feature" : "features"}, in rank order</span>{/* MOCK-HOOK */}
+    </Tag> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK
+
+/** MOCK-HOOK qp2: how value and confidence read on a row (a: no bar; b: the bar with value; c: two meters; d: a score bar). */
+function MkNumbers({ r, v, maxValue, maxScore }: { r: Row; v: string; maxValue: number; maxScore: number }) { // MOCK-HOOK
+  const bar = (share: number, label: string) => ( // MOCK-HOOK
+    <span role="img" aria-label={label} title={label} className="inline-block h-2 w-14 flex-none overflow-hidden rounded-full border border-line bg-surface2">{/* MOCK-HOOK */}
+      <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.min(1, share) * 100}%` }} />{/* MOCK-HOOK */}
+    </span> // MOCK-HOOK
+  ); // MOCK-HOOK
+  const value = <span className="whitespace-nowrap">value {fmt(r.goal_value)}</span>; // MOCK-HOOK
+  const valueBar = bar((r.goal_value ?? 0) / maxValue, `Goal value ${fmt(r.goal_value)} of the top ${fmt(maxValue)}`); // MOCK-HOOK
+  const conf = r.effort == null ? null : <span className="whitespace-nowrap">confidence {fmt(r.confidence, 2)}</span>; // MOCK-HOOK
+  const score = r.effort == null ? <span>PM-owned, no score</span> : <span className="whitespace-nowrap">score <span className="font-semibold text-text" data-testid="prio-score" title={SCORE_WORDS}>{fmt(r.score, 2)}</span></span>; // MOCK-HOOK
+  const wk = r.effort == null ? null : <span className="whitespace-nowrap">{fmt(r.effort)} wk</span>; // MOCK-HOOK
+  const dot = <span aria-hidden>·</span>; // MOCK-HOOK
+  return ( // MOCK-HOOK
+    <span data-testid="prio-numbers" data-mk={v} className="flex flex-wrap items-center gap-x-1.5 gap-y-1 tabular-nums">{/* MOCK-HOOK */}
+      {v === "b" && <span className="flex items-center gap-1.5">{value}{valueBar}</span>}{/* MOCK-HOOK */}
+      {v === "c" && <span className="flex items-center gap-1.5">{value}{valueBar}</span>}{/* MOCK-HOOK */}
+      {(v === "a" || v === "d") && value}{/* MOCK-HOOK */}
+      {conf && dot}{/* MOCK-HOOK */}
+      {conf && v === "c" ? <span className="flex items-center gap-1.5">{conf}{bar(r.confidence ?? 0, `Confidence ${fmt(r.confidence, 2)} of 1`)}</span> : conf}{/* MOCK-HOOK */}
+      {wk && dot}{wk}{/* MOCK-HOOK */}
+      {dot}{/* MOCK-HOOK */}
+      {v === "d" && r.effort != null ? <span className="flex items-center gap-1.5">{score}{bar((r.score ?? 0) / maxScore, `Score ${fmt(r.score, 2)} of the top ${fmt(maxScore, 2)}`)}</span> : score}{/* MOCK-HOOK */}
+    </span> // MOCK-HOOK
+  ); // MOCK-HOOK
+} // MOCK-HOOK
 
 /** The divider row, drawn only when every row after it misses the line. */
 function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
