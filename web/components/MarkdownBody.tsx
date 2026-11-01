@@ -5,6 +5,7 @@ import { CitationChip } from "@/components/CitationChip";
 import { DateMarker } from "@/components/DateMarker";
 import { withCodes } from "@/components/ds/CodeChip";
 import { IGNORE_ATTR } from "@/lib/anchor";
+import { calendarDay } from "@/lib/dates";
 import type { CitationOut, DateMarkOut } from "@/lib/api/client";
 import type { CodeIndex } from "@/lib/code-index";
 import { isSafeHref, storedImageSrc, type Block, type Inline } from "@/lib/markdown";
@@ -96,13 +97,36 @@ function isOpen(ctx: Ctx, key: string): boolean {
   return !!ctx.expand && ctx.expand.open.get(key) === ctx.expand.origin;
 }
 
+/** A calendar day standing alone in prose ("to 2027-01-29."), never one inside a key or a path. */
+const PROSE_DAY = /(?<![\w./-])(\d{4}-\d{2}-\d{2})(?![\w/-]|:\d)/;
+
+/**
+ * Prose with its calendar days month first ("to Jan 29, 2027"; walk-docs-priorities 9), as
+ * people read dates everywhere else. The day as written stays in the text, hidden, and the
+ * words are left out of the anchor's count, so a comment's quote still matches the stored body.
+ */
+function withDays(text: string, codes: CodeIndex | undefined, key: string): ReactNode {
+  const pieces = text.split(PROSE_DAY);
+  if (pieces.length === 1) return withCodes(text, codes, key);
+  return pieces.map((piece, i) =>
+    i % 2 === 1 ? (
+      <span key={`${key}d${i}`} data-day={piece}>
+        <span hidden>{piece}</span>
+        <span {...{ [IGNORE_ATTR]: "" }}>{calendarDay(piece, { month: "short", day: "numeric", year: "numeric" })}</span>
+      </span>
+    ) : (
+      <Fragment key={`${key}d${i}`}>{withCodes(piece, codes, `${key}d${i}`)}</Fragment>
+    ),
+  );
+}
+
 function renderText(text: string, ctx: Ctx, key: string, prose = false): ReactNode {
   const start = ctx.pos;
   const end = start + text.length;
   ctx.pos = end;
   const codes = prose && !ctx.inLink ? ctx.codes : undefined;
   const hits = ctx.highlights.filter((h) => h.start < end && h.end > start);
-  if (!hits.length) return withCodes(text, codes, key);
+  if (!hits.length) return prose ? withDays(text, codes, key) : withCodes(text, codes, key);
   const cuts = new Set([start, end]);
   for (const h of hits) {
     if (h.start > start) cuts.add(h.start);
@@ -116,7 +140,7 @@ function renderText(text: string, ctx: Ctx, key: string, prose = false): ReactNo
     const slice = text.slice(a - start, b - start);
     const covering = hits.filter((h) => h.start <= a && h.end >= b);
     if (!covering.length) {
-      out.push(<Fragment key={`${key}-${i}`}>{withCodes(slice, codes, `${key}-${i}`)}</Fragment>);
+      out.push(<Fragment key={`${key}-${i}`}>{prose ? withDays(slice, codes, `${key}-${i}`) : withCodes(slice, codes, `${key}-${i}`)}</Fragment>);
       continue;
     }
     const pending = covering.some((h) => h.kind === "pending");
