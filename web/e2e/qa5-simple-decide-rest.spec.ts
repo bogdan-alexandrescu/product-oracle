@@ -38,7 +38,7 @@ const MOMENT = /(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|S
 async function startReview(page: Page, signIn = true) {
   await openSheet(page, signIn);
   const s = sheet(page);
-  await s.getByRole("checkbox", { name: "Commenter" }).check();
+  await s.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await tap(s.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 }
@@ -59,15 +59,15 @@ for (const phone of [false, true]) {
       const s = sheet(page);
       const attends = s.getByRole("group", { name: "Who attends" });
       for (const box of await attends.getByRole("checkbox").all()) await box.uncheck();
-      await attends.getByRole("checkbox", { name: /^viewer/i }).check();
+      await attends.getByRole("checkbox", { name: "Lena Ortiz" }).check();
       await tap(s.getByRole("radio", { name: "Presenter plus one or two people" }));
       const picker = s.getByLabel("Who else changes things");
       await expect(picker.getByRole("checkbox")).toHaveCount(0);
       await expect(picker).toContainText("Viewers can't change things; tick someone else above.");
-      await attends.getByRole("checkbox", { name: "Commenter", exact: true }).check();
+      await attends.getByRole("checkbox", { name: "Theo Brandt", exact: true }).check();
       await expect(picker.getByRole("checkbox")).toHaveCount(1);
-      await expect(picker.getByRole("checkbox", { name: "Commenter", exact: true })).toBeVisible();
-      await expect(picker.getByRole("checkbox", { name: /^viewer/i })).toHaveCount(0);
+      await expect(picker.getByRole("checkbox", { name: "Theo Brandt", exact: true })).toBeVisible();
+      await expect(picker.getByRole("checkbox", { name: "Lena Ortiz" })).toHaveCount(0);
     });
 
     test("qa4-simple-decide-16: a roadmap move in a meeting is undone from its toast", async ({ page }) => {

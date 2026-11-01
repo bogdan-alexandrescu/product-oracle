@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { THEME_KEY } from "../lib/theme";
-import { ADMIN } from "./helpers";
+import { ADMIN, clearName } from "./helpers";
 
 /*
  * QA fixes on Simple's shell and Ask panel (qa-simple-home-18 to 25 and 29), driven through the
@@ -117,6 +117,8 @@ test("qa-simple-home-20: in dark the chosen mode is a lighter, outlined pill on 
 
 test("qa-simple-home-21: a member with no name shows their email once, broken only after the @ (desktop)", async ({ page }) => {
   await setUp(page, DESKTOP);
+  // The owner clears the viewer's invented name first.
+  await clearName(page, VIEWER);
   await signIn(page, VIEWER);
   const person = page.getByTestId("simple-person");
   const name = page.getByTestId("simple-person-name");

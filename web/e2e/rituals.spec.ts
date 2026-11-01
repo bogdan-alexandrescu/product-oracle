@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
-import { displayName } from "../lib/names";
+import { mockName } from "../lib/api/mock/people";
 
 import { ADMIN, login, pickZone } from "./helpers";
 
@@ -239,7 +239,7 @@ test("H2 review: an approver sees each ritual's owner by name", async ({ page })
   await withRituals(page);
   await login(page, APPROVER);
   await openRituals(page);
-  const owner = displayName(ADMIN.email);
+  const owner = mockName(ADMIN.email);
   await expect(ritualRow(page, "Weekly goals check-in")).toContainText(owner);
   await expect(page.getByTestId("ritual-row").filter({ hasText: "Someone" })).toHaveCount(0);
   await ritualRow(page, "Weekly goals check-in").click();

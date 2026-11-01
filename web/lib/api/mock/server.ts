@@ -3933,10 +3933,11 @@ const VIEWER_REFUSED = "A viewer can't be the engineering lead. Make them a comm
 
 /**
  * GET /v1/setup (A1), as oracle.setup: the caller's steps from the mock's own stores. The
- * connections and sources stores are the company's in the mock, not each person's.
+ * sources store is the company's in the mock, not each person's; of the connections, the
+ * seeded ones are the owner's alone (./connections.ts).
  */
 function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
-  const facts = setupFacts();
+  const facts = setupFacts(me.email);
   const sources = sourceCount();
   const people = db.members.filter((x) => x.status !== "disabled").length;
   // qa4-settings-3: as oracle.setup, an expired invite is not open (nobody can join through it).
@@ -5280,7 +5281,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const browse = sourceBrowseRoute(req, p, q);
   if (browse) return browse;
-  const connections = await connectionsRoute(req, p, me.role);
+  const connections = await connectionsRoute(req, p, me.role, me.email);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
