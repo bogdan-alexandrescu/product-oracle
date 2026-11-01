@@ -2697,6 +2697,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api-tokens/{token_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Api Token
+         * @description Remove an expired API token from the list (qa4-settings-39). Owners only, as
+         *     Revoke; an active or revoked token is refused (409). It no longer works already;
+         *     what was done with it (approvals, decisions) keeps its name.
+         */
+        post: operations["remove_api_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-tokens/{token_id}/approvals": {
         parameters: {
             query?: never;
@@ -50698,6 +50720,49 @@ export interface operations {
             };
             /** @description No such token */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_api_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such API token, or already removed */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The token is active or revoked, not expired */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
