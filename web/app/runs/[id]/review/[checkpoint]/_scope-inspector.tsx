@@ -15,9 +15,11 @@ import {
   describeAction,
   fixesFor,
   goalName,
+  goalsOf,
   includeFeature,
   LEAVE_OUT_REASONS,
   pct,
+  plainText,
   proposedText,
   reasonText,
   setDecision,
@@ -222,7 +224,7 @@ export function RequirementRow({ req, mode, ops, review, indent = true }: { req:
   const { can } = useMe();
   const [editing, setEditing] = useState<string | null>(null);
   const [enhancing, setEnhancing] = useState(false);
-  const text = req.text ?? req.title;
+  const text = plainText(req.text ?? req.title);
   const cut = req.decision === "cut";
   const suggestions = actionsOn(review, req.key).filter((a) => a.state === "suggested");
   return (
@@ -510,7 +512,7 @@ export function ScopeInspector({
           <Chip hero kind={undecided ? "warn" : f.decision === "include" ? "now" : "na"}>
             {undecided ? proposed : decisionText(f.decision, f.decision_reason)}
           </Chip>
-          <Chip hero>{f.goals.length ? f.goals.map((g) => goalTitle(g.key)).join(", ") : "No goal"}</Chip>
+          <Chip hero>{goalsOf(f).length ? goalsOf(f).map((g) => goalTitle(g.key)).join(", ") : "No goal"}</Chip>
         </>
       }
       stats={[
@@ -522,7 +524,7 @@ export function ScopeInspector({
     >
       {f.text && (
         <InspectorSection label="What it is">
-          <p className="text-sm">{f.text}</p>
+          <p className="text-sm">{plainText(f.text)}</p>
         </InspectorSection>
       )}
       {f.reasons.length > 0 && (
@@ -628,8 +630,8 @@ export function ScopeInspector({
       </InspectorSection>
       <InspectorSection label="Goals">
         <div className="flex flex-wrap items-center gap-1.5">
-          {f.goals.length ? (
-            f.goals.map((g) => (
+          {goalsOf(f).length ? (
+            goalsOf(f).map((g) => (
               // qa4-work-43: how much the feature helps the goal, in words, not a bare "1/3".
               <Chip key={g.key} kind="acc" data-testid="inspector-goal">
                 {goalTitle(g.key)} · contribution {g.contribution ?? 1} of 3
@@ -686,11 +688,18 @@ export function ScopeInspector({
         {mode === "approver" && can("add_scope_requirement") && <AddRequirement feature={f} ops={ops} />}
       </InspectorSection>
       <InspectorSection label="Evidence">
-        {f.evidence_ids.length ? (
-          <ul className="text-sm">
-            {f.evidence_ids.slice(0, 3).map((id) => (
-              <li key={id} className="font-mono">
-                {id.slice(0, 8)}
+        {/* walk-eng-check 6: each source by its name, never a bare id. */}
+        {f.evidence?.length ? (
+          <ul className="space-y-1 text-sm" data-testid="inspector-evidence">
+            {f.evidence.slice(0, 3).map((e) => (
+              <li key={e.id} className="break-words">
+                {e.url ? (
+                  <a href={e.url} target="_blank" rel="noreferrer" className="text-accent-ink hover:underline">
+                    {e.title}
+                  </a>
+                ) : (
+                  e.title
+                )}
               </li>
             ))}
           </ul>

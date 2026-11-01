@@ -182,6 +182,21 @@ export function named(scope: Scope): Scope {
 }
 
 /** A goal's name: its title in the baseline, else plain words, never its key (rirs-2). */
+/**
+ * walk-eng-check 6: the agents' text without their internal pointers, "(proposed in stage 3,
+ * awaiting the founder, stage 3 Q8.)" or "see stage 2 Q4": a person reads the requirement only.
+ */
+export function plainText(text: string): string {
+  return text
+    .replace(/\s*\([^()]*\bstage\s*\d+[^()]*\)\.?/gi, "")
+    .replace(/\s*\(?\b(?:see\s+)?stage\s*\d+(?:\s*Q\d+)?\b\)?/gi, "")
+    .replace(/\s+([.,;:])/g, "$1")
+    .trim();
+}
+
+/** The goals a row is shown with: its own, else, for a row left out, the baseline's (walk-eng-check 5). */
+export const goalsOf = (f: Feature) => (f.goals.length ? f.goals : f.decision !== "include" ? (f.baseline_goals ?? []) : []);
+
 export function goalName(scope: Scope, key: string): string {
   return scope.goals_available.find((g) => g.key === key)?.title ?? "A goal not in the baseline";
 }

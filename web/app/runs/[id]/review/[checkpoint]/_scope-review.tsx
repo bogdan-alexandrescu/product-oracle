@@ -17,7 +17,7 @@ import type { ReviewViewProps } from "./_shell";
 import { FixButtons, LeaveOutPicker, RequirementRow, ScopeInspector } from "./_scope-inspector";
 import { runDocName } from "../../../_lib";
 
-import { actionsOn, changeText, decisionText, describeAction, fixesFor, goalName, named, pct, reasonText, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
+import { actionsOn, changeText, decisionText, describeAction, fixesFor, goalName, goalsOf, named, pct, reasonText, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
 
 type Filter = "needs" | "all" | "out" | "changed";
 type Group = "goal" | "reason";
@@ -549,11 +549,11 @@ function FeatureRow({
           </span>
         </span>
         <span role="cell" className="flex min-w-0 flex-wrap gap-1">
-          {f.goals.length ? (
-            f.goals.map((g) => (
-              // qa-work-11: a long goal name ends in an ellipsis, the full name on hover.
-              <Chip key={g.key} kind="line" title={goalTitle(g.key)} className="min-w-0" data-testid="goal-chip">
-                <span className="min-w-0 truncate">{goalTitle(g.key)}</span>
+          {goalsOf(f).length ? (
+            goalsOf(f).map((g) => (
+              // walk-eng-check 5: the goal's whole name, wrapping, never cut mid-name.
+              <Chip key={g.key} kind="line" title={goalTitle(g.key)} className="min-w-0" wrap data-testid="goal-chip">
+                {goalTitle(g.key)}
               </Chip>
             ))
           ) : open.some((r) => r.code === "serves_no_goal") ? (
@@ -570,7 +570,8 @@ function FeatureRow({
         </span>
         {/* qa4-work-43: the count says what it counts, never a bare "2/2". */}
         <span role="cell" className="tnum text-sm max-[600px]:hidden" title={`${kept} of ${f.requirements.length} requirements kept`} data-testid="row-requirements">
-          {kept} of {f.requirements.length} kept
+          {/* walk-eng-check 5: a row left out with no requirements: leaving it out is the call. */}
+          {f.decision !== "include" && f.requirements.length === 0 ? "Left out" : `${kept} of ${f.requirements.length} kept`}
         </span>
         <span role="cell" className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
           {open.map((r) => (

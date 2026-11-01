@@ -59,6 +59,18 @@ function usePhone(): boolean {
  * decision carries the draft's revision; a 409 review_changed shows a Reload line. On a phone
  * it collapses to "N changes · Approve" with a sheet for the rest.
  */
+/**
+ * Focusing a field of the sticky bar scrolls the page to where the bar would sit in the flow
+ * (the list's end), so the list jumps under the pointer: the page stays where it was.
+ */
+function keepScroll() {
+  const x = window.scrollX;
+  const y = window.scrollY;
+  requestAnimationFrame(() => {
+    if (window.scrollY !== y || window.scrollX !== x) window.scrollTo(x, y);
+  });
+}
+
 export function DecisionBar({
   runId,
   checkpointId,
@@ -258,6 +270,7 @@ export function DecisionBar({
               rows={1}
               maxLength={NOTE_MAX + 200}
               onChange={(e) => setNote(e.target.value)}
+              onFocus={keepScroll}
               onBlur={() => void saveNote()}
               className={`${INPUT} min-h-9 placeholder:text-text2`}
             />
