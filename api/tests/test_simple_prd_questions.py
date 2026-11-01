@@ -487,3 +487,39 @@ async def test_decided_label_company_zone(client):
     assert company_time.date_in_words(company_time.day(d.decided_at)) == "Thu Oct 29"
     after = {x["code"]: x for x in (await page(client, ctx))["questions"]}["Q3"]
     assert after["decided_label"].startswith("Decided on Thu Oct 29 by")
+
+
+async def _prds(ctx: Ctx, n: int, start: int = 0) -> None:
+    async with tenant_session(ctx.tenant_id) as s:
+        for i in range(start, start + n):
+            prd = Document(slug=f"example-prd-{i}", title=f"Example PRD {i}", kind="prd",
+                           status="approved", visibility="company")  # fmt: skip
+            s.add(prd)
+            await s.flush()
+            await version(s, prd, 1, f"# Example PRD {i}\n\nPlain text, no open questions.\n")
+        await s.commit()
+
+
+async def _statements(client, ctx, path: str) -> int:
+    from tests.coverage_helpers import count_statements
+
+    assert (await client.get(path, headers=ctx.as_("owner"))).status_code == 200
+    with count_statements() as seen:
+        r = await client.get(path, headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    return len(seen)
+
+
+# protects=walk-brief item 8: Simple Home's reads cost the same number of statements
+# however many PRDs the company has (Home sat on "Loading…" for 20 s); fails_when=a
+# statement (or a per-PRD lock) per PRD on every read; no_claim=the web's own requests.
+@pytest.mark.parametrize(
+    "path", ["/v1/simple/decisions/waiting", "/v1/simple/roadmap", "/v1/simple/meetings"]
+)
+async def test_home_reads_do_not_grow_with_prds(client, path):
+    ctx = await make_ctx("Example Co")
+    await _prds(ctx, 2)
+    few = await _statements(client, ctx, path)
+    await _prds(ctx, 8, start=2)
+    many = await _statements(client, ctx, path)
+    assert many - few <= 2, (few, many)
