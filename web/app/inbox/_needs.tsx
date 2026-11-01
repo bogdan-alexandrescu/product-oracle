@@ -27,8 +27,7 @@ import {
   type TrackAlertOut,
 } from "@/lib/api/track-alerts";
 
-import { calendarDay } from "@/lib/dates";
-import { datesInWords } from "@/app/runs/[id]/review/[checkpoint]/_items-lib";
+import { calendarDay, datesInWords } from "@/lib/dates";
 
 import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {

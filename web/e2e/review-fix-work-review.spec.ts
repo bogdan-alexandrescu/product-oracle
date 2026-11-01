@@ -2,7 +2,8 @@ import { expect, test, type Page } from "./test";
 
 import { MOCK_INTERVIEW_TOKEN } from "../lib/api/mock/interviews";
 import { ROADMAP_REVIEW_RUN } from "../lib/api/mock/runs";
-import { datesInWords, showValue } from "../app/runs/[id]/review/[checkpoint]/_items-lib";
+import { datesInWords } from "../lib/dates";
+import { showValue } from "../app/runs/[id]/review/[checkpoint]/_items-lib";
 import { login } from "./helpers";
 
 /*
