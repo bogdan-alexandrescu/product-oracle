@@ -155,6 +155,8 @@ test.describe("desktop", () => {
     // Filled with the accent, as New PRD's Continue.
     const fill = await create.evaluate((el) => getComputedStyle(el).backgroundColor);
     await page.goto("/documents/new?kind=prd");
+    // walk-brief: Continue is disabled until the form is ready; compare the ready button.
+    await expect(page.getByRole("button", { name: "Continue" }).first()).toBeEnabled();
     const cont = await page.getByRole("button", { name: "Continue" }).first().evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(fill).toBe(cont);
 
@@ -237,6 +239,8 @@ test.describe("phone", () => {
   test("qa-docs-8: New PRD's last field, scrolled to the end, is above the tab bar", async ({ page }) => {
     await open(page, "/documents/new?kind=prd");
     await expect(page.getByTestId("recommendation-panel")).toBeVisible();
+    // walk-brief: the form's fields are disabled until it is ready; scroll the ready form.
+    await expect(page.getByRole("textbox", { name: "Title" })).toBeEnabled();
     await page.mouse.move(195, 400);
     await page.mouse.wheel(0, 30_000);
     const tabs = (await page.getByTestId("tab-bar").boundingBox())!;
