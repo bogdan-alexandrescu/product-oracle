@@ -138,7 +138,7 @@ async def test_a_password_change_leaves_a_removed_token_alone(client):
             await s.scalars(select(AuditEvent).where(AuditEvent.action == "api_token.revoke"))
         ).all()
     assert event.data["api_tokens"] == [str(active)]
-    assert [e.subject_id for e in revokes] == [active]
+    assert [e.entity_id for e in revokes] == [active]
 
 
 async def test_removing_a_member_leaves_a_removed_token_alone(client):

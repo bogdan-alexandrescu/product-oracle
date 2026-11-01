@@ -533,10 +533,14 @@ async def _acted_as(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]
 
 
 async def select_tokens(session: AsyncSession, user_id: uuid.UUID) -> list[ApiToken]:
-    """Their active API tokens: a disable revokes them."""
+    """Their active API tokens: a disable revokes them (a removed one is left as it is)."""
     return list(
         await session.scalars(
-            select(ApiToken).where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+            select(ApiToken).where(
+                ApiToken.user_id == user_id,
+                ApiToken.revoked_at.is_(None),
+                ApiToken.removed_at.is_(None),
+            )
         )
     )
 
@@ -969,7 +973,11 @@ async def _left_over(
 
     tokens = list(
         await session.scalars(
-            select(ApiToken.id).where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+            select(ApiToken.id).where(
+                ApiToken.user_id == user_id,
+                ApiToken.revoked_at.is_(None),
+                ApiToken.removed_at.is_(None),
+            )
         )
     )
     grants = list(
@@ -1446,7 +1454,11 @@ async def restore_member(session: AsyncSession, principal: "Principal", user_id:
 
 
 async def list_api_tokens(session: AsyncSession) -> list[ApiToken]:
-    return list(await session.scalars(select(ApiToken).order_by(ApiToken.created_at)))
+    return list(
+        await session.scalars(
+            select(ApiToken).where(ApiToken.removed_at.is_(None)).order_by(ApiToken.created_at)
+        )
+    )
 
 
 async def revoke_api_token(
