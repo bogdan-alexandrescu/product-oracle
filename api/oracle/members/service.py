@@ -1511,6 +1511,31 @@ async def revoke_any_token(
     await tokens.revoke_grant(session, principal, found[0], "revoked by an owner")
 
 
+async def remove_expired_token(
+    session: AsyncSession, principal: "Principal", token_id: uuid.UUID
+) -> None:
+    """qa4-settings-39: remove an expired API token from Settings > API tokens (owners,
+    as Revoke). An active or revoked one is refused. The row is kept, hidden from every
+    list, so the approvals and decisions made with it keep its name."""
+    await _gate(session, principal)
+    token = await session.get(ApiToken, token_id, with_for_update=True)
+    if token is None or token.removed_at is not None:
+        raise MemberError("not_found", f"API token {token_id} not found")
+    now = datetime.now(UTC)
+    if token.revoked_at is not None or token.expires_at is None or token.expires_at > now:
+        raise MemberError("conflict", "Only an expired token can be removed; revoke it instead")
+    token.removed_at = now
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "api_token.remove",
+        "api_token",
+        token.id,
+        {"name": token.name, "user_id": str(token.user_id) if token.user_id else None},
+    )
+
+
 async def token_approvals(
     session: AsyncSession, token_id: uuid.UUID
 ) -> list[dict[str, object]] | None:

@@ -153,7 +153,8 @@ async def list_tokens(
 
     out: list[ApiTokenOut] = []
     if kind in (None, "personal", "service"):
-        stmt = select(ApiToken).order_by(ApiToken.created_at)
+        # qa4-settings-39: a removed (expired) token is kept for its name, never listed.
+        stmt = select(ApiToken).where(ApiToken.removed_at.is_(None)).order_by(ApiToken.created_at)
         if kind == "personal" or user_id is not None:
             stmt = stmt.where(ApiToken.user_id.is_not(None))
         if kind == "service":

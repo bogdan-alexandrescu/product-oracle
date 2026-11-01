@@ -87,3 +87,6 @@ class ApiToken(TenantScoped, Base):
     # A personal token stops working at this time (chosen when it is created: 30 days,
     # 90 days, a year, or never: None). Expired tokens are listed as such and refused.
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # qa4-settings-39: an expired token an owner removed from Settings > API tokens. The
+    # row stays (hidden from every list) so what was done with it keeps its name.
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
