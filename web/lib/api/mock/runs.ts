@@ -2704,8 +2704,6 @@ function seedDatesRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, docu
   const off = { baseline_confirm: false, feature_set: false, priority_order: false, prd_review: false, eng_review: false, eng_dates: true };
   const r = seedRun(ctx, own, "baseline_to_prd", document, { checkpoints: off }, created_at);
   r.id = id;
-  // A PRD not imported yet: the brief's title, the one the import gives it (as the API's).
-  if (briefTitle) r.document_title = briefTitle;
   from(r.created_at);
   launch(full, r);
   return { r, full };
@@ -2896,6 +2894,8 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
   const full = { ...ctx, db: own, now };
   const r = seedRun(ctx, own, "baseline_to_prd", document, {}, created_at);
   r.id = id;
+  // A PRD not imported yet: the brief's title, the one the import gives it (as the API's).
+  if (briefTitle) r.document_title = briefTitle;
   from(r.created_at);
   launch(full, r);
   for (const seq of [1, 2]) {
