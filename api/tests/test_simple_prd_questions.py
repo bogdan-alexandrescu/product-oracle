@@ -523,3 +523,39 @@ async def test_home_reads_do_not_grow_with_prds(client, path):
     await _prds(ctx, 8, start=2)
     many = await _statements(client, ctx, path)
     assert many - few <= 2, (few, many)
+
+
+# protects=walk-brief review minors: Home's read of the latest approved versions uses
+# postgresql distinct_on, not the deprecated ``Select.distinct(col)``; fails_when=it warns
+# SADeprecationWarning (an error once SQLAlchemy drops it); no_claim=which version it picks.
+async def test_home_reads_latest_versions_without_a_deprecation(client):
+    import warnings
+
+    from sqlalchemy.exc import SADeprecationWarning
+
+    ctx = await make_ctx("Example Co")
+    await _prds(ctx, 2)
+    async with tenant_session(ctx.tenant_id) as s:
+        docs = list(await s.scalars(select(Document)))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", SADeprecationWarning)
+            await questions.ensure_all(s, docs)
+
+
+# protects=walk-brief review minors: the versions found to hold no questions are kept up to
+# a limit, the oldest dropped first; fails_when=the set grows with every such version for
+# as long as the process lives; no_claim=how often a dropped version is read again.
+async def test_versions_without_questions_are_kept_up_to_a_limit(client, monkeypatch):
+    monkeypatch.setattr(questions, "_NOTHING_MAX", 3, raising=False)
+    ctx = await make_ctx("Example Co")
+    await _prds(ctx, 5)
+    async with tenant_session(ctx.tenant_id) as s:
+        docs = list(await s.scalars(select(Document).order_by(Document.slug)))
+        await questions.ensure_all(s, docs)
+        newest = await s.scalar(
+            select(DocumentVersion.id)
+            .join(Document, Document.id == DocumentVersion.document_id)
+            .where(Document.slug == "example-prd-4")
+        )
+    assert len(questions._NOTHING) <= 3
+    assert newest in questions._NOTHING

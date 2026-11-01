@@ -11,6 +11,9 @@ import { login } from "./helpers";
  * - item 2: protects=the New PRD form shows at once with its fields disabled while the role
  *   is read, says so, and keeps what is typed once it is ready; fails_when=a blank
  *   "Loading…" stands in for the form; no_claim=how long the API takes.
+ * - item 2 (review minors): protects=the account button is blank, never "?", while GET
+ *   /v1/me answers, then shows the member's initials; fails_when=a "?" shows meanwhile;
+ *   no_claim=how long /v1/me takes.
  * - items 3 and 4: protects=the brief's side panel lists the goals the owner ticked, shows
  *   Oracle's other goals apart as suggestions with why, and names the theme ("Clean
  *   document"); fails_when=an unticked goal reads as picked, or the theme's key shows;
@@ -74,6 +77,21 @@ for (const [name, viewport] of VIEWPORTS) {
       await writeBrief(page, "Example gift cards");
       await expect(title).toHaveValue("Example gift cards");
       await expect(page.getByRole("textbox", { name: "What problem does it solve?" })).toHaveValue(PROBLEM);
+    });
+
+    test(`2: the account button never shows a "?" while the signed-in member loads (${name})`, async ({ page }) => {
+      await login(page);
+      await page.evaluate(() => {
+        localStorage.setItem("po-mock-slow", "/v1/me");
+        localStorage.setItem("po-mock-slow-ms", "3000");
+      });
+      await page.goto("/documents/new?kind=prd");
+      const avatar = page.getByTestId(name === "phone" ? "phone-user-menu" : "user-menu");
+      await expect(avatar).toBeVisible();
+      // Read once (a retried assertion would pass when /v1/me answers).
+      expect(await avatar.textContent()).not.toContain("?");
+      // Once the member is read, it shows their initials (admin@example.com).
+      await expect(avatar).toContainText("AD", { timeout: 10_000 });
     });
 
     test(`3-4: the side panel shows the picked goal, Oracle's other goal as a suggestion, and the theme's name (${name})`, async ({ page }) => {
