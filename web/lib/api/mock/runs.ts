@@ -2942,6 +2942,11 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     decided_at: "2026-10-12T10:00:00Z",
     document: checkout ? { id: checkout.id, slug: checkout.slug, title: checkout.title } : null,
   });
+  // A feature dropped from the feature set since: in no ranking on screen, so its Top names
+  // it from the snapshot's own ranking (top_titles), as the API's (walk-docs-priorities 3).
+  const dropped = { ...snap.ranking[snap.ranking.length - 1], key: "F-41", title: "Gift wrap at checkout", rank: snap.ranking.length + 1 };
+  snap.ranking = [...snap.ranking, dropped];
+  Object.assign(snap, { feature_count: snap.ranking.length, top: snap.ranking.slice(0, 5).map((f) => f.key), top_titles: snap.ranking.slice(0, 5).map((f) => f.title) });
 }
 
 /**

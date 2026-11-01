@@ -15,7 +15,8 @@ import { login } from "./helpers";
  *   inside a word ("Confidenc e", "0.6 0") at 1456 px.
  * - "3 a snapshot's Top names its features": fails_when=a feature the order on screen lacks
  *   shows as its key.
- * - "4 the run's Goal column breaks no goal name inside a word" at 1512 px.
+ * - "4 the run's Goal column breaks no goal name inside a word" at 1512 px: a guard only; the
+ *   break was not reproduced on the mock, so no change is claimed for it.
  * - "5 Depends on names a dependency the PRD left out and says so": fails_when=its key shows,
  *   or nothing says it is outside the PRD's scope.
  * - "6 at 390 px every table row fits the phone".
@@ -83,6 +84,8 @@ test("3 a snapshot's Top names its features, also those the order on screen lack
   const list = page.getByTestId("snapshot-list");
   await expect(list.getByRole("listitem")).toHaveCount(2);
   await expect(list).toContainText("Top: ");
+  // The Checkout redesign order's fifth feature was dropped since: by its name, not "F-41".
+  await expect(list).toContainText("Gift wrap at checkout");
   await expect(list).not.toContainText(/\bF-\d+\b/);
 });
 
