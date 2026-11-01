@@ -68,7 +68,7 @@ export function StartSheet({
   // the backdrop, so the page behind was dimmed unevenly; the app's Dialog backdrop colour, dark
   // in both themes (qa-simple-decide-5).
   return createPortal(
-    <div data-testid="start-backdrop" className="fixed inset-0 z-50 flex items-end justify-center bg-hero/50 sm:items-center" onClick={onClose}>
+    <div data-backdrop="" data-testid="start-backdrop" className="fixed inset-0 z-50 flex items-end justify-center bg-hero/50 sm:items-center" onClick={onClose}>
       <div
         ref={ref}
         tabIndex={-1}

@@ -162,7 +162,7 @@ export function Sheet({
       } ${dialog ? "sm:items-center sm:justify-center sm:p-6" : ""}`}
       data-testid={testId}
     >
-      <div data-testid="sheet-scrim" aria-hidden className="absolute inset-0 bg-hero/50" onClick={onClose} />
+      <div data-backdrop="" data-testid="sheet-scrim" aria-hidden className="absolute inset-0 bg-hero/50" onClick={onClose} />
       <div
         ref={panel}
         id={id}

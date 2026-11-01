@@ -122,7 +122,7 @@ export function ProposeDialog({
 
   return (
     // qa-company-46: on a phone a full-width sheet, edge to edge.
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:p-0">
+    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:p-0">
       <div
         ref={panel}
         role="dialog"

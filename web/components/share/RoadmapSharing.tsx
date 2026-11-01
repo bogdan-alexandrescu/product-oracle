@@ -51,6 +51,7 @@ function Modal({ title, onClose, children, footer }: { title: string; onClose: (
   useFocusTrap(ref, true, onClose);
   return (
     <div
+      data-backdrop=""
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();

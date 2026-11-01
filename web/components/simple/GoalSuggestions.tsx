@@ -124,7 +124,7 @@ const CONFIDENCE: Record<string, string> = { high: "bg-pass-bg text-pass", mediu
 function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (reason: string) => void; onClose: () => void }) {
   const [reason, setReason] = useState("");
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+    <div data-backdrop="" className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -662,7 +662,7 @@ export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; a
   return (
     <>
     {/* The page behind dims, as under the move dialog; a click on it closes the drawer. */}
-    <div data-testid="goal-panel-backdrop" aria-hidden className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
+    <div data-backdrop="" data-testid="goal-panel-backdrop" aria-hidden className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
     <aside ref={drawer} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} data-testid="goal-panel" className="fixed top-0 right-0 focus:outline-none bottom-0 z-50 w-[480px] max-w-full overflow-y-auto border-l border-line bg-surface p-4 text-text shadow-tip">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="flex-1 text-lg font-semibold">{title}</h2>

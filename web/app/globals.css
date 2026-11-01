@@ -367,6 +367,35 @@ html {
     scrollbar-gutter: stable;
   }
 }
+/* backdrop-gutter: while a dialog's or sheet's dimmed backdrop (data-backdrop) is open the page
+   stops scrolling and the scrollbar's room becomes padding of the same width (--scrollbar-room,
+   kept by ScrollbarRoom), so the page does not move, yet the window's area for fixed boxes is
+   the whole window: the backdrop reaches the right edge, with no undimmed strip where the
+   scrollbar was. "below-1240"/"below-1600": a backdrop shown only under that width (the Ask
+   panel's, which docks beside the page from there). --backdrop-room is that padding, for a fixed
+   box over the backdrop that spans the page (the toasts) to keep to the page's width. */
+html:has([data-backdrop=""]) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+  padding-right: var(--scrollbar-room, 0px);
+  --backdrop-room: var(--scrollbar-room, 0px);
+}
+@media (max-width: 1239.98px) {
+  html:has([data-backdrop="below-1240"]) {
+    overflow: hidden;
+    scrollbar-gutter: auto;
+    padding-right: var(--scrollbar-room, 0px);
+  --backdrop-room: var(--scrollbar-room, 0px);
+  }
+}
+@media (max-width: 1599.98px) {
+  html:has([data-backdrop="below-1600"]) {
+    overflow: hidden;
+    scrollbar-gutter: auto;
+    padding-right: var(--scrollbar-room, 0px);
+  --backdrop-room: var(--scrollbar-room, 0px);
+  }
+}
 body {
   background: var(--bg);
   color: var(--text);
