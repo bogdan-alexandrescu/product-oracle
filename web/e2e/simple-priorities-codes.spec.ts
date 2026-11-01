@@ -10,7 +10,7 @@ import {
 /**
  * Simple Priorities: stable item codes on Value / effort (#723; the owner's pick "Short code +
  * highlight"). Each mark shows a short code that never changes with rank (the feature's code,
- * F-12 for setup-import in the mock, else initials of the item's key: AS for alert-sso); the
+ * F-12 for setup-import in the mock, else the letters of the item's name: ARB for Alert routing by team); the
  * ranked side list shows the same code beside the rank; the item just moved stays highlighted
  * on the chart and in the list with "moved #a → #b" ("now #b (effort n wk)" for a re-estimate) until the next move (an accepted proposal
  * included). Every action is driven through the UI (a mouse drag, a finger's touch drag, the
@@ -103,20 +103,20 @@ const markCodes = (tab: Page) =>
 
 const CODES = {
   "setup-checklist": "SC",
-  "alert-rules": "AR",
+  "alert-rules": "ARE",
   "alert-digest": "F-06",
-  "alert-mobile": "AM",
+  "alert-mobile": "MAP",
   "setup-import": "F-12",
-  "alert-export": "AE",
-  "alert-sso": "AS",
-  "price-tiers": "PT",
-  "setup-video": "SV",
+  "alert-export": "AHE",
+  "alert-sso": "ARB",
+  "price-tiers": "NPT",
+  "setup-video": "WV",
 };
 
 test.describe("desktop", () => {
   /**
    * Card simple-priorities-codes-drag: protects = each Value / effort mark shows its short
-   * stable code (F-12, AS…), never its rank; dragging setup-import across a quadrant re-ranks
+   * stable code (F-12, ARB…), never its rank; dragging setup-import across a quadrant re-ranks
    * it (#5 → #2) while every mark keeps its code, the side-list row with that code shows the
    * new rank beside the code and "moved #5 → #2", the mark is highlighted, the hover card
    * keeps the rank, and the legend says codes stay with the item; fails_when = a mark shows a
@@ -261,7 +261,7 @@ test.describe("desktop", () => {
     const viewer = await open(page, "viewer@example.com");
     expect(await markCodes(viewer)).toEqual(CODES);
     await expect(side(viewer, "alert-sso").getByTestId("side-code")).toHaveText(
-      "AS",
+      "ARB",
     );
     await expect(side(viewer, "alert-sso").getByTestId("side-rank")).toHaveText(
       "7",

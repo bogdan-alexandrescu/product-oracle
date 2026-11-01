@@ -75,19 +75,22 @@ const featureId = (itemId: string): string => `feature-${itemId}`;
 
 const FEATURE_CODE = /^[A-Z]{1,3}-\d+$/;
 
-/** Initials of up to three words of `key`; a one-word key's first two letters. */
-function initials(key: string): string {
-  const words = key.toLowerCase().match(/[a-z]+/g) ?? [];
-  if (words.length >= 2) return words.slice(0, 3).map((w) => w[0]).join("").toUpperCase();
-  return `${words[0] ?? ""}xx`.slice(0, 2).toUpperCase();
+/** Initials of up to three words of `name` (Team invite nudges TIN); a one-word name's first two letters (Pricing PR); then the name's first number, if it has one (Pay 1 PA1). */
+function initials(name: string): string {
+  const words = name.match(/\p{L}+/gu) ?? [];
+  const number = name.match(/\d+/)?.[0] ?? "";
+  if (words.length >= 2) return words.slice(0, 3).map((w) => w[0]).join("").toUpperCase() + number;
+  return `${words[0] ?? ""}xx`.slice(0, 2).toUpperCase() + number;
 }
 
 /**
  * priorities.short_codes: each feature's short code, for feature keys in creation order: the
- * key when it is a code (F-12), else its PRD section's code (F-06), else its initials, a digit added on a clash in creation order,
- * so every reader reads the same code and a new feature never renames an older one.
+ * key when it is a code (F-12), else its PRD section's code (F-06), else the initials of its
+ * shown name (`names`, by key; the key when it has none) and its number (Pay 1 PA1), a digit
+ * added on a clash in creation order (SC, SC2; PA1.2 after a number), so every reader reads the same code, a rename moves it, and a new feature
+ * never renames an older one.
  */
-export function shortCodes(keys: string[], prd: Record<string, string> = {}): string[] {
+export function shortCodes(keys: string[], prd: Record<string, string> = {}, names: Record<string, string> = {}): string[] {
   const out: (string | null)[] = keys.map((k) => (FEATURE_CODE.test(k) ? k : null));
   const taken = new Set(out.filter((c): c is string => c !== null));
   // The walk: a feature whose item came from a PRD section with a code (f-06) reads F-06.
@@ -99,9 +102,10 @@ export function shortCodes(keys: string[], prd: Record<string, string> = {}): st
   });
   keys.forEach((k, i) => {
     if (out[i] !== null) return;
-    const base = initials(k);
+    const base = initials(names[k]?.trim() || k);
+    const sep = /\d$/.test(base) ? "." : "";
     let code = base;
-    for (let n = 2; taken.has(code); n++) code = `${base}${n}`;
+    for (let n = 2; taken.has(code); n++) code = `${base}${sep}${n}`;
     taken.add(code);
     out[i] = code;
   });
@@ -327,7 +331,10 @@ export function prioritiesOut(
   const featureKey = (k: string): string => planCode(db, k) ?? FEATURES[k]?.code ?? k;
   const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
   const prdCodes = Object.fromEntries(yours.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
-  const shorts = shortCodes(created, prdCodes);
+  // Each feature's shown name (priorities.py `_shown_names`): its item's title as every reader
+  // sees it, else its seed item's.
+  const names = Object.fromEntries([...db.items.map((i) => [featureKey(i.key), i.title]), ...ranked.map((i) => [featureKey(i.key), i.title])]);
+  const shorts = shortCodes(created, prdCodes, names);
   const short = new Map(created.map((k, n) => [k, shorts[n]]));
   yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
   const codes = new Map(read.items.map((i) => [i.id, i]));
