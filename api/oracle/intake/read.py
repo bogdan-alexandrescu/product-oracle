@@ -31,6 +31,7 @@ the reads on create and repin are not counted. Over the cap Analyse with Oracle 
 in words (:func:`capped`), owners included.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -245,6 +246,41 @@ async def end_active(db: AsyncSession, intake: ProductIntake) -> None:
     await db.flush()
 
 
+# Submissions under way after their request answered (:func:`submit_later`); kept so
+# the event loop does not drop them.
+_LATER: set[asyncio.Task[None]] = set()
+
+
+def submit_later(tenant_id: uuid.UUID, intake: ProductIntake) -> None:
+    """Submit a read's run after the response, in a session of its own: SwarmCloud's
+    calls take seconds (walk-brief: Continue waited 25 s on them). A refusal, or a
+    process that dies first, is the tick's to find (:func:`sync`)."""
+    read = current(intake)
+    if not read or read.get("path") != "swarmcloud" or not read.get("run_id"):
+        return
+    task = asyncio.get_running_loop().create_task(_submit_in(tenant_id, intake.id, dict(read)))
+    _LATER.add(task)
+    task.add_done_callback(_LATER.discard)
+
+
+async def _submit_in(tenant_id: uuid.UUID, intake_id: uuid.UUID, read: dict[str, Any]) -> None:
+    try:
+        async with tenant_session(tenant_id) as s:
+            await submit(s, read)
+            # A refusal falls back to the job at once, as the request's own summary did.
+            intake = await s.get(ProductIntake, intake_id, populate_existing=True)
+            if intake is not None and await sync(s, intake):
+                await s.commit()
+    except Exception:  # noqa: BLE001 - the tick submits it again
+        log.exception("intake read %s: the later submission failed", read.get("run_id"))
+
+
+async def drain() -> None:
+    """Wait for the submissions under way (tests, shutdown)."""
+    while _LATER:
+        await asyncio.gather(*list(_LATER), return_exceptions=True)
+
+
 async def submit(db: AsyncSession, read: dict[str, Any] | None) -> None:
     """Submit a read's run now (outside the review gate), rather than on the next tick;
     a refusal is the tick's to find (:func:`sync`)."""
@@ -337,10 +373,18 @@ def job_finished(intake: ProductIntake, job: LlmJob, out: dict[str, Any]) -> Non
 
 async def _unstarted(db: AsyncSession, run: Run) -> str | None:
     """Why a running read's run never reached SwarmCloud: its segment is back in the queue
-    with the refusal, no workflow, and no submission that may have landed."""
+    with the refusal, no workflow, and no submission that may have landed. One still
+    waiting to be submitted (:func:`submit_later`, or the tick) is not refused."""
+    from oracle.runs import service as runs_service
+
     segments = list(await db.scalars(select(RunSegment).where(RunSegment.run_id == run.id)))
     for s in segments:
-        if s.status == "pending" and s.error and not s.swarm_workflow_id:
+        if (
+            s.status == "pending"
+            and s.error
+            and s.error != runs_service.QUEUED
+            and not s.swarm_workflow_id
+        ):
             if (s.artifacts or {}).get("lost"):
                 return None
             return s.error
