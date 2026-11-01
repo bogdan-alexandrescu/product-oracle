@@ -25,6 +25,7 @@ from datetime import date
 from typing import Any
 
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -276,8 +277,16 @@ async def _read(db: AsyncSession, v: DocumentVersion) -> bool:
 
 # Approved versions found to hold no questions (neither a table nor the heading). A
 # version never changes, so it is not read again while this process lives (walk-brief:
-# Home took a lock, parsed and asked six times per PRD on every read).
-_NOTHING: set[uuid.UUID] = set()
+# Home took a lock, parsed and asked six times per PRD on every read). Kept up to
+# _NOTHING_MAX, the oldest dropped first (a dropped one is only read again).
+_NOTHING: dict[uuid.UUID, None] = {}
+_NOTHING_MAX = 4096
+
+
+def _found_nothing(version_id: uuid.UUID) -> None:
+    _NOTHING[version_id] = None
+    while len(_NOTHING) > _NOTHING_MAX:
+        del _NOTHING[next(iter(_NOTHING))]
 
 
 async def ensure_all(db: AsyncSession, documents: list[Document]) -> None:
@@ -293,7 +302,7 @@ async def ensure_all(db: AsyncSession, documents: list[Document]) -> None:
         select(DocumentVersion)
         .where(DocumentVersion.document_id.in_(ids), DocumentVersion.approved_at.is_not(None))
         .order_by(DocumentVersion.document_id, DocumentVersion.number.desc())
-        .distinct(DocumentVersion.document_id)
+        .ext(distinct_on(DocumentVersion.document_id))
     )
     versions = {v.document_id: v for v in await db.scalars(latest) if v.id not in _NOTHING}
     if not versions:
@@ -341,7 +350,7 @@ async def ensure(db: AsyncSession, document: Document, v: DocumentVersion | None
     if rows is not None:
         await import_answer(db, document, v, rows)
     elif not _HEADING.search(v.markdown or ""):
-        _NOTHING.add(v.id)
+        _found_nothing(v.id)
     else:
         try:
             await jobs.enqueue(db, document, "prd_questions", version=v, coalesce=True)

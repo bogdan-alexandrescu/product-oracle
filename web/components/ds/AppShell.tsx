@@ -289,7 +289,8 @@ function UserMenu({ placement, emailBeside = false }: { placement: "rail" | "hea
     router.push("/login");
   }
 
-  const initials = initialsOf(email);
+  // walk-brief review: blank while /v1/me loads, never a "?" for a member not read yet.
+  const initials = me ? initialsOf(email) : "";
   const rail = placement === "rail";
   const current = pathname === "/account" || pathname.startsWith("/account/");
 
