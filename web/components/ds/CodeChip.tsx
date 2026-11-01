@@ -336,14 +336,15 @@ export function CodeChip({
     <HoverCard
       testId={testId}
       label={n.code ? `${n.code} ${label}` : label}
-      className={codeOnly ? "flex-none" : "max-w-full"}
+      // whole: the name moves under its code rather than breaking inside a word ("Activati on").
+      className={codeOnly ? "flex-none" : whole ? "max-w-full flex-wrap" : "max-w-full"}
       trigger={
         <>
           {n.code && <CodeTag code={n.code} proposed={p.proposed} />}
           {!codeOnly && (
             <span
               data-testid="code-name"
-              className={`min-w-0 font-medium ${whole ? "break-words" : wrap ? "line-clamp-2" : "truncate"} ${p.proposed && !n.code ? "text-warn" : ""}`}
+              className={`font-medium ${whole ? "max-w-full break-words" : wrap ? "min-w-0 line-clamp-2" : "min-w-0 truncate"} ${p.proposed && !n.code ? "text-warn" : ""}`}
             >
               {label}
             </span>

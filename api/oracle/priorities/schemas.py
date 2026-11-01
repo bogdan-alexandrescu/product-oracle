@@ -158,6 +158,8 @@ class PrioritySnapshotSummary(BaseModel):
     note: str | None
     feature_count: int
     top: list[str]
+    # The same features by name, as the snapshot ranked them (keys are not for people).
+    top_titles: list[str] = []
     # saved: a person's snapshot, or a run's approved order; proposed: a run's order
     # waiting at its priority stop; discarded: sent back or replaced (C8).
     status: SnapshotStatus = "saved"

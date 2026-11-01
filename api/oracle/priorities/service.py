@@ -344,6 +344,7 @@ def _summary(s: PrioritySnapshot, document: SnapshotDocument | None) -> dict[str
         "note": (s.params or {}).get("note"),
         "feature_count": len(s.ranking or []),
         "top": [r["key"] for r in (s.ranking or [])[:5]],
+        "top_titles": [r.get("title") or r["key"] for r in (s.ranking or [])[:5]],
         "status": s.status,
         "run_id": s.run_id,
         "document": document,

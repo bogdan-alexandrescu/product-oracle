@@ -31405,6 +31405,11 @@ export interface components {
             /** Top */
             top: string[];
             /**
+             * Top Titles
+             * @default []
+             */
+            top_titles: string[];
+            /**
              * Status
              * @default saved
              * @enum {string}
@@ -31454,6 +31459,11 @@ export interface components {
             feature_count: number;
             /** Top */
             top: string[];
+            /**
+             * Top Titles
+             * @default []
+             */
+            top_titles: string[];
             /**
              * Status
              * @default saved

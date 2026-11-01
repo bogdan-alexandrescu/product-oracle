@@ -172,9 +172,10 @@ export function DataTable<T>({
           ))}
         </colgroup>
         {/* On a phone the header is for screen readers only (sr-only: a 1 px clipped box), so
-            nothing in it can run off the screen there (qa-work-31). */}
+            nothing in it can run off the screen there (qa-work-31); its row wraps inside that
+            box rather than laying its headers out wider than the phone (walk-docs-priorities 6). */}
         <thead className={hideHeader ? "sr-only" : "max-[600px]:sr-only"} role="rowgroup">
-          <tr role="row">
+          <tr role="row" className={hideHeader ? "flex max-w-full flex-wrap" : "max-[600px]:flex max-[600px]:max-w-full max-[600px]:flex-wrap"}>
             {columns.map((c) => (
               <th
                 key={c.key}

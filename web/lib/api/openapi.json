@@ -95951,6 +95951,14 @@
             "type": "array",
             "title": "Top"
           },
+          "top_titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top Titles",
+            "default": []
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -96123,6 +96131,14 @@
             },
             "type": "array",
             "title": "Top"
+          },
+          "top_titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top Titles",
+            "default": []
           },
           "status": {
             "type": "string",

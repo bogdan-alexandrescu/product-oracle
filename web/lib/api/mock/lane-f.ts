@@ -2051,6 +2051,7 @@ export async function laneF(
           note: input.note ?? null,
           feature_count: r.features.length,
           top: r.features.slice(0, 5).map((f) => f.key),
+          top_titles: r.features.slice(0, 5).map((f) => f.title),
           status: "saved",
           run_id: null,
           document: null,
