@@ -383,3 +383,20 @@ def test_prose_dates_read_month_first_in_exports():
     assert "by Jan 29, 2027 (G1)" in html and "Beta Nov 30, 2026;" in html
     assert "launch-2026-11-30" in html and "<code>2026-12-01</code>" in html
     assert "2027-01-29" not in html
+
+
+def test_prose_dates_read_month_first_in_themed_exports_and_decks():
+    """walk-docs-priorities review: a themed HTML or PDF export and a deck render prose with
+    their own Markdown, so their days read month first too ("to Jan 29, 2027")."""
+    from oracle.export.deck import _render_md
+    from oracle.export.render import _themed_markdown
+
+    text = "Raise completion to 70% by 2027-01-29 (G1); see launch-2026-11-30 and `2026-12-01`."
+    for html in (
+        _themed_markdown(False).render(text, {"numbers": {}}),
+        _themed_markdown(True).render(text, {"numbers": {}}),
+        str(_render_md(text, set())),
+    ):
+        assert "by Jan 29, 2027 (G1)" in html
+        assert "launch-2026-11-30" in html and "<code>2026-12-01</code>" in html
+        assert "2027-01-29" not in html
