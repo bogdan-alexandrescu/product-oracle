@@ -108520,6 +108520,37 @@
         "type": "object",
         "title": "ScopeEnhanceIn"
       },
+      "ScopeEvidence": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ScopeEvidence",
+        "description": "A feature's evidence by its source's name (walk-eng-check 6): never a bare id."
+      },
       "ScopeFeatureOut": {
         "properties": {
           "id": {
@@ -109417,6 +109448,22 @@
             },
             "type": "array",
             "title": "Evidence Ids",
+            "default": []
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeEvidence"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
+          },
+          "baseline_goals": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoal"
+            },
+            "type": "array",
+            "title": "Baseline Goals",
             "default": []
           },
           "edited": {
