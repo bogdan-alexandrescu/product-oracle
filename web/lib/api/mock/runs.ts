@@ -100,7 +100,7 @@ export interface RunsContext {
   userRole?: Schemas["Me"]["role"] | null;
   /** D8: the signed-in member (who stages or suggests), and every member by id (names). */
   member?: { id: string; email: string; role: Schemas["Me"]["role"] } | null;
-  members?: { id: string; email: string; role: Schemas["Me"]["role"] }[];
+  members?: { id: string; email: string; role: Schemas["Me"]["role"]; name?: string | null }[];
   /**
    * D8: a test's "another reviewer changed the draft" (MOCK_REVIEW_CHANGE_KEY): the email of
    * who changed it, read once (the key is cleared). The next decide bumps the draft by one
@@ -939,7 +939,7 @@ export function approveRunReview(ctx: RunsContext, runId: string, checkpointId: 
   const cp = r?.checkpoints.find((c) => c.id === checkpointId);
   if (!r || !cp || cp.status !== "pending" || r.status !== "awaiting_checkpoint") return;
   Object.assign(cp, { status: "approved", note: null, decided_by: ctx.userId, decided_at: ctx.now() });
-  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle" } };
+  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle", by: ctx.userId } };
   next(ctx, r, r.segments.find((x) => x.seq === cp.segment_seq)!);
   refresh(r);
 }
@@ -2151,6 +2151,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const scopeEdited = cp.kind === "feature_set" ? scopeEdits(ctx.db, r.id) : 0;
     if (decision === "changes_requested" && !text && !reviewed && !sent.length && !scopeEdited) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
+    // A confirmed console answer is its author's, as the API names it, not the confirmer's.
+    const answerer = confirming ? (ctx.members ?? []).find((x) => x.email === cp.console?.answered_by) : undefined;
+    const author = confirming ? (answerer?.id ?? null) : ctx.userId;
     Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
     if (decision === "changes_requested") cp.review = reviewed ? documentReview(ctx, r, cp, reviewed, text) : buildReview(ctx, r, cp, staged, text);
     if (edited) {
@@ -2179,7 +2182,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
     if (cp.kind === "eng_review" && decision === "approved") approveEngCheck(ctx, r, cp, staged);
     if (cp.kind === "eng_dates" && decision === "approved") approveEngDates(cp, staged);
-    cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: confirming ? "swarmcloud_console" : "oracle" } };
+    cp.payload = { ...cp.payload, decided: { role: (confirming ? answerer?.role : ctx.userRole) ?? null, via: confirming ? "swarmcloud_console" : "oracle", by: author } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
       const at = ctx.now();
@@ -2216,7 +2219,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     review.payload = { ...review.payload, import: s.draft_import };
     return done();
   }
-  if (action === "decisions" && m === "GET") return json(200, decisionsOf(r));
+  if (action === "decisions" && m === "GET") return json(200, decisionsOf(ctx, r));
   if (action === "segments" && p[5] === "artifacts" && m === "GET") {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     const raw = new URL(req.url).searchParams.get("attempt");
@@ -2328,7 +2331,9 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
 
 function decisionSummary(d: Omit<RunDecision, "summary">): string {
   let what = d.status.replace("_", " ");
-  if (d.decided_by_role) what += ` by ${/^[aeiou]/.test(d.decided_by_role) ? "an" : "a"} ${d.decided_by_role}`;
+  const role = d.decided_by_role ? `${/^[aeiou]/.test(d.decided_by_role) ? "an" : "a"} ${d.decided_by_role}` : null;
+  if (d.decided_by_name) what += role ? ` by ${d.decided_by_name}, ${role}` : ` by ${d.decided_by_name}`;
+  else if (role) what += ` by ${role}`;
   if (d.via === "swarmcloud_console") what += " in SwarmCloud's console";
   const parts = [CHECKPOINT_TITLES[d.kind] ?? d.kind, what];
   if (d.note) parts.push(`note: ${d.note}`);
@@ -2336,13 +2341,18 @@ function decisionSummary(d: Omit<RunDecision, "summary">): string {
   return parts.join(" · ");
 }
 
-/** The run's decided checkpoints, by segment then decided time; pending ones are not listed. */
-function decisionsOf(r: RunOut): RunDecision[] {
+/**
+ * The run's decided checkpoints, by segment then decided time; pending ones are not listed.
+ * Who decided is named as the API names them: the member's name, else their email.
+ */
+function decisionsOf(ctx: RunsContext, r: RunOut): RunDecision[] {
   const flow = FLOW_CATALOG.flows.find((f) => f.key === r.flow);
+  const people = new Map((ctx.members ?? []).map((x) => [x.id, x.name?.trim() || x.email]));
   const out = r.checkpoints
     .filter((c) => c.status !== "pending")
     .map((c) => {
-      const decided = c.payload.decided as { role?: RunDecision["decided_by_role"]; via?: RunDecision["via"] } | undefined;
+      const decided = c.payload.decided as { role?: RunDecision["decided_by_role"]; via?: RunDecision["via"]; by?: string | null } | undefined;
+      const by = decided && "by" in decided ? decided.by : c.decided_by;
       const extra = (c.payload.review ?? {}) as { edits?: RunDecision["edits"]; review?: RunDecision["review"] };
       const d: Omit<RunDecision, "summary"> = {
         checkpoint_id: c.id,
@@ -2353,6 +2363,7 @@ function decisionsOf(r: RunOut): RunDecision[] {
         status: c.status as RunDecision["status"],
         decided_at: c.decided_at ?? null,
         decided_by_role: decided?.role ?? null,
+        decided_by_name: (by && people.get(by)) || null,
         via: decided?.via ?? "oracle",
         note: c.note ?? null,
         edits: extra.edits ?? null,
@@ -3193,7 +3204,7 @@ function consoleHeldRun(): RunOut {
   cp.run_id = run.id;
   cp.payload = { ...cp.payload, items_check: items.items_check };
   cp.console = {
-    answered_by: "lead@example.com",
+    answered_by: "approver@example.com",
     answered_at: "2026-10-20T10:00:00Z",
     via: null,
     verdict: "MERGE",

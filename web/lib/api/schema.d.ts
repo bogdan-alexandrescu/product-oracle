@@ -35026,7 +35026,7 @@ export interface components {
         /**
          * RunDecision
          * @description A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
-         *     who decided by role only (no names reach the agents), when, and what. A console
+         *     who decided (the person's name beside their role), when, and what. A console
          *     answer is a decision once it is followed: one held for an approver is still pending
          *     and not listed.
          */
@@ -35056,6 +35056,8 @@ export interface components {
             decided_at?: string | null;
             /** Decided By Role */
             decided_by_role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /** Decided By Name */
+            decided_by_name?: string | null;
             /**
              * Via
              * @default oracle
