@@ -186,10 +186,14 @@ export function named(scope: Scope): Scope {
  * walk-eng-check 6: the agents' text without their internal pointers, "(proposed in stage 3,
  * awaiting the founder, stage 3 Q8.)" or "see stage 2 Q4": a person reads the requirement only.
  */
+// A pointer the agents write: "see stage 2", "stage 3 Q8", "proposed in stage 3". A bare
+// "stage 2" is the requirement's own words ("ships in stage 2 of rollout") and stays.
+const POINTER = String.raw`(?:see\s+stage\s*\d+(?:\s*Q\d+)?|stage\s*\d+\s*Q\d+|proposed\s+in\s+stage\s*\d+)`;
+
 export function plainText(text: string): string {
   return text
-    .replace(/\s*\([^()]*\bstage\s*\d+[^()]*\)\.?/gi, "")
-    .replace(/\s*\(?\b(?:see\s+)?stage\s*\d+(?:\s*Q\d+)?\b\)?/gi, "")
+    .replace(new RegExp(String.raw`\s*\([^()]*\b${POINTER}\b[^()]*\)\.?`, "gi"), "")
+    .replace(new RegExp(String.raw`\s*\(?\b${POINTER}\b\)?`, "gi"), "")
     .replace(/\s+([.,;:])/g, "$1")
     .trim();
 }

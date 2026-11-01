@@ -230,8 +230,8 @@ export function EngReview({
                 const v = verdictOf(acts.filter((a) => a.state === "staged"));
                 const size = (edit(acts.filter((a) => a.state === "staged"), "size")?.value as string | undefined) ?? f.size;
                 // A question with a staged answer is answered; only the rest are open.
-              const unanswered = f.questions.filter((q) => !acts.some((a) => a.state === "staged" && a.kind === "edit" && a.field === `answer:${q.id}`));
-              const blocking = unanswered.filter((q) => q.blocking).length;
+                const unanswered = f.questions.filter((q) => !acts.some((a) => a.state === "staged" && a.kind === "edit" && a.field === `answer:${q.id}`));
+                const blocking = unanswered.filter((q) => q.blocking).length;
                 const reasons = reasonsOf(f.key);
                 const confirm = [
                   !check.code_map_used ? NO_CODE_MAP : null,

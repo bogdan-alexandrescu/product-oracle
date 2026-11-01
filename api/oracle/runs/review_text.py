@@ -79,8 +79,9 @@ def plain(
             continue
         said = re.compile(rf"\b(?:(?i:decision|question)\s+)?{re.escape(qid)}\b")
         out = said.sub(lambda _m, q=question: f'"{q}"', out)
-    out = _ASKED.sub(lambda m: f"an open {m[1].lower()}", out)
-    out = _PREFIXED.sub("an open question", out)
+    # An id the review cannot quote may name a question already answered: never "open".
+    out = _ASKED.sub(lambda m: f"a {m[1].lower()}", out)
+    out = _PREFIXED.sub("a question", out)
     for key, name in (codes or {}).items():
         if not key or not name or name == key or not _code_like(key):
             continue
@@ -95,14 +96,19 @@ def plain(
 def _briefs(check: dict[str, Any]) -> None:
     features = [f for f in check.get("features") or [] if isinstance(f, dict)]
     codes = {str(f.get("key")): str(f.get("title") or "") for f in features}
-    for f in features:
-        asked = {
+
+    def asked(f: dict[str, Any]) -> dict[str, str]:
+        return {
             str(q.get("id")): str(q.get("question") or "")
             for q in f.get("questions") or []
             if isinstance(q, dict)
         }
+
+    # An approach may name another brief's question by its id; its own brief's come first.
+    every = {qid: q for f in features for qid, q in asked(f).items()}
+    for f in features:
         if isinstance(f.get("approach"), str):
-            f["approach"] = plain(f["approach"], codes=codes, questions=asked)
+            f["approach"] = plain(f["approach"], codes=codes, questions={**every, **asked(f)})
         for q in f.get("questions") or []:
             if isinstance(q, dict) and isinstance(q.get("question"), str):
                 q["question"] = plain(q["question"], codes=codes)
