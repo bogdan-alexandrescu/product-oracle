@@ -21,7 +21,7 @@ from oracle.members.names import display_name
 from oracle.models import AuditEvent
 from oracle.runs.models import Checkpoint, Run
 from oracle.tenancy import tenant_session
-from oracle.v2.models import KnowledgeGap, StakeholderAnswer, StakeholderQuestion
+from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderAnswer, StakeholderQuestion
 from tests.baseline_helpers import entity, make_item
 from tests.claude_account_helpers import add_account, window
 from tests.intake_helpers import answer, company, create_intake
@@ -865,3 +865,30 @@ def _intake_read_on_the_job(monkeypatch):
     from oracle.config import get_settings
 
     monkeypatch.setattr(get_settings(), "intake_read_runtime", "job")
+
+
+async def test_a_drafted_briefs_questions_say_the_prds_stage(client):
+    """protects=walk-brief item 7: once the brief's PRD is drafted, then approved, its open
+    questions in the Inbox say so instead of 'Before drafting'; fails_when=the label stays
+    'Before drafting · <PRD>'; no_claim=how the PRD was drafted."""
+    from oracle.docs.models import Document
+
+    ctx = await company()
+    out = await create_intake(client, ctx, "commenter")
+    intake_id = uuid.UUID(out["intake"]["id"])
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = Document(slug="saved-addresses", title="Saved addresses PRD", kind="prd")
+        s.add(doc)
+        await s.flush()
+        intake = await s.get(ProductIntake, intake_id)
+        intake.document_id = doc.id
+        await s.commit()
+        doc_id = doc.id
+    [row, *_] = await inbox(client, ctx, "commenter")
+    assert row["subject"]["title"] == "PRD drafted · Saved addresses PRD"
+    assert row["subject"]["href"] == f"/intakes/{intake_id}"
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(Document, doc_id)).status = "approved"
+        await s.commit()
+    [row, *_] = await inbox(client, ctx, "commenter")
+    assert row["subject"]["title"] == "PRD approved · Saved addresses PRD"
