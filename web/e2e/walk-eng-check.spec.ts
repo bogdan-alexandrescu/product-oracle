@@ -28,7 +28,9 @@ import { login, signOut } from "./helpers";
  *   words stay ("ships in stage 2 of rollout"); fails_when=a pointer shows or own words are cut.
  * - "evidence by name" (item 6): protects=evidence by its source's name; fails_when=a bare id shows.
  * - "one filter name" (item 7): protects=the same person reads the same filter name on a phone
- *   and a desktop; fails_when=the name changes with the width; no_claim=other roles (rirs-13).
+ *   and a desktop; fails_when=the name changes with the width; no_claim=other roles (rirs-13). It guards the
+ *   label as built, not a change: whether a commenter should read "Needs you" too is the
+ *   owner's question (questions.json).
  */
 
 const withScenario = (page: Page, scenario: string) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
