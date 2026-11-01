@@ -358,26 +358,47 @@ async def _documents(
     """The PRD of each run snapshot: its document, else the slug its run writes."""
     from oracle.docs.models import Document
     from oracle.runs.models import Run
+    from oracle.runs.service import _pending_titles
 
-    doc_ids = {s.document_id for s in snapshots if s.document_id}
     run_ids = {s.run_id for s in snapshots if s.run_id and not s.document_id}
-    docs = (
-        {d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(doc_ids)))}
-        if doc_ids
-        else {}
-    )
     runs = (
         {r.id: r for r in await db.scalars(select(Run).where(Run.id.in_(run_ids)))}
         if run_ids
         else {}
     )
+    doc_ids = {s.document_id for s in snapshots if s.document_id} | {
+        r.document_id for r in runs.values() if r.document_id
+    }
+    docs = (
+        {d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(doc_ids)))}
+        if doc_ids
+        else {}
+    )
+    # A run not yet imported: the document its slug already names, else the brief's title
+    # (the title the import gives it), so the PRD reads as titled, never as its slug.
+    slugs = {
+        str(slug)
+        for r in runs.values()
+        if not r.document_id and (slug := (r.knobs or {}).get("document_slug"))
+    }
+    by_slug = (
+        {d.slug: d for d in await db.scalars(select(Document).where(Document.slug.in_(slugs)))}
+        if slugs
+        else {}
+    )
+    pending = await _pending_titles(db, list(runs.values()))
     out: dict[uuid.UUID, SnapshotDocument] = {}
     for s in snapshots:
-        if s.document_id in docs:
-            d = docs[s.document_id]
+        run = runs.get(s.run_id) if s.run_id else None
+        doc_id = s.document_id or (run.document_id if run else None)
+        if doc_id in docs:
+            d = docs[doc_id]
             out[s.id] = SnapshotDocument(id=d.id, slug=d.slug, title=d.title)
-        elif s.run_id in runs and (slug := (runs[s.run_id].knobs or {}).get("document_slug")):
-            out[s.id] = SnapshotDocument(slug=str(slug))
+        elif run and (slug := (run.knobs or {}).get("document_slug")):
+            if (d := by_slug.get(str(slug))) is not None:
+                out[s.id] = SnapshotDocument(id=d.id, slug=d.slug, title=d.title)
+            else:
+                out[s.id] = SnapshotDocument(slug=str(slug), title=pending.get(run.id))
     return out
 
 
