@@ -34,8 +34,8 @@ def _plain(text, codes=None, questions=None):
         ("Capacity holds (team estimate, 0.73).", "Capacity holds (team estimate)."),
         ("Capacity holds (0.6).", "Capacity holds."),
         ("Capacity holds, confidence 0.55, per the plan.", "Capacity holds, per the plan."),
-        ("Waits on decision Q1.", "Waits on an open decision."),
-        ("Waits on FS-Q2 first.", "Waits on an open question first."),
+        ("Waits on decision Q1.", "Waits on a decision."),
+        ("Waits on FS-Q2 first.", "Waits on a question first."),
         ("Ship in Q4 as planned.", "Ship in Q4 as planned."),
         ("Version 2026.1 stays.", "Version 2026.1 stays."),
         ("", ""),
@@ -60,6 +60,31 @@ def test_known_questions_and_codes_go_by_their_words():
     assert _plain("Per question q1, price-early Show the price early waits.", codes, questions) == (
         'Per "Can the tax service answer within 200 ms?", price-early Show the price early waits.'
     )
+
+
+def test_a_question_id_never_reads_open():
+    # protects=walk-eng-check review minor: an id the text names may be a question already
+    # answered, so it never reads "an open question"; an id of another brief's question is
+    # quoted as that question; fails_when="an open decision" or "an open question" shows, or
+    # another brief's question id stays bare; no_claim=whether the question is answered.
+    from oracle.runs import review_text
+
+    payload = {
+        "briefs_check": {
+            "features": [
+                {"key": "f.tax-call", "title": "Fast tax call", "approach": "Cache the rates.",
+                 "questions": [{"id": "Q1", "question": "Can the tax service answer within 200 ms?",
+                                "blocking": True}]},
+                {"key": "f.price-early", "title": "Show the price early",
+                 "approach": "Waits on decision Q1, then on FS-Q2.", "questions": []},
+            ]
+        }
+    }  # fmt: skip
+    out = review_text.review_payload("eng_review", payload)["briefs_check"]["features"]
+    assert out[1]["approach"] == (
+        'Waits on "Can the tax service answer within 200 ms?", then on a question.'
+    )
+    assert "open" not in out[1]["approach"]
 
 
 def test_the_dates_review_payload_reads_plainly():
@@ -89,7 +114,7 @@ def test_the_dates_review_payload_reads_plainly():
     assert out[0]["assumptions"] == ["Two engineers from Nov 2, 2026 (plan)"]
     assert out[0]["proposed"]["supports_date"] == "2026-11-02"
     assert out[0]["key"] == "price-early"
-    assert out[1]["no_date_reason"] == "Waits on an open decision."
+    assert out[1]["no_date_reason"] == "Waits on a decision."
     assert payload["dates_check"]["items"][1]["no_date_reason"].endswith("[c:c2].")
 
 

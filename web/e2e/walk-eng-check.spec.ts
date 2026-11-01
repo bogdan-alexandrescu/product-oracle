@@ -9,7 +9,7 @@ import { login, signOut } from "./helpers";
  *
  * Test cards:
  * - "feasibility above the bar" (item 2): protects=at 1512 and 1366 wide the selected
- *   feature's panel ends above the fixed decision bar (it scrolls on its own), so a verdict
+ *   feature's panel, taller than the window, ends above the fixed decision bar (it scrolls on its own), so a verdict
  *   click records the verdict; fails_when=the panel runs under the bar; no_claim=the phone.
  * - "answered" (item 10): protects=the Questions column says Answered once every question of a
  *   feature has an answer; fails_when=it still counts them open; no_claim=suggested answers.
@@ -18,11 +18,14 @@ import { login, signOut } from "./helpers";
  * - "title as is" (item 3): protects=the run names its PRD by its title, no "PRD" added;
  *   fails_when=" PRD" follows the title.
  * - "inbox names the PRD" (item 4): protects=a stop's Inbox row names its PRD; fails_when=two
- *   runs' rows read the same.
+ *   runs' rows read the same; an Engineering check row names its PRD as the run page does;
+ *   fails_when=the row shows the PRD's slug.
  * - "note focus" (item 8): protects=focusing Note to the agents keeps the page's scroll and the
  *   selected feature; fails_when=the page jumps to the list's end.
  * - "left out" (item 5): protects=a row left out reads the baseline goal it serves and Left out,
  *   goal chips whole; fails_when=No goal or "0 of 0 kept" shows, or a goal chip is cut.
+ * - "plain requirement" (item 6): protects=the agents' stage pointers go, the requirement's own
+ *   words stay ("ships in stage 2 of rollout"); fails_when=a pointer shows or own words are cut.
  * - "evidence by name" (item 6): protects=evidence by its source's name; fails_when=a bare id shows.
  * - "one filter name" (item 7): protects=the same person reads the same filter name on a phone
  *   and a desktop; fails_when=the name changes with the width; no_claim=other roles (rirs-13).
@@ -44,9 +47,10 @@ async function openCheckAsLead(page: Page) {
   await expect(page.getByTestId("brief-row")).toHaveCount(3);
 }
 
+// Windows shorter than the panel with its note open: without its own scroll it runs under the bar.
 for (const size of [
-  { width: 1512, height: 860 },
-  { width: 1366, height: 680 },
+  { width: 1512, height: 600 },
+  { width: 1366, height: 540 },
 ]) {
   test(`feasibility above the bar: at ${size.width} px the panel ends above the decision bar and a verdict click records it`, async ({ page }) => {
     await page.setViewportSize(size);
@@ -63,6 +67,8 @@ for (const size of [
     const barBox = await bar(page).boundingBox();
     expect(panel && barBox).toBeTruthy();
     expect(panel!.y + panel!.height).toBeLessThanOrEqual(barBox!.y + 1);
+    // The panel is taller than the room above the bar, so it scrolls on its own.
+    expect(await inspector(page).evaluate((el) => el.scrollHeight > el.clientHeight + 1)).toBe(true);
     // Every verdict button is clickable: the click lands on it, never on the bar.
     await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click({ timeout: 5_000 });
     await expect(row(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
@@ -121,11 +127,21 @@ test("inbox names the PRD: a stop's row says which PRD it is for", async ({ page
   const labels = page.getByTestId("inbox-checkpoints").getByTestId("checkpoint-label");
   await expect(labels.first()).toBeVisible();
   const texts = await labels.allInnerTexts();
-  console.log("INBOX LABELS", JSON.stringify(texts));
   const sets = texts.filter((t) => t.startsWith("Feature set and dependencies"));
   expect(sets.length).toBeGreaterThan(0);
   for (const t of sets) expect(t).toMatch(/^Feature set and dependencies · \S/);
   expect(new Set(sets).size).toBe(sets.length);
+});
+
+test("inbox names the PRD: an Engineering check row names its PRD as the run page does, never by its slug", async ({ page }) => {
+  await withScenario(page, "eng-check");
+  await login(page, "commenter@example.com");
+  await page.goto(RUN);
+  const doc = (await page.locator("header[data-page-header]").filter({ visible: true }).getByTestId("run-document").innerText()).replace(/ \(written by this run\)$/, "");
+  await page.goto("/inbox");
+  const label = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "Engineering check" }).getByTestId("checkpoint-label");
+  await expect(label).toHaveText(`Engineering check · ${doc} · 3 features · 1 blocking`);
+  await expect(label).not.toContainText("guided-onboarding");
 });
 
 test("note focus: focusing Note to the agents keeps the list where it was and the selection", async ({ page }) => {
@@ -205,4 +221,6 @@ test("plain requirement: a requirement reads without the agents' stage and quest
   const req = page.getByTestId("inspector-requirements").filter({ visible: true }).getByTestId("requirement-address-edit-inline");
   await expect(req).toContainText("A saved address is edited in place at checkout");
   await expect(req).not.toContainText(/stage 3|Q8|awaiting the founder/);
+  // Only the pointers go: "stage 2 of rollout" is the requirement's own words.
+  await expect(req).toContainText("A saved address is edited in place at checkout and ships in stage 2 of rollout");
 });

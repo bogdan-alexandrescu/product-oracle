@@ -4454,7 +4454,7 @@ const EDIT: SpecFeature = {
   goals: [{ key: "g.early-churn", contribution: 1 }],
   depends_on: ["saved-addresses"],
   confidence: 0.7,
-  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout (proposed in stage 3, awaiting the founder, stage 3 Q8.)", ["Changes apply to this order"])],
+  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout and ships in stage 2 of rollout (proposed in stage 3, awaiting the founder, stage 3 Q8.)", ["Changes apply to this order"])],
 };
 const NOTES: SpecFeature = {
   key: "delivery-notes",
