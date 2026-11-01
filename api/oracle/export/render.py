@@ -948,6 +948,7 @@ def _themed_markdown(link: bool) -> MarkdownIt:
     md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
     md.inline.ruler.before("link", "citation", _citation_rule)
     md.add_render_rule("citation", _link_citation if link else _strip_citation)
+    md.add_render_rule("text", _render_text)
     md.add_render_rule("image", _render_image)
     return md
 
@@ -1258,7 +1259,9 @@ def render_markdown(ev: ExportVersion) -> str:  # full layer only
 
     The comment goes after the YAML front matter (front matter must stay first), so
     the export can still be re-imported. A roadmap's flagged dates carry an HTML comment
-    after each (``<!-- oracle: date unverified -->``), which the import drops.
+    after each (``<!-- oracle: date unverified -->``), which the import drops. The body's
+    days stay as stored (``2027-01-29``), not month first as in the HTML, PDF and deck:
+    the file is the source a person edits and imports again.
     """
     from oracle.roadmap import doc_dates
 
