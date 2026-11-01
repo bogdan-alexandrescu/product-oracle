@@ -1033,7 +1033,9 @@ function checkpointSummary(c: InboxOut["checkpoints"][number]): string {
       .join(" · ");
   }
   const check = briefsCheck(c);
-  if (!check) return CHECKPOINT_LABEL[c.kind];
+  // Several runs wait at the same stop: each row names its PRD by its title, as PRD review rows do.
+  const doc = c.document_title?.trim() || (c.document_slug ? runLabel({ ...c, flow_title: "" }).replace(/ · $/, "") : null);
+  if (!check) return [CHECKPOINT_LABEL[c.kind], doc].filter(Boolean).join(" · ");
   if (check.problems.length) return [c.segment_title ?? CHECKPOINT_LABEL[c.kind], c.document_slug, "the briefs could not be read"].filter(Boolean).join(" · ");
   const n = check.features.length;
   const blocking = (c.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;

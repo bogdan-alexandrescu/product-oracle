@@ -69,6 +69,7 @@ import {
   deliveryText,
   fileLabel,
   runDocName,
+  runDocTitle,
   runName,
   useRoleNames,
   useTemplateText,
@@ -315,7 +316,7 @@ export function RunDetail({ id }: { id: string }) {
                 <span className="inline-flex min-h-6 items-center gap-1 text-sm text-text2">
                   For
                   <Link href={`/documents/${run.document_slug}`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline" data-testid="run-document">
-                    {runDocName(run)}
+                    {runDocTitle(run)}
                   </Link>
                 </span>
               ) : (
@@ -324,7 +325,7 @@ export function RunDetail({ id }: { id: string }) {
                 <span className="inline-flex min-h-6 items-center gap-1 text-sm text-text2" title="This run writes the first version of this document">
                   For
                   <span className="font-medium text-text" data-testid="run-document">
-                    {runDocName(run)} (written by this run)
+                    {runDocTitle(run)} (written by this run)
                   </span>
                 </span>
               ))}
@@ -686,7 +687,7 @@ function RunInspector({ run }: { run: RunOut }) {
       label="Run"
       // qa4-work-28: the state as the header's tag says it, in sentence case.
       eyebrow={waiting ? "Checkpoint · Waiting" : `Run · ${runStatusLabel(run)}`}
-      title={waiting ? CHECKPOINT_LABEL[waiting] : (runDocName(run) ?? run.flow_title)}
+      title={waiting ? CHECKPOINT_LABEL[waiting] : (runDocTitle(run) ?? run.flow_title)}
       chips={
         <>
           {!started ? (
@@ -1222,7 +1223,7 @@ function SegmentItem({
             ))}
           {/* G4: everything staged at the waiting checkpoint, from rows and discussions. */}
           {waitingCp && shared && <StagingBar runId={run.id} checkpointId={waitingCp.id} revision={shared.revision} />}
-          {shared && deciding.length === 0 && <SharedDraftLine review={shared} />}
+          {shared && deciding.length === 0 && <SharedDraftLine review={shared} canDecide={!!waitingCp?.can_decide} />}
           {sentReviews.map((cp) => (
             <SentReviewLine key={cp.id} runId={run.id} cp={cp} />
           ))}
@@ -1876,7 +1877,7 @@ function WaitChip({ wait, forYou, role }: { wait: WaitInfo; forYou: boolean; rol
 }
 
 /** D8: the shared draft as someone who does not decide it reads it: time left and the note. */
-function SharedDraftLine({ review }: { review: CheckpointReview }) {
+function SharedDraftLine({ review, canDecide }: { review: CheckpointReview; canDecide: boolean }) {
   return (
     <div data-testid="shared-draft" className="space-y-1 text-sm">
       <p className="flex flex-wrap items-center gap-2">
@@ -1889,7 +1890,11 @@ function SharedDraftLine({ review }: { review: CheckpointReview }) {
           <Icon name="user" size={16} />
           {WHO_DECIDES[review.approver_role] ?? "Owners can decide"}
         </Chip>
-        <span className="text-text2">You can read it; you can&apos;t decide it.</span>
+        {/* The stop's own can_decide: a stop waiting for this person (one with its own review
+            screen) never tells them they can't decide it. */}
+        <span className="text-text2" data-testid="shared-you">
+          {canDecide ? "It waits for you: you can decide it." : "You can read it; you can't decide it."}
+        </span>
       </p>
       <p className="break-words text-text2" data-testid="shared-note">
         {review.note ? `Note for the agents: ${review.note}` : "No note for the agents yet."}

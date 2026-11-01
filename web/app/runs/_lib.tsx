@@ -247,6 +247,14 @@ export function runDocName(run: Pick<RunSummary, "flow_title" | "document_slug" 
   return docLabel({ title: label.endsWith(tail) ? label.slice(0, -tail.length) : label, kind: run.document_kind });
 }
 
+/** The run's document by its title as written ("Usage alerts"), never with a kind word added. */
+export function runDocTitle(run: Pick<RunSummary, "flow_title" | "document_slug" | "document_kind">): string | null {
+  if (!run.document_slug) return null;
+  const label = runLabel(run);
+  const tail = ` · ${run.flow_title}`;
+  return label.endsWith(tail) ? label.slice(0, -tail.length) : label;
+}
+
 /** What a run is for, in a list or a heading: its document, else its flow. */
 export const runName = (run: Pick<RunSummary, "flow_title" | "document_slug" | "document_kind">) => runDocName(run) ?? run.flow_title;
 
