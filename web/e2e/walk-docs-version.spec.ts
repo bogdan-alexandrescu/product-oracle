@@ -27,9 +27,11 @@ for (const [name, viewport] of [
     test("walk-docs-priorities 9: a PRD's body reads its dates month first", async ({ page }) => {
       await openVersion(page, CARTS);
       const decisions = await openSection(page, "decisions");
-      await expect(decisions).toContainText("needed by Nov 1, 2026.");
-      await expect(decisions).toContainText("needed by Nov 15, 2026.");
-      await expect(decisions.getByText("2026-11-01")).toHaveCount(0);
+      // What a person sees (innerText): the ISO day stays only in a hidden node the comment anchors count.
+      const shown = () => decisions.innerText();
+      await expect.poll(shown).toContain("needed by Nov 1, 2026.");
+      await expect.poll(shown).toContain("needed by Nov 15, 2026.");
+      expect(await shown()).not.toContain("2026-11-01");
     });
 
     test("walk-docs-priorities 10: Publish lists the accepted changes staged for the next draft", async ({ page }) => {
