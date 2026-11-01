@@ -7533,6 +7533,19 @@ async def _take_answer(
         # Oracle's own post: the label is the one Oracle sent, for its Inbox user.
         cp.decided_by = await db.scalar(select(User.id).where(User.email == record.on_behalf_of))
     _set_wait(cp, wait)
+    if approved and cp.kind == eng_check.KIND and run.flow != SPEC_FLOW:
+        # walk-eng-check: a counted console approval records the lead's verdicts, answers
+        # and sizes as Oracle's Approve does (decide_checkpoint), so the later stages read
+        # the answers.
+        decider = member or (await db.get(User, cp.decided_by) if cp.decided_by else None)
+        if decider is not None and decider.disabled_at is None:
+            staged = await db.scalars(
+                select(CheckpointAction).where(
+                    CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged"
+                )
+            )
+            principal = _creator(current_tenant(db), decider, None)
+            await eng_check.on_approved(db, principal, run, cp, list(staged))
     if approved and cp.kind == eng_dates.KIND:
         # F4 lane B: a counted console approval records the dates as Oracle's Approve does
         # (decide_checkpoint), for the member who answered (or Oracle's own Inbox user).
