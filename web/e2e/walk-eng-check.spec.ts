@@ -19,6 +19,13 @@ import { login, signOut } from "./helpers";
  *   fails_when=" PRD" follows the title.
  * - "inbox names the PRD" (item 4): protects=a stop's Inbox row names its PRD; fails_when=two
  *   runs' rows read the same.
+ * - "note focus" (item 8): protects=focusing Note to the agents keeps the page's scroll and the
+ *   selected feature; fails_when=the page jumps to the list's end.
+ * - "left out" (item 5): protects=a row left out reads the baseline goal it serves and Left out,
+ *   goal chips whole; fails_when=No goal or "0 of 0 kept" shows, or a goal chip is cut.
+ * - "evidence by name" (item 6): protects=evidence by its source's name; fails_when=a bare id shows.
+ * - "one filter name" (item 7): protects=the same person reads the same filter name on a phone
+ *   and a desktop; fails_when=the name changes with the width; no_claim=other roles (rirs-13).
  */
 
 const withScenario = (page: Page, scenario: string) => page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario]);
@@ -93,23 +100,101 @@ test("who decides: the run page tells the lead the check waits for them, an appr
 
 test("title as is: the run names its PRD by its title, with no PRD added", async ({ page }) => {
   await login(page);
-  await page.goto("/runs");
-  await page.locator('[data-testid="run-row"][data-document="team-workspaces"]').getByRole("link").first().click();
-  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  const doc = page.locator("header[data-page-header]").filter({ visible: true }).getByTestId("run-document");
-  await expect(doc).toHaveText("Team workspaces");
-  await page.goto("/runs");
-  await page.locator('[data-testid="run-row"][data-document="usage-alerts-v2"]').getByRole("link").first().click();
-  await expect(page.locator("header[data-page-header]").filter({ visible: true }).getByTestId("run-document")).toHaveText("Usage alerts v2 (written by this run)");
+  for (const [slug, written] of [
+    ["team-workspaces", ""],
+    ["usage-alerts-v2", " (written by this run)"],
+  ]) {
+    await page.goto("/runs");
+    await page.locator(`[data-testid="run-row"][data-document="${slug}"]`).getByRole("link").first().click();
+    await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+    const header = page.locator("header[data-page-header]").filter({ visible: true });
+    // The heading is "<title> · <flow>": the document line names the same title, as is.
+    const title = (await header.getByTestId("run-name").innerText()).split(" · ")[0];
+    await expect(header.getByTestId("run-document")).toHaveText(`${title}${written}`);
+  }
 });
 
 test("inbox names the PRD: a stop's row says which PRD it is for", async ({ page }) => {
-  await login(page);
+  await withScenario(page, "scope-review");
+  await login(page, "approver@example.com");
   await page.goto("/inbox");
   const labels = page.getByTestId("inbox-checkpoints").getByTestId("checkpoint-label");
   await expect(labels.first()).toBeVisible();
   const texts = await labels.allInnerTexts();
   console.log("INBOX LABELS", JSON.stringify(texts));
-  const plain = texts.filter((t) => /^(Feature set and dependencies|PRD review|Priority order|Baseline proposal)$/.test(t.trim()));
-  expect(plain).toEqual([]);
+  const sets = texts.filter((t) => t.startsWith("Feature set and dependencies"));
+  expect(sets.length).toBeGreaterThan(0);
+  for (const t of sets) expect(t).toMatch(/^Feature set and dependencies · \S/);
+  expect(new Set(sets).size).toBe(sets.length);
+});
+
+test("note focus: focusing Note to the agents keeps the list where it was and the selection", async ({ page }) => {
+  await withScenario(page, "scope-review");
+  await login(page, "approver@example.com");
+  await page.getByTestId("nav-runs").click();
+  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+  await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
+  await expect(page.getByTestId("scope-row").first()).toBeVisible();
+  await page.getByRole("button", { name: /^All/ }).click();
+  const selected = page.locator('[data-testid="scope-row"][aria-selected="true"]');
+  const before = await selected.getAttribute("data-key");
+  const y = await page.evaluate(() => window.scrollY);
+  const note = page.getByRole("textbox", { name: "Note to the agents" });
+  await note.click();
+  await expect(note).toBeFocused();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.scrollY)).toBe(y);
+  await expect(selected).toHaveAttribute("data-key", before!);
+  await note.fill("Keep the address book small.");
+  await expect(selected).toHaveAttribute("data-key", before!);
+});
+
+async function openFeatureSet(page: Page) {
+  await withScenario(page, "scope-review");
+  await login(page, "approver@example.com");
+  await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
+  await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
+  await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
+  await expect(page.getByTestId("scope-row").first()).toBeVisible();
+}
+const scopeRow = (page: Page, key: string) => page.locator(`[data-testid="scope-row"][data-key="${key}"]`);
+
+test("left out: a feature the set leaves out shows the goal it serves and Left out, goal names whole", async ({ page }) => {
+  await openFeatureSet(page);
+  await page.getByRole("button", { name: /^All/ }).click();
+  const out = scopeRow(page, "address-book-export");
+  await expect(out.getByTestId("goal-chip")).toHaveText("Raise activation");
+  await expect(out).not.toContainText("No goal");
+  await expect(out.getByTestId("row-requirements")).toHaveText("Left out");
+  await expect(scopeRow(page, "address-sharing").getByTestId("goal-chip")).toHaveText("Grow paid conversion");
+  // A goal's name is never cut: the chip is as wide as its text.
+  const chip = scopeRow(page, "saved-addresses").getByTestId("goal-chip").first();
+  expect(await chip.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+});
+
+test("evidence by name: the feature panel names each source, never a bare id", async ({ page }) => {
+  await openFeatureSet(page);
+  await page.getByRole("button", { name: /^All/ }).click();
+  await scopeRow(page, "saved-addresses").getByTestId("feature-title").click();
+  const evidence = page.getByTestId("inspector-evidence").filter({ visible: true });
+  await expect(evidence.getByRole("listitem")).toHaveText(["Checkout interviews, September", "Support tickets: retyped addresses"]);
+  await expect(evidence).not.toContainText("58a87cc0");
+  await expect(evidence.getByRole("link", { name: "Checkout interviews, September" })).toHaveAttribute("href", "https://example.com/research/checkout-interviews");
+});
+
+test("one filter name: the approver's filter reads the same on a phone and a desktop", async ({ page }) => {
+  await openFeatureSet(page);
+  await expect(page.getByRole("button", { name: /^Needs you/ }).filter({ visible: true })).toHaveCount(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("button", { name: /^Needs you/ }).filter({ visible: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^Needs a decision/ }).filter({ visible: true })).toHaveCount(0);
+});
+
+test("plain requirement: a requirement reads without the agents' stage and question pointers", async ({ page }) => {
+  await openFeatureSet(page);
+  await page.getByRole("button", { name: /^All/ }).click();
+  await scopeRow(page, "address-edit").getByTestId("feature-title").click();
+  const req = page.getByTestId("inspector-requirements").filter({ visible: true }).getByTestId("requirement-address-edit-inline");
+  await expect(req).toContainText("A saved address is edited in place at checkout");
+  await expect(req).not.toContainText(/stage 3|Q8|awaiting the founder/);
 });
