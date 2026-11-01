@@ -61,14 +61,22 @@ function usePhone(): boolean {
  */
 /**
  * Focusing a field of the sticky bar scrolls the page to where the bar would sit in the flow
- * (the list's end), so the list jumps under the pointer: the page stays where it was.
+ * (the list's end), so the list jumps under the pointer: the page stays where it was. That
+ * scroll happens before the focus event and its scroll event comes after, so the position is
+ * the one the last scroll event saw.
  */
-function keepScroll() {
-  const x = window.scrollX;
-  const y = window.scrollY;
-  requestAnimationFrame(() => {
-    if (window.scrollY !== y || window.scrollX !== x) window.scrollTo(x, y);
-  });
+function useKeepScroll() {
+  const seen = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const on = () => (seen.current = { x: window.scrollX, y: window.scrollY });
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  return () => {
+    const at = seen.current;
+    if (at && (window.scrollY !== at.y || window.scrollX !== at.x)) window.scrollTo({ left: at.x, top: at.y, behavior: "instant" });
+  };
 }
 
 export function DecisionBar({
@@ -162,6 +170,9 @@ export function DecisionBar({
   // A ref, read when the decision is sent: the note's save (on blur, as Send back to agents is
   // pressed) may answer after the decision's click, and a value of that render would be stale
   // (#520: rerun-previous was refused "the review changed" by its own note).
+  // The html's scroll padding (the bar's height, above) puts the note inside it: focusing it
+  // would scroll the page, so the page is put back.
+  const keepScroll = useKeepScroll();
   const bumped = useRef<{ from: number | null; to: number } | null>(null);
   const expected = () => (bumped.current && bumped.current.from === revision ? bumped.current.to : revision);
   /** The note's save in flight, if any: the decision waits for it. */

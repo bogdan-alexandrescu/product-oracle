@@ -140,8 +140,16 @@ test("note focus: focusing Note to the agents keeps the list where it was and th
   const before = await selected.getAttribute("data-key");
   const y = await page.evaluate(() => window.scrollY);
   const note = page.getByRole("textbox", { name: "Note to the agents" });
-  await note.click();
+  // A person clicks where the note shows, in the bar fixed at the window's foot.
+  const box = (await note.boundingBox())!;
+  await page.mouse.click(box.x + 20, box.y + box.height / 2);
   await expect(note).toBeFocused();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.scrollY)).toBe(y);
+  await expect(selected).toHaveAttribute("data-key", before!);
+  // From the keyboard too: focus moves to the note (as Tab does) and the page stays put.
+  await page.getByRole("heading", { level: 1 }).first().click();
+  await note.evaluate((el) => (el as HTMLElement).focus());
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.scrollY)).toBe(y);
   await expect(selected).toHaveAttribute("data-key", before!);
