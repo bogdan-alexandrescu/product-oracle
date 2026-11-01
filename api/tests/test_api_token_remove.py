@@ -101,3 +101,71 @@ async def test_approvals_made_with_a_removed_token_keep_it(client):
     rows = (await client.get(f"/v1/api-tokens/{token_id}/approvals", headers=ctx.auth)).json()
     [section] = [r for r in rows if r["kind"] == "section"]
     assert section["section_key"] == "problem" and section["approver_id"] == str(pm.user_id)
+
+
+async def removed_and_active(ctx, user_id: uuid.UUID) -> tuple[uuid.UUID, uuid.UUID]:
+    """One of the member's tokens expired and removed, one still on."""
+    gone, _ = await member_token(ctx, user_id, "old-laptop")
+    await expire(ctx.tenant_id, gone)
+    active, _ = await member_token(ctx, user_id, "new-laptop")
+    return gone, active
+
+
+async def revoked_at(tenant_id: uuid.UUID, token_id: uuid.UUID) -> datetime | None:
+    async with tenant_session(tenant_id) as s:
+        return (await s.get(ApiToken, token_id)).revoked_at
+
+
+async def test_a_password_change_leaves_a_removed_token_alone(client):
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    gone, active = await removed_and_active(ctx, pm.user_id)
+    assert (await client.post(remove_url(gone), headers=ctx.auth)).status_code == 204
+
+    resp = await client.post(
+        "/v1/me/password",
+        json={"current_password": "pw", "new_password": "a-new-passphrase-" + "x" * 8},
+        headers=pm.headers,
+    )
+    assert resp.status_code == 204, resp.text
+    assert await revoked_at(ctx.tenant_id, active) is not None
+    assert await revoked_at(ctx.tenant_id, gone) is None
+    async with tenant_session(ctx.tenant_id) as s:
+        [event] = (
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "password.change"))
+        ).all()
+        revokes = (
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "api_token.revoke"))
+        ).all()
+    assert event.data["api_tokens"] == [str(active)]
+    assert [e.subject_id for e in revokes] == [active]
+
+
+async def test_removing_a_member_leaves_a_removed_token_alone(client):
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    gone, active = await removed_and_active(ctx, pm.user_id)
+    assert (await client.post(remove_url(gone), headers=ctx.auth)).status_code == 204
+
+    # The remove dialog counts only the token that is still on.
+    impact = await client.get(
+        f"/v1/members/{pm.user_id}/impact", params={"change": "remove"}, headers=ctx.auth
+    )
+    assert impact.status_code == 200, impact.text
+    assert impact.json()["ends"]["api_tokens"] == 1
+    resp = await client.post(f"/v1/members/{pm.user_id}/disable", headers=ctx.auth)
+    assert resp.status_code in (200, 204), resp.text
+    assert await revoked_at(ctx.tenant_id, active) is not None
+    assert await revoked_at(ctx.tenant_id, gone) is None
+
+
+async def test_the_service_token_list_skips_a_removed_token(client):
+    from oracle.members import service
+
+    ctx = await setup(client)
+    pm = await person(ctx.tenant_id, "approver", "pm")
+    gone, active = await removed_and_active(ctx, pm.user_id)
+    assert (await client.post(remove_url(gone), headers=ctx.auth)).status_code == 204
+    async with tenant_session(ctx.tenant_id) as s:
+        ids = {t.id for t in await service.list_api_tokens(s)}
+    assert active in ids and gone not in ids
