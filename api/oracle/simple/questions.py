@@ -274,13 +274,64 @@ async def _read(db: AsyncSession, v: DocumentVersion) -> bool:
         LlmJob.kind == "prd_questions", LlmJob.version_id == v.id).limit(1)))  # fmt: skip
 
 
-async def ensure(db: AsyncSession, document: Document) -> None:
+# Approved versions found to hold no questions (neither a table nor the heading). A
+# version never changes, so it is not read again while this process lives (walk-brief:
+# Home took a lock, parsed and asked six times per PRD on every read).
+_NOTHING: set[uuid.UUID] = set()
+
+
+async def ensure_all(db: AsyncSession, documents: list[Document]) -> None:
+    """:func:`ensure` for many PRDs at once: their latest approved versions and which are
+    read already in three statements; only a version not read yet goes on to
+    :func:`ensure`."""
+    from oracle.jobs.models import LlmJob
+
+    ids = [d.id for d in documents]
+    if not ids:
+        return
+    latest = (
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id.in_(ids), DocumentVersion.approved_at.is_not(None))
+        .order_by(DocumentVersion.document_id, DocumentVersion.number.desc())
+        .distinct(DocumentVersion.document_id)
+    )
+    versions = {v.document_id: v for v in await db.scalars(latest) if v.id not in _NOTHING}
+    if not versions:
+        return
+    keys = [str(v.id) for v in versions.values()]
+    read = {
+        str(k)
+        for k in await db.scalars(
+            select(Decision.prd_question["version_id"].astext).where(
+                Decision.origin == "prd", Decision.prd_question["version_id"].astext.in_(keys)
+            )
+        )
+    }
+    read |= {
+        str(k)
+        for k in await db.scalars(
+            select(LlmJob.version_id).where(
+                LlmJob.kind == "prd_questions",
+                LlmJob.version_id.in_([v.id for v in versions.values()]),
+            )
+        )
+    }
+    for doc in documents:
+        v = versions.get(doc.id)
+        if v is not None and str(v.id) not in read:
+            await ensure(db, doc, v)
+
+
+async def ensure(db: AsyncSession, document: Document, v: DocumentVersion | None = None) -> None:
     """Read the latest approved version's questions once (its table, else one job), under
     a per-PRD lock so two reads at once import each question once."""
     from oracle.jobs import service as jobs
 
-    v = await approved(db, document.id)
-    if v is None or await _read(db, v):
+    if v is None:
+        v = await approved(db, document.id)
+        if v is None or await _read(db, v):
+            return
+    if v.id in _NOTHING:
         return
     await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"),
                      {"k": f"oracle:prd-questions:{document.id}"})  # fmt: skip
@@ -289,7 +340,9 @@ async def ensure(db: AsyncSession, document: Document) -> None:
     rows = parse(v.markdown or "", (v.approved_at or company_time.now()).date())
     if rows is not None:
         await import_answer(db, document, v, rows)
-    elif _HEADING.search(v.markdown or ""):
+    elif not _HEADING.search(v.markdown or ""):
+        _NOTHING.add(v.id)
+    else:
         try:
             await jobs.enqueue(db, document, "prd_questions", version=v, coalesce=True)
         except jobs.JobError:
@@ -341,8 +394,7 @@ async def rows(
 ) -> list[SimpleQuestion]:
     """Every readable PRD's questions: open first, soonest due first; decided after."""
     docs = {d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(readable)))}
-    for doc in docs.values():
-        await ensure(db, doc)
+    await ensure_all(db, list(docs.values()))
     ds = [d for d in await db.scalars(select(Decision).where(Decision.origin == "prd"))
           if (d.prd_question or {}).get("document_id")
           and uuid.UUID(d.prd_question["document_id"]) in docs
