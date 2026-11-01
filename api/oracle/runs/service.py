@@ -181,6 +181,7 @@ from oracle.runs import (
     rejection,
     reuse,
     review_link,
+    review_text,
     roadmap,
     waits,
     workflow,
@@ -1027,7 +1028,8 @@ def _checkpoint_out(
         decided_at=cp.decided_at,
         note=cp.note,
         review=cp.review,
-        payload=payload,
+        # ITEM 11: the agents' text the review shows, read plainly (oracle.runs.review_text).
+        payload=review_text.review_payload(cp.kind, payload),
         created_at=cp.created_at,
         console=ConsoleAnswer.model_validate({**console, "can_redo": _can_redo(console)})
         if isinstance(console, dict) and cp.status == "pending"
