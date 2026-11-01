@@ -74,6 +74,8 @@ export interface IntakeContext {
   role: Role;
   /** C4: the confirmed goals' titles by id (the brief's goals must be confirmed goals). */
   confirmedGoals?: () => Map<string, string>;
+  /** walk-brief: the confirmed goals' keys by id (the summary's goal links carry them). */
+  goalKeys?: () => Map<string, string>;
   /** Creates a draft run through the runs mock (POST /v1/runs). */
   createRun: (body: Schemas["RunCreate"]) => Promise<Response>;
   /** C4: changes the intake's draft run, not started yet (PATCH /v1/runs/{id}); null when it is no longer a draft. */
@@ -275,7 +277,28 @@ function briefFields(ctx: IntakeContext, input: Partial<BriefFields>): Partial<B
   return out;
 }
 
-function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSummary"] {
+/** Content words, crudely stemmed (the API's extract.terms, roughly). */
+function briefTerms(text: string): Set<string> {
+  return new Set((text.toLowerCase().match(/[a-z][a-z0-9]+/g) ?? []).filter((w) => w.length > 3).map((w) => w.replace(/(ing|es|s)$/, "")));
+}
+
+/**
+ * The confirmed goals the brief speaks of (the API's goals_and_features, matched_on
+ * "brief"): at least two of a goal's words (one for a one-word goal) are in the brief.
+ */
+function briefGoals(intake: Intake, ctx?: IntakeContext): Schemas["GoalLink"][] {
+  const brief = briefTerms(`${intake.title} ${intake.brief}`);
+  const keys = ctx?.goalKeys?.() ?? new Map<string, string>();
+  return [...(ctx?.confirmedGoals?.() ?? new Map<string, string>())]
+    .filter(([id, title]) => {
+      const wanted = briefTerms(`${title} ${(keys.get(id) ?? "").replace(/-/g, " ")}`);
+      const need = wanted.size < 4 ? Math.min(2, wanted.size) : Math.max(2, Math.ceil(wanted.size / 2));
+      return wanted.size > 0 && [...wanted].filter((w) => brief.has(w)).length >= need;
+    })
+    .map(([id, title]) => ({ entity_id: id, key: keys.get(id) ?? "", title, status: "confirmed", knowledge_state: "user_decision", matched_on: "brief" }));
+}
+
+function summary(db: V2Db, intake: Intake, userId: string, ctx?: IntakeContext): Schemas["IntakeSummary"] {
   const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
   const questions = db.questions.filter((q) => q.intake_id === intake.id);
   const out = rankedOut(gaps);
@@ -322,8 +345,8 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
       ...scope.map((s) => ({ field: "scope" as const, text: s, knowledge_state: "hypothesis" as const, origin: "brief" as const, evidence: [] })),
     ],
     coverage,
-    goals: [],
-    missing_goals: true,
+    goals: briefGoals(intake, ctx),
+    missing_goals: briefGoals(intake, ctx).length === 0,
     features: scope.map((s) => ({
       title: s,
       entity_id: null,
@@ -666,7 +689,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     }
     // At Observe and Draft a new brief asks no one; a person sends (H11 questions).
     if (questionsLevel(ctx) === "recommend" || questionsLevel(ctx) === "act") askBatch(db, ctx, intake, input.batch_size ?? 5);
-    return json(201, summary(db, intake, ctx.userId));
+    return json(201, summary(db, intake, ctx.userId, ctx));
   }
 
   if (p[1] === "intakes" && p[2] && p.length >= 3 && !(p.length === 3 && m === "GET")) {
@@ -697,8 +720,8 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       intake.updated_at = now();
       return json(200, intakeOut(intake, db));
     }
-    if (leaf === "summary" && m === "GET") return json(200, summary(db, intake, ctx.userId));
-    if (leaf === "new-evidence" && m === "GET") return json(200, summary(db, intake, ctx.userId).new_evidence);
+    if (leaf === "summary" && m === "GET") return json(200, summary(db, intake, ctx.userId, ctx));
+    if (leaf === "new-evidence" && m === "GET") return json(200, summary(db, intake, ctx.userId, ctx).new_evidence);
     if (leaf === "evidence" && m === "GET") {
       if (!q.get("q")) return fail(422, "q is required");
       return json(200, { intake_id: intake.id, q: q.get("q"), pinned_version: intake.source_snapshot_ids.length, as_of: intake.created_at, hits: [] });
@@ -771,12 +794,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (leaf === "analyze" && m === "POST") {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can re-run its analysis");
       syncQuestions(db, intake);
-      return json(200, summary(db, intake, ctx.userId));
+      return json(200, summary(db, intake, ctx.userId, ctx));
     }
     if (leaf === "repin" && m === "POST") {
       if (intake.author_id !== ctx.userId) return fail(403, "Only the intake's author can repin it");
       intake.source_snapshot_ids = [...intake.source_snapshot_ids, uuid()];
-      return json(200, summary(db, intake, ctx.userId));
+      return json(200, summary(db, intake, ctx.userId, ctx));
     }
     if (leaf === "question-batches" && m === "POST") {
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver asks the next batch");
