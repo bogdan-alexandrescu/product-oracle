@@ -5468,6 +5468,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         return {
           slug: doc.slug,
           title: doc.title,
+          status: doc.status,
           latest: latest.number,
           heading: (key) => latest.sections.find((x) => x.section_key === key)?.heading ?? null,
         };

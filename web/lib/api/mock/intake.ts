@@ -62,7 +62,7 @@ export interface MockPerson {
 
 /** What a question's subject is, for its Inbox line and its Open link. */
 export interface SubjectLookup {
-  document: (id: string) => { slug: string; title: string; latest: number; heading: (key: string) => string | null } | null;
+  document: (id: string) => { slug: string; title: string; status: string; latest: number; heading: (key: string) => string | null } | null;
   entity: (id: string) => string | null;
   checkpoint: (id: string) => { run_id: string; kind: string } | null;
   /** A Plan item's title, by its PRD and key (F2 Ask from the Plan). */
@@ -1110,6 +1110,8 @@ function subjectColumns(db: V2Db, ctx: IntakeContext, subject: Schemas["Question
   return ctx.subjects?.entity(subject.entity_id) != null ? { entity_id: subject.entity_id } : null;
 }
 
+const PRD_STAGE: Record<string, string> = { draft: "PRD drafted", in_review: "PRD in review", approved: "PRD approved" };
+
 function subjectOf(db: V2Db, ctx: IntakeContext, q: Question): Schemas["InboxSubject"] {
   if (q.checkpoint_id) {
     const cp = ctx.subjects?.checkpoint(q.checkpoint_id);
@@ -1122,7 +1124,12 @@ function subjectOf(db: V2Db, ctx: IntakeContext, q: Question): Schemas["InboxSub
     return { kind: "roadmap_item", title: `${doc.title} · ${title}`, href: `/plan?prd=${q.document_id}&item=${encodeURIComponent(q.item_ref)}` };
   }
   const intake = q.intake_id ? db.intakes.find((i) => i.id === q.intake_id) : undefined;
-  if (intake) return { kind: "intake", title: `Before drafting · ${intake.title}`, href: `/intakes/${intake.id}` };
+  if (intake) {
+    // walk-brief: once the brief's PRD is drafted the label says the PRD's stage (API's PRD_STAGE).
+    const prd = intake.document_id ? ctx.subjects?.document(intake.document_id) : null;
+    const title = prd ? `${PRD_STAGE[prd.status] ?? "PRD drafted"} · ${prd.title}` : `Before drafting · ${intake.title}`;
+    return { kind: "intake", title, href: `/intakes/${intake.id}` };
+  }
   if (!doc) return { kind: "document_section", title: "A document", href: null };
   const heading = q.section_key ? doc.heading(q.section_key) : null;
   return {
