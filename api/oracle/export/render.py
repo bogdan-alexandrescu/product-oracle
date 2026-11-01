@@ -23,7 +23,7 @@ version built from another one (a roadmap from its PRD version) says so in its b
 import re
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import date, datetime
 from functools import cache
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -727,12 +727,35 @@ def _render_image(self, tokens, idx, options, env) -> str:
     return f'<a href="{escape(href)}" rel="noopener noreferrer">{escape(label)}</a>'
 
 
+# A calendar day standing alone in prose ("to 2027-01-29."), never one inside a key or a path.
+_PROSE_DAY = re.compile(r"(?<![\w./-])(\d{4})-(\d{2})-(\d{2})(?![\w/-]|:\d)")
+
+
+def _day_in_words(m: re.Match[str]) -> str:
+    try:
+        d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return m.group(0)
+    return f"{d:%b} {d.day}, {d.year}"
+
+
+def days_in_words(text: str) -> str:
+    """Prose with its calendar days month first, as people read dates ("to Jan 29, 2027";
+    walk-docs-priorities 9). The stored text is not changed."""
+    return _PROSE_DAY.sub(_day_in_words, text)
+
+
+def _render_text(renderer, tokens, idx, options, env) -> str:
+    return str(escape(days_in_words(tokens[idx].content)))
+
+
 @cache
 def _markdown() -> MarkdownIt:
     # Raw HTML in drafts is not rendered: exports are shared, drafts are agent-written.
     md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
     md.inline.ruler.before("link", "citation", _citation_rule)
     md.add_render_rule("citation", _render_citation)
+    md.add_render_rule("text", _render_text)
     md.add_render_rule("image", _render_image)
     return md
 
