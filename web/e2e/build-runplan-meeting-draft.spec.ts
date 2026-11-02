@@ -87,6 +87,13 @@ test.describe("desktop", () => {
     await expect(slice).not.toContainText("Draft from the run");
     await expect(page.getByText("Saved carts dates approved: 6 items on the roadmap").first()).toBeVisible();
 
+    // After a reload the Roadmap step still says the dates were approved here, solid.
+    await page.reload();
+    await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }).click();
+    await expect(slice.getByRole("status")).toHaveText("Dates approved in this meeting: 6 items are on the roadmap.");
+    await expect(slice.locator("[data-bar]")).toHaveCount(6);
+    await expect(slice).not.toContainText("Draft from the run");
+
     // The items are on the Simple roadmap now.
     await page.goto("/simple/roadmap?prd=saved-carts");
     await expect(page.getByRole("button", { name: /^Turn a cart into a quote: May 3 to Jun 25, 2027/ })).toBeVisible();
