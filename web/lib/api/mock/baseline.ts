@@ -94,6 +94,12 @@ export const BASELINE_STALE_SCENARIO = "baseline-stale";
 /** qa5-plan-at-risk: paid conversion carries a long name (Priorities' Goal column wraps it whole). */
 export const LONG_GOAL_SCENARIO = "long-goal";
 export const LONG_GOAL_NAME = "Grow paid conversion for small teams on the yearly plan, the monthly plan and the new starter plan in every region we sell in";
+/**
+ * priorities-words: goals and features named with long single words, as a production company's
+ * ("G-B Conversion" beside its code, "(instrumentation)" in Depends on): Detailed › Priorities
+ * wraps each between words, never inside one. The features' names are lane-f.ts's.
+ */
+export const LONG_WORDS_SCENARIO = "long-words";
 const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
 
 /**
@@ -260,7 +266,8 @@ export function seedBaseline(uuid: () => string): BaselineState {
   // Goals: two confirmed, one still proposed (and served by nothing yet). B5: activation is
   // typed and owned (by the approver, see attributeGoalOwner), paid conversion typed without
   // an owner, early churn still on text, so it is Not measurable and offers Fill from text.
-  const activation = entity("goal", "g.activation", "Raise activation", {
+  const longWords = typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === LONG_WORDS_SCENARIO;
+  const activation = entity("goal", "g.activation", longWords ? "G-A Internationalization" : "Raise activation", {
     body: "More new accounts reach their first successful order in the first week.",
     attrs: {
       weight: 0.5, metric: "Accounts that finish setup within 7 days", unit: "%", comparison: "at_least", target: 45, start: 31,
@@ -269,7 +276,7 @@ export function seedBaseline(uuid: () => string): BaselineState {
     confidence: 0.78,
   });
   const longGoal = typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === LONG_GOAL_SCENARIO;
-  const paid = entity("goal", "g.paid-conversion", longGoal ? LONG_GOAL_NAME : "Grow paid conversion", {
+  const paid = entity("goal", "g.paid-conversion", longGoal ? LONG_GOAL_NAME : longWords ? "G-B Conversion" : "Grow paid conversion", {
     body: "More trial accounts move to a paid plan.",
     attrs: {
       // qa4-simple-home-6: its starting value, as activation has one (the first of its monthly reads below).
