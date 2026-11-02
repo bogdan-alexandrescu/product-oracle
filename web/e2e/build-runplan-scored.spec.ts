@@ -63,7 +63,7 @@ test.describe("desktop", () => {
     await expect(panel).toContainText("60%");
     const steps = page.getByTestId("explanation-N-4").getByRole("list", { name: "Steps" });
     await expect(steps).toContainText("Goal value = 3×2");
-    await expect(steps).toContainText(/Score = 6 × 60% ÷ 2 = 1\.80?/);
+    await expect(steps).toContainText(/Score = 6 × 60% ÷ 2 = 1\.80$/);
 
     // Approve order: saved, and the 6 new features joined the baseline as proposed.
     const band = page.getByTestId("snapshot-band");
