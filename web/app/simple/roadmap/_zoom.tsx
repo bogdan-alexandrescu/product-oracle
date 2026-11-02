@@ -9,6 +9,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -432,15 +433,12 @@ function DayChart(props: TimelineProps) {
     pointer: number;
     armed: boolean;
     timer: number | null;
+    dx: number;
+    frame: number | null;
   } | null>(null);
   const clicked = useRef(false);
-  const [live, setLive] = useState<{
-    id: string;
-    start: string;
-    end: string;
-  } | null>(null);
-  const spanOf = (i: Item): [string, string] =>
-    live?.id === i.id ? [live.start, live.end] : (moved[i.id] ?? barSpan(i));
+  // The bar in hand lives outside the chart's state: a move redraws only its own row.
+  const [live] = useState(liveStore);
   const dragTo = (dx: number): [string, string] | null => {
     const d = drag.current;
     if (!d) return null;
@@ -464,6 +462,8 @@ function DayChart(props: TimelineProps) {
       pointer: e.pointerId,
       armed: !touch,
       timer: null as number | null,
+      dx: 0,
+      frame: null as number | null,
     };
     drag.current = d;
     // A finger: a long press picks the bar up, as on the Gantt.
@@ -490,15 +490,23 @@ function DayChart(props: TimelineProps) {
     if (!d.moved && Math.abs(dx) < DRAG_PX) return;
     e.preventDefault();
     d.moved = true;
-    const to = dragTo(dx)!;
-    if (live?.start !== to[0] || live?.end !== to[1] || live?.id !== d.item.id)
-      setLive({ id: d.item.id, start: to[0], end: to[1] });
+    // The bar follows the pointer once a frame, however many moves the frame had (as the Gantt).
+    d.dx = dx;
+    d.frame ??= requestAnimationFrame(() => {
+      d.frame = null;
+      if (drag.current !== d) return;
+      const to = dragTo(d.dx)!;
+      const was = live.get();
+      if (was?.start !== to[0] || was?.end !== to[1] || was?.id !== d.item.id)
+        live.set({ id: d.item.id, start: to[0], end: to[1] });
+    });
   };
   /** The drag over: no bar in hand, no live dates. */
   const stopDrag = () => {
     if (drag.current?.timer) clearTimeout(drag.current.timer);
+    if (drag.current?.frame != null) cancelAnimationFrame(drag.current.frame);
     drag.current = null;
-    setLive(null);
+    live.set(null);
   };
   const onUp = (e: ReactPointerEvent) => {
     const d = drag.current;
@@ -520,9 +528,6 @@ function DayChart(props: TimelineProps) {
     const s1 = month ? addMonths(s, dir) : addDays(s, dir * 7);
     onKeyMove(i, s1, addDays(en, daysBetween(s, s1)));
   };
-  const liveWarn = live
-    ? liveBreaks(props.byId, live.id, live.start, live.end)
-    : NO_WARN;
   // The rows' moves read the latest draw's state through a ref, so each row's `on` stays the
   // same object and only the rows whose own props change redraw.
   const latest = useRef({
@@ -716,18 +721,15 @@ function DayChart(props: TimelineProps) {
                 </div>
               );
             const i = r.item;
-            const [ds, de] = spanOf(i);
-            const bx = x(ds);
-            const bw = Math.max(8, x(addDays(de, 1)) - bx);
-            const now = live?.id === i.id;
+            const [ds, de] = moved[i.id] ?? barSpan(i);
             return (
               <TimelineRow
                 key={i.id}
                 item={i}
                 ds={ds}
                 de={de}
-                bx={bx}
-                bw={bw}
+                t0={t0}
+                ppd={ppd}
                 labelW={labelW}
                 trackW={trackW}
                 sl={sl}
@@ -736,8 +738,8 @@ function DayChart(props: TimelineProps) {
                 canChange={canChange}
                 still={fixed(i)}
                 sel={openKey === i.key}
-                live={now ? live : null}
-                liveWarn={now ? liveWarn : NO_WARN}
+                live={live}
+                byId={props.byId}
                 on={on}
               />
             );
@@ -749,6 +751,29 @@ function DayChart(props: TimelineProps) {
 }
 
 const NO_WARN: string[] = [];
+
+type Live = { id: string; start: string; end: string } | null;
+
+/** The day chart's bar in hand and its live dates. Each row reads only its own bar from it
+ * (useSyncExternalStore), so a drag's move redraws the dragged row, not the chart's 500. */
+function liveStore() {
+  let now: Live = null;
+  const seen = new Set<() => void>();
+  return {
+    get: () => now,
+    set: (next: Live) => {
+      now = next;
+      seen.forEach((f) => f());
+    },
+    watch: (f: () => void) => {
+      seen.add(f);
+      return () => {
+        seen.delete(f);
+      };
+    },
+  };
+}
+type LiveStore = ReturnType<typeof liveStore>;
 
 /** A day chart row's moves, the same functions on every draw (so memo(TimelineRow) holds). */
 type RowMoves = {
@@ -767,10 +792,10 @@ type RowMoves = {
  * hand (memo, as the Gantt's Bar), not the 500 rows. */
 const TimelineRow = memo(function TimelineRow({
   item: i,
-  ds,
-  de,
-  bx,
-  bw,
+  ds: ds0,
+  de: de0,
+  t0,
+  ppd,
   labelW,
   trackW,
   sl,
@@ -779,15 +804,15 @@ const TimelineRow = memo(function TimelineRow({
   canChange,
   still,
   sel,
-  live,
-  liveWarn,
+  live: store,
+  byId,
   on,
 }: {
   item: Item;
   ds: string;
   de: string;
-  bx: number;
-  bw: number;
+  t0: string;
+  ppd: number;
   labelW: number;
   trackW: number;
   sl: number;
@@ -796,16 +821,43 @@ const TimelineRow = memo(function TimelineRow({
   canChange: boolean;
   still: boolean;
   sel: boolean;
-  live: { id: string; start: string; end: string } | null;
-  liveWarn: string[];
+  live: LiveStore;
+  byId: Map<string, Item>;
   on: RowMoves;
 }) {
   const lk = lookOf(i);
+  const live = useSyncExternalStore(
+    store.watch,
+    () => {
+      const l = store.get();
+      return l?.id === i.id ? l : null;
+    },
+    () => null,
+  );
+  const [ds, de] = live ? [live.start, live.end] : [ds0, de0];
+  const bx = daysBetween(t0, ds) * ppd;
+  const bw = Math.max(8, daysBetween(t0, addDays(de, 1)) * ppd - bx);
+  const liveWarn = useMemo(
+    () => (live ? liveBreaks(byId, live.id, live.start, live.end) : NO_WARN),
+    [live, byId],
+  );
   return (
     <div
       data-testid="timeline-row"
       data-item={i.key}
       data-open={sel || undefined}
+      // A row out of sight is not painted (content-visibility), so a drag's frame repaints the
+      // rows in sight and not the chart's 500. Its containment stacks the row on its own, so
+      // the row sits over the chart's today line and draws its own piece of it (below).
+      className="relative z-[11]"
+      style={
+        live
+          ? undefined
+          : {
+              contentVisibility: "auto",
+              containIntrinsicSize: `auto ${ROW_H}px`,
+            }
+      }
     >
       <div
         className={`pointer-events-none relative flex border-b border-line/60 ${sel ? "bg-accent-soft/50" : ""}`}
@@ -836,6 +888,15 @@ const TimelineRow = memo(function TimelineRow({
           )}
         </button>
         <div className="relative" style={{ width: trackW }}>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute top-0 bottom-0 z-10"
+            style={{
+              left: daysBetween(t0, today) * ppd,
+              width: 2,
+              background: TODAY,
+            }}
+          />
           <button
             type="button"
             data-bar-id={i.id}

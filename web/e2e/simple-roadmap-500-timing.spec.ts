@@ -184,13 +184,14 @@ for (const [where, use] of [
           // A bar the viewer may move (its label says the arrows move it); its live dates show.
           const bar = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]').first();
           end = await mouseDrag(page, bar, 160);
-          await expect(page.getByTestId("drag-live")).toBeVisible();
         } else {
           const bar = page.locator('g[data-testid="bar"][data-kind="dated"]').first();
           const body = bar.locator("rect[data-body]");
           end = phone ? await touchDrag(page, bar, page.getByTestId("chart-svg"), 60) : await mouseDrag(page, body, 160);
         }
         const r = await stopFrames(page, `${where} ${view} drag`);
+        // Checked once the frames are counted, so its polling is not timed with the drag.
+        if (view === "timeline") await expect(page.getByTestId("drag-live")).toBeVisible();
         await end();
         expect(r.n).toBeGreaterThan(10);
         if (phone) expect(r.p95).toBeLessThanOrEqual(2 * FRAME + 0.01);
