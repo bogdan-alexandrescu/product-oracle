@@ -9,15 +9,20 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+
+import { addMonths } from "@/lib/dates";
 
 import { FixButtons, type Act } from "./_card";
 import {
   addDays,
+  barSpan,
   broken,
   closedItem,
   daysBetween,
+  liveBreaks,
   ms,
   quarterValue,
   quarters,
@@ -28,6 +33,7 @@ import {
   type Roadmap,
   whereAttr,
 } from "./_lib";
+import { planned } from "./_timeline";
 
 type Zoom = "6m" | "1y" | "all";
 
@@ -198,6 +204,13 @@ export interface TimelineProps extends Common {
   /** The open item's key, and how to open or close one. */
   openKey: string | null;
   onOpen: (key: string | null) => void;
+  /** The Gantt's moves (roadmap-r2): bars moved and waiting for the change's answer, a
+   * drag's change, the keyboard's burst and its end or cancel (_roadmap.tsx's). */
+  moved: Record<string, [string, string]>;
+  onMove: (item: Item, start: string, end: string) => void;
+  onKeyMove: (item: Item, start: string, end: string) => void;
+  onKeyEnd: (item: Item) => void;
+  onKeyCancel: (item: Item) => void;
   /** The item card (FloatingCard), placed by `style`; `sheet`: a phone's bottom sheet. */
   card: (
     item: Item,
@@ -388,6 +401,68 @@ function DayChart(props: TimelineProps) {
   const firstSeen = fit
     ? months[0]?.day
     : months.find((m) => x(m.day) >= sl - 2)?.day;
+  // roadmap-r2: the Gantt's moves. A drag past 4 px moves the bar by whole days (an end
+  // within 10 px of the bar's edge moves only that end); a shorter one is a click. The
+  // arrow keys move a focused bar a week, Shift+arrow a month; each move is the Gantt's
+  // change. Cut and planned items, and a viewer's bars, do not move.
+  const { canChange, moved, onMove, onKeyMove, onKeyEnd, onKeyCancel } = props;
+  const fixed = (i: Item) => !canChange || closedItem(i) || planned(i);
+  const drag = useRef<{ item: Item; mode: "move" | "start" | "end"; x0: number; start: string; end: string; moved: boolean; pointer: number } | null>(null);
+  const clicked = useRef(false);
+  const [live, setLive] = useState<{ id: string; start: string; end: string } | null>(null);
+  const spanOf = (i: Item): [string, string] =>
+    live?.id === i.id ? [live.start, live.end] : (moved[i.id] ?? barSpan(i));
+  const dragTo = (dx: number): [string, string] | null => {
+    const d = drag.current;
+    if (!d) return null;
+    const n = Math.round(dx / ppd);
+    const a = d.mode === "end" ? d.start : addDays(d.start, n);
+    const b = d.mode === "start" ? d.end : addDays(d.end, n);
+    return a > b ? [b, a] : [a, b];
+  };
+  const onDown = (e: ReactPointerEvent<HTMLButtonElement>, i: Item) => {
+    if (e.button !== 0 || e.pointerType === "touch" || fixed(i)) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const edge = Math.min(10, r.width / 4);
+    const [start, end] = moved[i.id] ?? barSpan(i);
+    const mode = e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
+    drag.current = { item: i, mode, x0: e.clientX, start, end, moved: false, pointer: e.pointerId };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // A pointer that is gone already.
+    }
+  };
+  const onDragMove = (e: ReactPointerEvent) => {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointer) return;
+    const dx = e.clientX - d.x0;
+    if (!d.moved && Math.abs(dx) < 4) return;
+    e.preventDefault();
+    d.moved = true;
+    const to = dragTo(dx)!;
+    if (live?.start !== to[0] || live?.end !== to[1] || live?.id !== d.item.id)
+      setLive({ id: d.item.id, start: to[0], end: to[1] });
+  };
+  const onUp = (e: ReactPointerEvent) => {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointer) return;
+    drag.current = null;
+    setLive(null);
+    if (!d.moved) return;
+    // A drag is no click: the click that follows the release opens nothing.
+    clicked.current = true;
+    const [s, en] = dragTo(e.clientX - d.x0)!;
+    if (s !== d.start || en !== d.end) onMove(d.item, s, en);
+  };
+  const keyMove = (i: Item, dir: 1 | -1, month: boolean) => {
+    if (fixed(i)) return;
+    const [s, en] = moved[i.id] ?? barSpan(i);
+    const s1 = month ? addMonths(s, dir) : addDays(s, dir * 7);
+    onKeyMove(i, s1, addDays(en, daysBetween(s, s1)));
+  };
+  const liveItem = live ? data.items.find((i) => i.id === live.id) : undefined;
+  const liveWarn = live ? liveBreaks(props.byId, live.id, live.start, live.end) : [];
   const zooms: [Zoom, string][] = [
     ["6m", "6 months"],
     ["1y", "1 year"],
@@ -516,8 +591,10 @@ function DayChart(props: TimelineProps) {
               );
             const i = r.item;
             const lk = lookOf(i);
-            const bx = x(i.start.date);
-            const bw = Math.max(8, x(addDays(i.end.date, 1)) - bx);
+            const [ds, de] = spanOf(i);
+            const bx = x(ds);
+            const bw = Math.max(8, x(addDays(de, 1)) - bx);
+            const still = fixed(i);
             const sel = openKey === i.key;
             return (
               <div
@@ -564,10 +641,28 @@ function DayChart(props: TimelineProps) {
                       type="button"
                       data-bar-id={i.id}
                       data-testid="timeline-bar"
-                      aria-label={`${i.title}, ${spanWords(i.start.date, i.end.date, data.today)}`}
-                      onClick={() => onOpen(sel ? null : i.key)}
-                      className="pointer-events-auto absolute rounded-full"
+                      data-start={ds}
+                      data-end={de}
+                      data-live={live?.id === i.id ? (liveWarn.length ? "broken" : "ok") : undefined}
+                      aria-label={`${i.title}, ${spanWords(ds, de, data.today)}`}
+                      onClick={() => {
+                        if (clicked.current) clicked.current = false;
+                        else onOpen(sel ? null : i.key);
+                      }}
+                      onPointerDown={(e) => onDown(e, i)}
+                      onPointerMove={onDragMove}
+                      onPointerUp={onUp}
+                      onPointerCancel={onUp}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                          e.preventDefault();
+                          keyMove(i, e.key === "ArrowRight" ? 1 : -1, e.shiftKey);
+                        } else if (e.key === "Escape") onKeyCancel(i);
+                      }}
+                      onBlur={() => onKeyEnd(i)}
+                      className={`pointer-events-auto absolute rounded-full ${still ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} focus-visible:shadow-[0_0_0_2px_var(--surface),0_0_0_4px_var(--accent)]`}
                       style={{
+                        touchAction: still ? "auto" : "none",
                         ...lk.bar,
                         left: bx,
                         width: bw,
@@ -588,8 +683,20 @@ function DayChart(props: TimelineProps) {
                         }}
                       >
                         <span className="min-w-0 truncate rounded bg-surface px-1 text-xs leading-4 text-text">
-                          {spanWords(i.start.date, i.end.date, data.today)}
+                          {spanWords(ds, de, data.today)}
                         </span>
+                      </span>
+                    )}
+                    {live?.id === i.id && liveItem && (
+                      // The Gantt's live words while a bar is dragged: its dates, and a link it would break.
+                      <span
+                        data-testid="drag-live"
+                        data-state={liveWarn.length ? "broken" : "ok"}
+                        className="pointer-events-none absolute -top-5 z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text"
+                        style={{ left: Math.max(0, bx) }}
+                      >
+                        {shortDay(live.start)} – {shortDay(live.end)}
+                        {liveWarn.length ? ` · ${liveWarn[0]}` : " · no broken links"}
                       </span>
                     )}
                   </div>

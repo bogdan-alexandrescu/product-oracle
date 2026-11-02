@@ -331,7 +331,7 @@ export interface ChartProps {
 }
 
 /** An item the plan dates by its slices: drawn one bar per slice, its dates the plan's (not dragged). */
-const planned = (i: Item): boolean => i.slices.some((x) => x.start_date && x.end_date);
+export const planned = (i: Item): boolean => i.slices.some((x) => x.start_date && x.end_date);
 /** The days a row's bar (or its slices) cover. */
 function drawnSpan(i: Item, span?: [string, string]): [string, string] {
   const d = i.slices.filter((x) => x.start_date && x.end_date);

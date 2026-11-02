@@ -1310,6 +1310,11 @@ export function SimpleRoadmap() {
             act={act}
             canChange={canChange}
             byId={byId}
+            moved={moved}
+            onMove={onMove}
+            onKeyMove={onKeyMove}
+            onKeyEnd={(item) => dates.flush(item.id)}
+            onKeyCancel={onKeyCancel(dates)}
             openKey={cardItem?.key ?? null}
             onOpen={(k) => {
               const it = k ? data.items.find((x) => x.key === k) : undefined;
