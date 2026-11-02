@@ -74,6 +74,7 @@ import {
   scopeStop,
   seedEngCheckRun,
   seedEngCheckUnmappedRun,
+  shopBriefsCheck,
   seedEngDatesRuns,
   seedBaselineReviewRun,
   seedEngReviewRun,
@@ -1413,6 +1414,15 @@ const seedEngCheckUnreadable = () =>
 const seedEngCheckLongKey = () =>
   seedEngCheckWith("eng-check-long-key", (check) => {
     check.features[0].key = "f.guided_setup_with_test_order_and_sample_catalogue";
+  });
+
+/**
+ * "eng-check-shop" / "eng-check-shop-15" scenarios: the "eng-check" run with nine (or fifteen)
+ * invented shop features whose approaches run long, as the list and reading pane is read.
+ */
+const seedEngCheckShop = (n: number) =>
+  seedEngCheckWith(n === 9 ? "eng-check-shop" : `eng-check-shop-${n}`, (check) => {
+    Object.assign(check, shopBriefsCheck(n));
   });
 
 /** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
@@ -2847,6 +2857,10 @@ function load(): Db {
             ? seedEngCheckUnreadable
           : scenario === "eng-check-long-key"
             ? seedEngCheckLongKey
+          : scenario === "eng-check-shop"
+            ? () => seedEngCheckShop(9)
+          : scenario === "eng-check-shop-15"
+            ? () => seedEngCheckShop(15)
           : scenario === "eng-dates"
             ? seedEngDates
           : scenario === "roadmap-items-console-held"
