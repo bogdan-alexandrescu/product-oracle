@@ -237,22 +237,9 @@ const SEED: SeedItem[] = [
   { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", status: "in_progress", gates: [{ phase: "Beta", day: 40 }] },
   { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", status: "in_progress", depends: ["setup-checklist"], gates: [{ phase: "beta", day: 75 }], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
   { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut", start: 30, end: 75, source: "typed" },
-  { key: "welcome-email", title: "Welcome email series", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: -25, end: 14, source: "typed", status: "done" },
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
-  { key: "usage-forecast", title: "Usage forecast panel", horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 120, end: 210, source: "typed" },
-  { key: "alert-quiet-hours", title: "Quiet hours for alerts", horizon: "later", roadmap: "alerts-roadmap", goal: "quiet-alerts", track: "alerts", confidence: "medium", start: 190, end: 260, source: "typed" },
-  { key: "alert-snooze", title: "Snooze an alert for a week", horizon: "later", roadmap: "alerts-roadmap", goal: "quiet-alerts", track: "alerts", confidence: "medium", start: 250, end: 330, source: "typed" },
-  { key: "alert-bundles", title: "Bundle alerts into one message", horizon: "later", roadmap: "alerts-roadmap", goal: "quiet-alerts", track: "alerts", confidence: "medium", start: 340, end: 470, source: "typed", depends: ["alert-snooze"] },
-  { key: "team-spaces", title: "Shared team spaces", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 150, end: 290, source: "typed" },
-  { key: "guided-import", title: "Guided import from a spreadsheet", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 300, end: 400, source: "typed" },
-  { key: "starter-kits", title: "Starter kits by industry", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 420, end: 560, source: "typed" },
-  { key: "annual-billing", title: "Annual billing option", horizon: "later", roadmap: "pricing-roadmap", confidence: "medium", start: 200, end: 280, source: "typed" },
-  { key: "seat-reports", title: "Seat usage reports", horizon: "later", roadmap: "pricing-roadmap", goal: "grow-retention", confidence: "medium", start: 380, end: 520, source: "typed" },
-  { key: "partner-api", title: "Partner API, first version", horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 540, end: 720, source: "typed" },
-  { key: "offline-mode", title: "Offline mode on mobile", horizon: "later", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 660, end: 820, source: "typed" },
-  { key: "renewal-nudges", title: "Renewal reminders", horizon: "later", roadmap: "pricing-roadmap", goal: "grow-retention", confidence: "medium", start: 780, end: 900, source: "typed" },
 ];
 
 const DAY = 86_400_000;

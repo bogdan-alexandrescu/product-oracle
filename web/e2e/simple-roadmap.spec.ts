@@ -27,9 +27,9 @@ async function open(page: Page, email?: string, gantt = false) {
 }
 
 /** B3: a phone opens a lane, then a piece's row in its list (the card opens as a sheet). */
-async function openFromLane(page: Page, laneTitle: string, key: string) {
-  await page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: laneTitle }) }).click();
-  await page.locator(`[data-testid="lane-row"][data-item="${key}"]`).click();
+async function openFromList(page: Page, key: string) {
+  // mk-qa4-roadmap QR1 A: a phone's Timeline is a list by quarter; a row opens its item's sheet.
+  await page.locator(`[data-testid="timeline-list"] [data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`).click();
 }
 
 /** Drags a bar by `dx` pixels with the mouse, from its middle (a move, not a resize). */
@@ -91,7 +91,7 @@ for (const [where, use] of [
           await expect(bar(page, "alert-digest")).toHaveAttribute("data-broken", "true");
           await expect(page.locator('[data-testid="dep-arrow"][data-from="alert-rules"][data-to="alert-digest"]')).toHaveAttribute("data-state", "red");
           await expect(page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]')).toHaveAttribute("data-state", "amber");
-          await expect(page.locator('[data-testid="broken-callout"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
+          await expect(page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
           await expect(page.getByTestId("item-milestone").first()).toBeAttached();
           await expect(page.getByTestId("below-the-line")).toBeVisible();
           // fix4 qa-simple-roadmap-3: the return queue's place is on hover ("1st to come back"), not a "#1" on the bar.
@@ -101,9 +101,12 @@ for (const [where, use] of [
           expect(await bar(page, "alert-digest").getAttribute("data-lane")).toBe(await page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getAttribute("data-lane"));
         } else {
           // B3: a thin lane per goal (and below the line), the open lane's pieces listed under the chart.
-          await expect(page.getByTestId("phone-lane").filter({ hasText: "Grow retention" }).getByTestId("lane-count")).toHaveText("4 items");
-          await expect(page.getByTestId("phone-lane").filter({ hasText: "Below the line" })).toHaveCount(1);
-          await expect(page.getByTestId("lane-list").getByTestId("lane-row").first()).toBeVisible();
+          // mk-qa4-roadmap QR1 A: a phone's Timeline is a list by quarter (the picked frame has
+          // no goal lanes there): each row names its goal, a broken link says so.
+          const row = page.locator('[data-testid="timeline-list"] [data-testid="timeline-row"][data-item="alert-digest"]');
+          await expect(row).toContainText("Grow retention");
+          await expect(row).toContainText("Broken link");
+          await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
         }
         await expect(page.getByTestId("track-milestone")).toHaveCount(1);
         await expect(page.getByTestId("today-line")).toBeAttached();
@@ -124,7 +127,7 @@ for (const [where, use] of [
       test("a bar opens the floating card", async ({ page }) => {
         await open(page);
         // A phone's Timeline (B3) opens it from the lane's list.
-        if (where === "phone") await openFromLane(page, "Grow retention", "alert-digest");
+        if (where === "phone") await openFromList(page, "alert-digest");
         else await bar(page, "alert-digest").click();
         const card = page.getByTestId("floating-card");
         await expect(card).toBeVisible();
@@ -179,15 +182,19 @@ test("an owner drags a bar: applied, with Undo", async ({ page }) => {
  * = nothing shows during the drag; no_claim = the server's checker (it runs on drop).
  */
 test("the drag shows dates and constraint flags live", async ({ page }) => {
-  await open(page);
+  // roadmap-r2: the Timeline's bars drag again (the owner's answer, Nov 1).
+  await login(page);
+  await page.goto(URL);
+  const tl = page.locator('[data-testid="timeline-row"][data-item="alert-mobile"] [data-testid="timeline-bar"]');
+  await expect(tl).toBeVisible();
   // Mobile alert push depends on the rules engine: any span before the rules end is broken.
-  const box = (await body(page, "alert-mobile").boundingBox())!;
+  const box = (await tl.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2 - 30, box.y + box.height / 2, { steps: 6 });
   await expect(page.getByTestId("drag-live")).toBeVisible();
   await expect(page.getByTestId("drag-live")).toHaveAttribute("data-state", "broken");
-  await expect(bar(page, "alert-mobile")).toHaveAttribute("data-live", "broken");
+  await expect(tl).toHaveAttribute("data-live", "broken");
   await page.mouse.up();
   await expect(page.getByText(/Moved 'Mobile alert push'/)).toBeVisible();
 });
@@ -231,13 +238,13 @@ test("a broken link's fixes: move the dependents, accept as risk", async ({ page
   await open(page);
   const arrow = page.locator('[data-testid="dep-arrow"][data-from="alert-rules"][data-to="alert-digest"]');
   await expect(arrow).toHaveAttribute("data-state", "red");
-  await page.locator('[data-testid="broken-callout"][data-item="alert-digest"]').getByRole("button", { name: "Accept as risk" }).click();
+  await page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Accept as risk" }).click();
   await page.getByLabel("Why it is an accepted risk").fill("The digest can ship on the old rules");
   await page.getByRole("button", { name: "Save the risk" }).click();
   await expect(arrow).toHaveAttribute("data-state", "amber");
   await page.getByRole("button", { name: "Undo" }).first().click();
   await expect(arrow).toHaveAttribute("data-state", "red");
-  await page.locator('[data-testid="broken-callout"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
+  await page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]').getByRole("button", { name: "Move the dependents" }).click();
   await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
   await expect(arrow).toHaveAttribute("data-state", "ok");
 });
@@ -373,7 +380,7 @@ test("only a new feature's proposal carries a flow thumbnail", async ({ page }) 
  */
 test("a commenter proposes a fix from the callout", async ({ page }) => {
   await open(page, "commenter@example.com");
-  const callout = page.locator('[data-testid="broken-callout"][data-item="alert-digest"]');
+  const callout = page.locator('[data-testid="conflicts"] [data-testid="conflict"][data-item="alert-digest"]');
   await callout.getByRole("button", { name: "Move the dependents" }).click();
   await expect(page.getByText(/Moved what depends on 'Alert rules engine' proposed: it waits for .+ in Needs a decision/)).toBeVisible();
 });

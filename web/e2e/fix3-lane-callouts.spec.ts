@@ -44,10 +44,17 @@ for (const scheme of ["light", "dark"] as const) {
       // Every bar in sight takes its own clicks (nothing drawn over its middle).
       const hit = await page.getByTestId("timeline-bar").evaluateAll((els) =>
         els
-          .map((b) => ({ b, r: b.getBoundingClientRect() }))
-          .filter(({ r }) => r.width > 24 && r.x >= 0 && r.x + r.width <= innerWidth && r.y >= 0 && r.y + r.height <= innerHeight)
-          .map(({ b, r }) => {
-            const at = document.elementFromPoint(r.x + Math.min(r.width / 2, 12), r.y + r.height / 2);
+          .map((b) => {
+            // A bar that starts before the chart's scroll runs under the names fixed on the left
+            // (mk-qa4-roadmap QR1 A): its part in sight starts at the names' right edge.
+            const names = b.closest('[data-testid="timeline-row"]')?.querySelector("button")?.getBoundingClientRect().right ?? 0;
+            const r = b.getBoundingClientRect();
+            const x0 = Math.max(r.x, names);
+            return { b, r, x0, w: r.x + r.width - x0 };
+          })
+          .filter(({ r, w }) => w > 24 && r.x + r.width <= innerWidth && r.y >= 0 && r.y + r.height <= innerHeight)
+          .map(({ b, r, x0, w }) => {
+            const at = document.elementFromPoint(x0 + Math.min(w / 2, 12), r.y + r.height / 2);
             return { key: b.closest("[data-item]")?.getAttribute("data-item"), ok: !!at && b.contains(at) };
           }),
       );
