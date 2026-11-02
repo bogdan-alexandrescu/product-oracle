@@ -276,7 +276,8 @@ for (const [where, use] of [
         await open(page);
         const other = await context.newPage();
         await other.goto(URL);
-        if (where === "phone") await other.getByTestId("format-gantt").click();
+        // The bars are the Gantt's (the Timeline draws HTML rows: roadmap-r2-timeline-drag.spec.ts).
+        await other.getByTestId("format-gantt").click();
         await expect(bar(other, "alert-export")).toBeVisible();
         const start = (await bar(page, "alert-export").getAttribute("data-start"))!;
         // The other tab moves the bar a week earlier; this tab has not reloaded.
@@ -368,7 +369,8 @@ for (const [where, use] of [
         await expect(column(page, "now").locator('[data-item="alert-rules"]')).toBeVisible();
         await expect(card(page, "alert-rules").getByTestId("board-pending")).toHaveText(/Proposed by .*: move to Later/);
         // A phone reads the proposal on the Gantt's bar (its Timeline, timeline-overlap B3, has none).
-        await page.getByTestId(where === "phone" ? "format-gantt" : "format-timeline").click();
+        // The bars are the Gantt's on desktop and phone (the Timeline draws HTML rows).
+        await page.getByTestId("format-gantt").click();
         expect(await proposalsOn(page, bar(page, "alert-rules"))).toBe(1);
       });
     });

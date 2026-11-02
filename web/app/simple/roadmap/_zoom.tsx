@@ -781,7 +781,7 @@ function QuarterList(props: TimelineProps) {
                         >
                           {i.title}
                           {lk.chip ? (
-                            <span className="ml-2 rounded-full bg-surface2 px-1.5 text-[11px] font-normal text-text2">
+                            <span data-testid="draft-tag" className="ml-2 rounded-full bg-surface2 px-1.5 text-[11px] font-normal text-text2">
                               {lk.chip}
                             </span>
                           ) : null}

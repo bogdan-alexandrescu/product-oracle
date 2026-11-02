@@ -269,6 +269,7 @@ for (const scheme of ["light", "dark"] as const) {
       await panel.getByRole("button", { name: "Close" }).click();
 
       await switchTo(page, "admin@example.com");
+      await page.getByTestId("format-gantt").click();
       await expect(bar(page, "alert-rules")).toBeVisible();
       await page.getByTestId("needs-decision").click();
       const tray = page.getByTestId("decision-tray");
@@ -351,9 +352,8 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("quick-add")).toHaveCount(0);
       await sheetAdd(page, "Mute a rule for a week", "Next", "Add");
       await expect(toastWith(page, "Added Mute a rule for a week as a draft")).toBeVisible();
-      // B3: the draft is listed in its lane (No goal) with its Draft tag; its row opens the card.
-      await page.getByTestId("phone-lane").filter({ hasText: "No goal" }).click();
-      const row = page.locator('[data-testid="lane-row"][data-item="mute-a-rule-for-a-week"]');
+      // mk-qa4-roadmap QR1 A: the draft is listed in its quarter with its Draft tag; its row opens the card.
+      const row = page.locator('[data-testid="timeline-list"] [data-testid="timeline-row"][data-item="mute-a-rule-for-a-week"]');
       await expect(row.getByTestId("draft-tag")).toHaveText("Draft");
       await noSidewaysScroll(page);
       await row.click();

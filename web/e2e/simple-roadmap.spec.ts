@@ -95,7 +95,8 @@ for (const [where, use] of [
           await expect(page.getByTestId("item-milestone").first()).toBeAttached();
           await expect(page.getByTestId("below-the-line")).toBeVisible();
           // fix4 qa-simple-roadmap-3: the return queue's place is on hover ("1st to come back"), not a "#1" on the bar.
-          await expect(page.locator('[data-testid="bar"][data-place="1"] title').first()).toContainText("1st to come back");
+          // The Gantt (mk-qa4-roadmap) says the cut item's place in the return queue in words.
+          await expect(page.getByTestId("return-place").first()).toHaveText("1st to return");
           // B2: the lanes name their goal and count their items.
           await expect(page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getByTestId("lane-count")).toHaveText("4 items");
           expect(await bar(page, "alert-digest").getAttribute("data-lane")).toBe(await page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getAttribute("data-lane"));
@@ -107,13 +108,17 @@ for (const [where, use] of [
           await expect(row).toContainText("Grow retention");
           await expect(row).toContainText("Broken link");
           await expect(page.getByTestId("timeline-quarter").first()).toBeVisible();
+          // The phone's list marks today on its quarter (the picked frame draws no line or milestone marks there).
+          await expect(page.getByTestId("timeline-quarter").filter({ hasText: "Today" })).toHaveCount(1);
         }
-        await expect(page.getByTestId("track-milestone")).toHaveCount(1);
-        await expect(page.getByTestId("today-line")).toBeAttached();
+        if (where === "desktop") {
+          await expect(page.getByTestId("track-milestone")).toHaveCount(1);
+          await expect(page.getByTestId("today-line")).toBeAttached();
+        }
         await expect(page.getByTestId("goal-counter")).toHaveCount(2);
         await expect(page.getByTestId("goal-counters")).toContainText("Teams active after 90 days");
         for (const t of ["timeline", "gantt", "board", "waterfall"]) await expect(page.getByTestId(`format-${t}`)).toBeVisible();
-        await expect(page.getByTestId("format-timeline")).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByTestId(where === "phone" ? "format-timeline" : "format-gantt")).toHaveAttribute("aria-pressed", "true");
         if (where === "phone") await noSidewaysScroll(page);
       });
 
