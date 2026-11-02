@@ -11,6 +11,9 @@ import { login, openSeeded, seedRoadmapAttempt2, seedRoadmapFileProblem, seedRoa
 const RUN = ROADMAP_REVIEW_RUN.run.id;
 const CP = ROADMAP_REVIEW_RUN.run.checkpoints[0].id;
 const SCREEN = `/runs/${RUN}/review/${CP}`;
+// A browser east of the Company zone (ah-detailed-specs): a milestone's day reads as the file
+// writes it, never a day early from formatting an already formatted date.
+test.use({ timezoneId: "UTC" });
 
 // D1 draws E2's ItemsTable and ItemInspector (no second table): their rows and inspector.
 const row = (page: Page, key: string) => page.locator(`[data-testid="roadmap-item-row"][data-key="${key}"]`);
