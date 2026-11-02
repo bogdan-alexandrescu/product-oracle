@@ -1,6 +1,6 @@
 import { DATE_BASES_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login, signOut } from "./helpers";
+import { login, openSection, signOut } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /**
@@ -148,13 +148,15 @@ for (const phone of [false, true]) {
       const left = page.getByTestId("share-left");
       await expect(left.nth(0)).toContainText("Pick where dates come from: 1 date has no source yet");
       await expect(left.nth(0).getByRole("link", { name: "Fix in Plan › Dates" })).toHaveAttribute("href", "/plan/dates");
-      await expect(left.nth(1)).toContainText("Publish v1 (this approves it too)");
+      // This roadmap's v1 is approved already, so the row does not add "(this approves it too)".
+      await expect(left.nth(1)).toHaveText("Publish v1Fix on Publish page");
       await expect(left.nth(1).getByRole("link", { name: "Fix on Publish page" })).toHaveAttribute("href", "/documents/usage-alerts-roadmap/publish");
 
       // The date gets a verified source, as a person records it.
       await page.goto("/documents/usage-alerts-roadmap/v/1");
       await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
-      await page.locator('[data-date-mark="unverified"]').first().click();
+      const item = await openSection(page, "item-behaviour");
+      await item.locator('[data-date-mark="unverified"]').click();
       await page.getByTestId("date-mark-popover").getByRole("button", { name: "Add a date source" }).click();
       const basis = page.getByTestId("date-basis-dialog");
       await basis.getByRole("button", { name: "Record and verify" }).click();
