@@ -79,7 +79,7 @@ import uuid
 from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any, Literal, Protocol
 
@@ -705,6 +705,7 @@ class Found:
     owner: str | None  # the item that owns the date (its section, row or line)
     block: str  # the rendered block it is in (a tracker key named there counts)
     in_code: bool = False  # in a code block: a marker goes right after it, as text
+    items: frozenset[str] = frozenset()  # the roadmap's own item keys, lowercased
 
     @property
     def day(self) -> date:
@@ -833,7 +834,8 @@ def find(
             ref=ref,
             skip_yaml=s.section_key == LAYOUT_KEY,
         )
-    return out
+    items = frozenset(k.lower() for k in map(_item_of_anchor, keys) if k)
+    return [replace(f, items=items) for f in out]
 
 
 def covering(found: Found, bases: Iterable[schedule.Basis]) -> list[schedule.Basis]:
@@ -853,9 +855,9 @@ def _in_scope(b: schedule.Basis, found: Found) -> bool:
     owner = (found.owner or "").lower()
     if b.item_key:
         # walkb-roadmap: a date outside every item (a summary, a brief table) is backed by
-        # an item's verified basis for that day, as Plan › Dates shows it verified.
+        # the verified basis for that day of one of this roadmap's own items.
         if not owner:
-            return True
+            return b.item_key.lower() in found.items
         return owner == b.item_key.lower()
     if b.tracker_key:
         if schedule._names(b.tracker_key, found.block):
