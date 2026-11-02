@@ -148,3 +148,33 @@ async def test_minutes_do_not_wait_for_the_prds_other_jobs(client):
         await s.commit()
         minutes_id = minutes.id
     assert await worker.claim_next(w.ctx.tenant_id) == minutes_id
+
+
+async def test_a_task_on_an_item_whose_name_holds_for(client):
+    """walkc-meeting: protects=a task line on an item named "Exports for teams" finds that
+    item (the longest name the roadmap knows), with and without "for <person>";
+    fails_when=the line splits at the name's own " for " (item "Exports", owner "teams
+    for Theo"); no_claim=other phrases."""
+    from sqlalchemy import update
+
+    from oracle.roadmap.models import RoadmapItem
+    from tests.test_simple_chat_api import World, make_people
+    from tests.test_simple_chat_api import say as ask
+
+    ctx = await make_people()
+    w = await World(ctx).build()
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(update(RoadmapItem).where(RoadmapItem.id == w.ids["Partner API"])
+                        .values(title="Exports for teams"))  # fmt: skip
+        await s.commit()
+    for line, owner in (
+        ("add a task 'Draft the email' to Exports for teams for commenter by March 5",
+         str(ctx.users["commenter"].id)),
+        ("add a task 'Write the FAQ' to Exports for teams", None),
+    ):  # fmt: skip
+        m = await ask(client, ctx, "owner", line)
+        assert m["kind"] == "cards", (line, m["body"])
+        [card] = m["cards"]
+        assert card["op"] == "add_item_task"
+        assert card["target"]["item_id"] == w.ids["Partner API"], line
+        assert card["after"]["owner_id"] == owner, line
