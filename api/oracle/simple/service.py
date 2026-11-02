@@ -1008,8 +1008,8 @@ async def build(
             for m in read.milestones
         ],
         span=span,
-        changes_in_review=seen.changes_in_review,
-        drafts=seen.visible,
+        changes_in_review=seen.of(chosen.id if chosen else None)[1],
+        drafts=seen.of(chosen.id if chosen else None)[0],
         key_dates=kds,
         key_date_roadmaps=kd_roadmaps,
         roadmaps=all_roadmaps,

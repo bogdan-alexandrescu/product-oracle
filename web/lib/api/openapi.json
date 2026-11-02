@@ -42944,24 +42944,8 @@
           "simple"
         ],
         "summary": "List Simple Drafts",
-        "description": "The open working and submitted drafts the caller may see: their participants, the\ncompany's owners, the roadmap's decider, required reviewers and owners.",
+        "description": "The open working and submitted drafts the caller may see: their participants, the\ncompany's owners, the roadmap's decider, required reviewers and owners. ``roadmap``\n(an id or slug) keeps that roadmap's drafts only; 404 when there is no such roadmap.",
         "operationId": "list_simple_drafts",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SimpleDraftOut"
-                  },
-                  "type": "array",
-                  "title": "Response List Simple Drafts"
-                }
-              }
-            }
-          }
-        },
         "security": [
           {
             "HTTPBearer": []
@@ -42970,6 +42954,50 @@
             "APIKeyCookie": []
           }
         ],
+        "parameters": [
+          {
+            "name": "roadmap",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Roadmap"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SimpleDraftOut"
+                  },
+                  "title": "Response List Simple Drafts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
         "x-min-role": "viewer"
       }
     },

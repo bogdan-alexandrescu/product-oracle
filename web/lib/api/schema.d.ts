@@ -12409,7 +12409,8 @@ export interface paths {
         /**
          * List Simple Drafts
          * @description The open working and submitted drafts the caller may see: their participants, the
-         *     company's owners, the roadmap's decider, required reviewers and owners.
+         *     company's owners, the roadmap's decider, required reviewers and owners. ``roadmap``
+         *     (an id or slug) keeps that roadmap's drafts only; 404 when there is no such roadmap.
          */
         get: operations["list_simple_drafts"];
         put?: never;
@@ -69491,7 +69492,9 @@ export interface operations {
     };
     list_simple_drafts: {
         parameters: {
-            query?: never;
+            query?: {
+                roadmap?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -69505,6 +69508,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleDraftOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

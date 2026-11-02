@@ -662,7 +662,10 @@ export function SimpleRoadmap() {
     { keepPrevious: true },
   );
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
-  const drafts = useQuery("simple-drafts", () => unwrap(api.GET("/v1/simple/drafts")));
+  // A working draft belongs to one roadmap: a chosen roadmap's page lists its own drafts only.
+  const drafts = useQuery(`simple-drafts:${f.roadmap ?? ""}`, () =>
+    unwrap(api.GET("/v1/simple/drafts", { params: { query: f.roadmap ? { roadmap: f.roadmap } : {} } })),
+  );
   // Who may start a review is the start sheet's own per-PRD answer (meetings.may_start: an owner,
   // or a PRD's decider), not who decides this roadmap's items; the same read the sheet makes.
   const startOptions = useQuery("simple-meeting-options||", () =>

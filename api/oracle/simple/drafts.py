@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -386,6 +386,13 @@ class Reader:
     overlays: dict[uuid.UUID, dict[str, Any]]
     visible: list[SimpleDraftBrief]
     changes_in_review: int
+    hidden_by_doc: dict[uuid.UUID, int] = field(default_factory=dict)
+
+    def of(self, doc: uuid.UUID | None) -> tuple[list[SimpleDraftBrief], int]:
+        """The drafts and the hidden count of one roadmap (every roadmap when None)."""
+        if doc is None:
+            return self.visible, self.changes_in_review
+        return [b for b in self.visible if b.document_id == doc], self.hidden_by_doc.get(doc, 0)
 
 
 async def reader(db: AsyncSession, principal: Any) -> Reader:
@@ -404,6 +411,7 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
     overlays: dict[uuid.UUID, dict[str, Any]] = {}
     visible: list[SimpleDraftBrief] = []
     hidden = 0
+    by_doc: dict[uuid.UUID, int] = {}
     seen_docs: set[uuid.UUID] = set()
     for d in ds:
         if sees(principal, d, w):
@@ -416,6 +424,7 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
             )  # type: ignore[arg-type]
         else:
             hidden += n[d.id]
+            by_doc[d.document_id] = by_doc.get(d.document_id, 0) + n[d.id]
     me = _me(principal)
     for doc, k in proposals.items():
         if doc in seen_docs:
@@ -428,7 +437,8 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
         )
         if not mine:
             hidden += k
-    return Reader(overlays, visible, hidden)
+            by_doc[doc] = by_doc.get(doc, 0) + k
+    return Reader(overlays, visible, hidden, by_doc)
 
 
 async def overlays_for(db: AsyncSession, principal: Any) -> dict[uuid.UUID, dict[str, Any]]:
@@ -740,9 +750,22 @@ async def outs(
     return out
 
 
-async def listing(db: AsyncSession, principal: Any) -> list[SimpleDraftOut]:
-    """The open drafts the caller may see, oldest first."""
+async def listing(
+    db: AsyncSession, principal: Any, roadmap: str | None = None
+) -> list[SimpleDraftOut]:
+    """The open drafts the caller may see, oldest first; with ``roadmap`` (its id or slug)
+    only that roadmap's (a working draft belongs to one roadmap)."""
     ds = await open_drafts(db)
+    if roadmap:
+        doc = await db.scalar(
+            select(Document).where(
+                Document.kind == "roadmap",
+                or_(Document.slug == roadmap, cast(Document.id, String) == roadmap),
+            )
+        )
+        if doc is None:
+            raise DraftError(404, "No such roadmap")
+        ds = [d for d in ds if d.document_id == doc.id]
     w = await who(db, {d.document_id for d in ds})
     return await outs(db, principal, [d for d in ds if sees(principal, d, w)])
 

@@ -47,6 +47,7 @@ import {
   readsRoadmap,
   roadmapId,
   roadmapOut,
+  readableRoadmap,
   seesDraft,
   settleDrafting,
   simpleWindows,
@@ -372,9 +373,13 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
 }
 
 /** /v1/simple/drafts (drafts.listing, submit, approve, resume). */
-function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]): Response | null {
+function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[], q: URLSearchParams): Response | null {
   const now = iso(mockNowMs());
-  const open = (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status));
+  // ?roadmap= (an id or slug): that roadmap's drafts only (a working draft belongs to one roadmap).
+  const asked = q.get("roadmap");
+  const rm = asked ? readableRoadmap(asked, ctx.role) : undefined;
+  if (asked && !rm && !p[3]) return json(404, { detail: "No such roadmap" });
+  const open = (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status) && (!rm || d.roadmap === rm));
   if (!p[3] && m === "GET") return json(200, open.filter((d) => seesDraft(d, ctx, db)).map((d) => draftOut(db, ctx, d)));
   const d = (db.drafts ?? []).find((x) => x.out.id === p[3] && seesDraft(x, ctx, db));
   if (!d) return json(404, { detail: "No such draft" });
@@ -737,7 +742,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     } as Schemas["SimpleChangeIn"]);
     return res.status === 201 ? new Response(res.body, { status: 200, headers: res.headers }) : res;
   }
-  if (p[2] === "drafts") return routeDrafts(db, ctx, m, p);
+  if (p[2] === "drafts") return routeDrafts(db, ctx, m, p, q);
   if (p[2] === "sessions") {
     if (!p[3] && m === "POST") {
       const body = (await req.json().catch(() => ({}))) as { kind?: Session["kind"] };
