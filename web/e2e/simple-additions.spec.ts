@@ -27,9 +27,11 @@ async function openRoadmap(page: Page, email?: string) {
   await login(page, email);
   await page.goto(ROADMAP);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  // A phone's Timeline (timeline-overlap B3) draws thin lanes, not bars.
-  if (page.viewportSize()!.width > 640) await expect(bar(page, "alert-rules")).toBeVisible();
-  else await expect(page.getByTestId("phone-lane").first()).toBeVisible();
+  // The quarter drops and drawn bars are the Gantt's on a desktop; a phone's Timeline is a list by quarter.
+  if (page.viewportSize()!.width > 640) {
+    await page.getByTestId("format-gantt").click();
+    await expect(bar(page, "alert-rules")).toBeVisible();
+  } else await expect(page.getByTestId("timeline-list")).toBeVisible();
 }
 
 /** A lane's key on the Timeline (timeline-overlap B2), by its title. */
