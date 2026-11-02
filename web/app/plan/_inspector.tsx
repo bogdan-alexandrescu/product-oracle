@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { AskTeammate } from "@/components/AskTeammate";
 import { DateBasisDialog, shortDay, useDateRights } from "@/components/DateBasisDialog";
 import { DiscussSubject, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
+import { DecidedWho } from "@/components/simple/DecidedWho";
 import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, Sheet, ToGo } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
 import { RequestSpecDialog, SPEC_STATE, specFor, specHref, useSpecs } from "@/components/RequestSpec";
@@ -494,18 +495,31 @@ function DriftCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Pro
 /** H1 entry point: who may record a decision records one about this Plan item. */
 function RecordDecision({ item }: { item: PlanItem }) {
   const { can } = useMe();
-  if (!can("create_decision")) return null;
+  const decided = item.decisions ?? [];
+  // walkc-roadmap-tasks: the decisions taken about the item show to everyone who reads it;
+  // recording one stays with who may.
+  if (!can("create_decision") && !decided.length) return null;
   const subject = encodeURIComponent(`roadmap_item:${item.id}`);
   return (
     <InspectorSection label="Decisions" testId="plan-decisions">
-      <p className="flex flex-wrap gap-3 text-[15px]">
+      {decided.length > 0 && (
+        <ul className="mb-2 space-y-1.5 text-[15px]" data-testid="plan-decided">
+          {decided.map((d) => (
+            <li key={d.id}>
+              {d.title}
+              <DecidedWho d={d} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {can("create_decision") && <p className="flex flex-wrap gap-3 text-[15px]">
         <Link href={`/company/decisions?subject=${subject}&ref=${encodeURIComponent(item.title)}&propose=1`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline">
           Record a decision
         </Link>
         <Link href={`/company/decisions?subject=${subject}&class=all`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline">
           Decisions about this item
         </Link>
-      </p>
+      </p>}
     </InspectorSection>
   );
 }

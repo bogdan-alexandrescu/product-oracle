@@ -89,7 +89,7 @@ for (const where of ["desktop", "phone"] as const) {
     const formats = where === "phone" ? ["gantt"] : ["timeline", "gantt"];
     for (const f of formats) {
       await page.getByTestId(`format-${f}`).click();
-      await expect(page.locator('g[data-testid="slice-bar"][data-code="F-02"]').first(), f).toHaveAttribute("data-start", now!);
+      await expect(page.locator('g[data-testid="slice-bar"][data-code^="F-02"]').first(), f).toHaveAttribute("data-start", now!);
     }
   });
 }
