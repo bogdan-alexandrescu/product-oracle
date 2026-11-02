@@ -24,7 +24,8 @@ async function open(page: Page, email?: string, phone = false) {
   await login(page, email);
   await page.goto(URL);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  if (phone) await page.getByTestId("format-gantt").click();
+  // The Timeline (mk-qa4-roadmap QR1 A) is for reading: bars move on the Gantt.
+  await page.getByTestId("format-gantt").click();
   await expect(bar(page, "alert-export")).toBeVisible();
 }
 
