@@ -97,7 +97,9 @@ test.describe("phone", () => {
     await expect(toggle).toHaveText("Filters · 1");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("combobox", { name: "To", exact: true })).toHaveCount(0);
-    // Group by stays at hand beside the button.
+    // The Timeline always groups by goal, so it has no Group by; on the Gantt Group by stays at hand beside the button.
+    await expect(page.getByTestId("filters").getByRole("group", { name: "Group by" })).toHaveCount(0);
+    await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("filters").getByRole("group", { name: "Group by" })).toBeVisible();
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
