@@ -107,6 +107,8 @@ test("a proposal made in a meeting stays with the meeting's decider after the it
   const owner = await attend(page, ADMIN.email, true);
   await owner.getByLabel("Who changes things").selectOption("everyone");
   await expect(owner.getByLabel("Who changes things")).toHaveValue("everyone");
+  // The rule is saved (its hint shows) before the owner leaves the meeting.
+  await expect(owner.getByTestId("chat-rules-hint")).toBeVisible();
   // What waits on the owner before the meeting's proposal.
   await owner.goto("/simple/roadmap");
   const count = owner.getByTestId("simple-nav-roadmap-count");

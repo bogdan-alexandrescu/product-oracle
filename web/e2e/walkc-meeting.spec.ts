@@ -192,6 +192,7 @@ for (const phone of [false, true]) {
       const owner = await attend(page, ADMIN.email, true);
       await owner.getByLabel("Who changes things").selectOption("everyone");
       await expect(owner.getByLabel("Who changes things")).toHaveValue("everyone");
+      await expect(owner.getByTestId("chat-rules-hint")).toBeVisible();
       const theo = await attend(page, "commenter@example.com", false);
       const chat = theo.getByTestId("meeting-chat");
       await chat.getByLabel("Message Oracle").fill("cut Alert rules engine");
