@@ -284,6 +284,8 @@ export default function SimpleHome() {
       ["broken-links", roadmap.data ? broken.length : null, broken.length === 1 ? "broken link" : "broken links", broken.length === 1 ? "broken link" : "broken links"],
     ] as const
   ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty || prdWaiting.length > 0 : !proposalsEmpty));
+  // build-rundecide review: with no other judgement call the Decisions card is not drawn; its tile goes to the first PRD's card.
+  const tileAnchor = (id: string) => (id === "decisions" && decisionsEmpty && prdWaiting[0] ? `waiting-${prdWaiting[0].prd.slug}` : id);
   // The goal band's weights as their share of the score ("50% of the score").
   const weightSum = (tiles ?? []).reduce((n, g) => n + (g.weight != null && g.weight > 0 ? g.weight : 0), 0);
   /** A goal's features on the roadmap (filtered to it), or Priorities when none is planned yet. */
@@ -553,7 +555,7 @@ export default function SimpleHome() {
             {tilesShown.map(([id, n, label, short]) => (
               <li key={id}>
                 <a
-                  href={`#${id}`}
+                  href={`#${tileAnchor(id)}`}
                   data-testid={`home-summary-${id}`}
                   className="flex h-full flex-col rounded-xl bg-surface2 px-4 py-3 hover:bg-accent-soft max-[600px]:px-2.5 max-[600px]:py-2"
                 >
@@ -610,7 +612,7 @@ export default function SimpleHome() {
 
       {!reads &&
         prdWaiting.map(({ prd, questions }) => (
-          <section key={prd.slug} className="simple-card" aria-label={`Waiting for you: ${prd.title}`} data-testid="home-prd-waiting">
+          <section key={prd.slug} id={`waiting-${prd.slug}`} className="simple-card scroll-mt-6" aria-label={`Waiting for you: ${prd.title}`} data-testid="home-prd-waiting">
             <header className="flex flex-wrap items-baseline gap-x-3">
               <h2 className="simple-h2 flex-1">Waiting for you: {prd.title}</h2>
               <span className="simple-meta">
