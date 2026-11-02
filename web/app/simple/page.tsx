@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
+import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
@@ -130,6 +131,10 @@ export default function SimpleHome() {
   // qa4-simple-home-10: Done gives the focus back to "Walk me through it".
   const walkButton = useRef<HTMLButtonElement>(null);
   const backToWalk = useRef(false);
+  const canStartPrd = useCanStartPrd();
+  const [newPrd, setNewPrd] = useState(false);
+  const closeNewPrd = useCallback(() => setNewPrd(false), []);
+  const started = useStartedPrds(canStartPrd);
   useEffect(() => {
     if (walking || !backToWalk.current) return;
     walkButton.current?.focus();
@@ -470,6 +475,7 @@ export default function SimpleHome() {
 
   return (
     <SimplePage title="Home">
+      {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       {confirming && (
         <Dialog
@@ -511,15 +517,19 @@ export default function SimpleHome() {
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
-        {!walking && capsReady && !reads && counted && !nothingToWalk && (
-          <div>
-            <button type="button" ref={walkButton} className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
-              Walk me through it
-            </button>
+        {/* NP1: New PRD beside the walk, opening the guided sheet. */}
+        {!walking && capsReady && ((!reads && counted && !nothingToWalk) || canStartPrd) && (
+          <div className="flex flex-wrap gap-2">
+            {!reads && counted && !nothingToWalk && (
+              <button type="button" ref={walkButton} className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
+                Walk me through it
+              </button>
+            )}
+            {canStartPrd && <NewPrdButton onOpen={() => setNewPrd(true)} />}
           </div>
         )}
         {/* While the role or what waits is unknown the walk's slot keeps its height; a reader known has no walk and no gap. */}
-        {!walking && (!capsReady || (!reads && !counted)) && (
+        {!walking && (!capsReady || (!reads && !counted && !canStartPrd)) && (
           <div aria-hidden data-testid="home-walk-slot" className="invisible">
             <span className="simple-button">Walk me through it</span>
           </div>
@@ -538,6 +548,7 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
+      <StartedCard started={started.data ?? []} />
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
       {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
