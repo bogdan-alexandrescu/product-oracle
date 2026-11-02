@@ -115,7 +115,9 @@ for (const scheme of ["light", "dark"] as const) {
       await toastWith(page, "Added Quiet hours setting as a draft").getByRole("button", { name: "Undo" }).click();
       await expect(b).toHaveCount(0);
 
+      await page.getByTestId("format-timeline").click();
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
+      await page.getByTestId("format-gantt").click();
       await expect(b).toHaveAttribute("data-kind", "draft");
       await b.locator("rect[data-body]").click();
       const card = page.getByTestId("floating-card");

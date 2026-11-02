@@ -113,6 +113,25 @@ for (const width of [1440, 1024]) {
       await expect(page.getByTestId("draft-count")).toHaveText("2");
     });
 
+    // R2_SHOTS=<dir> saves a drag in progress and its result (the PR's pictures).
+    test("a drag in progress shows its dates live", async ({ page }) => {
+      await open(page);
+      const b = bar(page, "alert-mobile");
+      const box = (await b.boundingBox())!;
+      const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + 80, y, { steps: 8 });
+      await expect(page.getByTestId("drag-live")).toBeVisible();
+      await expect(page.getByTestId("drag-live")).toContainText(" – ");
+      const dir = process.env.R2_SHOTS;
+      if (dir) await page.screenshot({ path: `${dir}/timeline-drag-${width}-during.png` });
+      await page.mouse.up();
+      await expect(page.getByText(/Moved 'Mobile alert push'/)).toBeVisible();
+      await expect(page.getByTestId("drag-live")).toHaveCount(0);
+      if (dir) await page.screenshot({ path: `${dir}/timeline-drag-${width}-after.png` });
+    });
+
     test("a viewer's bars do not move", async ({ page }) => {
       await open(page, "viewer@example.com");
       const b = bar(page, "alert-export");
