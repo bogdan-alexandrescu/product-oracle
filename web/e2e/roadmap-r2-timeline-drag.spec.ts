@@ -93,6 +93,11 @@ for (const width of [1440, 1024]) {
       await open(page);
       const b = bar(page, "alert-export");
       const [s0, e0] = await span(b);
+      // A drag shorter than the threshold is a click: the side panel opens, nothing moves.
+      await drag(page, b, 2);
+      await expect(page.getByTestId("item-panel")).toBeVisible();
+      await expect(b).toHaveAttribute("data-start", s0);
+      await expect(page.getByTestId("draft-banner")).toHaveCount(0);
       await b.focus();
       await page.keyboard.press("ArrowRight");
       await page.waitForTimeout(1200);
@@ -105,11 +110,6 @@ for (const width of [1440, 1024]) {
       const s2 = plusMonth(plus(s0, 7));
       await expect(b).toHaveAttribute("data-start", s2);
       await expect(b).toHaveAttribute("data-end", plus(e0, 7 + (Date.parse(s2) - Date.parse(plus(s0, 7))) / 86_400_000));
-      await expect(page.getByTestId("draft-count")).toHaveText("2");
-      // A drag shorter than the threshold is a click: the side panel opens, nothing moves.
-      await drag(page, b, 2);
-      await expect(page.getByTestId("item-panel")).toBeVisible();
-      await expect(b).toHaveAttribute("data-start", s2);
       await expect(page.getByTestId("draft-count")).toHaveText("2");
     });
 

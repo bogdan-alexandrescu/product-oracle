@@ -447,12 +447,12 @@ function DayChart(props: TimelineProps) {
   const onUp = (e: ReactPointerEvent) => {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointer) return;
+    const [s, en] = dragTo(e.clientX - d.x0)!;
     drag.current = null;
     setLive(null);
     if (!d.moved) return;
     // A drag is no click: the click that follows the release opens nothing.
     clicked.current = true;
-    const [s, en] = dragTo(e.clientX - d.x0)!;
     if (s !== d.start || en !== d.end) onMove(d.item, s, en);
   };
   const keyMove = (i: Item, dir: 1 | -1, month: boolean) => {
