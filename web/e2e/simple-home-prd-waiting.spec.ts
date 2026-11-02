@@ -77,7 +77,8 @@ for (const phone of [false, true]) {
     test("the PRD's review meeting: every open question on the agenda, soonest first", async ({ page }) => {
       await login(page);
       await page.goto("/simple/prds/guided-setup");
-      await page.getByRole("button", { name: "Start review" }).click();
+      // vqa-simple-runs: the PRD page's button reads "Start a review meeting" since train AH.
+      await page.getByRole("button", { name: "Start a review meeting" }).click();
       await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
       await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "3 Decisions" }).click();
