@@ -128,6 +128,12 @@ for (const scheme of ["light", "dark"] as const) {
       expect(Math.abs(a.y - b.y)).toBeLessThan(1);
       await expect(slice(page, "F-05a").locator("title")).toHaveText(/^Team invites, part 1 of 2 · M1 Prove it/);
       await expect(slice(page, "F-05b").locator("title")).toHaveText(/^Team invites, part 2 of 2 · M2 Scale volume/);
+      // Each piece's visible label reads its name or its part, never its code.
+      for (const [code, part] of [["F-05a", "1"], ["F-05b", "2"]]) {
+        await expect(slice(page, code).getByTestId("slice-label")).toBeVisible();
+        await expect(slice(page, code).getByTestId("slice-label")).toHaveText(new RegExp(`^(Team invites|Tea…|Part ${part} of 2)`));
+        await expect(slice(page, code).getByTestId("slice-label")).not.toHaveText(/F-\d/);
+      }
       // The Gantt's axis: weeks, the Today pill; the milestones' ends; the holidays; the legend.
       await expect(page.getByTestId("axis-tick").filter({ hasText: /^Dec 7$/ })).toHaveCount(1);
       await expect(page.getByTestId("today-pill")).toHaveText("Today");
@@ -182,7 +188,8 @@ for (const scheme of ["light", "dark"] as const) {
      * first slice, still drawn as both slices), by Track the track "Guided setup track", by PRD
      * Guided setup; in each, Setup checklist and Sample data import (they overlap) sit in one
      * group on two rows, and PM-owned work stays in its group; fails_when = a grouping draws the
-     * goal groups, a group is missing, or overlapping pieces share a row; no_claim = the groups'
+     * goal groups, a group is missing, or overlapping pieces share a row; on the Waterfall each
+     * milestone's group heads its count of items (M1 6, M2 6, M3 8); no_claim = the groups'
      * order beyond the API's.
      */
     test(`Group by Milestone, Track and PRD draw their own lanes (desktop, ${scheme})`, async ({ page }) => {
@@ -210,6 +217,13 @@ for (const scheme of ["light", "dark"] as const) {
           .toBe("one group, two rows");
         await expect(group(page, "PM-owned")).toHaveCount(0);
       }
+      // The Waterfall, by Milestone, heads each milestone's group with its count of items.
+      await page.getByTestId("group-milestone").click();
+      await format(page, "waterfall");
+      await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
+      // (Team invites counts once, under M1, its first slice.)
+      for (const [t, n] of [["M1 Prove it", "6 items"], ["M2 Scale volume", "6 items"], ["M3 Open to all", "8 items"]])
+        await expect(group(page, t).getByTestId("lane-count")).toHaveText(n);
     });
   });
 
