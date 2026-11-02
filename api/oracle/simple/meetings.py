@@ -57,6 +57,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
+from oracle.docs.parser import DraftError as ImportRejected
 from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import change_words, drafts, minutes
@@ -764,6 +765,37 @@ def published_words(d: Any, names: dict[uuid.UUID, str]) -> str:
     return "not yet published: " + (" · ".join(why) or "its review is not complete")
 
 
+def _sentence(text: str) -> str:
+    text = text.strip()
+    if not text:
+        return text
+    text = text[0].upper() + text[1:]
+    return text if text.endswith((".", "?", "!")) else text + "."
+
+
+def approve_problems(problems: list[Any]) -> dict[str, Any]:
+    """walkc-meeting: why the meeting's Approve could not publish, as a short list a person
+    reads: each problem said once, in plain words (what to do is in its message), where it
+    is (the section's name), and how many times it came up. No codes or raw lines."""
+    seen: dict[tuple[str, str | None], dict[str, Any]] = {}
+    for p in problems:
+        what = _sentence(str(getattr(p, "message", "") or ""))
+        refs = getattr(p, "refs", None) or {}
+        where = refs.get("section") if isinstance(refs.get("section"), str) else None
+        key = (what, where)
+        if key in seen:
+            seen[key]["times"] += 1
+        else:
+            seen[key] = {"what": what, "where": where, "times": 1}
+    n = len(problems)
+    message = (
+        "Not approved: the draft has 1 problem to fix first."
+        if n == 1
+        else f"Not approved: the draft has {n} problems to fix first."
+    )
+    return {"code": "draft_problems", "message": message, "problems": list(seen.values())}
+
+
 async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     """The decider's Approve: every draft the meeting worked on, with the required
     reviewers present approving too (oracle.simple.drafts.approve_in_meeting); the
@@ -781,6 +813,10 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
         result = await drafts.approve_in_meeting(db, session, me, present)
     except drafts.DraftError as e:
         raise MeetingError(e.status, str(e)) from e
+    except ImportRejected as e:
+        # walkc-meeting: never the raw "draft rejected: 38 problem(s)": each problem in
+        # plain words, with what to do about it and where.
+        raise MeetingError(422, approve_problems(e.problems)) from e
     if not result.drafts:
         if result.not_approved:
             return result
