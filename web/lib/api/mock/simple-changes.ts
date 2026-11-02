@@ -430,6 +430,14 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const ranking = body.op === "override_priority" || body.op === "estimate_feature";
   const after = ranking ? priorityAfter(body.op, body.after ?? {}) : { ...body.after };
   if (typeof after === "string") return json(422, { detail: after });
+  // walkc-roadmap-tasks: a task's owner is a person (targets.py stores owner_id); the chat's
+  // "for <name>" names them.
+  if (body.op === "add_item_task" && !after.owner_id && typeof after.owner_name === "string") {
+    const asked = after.owner_name.trim().toLowerCase();
+    const hit = Object.entries(ctx.names).find(([, n]) => n.toLowerCase() === asked) ?? Object.entries(ctx.names).find(([, n]) => n.toLowerCase().split(" ")[0] === asked);
+    if (hit) Object.assign(after, { owner_id: hit[0], owner_name: hit[1] });
+  }
+  if (body.op === "add_item_task" && after.owner_id && !after.owner_name) after.owner_name = ctx.names[String(after.owner_id)] ?? null;
   const before: Values = ranking
     ? priorityBefore(db, keyOf(db, target.item_id)!, body.op, id)
     : (body.op as string) === "set_owner"
@@ -459,6 +467,8 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
   const id = String(c.target[spec.id]);
   const targets = (db.targets ??= {});
   if (spec.adds && undo) delete targets[id];
+  // walkc-roadmap-tasks: a task is stored under its item, open, as RoadmapItemTask is.
+  else if (c.op === "add_item_task") targets[id] = { status: "todo", owner_id: null, due_date: null, ...values, kind: "item_task", item_id: c.target.item_id, at: c.at };
   else targets[id] = { ...(targets[id] ?? {}), ...values };
 }
 

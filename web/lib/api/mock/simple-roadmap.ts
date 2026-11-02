@@ -109,7 +109,7 @@ interface SimpleDb {
   /** S10: the visuals (./simple-visuals.ts), shared with the one-pager's. */
   visuals?: VisualsDb;
   /** S8: decided decisions that changed each item (by item id), newest first. */
-  decided_in?: Record<string, { id: string; number: number; title: string }[]>;
+  decided_in?: Record<string, Schemas["SimpleDecidedRef"][]>;
   /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
   plan?: PlanDb;
 }
@@ -221,6 +221,28 @@ export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug
 export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
 /** Whether a commenter or viewer reads the roadmap (oracle.docs.visibility). */
 export const readsRoadmap = (slug: string, role: Role): boolean => !(role === "commenter" || role === "viewer") || ROADMAPS[slug]?.visibility === "company";
+type StoredTask = { id: string; title: string; status: Schemas["SimpleItemTask"]["status"]; owner_id: string | null; owner_name: string | null; due_date: string | null; item_id: string; at: string };
+const storedTasks = (db: SimpleDb): StoredTask[] =>
+  Object.entries(db.targets ?? {})
+    .filter(([, v]) => v.kind === "item_task")
+    .map(([id, v]) => ({ ...(v as Omit<StoredTask, "id">), id }))
+    .sort((a, b) => (a.at < b.at ? -1 : 1));
+const taskOut = (t: StoredTask): Schemas["SimpleItemTask"] => ({ id: t.id, title: t.title, status: t.status, owner: t.owner_id ? { id: t.owner_id, name: t.owner_name ?? "someone" } : null, due_date: t.due_date });
+/** walkc-roadmap-tasks: an item's tasks, not dropped, in the order they were added. */
+export const itemTasks = (db: SimpleDb, itemId: string): Schemas["SimpleItemTask"][] => storedTasks(db).filter((t) => t.item_id === itemId && t.status !== "dropped").map(taskOut);
+/** walkc-roadmap-tasks: the open tasks waiting on `me` (questions.tasks_waiting), due first. */
+export function tasksWaiting(db: SimpleDb, me: { id: string; role: Role }): Schemas["SimpleTaskWaiting"][] {
+  const today = companyToday();
+  return storedTasks(db)
+    .filter((t) => t.owner_id === me.id && (t.status === "todo" || t.status === "doing"))
+    .flatMap((t) => {
+      const key = Object.keys(db.ids).find((k) => db.ids[k] === t.item_id);
+      const s = key ? db.items.find((x) => x.key === key) : undefined;
+      if (!s || !readsRoadmap(s.roadmap, me.role)) return [];
+      return [{ ...taskOut(t), item_id: t.item_id, item_title: s.title, roadmap_id: roadmapId(s.roadmap), late: !!t.due_date && t.due_date < today }];
+    })
+    .sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+}
 /** The roadmap a slug or id names, when the role reads it. */
 export const readableRoadmap = (asked: string | null, role: Role): string | undefined =>
   asked ? ROADMAP_SLUGS().find((r) => (r === asked || roadmapId(r) === asked) && readsRoadmap(r, role)) : undefined;
@@ -780,6 +802,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
       // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
+      // walkc-roadmap-tasks: the work under the item (service._tasks).
+      tasks: itemTasks(db, db.ids[s.key]),
     };
   });
   // qa-simple-home-1: what "Move the dependents" moves, as the change engine moves it (service.read).

@@ -5830,7 +5830,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
-  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift }, db.roadmap, req, p, q);
+  // walkc-roadmap-tasks: an item's decisions as Simple's item sheet reads them (the same keys).
+  const decidedOf = (key: string) => [...(db.simple_roadmap?.decided_in?.[stableUuid(`simple-item/${key}`)] ?? [])];
+  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift, decided: decidedOf }, db.roadmap, req, p, q);
   if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
     if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
