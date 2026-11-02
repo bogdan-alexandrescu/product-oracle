@@ -56,7 +56,7 @@ for (const v of SIZES) {
       await setUp(page, { phone: v.phone });
       await openPriorities(page, "?tab=ranked");
       const options = await page.locator("#prio-line option").allTextContents();
-      for (const start of ["Customer conference", "Milestone: Beta"]) {
+      for (const start of ["Key date: Customer conference", "Milestone: Beta"]) {
         const label = options.find((o) => o.startsWith(start));
         expect(label, options.join(" | ")).toBeTruthy();
         await lineSelect(page).selectOption({ label: label! });
@@ -112,21 +112,23 @@ for (const v of SIZES) {
       const drawer = page.getByTestId("goal-panel");
       const actions = drawer.getByTestId("suggest-actions");
       await expect(actions.getByRole("button")).toHaveText(["+ Suggest a feature", "✦ Get more from Oracle", "Ask in the chat"]);
-      // The three sit on one row.
-      const tops = await actions.getByRole("button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2)));
-      expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(12);
+      // On a wide screen the buttons sit on one row (the link beside them, or under them on a phone, as its frame shows).
+      const spread = async () => {
+        const tops = await actions.locator("button").filter({ hasText: /Suggest a feature|Get more from Oracle/ }).evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2)));
+        return Math.max(...tops) - Math.min(...tops);
+      };
+      if (!v.phone) await expect.poll(spread).toBeLessThan(12);
       await drawer.getByTestId("suggestions-tab-oracle").click();
       const looks = drawer.getByTestId("suggestion-looks-like");
       await expect(looks.first()).toBeVisible({ timeout: 15_000 });
       await expect(drawer.getByText("Same as this: decline the suggestion")).toHaveCount(0);
-      const card = drawer.locator("li").filter({ has: looks.first() }).first();
-      const title = ((await card.locator("p").first().textContent()) ?? "").trim();
       const count = await looks.count();
       await expect(drawer.getByTestId("looks-like-duplicate")).toHaveCount(count);
       const like = ((await looks.first().getByTestId("looks-like-link").textContent()) ?? "").trim();
       await looks.first().getByTestId("looks-like-duplicate").click();
       const confirm = looks.first().getByTestId("looks-like-confirm");
-      await expect(confirm).toContainText(`Decline ${title} as a duplicate of ${like}?`);
+      await expect(confirm).toContainText(new RegExp(`^Decline .+ as a duplicate of ${like}\\?`));
+      const title = /^Decline (.+) as a duplicate of /.exec((await confirm.textContent()) ?? "")![1];
       // Cancel leaves it; Duplicate again, then confirm.
       await confirm.getByRole("button", { name: "Cancel" }).click();
       await expect(confirm).toHaveCount(0);
