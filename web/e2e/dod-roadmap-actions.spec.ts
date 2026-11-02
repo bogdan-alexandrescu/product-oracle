@@ -325,6 +325,7 @@ test.describe("desktop, a commenter adds", () => {
   test.use(DESKTOP);
   test("a commenter drops a title on a quarter: a proposed addition", async ({ page }) => {
     await open(page, "commenter@example.com");
+    await page.getByTestId("format-timeline").click();
     await page.getByLabel("Add an item").fill("Quiet hours setting");
     await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
     const chip = page.getByTestId("quick-add-chip");

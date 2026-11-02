@@ -19,12 +19,14 @@ import {
   closedItem,
   daysBetween,
   ms,
+  quarterValue,
   quarters,
   shortDay,
   spanWords,
   type Flag,
   type Item,
   type Roadmap,
+  whereAttr,
 } from "./_lib";
 
 type Zoom = "6m" | "1y" | "all";
@@ -476,6 +478,18 @@ function DayChart(props: TimelineProps) {
           >
             Today
           </span>
+          {/* Quick add's drop targets: a quarter's columns (transparent, under the rows). */}
+          {props.canChange &&
+            quarters(t0, t1).map((q) => (
+              <div
+                key={q.start}
+                data-testid="quarter-drop"
+                data-add-where={whereAttr("quarter", quarterValue(q.start))}
+                data-add-label={q.label}
+                className="absolute top-11 bottom-0"
+                style={{ left: labelW + x(q.start), width: x(addDays(q.end, 1)) - x(q.start) }}
+              />
+            ))}
           {months.map((m) => (
             <div
               key={m.day}
@@ -490,7 +504,7 @@ function DayChart(props: TimelineProps) {
                 <div
                   key={`l-${r.key}`}
                   data-testid="timeline-lane"
-                  className="relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
+                  className="pointer-events-none relative z-[11] flex h-8 items-end border-b border-line bg-surface2/70"
                 >
                   <div className="sticky left-0 px-3 pb-1 text-sm font-semibold whitespace-nowrap">
                     {r.title}{" "}
@@ -513,7 +527,7 @@ function DayChart(props: TimelineProps) {
                 data-open={sel || undefined}
               >
                 <div
-                  className={`relative flex border-b border-line/60 ${sel ? "bg-accent-soft/50" : ""}`}
+                  className={`pointer-events-none relative flex border-b border-line/60 ${sel ? "bg-accent-soft/50" : ""}`}
                   style={{ height: ROW_H }}
                 >
                   <button
@@ -524,7 +538,7 @@ function DayChart(props: TimelineProps) {
                       if (!sel && (bx + bw < sl || bx > sl + visible))
                         box.current?.scrollTo({ left: Math.max(0, bx - 60) });
                     }}
-                    className={`sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`}
+                    className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`}
                     style={{ width: labelW }}
                     title={i.title}
                   >
@@ -552,7 +566,7 @@ function DayChart(props: TimelineProps) {
                       data-testid="timeline-bar"
                       aria-label={`${i.title}, ${spanWords(i.start.date, i.end.date, data.today)}`}
                       onClick={() => onOpen(sel ? null : i.key)}
-                      className="absolute rounded-full"
+                      className="pointer-events-auto absolute rounded-full"
                       style={{
                         ...lk.bar,
                         left: bx,
