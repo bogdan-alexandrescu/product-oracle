@@ -127,6 +127,17 @@ export function MeetingScreen({ id }: { id: string }) {
   );
 }
 
+type DraftProblems = { message: string; problems: { what: string; where: string | null; times: number }[] };
+const PROBLEMS_SHOWN = 6;
+
+/** walkc-meeting: a refused Approve's problems ({detail: {code: "draft_problems", ...}}), else null. */
+function draftProblems(error: unknown): DraftProblems | null {
+  const detail = error && typeof error === "object" && "detail" in error ? (error as { detail: unknown }).detail : null;
+  if (!detail || typeof detail !== "object" || (detail as { code?: unknown }).code !== "draft_problems") return null;
+  const d = detail as Partial<DraftProblems>;
+  return Array.isArray(d.problems) && typeof d.message === "string" ? { message: d.message, problems: d.problems } : null;
+}
+
 function useAct(reload: () => Promise<unknown>) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +161,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const [step, setStep] = useState(0);
   const [people, setPeople] = useState(false);
   const [notApproved, setNotApproved] = useState<Meeting["not_approved"]>([]);
+  const [problems, setProblems] = useState<DraftProblems | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const { busy, error, act } = useAct(reload);
   useEffect(() => {
@@ -192,8 +204,17 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
       cancel: "Back",
     });
     if (!yes) return;
+    setProblems(null);
     await act(async () => {
-      const r = await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/approve", path));
+      const call = await api.POST("/v1/simple/meetings/{meeting_id}/approve", path);
+      // walkc-meeting: a draft the importer refuses comes back as its problems in plain
+      // words (meetings.approve_problems): shown as a list, never the raw line.
+      const said = draftProblems(call.error);
+      if (said) {
+        setProblems(said);
+        return;
+      }
+      const r = await unwrap(Promise.resolve(call));
       setNotApproved(r.not_approved);
     });
   };
@@ -313,6 +334,23 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
         </p>
       ))}
       {error && <div className="px-4 pt-2"><ErrorNote>{error}</ErrorNote></div>}
+      {problems && (
+        <div role="alert" data-testid="approve-problems" className="border-b border-line px-4 py-2 text-base">
+          <p className="font-medium">{problems.message}</p>
+          <ul className="mt-1 list-disc pl-5">
+            {problems.problems.slice(0, PROBLEMS_SHOWN).map((p, i) => (
+              <li key={i}>
+                {p.what}
+                {p.where ? ` In ${p.where}.` : ""}
+                {p.times > 1 ? ` (${p.times} times)` : ""}
+              </li>
+            ))}
+          </ul>
+          {problems.problems.length > PROBLEMS_SHOWN && (
+            <p className="simple-small text-text2">And {problems.problems.length - PROBLEMS_SHOWN} more like these. Fix these first, then approve again.</p>
+          )}
+        </div>
+      )}
       <AgendaStrip agenda={m.agenda} />
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* qa-simple-decide-49: the app has the one <main>; the stage is a section. */}

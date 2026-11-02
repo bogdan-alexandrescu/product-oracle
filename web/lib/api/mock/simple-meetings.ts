@@ -1069,6 +1069,13 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
     if (!(ctx.me.id === prd.decider || ctx.me.role === "owner")) return json(403, { detail: "Only the PRD's decider (or an owner) approves in the meeting" });
     if (!db.decisions.some((d) => d.meeting_id === m.id && d.change_ids.length)) return json(422, { detail: "Nothing to approve: no change was made in this meeting" });
+    // walkc-meeting "approve-problems": the importer refuses the draft (meetings.approve_problems):
+    // each problem once, in plain words with what to do and where, never "draft rejected: N problem(s)".
+    if (flags().includes("approve-problems")) {
+      const date = (d: string) => ({ what: `The date ${d} (in What we will build) is not backed by a confirmed schedule: no verified estimate, capacity or commitment for this item; record its basis on the roadmap or drop the date.`, where: null, times: 1 });
+      const problems = [...["Nov 20", "Dec 4", "Dec 18", "Jan 8", "Jan 22", "Feb 5", "Feb 19"].map(date), { what: "A source is cited twice in Why now; drop one.", where: null, times: 1 }];
+      return json(422, { detail: { code: "draft_problems", message: `Not approved: the draft has ${problems.length} problems to fix first.`, problems } });
+    }
     const present = m.attendee_ids.filter((i) => !m.absent_ids.includes(i));
     const waiting = prd.reviewers.filter((i) => i !== ctx.me.id && !present.includes(i));
     // "section-reviewer": Guided setup's required section "What we will build" names the
