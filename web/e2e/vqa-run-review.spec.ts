@@ -15,6 +15,10 @@ import { login } from "./helpers";
  * - "list ends at the bar": protects=on a desktop the list runs down to the decision bar's top
  *   edge, as in the picked frame, and never under it;
  *   fails_when=a gap above the bar cuts the last row short.
+ * - "answered in its card" (EC2 b): protects=an answered question keeps its card, the same
+ *   border and padding as an open one, with the tick, the question, the answer, who gave it
+ *   and Change inside, and no answer box, desktop and phone; fails_when=the answered question
+ *   loses its card and sits bare between the open ones.
  */
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -60,3 +64,27 @@ test("desktop: the list runs down to the bar as in the frame, never under it", a
   const b2 = (await page.getByTestId("decision-bar").boundingBox())!;
   expect(l2.y + l2.height).toBeLessThanOrEqual(b2.y + 1);
 });
+
+for (const [device, viewport] of [
+  ["desktop", DESKTOP],
+  ["phone", PHONE],
+] as const) {
+  test(`${device}: an answered question keeps its card, as open ones do, with no answer box`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openCheck(page);
+    await page.locator('[data-testid="brief-row"][data-feature="f.returns-portal"]').getByRole("button").click();
+    const pane = page.getByTestId("brief-inspector");
+    const questions = pane.getByTestId("brief-question");
+    const regions = "Does the shipping provider's returns endpoint work in every region we ship to?";
+    await pane.getByRole("textbox", { name: `Answer: ${regions}` }).fill("Yes in 11 of our 14 regions; the other 3 fall back to the address slip.");
+    await questions.first().getByRole("button", { name: "Answer", exact: true }).click();
+    const answered = questions.first();
+    await expect(answered).toHaveAttribute("data-answered", "true");
+    await expect(answered.getByRole("textbox")).toHaveCount(0);
+    await expect(answered.getByTestId("answer")).toContainText("Yes in 11 of our 14 regions");
+    const card = (l: typeof answered) => l.evaluate((e) => { const c = getComputedStyle(e); return [c.borderTopWidth, c.borderTopStyle, c.paddingTop, c.paddingLeft, c.borderTopLeftRadius]; });
+    // The same card as the open question below it.
+    expect(await card(answered)).toEqual(await card(questions.nth(1)));
+    expect((await card(answered))[0]).toBe("1px");
+  });
+}
