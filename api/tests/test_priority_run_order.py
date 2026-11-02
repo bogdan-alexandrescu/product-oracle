@@ -713,6 +713,7 @@ order:
     contribution: 2
     confidence: 0.6
     effort: 2
+    depends_on: [address-lookup]
     explanation: "New in this PRD; large customers edit in bulk"
   - key: saved-addresses
     rank: 3
@@ -733,6 +734,8 @@ async def test_a_new_feature_is_scored_and_ranked_with_the_rest(client, owner, r
     new = snap.ranking[1]
     assert new["title"] == "Bulk edit" and new["status"] == "proposed"
     assert new["score"] == 1.8 and new["live_rank"] is None
+    # What it waits on, as the run set it: the order's Depends on column reads it.
+    assert new["depends_on"] == ["address-lookup"]
     e = new["explanation"]
     assert e["confidence"]["value"] == 0.6 and e["confidence"]["source"] == "attrs"
     assert e["inputs"]["effort"]["value"] == 2
