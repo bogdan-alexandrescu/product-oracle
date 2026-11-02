@@ -165,6 +165,8 @@ export default function SimpleHome() {
     shownBefore.current = true;
   }, []);
   useEffect(() => {
+    // Once the Inbox is read again: a later reload (a decision on Home) keeps the cards it has.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (revisit && !inbox.loading) setRevisit(false);
   }, [revisit, inbox.loading]);
   const roadmap = useQuery(k("roadmap"), () => unwrap(api.GET("/v1/simple/roadmap")), { keepPrevious: true });
