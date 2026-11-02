@@ -52,5 +52,5 @@ test("a confirmed console approval names who answered in the console, not who co
   await expect(page.getByTestId("segment-roadmap_items").getByTestId("checkpoint-roadmap_items")).toContainText("Approved");
 
   const section = page.getByRole("complementary", { name: "Run" }).filter({ visible: true }).getByTestId("run-decisions");
-  await expect(section.getByTestId("run-decision")).toHaveText(["Roadmap items was approved by Approver in SwarmCloud's console."]);
+  await expect(section.getByTestId("run-decision")).toHaveText(["Roadmap items was approved by Priya Raman in SwarmCloud's console."]);
 });
