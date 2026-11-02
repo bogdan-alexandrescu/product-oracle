@@ -54,30 +54,32 @@ async def _spans(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, t
     return out
 
 
-# The ref on the PRD subject of a meeting's Approve these N dates decision: "draft-dates:N".
-APPROVED_REF = "draft-dates"
+# The chosen option of a meeting's Approve these N dates decision: "draft-dates:N". Its PRD
+# subject keeps the PRD's slug as ref, so Company > Decisions links to the PRD.
+APPROVED_KEY = "draft-dates"
 
 
 async def _approved_here(
     db: AsyncSession, meeting_id: uuid.UUID, document_id: uuid.UUID
 ) -> int | None:
-    """How many items this meeting's Approve these N dates put on the roadmap, or None."""
+    """How many items this meeting's Approve these N dates put on the roadmap, or None: the
+    meeting's newest such decision on the PRD, found by its chosen option."""
     from oracle.decisions.models import Decision
     from oracle.simple.models import SimpleMeetingDecision
 
-    rows = await db.scalars(
-        select(Decision.subjects)
+    key = await db.scalar(
+        select(Decision.chosen_option)
         .join(SimpleMeetingDecision, SimpleMeetingDecision.decision_id == Decision.id)
-        .where(SimpleMeetingDecision.meeting_id == meeting_id)
+        .where(
+            SimpleMeetingDecision.meeting_id == meeting_id,
+            Decision.chosen_option.startswith(f"{APPROVED_KEY}:"),
+            Decision.subjects.contains([{"kind": "document", "id": str(document_id)}]),
+        )
         .order_by(SimpleMeetingDecision.at.desc())
+        .limit(1)
     )
-    for subjects in rows:
-        for s in subjects or []:
-            ref = str(s.get("ref") or "")
-            if s.get("id") == str(document_id) and ref.startswith(f"{APPROVED_REF}:"):
-                n = ref.partition(":")[2]
-                return int(n) if n.isdigit() else None
-    return None
+    n = (key or "").partition(":")[2]
+    return int(n) if n.isdigit() else None
 
 
 async def draft_out(
@@ -202,5 +204,7 @@ async def approve_dates(db: AsyncSession, principal: Any, meeting_id: uuid.UUID)
     await db.flush()
     n = len(rows)
     title = f"{document.title} dates approved: {n} item{'' if n == 1 else 's'} on the roadmap"
-    subject = {"kind": "document", "id": str(document.id), "ref": f"{APPROVED_REF}:{n}"}
-    await record_meeting_decision(db, principal, meeting_id, title, [subject], [])
+    subject = {"kind": "document", "id": str(document.id), "ref": document.slug}
+    await record_meeting_decision(
+        db, principal, meeting_id, title, [subject], [], chosen=f"{APPROVED_KEY}:{n}"
+    )
