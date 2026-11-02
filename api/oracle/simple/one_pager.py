@@ -965,6 +965,13 @@ async def document_owner(
     return None
 
 
+def span_words(start: date, end: date) -> str:
+    """A span as people read it, month first: "Nov 2 – Dec 23, 2026", "Nov 2, 2026 – Feb 26,
+    2027"; never ISO."""
+    first = f"{start:%b} {start.day}" + ("" if start.year == end.year else f", {start.year}")
+    return f"{first} – {end:%b} {end.day}, {end.year}"
+
+
 def milestone_span(items: list[plan_strip.PlanItem]) -> tuple[date, date] | None:
     """The PRD's span in the header (P4): from the earliest start of its items that carry a
     dated milestone (or that milestone's date, when earlier) to its latest milestone date.
@@ -2095,7 +2102,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     if out.decider:
         meta.append(f"decider {escape(out.decider.name)}")
     if out.span_start and out.span_end:
-        meta.append(f"{out.span_start.isoformat()} – {out.span_end.isoformat()}")
+        meta.append(span_words(out.span_start, out.span_end))
     parts.append(f"<div class='meta'>{' · '.join(meta)}</div>")
     published_lines = await _published_lines(db, out)
     for blk in out.blocks:
