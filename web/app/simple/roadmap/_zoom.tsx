@@ -4,6 +4,7 @@
 // chart (QR3 A) and an item opens in a side panel (QR4 A; a sheet on a phone).
 
 import {
+  memo,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -519,10 +520,60 @@ function DayChart(props: TimelineProps) {
     const s1 = month ? addMonths(s, dir) : addDays(s, dir * 7);
     onKeyMove(i, s1, addDays(en, daysBetween(s, s1)));
   };
-  const liveItem = live ? data.items.find((i) => i.id === live.id) : undefined;
   const liveWarn = live
     ? liveBreaks(props.byId, live.id, live.start, live.end)
-    : [];
+    : NO_WARN;
+  // The rows' moves read the latest draw's state through a ref, so each row's `on` stays the
+  // same object and only the rows whose own props change redraw.
+  const latest = useRef({
+    onDown,
+    onDragMove,
+    onUp,
+    onCancel,
+    keyMove,
+    onKeyCancel,
+    onKeyEnd,
+    onOpen,
+    sl,
+    visible,
+  });
+  useLayoutEffect(() => {
+    latest.current = {
+      onDown,
+      onDragMove,
+      onUp,
+      onCancel,
+      keyMove,
+      onKeyCancel,
+      onKeyEnd,
+      onOpen,
+      sl,
+      visible,
+    };
+  });
+  const on = useMemo<RowMoves>(
+    () => ({
+      name: (i, sel, bx, bw) => {
+        const l = latest.current;
+        l.onOpen(sel ? null : i.key);
+        // Opening an item whose bar is out of sight slides the chart to it.
+        if (!sel && (bx + bw < l.sl || bx > l.sl + l.visible))
+          box.current?.scrollTo({ left: Math.max(0, bx - 60) });
+      },
+      bar: (i, sel) => {
+        if (clicked.current) clicked.current = false;
+        else latest.current.onOpen(sel ? null : i.key);
+      },
+      down: (e, i) => latest.current.onDown(e, i),
+      move: (e) => latest.current.onDragMove(e),
+      up: (e) => latest.current.onUp(e),
+      cancel: (e) => latest.current.onCancel(e),
+      keyMove: (i, dir, month) => latest.current.keyMove(i, dir, month),
+      keyCancel: (i) => latest.current.onKeyCancel(i),
+      keyEnd: (i) => latest.current.onKeyEnd(i),
+    }),
+    [],
+  );
   const zooms: [Zoom, string][] = [
     ["6m", "6 months"],
     ["1y", "1 year"],
@@ -665,133 +716,30 @@ function DayChart(props: TimelineProps) {
                 </div>
               );
             const i = r.item;
-            const lk = lookOf(i);
             const [ds, de] = spanOf(i);
             const bx = x(ds);
             const bw = Math.max(8, x(addDays(de, 1)) - bx);
-            const still = fixed(i);
-            const sel = openKey === i.key;
+            const now = live?.id === i.id;
             return (
-              <div
+              <TimelineRow
                 key={i.id}
-                data-testid="timeline-row"
-                data-item={i.key}
-                data-open={sel || undefined}
-              >
-                <div
-                  className={`pointer-events-none relative flex border-b border-line/60 ${sel ? "bg-accent-soft/50" : ""}`}
-                  style={{ height: ROW_H }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpen(sel ? null : i.key);
-                      // Opening an item whose bar is out of sight slides the chart to it.
-                      if (!sel && (bx + bw < sl || bx > sl + visible))
-                        box.current?.scrollTo({ left: Math.max(0, bx - 60) });
-                    }}
-                    className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`}
-                    style={{ width: labelW }}
-                    title={i.title}
-                  >
-                    <span className="min-w-0 truncate" style={lk.name}>
-                      {i.title}
-                    </span>
-                    {lk.chip && (
-                      <span
-                        data-testid="draft-tag"
-                        className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2"
-                      >
-                        {lk.chip}
-                      </span>
-                    )}
-                    {lk.mark && (
-                      <span
-                        className="flex-none text-crit"
-                        aria-label="Broken link"
-                      >
-                        ⚠
-                      </span>
-                    )}
-                  </button>
-                  <div className="relative" style={{ width: trackW }}>
-                    <button
-                      type="button"
-                      data-bar-id={i.id}
-                      data-testid="timeline-bar"
-                      data-start={ds}
-                      data-end={de}
-                      data-live={
-                        live?.id === i.id
-                          ? liveWarn.length
-                            ? "broken"
-                            : "ok"
-                          : undefined
-                      }
-                      aria-label={`${i.title}, ${spanWords(ds, de, data.today)}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
-                      onClick={() => {
-                        if (clicked.current) clicked.current = false;
-                        else onOpen(sel ? null : i.key);
-                      }}
-                      onPointerDown={(e) => onDown(e, i)}
-                      onPointerMove={onDragMove}
-                      onPointerUp={onUp}
-                      onPointerCancel={onCancel}
-                      onKeyDown={(e) => {
-                        if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                          e.preventDefault();
-                          keyMove(
-                            i,
-                            e.key === "ArrowRight" ? 1 : -1,
-                            e.shiftKey,
-                          );
-                        } else if (e.key === "Escape") onKeyCancel(i);
-                      }}
-                      onBlur={() => onKeyEnd(i)}
-                      className={`pointer-events-auto absolute rounded-full ${still ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} focus-visible:shadow-[0_0_0_2px_var(--surface),0_0_0_4px_var(--accent)]`}
-                      style={{
-                        touchAction: still ? "auto" : "none",
-                        ...lk.bar,
-                        left: bx,
-                        width: bw,
-                        top: 8,
-                        height: 18,
-                        outline: sel
-                          ? "2px solid var(--accent-ink)"
-                          : undefined,
-                        outlineOffset: 2,
-                      }}
-                    />
-                    {!fit && bx + bw - Math.max(bx, sl) > 120 && (
-                      <span
-                        className="pointer-events-none absolute top-[9px] z-[11] flex px-1.5"
-                        style={{
-                          left: Math.max(bx, sl),
-                          width: bx + bw - Math.max(bx, sl),
-                        }}
-                      >
-                        <span className="min-w-0 truncate rounded bg-surface px-1 text-xs leading-4 text-text">
-                          {spanWords(ds, de, data.today)}
-                        </span>
-                      </span>
-                    )}
-                    {live?.id === i.id && liveItem && (
-                      // The Gantt's live words while a bar is dragged: its dates, and a link it would break.
-                      <span
-                        data-testid="drag-live"
-                        data-state={liveWarn.length ? "broken" : "ok"}
-                        className="pointer-events-none absolute -top-5 z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text"
-                        style={{ left: Math.max(0, bx) }}
-                      >
-                        {shortDay(live.start)} – {shortDay(live.end)}
-                        {liveWarn.length
-                          ? ` · ${liveWarn[0]}`
-                          : " · no broken links"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+                item={i}
+                ds={ds}
+                de={de}
+                bx={bx}
+                bw={bw}
+                labelW={labelW}
+                trackW={trackW}
+                sl={sl}
+                fit={fit}
+                today={data.today}
+                canChange={canChange}
+                still={fixed(i)}
+                sel={openKey === i.key}
+                live={now ? live : null}
+                liveWarn={now ? liveWarn : NO_WARN}
+                on={on}
+              />
             );
           })}
         </div>
@@ -799,6 +747,157 @@ function DayChart(props: TimelineProps) {
     </div>
   );
 }
+
+const NO_WARN: string[] = [];
+
+/** A day chart row's moves, the same functions on every draw (so memo(TimelineRow) holds). */
+type RowMoves = {
+  name: (i: Item, sel: boolean, bx: number, bw: number) => void;
+  bar: (i: Item, sel: boolean) => void;
+  down: (e: ReactPointerEvent<HTMLButtonElement>, i: Item) => void;
+  move: (e: ReactPointerEvent) => void;
+  up: (e: ReactPointerEvent) => void;
+  cancel: (e: ReactPointerEvent) => void;
+  keyMove: (i: Item, dir: 1 | -1, month: boolean) => void;
+  keyCancel: (i: Item) => void;
+  keyEnd: (i: Item) => void;
+};
+
+/** One item's row of the day chart: its name and its bar. A drag redraws only the bar in
+ * hand (memo, as the Gantt's Bar), not the 500 rows. */
+const TimelineRow = memo(function TimelineRow({
+  item: i,
+  ds,
+  de,
+  bx,
+  bw,
+  labelW,
+  trackW,
+  sl,
+  fit,
+  today,
+  canChange,
+  still,
+  sel,
+  live,
+  liveWarn,
+  on,
+}: {
+  item: Item;
+  ds: string;
+  de: string;
+  bx: number;
+  bw: number;
+  labelW: number;
+  trackW: number;
+  sl: number;
+  fit: boolean;
+  today: string;
+  canChange: boolean;
+  still: boolean;
+  sel: boolean;
+  live: { id: string; start: string; end: string } | null;
+  liveWarn: string[];
+  on: RowMoves;
+}) {
+  const lk = lookOf(i);
+  return (
+    <div
+      data-testid="timeline-row"
+      data-item={i.key}
+      data-open={sel || undefined}
+    >
+      <div
+        className={`pointer-events-none relative flex border-b border-line/60 ${sel ? "bg-accent-soft/50" : ""}`}
+        style={{ height: ROW_H }}
+      >
+        <button
+          type="button"
+          onClick={() => on.name(i, sel, bx, bw)}
+          className={`pointer-events-auto sticky left-0 z-[12] flex flex-none items-center gap-1.5 border-r border-line px-3 text-left text-sm ${sel ? "bg-accent-soft" : "bg-surface"} hover:underline`}
+          style={{ width: labelW }}
+          title={i.title}
+        >
+          <span className="min-w-0 truncate" style={lk.name}>
+            {i.title}
+          </span>
+          {lk.chip && (
+            <span
+              data-testid="draft-tag"
+              className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2"
+            >
+              {lk.chip}
+            </span>
+          )}
+          {lk.mark && (
+            <span className="flex-none text-crit" aria-label="Broken link">
+              ⚠
+            </span>
+          )}
+        </button>
+        <div className="relative" style={{ width: trackW }}>
+          <button
+            type="button"
+            data-bar-id={i.id}
+            data-testid="timeline-bar"
+            data-start={ds}
+            data-end={de}
+            data-live={live ? (liveWarn.length ? "broken" : "ok") : undefined}
+            aria-label={`${i.title}, ${spanWords(ds, de, today)}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
+            onClick={() => on.bar(i, sel)}
+            onPointerDown={(e) => on.down(e, i)}
+            onPointerMove={on.move}
+            onPointerUp={on.up}
+            onPointerCancel={on.cancel}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                e.preventDefault();
+                on.keyMove(i, e.key === "ArrowRight" ? 1 : -1, e.shiftKey);
+              } else if (e.key === "Escape") on.keyCancel(i);
+            }}
+            onBlur={() => on.keyEnd(i)}
+            className={`pointer-events-auto absolute rounded-full ${still ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} focus-visible:shadow-[0_0_0_2px_var(--surface),0_0_0_4px_var(--accent)]`}
+            style={{
+              touchAction: still ? "auto" : "none",
+              ...lk.bar,
+              left: bx,
+              width: bw,
+              top: 8,
+              height: 18,
+              outline: sel ? "2px solid var(--accent-ink)" : undefined,
+              outlineOffset: 2,
+            }}
+          />
+          {!fit && bx + bw - Math.max(bx, sl) > 120 && (
+            <span
+              className="pointer-events-none absolute top-[9px] z-[11] flex px-1.5"
+              style={{
+                left: Math.max(bx, sl),
+                width: bx + bw - Math.max(bx, sl),
+              }}
+            >
+              <span className="min-w-0 truncate rounded bg-surface px-1 text-xs leading-4 text-text">
+                {spanWords(ds, de, today)}
+              </span>
+            </span>
+          )}
+          {live && (
+            // The Gantt's live words while a bar is dragged: its dates, and a link it would break.
+            <span
+              data-testid="drag-live"
+              data-state={liveWarn.length ? "broken" : "ok"}
+              className="pointer-events-none absolute -top-5 z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text"
+              style={{ left: Math.max(0, bx) }}
+            >
+              {shortDay(live.start)} – {shortDay(live.end)}
+              {liveWarn.length ? ` · ${liveWarn[0]}` : " · no broken links"}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
 
 /** A phone's Timeline: a list by quarter; an item sits in the quarter it starts in (or in
  * this one, when it started before and runs on). */
