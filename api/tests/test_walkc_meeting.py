@@ -200,3 +200,55 @@ async def test_a_card_reads_the_meetings_working_state(client):
     cards = {c["id"]: c for m in r.json()["messages"] for c in m.get("cards") or []}
     assert cards[later["id"]]["status"] == "open"
     assert cards[later["id"]]["fixes"] == []
+
+
+def test_approve_problems_name_the_section_and_drop_raw_tokens():
+    """walkc-meeting review: protects=a refused Approve's problem says where it is by the
+    section's name (from the problem's section_key) and never shows the importer's raw
+    tokens ("[c:key]", "{#sources}", "section id 'key'"); fails_when="where" is null or a
+    raw token reaches people; no_claim=the importer's own checks."""
+    from oracle.docs.schemas import ImportProblem
+    from oracle.simple.meetings import approve_problems
+
+    out = approve_problems([
+        ImportProblem(code="unknown_citation", section_key="what-we-build",
+                      message="[c:old-survey] in section 'what-we-build' is not a known source"),
+        ImportProblem(code="invalid_structure", message="the Sources and data points section "
+                      "({#sources}) must be the last part of a roadmap"),
+        ImportProblem(code="duplicate_section_id", section_key="goals",
+                      message="section id 'goals' is used more than once"),
+    ])  # fmt: skip
+    said = [p["what"] for p in out["problems"]]
+    assert out["problems"][0]["where"] == "What we build"
+    assert out["problems"][2]["where"] == "Goals"
+    for what in said:
+        assert "[c:" not in what and "{#" not in what and "section id" not in what, what
+        assert "what-we-build" not in what, what
+
+
+def test_approve_problems_group_a_sections_dates():
+    """walkc-meeting review: protects=many dates in one section without a confirmed
+    schedule read as one line that lists them (and how many), not one entry per date;
+    fails_when=each date is its own entry, so 38 dates show as 6 and "And 32 more";
+    no_claim=dates in other sections."""
+    from oracle.docs.schemas import ImportProblem
+    from oracle.simple.meetings import approve_problems
+
+    days = ["Nov 20", "Dec 3", "Jan 4", "Feb 9", "Mar 2"]
+    problems = [
+        ImportProblem(code="unverified_date", section_key="what-we-build",
+                      refs={"date": d, "prd": "guided-setup"},
+                      message=f"the date {d} (in What we will build) is not backed by a "
+                      "confirmed schedule: no verified estimate; record a date basis on Plan "
+                      "› Dates (or ask the engineering lead to) or drop the date")
+        for d in days
+    ]  # fmt: skip
+    out = approve_problems(problems)
+    assert out["message"] == "Not approved: the draft has 5 problems to fix first."
+    [only] = out["problems"]
+    assert only["times"] == 5
+    assert only["where"] == "What we build"
+    assert only["what"].startswith(
+        "5 dates are not backed by a confirmed schedule: Nov 20, Dec 3, Jan 4, Feb 9 and Mar 2."
+    )
+    assert "record a date basis" in only["what"]
