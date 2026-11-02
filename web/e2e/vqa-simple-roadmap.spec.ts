@@ -46,10 +46,10 @@ for (const width of [1440, 1512]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await open(page);
-    const timeline = page.getByTestId("zoom-timeline");
-    await expect(
-      timeline.getByTestId("timeline-month").filter({ hasText: "Nov 2026" }),
-    ).toBeVisible();
+    // The first month in sight shows whole, with its year.
+    await expect
+      .poll(async () => (await labels(page))[0]?.text)
+      .toMatch(/^[A-Z][a-z]{2} \d{4}$/);
     for (const l of await labels(page))
       expect(
         l.left,

@@ -402,10 +402,18 @@ function DayChart(props: TimelineProps) {
       .toISOString()
       .slice(0, 10);
   }
+  // A month that starts just left of the view keeps its label, whole, at the view's left
+  // edge while the next month's label is not in its way.
+  const cutAt = fit ? -1 : months.findIndex((m) => x(m.day) >= sl - 2) - 1;
+  const pinned =
+    cutAt >= 0 &&
+    (cutAt + 1 >= months.length || x(months[cutAt + 1].day) - sl > 80)
+      ? months[cutAt].day
+      : undefined;
   // The first month in sight carries its year.
   const firstSeen = fit
     ? months[0]?.day
-    : months.find((m) => x(m.day) >= sl - 2)?.day;
+    : (pinned ?? months.find((m) => x(m.day) >= sl - 2)?.day);
   // roadmap-r2: the Gantt's moves. A drag past DRAG_PX moves the bar by whole days (an end
   // grabbed near the bar's edge, grabAt, moves only that end); a shorter one is a click. A
   // finger picks a bar up with the Gantt's long press first. The arrow keys move a focused
@@ -553,13 +561,17 @@ function DayChart(props: TimelineProps) {
               {months
                 // A month that starts left of the view would peek out from under the names
                 // column cut short; the picked frames show only months that start in sight.
-                .filter((m) => (fit ? x(m.day) < trackW - 64 : x(m.day) >= sl - 2))
+                .filter((m) =>
+                  fit
+                    ? x(m.day) < trackW - 64
+                    : x(m.day) >= sl - 2 || m.day === pinned,
+                )
                 .map((m) => (
                   <span
                     key={m.day}
                     data-testid="timeline-month"
                     className="absolute top-1 text-xs whitespace-nowrap text-text2"
-                    style={{ left: x(m.day) + 4 }}
+                    style={{ left: (m.day === pinned ? sl : x(m.day)) + 4 }}
                   >
                     {m.day === firstSeen ? monthWord(m.day) : m.label}
                   </span>
