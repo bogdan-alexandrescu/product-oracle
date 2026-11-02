@@ -1274,7 +1274,7 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
   const titles = Object.fromEntries(spec.order.filter((o) => o.title).map((o) => [o.key, o]));
   const liveRows = Object.values(live);
   const rows = check.order!.filter((o) => live[o.key] || titles[o.key]).map((o) =>
-    live[o.key] ? { ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation } : newFeature(titles[o.key], o.rank, spec.method, liveRows),
+    live[o.key] ? { ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation } : newFeature(titles[o.key], o.rank, spec.method, liveRows, spec.order),
   );
   const snap: SnapshotRow = {
     id: same?.id ?? ctx.uuid(),
@@ -1306,9 +1306,10 @@ const num = (v: number) => String(Number(v.toFixed(4)));
 /**
  * As oracle.priorities.run_order.new_feature: a feature new in this PRD scored on the same
  * formula (goal weight × contribution × confidence ÷ effort) from the inputs the run set,
- * marked `new`; its confidence is the run's, with no evidence yet.
+ * marked `new`; its confidence is the run's, with no evidence yet. What it depends on, and
+ * what waits on it, are the edges the run's feature set gives (`depends_on`).
  */
-function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotRow["ranking"]): SnapshotRow["ranking"][number] {
+function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotRow["ranking"], order: OrderEntry[]): SnapshotRow["ranking"][number] {
   const goalTitle = live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal)?.title ?? o.goal ?? "";
   const goals: SnapshotRow["ranking"][number]["explanation"]["goals"] = [];
   const steps: string[] = [];
@@ -1336,8 +1337,8 @@ function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotR
     score,
     serves_goal: goals.length > 0,
     flags: [],
-    depends_on: [],
-    dependents: [],
+    depends_on: [...new Set(o.depends_on ?? [])].filter((k) => k !== o.key).sort(),
+    dependents: order.filter((x) => x.key !== o.key && x.depends_on?.includes(o.key)).map((x) => x.key).sort(),
     explanation: {
       method,
       formula: FORMULAS[method],
