@@ -28,7 +28,9 @@ const badge = (page: Page) => page.getByTestId(/^(nav|tab)-inbox-badge$/).filter
 const row = (page: Page, text: string, state = "new") =>
   page.getByTestId(`inbox-tab-${state}`).getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: text });
 const notice = (page: Page) => page.getByTestId("inbox-acted");
-const buttons = (r: Locator) => r.locator("td").last().locator("button, a").allInnerTexts();
+// A row draws Open alone until the signed-in person's capabilities are read, then its own
+// actions: wait for the actions rather than reading them once.
+const buttons = (r: Locator) => r.locator("td").last().locator("button, a");
 
 const METRIC = "Add a metric that shows the outbound check works";
 const QUANTIFY = "Can we quantify the demand from the sales calls?";
@@ -64,7 +66,7 @@ for (const [width, height] of [
       await notice(page).getByRole("button", { name: "Undo" }).click();
       await expect(notice(page)).toHaveCount(0);
       await expect(row(page, METRIC)).toHaveCount(1);
-      expect(await buttons(row(page, METRIC))).toEqual(["Accept", "Decline", "Open"]);
+      await expect(buttons(row(page, METRIC))).toHaveText(["Accept", "Decline", "Open"]);
       await expect(tab(page, "New")).toHaveText(`New${newBefore}`);
       await expect(tab(page, "Staged")).toHaveText(`Staged${stagedBefore}`);
       await expect(badge(page)).toHaveText(String(before));
@@ -80,14 +82,14 @@ for (const [width, height] of [
       await expect(tab(page, "Done")).toHaveText(`Done${doneBefore + 1}`);
       await notice(page).getByRole("button", { name: "Undo" }).click();
       await expect(row(page, REMARK)).toHaveCount(1);
-      expect(await buttons(row(page, REMARK))).toEqual(["Close", "Decline", "Stage for agents", "Open"]);
+      await expect(buttons(row(page, REMARK))).toHaveText(["Close", "Decline", "Stage for agents", "Open"]);
       await expect(tab(page, "Done")).toHaveText(`Done${doneBefore}`);
 
       await row(page, QUANTIFY).getByRole("button", { name: "Merge" }).click();
       await expect(notice(page)).toContainText("Merged");
       await notice(page).getByRole("button", { name: "Undo" }).click();
       await expect(row(page, QUANTIFY)).toHaveCount(1);
-      expect(await buttons(row(page, QUANTIFY))).toEqual(["Merge", "Open"]);
+      await expect(buttons(row(page, QUANTIFY))).toHaveText(["Merge", "Open"]);
 
       await row(page, QUESTION).getByRole("button", { name: "Send answer" }).click();
       await expect(notice(page)).toContainText("Answer sent");
