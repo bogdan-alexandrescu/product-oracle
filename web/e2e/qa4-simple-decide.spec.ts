@@ -162,10 +162,10 @@ for (const phone of [false, true]) {
           expect(decided!.y).toBeLessThan(needs!.y + needs!.height + 40);
           expect(rec!.x).toBeGreaterThan(needs!.x + 100);
         }
-        // qa-simple-decide-12: grammar on a filtered meeting; qa-simple-decide-11: the meeting's day.
+        // qa-simple-decide-12: grammar on a filtered meeting; qa-simple-decide-11 + walkc-meeting r2 (5j): the meeting's day and time.
         await tap(page.getByTestId("decisions-view-meetings"));
         await expect(page).toHaveURL(/view=meetings/);
-        await expect(page.getByTestId("meeting-group-when").first()).toHaveText(/^\w{3} \w{3} \d+( · |$)/);
+        await expect(page.getByTestId("meeting-group-when").first()).toHaveText(/^\w{3} \w{3} \d+, \d{1,2}:\d{2}\s[AP]M( · |$)/);
         await page.getByRole("combobox", { name: "Goal", exact: true }).selectOption({ label: "Grow retention" });
         await expect(page.getByTestId("meeting-group-filtered").first()).toHaveText(/Filtered: (1 decision of this meeting matches|\d+ decisions of this meeting match)\./);
       });
