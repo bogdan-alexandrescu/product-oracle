@@ -35,10 +35,16 @@ export function seedMeetingDraftDates(db: SimpleDb, prdId: string): void {
 /** The PRD's draft items, left in, in roadmap order. */
 const drafts = (db: SimpleDb, prdIds: string[]) => db.items.filter((s) => s.draft_roadmap && s.prd_doc && prdIds.includes(s.prd_doc.id) && s.status !== "cut");
 
-/** SimpleMeetingOut.draft_roadmap: null without one. */
-export function draftRoadmapOut(db: SimpleDb, prdIds: string[]): Schemas["SimpleDraftRoadmap"] | null {
+/** The ref on the PRD subject of a meeting's Approve these N dates decision (meeting_draft.APPROVED_REF). */
+export const APPROVED_REF = "draft-dates";
+
+/**
+ * SimpleMeetingOut.draft_roadmap: null without one. With no draft left, `approved` is how many
+ * items the meeting's own Approve these N dates put on the roadmap (`approvedHere`), as the API.
+ */
+export function draftRoadmapOut(db: SimpleDb, prdIds: string[], approvedHere: number | null = null): Schemas["SimpleDraftRoadmap"] | null {
   const rows = drafts(db, prdIds);
-  if (!rows.length) return null;
+  if (!rows.length) return approvedHere == null ? null : { items: [], approved: approvedHere };
   const all = roadmapOut(db, "owner", new URLSearchParams({ draft_roadmap: "1" }))?.items ?? [];
   return {
     items: rows.map((s) => {

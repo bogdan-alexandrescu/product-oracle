@@ -49,7 +49,7 @@ import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
-import { draftAct, draftRoadmapOut } from "./meeting-draft";
+import { APPROVED_REF, draftAct, draftRoadmapOut } from "./meeting-draft";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 
@@ -513,7 +513,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     notes: m.notes ?? [],
     agenda: m.agenda_state ?? { next: null, skipped: [] },
     // build-runplan RP2: the run's draft roadmap of the PRD (meeting_draft.draft_out).
-    draft_roadmap: draftRoadmapOut(ctx.roadmap, p.ids),
+    draft_roadmap: draftRoadmapOut(ctx.roadmap, p.ids, approvedHere(db, m, p.ids)),
   };
 }
 
@@ -621,6 +621,16 @@ function decidedFlow(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecidedFlow"
   if (!item) return null;
   const flow = flags().includes("flow") && item.key === "setup-ideas" ? INVITE_FLOW : (FLOWS[item.key] ?? null);
   return { kind: "draft_item", id: item.id, title: item.title, flow };
+}
+
+/** How many items this meeting's Approve these N dates put on the roadmap, or null (meeting_draft._approved_here). */
+function approvedHere(db: MeetingsDb, m: Meeting, prdIds: string[]): number | null {
+  for (const d of [...db.decisions].reverse()) {
+    if (d.meeting_id !== m.id) continue;
+    const s = d.subjects.find((x) => prdIds.includes(x.id) && x.ref?.startsWith(`${APPROVED_REF}:`));
+    if (s) return Number(s.ref!.slice(APPROVED_REF.length + 1));
+  }
+  return null;
 }
 
 function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = []): Decision {
@@ -1077,7 +1087,11 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (!act) return null;
     const r = draftAct(ctx.roadmap, prd.ids, act);
     if ("status" in r) return json(r.status, { detail: r.detail });
-    if (act.kind === "approve") record(db, ctx, m, `${prd.title} dates approved: ${r.n} item${r.n === 1 ? "" : "s"} on the roadmap`, [], []);
+    if (act.kind === "approve") {
+      // The PRD subject carries the count, so the step says so after a reload (meeting_draft.approve_dates).
+      const subject = { kind: "document", id: prd.ids[0]!, ref: `${APPROVED_REF}:${r.n}` };
+      record(db, ctx, m, `${prd.title} dates approved: ${r.n} item${r.n === 1 ? "" : "s"} on the roadmap`, [subject], []);
+    }
     return ok();
   }
   if (p[4] === "approve" && method === "POST") {

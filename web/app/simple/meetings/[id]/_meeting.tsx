@@ -484,7 +484,8 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
   // build-runplan RP2: the run's draft roadmap, hatched until the meeting approves its dates.
-  if (m.draft_roadmap || approved !== null) return <DraftDates m={m} reload={reload} roadmap={q} approved={approved} onApproved={setApproved} />;
+  // The meeting's own count once it approved the dates, so a reload keeps the done view.
+  if (m.draft_roadmap || approved !== null) return <DraftDates m={m} reload={reload} roadmap={q} approved={approved ?? m.draft_roadmap?.approved ?? null} onApproved={setApproved} />;
   // qa4-simple-decide-15: Now, Next, Later, then Cut; the roadmap's order within each.
   const all = q.data.items;
   const rank = (i: (typeof all)[number]) => ORDER[i.status === "cut" ? "cut" : i.horizon] ?? 4;
