@@ -13,7 +13,8 @@ import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, seeded, stableUuid } from "./ids";
-import { flowFor, type VisualsDb } from "./simple-visuals";
+import { betSubject, flowFor, type VisualsDb } from "./simple-visuals";
+import type { OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 
 type Item = Schemas["SimpleRoadmapItem"];
@@ -113,6 +114,8 @@ interface SimpleDb {
   snapshots?: Record<string, SeedItem[]>;
   /** S10: the visuals (./simple-visuals.ts), shared with the one-pager's. */
   visuals?: VisualsDb;
+  /** walkb-roadmap review: the PRD's one-pager, whose bets' flows its items show. */
+  onePager?: OnePagerDb;
   /** S8: decided decisions that changed each item (by item id), newest first. */
   decided_in?: Record<string, { id: string; number: number; title: string }[]>;
   /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
@@ -246,6 +249,23 @@ const SEED: SeedItem[] = [
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
   { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
 ];
+
+/**
+ * walkb-roadmap review: the flow drawn on the PRD's one-pager for the bet an item was built
+ * from (service.bet_flows): the bet naming the item's code or title, else the one bet drawn
+ * from the item's PRD section alone; null for an item not built from a PRD section.
+ */
+function betFlow(db: SimpleDb, s: SeedItem): Schemas["SimpleFlow"] | null {
+  const op = db.onePager;
+  if (!op || !s.section || ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") !== op.doc.slug) return null;
+  const bets = op.blocks.find((b) => b.key === "bets")?.lines ?? [];
+  const words = (t: string) => ` ${t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+  const code = prdCode(s.section);
+  const named = bets.find((l) => (code && words(l.text).includes(words(code))) || words(l.text).includes(words(s.title)));
+  const sourced = bets.filter((l) => l.keys.includes(s.section!));
+  const line = named ?? (sourced.length === 1 ? sourced[0] : undefined);
+  return line ? flowFor(db.visuals, "one_pager_line", betSubject(op.flowKey ? `${op.flowKey}/${line.id}` : line.id)) : null;
+}
 
 const DAY = 86_400_000;
 const iso = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
@@ -813,7 +833,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
       merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
       drafting: !!s.drafting_until,
-      flow: s.draft ? (s.flow ?? null) : flowFor(db.visuals, "feature", db.ids[s.key]),
+      flow: s.draft ? (s.flow ?? null) : (flowFor(db.visuals, "feature", db.ids[s.key]) ?? betFlow(db, s)),
       goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
       // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],

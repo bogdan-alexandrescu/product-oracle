@@ -5718,6 +5718,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (visualsRes) return visualsRes;
   db.simple_roadmap.visuals = db.simple_visuals;
+  // walkb-roadmap review: the one-pager whose bets' flows an item built from its PRD shows.
+  db.simple_roadmap.onePager = db.simple_one_pager;
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));

@@ -764,10 +764,17 @@ export function FloatingCard({
     <Part title="Flow" testId="card-flow">
       {/* fix4 qa-simple-roadmap-39: the same row (its thumbnail, or "Ask Oracle to draw it") on
        * a desktop, a phone and the card widened beside its talk; qa-simple-roadmap-3: no code. */}
+      {/* walkb-roadmap review: an item built from a PRD with no flow of its own shows the flow
+       * its one-pager draws for the item's bet (the API's item.flow names that bet). */}
       <FlowPanel
         key={`row-${item.id}`}
         row
-        subject={{ kind: "feature", id: item.id }}
+        subject={
+          item.flow?.subject_kind === "one_pager_line" && item.flow.subject_id
+            ? { kind: "one_pager_line", id: item.flow.subject_id }
+            : { kind: "feature", id: item.id }
+        }
+        documentId={item.flow?.subject_kind === "one_pager_line" ? item.prd?.id : undefined}
         openLabel="Open the item's flow"
         code={null}
         name={item.title}
