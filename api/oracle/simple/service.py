@@ -25,7 +25,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
@@ -710,19 +710,24 @@ async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: 
         and visibility.can_see(principal, e.prd)
         and not getattr(e.prd, "deleted_at", None)
     ]
-    drawn = set(
+    # A bet's visual stored with no PRD (``document_id`` null) names no PRD: then every
+    # PRD's one-pager is read, as before the gate.
+    drawn: set[uuid.UUID | None] = set(
         await db.scalars(
             select(SimpleVisual.document_id)
             .where(
                 SimpleVisual.subject_kind == "one_pager_line",
-                SimpleVisual.document_id.in_({e.prd.id for e in wanting}),
+                or_(
+                    SimpleVisual.document_id.in_({e.prd.id for e in wanting}),
+                    SimpleVisual.document_id.is_(None),
+                ),
             )
             .distinct()
         )
     ) if wanting else set()  # fmt: skip
     bets: dict[uuid.UUID, list[tuple[str, list[str], Any]]] = {}
     for e in wanting:
-        if e.prd.id in drawn and e.prd.id not in bets:
+        if (e.prd.id in drawn or None in drawn) and e.prd.id not in bets:
             bets[e.prd.id] = await one_pager.bet_flows(db, e.prd)
 
     def words(text: str) -> str:
