@@ -408,3 +408,50 @@ async def test_a_draft_holding_only_the_prds_additions_submits_and_publishes(cli
     assert_milestones_once(
         out, [("M1 · Private beta", "2026-12-04"), ("M2 · Launch", "2027-01-29")]
     )
+
+
+async def test_already_published_copies_of_the_milestones_show_once(client):
+    """protects=a roadmap that published the PRD's milestones as its own key dates before
+    ah-prd-milestones-once ('From <PRD>' rows, id uuid5(roadmap, prd:code)) shows each
+    milestone once, read-only from the PRD, on Simple › Roadmap and in the Priorities line
+    picker; a copy the owner renamed or re-noted since is theirs and stays; fails_when=the
+    published copies show beside the read-only milestones."""
+    ctx, ids = await world()
+    await approve(client, ctx, 1)
+    rm, prd = ids["roadmap"], ids["prd"]
+    owner = ctx.users["owner"].id
+    async with tenant_session(ctx.tenant_id) as s:
+        for code, name, day, note in [
+            ("M1", "Private beta", date(2026, 12, 4), "From Trail maps"),
+            # The PRD moved M2 since; still the PRD's copy as written.
+            ("M2", "Launch", date(2027, 1, 22), "From Trail maps"),
+            ("M3", "Wrap up", date(2027, 2, 26), "From Trail maps"),
+        ]:
+            s.add(RoadmapKeyDate(id=uuid.uuid5(rm, f"{prd}:{code}"), roadmap_document_id=rm,
+                                 name=name, on_date=day, note=note,
+                                 created_by=owner))  # fmt: skip
+        await s.commit()
+    expected = [("M1 · Private beta", "2026-12-04"), ("M2 · Launch", "2027-01-29")]
+    for who in ("owner", "viewer"):
+        out = (await client.get(ROADMAP, headers=ctx.as_(who))).json()
+        got = sorted((k["name"], k["date"], k["prd"] is None) for k in out["key_dates"])
+        # M3 is no milestone of the PRD: the roadmap's own key date, kept.
+        assert got == sorted(
+            [(n, d, False) for n, d in expected] + [("Wrap up", "2027-02-26", True)]
+        )
+    r = await client.get("/v1/simple/priorities", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    picker = [x["label"] for x in r.json()["lines"] if x["kind"] == "key_date"]
+    assert sorted(picker) == [
+        "M1 · Private beta · Dec 4, 2026", "M2 · Launch · Jan 29, 2027", "Wrap up · Feb 26, 2027"
+    ]  # fmt: skip
+    # The owner re-noted the M1 copy: theirs now, it shows beside the PRD's.
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(RoadmapKeyDate, uuid.uuid5(rm, f"{prd}:M1"))
+        assert row is not None
+        row.note = "Beta for the trail club"
+        await s.commit()
+    out = await read(client, ctx)
+    assert sorted(k["name"] for k in out["key_dates"] if k["prd"] is None) == [
+        "Private beta", "Wrap up"
+    ]  # fmt: skip
