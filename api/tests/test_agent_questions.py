@@ -127,3 +127,26 @@ async def test_answers_go_with_the_decision_and_unanswered_ones_with_the_agents_
     assert "Owned from Nov 16" in d.context
     assert "Home orders only, or every country?: Home orders only (the agent's pick" in d.context
     await answer(review, "owner", "q2", 409, option="all")
+
+
+async def test_at_a_lead_stop_the_leads_answer_and_can_answer_says_so(review):  # noqa: F811
+    """protects=can_answer agrees with who may answer at an engineering stop with a lead
+    named; fails_when=an approver who is not a lead is shown the options the API refuses,
+    or a commenter lead is not shown them; no_claim=which flows place the stop."""
+    await asked(review)
+    async with tenant_session(review.tenant_id) as s:
+        cp = await s.get(Checkpoint, uuid.UUID(review.cp["id"]))
+        cp.kind = "eng_review"
+        await s.commit()
+    resp = await review.client.patch(
+        f"/v1/members/{review.id('commenter')}",
+        json={"engineering_lead": True},
+        headers=review.auth,
+    )
+    assert resp.status_code == 200, resp.text
+    assert (await qs(review, "approver"))["can_answer"] is False
+    await answer(review, "approver", "q1", 403, option="build")
+    assert (await qs(review, "commenter"))["can_answer"] is True
+    await answer(review, "commenter", "q1", option="build")
+    assert (await qs(review, "commenter2"))["can_answer"] is False
+    assert (await qs(review, "owner"))["can_answer"] is True
