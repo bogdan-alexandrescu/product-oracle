@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
@@ -150,6 +150,22 @@ export default function SimpleHome() {
   };
 
   const inbox = useQuery(k("inbox"), loadInbox, { keepPrevious: true });
+  // vqa-simple-runs: Back to Home shows the page as it was left (cacheComponents keeps its
+  // state): read everything again, and draw no run stop until the Inbox is read, so a stop just
+  // approved on the run's page never shows again. Before paint, so nothing stale flashes.
+  const shownBefore = useRef(false);
+  const [revisit, setRevisit] = useState(false);
+  useLayoutEffect(() => {
+    if (shownBefore.current) {
+      invalidateWaiting();
+      setRevisit(true);
+      setStamp((s) => s + 1);
+    }
+    shownBefore.current = true;
+  }, []);
+  useEffect(() => {
+    if (revisit && !inbox.loading) setRevisit(false);
+  }, [revisit, inbox.loading]);
   const roadmap = useQuery(k("roadmap"), () => unwrap(api.GET("/v1/simple/roadmap")), { keepPrevious: true });
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
   const changes = useQuery(k("changes"), () => unwrap(api.GET("/v1/simple/changes")), { keepPrevious: true });
@@ -257,7 +273,7 @@ export default function SimpleHome() {
   const firstName = (me?.name ?? "").trim().split(/\s/)[0];
   const decisionCount = waiting.data?.count ?? 0;
   // SW1: the run stops that wait on me, a card each under the summary (their work is on the run's page).
-  const runStops = runStopsOf(inbox.data);
+  const runStops = revisit && inbox.loading ? undefined : runStopsOf(inbox.data);
   const stopCount = runStops?.length ?? 0;
   // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
   const myTasks = waiting.data?.tasks ?? [];
@@ -289,7 +305,7 @@ export default function SimpleHome() {
   const prdWaiting = waitingByPrd(waiting.data?.questions ?? []);
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
-  const quiet = decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0;
+  const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0;
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
