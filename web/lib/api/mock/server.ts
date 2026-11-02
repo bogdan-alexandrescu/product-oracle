@@ -11,96 +11,21 @@ import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
 import { mockName as displayName } from "./people";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
-import {
-  addDecisionEntity,
-  addGoalCodes,
-  addGoalWords,
-  addNoisyProposals,
-  addOverlappingProposals,
-  addStatusOverlapProposals,
-  addThreeWayConflict,
-  attributeCommenterProposal,
-  attributeGoalOwner,
-  attributeLocks,
-  enlargeBaseline,
-  readMetricIntoGoal,
-  routeBaseline,
-  seedBaseline,
-  setEntityEffort,
-  type BaselineState,
-} from "./baseline";
-import {
-  BLOCKER_NARROWED_SCENARIO,
-  documentGate,
-  narrowResolvedBlocker,
-  routeBlockers,
-  seedBlockers,
-  type BlockersDb,
-} from "./blockers";
+import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
-import {
-  BIG_PRD,
-  BIG_PRD_COMMENTS,
-  BIG_PRD_REVIEWS,
-  BIG_PRD_SUGGESTIONS,
-} from "./big-prd";
-import {
-  applied,
-  handOver,
-  membersDetailRoute,
-  type MembersContext,
-  type MembersDb,
-} from "./members";
+import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
+import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
 import type { HandOver } from "@/lib/api/members-types";
-import {
-  accountRoute,
-  liveCredentials,
-  openTokens,
-  passwordOk,
-  revokeMemberTokens,
-  seedAccount,
-  type AccountDb,
-} from "./account";
-import {
-  deckOut,
-  LAYER_FORMATS,
-  PPTX_TYPE,
-  presenterNotes,
-  resolveBrief,
-} from "./brief";
-import {
-  brandHeaderHtml,
-  brandStyleHtml,
-  emptyBranding,
-  routeBranding,
-  type BrandingDb,
-} from "./branding";
+import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
+import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
+import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
-import {
-  POOL_SPENT_SCENARIO,
-  claudeAccountsRoute,
-  poolRefusal,
-} from "./claude-accounts";
+import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
-import {
-  decidePricing,
-  decisionInbox,
-  enlargeDecisions,
-  proposePricing,
-  requestDecisions,
-  routeDecisions,
-  seedDecisions,
-  type DecisionsContext,
-  type DecisionsDb,
-} from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
-import {
-  afterAccept,
-  goalInterviewReply,
-  proposeVersion,
-  routeGoalInterview,
-  type GoalInterviewContext,
-} from "./goal-interview";
+import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
 import {
   discussionInboxRows,
@@ -123,55 +48,11 @@ import {
   type SubjectInfo,
 } from "./discussions";
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
-import {
-  DOCUMENTS,
-  FLEET_DOC,
-  FLEET_SUGGESTIONS,
-  MOCK_ACCESS_REQUESTS,
-  MOCK_INVITES,
-  MOCK_LOGIN,
-  MOCK_MEMBERS,
-  REMOVED_MEMBER,
-  roadmapFromPrd,
-  UPDATE_DOCUMENTS,
-  UPDATE_SEED_CITATIONS,
-  type DocumentSeed,
-  type VersionSeed,
-} from "./fixtures";
-import {
-  laneF,
-  nothingWritten,
-  NOTHING_WRITTEN,
-  type LaneFState,
-} from "./lane-f";
-import {
-  llmJobsRoute,
-  onFeedback,
-  queueJob,
-  queueQualityReview,
-  seedLlm,
-  seedStoredRefusals,
-  SPENT,
-  tick,
-  withSuggestion,
-  type LlmContext,
-  type LlmDb,
-} from "./llm-jobs";
+import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
+import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
+import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import {
-  draftRefusal,
-  emptyAutonomy,
-  inboxActions,
-  levelFor,
-  limitsFor,
-  oracleDid,
-  routeAutonomy,
-  seedLaunchDid,
-  seedOracleDid,
-  seedRequestDid,
-  seedRitualDid,
-  type AutonomyDb,
-} from "./autonomy";
+import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { nudges } from "./learned";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
@@ -212,66 +93,13 @@ import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { liveReply, routeLive } from "./live";
 import { sourceBrowseRoute } from "./source-browse";
-import {
-  DRAFT_NEW_ITEMS_SCENARIO,
-  itemsChangedSince,
-  routeSources,
-  sourceCount,
-  sourceItem,
-  SOURCES_STORAGE_KEY,
-} from "./sources";
-import {
-  BEFORE_DRAFTING,
-  LATE_ANSWER_WITHHELD,
-  routeIntake,
-  seedBeforeDrafting,
-  seedBriefGoalRejected,
-  startedIntakeRun,
-  type SubjectLookup,
-} from "./intake";
-import {
-  ensureReports,
-  inboxReports,
-  REPORT_PRD_MOVED_SCENARIO,
-  reportsRoute,
-  type LiveTracks,
-  type ReportsDb,
-} from "./reports";
-import {
-  discussionSlackRoute,
-  failSlackMirror,
-  holdSlackMirror,
-  injectSlackReply,
-  seedSlackBridge,
-  SLACK_SCENARIO,
-  slackRoute,
-} from "./slack";
-import {
-  addDigest,
-  addMetricsReview,
-  ritualInbox,
-  routeRituals,
-  seedRituals,
-  type RitualsContext,
-  type RitualsDb,
-} from "./rituals";
-import {
-  emptyMetrics,
-  metricInbox,
-  openVariances,
-  reviewBlocks,
-  routeMetrics,
-  seedMetrics,
-  type MetricsContext,
-  type MetricsDb,
-} from "./metrics";
-import {
-  digestBlocks,
-  emptyMarket,
-  routeMarket,
-  seedMarket,
-  type MarketDb,
-} from "./market";
+import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
+import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
+import { ensureReports, inboxReports, REPORT_PRD_MOVED_SCENARIO, reportsRoute, type LiveTracks, type ReportsDb } from "./reports";
+import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
+import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
+import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
+import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } from "./market";
 import {
   addInterviewRequest,
   behindBriefRefusal,
@@ -286,22 +114,8 @@ import {
   type RequestsContext,
   type RequestsDb,
 } from "./requests";
-import {
-  MOCK_COMPANY,
-  routeInterviews,
-  routePublicInterviews,
-  routeTeamInterviews,
-  seedInterviews,
-  type InterviewsContext,
-  type InterviewsDb,
-} from "./interviews";
-import {
-  launchInboxRows,
-  routeLaunches,
-  seedLaunches,
-  type LaunchesContext,
-  type LaunchesDb,
-} from "./launches";
+import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
+import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import {
   calibration,
   outcomeInboxRows,
@@ -318,72 +132,12 @@ import {
   type QualityContext,
   type QualityDb,
 } from "./quality";
-import {
-  routeReviewV2,
-  sectionRevision,
-  seedReviewV2,
-  type ReviewV2Db,
-} from "./review-v2";
-import {
-  emptyPlanEdits,
-  routeChangeSets,
-  supersededRefusal,
-  type PlanEditsContext,
-  type PlanEditsDb,
-} from "./plan-edits";
-import {
-  draftRoadmapSummary,
-  queueDraftRoadmap,
-  reusableDraftItems,
-  routeDraftRoadmap,
-  seedApprovedPlanDraft,
-  seedDraftRoadmaps,
-  seedStoredRefusalDraft,
-  tickDraftRoadmaps,
-  type DraftRoadmapContext,
-  type DraftRoadmapDb,
-} from "./draft-roadmap";
-import {
-  ALERTS_APPROVED_SCENARIO,
-  ALERTS_ROADMAP_SLUG,
-  APPROVED_PLAN_SCENARIO,
-  planItemTitle,
-  DATE_BASES_SCENARIO,
-  DIFF_SCENARIO,
-  VERSION_WARNINGS_SCENARIO,
-  dateMarks,
-  versionWarnings,
-  inboxTracks,
-  planEntityTitle,
-  reportTracks,
-  routePlan,
-  routeRoadmap,
-  sectionItems,
-  seedRoadmap,
-  seededPlanItems,
-  trackRunBody,
-  type RoadmapContext,
-  type RoadmapDb,
-} from "./roadmap";
-import {
-  routeSpecs,
-  seedSpecs,
-  specStalenessAction,
-  specStates,
-  staleSpecRefusal,
-  type SpecPerson,
-  type SpecsDb,
-} from "./specs";
-import {
-  inboxStrategy,
-  planDrift,
-  routeStrategy,
-  seedNoStrategy,
-  seedPlanDrift,
-  seedStrategy,
-  STRATEGY_DOCUMENTS,
-  type StrategyDb,
-} from "./strategy";
+import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
+import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
+import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
+import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
 import { routeTrace } from "./trace";
 import {
@@ -399,103 +153,20 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import {
-  routeSimpleChanges,
-  seedSimpleProposal,
-  simpleInboxRows,
-} from "./simple-changes";
-import {
-  chatMeetings,
-  ensureMeetings,
-  mockApproverOwnsTrack,
-  meetingInboxRows,
-  routeMeetingQuestions,
-  routeSimpleMeetings,
-  withMeeting,
-  type MeetingsCtx,
-  type MeetingsDb,
-} from "./simple-meetings";
-import {
-  seedGoalSuggestions,
-  seedHeldGoalSuggestion,
-} from "./simple-suggestions";
-import {
-  planSlice,
-  routeOnePager,
-  seedNeedsLookOnePager,
-  seedNotInPrdOnePager,
-  seedOnePager,
-  seedRunPrdOnePager,
-  seedSkeletonOnePager,
-  seedWalkOnePager,
-  type OnePagerDb,
-} from "./simple-one-pager";
-import {
-  PLAN_PRD_SLUG,
-  planFeatureName,
-  planMilestones,
-  planSlices,
-  routeSimplePlan,
-  seedPlan,
-} from "./simple-plan";
+import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
+import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
-import {
-  routeSimpleVisuals,
-  seedVisuals,
-  type VisualsDb,
-} from "./simple-visuals";
-import {
-  planAnswer,
-  routeSimpleChat,
-  seedReaderItems,
-  seedSimpleChat,
-  seedStrayReply,
-  seedRightPrd,
-  seedTalkItems,
-  takeReaderWrote,
-  type ChatDb,
-} from "./simple-chat";
-import {
-  approvedPrdToDraft,
-  itemSubjectName,
-  knowManyPlans,
-  routeSimpleRoadmap,
-  seedSimpleDeciders,
-  seedSimpleMany,
-  seedSimpleRoadmap,
-  simpleWindows,
-  type SimpleDb,
-} from "./simple-roadmap";
-import {
-  canSee,
-  draftSections,
-  isUpdateTemplate,
-  periodMonth,
-  templateSections,
-  updateDateMarks,
-  updateFrontMatter,
-  type UpdatePeriod,
-} from "./updates";
+import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { approvedPrdToDraft, itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
-import {
-  captureRunChanges,
-  runMarks,
-  seedWebhooks,
-  tokenRevoked,
-  webhooksRoute,
-  type WebhooksContext,
-  type WebhooksDb,
-} from "./webhooks";
+import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
-import {
-  AUDIENCES,
-  audienceLabel,
-  audienceRefusal,
-  audienceSections,
-  isAudience,
-  spansRow,
-  type BoardItem,
-} from "./audience";
+import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
   emptyShares,
@@ -517,30 +188,17 @@ import {
  * latest_version, approved_version, source and an update's period are read off the versions;
  * visibility is "company" unless the row says otherwise (H8: updates are "approvers").
  */
-export type DocumentRow = Omit<
-  Schemas["DocumentSummary"],
-  "latest_version" | "approved_version" | "source" | "visibility" | "period"
-> & {
+export type DocumentRow = Omit<Schemas["DocumentSummary"], "latest_version" | "approved_version" | "source" | "visibility" | "period"> & {
   visibility?: Schemas["DocumentSummary"]["visibility"];
 };
-export type VersionRow = Omit<
-  Schemas["VersionOut"],
-  "sections" | "date_marks"
-> & {
-  sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> &
-    Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
+export type VersionRow = Omit<Schemas["VersionOut"], "sections" | "date_marks"> & {
+  sections: (Omit<Schemas["SectionOut"], "verdict" | "spec_states"> & Partial<Pick<Schemas["SectionOut"], "spec_states">>)[];
 };
 type CommentRow = Omit<Schemas["CommentOut"], "replies">;
 /** A stored section review; a spec may mark an approval lapsed (C2). */
-type ReviewRow = Schemas["SectionReviewOut"] & {
-  lapsed_at?: string | null;
-  lapse_reason?: string | null;
-};
+type ReviewRow = Schemas["SectionReviewOut"] & { lapsed_at?: string | null; lapse_reason?: string | null };
 /** Stored without its derived C1e state (withSuggestion adds it on the way out). */
-type FeedbackRow = Omit<
-  Schemas["FeedbackItemOut"],
-  "state" | "staged_for_version" | "staged_for_agents"
-> & {
+type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version" | "staged_for_agents"> & {
   /** D12: staged for the agents (when, by whom); open items only count. */
   staged_for_agents_at?: string | null;
   staged_for_agents_by?: string | null;
@@ -673,11 +331,7 @@ type RevokeFailureRow = Schemas["InboxRevokeFailure"] & { dismissed?: boolean };
 /** Two revokes still owed: GitHub (24 hours of retries over) and Slack (not configured, still retried). */
 function seedRevokeFailures(): RevokeFailureRow[] {
   const member = { member_id: uuid(), member_email: "former.pm@example.com" };
-  const item = (
-    provider: string,
-    name: string,
-    extra: Partial<RevokeFailureRow>,
-  ): RevokeFailureRow => ({
+  const item = (provider: string, name: string, extra: Partial<RevokeFailureRow>): RevokeFailureRow => ({
     id: uuid(),
     ...member,
     provider,
@@ -693,11 +347,7 @@ function seedRevokeFailures(): RevokeFailureRow[] {
     ...extra,
   });
   return [
-    item("github", "GitHub", {
-      status: "failed",
-      attempts: 12,
-      last_error: "the provider did not answer in time",
-    }),
+    item("github", "GitHub", { status: "failed", attempts: 12, last_error: "the provider did not answer in time" }),
     item("slack", "Slack", {
       outcome: "not_configured",
       attempts: 3,
@@ -727,12 +377,7 @@ function seedAccessFailures(): Schemas["InboxAccessFailure"][] {
 /** Retry and Dismiss of a revoke a disable owes: owners only, as in the API. A retry succeeds,
  * except while the provider's OAuth app is not configured. An access change's Retry (#245)
  * succeeds, and its item closes. */
-function followUpsRoute(
-  db: Db,
-  req: Request,
-  p: string[],
-  me: MemberRow,
-): Response | null {
+function followUpsRoute(db: Db, req: Request, p: string[], me: MemberRow): Response | null {
   if (p[1] !== "member-follow-ups" || req.method !== "POST") return null;
   if (!atLeast(me.role, "owner")) return forbidden("owner");
   const access = (db.access_failures ??= []).find((r) => r.id === p[2]);
@@ -755,8 +400,7 @@ function followUpsRoute(
   db.revoke_failures ??= [];
   const row = db.revoke_failures.find((r) => r.id === p[2]);
   if (!row) return notFound("Follow-up");
-  if (row.dismissed)
-    return json(409, { detail: "This follow-up is dismissed; nothing to do" });
+  if (row.dismissed) return json(409, { detail: "This follow-up is dismissed; nothing to do" });
   const out = (status: string) => ({
     id: row.id,
     member_id: row.member_id,
@@ -771,11 +415,7 @@ function followUpsRoute(
   });
   if (p[3] === "dismiss") {
     row.dismissed = true;
-    return json(200, {
-      ...out("dismissed"),
-      dismissed_at: now(),
-      dismissed_by: me.id,
-    });
+    return json(200, { ...out("dismissed"), dismissed_at: now(), dismissed_by: me.id });
   }
   if (p[3] === "retry") {
     row.attempts += 1;
@@ -788,11 +428,7 @@ function followUpsRoute(
 
 /** The track record over the mock's outcomes (H3), goals named from the baseline. */
 export function trackRecord(db: Db): Schemas["CalibrationOut"] {
-  const titles = Object.fromEntries(
-    db.baseline.entities
-      .filter((e) => e.type === "goal")
-      .map((e) => [e.id, e.title]),
-  );
+  const titles = Object.fromEntries(db.baseline.entities.filter((e) => e.type === "goal").map((e) => [e.id, e.title]));
   return calibration(db.quality, titles);
 }
 
@@ -804,28 +440,17 @@ function launchesContext(db: Db, me: MemberRow): LaunchesContext {
     askerId: db.members.find((x) => x.role === "commenter")?.id ?? null,
     trackId: db.roadmap?.tracks[0]?.id ?? null,
     // H11 external_messages: at Observe the kit keeps to internal words.
-    externalWords: () =>
-      levelFor((db.autonomy ??= emptyAutonomy()), "external_messages") !==
-      "observe",
+    externalWords: () => levelFor((db.autonomy ??= emptyAutonomy()), "external_messages") !== "observe",
     roadmapItems: (trackId) => {
       const t = db.roadmap?.tracks.find((x) => x.id === trackId);
       if (!t) return null;
       const doc = db.documents.find((d) => d.id === t.roadmap_id);
       const v = db.versions
-        .filter(
-          (x) =>
-            x.document_id === t.roadmap_id &&
-            x.approved_at &&
-            db.roadmap!.items[x.id]?.length,
-        )
+        .filter((x) => x.document_id === t.roadmap_id && x.approved_at && db.roadmap!.items[x.id]?.length)
         .sort((a, b) => b.number - a.number)[0];
       if (!v) return [];
       return db.roadmap!.items[v.id].map((i) => ({
-        item_key: i.item_key,
-        title: i.title,
-        horizon: i.horizon,
-        roadmap_slug: doc?.slug ?? null,
-        roadmap_version: v.number,
+        item_key: i.item_key, title: i.title, horizon: i.horizon, roadmap_slug: doc?.slug ?? null, roadmap_version: v.number,
       }));
     },
   };
@@ -986,17 +611,11 @@ function setSession(db: Db, email: string | null) {
   if (email) db.tab_sessions[tabId()] = email;
   else delete db.tab_sessions[tabId()];
 }
-const ROLES: readonly Schemas["Me"]["role"][] = [
-  "viewer",
-  "commenter",
-  "approver",
-  "owner",
-];
+const ROLES: readonly Schemas["Me"]["role"][] = ["viewer", "commenter", "approver", "owner"];
 
 /** The signed-in member, with the role overridden when a test set MOCK_ROLE_KEY. */
 function withMockRole<T extends { role: Schemas["Me"]["role"] }>(member: T): T {
-  const role = localStorage.getItem(MOCK_ROLE_KEY) as
-    Schemas["Me"]["role"] | null;
+  const role = localStorage.getItem(MOCK_ROLE_KEY) as Schemas["Me"]["role"] | null;
   return role && ROLES.includes(role) ? { ...member, role } : member;
 }
 const LATENCY_MS = 60;
@@ -1015,20 +634,12 @@ function hash(text: string): string {
 const now = () => new Date().toISOString();
 
 /** The seeded API token that imports the mock's versions unless a seed says who did. */
-const AGENT_TRACK = {
-  id: "3d7e9a52-6b14-4c8f-a0e2-71f5c9b8d046",
-  name: "agent-track",
-};
+const AGENT_TRACK = { id: "3d7e9a52-6b14-4c8f-a0e2-71f5c9b8d046", name: "agent-track" };
 
 function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
   const id = uuid();
-  const layered = resolveBrief(
-    seed.sections.map((s) => ({ section_key: s.key, level: s.level })),
-    seed.brief,
-  );
-  const depth =
-    (DOCUMENTS as DocumentSeed[]).find((d) => d.slug === doc.slug)?.depth ??
-    "full";
+  const layered = resolveBrief(seed.sections.map((s) => ({ section_key: s.key, level: s.level })), seed.brief);
+  const depth = (DOCUMENTS as DocumentSeed[]).find((d) => d.slug === doc.slug)?.depth ?? "full";
   const sections = seed.sections.map((s, ordinal) => ({
     id: uuid(),
     section_key: s.key,
@@ -1038,13 +649,10 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     body_md: s.body,
     body_text: plainText(s.body),
     content_hash: hash(s.heading + "\n" + s.body),
-    citation_keys: [
-      ...new Set([...s.body.matchAll(/\[c:([\w.:-]+)\]/g)].map((m) => m[1])),
-    ],
+    citation_keys: [...new Set([...s.body.matchAll(/\[c:([\w.:-]+)\]/g)].map((m) => m[1]))],
     layer: layered.brief.has(s.key) ? ("brief" as const) : ("detail" as const),
     notes: layered.brief.has(s.key) ? presenterNotes(s.body) : null,
-    spec_states:
-      doc.kind === "spec" ? specStates(s.key, s.body, false, depth) : [],
+    spec_states: doc.kind === "spec" ? specStates(s.key, s.body, false, depth) : [],
   }));
   return {
     id,
@@ -1061,11 +669,7 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     approved_at: null,
     approval_lapses: [],
     created_at: seed.created_at,
-    front_matter: {
-      document: doc.slug,
-      title: doc.title,
-      template: doc.template ?? undefined,
-    },
+    front_matter: { document: doc.slug, title: doc.title, template: doc.template ?? undefined },
     sections,
     citations: seed.citations.map((c) => ({
       id: uuid(),
@@ -1101,14 +705,7 @@ function seedEmpty(): Db {
     comments: [],
     reviews: [],
     feedback: [],
-    baseline: {
-      entities: [],
-      edges: [],
-      evidence: [],
-      conflicts: [],
-      proposals: [],
-      revisions: [],
-    },
+    baseline: { entities: [], edges: [], evidence: [], conflicts: [], proposals: [], revisions: [] },
     runs: { runs: [], artifacts: {} },
     v2: emptyV2(),
   };
@@ -1132,28 +729,12 @@ function seedLarge(): Db {
   const v2 = ensureV2(db);
   const model = v2.questions[0];
   for (let i = 1; i <= 4; i++) {
-    const at = new Date(
-      Date.parse(model.created_at) + i * 60_000,
-    ).toISOString();
-    v2.questions.push({
-      ...model,
-      id: uuid(),
-      prompt: `Which clinics open first in region ${i}?`,
-      priority: 10 + i,
-      created_at: at,
-      updated_at: at,
-    });
+    const at = new Date(Date.parse(model.created_at) + i * 60_000).toISOString();
+    v2.questions.push({ ...model, id: uuid(), prompt: `Which clinics open first in region ${i}?`, priority: 10 + i, created_at: at, updated_at: at });
   }
   // Asked of someone else: not the signed-in member's to answer.
   const other = db.members.find((m) => m.id !== db.user_id)!;
-  v2.questions.push({
-    ...model,
-    id: uuid(),
-    prompt: "Who owns the pricing page?",
-    asked_to: other.id,
-    created_at: model.created_at,
-    updated_at: model.created_at,
-  });
+  v2.questions.push({ ...model, id: uuid(), prompt: "Who owns the pricing page?", asked_to: other.id, created_at: model.created_at, updated_at: model.created_at });
   return db;
 }
 
@@ -1167,105 +748,33 @@ function seedQuestions(): Db {
   const intake = uuid();
   const gap = uuid();
   v2.intakes.push({
-    id: intake,
-    title: "Clinic waitlist",
-    brief:
-      "Patients wait by phone for a cancelled slot. Let them join a waitlist instead.",
-    author_id: db.user_id,
-    source_snapshot_ids: [],
-    status: "awaiting_answers",
-    document_id: null,
-    lock_version: 1,
-    analysis: {
-      users: [],
-      problem: null,
-      outcomes: [],
-      goal_ids: [],
-      scope: ["A waitlist for cancelled slots"],
-      non_goals: [],
-      dependencies: [],
-      blockers: [],
-      category: "feature",
-      conflicts: [],
-    },
+    id: intake, title: "Clinic waitlist", brief: "Patients wait by phone for a cancelled slot. Let them join a waitlist instead.",
+    author_id: db.user_id, source_snapshot_ids: [], status: "awaiting_answers", document_id: null, lock_version: 1,
+    analysis: { users: [], problem: null, outcomes: [], goal_ids: [], scope: ["A waitlist for cancelled slots"], non_goals: [], dependencies: [], blockers: [], category: "feature", conflicts: [] },
     ...at("2026-10-01T09:00:00Z"),
   });
   v2.gaps.push({
-    id: gap,
-    intake_id: intake,
-    document_id: null,
-    category: "customer_user",
-    statement: "Customer and user: not known yet.",
-    impact: ["goals", "scope", "module_selection"],
-    importance: "high",
-    evidence_ids: [],
-    confidence: null,
-    knowledge_state: "unknown",
-    status: "asked",
-    owner_id: null,
-    related_modules: ["context.users"],
-    stop_condition: null,
-    entity_ids: [],
-    section_keys: [],
-    created_by: null,
-    lock_version: 1,
-    ...at("2026-10-01T09:00:00Z"),
+    id: gap, intake_id: intake, document_id: null, category: "customer_user", statement: "Customer and user: not known yet.",
+    impact: ["goals", "scope", "module_selection"], importance: "high", evidence_ids: [], confidence: null, knowledge_state: "unknown",
+    status: "asked", owner_id: null, related_modules: ["context.users"], stop_condition: null, entity_ids: [], section_keys: [],
+    created_by: null, lock_version: 1, ...at("2026-10-01T09:00:00Z"),
   });
-  const base = {
-    checkpoint_id: null,
-    item_ref: null,
-    entity_id: null,
-    module_key: null,
-    batch: null,
-    priority: 100,
-  };
+  const base = { checkpoint_id: null, item_ref: null, entity_id: null, module_key: null, batch: null, priority: 100 };
   v2.questions.push(
     {
-      ...base,
-      id: uuid(),
-      gap_id: gap,
-      intake_id: intake,
-      document_id: null,
-      category: "customer_user",
-      prompt: "Which clinics join the waitlist first?",
-      rationale: "Decides who the first release is for, and its scope.",
-      batch: 1,
-      priority: 10,
-      asked_to: db.user_id,
-      asked_by: db.user_id,
-      section_key: null,
-      status: "asked",
-      ...at("2026-10-01T09:00:00Z"),
+      ...base, id: uuid(), gap_id: gap, intake_id: intake, document_id: null, category: "customer_user",
+      prompt: "Which clinics join the waitlist first?", rationale: "Decides who the first release is for, and its scope.",
+      batch: 1, priority: 10, asked_to: db.user_id, asked_by: db.user_id, section_key: null, status: "asked", ...at("2026-10-01T09:00:00Z"),
     },
     {
-      ...base,
-      id: uuid(),
-      gap_id: null,
-      intake_id: null,
-      document_id: prd.id,
-      category: "general",
-      prompt: "Which plan tiers get hard caps?",
-      rationale: "The scope review needs it before approving.",
-      asked_to: db.user_id,
-      asked_by: approver.id,
-      section_key: "metrics",
-      status: "asked",
-      ...at("2026-10-18T09:00:00Z"),
+      ...base, id: uuid(), gap_id: null, intake_id: null, document_id: prd.id, category: "general",
+      prompt: "Which plan tiers get hard caps?", rationale: "The scope review needs it before approving.",
+      asked_to: db.user_id, asked_by: approver.id, section_key: "metrics", status: "asked", ...at("2026-10-18T09:00:00Z"),
     },
     {
-      ...base,
-      id: uuid(),
-      gap_id: null,
-      intake_id: null,
-      document_id: prd.id,
-      category: "general",
-      prompt: "Who signs off the refund rule?",
-      rationale: null,
-      asked_to: approver.id,
-      asked_by: db.user_id,
-      section_key: "metrics",
-      status: "delegated",
-      ...at("2026-10-18T10:00:00Z"),
+      ...base, id: uuid(), gap_id: null, intake_id: null, document_id: prd.id, category: "general",
+      prompt: "Who signs off the refund rule?", rationale: null,
+      asked_to: approver.id, asked_by: db.user_id, section_key: "metrics", status: "delegated", ...at("2026-10-18T10:00:00Z"),
     },
   );
   return db;
@@ -1290,41 +799,22 @@ function seedLateAnswersScenario(): Db {
   const intake = v2.intakes.find((i) => i.id === BEFORE_DRAFTING.intakeId)!;
   const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
   Object.assign(intake, { status: "converted", document_id: prd.id });
-  const mine = new Set(
-    v2.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id),
-  );
+  const mine = new Set(v2.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
   v2.intake_runs = {
     ...v2.intake_runs,
-    [intake.id]: {
-      run_id: "c5000000-0000-4000-8000-0000000000d1",
-      answer_ids: v2.answers
-        .filter((a) => mine.has(a.question_id))
-        .map((a) => a.id),
-      document: prd.slug,
-    },
+    [intake.id]: { run_id: "c5000000-0000-4000-8000-0000000000d1", answer_ids: v2.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id), document: prd.slug },
   };
   // The owner's success-metric gap is also a finding from their own sources, shared in full:
   // an answer to it is quoted in feedback only while it stays shared from summary up (S6).
-  const metric = v2.gaps.find(
-    (g) => g.intake_id === intake.id && g.category === "success_metric",
-  )!;
+  const metric = v2.gaps.find((g) => g.intake_id === intake.id && g.category === "success_metric")!;
   v2.intake_findings = {
     ...v2.intake_findings,
     [intake.id]: [
       ...(v2.intake_findings?.[intake.id] ?? []),
       {
-        id: "c5000000-0000-4000-8000-0000000000f1",
-        kind: "gap",
-        origin: "rules",
-        category: "success_metric",
-        sharing: "full",
-        summary: "A gap about success metric",
-        summary_confirmed: false,
-        draft_summary:
-          "The checkout timing export sits in a private dashboard.",
-        gap_id: metric.id,
-        source_item_ids: ["c5000000-0000-4000-8000-0000000000f2"],
-        unshared_item_ids: [],
+        id: "c5000000-0000-4000-8000-0000000000f1", kind: "gap", origin: "rules", category: "success_metric", sharing: "full",
+        summary: "A gap about success metric", summary_confirmed: false, draft_summary: "The checkout timing export sits in a private dashboard.",
+        gap_id: metric.id, source_item_ids: ["c5000000-0000-4000-8000-0000000000f2"], unshared_item_ids: [],
       },
     ],
   };
@@ -1335,12 +825,8 @@ function seedLateAnswersScenario(): Db {
 function seedBriefGoalRejectedScenario(): Db {
   const db = seed();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
-  const goal = (key: string) =>
-    db.baseline.entities.find((e) => e.type === "goal" && e.key === key)!;
-  seedBriefGoalRejected(ensureV2(db), approver.id, [
-    goal("g.activation").id,
-    goal("g.early-churn").id,
-  ]);
+  const goal = (key: string) => db.baseline.entities.find((e) => e.type === "goal" && e.key === key)!;
+  seedBriefGoalRejected(ensureV2(db), approver.id, [goal("g.activation").id, goal("g.early-churn").id]);
   goal("g.early-churn").status = "rejected";
   return db;
 }
@@ -1351,51 +837,18 @@ function seedPrivateFinding(): Db {
   const v2 = ensureV2(db);
   const intake = v2.intakes.find((i) => i.title === "Clinic waitlist")!;
   const gap = uuid();
-  const at = {
-    created_at: "2026-10-02T09:00:00Z",
-    updated_at: "2026-10-02T09:00:00Z",
-  };
+  const at = { created_at: "2026-10-02T09:00:00Z", updated_at: "2026-10-02T09:00:00Z" };
   v2.gaps.push({
-    id: gap,
-    intake_id: intake.id,
-    document_id: null,
-    category: "release_rollout",
-    statement: "Is the pilot limited to two clinics?",
-    impact: ["risks", "scope"],
-    importance: "high",
-    evidence_ids: [],
-    confidence: null,
-    knowledge_state: "ai_inference",
-    status: "asked",
-    owner_id: null,
-    related_modules: ["launch.rollout"],
-    stop_condition: null,
-    entity_ids: [],
-    section_keys: [],
-    created_by: null,
-    lock_version: 1,
-    ...at,
+    id: gap, intake_id: intake.id, document_id: null, category: "release_rollout", statement: "Is the pilot limited to two clinics?",
+    impact: ["risks", "scope"], importance: "high", evidence_ids: [], confidence: null, knowledge_state: "ai_inference",
+    status: "asked", owner_id: null, related_modules: ["launch.rollout"], stop_condition: null, entity_ids: [], section_keys: [],
+    created_by: null, lock_version: 1, ...at,
   });
   v2.private_gap_ids = [gap];
   v2.questions.push({
-    id: uuid(),
-    gap_id: gap,
-    intake_id: intake.id,
-    document_id: null,
-    checkpoint_id: null,
-    item_ref: null,
-    entity_id: null,
-    category: "release_rollout",
-    prompt: "Is the pilot limited to two clinics?",
-    rationale: null,
-    priority: 20,
-    batch: 1,
-    asked_to: db.user_id,
-    asked_by: db.user_id,
-    module_key: null,
-    section_key: null,
-    status: "asked",
-    ...at,
+    id: uuid(), gap_id: gap, intake_id: intake.id, document_id: null, checkpoint_id: null, item_ref: null, entity_id: null,
+    category: "release_rollout", prompt: "Is the pilot limited to two clinics?", rationale: null, priority: 20, batch: 1,
+    asked_to: db.user_id, asked_by: db.user_id, module_key: null, section_key: null, status: "asked", ...at,
   });
   return db;
 }
@@ -1410,23 +863,10 @@ function seedPrivateFinding(): Db {
  */
 function seedSimpleDecidersScenario(): Db {
   const db = seed();
-  const join = (
-    email: string,
-    name: string,
-    role: "approver" | "commenter" | "viewer",
-    i: number,
-  ) => {
+  const join = (email: string, name: string, role: "approver" | "commenter" | "viewer", i: number) => {
     const m = {
-      email,
-      name,
-      role,
-      engineering_lead: false,
-      created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
-      id: uuid(),
-      disabled_at: null,
-      disabled_by: null,
-      status: "active" as const,
-      open_tokens: 0,
+      email, name, role, engineering_lead: false, created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
+      id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
     };
     db.members.push(m);
     return m.id;
@@ -1437,9 +877,7 @@ function seedSimpleDecidersScenario(): Db {
     commenter: join("cory.hale@example.com", "Cory Hale", "commenter", 2),
     viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
   });
-  db.simple_roadmap.people = Object.fromEntries(
-    db.members.map((m) => [m.id, m.name ?? m.email]),
-  );
+  db.simple_roadmap.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
   return db;
 }
 
@@ -1452,18 +890,7 @@ function seedSimpleHomeMilestonesScenario(): Db {
   const rm = db.simple_roadmap!;
   for (let i = 1; i <= 10; i++) {
     const key = `setup-step-${i}`;
-    rm.items.push({
-      key,
-      title: `Setup step ${i}`,
-      horizon: "now",
-      roadmap: "onboarding-roadmap",
-      track: "onboarding",
-      confidence: "medium",
-      start: 5 * i,
-      end: 5 * i + 20,
-      source: "typed",
-      milestone: { name: `Step ${i}`, day: 5 * i + 20 },
-    });
+    rm.items.push({ key, title: `Setup step ${i}`, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { name: `Step ${i}`, day: 5 * i + 20 } });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
   return db;
@@ -1478,8 +905,7 @@ function seedSimpleHomeOnePrdScenario(): Db {
   for (const i of db.simple_roadmap!.items) {
     if (i.roadmap === "onboarding-roadmap") continue;
     // An undated item would be estimated into this quarter: dated after it instead.
-    if (i.start == null || i.end == null)
-      Object.assign(i, { start: 180, end: 220, source: "typed" });
+    if (i.start == null || i.end == null) Object.assign(i, { start: 180, end: 220, source: "typed" });
     else Object.assign(i, { start: i.start + 180, end: i.end + 180 });
     if (i.milestone) i.milestone.day += 180;
   }
@@ -1499,78 +925,31 @@ function seedSimpleWalkScenario(): Db {
   const M1 = "M1 · Measure it, make it safe";
   const M2 = "M2 · Ship to beta";
   const noted: [string, string, number, number, string, number][] = [
-    [
-      "walk-export",
-      "Baseline export",
-      5,
-      40,
-      `${M1} (baseline needs the export); Alert digest in ${M2}`,
-      45,
-    ],
+    ["walk-export", "Baseline export", 5, 40, `${M1} (baseline needs the export); Alert digest in ${M2}`, 45],
     ["walk-dry-run", "Dry run", 10, 45, `${M1} (owner asks for a dry run)`, 45],
     ["walk-audit", "Setup audit", 15, 35, `${M1}; follow-up in M3`, 45],
     ["walk-invites", "Beta invites", 45, 70, `${M2} (two teams first)`, 75],
     ["walk-feedback", "Beta feedback form", 50, 65, M2, 75],
   ];
   for (const [key, title, start, end, name, day] of noted) {
-    rm.items.push({
-      key,
-      title,
-      horizon: "now",
-      roadmap: "onboarding-roadmap",
-      track: "onboarding",
-      confidence: "medium",
-      start,
-      end,
-      source: "typed",
-      milestone: { name, day },
-    });
+    rm.items.push({ key, title, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start, end, source: "typed", milestone: { name, day } });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
   // A track milestone record naming three items: two whose own texts differ, one with none.
   const linked: [string, string, number, number, string | null][] = [
-    [
-      "walk-beta-two",
-      "Beta for two teams",
-      55,
-      80,
-      "Beta launch, two teams first",
-    ],
+    ["walk-beta-two", "Beta for two teams", 55, 80, "Beta launch, two teams first"],
     ["walk-beta-legal", "Beta terms", 60, 85, "Beta launch - after legal"],
     ["walk-beta-docs", "Beta docs", 60, 80, null],
   ];
   for (const [key, title, start, end, name] of linked) {
-    rm.items.push({
-      key,
-      title,
-      horizon: "now",
-      roadmap: "onboarding-roadmap",
-      track: "onboarding",
-      confidence: "medium",
-      start,
-      end,
-      source: "typed",
-      record: "Beta launch",
-      ...(name ? { milestone: { name, day: 90 } } : {}),
-    });
+    rm.items.push({ key, title, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start, end, source: "typed", record: "Beta launch", ...(name ? { milestone: { name, day: 90 } } : {}) });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
   db.simple_one_pager = seedWalkOnePager();
   // P4: Guided setup was brought in by the Approver, not the company's owner: its owner.
-  db.simple_one_pager.owner = db.members.find(
-    (m) => m.email === "approver@example.com",
-  )?.id;
-  const skeleton = db.documents.find(
-    (d) => d.kind === "prd" && d.slug === "checkout-redesign",
-  );
-  if (skeleton)
-    db.simple_one_pagers = {
-      [skeleton.id]: seedSkeletonOnePager({
-        id: skeleton.id,
-        slug: skeleton.slug,
-        title: skeleton.title,
-      }),
-    };
+  db.simple_one_pager.owner = db.members.find((m) => m.email === "approver@example.com")?.id;
+  const skeleton = db.documents.find((d) => d.kind === "prd" && d.slug === "checkout-redesign");
+  if (skeleton) db.simple_one_pagers = { [skeleton.id]: seedSkeletonOnePager({ id: skeleton.id, slug: skeleton.slug, title: skeleton.title }) };
   return db;
 }
 
@@ -1590,21 +969,10 @@ function seedSimplePlanScenario(datedAll = false): Db {
   const rm = db.simple_roadmap!;
   rm.plan = seedPlan();
   const w = simpleWindows(new Date(mockNowMs()).toISOString().slice(0, 10));
-  const days = (from: string, to: string) =>
-    Math.round(
-      (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) /
-        86_400_000,
-    );
+  const days = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
   const byFeature = new Map<string, ReturnType<typeof planSlices>>();
-  for (const x of planSlices())
-    byFeature.set(x.feature_code, [
-      ...(byFeature.get(x.feature_code) ?? []),
-      x,
-    ]);
-  const existing: Record<string, string> = {
-    "F-01": "setup-checklist",
-    "F-02": "setup-import",
-  };
+  for (const x of planSlices()) byFeature.set(x.feature_code, [...(byFeature.get(x.feature_code) ?? []), x]);
+  const existing: Record<string, string> = { "F-01": "setup-checklist", "F-02": "setup-import" };
   for (const [code, of] of byFeature) {
     const section = code.toLowerCase();
     const key = existing[code];
@@ -1614,35 +982,15 @@ function seedSimplePlanScenario(datedAll = false): Db {
       continue;
     }
     const start = of.map((x) => x.start_date!).sort()[0];
-    const end = of
-      .map((x) => x.end_date!)
-      .sort()
-      .at(-1)!;
+    const end = of.map((x) => x.end_date!).sort().at(-1)!;
     const horizon = start <= w.now[1] ? "now" : "next";
     const from = w[horizon][0];
     const k = `plan-${section}`;
     const name = planFeatureName(code) ?? of[0].name;
     // Team invites (F-05, a slice in M1 and one in M2) and Self-serve checkout (F-11, roadmap-gantt) have no dates of their own:
     // Oracle's date suggestions for them, in the tray's "Dates to confirm", are their slices'.
-    const dated =
-      !datedAll && (code === "F-05" || code === UNDATED_PLAN_FEATURE)
-        ? {}
-        : {
-            start: days(from, start),
-            end: days(from, end),
-            source: "typed" as const,
-          };
-    rm.items.push({
-      key: k,
-      title: name,
-      horizon,
-      roadmap: "onboarding-roadmap",
-      track: "onboarding",
-      confidence: "medium",
-      ...dated,
-      section,
-      heading: `${code} ${name}`,
-    });
+    const dated = !datedAll && (code === "F-05" || code === UNDATED_PLAN_FEATURE) ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
+    rm.items.push({ key: k, title: name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", ...dated, section, heading: `${code} ${name}` });
     rm.ids[k] = stableUuid(`simple-item/${k}`);
   }
   db.simple_one_pager = seedOnePager();
@@ -1651,16 +999,8 @@ function seedSimplePlanScenario(datedAll = false): Db {
   // is approved, as the one-pager reads (qa-simple-prd-9).
   const at = "2026-10-20T15:05:00Z";
   db.documents.push({
-    id: db.simple_one_pager.doc.id,
-    slug: PLAN_PRD_SLUG,
-    title: db.simple_one_pager.doc.title,
-    status: "approved",
-    kind: "prd",
-    template: null,
-    template_version: null,
-    theme: null,
-    created_at: at,
-    updated_at: at,
+    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "approved", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   return db;
 }
@@ -1675,17 +1015,7 @@ function seedSimplePlanScenario(datedAll = false): Db {
 function seedSimplePlanLanesScenario(): Db {
   const db = seedSimplePlanScenario(true);
   const rm = db.simple_roadmap!;
-  const gone = new Set(
-    rm.items
-      .filter(
-        (x) =>
-          x.roadmap === "onboarding-roadmap" &&
-          x.key !== "setup-checklist" &&
-          x.key !== "setup-import" &&
-          !x.key.startsWith("plan-"),
-      )
-      .map((x) => x.key),
-  );
+  const gone = new Set(rm.items.filter((x) => x.roadmap === "onboarding-roadmap" && x.key !== "setup-checklist" && x.key !== "setup-import" && !x.key.startsWith("plan-")).map((x) => x.key));
   rm.items = rm.items.filter((x) => !gone.has(x.key));
   for (const k of gone) delete rm.ids[k];
   for (const x of rm.items) {
@@ -1695,8 +1025,7 @@ function seedSimplePlanLanesScenario(): Db {
       delete x.risks;
     }
   }
-  if (rm.key_dates)
-    rm.key_dates = { ...rm.key_dates, "onboarding-roadmap": [] };
+  if (rm.key_dates) rm.key_dates = { ...rm.key_dates, "onboarding-roadmap": [] };
   return db;
 }
 
@@ -1725,93 +1054,19 @@ function seedSimpleHomeScenario(): Db {
   const db = seed();
   db.simple_roadmap = seedSimpleRoadmap();
   const template = db.baseline.entities.find((e) => e.type === "goal")!;
-  for (const e of db.baseline.entities)
-    if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
+  for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
   const goal = (key: string, title: string, attrs: Record<string, unknown>) =>
-    db.baseline.entities.push({
-      ...template,
-      id: stableUuid(`simple-goal/${key}`),
-      key,
-      title,
-      body: null,
-      attrs,
-      status: "confirmed",
-      locked: false,
-      locked_by: null,
-      locked_at: null,
-    });
-  goal("grow-retention", "G-R Grow retention", {
-    metric: "teams with weekly alerts on",
-    unit: "teams",
-    comparison: "at_least",
-    start: 50,
-    current: 100,
-    current_as_of: "2026-10-01",
-    target: 200,
-    weight: 3,
-    horizon: "medium",
-  });
-  goal("faster-activation", "G-A Faster activation", {
-    metric: "monthly revenue from teams set up in a day",
-    unit: "USD",
-    comparison: "at_least",
-    start: 30000,
-    target: 50000,
-    weight: 2,
-    horizon: "short",
-  });
-  goal("quiet-alerts", "G-Q Keep alerts quiet", {
-    metric: "teams muting alerts",
-    unit: "teams",
-    comparison: "at_most",
-    start: 12,
-    target: 10,
-    weight: 1,
-    horizon: "short",
-    guardrail: true,
-  });
-  const owners = db.members
-    .filter((m) => m.role === "owner" && m.status !== "disabled")
-    .map((m) => m.id);
+    db.baseline.entities.push({ ...template, id: stableUuid(`simple-goal/${key}`), key, title, body: null, attrs, status: "confirmed", locked: false, locked_by: null, locked_at: null });
+  goal("grow-retention", "G-R Grow retention", { metric: "teams with weekly alerts on", unit: "teams", comparison: "at_least", start: 50, current: 100, current_as_of: "2026-10-01", target: 200, weight: 3, horizon: "medium" });
+  goal("faster-activation", "G-A Faster activation", { metric: "monthly revenue from teams set up in a day", unit: "USD", comparison: "at_least", start: 30000, target: 50000, weight: 2, horizon: "short" });
+  goal("quiet-alerts", "G-Q Keep alerts quiet", { metric: "teams muting alerts", unit: "teams", comparison: "at_most", start: 12, target: 10, weight: 1, horizon: "short", guardrail: true });
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
   const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
-  const commenter = db.members.find(
-    (m) => m.email === "commenter@example.com",
-  )!;
-  const who = {
-    id: commenter.id,
-    name: commenter.name ?? commenter.email,
-    owners,
-    roles,
-  };
-  seedSimpleProposal(
-    db.simple_roadmap,
-    who,
-    "edit_title",
-    "alert-export",
-    { title: "Alert history export" },
-    { title: "Alert history as CSV" },
-    "2026-10-26T15:00:00Z",
-    "Says what people get",
-  );
-  seedSimpleProposal(
-    db.simple_roadmap,
-    who,
-    "change_horizon",
-    "setup-ideas",
-    { horizon: "next" },
-    { horizon: "now" },
-    "2026-10-26T16:30:00Z",
-  );
-  seedSimpleProposal(
-    db.simple_roadmap,
-    who,
-    "add_item_task",
-    "alert-digest",
-    {},
-    { title: "Digest email for team leads" },
-    "2026-10-26T17:00:00Z",
-    "A new step in the digest flow",
-  );
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
+  seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
+  seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
   return db;
 }
 
@@ -1822,10 +1077,7 @@ function seedSimpleHomeScenario(): Db {
  */
 function seedSimpleSuggestNeedsLookScenario(): Db {
   const db = seedSimpleHomeScenario();
-  db.simple_roadmap!.goal_suggestions = [
-    ...seedGoalSuggestions(),
-    seedHeldGoalSuggestion(),
-  ];
+  db.simple_roadmap!.goal_suggestions = [...seedGoalSuggestions(), seedHeldGoalSuggestion()];
   return db;
 }
 
@@ -1837,33 +1089,15 @@ function seedSimpleSuggestNeedsLookScenario(): Db {
  */
 function seedSimpleSuggestDecidersScenario(): Db {
   const db = seedSimpleHomeScenario();
-  const join = (
-    email: string,
-    name: string,
-    role: "approver" | "commenter",
-    i: number,
-  ) => {
+  const join = (email: string, name: string, role: "approver" | "commenter", i: number) => {
     const m = {
-      email,
-      name,
-      role,
-      engineering_lead: false,
-      created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
-      id: uuid(),
-      disabled_at: null,
-      disabled_by: null,
-      status: "active" as const,
-      open_tokens: 0,
+      email, name, role, engineering_lead: false, created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
+      id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
     };
     db.members.push(m);
     return m.id;
   };
-  const decider = join(
-    "dana.decider@example.com",
-    "Dana Decider",
-    "approver",
-    0,
-  );
+  const decider = join("dana.decider@example.com", "Dana Decider", "approver", 0);
   const approver = join("avery.lane@example.com", "Avery Lane", "approver", 1);
   const quiet = db.baseline.entities.find((e) => e.key === "quiet-alerts")!;
   const attrs = { ...(quiet.attrs as Record<string, unknown>) };
@@ -1871,9 +1105,7 @@ function seedSimpleSuggestDecidersScenario(): Db {
   quiet.attrs = attrs;
   db.simple_roadmap!.deciders = { "pricing-roadmap": decider };
   db.simple_roadmap!.track_owners = { alerts: approver };
-  db.simple_roadmap!.people = Object.fromEntries(
-    db.members.map((m) => [m.id, m.name ?? m.email]),
-  );
+  db.simple_roadmap!.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
   return db;
 }
 
@@ -1884,48 +1116,21 @@ function seedSimpleSuggestDecidersScenario(): Db {
  */
 function seedSimpleHomeDecidersScenario(): Db {
   const db = seedSimpleDecidersScenario();
-  const owners = db.members
-    .filter((m) => m.role === "owner" && m.status !== "disabled")
-    .map((m) => m.id);
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
   const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
-  const commenter = db.members.find(
-    (m) => m.email === "commenter@example.com",
-  )!;
-  const who = {
-    id: commenter.id,
-    name: commenter.name ?? commenter.email,
-    owners,
-    roles,
-  };
-  seedSimpleProposal(
-    db.simple_roadmap!,
-    who,
-    "edit_title",
-    "price-tiers",
-    { title: "New plan tiers" },
-    { title: "New plan tiers, yearly" },
-    "2026-10-26T15:00:00Z",
-  );
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  seedSimpleProposal(db.simple_roadmap!, who, "edit_title", "price-tiers", { title: "New plan tiers" }, { title: "New plan tiers, yearly" }, "2026-10-26T15:00:00Z");
   return db;
 }
 
 function seedManyPeople(): Db {
   const db = seedQuestions();
   const join = (email: string, i: number) => ({
-    email,
-    role: "commenter" as const,
-    engineering_lead: false,
-    created_at: `2026-09-${String(5 + i).padStart(2, "0")}T09:00:00Z`,
-    id: uuid(),
-    disabled_at: null,
-    disabled_by: null,
-    status: "active" as const,
-    open_tokens: 0,
+    email, role: "commenter" as const, engineering_lead: false, created_at: `2026-09-${String(5 + i).padStart(2, "0")}T09:00:00Z`,
+    id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
   });
-  for (let i = 0; i < 20; i++)
-    db.members.push(
-      join(`member.${String(i).padStart(2, "0")}@example.com`, i),
-    );
+  for (let i = 0; i < 20; i++) db.members.push(join(`member.${String(i).padStart(2, "0")}@example.com`, i));
   db.members.push(join("zoe.zimmer@example.com", 20));
   return db;
 }
@@ -1943,9 +1148,7 @@ function seedNoStrategyScenario(): Db {
  */
 function seedStrategyScenario(vision = true): Db {
   const db = seed();
-  for (const d of STRATEGY_DOCUMENTS.filter(
-    (x) => vision || x.kind !== "vision",
-  )) {
+  for (const d of STRATEGY_DOCUMENTS.filter((x) => vision || x.kind !== "vision")) {
     const doc: DocumentRow = {
       id: uuid(),
       slug: d.slug,
@@ -1999,20 +1202,11 @@ function seedSuggestions(): Db {
   for (const v of FLEET_DOC.versions) db.versions.push(buildVersion(doc, v));
   const v1 = findVersion(db, doc, 1)!;
   const v2 = findVersion(db, doc, 2)!;
-  addComment(
-    db,
-    v1,
-    {
-      section_key: "problem",
-      anchor: {
-        exact: "so many are out when the driver comes",
-        prefix: "arrive, ",
-        suffix: ".",
-      },
-      body: "How many first attempts fail today? Put the number in.",
-    },
-    { created_at: "2026-10-17T11:00:00Z" },
-  );
+  addComment(db, v1, {
+    section_key: "problem",
+    anchor: { exact: "so many are out when the driver comes", prefix: "arrive, ", suffix: "." },
+    body: "How many first attempts fail today? Put the number in.",
+  }, { created_at: "2026-10-17T11:00:00Z" });
   Object.assign(db.feedback.at(-1)!, {
     status: "addressed",
     addressed_in_version: 2,
@@ -2067,31 +1261,17 @@ function seedSuggestions(): Db {
   // D14: a question Oracle answered and a remark with nothing to change, on Team workspaces,
   // so the Inbox has a row of every kind to act on (Send answer, Close).
   const w2 = findVersion(db, findDocument(db, "team-workspaces")!, 2)!;
-  const replies: [
-    string,
-    Schemas["TextQuoteSelector"],
-    "answer" | "none",
-    string | null,
-    string,
-  ][] = [
+  const replies: [string, Schemas["TextQuoteSelector"], "answer" | "none", string | null, string][] = [
     [
       "Who can see a workspace's billing page?",
-      {
-        exact: "One invoice per workspace",
-        prefix: "",
-        suffix: ", with seats",
-      },
+      { exact: "One invoice per workspace", prefix: "", suffix: ", with seats" },
       "answer",
       "Workspace owners and billing admins see it; members do not.",
       "The roles section says who manages billing.",
     ],
     [
       "The scope reads well as it is.",
-      {
-        exact: "Move existing projects into a workspace",
-        prefix: "",
-        suffix: ".",
-      },
+      { exact: "Move existing projects into a workspace", prefix: "", suffix: "." },
       "none",
       null,
       "A remark that approves the section: nothing to change.",
@@ -2138,10 +1318,7 @@ function specsSeed(db: Db): SpecsDb {
     return m && { id: m.id, name: displayName(m.email, m.name) };
   };
   const admin = person("admin@example.com");
-  const named =
-    localStorage.getItem(MOCK_SCENARIO_KEY) === "design-named-approver" && admin
-      ? [admin]
-      : [];
+  const named = localStorage.getItem(MOCK_SCENARIO_KEY) === "design-named-approver" && admin ? [admin] : [];
   return seedSpecs({ approver: person("approver@example.com"), named });
 }
 
@@ -2152,14 +1329,8 @@ function specActorName(db: Db, id: string): string | null {
 }
 
 /** qa4-docs-39: a feedback item with its author's name, as the API's feedback_out (author_names). */
-function withAuthorName<T extends { author_id?: string | null }>(
-  db: Db,
-  f: T,
-): T & { author_name: string | null } {
-  return {
-    ...f,
-    author_name: f.author_id ? specActorName(db, f.author_id) : null,
-  };
+function withAuthorName<T extends { author_id?: string | null }>(db: Db, f: T): T & { author_name: string | null } {
+  return { ...f, author_name: f.author_id ? specActorName(db, f.author_id) : null };
 }
 
 /**
@@ -2168,9 +1339,7 @@ function withAuthorName<T extends { author_id?: string | null }>(
  */
 function seedEngReview(): Db {
   const db = seed();
-  db.members.find(
-    (x) => x.email === "commenter@example.com",
-  )!.engineering_lead = true;
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded("eng-review", () => seedEngReviewRun(db.runs!, runsContext(db)));
   return db;
 }
@@ -2181,9 +1350,7 @@ function seedEngReview(): Db {
  */
 function seedEngCheck(): Db {
   const db = seed();
-  db.members.find(
-    (x) => x.email === "commenter@example.com",
-  )!.engineering_lead = true;
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded("eng-check", () => seedEngCheckRun(db.runs!, runsContext(db)));
   return db;
 }
@@ -2195,9 +1362,7 @@ function seedEngCheck(): Db {
  */
 function seedEngDates(): Db {
   const db = seed();
-  db.members.find(
-    (x) => x.email === "commenter@example.com",
-  )!.engineering_lead = true;
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded("eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db)));
   return db;
 }
@@ -2205,48 +1370,27 @@ function seedEngDates(): Db {
 /** "eng-check-unmapped" scenario: the "eng-check" run whose briefs cite ids of a repository with no code map. */
 function seedEngCheckUnmapped(): Db {
   const db = seed();
-  db.members.find(
-    (x) => x.email === "commenter@example.com",
-  )!.engineering_lead = true;
-  seeded("eng-check-unmapped", () =>
-    seedEngCheckUnmappedRun(db.runs!, runsContext(db)),
-  );
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-check-unmapped", () => seedEngCheckUnmappedRun(db.runs!, runsContext(db)));
   return db;
 }
 
 /** "eng-check-unnamed" scenario: as "eng-check-unmapped", but the briefs do not name the repository with no map. */
 function seedEngCheckUnnamed(): Db {
   const db = seed();
-  db.members.find(
-    (x) => x.email === "commenter@example.com",
-  )!.engineering_lead = true;
-  seeded("eng-check-unnamed", () =>
-    seedEngCheckUnmappedRun(db.runs!, runsContext(db), false),
-  );
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
+  seeded("eng-check-unnamed", () => seedEngCheckUnmappedRun(db.runs!, runsContext(db), false));
   return db;
 }
 
 /** The "eng-check" run with its Engineering check's briefs changed by `change` (the scenarios below). */
-function seedEngCheckWith(
-  label: string,
-  change: (check: {
-    features: { key: string }[];
-    problems: unknown[];
-    code_map_used: boolean;
-  }) => void,
-): Db {
+function seedEngCheckWith(label: string, change: (check: { features: { key: string }[]; problems: unknown[]; code_map_used: boolean }) => void): Db {
   const db = seed();
-  db.members.find(
-    (x) => x.email === "commenter@example.com",
-  )!.engineering_lead = true;
+  db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
   seeded(label, () => {
     const r = seedEngCheckRun(db.runs!, runsContext(db));
-    const cp = r.checkpoints.find(
-      (c) => c.status === "pending" && c.kind === "eng_review",
-    )!;
-    const payload = cp.payload as {
-      briefs_check: Parameters<typeof change>[0];
-    };
+    const cp = r.checkpoints.find((c) => c.status === "pending" && c.kind === "eng_review")!;
+    const payload = cp.payload as { briefs_check: Parameters<typeof change>[0] };
     payload.briefs_check = JSON.parse(JSON.stringify(payload.briefs_check));
     change(payload.briefs_check);
     return r;
@@ -2262,16 +1406,13 @@ function seedEngCheckWith(
 const seedEngCheckUnreadable = () =>
   seedEngCheckWith("eng-check-unreadable", (check) => {
     check.features = [];
-    check.problems = [
-      { code: "missing_file", message: "the segment left no tech_briefs.yaml" },
-    ];
+    check.problems = [{ code: "missing_file", message: "the segment left no tech_briefs.yaml" }];
   });
 
 /** "eng-check-long-key" scenario: the "eng-check" run whose first brief has a long key with no break in it. */
 const seedEngCheckLongKey = () =>
   seedEngCheckWith("eng-check-long-key", (check) => {
-    check.features[0].key =
-      "f.guided_setup_with_test_order_and_sample_catalogue";
+    check.features[0].key = "f.guided_setup_with_test_order_and_sample_catalogue";
   });
 
 /** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
@@ -2288,13 +1429,9 @@ function seedEngCheckNoLead(): Db {
  */
 function seedBaselineReview(consoleHeld: boolean): Db {
   const db = seed();
-  const run = seeded("baseline-review", () =>
-    seedBaselineReviewRun(db.runs!, runsContext(db), consoleHeld),
-  );
+  const run = seeded("baseline-review", () => seedBaselineReviewRun(db.runs!, runsContext(db), consoleHeld));
   const lead = db.members.find((m) => m.email === "approver@example.com")!.id;
-  seeded("baseline-review-items", () =>
-    seedFromRun(db.baseline, run.id, uuid, lead),
-  );
+  seeded("baseline-review-items", () => seedFromRun(db.baseline, run.id, uuid, lead));
   return db;
 }
 
@@ -2330,21 +1467,10 @@ function seedRunReviewDecider(): Db {
   const db = seedRunReview();
   const doc = db.documents.find((d) => d.slug === "usage-alerts")!;
   const prd = db.documents.find((d) => d.kind === "prd");
-  db.review_v2 = seedReviewV2(
-    prd,
-    prd ? docVersions(db, prd).pop() : undefined,
-    db.user_id,
-    hash,
-  );
+  db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
   db.review_v2.policies.push({
-    document_id: doc.id,
-    decider_id: db.members.find((m) => m.email === "approver@example.com")!.id,
-    mandatory_reviewer_ids: [],
-    required_section_keys: [],
-    section_approval: "required_sections",
-    rereview_on_change: true,
-    source: "document",
-    lock_version: 1,
+    document_id: doc.id, decider_id: db.members.find((m) => m.email === "approver@example.com")!.id, mandatory_reviewer_ids: [],
+    required_section_keys: [], section_approval: "required_sections", rereview_on_change: true, source: "document", lock_version: 1,
   });
   return db;
 }
@@ -2359,9 +1485,7 @@ function seedFeatureSet(): Db {
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
 function seedScopeReview(kept = false): Db {
   const db = seed();
-  seeded("scope-review", () =>
-    seedScopeReviewRuns(db.runs!, runsContext(db), kept),
-  );
+  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept));
   return db;
 }
 
@@ -2373,111 +1497,33 @@ function seedScopeReview(kept = false): Db {
 function scopeToBaseline(db: Db, scope: StoredScope, by: string) {
   const at = new Date().toISOString();
   const s = db.baseline;
-  const base = {
-    origin: "user" as const,
-    locked: true,
-    locked_by: by,
-    locked_at: at,
-    confidence: null,
-    run_id: scope.run_id,
-    created_at: at,
-    updated_at: at,
-  };
+  const base = { origin: "user" as const, locked: true, locked_by: by, locked_at: at, confidence: null, run_id: scope.run_id, created_at: at, updated_at: at };
   for (const { feature, requirement, added } of personRequirements(scope)) {
-    let f = s.entities.find(
-      (e) =>
-        e.type === "feature" &&
-        (e.id === feature.entity_id ||
-          e.key === feature.key ||
-          e.key === `f.${feature.key}`),
-    );
+    let f = s.entities.find((e) => e.type === "feature" && (e.id === feature.entity_id || e.key === feature.key || e.key === `f.${feature.key}`));
     if (!f) {
-      f = {
-        id: uuid(),
-        type: "feature",
-        key: feature.key,
-        title: feature.title,
-        body: feature.text ?? null,
-        attrs: {},
-        status: "proposed",
-        origin: "agent",
-        locked: false,
-        locked_by: null,
-        locked_at: null,
-        confidence: feature.confidence ?? null,
-        run_id: scope.run_id,
-        created_at: at,
-        updated_at: at,
-      };
+      f = { id: uuid(), type: "feature", key: feature.key, title: feature.title, body: feature.text ?? null, attrs: {}, status: "proposed", origin: "agent", locked: false, locked_by: null, locked_at: null, confidence: feature.confidence ?? null, run_id: scope.run_id, created_at: at, updated_at: at };
       s.entities.push(f);
       // As the API: the agents' open proposal to create it is withdrawn (never listed again).
       const made = (p: (typeof s.proposals)[number]) => {
-        const fields = (p.payload.fields ?? {}) as {
-          type?: string;
-          key?: string;
-        };
-        return (
-          p.status === "open" &&
-          p.payload.op === "create" &&
-          p.payload.kind === "entity" &&
-          fields.type === "feature" &&
-          fields.key === feature.key
-        );
+        const fields = (p.payload.fields ?? {}) as { type?: string; key?: string };
+        return p.status === "open" && p.payload.op === "create" && p.payload.kind === "entity" && fields.type === "feature" && fields.key === feature.key;
       };
       s.proposals = s.proposals.filter((p) => !made(p));
     }
     const text = requirement.text ?? requirement.title;
-    const attrs = {
-      feature: feature.key,
-      goals: feature.goals.map((g) => g.key),
-      acceptance: requirement.acceptance,
-      from_scope: scope.id,
-    };
-    const existing =
-      !added && requirement.entity_id
-        ? s.entities.find((e) => e.id === requirement.entity_id)
-        : undefined;
+    const attrs = { feature: feature.key, goals: feature.goals.map((g) => g.key), acceptance: requirement.acceptance, from_scope: scope.id };
+    const existing = !added && requirement.entity_id ? s.entities.find((e) => e.id === requirement.entity_id) : undefined;
     if (existing) {
-      Object.assign(existing, {
-        body: text,
-        attrs: { ...existing.attrs, acceptance: requirement.acceptance },
-        locked: true,
-        locked_by: by,
-        locked_at: at,
-        updated_at: at,
-      });
+      Object.assign(existing, { body: text, attrs: { ...existing.attrs, acceptance: requirement.acceptance }, locked: true, locked_by: by, locked_at: at, updated_at: at });
       continue;
     }
-    const slug =
-      text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-        .slice(0, 60) || "requirement";
+    const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "requirement";
     let key = `r.${slug}`;
-    for (let n = 2; s.entities.some((e) => e.key === key); n++)
-      key = `r.${slug}-${n}`;
-    const entity = {
-      ...base,
-      id: uuid(),
-      type: "requirement" as const,
-      key,
-      title: text.slice(0, 80),
-      body: text,
-      attrs,
-      status: "confirmed" as const,
-    };
+    for (let n = 2; s.entities.some((e) => e.key === key); n++) key = `r.${slug}-${n}`;
+    const entity = { ...base, id: uuid(), type: "requirement" as const, key, title: text.slice(0, 80), body: text, attrs, status: "confirmed" as const };
     s.entities.push(entity);
     requirement.entity_id = entity.id;
-    s.edges.push({
-      ...base,
-      id: uuid(),
-      src_id: entity.id,
-      dst_id: f.id,
-      type: "part_of",
-      attrs: {},
-      status: "confirmed",
-    });
+    s.edges.push({ ...base, id: uuid(), src_id: entity.id, dst_id: f.id, type: "part_of", attrs: {}, status: "confirmed" });
   }
 }
 
@@ -2490,16 +1536,8 @@ function seedPriorityOrder(): Db {
   const db = seed();
   const at = "2026-10-18T09:00:00Z";
   db.documents.push({
-    id: uuid(),
-    slug: "saved-addresses",
-    title: "Saved addresses PRD",
-    status: "draft",
-    kind: "prd",
-    template: null,
-    template_version: null,
-    theme: null,
-    created_at: at,
-    updated_at: at,
+    id: uuid(), slug: "saved-addresses", title: "Saved addresses PRD", status: "draft", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   seeded("priority-order", () => seedPriorityRuns(db.runs!, runsContext(db)));
   return db;
@@ -2529,12 +1567,7 @@ function seedNextDraft(costly: boolean): Db {
   for (const v of FLEET_DOC.versions) db.versions.push(buildVersion(doc, v));
   const v2 = findVersion(db, doc, 2)!;
   const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
-  const item = (
-    key: string | null,
-    summary: string,
-    created_at: string,
-    staged = false,
-  ): FeedbackRow => {
+  const item = (key: string | null, summary: string, created_at: string, staged = false): FeedbackRow => {
     const f: FeedbackRow = {
       id: uuid(),
       document_id: doc.id,
@@ -2584,12 +1617,7 @@ function seedNextDraft(costly: boolean): Db {
       updated_at: created_at,
     });
   });
-  item(
-    null,
-    "The draft never says how drivers learn the new app.",
-    "2026-10-19T10:05:00Z",
-    true,
-  );
+  item(null, "The draft never says how drivers learn the new app.", "2026-10-19T10:05:00Z", true);
   item(null, "Say which fleets join the pilot first.", "2026-10-19T10:06:00Z");
   if (costly) db.next_draft_run_usd = 64;
   return db;
@@ -2633,22 +1661,12 @@ function seedBigPrd(): Db {
   const v = buildVersion(row, BIG_PRD.versions[0]);
   db.versions.push(v);
   const at = "2026-10-19T10:00:00Z";
-  for (const [key, r] of Object.entries(BIG_PRD_REVIEWS))
-    addReview(db, v, key, r, { created_at: at });
+  for (const [key, r] of Object.entries(BIG_PRD_REVIEWS)) addReview(db, v, key, r, { created_at: at });
   const comments = BIG_PRD_COMMENTS.map(([key, exact, text], i) => {
     const plain = v.sections.find((s) => s.section_key === key)!.body_text;
     const start = plain.indexOf(exact);
-    const anchor = {
-      exact,
-      prefix: plain.slice(Math.max(0, start - 32), start),
-      suffix: plain.slice(start + exact.length, start + exact.length + 32),
-    };
-    return addComment(
-      db,
-      v,
-      { section_key: key, anchor, body: text },
-      { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` },
-    );
+    const anchor = { exact, prefix: plain.slice(Math.max(0, start - 32), start), suffix: plain.slice(start + exact.length, start + exact.length + 32) };
+    return addComment(db, v, { section_key: key, anchor, body: text }, { created_at: `2026-10-19T11:${String(10 + i).padStart(2, "0")}:00Z` });
   });
   const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
   for (const s of BIG_PRD_SUGGESTIONS) {
@@ -2677,15 +1695,10 @@ function seedBigPrd(): Db {
       updated_at: at,
     });
     // Dismissed with "decline the feedback".
-    if (s.status === "dismissed")
-      Object.assign(
-        db.feedback.find((f) => f.id === c.feedback_item_id)!,
-        { status: "declined", resolution_note: "Kept as written." },
-      );
+    if (s.status === "dismissed") Object.assign(db.feedback.find((f) => f.id === c.feedback_item_id)!, { status: "declined", resolution_note: "Kept as written." });
   }
   // One resolved thread: Done.
-  comments.find((c) => c.body.startsWith("List the shortcuts"))!.resolved_at =
-    at;
+  comments.find((c) => c.body.startsWith("List the shortcuts"))!.resolved_at = at;
   return db;
 }
 
@@ -2713,20 +1726,11 @@ function seed(): Db {
     open_tokens: 0,
   }));
   // The seeded commenter proposal is the commenter's (B4 names who made it).
-  attributeCommenterProposal(
-    db.baseline,
-    db.members.find((m) => m.email === "commenter@example.com")!.id,
-  );
+  attributeCommenterProposal(db.baseline, db.members.find((m) => m.email === "commenter@example.com")!.id);
   // B5: activation's owner is the approver.
-  attributeGoalOwner(
-    db.baseline,
-    db.members.find((m) => m.email === "approver@example.com")!.id,
-  );
+  attributeGoalOwner(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   // The colleague who locked the seeded items is the approver (#505: the lock names a person).
-  attributeLocks(
-    db.baseline,
-    db.members.find((m) => m.email === "approver@example.com")!.id,
-  );
+  attributeLocks(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   // A member removed two days ago (C2): kept, so history keeps the name; an owner can restore.
   db.members.push({
     ...REMOVED_MEMBER,
@@ -2748,9 +1752,7 @@ function seed(): Db {
     email_at: i.created_at,
     sign_in_url: signInUrl(),
     // A5: 14 days from creation.
-    expires_at: new Date(
-      Date.parse(i.created_at) + 14 * 86_400_000,
-    ).toISOString(),
+    expires_at: new Date(Date.parse(i.created_at) + 14 * 86_400_000).toISOString(),
     resend_count: 0,
   }));
   const docs = new Map<string, DocumentRow>();
@@ -2778,63 +1780,33 @@ function seed(): Db {
 
   // Checkout redesign: v1 was reviewed, v2 answered that feedback.
   const c1 = ver("checkout-redesign", 1);
-  addComment(
-    db,
-    c1,
-    {
-      section_key: "problem",
-      anchor: {
-        exact: "Most abandonment happens at the shipping step",
-        prefix:
-          "Buyers leave checkout when the total changes late in the flow. ",
-        suffix: ", right after shipping cost appears",
-      },
-      body: "Can we put a number on this? A funnel figure would make the case much stronger.",
+  addComment(db, c1, {
+    section_key: "problem",
+    anchor: {
+      exact: "Most abandonment happens at the shipping step",
+      prefix: "Buyers leave checkout when the total changes late in the flow. ",
+      suffix: ", right after shipping cost appears",
     },
-    at("2026-10-16T15:02:00Z"),
-  );
-  addComment(
-    db,
-    c1,
-    {
-      section_key: "s-5-2",
-      anchor: {
-        exact: "Each option shows its price and delivery window",
-        prefix:
-          "Replace the free-text shipping options with three clear choices: standard, express and pickup. ",
-        suffix: " before it is selected.",
-      },
-      body: "Which option is preselected? Defaulting to the cheapest one would match the cart estimate.",
+    body: "Can we put a number on this? A funnel figure would make the case much stronger.",
+  }, at("2026-10-16T15:02:00Z"));
+  addComment(db, c1, {
+    section_key: "s-5-2",
+    anchor: {
+      exact: "Each option shows its price and delivery window",
+      prefix: "Replace the free-text shipping options with three clear choices: standard, express and pickup. ",
+      suffix: " before it is selected.",
     },
-    at("2026-10-16T15:10:00Z"),
-  );
-  addReview(
-    db,
-    c1,
-    "goal-trace",
-    { verdict: "approved", note: "Clear link to G1." },
-    at("2026-10-16T15:20:00Z"),
-  );
-  addReview(
-    db,
-    c1,
-    "metrics",
-    {
-      verdict: "changes_requested",
-      note: "Add a guardrail metric so we notice if a faster checkout increases refunds.",
-    },
-    at("2026-10-16T15:24:00Z"),
-  );
-  addReview(
-    db,
-    c1,
-    "rollout",
-    {
-      verdict: "rejected",
-      note: "Rollout belongs in the launch plan, not in this PRD.",
-    },
-    at("2026-10-16T15:26:00Z"),
-  );
+    body: "Which option is preselected? Defaulting to the cheapest one would match the cart estimate.",
+  }, at("2026-10-16T15:10:00Z"));
+  addReview(db, c1, "goal-trace", { verdict: "approved", note: "Clear link to G1." }, at("2026-10-16T15:20:00Z"));
+  addReview(db, c1, "metrics", {
+    verdict: "changes_requested",
+    note: "Add a guardrail metric so we notice if a faster checkout increases refunds.",
+  }, at("2026-10-16T15:24:00Z"));
+  addReview(db, c1, "rollout", {
+    verdict: "rejected",
+    note: "Rollout belongs in the launch plan, not in this PRD.",
+  }, at("2026-10-16T15:26:00Z"));
   const notes: Record<string, string> = {
     problem: "Added the September funnel numbers to §2.",
     "s-5-2": "The cheapest option is now preselected, see §5.2.",
@@ -2842,12 +1814,7 @@ function seed(): Db {
     rollout: "Removed; the rollout now lives in the launch plan.",
   };
   for (const f of db.feedback) {
-    if (
-      f.raised_on_version === 1 &&
-      f.document_id === c1.document_id &&
-      f.section_key &&
-      notes[f.section_key]
-    ) {
+    if (f.raised_on_version === 1 && f.document_id === c1.document_id && f.section_key && notes[f.section_key]) {
       Object.assign(f, {
         status: "addressed",
         addressed_in_version: 2,
@@ -2856,38 +1823,21 @@ function seed(): Db {
       });
     }
   }
-  addComment(
-    db,
-    ver("checkout-redesign", 2),
-    {
-      section_key: "s-5-3",
-      anchor: {
-        exact: "Choosing a card fills the form",
-        prefix: "eir saved addresses as cards on the shipping step. ",
-        suffix: " and recalculates the shipping options in place.",
-      },
-      body: "Should the most recently used address be selected by default?",
+  addComment(db, ver("checkout-redesign", 2), {
+    section_key: "s-5-3",
+    anchor: {
+      exact: "Choosing a card fills the form",
+      prefix: "eir saved addresses as cards on the shipping step. ",
+      suffix: " and recalculates the shipping options in place.",
     },
-    at("2026-10-17T09:40:00Z"),
-  );
+    body: "Should the most recently used address be selected by default?",
+  }, at("2026-10-17T09:40:00Z"));
   docs.get("checkout-redesign")!.status = "in_review";
 
   // Team workspaces: an approved section changed in v2.
   const w1 = ver("team-workspaces", 1);
-  addReview(
-    db,
-    w1,
-    "roles",
-    { verdict: "approved", note: null },
-    at("2026-10-12T16:00:00Z"),
-  );
-  addReview(
-    db,
-    w1,
-    "scope",
-    { verdict: "approved", note: null },
-    at("2026-10-12T16:02:00Z"),
-  );
+  addReview(db, w1, "roles", { verdict: "approved", note: null }, at("2026-10-12T16:00:00Z"));
+  addReview(db, w1, "scope", { verdict: "approved", note: null }, at("2026-10-12T16:02:00Z"));
   ver("team-workspaces", 2).warnings = [
     {
       code: "locked_section_changed",
@@ -2898,152 +1848,67 @@ function seed(): Db {
   ];
   // Review comments on v2, which Oracle's review job has already handled (./llm-jobs.ts).
   const w2 = ver("team-workspaces", 2);
-  addComment(
-    db,
-    w2,
-    {
-      section_key: "problem",
-      anchor: {
-        exact:
-          "Requests for shared editing come up in most sales conversations",
-        prefix: "around. ",
-        suffix: " with teams",
-      },
-      body: "Say how many teams asked for this; a number would make the case.",
-    },
-    at("2026-10-13T10:50:00Z"),
-  );
-  addComment(
-    db,
-    w2,
-    {
-      section_key: "problem",
-      anchor: {
-        exact: "People share work by exporting files",
-        prefix: "",
-        suffix: " and sending",
-      },
-      body: "Can we quantify the demand from the sales calls?",
-    },
-    at("2026-10-13T10:55:00Z"),
-  );
-  addComment(
-    db,
-    w2,
-    {
-      section_key: "roles",
-      anchor: { exact: "Three fixed roles", prefix: "", suffix: ": owner" },
-      body: "Add custom roles to the first release; big teams will ask for them.",
-    },
-    at("2026-10-13T11:00:00Z"),
-  );
+  addComment(db, w2, {
+    section_key: "problem",
+    anchor: { exact: "Requests for shared editing come up in most sales conversations", prefix: "around. ", suffix: " with teams" },
+    body: "Say how many teams asked for this; a number would make the case.",
+  }, at("2026-10-13T10:50:00Z"));
+  addComment(db, w2, {
+    section_key: "problem",
+    anchor: { exact: "People share work by exporting files", prefix: "", suffix: " and sending" },
+    body: "Can we quantify the demand from the sales calls?",
+  }, at("2026-10-13T10:55:00Z"));
+  addComment(db, w2, {
+    section_key: "roles",
+    anchor: { exact: "Three fixed roles", prefix: "", suffix: ": owner" },
+    body: "Add custom roles to the first release; big teams will ask for them.",
+  }, at("2026-10-13T11:00:00Z"));
   docs.get("team-workspaces")!.status = "in_review";
 
   // Clinic outreach (C1e): feedback in every state; the suggestions are in ./llm-jobs.ts.
-  addComment(
-    db,
-    ver("clinic-outreach", 3),
-    {
-      section_key: "problem",
-      anchor: {
-        exact: "in every pilot clinic",
-        prefix: "from paper lists, ",
-        suffix: ".",
-      },
-      body: "Name the clinics in the pilot.",
-    },
-    at("2026-10-08T12:00:00Z"),
-  );
+  addComment(db, ver("clinic-outreach", 3), {
+    section_key: "problem",
+    anchor: { exact: "in every pilot clinic", prefix: "from paper lists, ", suffix: "." },
+    body: "Name the clinics in the pilot.",
+  }, at("2026-10-08T12:00:00Z"));
   for (const f of db.feedback) {
     if (f.summary === "Name the clinics in the pilot.") {
-      Object.assign(f, {
-        status: "addressed",
-        addressed_in_version: 4,
-        resolution_note: "The three pilot clinics are named in the problem.",
-        updated_at: "2026-10-09T10:00:00Z",
-      });
+      Object.assign(f, { status: "addressed", addressed_in_version: 4, resolution_note: "The three pilot clinics are named in the problem.", updated_at: "2026-10-09T10:00:00Z" });
     }
   }
-  addComment(
-    db,
-    ver("clinic-outreach", 4),
-    {
-      section_key: "goal-trace",
-      anchor: {
-        exact: "Serves G1 activation",
-        prefix: "",
-        suffix: ": more new patients",
-      },
-      body: "Trace this to G2 retention, not activation: these are returning patients.",
-    },
-    at("2026-10-09T15:00:00Z"),
-  );
+  addComment(db, ver("clinic-outreach", 4), {
+    section_key: "goal-trace",
+    anchor: { exact: "Serves G1 activation", prefix: "", suffix: ": more new patients" },
+    body: "Trace this to G2 retention, not activation: these are returning patients.",
+  }, at("2026-10-09T15:00:00Z"));
   const o5 = ver("clinic-outreach", 5);
-  addComment(
-    db,
-    o5,
-    {
-      section_key: "f-38",
-      anchor: {
-        exact: "After each outbound call",
-        prefix: "",
-        suffix: ", the agent checks",
-      },
-      body: "Run the outbound check before the call is placed, not after.",
-    },
-    at("2026-10-18T14:00:00Z"),
-  );
-  addComment(
-    db,
-    o5,
-    {
-      section_key: "problem",
-      anchor: {
-        exact: "40% of missed visits",
-        prefix: "",
-        suffix: " are never rebooked",
-      },
-      body: "Drop the 40% figure; it is from 2024.",
-    },
-    at("2026-10-18T14:20:00Z"),
-  );
-  addComment(
-    db,
-    o5,
-    {
-      section_key: "metrics",
-      anchor: {
-        exact: "Calls per rebooking",
-        prefix: "- ",
-        suffix: ": 3.1 today",
-      },
-      body: "Add a metric that shows the outbound check works.",
-    },
-    at("2026-10-19T09:30:00Z"),
-  );
+  addComment(db, o5, {
+    section_key: "f-38",
+    anchor: { exact: "After each outbound call", prefix: "", suffix: ", the agent checks" },
+    body: "Run the outbound check before the call is placed, not after.",
+  }, at("2026-10-18T14:00:00Z"));
+  addComment(db, o5, {
+    section_key: "problem",
+    anchor: { exact: "40% of missed visits", prefix: "", suffix: " are never rebooked" },
+    body: "Drop the 40% figure; it is from 2024.",
+  }, at("2026-10-18T14:20:00Z"));
+  addComment(db, o5, {
+    section_key: "metrics",
+    anchor: { exact: "Calls per rebooking", prefix: "- ", suffix: ": 3.1 today" },
+    body: "Add a metric that shows the outbound check works.",
+  }, at("2026-10-19T09:30:00Z"));
   docs.get("clinic-outreach")!.status = "in_review";
 
   // Usage alerts: fully approved.
   const a1 = ver("usage-alerts", 1);
-  for (const s of a1.sections)
-    addReview(
-      db,
-      a1,
-      s.section_key,
-      { verdict: "approved", note: null },
-      at("2026-10-03T10:00:00Z"),
-    );
+  for (const s of a1.sections) addReview(db, a1, s.section_key, { verdict: "approved", note: null }, at("2026-10-03T10:00:00Z"));
   a1.approved_at = "2026-10-03T10:05:00Z";
   docs.get("usage-alerts")!.status = "approved";
 
   // Provenance (O4b): roadmap versions record the approved PRD version they came from.
   for (const d of DOCUMENTS as DocumentSeed[]) {
     for (const v of d.versions) {
-      if (v.source)
-        ver(d.slug, v.number).source = versionSource(
-          docs.get(v.source.slug)!,
-          ver(v.source.slug, v.source.version),
-        );
+      if (v.source) ver(d.slug, v.number).source = versionSource(docs.get(v.source.slug)!, ver(v.source.slug, v.source.version));
     }
   }
   // #482 "trash-family": the early shipping cost brief is usage-alerts' tech brief too, so
@@ -3051,25 +1916,16 @@ function seed(): Db {
   // import makes it: through its spec request, with no source on the brief's versions.
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === "trash-family") {
     const brief = docs.get("checkout-redesign-early-shipping-cost-spec")!;
-    for (const v of db.versions)
-      if (v.document_id === brief.id) v.source = null;
+    for (const v of db.versions) if (v.document_id === brief.id) v.source = null;
     db.specs ??= specsSeed(db);
-    for (const s of db.specs.specs)
-      if (s.document_slug === brief.slug)
-        s.request.source_document_id = docs.get("usage-alerts")!.id;
+    for (const s of db.specs.specs) if (s.document_slug === brief.slug) s.request.source_document_id = docs.get("usage-alerts")!.id;
   }
   docs.get("usage-alerts-roadmap")!.status = "in_review";
   db.runs = seeded("runs", () => seedRuns(runsContext(db)));
   db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   seeded("updates", () => seedUpdates(db));
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
-  if (scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO)
-    seeded("sharing", () =>
-      seedSharingRoadmap(
-        db,
-        scenario === SHARING_PUBLIC_SCENARIO ? "public" : "team",
-      ),
-    );
+  if (scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO) seeded("sharing", () => seedSharingRoadmap(db, scenario === SHARING_PUBLIC_SCENARIO ? "public" : "team"));
   return db;
 }
 
@@ -3077,78 +1933,29 @@ function seed(): Db {
 function seedSharingRoadmap(db: Db, audience: "team" | "public") {
   const created = "2026-10-12T09:00:00Z";
   const doc: DocumentRow = {
-    id: uuid(),
-    slug: SHARING_ROADMAP_SLUG,
-    title: SHARING_ROADMAP_TITLE,
-    status: "approved",
-    kind: "roadmap",
-    template: "now-next-later",
-    template_version: "1",
-    theme: null,
-    audience,
-    created_at: created,
-    updated_at: created,
+    id: uuid(), slug: SHARING_ROADMAP_SLUG, title: SHARING_ROADMAP_TITLE, status: "approved", kind: "roadmap", template: "now-next-later",
+    template_version: "1", theme: null, audience, created_at: created, updated_at: created,
   };
   db.documents.push(doc);
-  const v = buildVersion(doc, {
-    number: 1,
-    created_at: created,
-    sections: SHARING_SECTIONS,
-    citations: [],
-    brief: ["summary", "brief-items"],
-  });
+  const v = buildVersion(doc, { number: 1, created_at: created, sections: SHARING_SECTIONS, citations: [], brief: ["summary", "brief-items"] });
   v.approved_at = "2026-10-13T09:00:00Z";
   db.versions.push(v);
   // Its roadmap items (one per card), each traced to a baseline feature: the confirmed goals G1 and G2 as the
   // Goals section says, and Ops console cleanup's feature supporting no confirmed goal. Falcon alerts rework's feature
   // reaches both: its best goal is G2 (the later title, at equal contribution), its group G1 (the first by title).
-  const goal = (key: string, title: string) =>
-    baselineEntity(db, "goal", key, title, created);
+  const goal = (key: string, title: string) => baselineEntity(db, "goal", key, title, created);
   const g1 = goal("g.monthly-churn", "Cut monthly churn to 2%");
   const g2 = goal("g.self-serve", "Grow self-serve sign-ups");
-  const serves: Record<string, BaselineEntity[]> = {
-    "item-falcon": [g2, g1],
-    "item-import": [g2],
-    "item-ledger": [g1],
-    "item-partner": [g2],
-    "item-ops": [],
-  };
+  const serves: Record<string, BaselineEntity[]> = { "item-falcon": [g2, g1], "item-import": [g2], "item-ledger": [g1], "item-partner": [g2], "item-ops": [] };
   const items = sectionItems(db, v).map((i) => {
-    const f = baselineEntity(
-      db,
-      "feature",
-      `f.sharing-${i.item_key.replace(/^item-/, "")}`,
-      i.title,
-      created,
-    );
+    const f = baselineEntity(db, "feature", `f.sharing-${i.item_key.replace(/^item-/, "")}`, i.title, created);
     for (const dst of serves[i.item_key] ?? []) {
       db.baseline.edges.push({
-        id: uuid(),
-        src_id: f.id,
-        dst_id: dst.id,
-        type: "supports",
-        attrs: {},
-        status: "confirmed",
-        origin: "user",
-        locked: false,
-        locked_by: null,
-        locked_at: null,
-        confidence: null,
-        run_id: null,
-        created_at: created,
-        updated_at: created,
+        id: uuid(), src_id: f.id, dst_id: dst.id, type: "supports", attrs: {}, status: "confirmed", origin: "user", locked: false,
+        locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: created, updated_at: created,
       });
     }
-    return {
-      ...i,
-      feature: {
-        id: f.id,
-        type: f.type,
-        key: f.key,
-        title: f.title,
-        status: f.status,
-      },
-    };
+    return { ...i, feature: { id: f.id, type: f.type, key: f.key, title: f.title, status: f.status } };
   });
   db.sharing_items = { [v.id]: items };
 }
@@ -3156,29 +1963,10 @@ function seedSharingRoadmap(db: Db, audience: "team" | "public") {
 type BaselineEntity = Db["baseline"]["entities"][number];
 
 /** A confirmed baseline entity the "sharing" scenario adds. */
-function baselineEntity(
-  db: Db,
-  type: BaselineEntity["type"],
-  key: string,
-  title: string,
-  at: string,
-): BaselineEntity {
+function baselineEntity(db: Db, type: BaselineEntity["type"], key: string, title: string, at: string): BaselineEntity {
   const row: BaselineEntity = {
-    id: uuid(),
-    type,
-    key,
-    title,
-    body: null,
-    attrs: {},
-    status: "confirmed",
-    origin: "user",
-    locked: false,
-    locked_by: null,
-    locked_at: null,
-    confidence: null,
-    run_id: null,
-    created_at: at,
-    updated_at: at,
+    id: uuid(), type, key, title, body: null, attrs: {}, status: "confirmed", origin: "user", locked: false, locked_by: null,
+    locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
   };
   db.baseline.entities.push(row);
   return row;
@@ -3187,11 +1975,8 @@ function baselineEntity(
 /** The roadmap data, seeded on first use (./roadmap.ts), with the "sharing" roadmap's items (seedSharingRoadmap). */
 function ensureRoadmap(db: Db, ctx: RoadmapContext): RoadmapDb {
   if (!db.roadmap) {
-    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY), {
-      plan: true,
-    });
-    for (const [id, items] of Object.entries(db.sharing_items ?? {}))
-      db.roadmap.items[id] ??= items;
+    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY), { plan: true });
+    for (const [id, items] of Object.entries(db.sharing_items ?? {})) db.roadmap.items[id] ??= items;
   }
   return db.roadmap;
 }
@@ -3200,49 +1985,22 @@ function ensureRoadmap(db: Db, ctx: RoadmapContext): RoadmapDb {
 function ensureReviewV2(db: Db): ReviewV2Db {
   if (db.review_v2) return db.review_v2;
   const prd = db.documents.find((d) => d.kind === "prd");
-  db.review_v2 = seedReviewV2(
-    prd,
-    prd ? docVersions(db, prd).pop() : undefined,
-    db.user_id,
-    hash,
-  );
+  db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
   // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
   const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
   const decider = db.members.find((x) => x.email === "approver@example.com");
   // The "impact" scenarios (./impact.ts): the commenter decides usage-alerts-roadmap.
-  const impactDecider = db.members.find(
-    (x) => x.email === "commenter@example.com",
-  );
-  if (
-    localStorage.getItem(MOCK_SCENARIO_KEY)?.startsWith("impact") &&
-    roadmapDoc &&
-    impactDecider
-  ) {
+  const impactDecider = db.members.find((x) => x.email === "commenter@example.com");
+  if (localStorage.getItem(MOCK_SCENARIO_KEY)?.startsWith("impact") && roadmapDoc && impactDecider) {
     db.review_v2.policies.push({
-      document_id: roadmapDoc.id,
-      decider_id: impactDecider.id,
-      mandatory_reviewer_ids: [],
-      required_section_keys: [],
-      section_approval: "none",
-      rereview_on_change: true,
-      source: "document",
-      lock_version: 1,
+      document_id: roadmapDoc.id, decider_id: impactDecider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+      section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
     });
   }
-  if (
-    localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" &&
-    roadmapDoc &&
-    decider
-  ) {
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
     db.review_v2.policies.push({
-      document_id: roadmapDoc.id,
-      decider_id: decider.id,
-      mandatory_reviewer_ids: [],
-      required_section_keys: [],
-      section_approval: "none",
-      rereview_on_change: true,
-      source: "document",
-      lock_version: 1,
+      document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+      section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
     });
   }
   // O5 "sharing": the roadmap's v1 is publication 1.
@@ -3250,113 +2008,45 @@ function ensureReviewV2(db: Db): ReviewV2Db {
   const sv = shared && docVersions(db, shared)[0];
   if (shared && sv) {
     db.review_v2.publications.push({
-      id: uuid(),
-      document_id: shared.id,
-      number: 1,
-      version_id: sv.id,
-      version_number: sv.number,
-      content_hash: sv.content_hash,
-      manifest_hash: hash(`${sv.content_hash}:1`),
-      published_by: db.user_id,
-      created_at: "2026-10-13T10:00:00Z",
-      has_brief: true,
-      manifest: {
-        format: 1,
-        document: { id: shared.id, slug: shared.slug, title: shared.title },
-        version: {
-          id: sv.id,
-          number: sv.number,
-          content_hash: sv.content_hash,
-        },
-        approval: {
-          approved_at: sv.approved_at ?? null,
-          decider_id: db.user_id,
-        },
-        sections: [],
-      },
-      markdown: "",
-      html: exportHtml(shared, sv),
+      id: uuid(), document_id: shared.id, number: 1, version_id: sv.id, version_number: sv.number, content_hash: sv.content_hash,
+      manifest_hash: hash(`${sv.content_hash}:1`), published_by: db.user_id, created_at: "2026-10-13T10:00:00Z", has_brief: true,
+      manifest: { format: 1, document: { id: shared.id, slug: shared.slug, title: shared.title }, version: { id: sv.id, number: sv.number, content_hash: sv.content_hash }, approval: { approved_at: sv.approved_at ?? null, decider_id: db.user_id }, sections: [] },
+      markdown: "", html: exportHtml(shared, sv),
     });
   }
   return db.review_v2;
 }
 
 /** O5: the share links' context (./shares.ts); `me` is null for a link holder. */
-function sharesContext(
-  db: Db,
-  me: { id: string; role: Role } | null,
-): SharesContext {
+function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesContext {
   const publications = ensureReviewV2(db).publications;
   const base = {
-    documents: db.documents,
-    versions: db.versions,
-    publications,
-    members: db.members,
-    company: MOCK_COMPANY,
-    uuid,
-    now,
-    zone: () =>
-      String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now,
+    zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     noGoal: (v: { id: string }) => {
       const version = db.versions.find((x) => x.id === v.id);
-      return new Set(
-        version
-          ? boardItems(db, version)
-              .filter((i) => i.no_goal)
-              .map((i) => i.key)
-          : [],
-      );
+      return new Set(version ? boardItems(db, version).filter((i) => i.no_goal).map((i) => i.key) : []);
     },
   };
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
-  db.shares ??=
-    scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO
-      ? seeded("shares", () =>
-          seedShares(
-            base,
-            db.user_id,
-            db.members.find((m) => m.status === "disabled")?.id ?? null,
-            scenario === SHARING_SCENARIO,
-          ),
-        )
-      : emptyShares();
+  db.shares ??= scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO
+    ? seeded("shares", () => seedShares(base, db.user_id, db.members.find((m) => m.status === "disabled")?.id ?? null, scenario === SHARING_SCENARIO))
+    : emptyShares();
   const shares = db.shares;
   return {
     ...base,
     db: shares,
     me,
-    observesOutside: () =>
-      levelFor((db.autonomy ??= emptyAutonomy()), "external_messages") ===
-      "observe",
+    observesOutside: () => levelFor((db.autonomy ??= emptyAutonomy()), "external_messages") === "observe",
     queueDraft: (doc, v) => {
-      db.llm ??= seeded("llm", () =>
-        seedLlm(llmContext(db, db.user_id, "owner")),
-      );
-      return queueJob(
-        llmContext(db, me?.id ?? db.user_id, me?.role ?? "owner"),
-        doc.id,
-        "public_text",
-        v.number,
-      );
+      db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
+      return queueJob(llmContext(db, me?.id ?? db.user_id, me?.role ?? "owner"), doc.id, "public_text", v.number);
     },
     renderAudience: (doc, v, audience, linkHolder = false) => {
       const row = db.documents.find((d) => d.id === doc.id)!;
       const version = db.versions.find((x) => x.id === v.id)!;
-      const sections = audienceSections(
-        version.sections,
-        audience,
-        boardItems(db, version),
-      );
-      return exportHtml(
-        row,
-        {
-          ...version,
-          sections: linkHolder ? readerSections(sections) : sections,
-        },
-        db.branding,
-        audienceLabel(audience),
-        linkHolder,
-      );
+      const sections = audienceSections(version.sections, audience, boardItems(db, version));
+      return exportHtml(row, { ...version, sections: linkHolder ? readerSections(sections) : sections }, db.branding, audienceLabel(audience), linkHolder);
     },
   };
 }
@@ -3383,14 +2073,8 @@ function seedUpdates(db: Db) {
     db.documents.push(doc);
     for (const seedV of d.versions) {
       const v = buildVersion(doc, seedV);
-      v.front_matter = updateFrontMatter(
-        d.template,
-        doc.slug,
-        doc.title,
-        d.period,
-      );
-      if (d.approved_at && seedV.number === d.versions.at(-1)!.number)
-        v.approved_at = d.approved_at;
+      v.front_matter = updateFrontMatter(d.template, doc.slug, doc.title, d.period);
+      if (d.approved_at && seedV.number === d.versions.at(-1)!.number) v.approved_at = d.approved_at;
       db.versions.push(v);
     }
   }
@@ -3409,95 +2093,41 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
     closeThread: (item) => closeFeedbackThread(db, item),
     lockedKeys: (v) => lockedKeys(db, v as VersionRow),
     sentToAgents: (sid) =>
-      (db.runs?.runs ?? []).some(
-        (r) =>
-          !["succeeded", "failed", "cancelled"].includes(r.status) &&
-          !!(r as SentRun).sent?.suggestion_ids.includes(sid),
-      ),
+      (db.runs?.runs ?? []).some((r) => !["succeeded", "failed", "cancelled"].includes(r.status) && !!(r as SentRun).sent?.suggestion_ids.includes(sid)),
     reply: (feedbackId, body) => {
-      const parent = db.comments.find(
-        (c) =>
-          c.id === db.feedback.find((f) => f.id === feedbackId)?.comment_id,
-      );
+      const parent = db.comments.find((c) => c.id === db.feedback.find((f) => f.id === feedbackId)?.comment_id);
       if (!parent) return;
-      db.comments.push({
-        ...parent,
-        id: uuid(),
-        anchor: null,
-        body,
-        author_id: userId,
-        parent_id: parent.id,
-        created_at: now(),
-        feedback_item_id: null,
-      });
+      db.comments.push({ ...parent, id: uuid(), anchor: null, body, author_id: userId, parent_id: parent.id, created_at: now(), feedback_item_id: null });
     },
     importRevision: (doc, base, key, heading, body, resolutions) =>
-      importSections(
-        db,
-        doc,
-        base as VersionRow,
-        { [key]: { heading, body } },
-        resolutions,
-      ),
-    importSections: (doc, base, replace, resolutions) =>
-      importSections(db, doc, base as VersionRow, replace, resolutions),
+      importSections(db, doc, base as VersionRow, { [key]: { heading, body } }, resolutions),
+    importSections: (doc, base, replace, resolutions) => importSections(db, doc, base as VersionRow, replace, resolutions),
     memberName: (id) => db.members.find((m) => m.id === id)?.email ?? null,
     discussion: (id) => {
       const d = db.discussions?.discussions.find((x) => x.id === id);
       if (!d) return null;
-      const inIt = db.discussions!.participants.some(
-        (x) => x.discussion_id === id && x.user_id === userId && !x.left_at,
-      );
+      const inIt = db.discussions!.participants.some((x) => x.discussion_id === id && x.user_id === userId && !x.left_at);
       const priv = d.visibility === "private";
-      return priv && !inIt
-        ? { id: null, title: null, private: true }
-        : { id: d.id, title: d.title, private: priv };
+      return priv && !inIt ? { id: null, title: null, private: true } : { id: d.id, title: d.title, private: priv };
     },
     runEstimateUsd: () => db.next_draft_run_usd ?? null,
     // #574 review: the agents' feedback-loop run under way on the document, as the API's agents_run.
     agentsRun: (docId) => {
       const run = ((db.runs?.runs ?? []) as SentRun[])
-        .filter(
-          (r) =>
-            r.flow === "feedback_loop" &&
-            r.document_id === docId &&
-            BUILD_UNDER_WAY.includes(r.status),
-        )
+        .filter((r) => r.flow === "feedback_loop" && r.document_id === docId && BUILD_UNDER_WAY.includes(r.status))
         .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
       if (!run) return null;
-      const sent = run.sent
-        ? [
-            ...run.sent.feedback_ids,
-            ...run.sent.suggestion_ids,
-            ...(run.sent.next_draft_change_ids ?? []),
-          ]
-        : [];
-      return {
-        id: run.id,
-        flow: run.flow,
-        flow_title: run.flow_title,
-        status: run.status,
-        created_at: run.created_at,
-        sent,
-      };
+      const sent = run.sent ? [...run.sent.feedback_ids, ...run.sent.suggestion_ids, ...(run.sent.next_draft_change_ids ?? [])] : [];
+      return { id: run.id, flow: run.flow, flow_title: run.flow_title, status: run.status, created_at: run.created_at, sent };
     },
     nextDrafts: () => {
       const a = (db.autonomy ??= emptyAutonomy());
       const min = Number(a.stored.next_drafts?.limits?.min_staged);
-      return {
-        level: levelFor(a, "next_drafts"),
-        min_staged: Number.isFinite(min) && min >= 3 ? min : 5,
-      };
+      return { level: levelFor(a, "next_drafts"), min_staged: Number.isFinite(min) && min >= 3 ? min : 5 };
     },
-    runQualityReview: (job, versionId) =>
-      storeModelReview(ensureV2(db), job, versionId),
+    runQualityReview: (job, versionId) => storeModelReview(ensureV2(db), job, versionId),
     // O5: the public_text job drafts into the share mock's texts.
-    publicText: (job) =>
-      draftPublicTexts(
-        sharesContext(db, null),
-        job.document_id!,
-        job.version_number!,
-      ),
+    publicText: (job) => draftPublicTexts(sharesContext(db, null), job.document_id!, job.version_number!),
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
@@ -3512,39 +2142,22 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
           }),
           path.split("/").filter(Boolean),
         );
-      const created = await call("/v1/runs", {
-        flow: "feedback_loop",
-        document: doc.slug,
-        knobs: { depth: input.depth },
-      });
+      const created = await call("/v1/runs", { flow: "feedback_loop", document: doc.slug, knobs: { depth: input.depth } });
       if (!created || !created.ok) return created ?? notFound("Route");
       const { id } = (await created.json()) as Schemas["RunOut"];
       await call(`/v1/runs/${id}/estimate`);
       const run = db.runs.runs.find((r) => r.id === id)! as SentRun;
       run.estimate_usd = input.estimate_usd;
       run.segments[0].estimate_usd = input.estimate_usd;
-      run.sent = {
-        feedback_ids: input.feedback_ids,
-        suggestion_ids: input.suggestion_ids,
-        next_draft_change_ids: input.next_draft_change_ids,
-      };
+      run.sent = { feedback_ids: input.feedback_ids, suggestion_ids: input.suggestion_ids, next_draft_change_ids: input.next_draft_change_ids };
       const started = (await call(`/v1/runs/${id}/start`))!;
-      return new Response(started.body, {
-        status: started.ok ? 201 : started.status,
-        headers: started.headers,
-      });
+      return new Response(started.body, { status: started.ok ? 201 : started.status, headers: started.headers });
     },
   };
 }
 
 /** D12: a feedback-loop run started from Build next draft, with the items it was sent. */
-type SentRun = Schemas["RunOut"] & {
-  sent?: {
-    feedback_ids: string[];
-    suggestion_ids: string[];
-    next_draft_change_ids?: string[];
-  };
-};
+type SentRun = Schemas["RunOut"] & { sent?: { feedback_ids: string[]; suggestion_ids: string[]; next_draft_change_ids?: string[] } };
 
 /**
  * C1e: the Inbox's feedback by state for approvers (new since my last visit, open, staged,
@@ -3562,16 +2175,12 @@ function withInboxStates(
   if (markSeen) db.inbox_seen[me.id] = now();
   // Decisions not delivered yet show to the review's approver role and above, as the API.
   // Open feedback too, as the API (qa-company-4: approvers decide it).
-  if (!atLeast(me.role, "approver"))
-    return { ...base, deliveries: [], feedback: [], last_seen_at: seen };
+  if (!atLeast(me.role, "approver")) return { ...base, deliveries: [], feedback: [], last_seen_at: seen };
   const states = inboxStates(llm, seen);
   // Open feedback per document comes from ./runs.ts (staged items left out there); its
   // items carry their state here.
   const byId = new Map(states.items.map((i) => [i.id, i]));
-  const feedback = base.feedback.map((d) => ({
-    ...d,
-    items: d.items.map((i) => ({ ...i, ...byId.get(i.id), kind: i.kind })),
-  }));
+  const feedback = base.feedback.map((d) => ({ ...d, items: d.items.map((i) => ({ ...i, ...byId.get(i.id), kind: i.kind })) }));
   return {
     ...base,
     feedback,
@@ -3585,35 +2194,20 @@ function withInboxStates(
 /** H11 Check outcomes: the ticker's pass at the company's level, before outcomes are read. */
 function passOutcomes(db: Db) {
   const autonomy = (db.autonomy ??= emptyAutonomy());
-  const owners = db.members
-    .filter((m) => m.role === "owner" && m.status !== "disabled")
-    .map((m) => m.id);
-  outcomesPass(
-    db.quality,
-    levelFor(autonomy, "outcomes"),
-    owners,
-    (a) => void oracleDid(autonomy, "outcomes", a),
-  );
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  outcomesPass(db.quality, levelFor(autonomy, "outcomes"), owners, (a) => void oracleDid(autonomy, "outcomes", a));
 }
 
 /** What the decision log mock reads: the signed-in member, the members, the runs' stops. */
 function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
   return {
     me: { id: me.id, email: me.email, role: me.role, status: me.status },
-    members: db.members.map((m) => ({
-      id: m.id,
-      email: m.email,
-      role: m.role,
-      status: m.status,
-    })),
+    members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
     runs: (db.runs?.runs ?? []) as unknown as DecisionsContext["runs"],
-    documentTitle: (slug) =>
-      db.documents.find((d) => d.slug === slug)?.title ?? null,
+    documentTitle: (slug) => db.documents.find((d) => d.slug === slug)?.title ?? null,
     hiddenDocument: (key) => {
       const versionOf = db.versions.find((v) => v.id === key)?.document_id;
-      const doc = db.documents.find(
-        (d) => d.id === key || d.slug === key || d.id === versionOf,
-      );
+      const doc = db.documents.find((d) => d.id === key || d.slug === key || d.id === versionOf);
       return !!doc && !canSee(me.role, doc.visibility);
     },
     // H9 (docs/visibility._decision_visible): a pricing decision, and the record of a stop of
@@ -3621,12 +2215,8 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     visible: (d) => {
       if (atLeast(me.role, "approver")) return true;
       if (d.origin === "pricing") return false;
-      const run = d.run_id
-        ? db.runs?.runs.find((r) => r.id === d.run_id)
-        : undefined;
-      const doc = run?.document_slug
-        ? findDocument(db, run.document_slug)
-        : undefined;
+      const run = d.run_id ? db.runs?.runs.find((r) => r.id === d.run_id) : undefined;
+      const doc = run?.document_slug ? findDocument(db, run.document_slug) : undefined;
       return !doc || canSee(me.role, doc.visibility);
     },
     uuid,
@@ -3634,46 +2224,26 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     // A hidden decision's baseline entity, and its evidence, are unknown to a reader who may not see it.
     entity: (id) => {
       const e = db.baseline.entities.find((x) => x.id === id);
-      return e && !hiddenDecisionEntities(db, me).has(e.id)
-        ? {
-            id: e.id,
-            type: e.type,
-            key: e.key,
-            title: e.title,
-            status: e.status,
-          }
-        : null;
+      return e && !hiddenDecisionEntities(db, me).has(e.id) ? { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status } : null;
     },
     evidence: (id) => {
       const e = db.baseline.evidence.find((x) => x.id === id);
-      return e &&
-        !(e.entity_id && hiddenDecisionEntities(db, me).has(e.entity_id))
-        ? {
-            id: e.id,
-            entity_id: e.entity_id ?? null,
-            excerpt: e.excerpt ?? null,
-            url: e.url ?? null,
-            ref: e.ref ?? null,
-          }
+      return e && !(e.entity_id && hiddenDecisionEntities(db, me).has(e.entity_id))
+        ? { id: e.id, entity_id: e.entity_id ?? null, excerpt: e.excerpt ?? null, url: e.url ?? null, ref: e.ref ?? null }
         : null;
     },
-    outcomeStatus: (id) =>
-      db.quality?.outcomes.find((o) => o.id === id)?.status ?? null,
+    outcomeStatus: (id) => db.quality?.outcomes.find((o) => o.id === id)?.status ?? null,
     outcomeCheckDue: (id) => {
       const o = db.quality?.outcomes.find((x) => x.id === id);
       return o?.status === "tracking" && !!o.proposed_assessment;
     },
-    addOutcome: (d) =>
-      addDecisionOutcome((db.quality ??= seedQuality()), d, me.id),
+    addOutcome: (d) => addDecisionOutcome((db.quality ??= seedQuality()), d, me.id),
     autonomy: {
       level: () => levelFor((db.autonomy ??= emptyAutonomy()), "decisions"),
       limits: () => limitsFor((db.autonomy ??= emptyAutonomy()), "decisions"),
       // Who set Decide reversible calls (the mock keeps only the latest change's owner).
-      setBy: () =>
-        db.members.find((m) => m.id === db.autonomy?.updated_by)?.email ??
-        "an owner",
-      acted: (a) =>
-        void oracleDid((db.autonomy ??= emptyAutonomy()), "decisions", a),
+      setBy: () => db.members.find((m) => m.id === db.autonomy?.updated_by)?.email ?? "an owner",
+      acted: (a) => void oracleDid((db.autonomy ??= emptyAutonomy()), "decisions", a),
     },
   };
 }
@@ -3684,18 +2254,13 @@ function pricingContext(me: MemberRow): PricingContext {
     me: { id: me.id, role: me.role },
     uuid,
     now,
-    today: () =>
-      todayIn(
-        String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
-      ),
+    today: () => todayIn(String(mockSettingValue("company_timezone") ?? "America/Los_Angeles")),
   };
 }
 
 /** The pricing owner (oracle.pricing.decide.pricing_owner): the setting's active owner, else the earliest active owner. */
 function pricingOwner(db: Db): MemberRow | undefined {
-  const owners = db.members
-    .filter((m) => m.role === "owner" && m.status === "active")
-    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const owners = db.members.filter((m) => m.role === "owner" && m.status === "active").sort((a, b) => a.created_at.localeCompare(b.created_at));
   const chosen = mockSettingValue("pricing_owner");
   return owners.find((m) => m.id === chosen) ?? owners[0];
 }
@@ -3709,11 +2274,7 @@ function memberName(m: MemberRow | undefined): string {
 function memoOf(db: Db, doc: DocumentRow) {
   const latest = docVersions(db, doc).pop();
   const fm = (latest?.front_matter ?? {}) as Record<string, unknown>;
-  return {
-    latest,
-    question: typeof fm.question === "string" ? fm.question : null,
-    fm,
-  };
+  return { latest, question: typeof fm.question === "string" ? fm.question : null, fm };
 }
 
 /** GET /v1/pricing-memos: the pricing documents with their decision and who decides. */
@@ -3726,34 +2287,15 @@ function pricingMemos(db: Db): Schemas["PricingMemoSummary"][] {
     .map((doc) => {
       const { latest, question } = memoOf(db, doc);
       const ids = new Set(docVersions(db, doc).map((v) => v.id));
-      const d = decisions
-        .filter(
-          (x) => x.origin === "pricing" && x.source && ids.has(x.source.id),
-        )
-        .pop();
-      const state =
-        d?.status === "decided"
-          ? "decided"
-          : latest?.approved_at
-            ? "approved"
-            : doc.status === "in_review"
-              ? "in_review"
-              : "draft";
+      const d = decisions.filter((x) => x.origin === "pricing" && x.source && ids.has(x.source.id)).pop();
+      const state = d?.status === "decided" ? "decided" : latest?.approved_at ? "approved" : doc.status === "in_review" ? "in_review" : "draft";
       return {
         document_id: doc.id,
         slug: doc.slug,
         title: doc.title,
         question,
         state,
-        decision: d
-          ? {
-              number: d.number,
-              title: d.title,
-              status: d.status,
-              chosen_label:
-                d.options.find((o) => o.key === d.chosen_option)?.label ?? null,
-            }
-          : null,
+        decision: d ? { number: d.number, title: d.title, status: d.status, chosen_label: d.options.find((o) => o.key === d.chosen_option)?.label ?? null } : null,
         updated_at: doc.updated_at,
         pricing_owner: owner ? { id: owner.id, name: memberName(owner) } : null,
       };
@@ -3763,22 +2305,15 @@ function pricingMemos(db: Db): Schemas["PricingMemoSummary"][] {
 /** POST /v1/pricing-memos/{doc}/decide: the pricing owner opens the approved memo's proposed decision. */
 function decideMemo(db: Db, me: MemberRow, slug: string): Response {
   const doc = findDocument(db, slug);
-  if (!doc || doc.kind !== "pricing")
-    return json(404, { detail: `pricing memo '${slug}' not found` });
+  if (!doc || doc.kind !== "pricing") return json(404, { detail: `pricing memo '${slug}' not found` });
   const owner = pricingOwner(db);
-  if (!owner || owner.id !== me.id)
-    return json(403, { detail: `Only ${memberName(owner)} decides prices` });
+  if (!owner || owner.id !== me.id) return json(403, { detail: `Only ${memberName(owner)} decides prices` });
   const { latest, question, fm } = memoOf(db, doc);
-  if (!latest?.approved_at)
-    return json(409, {
-      detail: "Approve the memo's latest version before deciding",
-    });
+  if (!latest?.approved_at) return json(409, { detail: "Approve the memo's latest version before deciding" });
   db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
   const ctx = decisionsContext(db, me);
   db.decisions ??= seeded("decisions", () => seedDecisions(ctx));
-  const recommendation =
-    latest.sections.find((s) => s.section_key === "recommendation")?.body_md ??
-    "";
+  const recommendation = latest.sections.find((s) => s.section_key === "recommendation")?.body_md ?? "";
   const { row, created } = proposePricing(
     ctx,
     db.decisions,
@@ -3797,45 +2332,18 @@ function decideMemo(db: Db, me: MemberRow, slug: string): Response {
 }
 
 /** /v1/pricing-memos…, /v1/deal-outcomes… and the pricing_owner setting (H9); null for other routes. */
-async function routePricing(
-  db: Db,
-  me: MemberRow,
-  req: Request,
-  p: string[],
-  q: URLSearchParams,
-): Promise<Response | null> {
+async function routePricing(db: Db, me: MemberRow, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] === "pricing-memos") {
     // H8's rule: below approver, there is no such memo.
     if (!atLeast(me.role, "approver")) return notFound("Pricing memo");
-    if (p.length === 2 && req.method === "GET")
-      return json(200, pricingMemos(db));
-    if (p.length === 4 && p[3] === "decide" && req.method === "POST")
-      return decideMemo(db, me, p[2]);
+    if (p.length === 2 && req.method === "GET") return json(200, pricingMemos(db));
+    if (p.length === 4 && p[3] === "decide" && req.method === "POST") return decideMemo(db, me, p[2]);
     return null;
   }
-  if (p[1] === "deal-outcomes")
-    return routeDeals(
-      pricingContext(me),
-      (db.pricing ??= { deals: [] }),
-      req,
-      p,
-      q,
-      ensureMarket(db).competitors,
-    );
-  if (
-    p[1] === "settings" &&
-    p[2] === "pricing_owner" &&
-    req.method === "PUT" &&
-    me.role === "owner"
-  ) {
-    const { value } = (JSON.parse((await req.clone().text()) || "{}") ??
-      {}) as { value?: unknown };
-    if (
-      value != null &&
-      !db.members.some(
-        (m) => m.id === value && m.role === "owner" && m.status === "active",
-      )
-    ) {
+  if (p[1] === "deal-outcomes") return routeDeals(pricingContext(me), (db.pricing ??= { deals: [] }), req, p, q, ensureMarket(db).competitors);
+  if (p[1] === "settings" && p[2] === "pricing_owner" && req.method === "PUT" && me.role === "owner") {
+    const { value } = (JSON.parse((await req.clone().text()) || "{}") ?? {}) as { value?: unknown };
+    if (value != null && !db.members.some((m) => m.id === value && m.role === "owner" && m.status === "active")) {
       return json(422, { detail: "The pricing owner must be an active owner" });
     }
   }
@@ -3854,21 +2362,10 @@ function seedPricingScenario(db: Db) {
     last_sign_in_at: "2026-10-20T08:00:00Z",
   };
   db.members.push(second);
-  db.pricing = {
-    deals: seedDeals(
-      pricingContext(db.members.find((m) => m.id === db.user_id)!),
-      db.user_id,
-    ),
-  };
+  db.pricing = { deals: seedDeals(pricingContext(db.members.find((m) => m.id === db.user_id)!), db.user_id) };
   // H7's alternatives the deals name: Account 9 was lost to Competitor A; Old Rival is archived.
   const market = emptyMarket();
-  const alternative = (
-    key: string,
-    name: string,
-    kind: MarketDb["competitors"][number]["kind"],
-    aliases: string[],
-    status: "active" | "archived" = "active",
-  ) => ({
+  const alternative = (key: string, name: string, kind: MarketDb["competitors"][number]["kind"], aliases: string[], status: "active" | "archived" = "active") => ({
     id: uuid(),
     name,
     kind,
@@ -3878,79 +2375,28 @@ function seedPricingScenario(db: Db) {
     status,
     lock_version: 1,
   });
-  const rival = alternative("competitor-a", "Competitor A", "direct", [
-    "CompA",
-  ]);
-  market.competitors.push(
-    rival,
-    alternative("spreadsheets", "Spreadsheets", "status_quo", [
-      "a spreadsheet",
-    ]),
-    alternative("old-rival", "Old Rival", "direct", [], "archived"),
-  );
+  const rival = alternative("competitor-a", "Competitor A", "direct", ["CompA"]);
+  market.competitors.push(rival, alternative("spreadsheets", "Spreadsheets", "status_quo", ["a spreadsheet"]), alternative("old-rival", "Old Rival", "direct", [], "archived"));
   db.market = market;
-  db.pricing.deals.find((d) => d.account === "Account 9")!.competitor_id =
-    rival.id;
+  db.pricing.deals.find((d) => d.account === "Account 9")!.competitor_id = rival.id;
   const window: EvidenceWindow = { from: "2026-04-24", to: "2026-10-23" };
-  const memo = (
-    slug: string,
-    title: string,
-    question: string,
-    approvedAt: string,
-  ) => {
+  const memo = (slug: string, title: string, question: string, approvedAt: string) => {
     const doc: DocumentRow = {
-      id: uuid(),
-      slug,
-      title,
-      status: "approved",
-      kind: "pricing",
-      template: PRICING_TEMPLATE,
-      template_version: "1",
-      theme: "one-page-brief",
-      visibility: "approvers",
-      created_at: "2026-10-12T16:00:00Z",
-      updated_at: approvedAt,
+      id: uuid(), slug, title, status: "approved", kind: "pricing", template: PRICING_TEMPLATE, template_version: "1",
+      theme: "one-page-brief", visibility: "approvers", created_at: "2026-10-12T16:00:00Z", updated_at: approvedAt,
     };
     db.documents.push(doc);
-    const v1 = buildVersion(doc, {
-      number: 1,
-      created_at: doc.created_at,
-      sections: pricingTemplateSections(title),
-      citations: [],
-      brief: ["question", "recommendation", "options"],
-    });
+    const v1 = buildVersion(doc, { number: 1, created_at: doc.created_at, sections: pricingTemplateSections(title), citations: [], brief: ["question", "recommendation", "options"] });
     v1.front_matter = pricingFrontMatter(slug, title, question, window);
     v1.imported_by = "draft-picker";
-    const v2 = buildVersion(doc, {
-      number: 2,
-      created_at: "2026-10-13T16:00:00Z",
-      sections: pricingDraftSections(title, question, window),
-      citations: [],
-      brief: ["question", "recommendation", "options"],
-    });
-    v2.front_matter = pricingFrontMatter(
-      slug,
-      title,
-      question,
-      window,
-      DRAFT_OPTIONS,
-    );
+    const v2 = buildVersion(doc, { number: 2, created_at: "2026-10-13T16:00:00Z", sections: pricingDraftSections(title, question, window), citations: [], brief: ["question", "recommendation", "options"] });
+    v2.front_matter = pricingFrontMatter(slug, title, question, window, DRAFT_OPTIONS);
     v2.imported_by = "agent-track";
     v2.approved_at = approvedAt;
     db.versions.push(v1, v2);
   };
-  memo(
-    "team-plan-pricing",
-    "Team plan pricing",
-    "Should the team plan move from per-seat to a flat price per team?",
-    "2026-10-15T17:00:00Z",
-  );
-  memo(
-    "starter-plan-price",
-    "Starter plan price",
-    "Should the Starter plan cost less for teams under 5 seats?",
-    "2026-10-08T17:00:00Z",
-  );
+  memo("team-plan-pricing", "Team plan pricing", "Should the team plan move from per-seat to a flat price per team?", "2026-10-15T17:00:00Z");
+  memo("starter-plan-price", "Starter plan price", "Should the Starter plan cost less for teams under 5 seats?", "2026-10-08T17:00:00Z");
 }
 
 /** The pricing scenario's earlier memo, decided by the pricing owner (a pricing decision in the log). */
@@ -3963,30 +2409,13 @@ function seedPricingDecisions(db: Db, ctx: DecisionsContext, log: DecisionsDb) {
   const { row } = proposePricing(
     { ...ctx, me: { id: owner.id, email: owner.email, role: owner.role } },
     log,
-    {
-      versionId: latest.id,
-      documentId: doc.id,
-      version: latest.number,
-      slug: doc.slug,
-      question: question ?? doc.title,
-      context: "",
-      options: memoOptions(fm, latest.sections),
-    },
+    { versionId: latest.id, documentId: doc.id, version: latest.number, slug: doc.slug, question: question ?? doc.title, context: "", options: memoOptions(fm, latest.sections) },
     owner.id,
   );
-  decidePricing(
-    ctx,
-    log,
-    row.number,
-    "keep",
-    "Small teams churn on budget, not on price.",
-    "Starter churn stays under 3% a month.",
-    "2026-10-09T17:00:00Z",
-  );
+  decidePricing(ctx, log, row.number, "keep", "Small teams churn on budget, not on price.", "Starter churn stays under 3% a month.", "2026-10-09T17:00:00Z");
   // Its baseline decision entity, hidden with it from commenters and viewers (docs/visibility).
   const decided = log.decisions.find((d) => d.id === row.id);
-  if (decided)
-    decided.entity_id = addDecisionEntity(db.baseline, decided, owner.id);
+  if (decided) decided.entity_id = addDecisionEntity(db.baseline, decided, owner.id);
 }
 
 /**
@@ -3996,78 +2425,38 @@ function seedPricingDecisions(db: Db, ctx: DecisionsContext, log: DecisionsDb) {
 function hiddenDecisionEntities(db: Db, me: MemberRow): Set<string> {
   if (atLeast(me.role, "approver") || !db.decisions) return new Set();
   const visible = decisionsContext(db, me).visible;
-  return new Set(
-    db.decisions.decisions.flatMap((d) =>
-      d.entity_id && visible && !visible(d) ? [d.entity_id] : [],
-    ),
-  );
+  return new Set(db.decisions.decisions.flatMap((d) => (d.entity_id && visible && !visible(d) ? [d.entity_id] : [])));
 }
 
 /** What the rituals mock reads: the signed-in member and the members. */
 function ritualsContext(db: Db, me: MemberRow): RitualsContext {
   return {
     me: { id: me.id, email: me.email, role: me.role, status: me.status },
-    members: db.members.map((m) => ({
-      id: m.id,
-      email: m.email,
-      role: m.role,
-      status: m.status,
-    })),
+    members: db.members.map((m) => ({ id: m.id, email: m.email, role: m.role, status: m.status })),
     uuid,
-    companyTimezone: () =>
-      String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
     // qa-company-6: the goals block reads the baseline's goals, as Home does.
-    goals: () =>
-      db.baseline.entities.filter(
-        (e) => e.type === "goal",
-      ) as Schemas["EntityOut"][],
+    goals: () => db.baseline.entities.filter((e) => e.type === "goal") as Schemas["EntityOut"][],
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
-    marketWrites: () =>
-      levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
-    baselineStarts: () =>
-      levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",
+    marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
+    baselineStarts: () => levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",
     ritualsActCap: () => {
       const a = (db.autonomy ??= emptyAutonomy());
-      const cap =
-        levelFor(a, "rituals") === "act"
-          ? limitsFor(a, "rituals")?.max_run_usd
-          : null;
+      const cap = levelFor(a, "rituals") === "act" ? limitsFor(a, "rituals")?.max_run_usd : null;
       return typeof cap === "number" ? cap : null;
     },
     rebuildUsd: () => db.baseline_build_usd ?? 7,
     // As rebuild.after_ready: B1's create, estimate and start through the runs mock's own routes.
     startBaselineBuild: async () => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
-      const call = async (
-        path: string[],
-        body?: unknown,
-      ): Promise<{ ok: true; id?: string } | { ok: false; error: string }> => {
-        const req = new Request(
-          new URL(`/${path.join("/")}`, "http://mock.local"),
-          {
-            method: "POST",
-            body: body === undefined ? undefined : JSON.stringify(body),
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-        const res = (await routeRuns(
-          { ...runsContext(db), db: db.runs! },
-          req,
-          path,
-        ))!;
+      const call = async (path: string[], body?: unknown): Promise<{ ok: true; id?: string } | { ok: false; error: string }> => {
+        const req = new Request(new URL(`/${path.join("/")}`, "http://mock.local"), { method: "POST", body: body === undefined ? undefined : JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+        const res = (await routeRuns({ ...runsContext(db), db: db.runs! }, req, path))!;
         const out = (await res.json()) as { id?: string; detail?: string };
-        return res.ok
-          ? { ok: true, id: out.id }
-          : {
-              ok: false,
-              error: String(out.detail ?? "Oracle could not start the build"),
-            };
+        return res.ok ? { ok: true, id: out.id } : { ok: false, error: String(out.detail ?? "Oracle could not start the build") };
       };
-      const created = await call(["v1", "runs"], {
-        flow: "baseline",
-        knobs: { depth: "standard", checkpoints: { baseline_confirm: true } },
-      });
+      const created = await call(["v1", "runs"], { flow: "baseline", knobs: { depth: "standard", checkpoints: { baseline_confirm: true } } });
       if (!created.ok) return { error: created.error };
       const id = created.id!;
       for (const step of ["estimate", "start"]) {
@@ -4075,68 +2464,35 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
         if (!done.ok) return { error: done.error };
         // The "rebuild-costly" and "rebuild-over-approval" scenarios price the build otherwise.
         const run = db.runs!.runs.find((r) => r.id === id);
-        if (step === "estimate" && run && db.baseline_build_usd != null)
-          Object.assign(run, {
-            estimate_usd: db.baseline_build_usd,
-            needs_approval: db.baseline_build_usd > 50,
-          });
+        if (step === "estimate" && run && db.baseline_build_usd != null) Object.assign(run, { estimate_usd: db.baseline_build_usd, needs_approval: db.baseline_build_usd > 50 });
       }
       return { id };
     },
     runStatus: (id) => db.runs?.runs.find((r) => r.id === id)?.status ?? null,
     lastBaselineRun: () => lastBaselineRun(db.runs),
     oracleDid: (row) =>
-      (db.autonomy ??= emptyAutonomy()).actions.push({
-        ...row,
-        id: uuid(),
-        created_at: new Date().toISOString(),
-        undone_at: null,
-        opened_by: [],
-        undone_by: null,
-      }),
+      (db.autonomy ??= emptyAutonomy()).actions.push({ ...row, id: uuid(), created_at: new Date().toISOString(), undone_at: null, opened_by: [], undone_by: null }),
   };
 }
 
 /** What the metrics mock reads: the signed-in member, the members and the goals. */
 function metricsContext(db: Db, me: MemberRow): MetricsContext {
   return {
-    me: {
-      id: me.id,
-      email: me.email,
-      name: me.name,
-      role: me.role,
-      status: me.status,
-    },
-    members: db.members.map((m) => ({
-      id: m.id,
-      email: m.email,
-      name: m.name,
-      role: m.role,
-      status: m.status,
-    })),
+    me: { id: me.id, email: me.email, name: me.name, role: me.role, status: me.status },
+    members: db.members.map((m) => ({ id: m.id, email: m.email, name: m.name, role: m.role, status: m.status })),
     uuid,
-    companyTimezone: () =>
-      String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     goals: () =>
       db.baseline.entities
         .filter((e) => e.type === "goal")
-        .map((e) => ({
-          id: e.id,
-          title: e.title,
-          unit: typeof e.attrs.unit === "string" ? e.attrs.unit : null,
-          confirmed: e.status === "confirmed",
-        })),
-    readIntoGoal: (goalId, day, value, note, metricId) =>
-      readMetricIntoGoal(db.baseline, goalId, day, value, note, metricId),
+        .map((e) => ({ id: e.id, title: e.title, unit: typeof e.attrs.unit === "string" ? e.attrs.unit : null, confirmed: e.status === "confirmed" })),
+    readIntoGoal: (goalId, day, value, note, metricId) => readMetricIntoGoal(db.baseline, goalId, day, value, note, metricId),
   };
 }
 
 /** H5: the metrics; the "metrics" scenario seeds them, every other company has none. */
 function ensureMetrics(db: Db, me: MemberRow): MetricsDb {
-  db.metrics ??=
-    localStorage.getItem(MOCK_SCENARIO_KEY) === "metrics"
-      ? seedMetrics(metricsContext(db, me))
-      : emptyMetrics();
+  db.metrics ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "metrics" ? seedMetrics(metricsContext(db, me)) : emptyMetrics();
   return db.metrics;
 }
 
@@ -4148,15 +2504,11 @@ function ensureRituals(db: Db, me: MemberRow): RitualsDb {
   db.rituals = seedRituals(ctx, scenario === "rituals");
   if (scenario === "metrics") {
     const metrics = ensureMetrics(db, me);
-    addMetricsReview(ctx, db.rituals, (id, asOf) =>
-      reviewBlocks(metricsContext(db, me), metrics, id, asOf),
-    );
+    addMetricsReview(ctx, db.rituals, (id, asOf) => reviewBlocks(metricsContext(db, me), metrics, id, asOf));
   }
   if (scenario === "market") {
     const market = ensureMarket(db);
-    addDigest(ctx, db.rituals, MARKET_DIGEST_ID, (asOf) =>
-      digestBlocks(market, ctx.companyTimezone(), asOf),
-    );
+    addDigest(ctx, db.rituals, MARKET_DIGEST_ID, (asOf) => digestBlocks(market, ctx.companyTimezone(), asOf));
   }
   return db.rituals;
 }
@@ -4166,10 +2518,7 @@ const MARKET_DIGEST_ID = "6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b";
 
 /** H7: the market's alternatives, change log and positioning; seeded in the "market" scenario only. */
 function ensureMarket(db: Db): MarketDb {
-  return (db.market ??=
-    localStorage.getItem(MOCK_SCENARIO_KEY) === "market"
-      ? seedMarket(MARKET_DIGEST_ID)
-      : emptyMarket());
+  return (db.market ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "market" ? seedMarket(MARKET_DIGEST_ID) : emptyMarket());
 }
 
 /** The next version: the base with some sections replaced, and the resolutions recorded. */
@@ -4178,11 +2527,7 @@ function importSections(
   doc: { id: string },
   from: VersionRow,
   replace: Record<string, { heading: string; body: string }>,
-  resolutions: {
-    feedback_id: string;
-    status: "addressed" | "declined";
-    note: string | null;
-  }[],
+  resolutions: { feedback_id: string; status: "addressed" | "declined"; note: string | null }[],
 ): VersionRow {
   const row = findDocument(db, doc.id)!;
   const v = buildVersion(row, {
@@ -4214,28 +2559,13 @@ function importSections(
   queueDraft(db, doc.id, v);
   for (const r of resolutions) {
     const f = db.feedback.find((x) => x.id === r.feedback_id);
-    if (f && f.status === "open")
-      Object.assign(f, {
-        status: r.status,
-        resolution_note: r.note,
-        addressed_in_version: v.number,
-        updated_at: now(),
-      });
+    if (f && f.status === "open") Object.assign(f, { status: r.status, resolution_note: r.note, addressed_in_version: v.number, updated_at: now() });
   }
   // Duplicates of what was resolved go with it.
   for (const s of db.llm?.suggestions ?? []) {
     const f = db.feedback.find((x) => x.id === s.feedback_item_id);
-    if (
-      s.kind === "duplicate" &&
-      f?.status === "open" &&
-      resolutions.some((r) => r.feedback_id === s.duplicate_of)
-    ) {
-      Object.assign(f, {
-        status: "addressed",
-        resolution_note: "Addressed with the item it duplicates",
-        addressed_in_version: v.number,
-        updated_at: now(),
-      });
+    if (s.kind === "duplicate" && f?.status === "open" && resolutions.some((r) => r.feedback_id === s.duplicate_of)) {
+      Object.assign(f, { status: "addressed", resolution_note: "Addressed with the item it duplicates", addressed_in_version: v.number, updated_at: now() });
     }
   }
   touch(db, doc.id);
@@ -4244,14 +2574,11 @@ function importSections(
 
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   const session = sessionOf(db);
-  const member =
-    db.members.find((m) => m.email === session) ??
-    db.members.find((m) => m.id === db.user_id);
+  const member = db.members.find((m) => m.email === session) ?? db.members.find((m) => m.id === db.user_id);
   const ctx: Omit<RunsContext, "db"> & { db?: RunsDb } = {
     db: db.runs,
     userId: db.user_id,
-    userName:
-      session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
+    userName: session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
     userRole: member ? withMockRole(member).role : null,
     // A3, as oracle.members.leads.may_decide: an engineering stop outside prd_to_spec goes to
     // the engineering leads and owners once one is named, else to its role and above.
@@ -4259,55 +2586,23 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       if (!member || !ENGINEERING_KINDS.includes(c.kind)) return true;
       const role = withMockRole(member).role;
       const leads = engineeringLeads(db);
-      if (flow !== "prd_to_spec" && leads.length)
-        return (
-          role === "owner" ||
-          (leads.includes(member.id) && atLeast(role, "commenter"))
-        );
+      if (flow !== "prd_to_spec" && leads.length) return role === "owner" || (leads.includes(member.id) && atLeast(role, "commenter"));
       return atLeast(role, c.approver_role);
     },
-    leadStop: (c, flow) =>
-      ENGINEERING_KINDS.includes(c.kind) &&
-      flow !== "prd_to_spec" &&
-      engineeringLeads(db).length > 0,
-    setEffort: (key, size, runId) =>
-      setEntityEffort(db.baseline, key, size, member?.id ?? db.user_id, runId),
-    member: member
-      ? { id: member.id, email: member.email, role: withMockRole(member).role }
-      : null,
+    leadStop: (c, flow) => ENGINEERING_KINDS.includes(c.kind) && flow !== "prd_to_spec" && engineeringLeads(db).length > 0,
+    setEffort: (key, size, runId) => setEntityEffort(db.baseline, key, size, member?.id ?? db.user_id, runId),
+    member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     reviewDecider: (c) => runReviewDecider(db, c),
-    draftRefusal: (flow, kind) =>
-      draftRefusal((db.autonomy ??= emptyAutonomy()), flow, kind),
-    members: db.members.map((x) => ({
-      id: x.id,
-      email: x.email,
-      role: x.role,
-      name: x.name,
-    })),
+    draftRefusal: (flow, kind) => draftRefusal((db.autonomy ??= emptyAutonomy()), flow, kind),
+    members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, name: x.name })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
     ask: (q) => {
       const at = now();
       const id = uuid();
       ensureV2(db).questions.push({
-        id,
-        gap_id: null,
-        intake_id: null,
-        document_id: null,
-        checkpoint_id: q.checkpoint_id,
-        item_ref: q.item_ref,
-        entity_id: null,
-        module_key: null,
-        category: "general",
-        prompt: q.prompt,
-        rationale: null,
-        priority: 100,
-        batch: null,
-        asked_to: q.asked_to,
-        asked_by: member?.id ?? db.user_id,
-        section_key: null,
-        status: "asked",
-        created_at: at,
-        updated_at: at,
+        id, gap_id: null, intake_id: null, document_id: null, checkpoint_id: q.checkpoint_id, item_ref: q.item_ref, entity_id: null,
+        module_key: null, category: "general", prompt: q.prompt, rationale: null, priority: 100, batch: null,
+        asked_to: q.asked_to, asked_by: member?.id ?? db.user_id, section_key: null, status: "asked", created_at: at, updated_at: at,
       });
       return id;
     },
@@ -4315,15 +2610,12 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       const v2 = ensureV2(db);
       const q = v2.questions.find((x) => x.id === id);
       if (!q) return null;
-      const a = v2.answers
-        .filter((x) => x.question_id === id && x.kind === "answer")
-        .at(-1);
+      const a = v2.answers.filter((x) => x.question_id === id && x.kind === "answer").at(-1);
       return { status: q.status, answer: a?.body ?? null };
     },
     withdraw: (id) => {
       const q = ensureV2(db).questions.find((x) => x.id === id);
-      if (q && (q.status === "asked" || q.status === "delegated"))
-        Object.assign(q, { status: "withdrawn", updated_at: now() });
+      if (q && (q.status === "asked" || q.status === "delegated")) Object.assign(q, { status: "withdrawn", updated_at: now() });
     },
     reviewChange: () => {
       const who = localStorage.getItem(MOCK_REVIEW_CHANGE_KEY);
@@ -4336,72 +2628,40 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     autonomy: {
       level: () => levelFor((db.autonomy ??= emptyAutonomy()), "priorities"),
       limits: () => limitsFor((db.autonomy ??= emptyAutonomy()), "priorities"),
-      acted: (a) =>
-        void oracleDid((db.autonomy ??= emptyAutonomy()), "priorities", a),
+      acted: (a) => void oracleDid((db.autonomy ??= emptyAutonomy()), "priorities", a),
     },
     feedback: db.feedback,
     documents: db.documents,
     confirmedGoals: () =>
-      db.baseline.entities
-        .filter((e) => e.type === "goal" && e.status === "confirmed")
-        .map((e) => ({ id: e.id, key: e.key, title: e.title })),
-    suggestionStatus: (id) =>
-      withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
-    staged: (id) =>
-      isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
-    baselineReview: (runId, actions) =>
-      baselineReviewOf(
-        db.baseline,
-        runId,
-        actions as Schemas["ReviewAction"][],
-      ),
+      db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title })),
+    suggestionStatus: (id) => withSuggestion(db.llm, { id } as FeedbackRow).suggestion?.status ?? null,
+    staged: (id) => isStaged(withSuggestion(db.llm, { id } as FeedbackRow).suggestion),
+    baselineReview: (runId, actions) => baselineReviewOf(db.baseline, runId, actions as Schemas["ReviewAction"][]),
     stagedText: (id) => {
       const s = withSuggestion(db.llm, { id } as FeedbackRow).suggestion;
       return s?.text ?? null;
     },
     lockedSections: (documentId, version) => {
-      const v = db.versions.find(
-        (x) => x.document_id === documentId && x.number === version,
-      );
+      const v = db.versions.find((x) => x.document_id === documentId && x.number === version);
       return v ? lockedKeys(db, v) : [];
     },
-    openProposals: (runId) =>
-      db.baseline.proposals.filter(
-        (p) => p.run_id === runId && p.status === "open",
-      ).length,
+    openProposals: (runId) => db.baseline.proposals.filter((p) => p.run_id === runId && p.status === "open").length,
     // B6: the confirmed and proposed goals not measurable, for an approved Confirm the baseline stop.
     vagueGoals: () =>
       db.baseline.entities.filter(
-        (e) =>
-          e.type === "goal" &&
-          (e.status === "confirmed" || e.status === "proposed") &&
-          !goalCheck(e.attrs, e.status, (id) => activeMember(db, id))
-            .measurable,
+        (e) => e.type === "goal" && (e.status === "confirmed" || e.status === "proposed") && !goalCheck(e.attrs, e.status, (id) => activeMember(db, id)).measurable,
       ).length,
     latestVersion: (id) => {
       const doc = db.documents.find((d) => d.id === id);
       const vs = doc ? docVersions(db, doc) : [];
       return vs.length ? vs[vs.length - 1].number : null;
     },
-    sectionKeys: (versionId) =>
-      db.versions
-        .find((v) => v.id === versionId)
-        ?.sections.map((s) => s.section_key) ?? [],
+    sectionKeys: (versionId) => db.versions.find((v) => v.id === versionId)?.sections.map((s) => s.section_key) ?? [],
     versionAfter: (documentId, slug, at) => {
-      const doc = db.documents.find(
-        (d) => d.id === documentId || (slug != null && d.slug === slug),
-      );
-      return (
-        !!doc &&
-        db.versions.some(
-          (v) =>
-            v.document_id === doc.id &&
-            Date.parse(v.created_at) > Date.parse(at),
-        )
-      );
+      const doc = db.documents.find((d) => d.id === documentId || (slug != null && d.slug === slug));
+      return !!doc && db.versions.some((v) => v.document_id === doc.id && Date.parse(v.created_at) > Date.parse(at));
     },
-    draftItemsToReuse: (documentId, version) =>
-      reusableDraftItems(draftDb(db), documentId, version),
+    draftItemsToReuse: (documentId, version) => reusableDraftItems(draftDb(db), documentId, version),
     // The approved version a roadmap is built from: the one named, else the latest approved.
     sourceVersion: (documentId, number) => {
       const doc = findDocument(db, documentId)!;
@@ -4409,45 +2669,33 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       if (number != null) {
         const v = vs.find((x) => x.number === number);
         if (!v) return `version ${number} of '${doc.slug}' not found`;
-        if (!v.approved_at)
-          return `version ${number} of '${doc.slug}' is not approved: a roadmap is built from an approved PRD version`;
-        if (nothingWritten(db, doc, v.sections))
-          return `version ${number} of '${doc.slug}': ${NOTHING_WRITTEN}`;
+        if (!v.approved_at) return `version ${number} of '${doc.slug}' is not approved: a roadmap is built from an approved PRD version`;
+        if (nothingWritten(db, doc, v.sections)) return `version ${number} of '${doc.slug}': ${NOTHING_WRITTEN}`;
         return versionSource(doc, v);
       }
       const v = vs.filter((x) => x.approved_at).pop();
-      if (v && nothingWritten(db, doc, v.sections))
-        return `version ${v.number} of '${doc.slug}': ${NOTHING_WRITTEN}`;
-      return v
-        ? versionSource(doc, v)
-        : `'${doc.slug}' has no approved version: approve a version of the PRD before building its roadmap`;
+      if (v && nothingWritten(db, doc, v.sections)) return `version ${v.number} of '${doc.slug}': ${NOTHING_WRITTEN}`;
+      return v ? versionSource(doc, v) : `'${doc.slug}' has no approved version: approve a version of the PRD before building its roadmap`;
     },
     // A run's draft becomes the next version: a copy of the latest one (or of the first
     // fixture for a new document); a roadmap draft is built from its PRD version. So the
     // review screens have something to show.
     importDraft: (slug, run, again) => {
-      const prd = run.source
-        ? db.versions.find((v) => v.id === run.source!.version_id)
-        : undefined;
+      const prd = run.source ? db.versions.find((v) => v.id === run.source!.version_id) : undefined;
       const fromPrd =
         prd &&
         roadmapFromPrd({
           slug: run.source!.slug,
           title: run.source!.title,
           version: prd.number,
-          sections: prd.sections.map((s) => ({
-            key: s.section_key,
-            level: s.level,
-            heading: s.heading,
-          })),
+          sections: prd.sections.map((s) => ({ key: s.section_key, level: s.level, heading: s.heading })),
         });
       let doc = findDocument(db, slug);
       if (!doc) {
         doc = {
           id: uuid(),
           slug,
-          title:
-            fromPrd?.title ?? ctx.briefTitle?.(run.id) ?? "Example product PRD",
+          title: fromPrd?.title ?? ctx.briefTitle?.(run.id) ?? "Example product PRD",
           status: "draft",
           kind: run.document_kind ?? "prd",
           template: run.template ?? null,
@@ -4466,36 +2714,13 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       // H9: a pricing_memo run writes the memo for the question in its front matter.
       const question = latest?.front_matter.question as string | undefined;
       if (doc.kind === "pricing" && question) {
-        const window = (latest?.front_matter.evidence_window as
-          EvidenceWindow | undefined) ?? {
-          from: now().slice(0, 10),
-          to: now().slice(0, 10),
-        };
-        const v = buildVersion(doc, {
-          number,
-          created_at: now(),
-          sections: pricingDraftSections(doc.title, question, window),
-          citations: [],
-          brief: ["question", "recommendation", "options"],
-        });
-        v.front_matter = pricingFrontMatter(
-          doc.slug,
-          doc.title,
-          question,
-          window,
-          DRAFT_OPTIONS,
-        );
+        const window = (latest?.front_matter.evidence_window as EvidenceWindow | undefined) ?? { from: now().slice(0, 10), to: now().slice(0, 10) };
+        const v = buildVersion(doc, { number, created_at: now(), sections: pricingDraftSections(doc.title, question, window), citations: [], brief: ["question", "recommendation", "options"] });
+        v.front_matter = pricingFrontMatter(doc.slug, doc.title, question, window, DRAFT_OPTIONS);
         v.imported_by = "agent-track";
         db.versions.push(v);
         touch(db, doc.id);
-        return {
-          document_id: doc.id,
-          slug: doc.slug,
-          kind: doc.kind,
-          version: v.number,
-          source: null,
-          prd_links: null,
-        };
+        return { document_id: doc.id, slug: doc.slug, kind: doc.kind, version: v.number, source: null, prd_links: null };
       }
       if (doc.kind === "update" && isUpdateTemplate(doc.template) && period) {
         const v = buildVersion(doc, {
@@ -4503,47 +2728,18 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
           created_at: now(),
           sections: draftSections(doc.template, doc.title, period),
           citations: UPDATE_SEED_CITATIONS,
-          brief: updateFrontMatter(doc.template, doc.slug, doc.title, period)
-            .brief as string[],
+          brief: updateFrontMatter(doc.template, doc.slug, doc.title, period).brief as string[],
         });
-        v.front_matter = updateFrontMatter(
-          doc.template,
-          doc.slug,
-          doc.title,
-          period,
-        );
+        v.front_matter = updateFrontMatter(doc.template, doc.slug, doc.title, period);
         v.imported_by = "agent-track";
         db.versions.push(v);
         touch(db, doc.id);
-        return {
-          document_id: doc.id,
-          slug: doc.slug,
-          kind: doc.kind,
-          version: v.number,
-          source: null,
-          prd_links: null,
-        };
+        return { document_id: doc.id, slug: doc.slug, kind: doc.kind, version: v.number, source: null, prd_links: null };
       }
       const base = fromPrd
-        ? {
-            number,
-            created_at: now(),
-            sections: fromPrd.sections,
-            citations: [],
-            brief: fromPrd.brief,
-          }
+        ? { number, created_at: now(), sections: fromPrd.sections, citations: [], brief: fromPrd.brief }
         : latest
-          ? {
-              number,
-              created_at: now(),
-              sections: latest.sections.map((x) => ({
-                key: x.section_key,
-                level: x.level,
-                heading: x.heading,
-                body: x.body_md,
-              })),
-              citations: [],
-            }
+          ? { number, created_at: now(), sections: latest.sections.map((x) => ({ key: x.section_key, level: x.level, heading: x.heading, body: x.body_md })), citations: [] }
           : { ...seed, number, created_at: now() };
       const v = buildVersion(doc, base);
       v.source = run.source ?? null;
@@ -4555,39 +2751,18 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       const sent = (run as SentRun).sent;
       for (const sug of db.llm?.suggestions ?? []) {
         if (sent?.suggestion_ids.includes(sug.id) && sug.status === "accepted")
-          Object.assign(sug, {
-            status: "applied",
-            applied_in_version: v.number,
-            updated_at: now(),
-          });
+          Object.assign(sug, { status: "applied", applied_in_version: v.number, updated_at: now() });
       }
       for (const f of db.feedback) {
-        if (sent?.feedback_ids.includes(f.id))
-          Object.assign(f, {
-            staged_for_agents_at: null,
-            staged_for_agents_by: null,
-          });
+        if (sent?.feedback_ids.includes(f.id)) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
       }
       // G4: the discussions' section changes it was sent are applied in this version too.
       for (const r of db.llm?.next_draft_changes ?? []) {
-        if (
-          !sent?.next_draft_change_ids?.includes(r.id) ||
-          r.status !== "staged" ||
-          r.document_id !== doc.id
-        )
-          continue;
+        if (!sent?.next_draft_change_ids?.includes(r.id) || r.status !== "staged" || r.document_id !== doc.id) continue;
         Object.assign(r, { status: "applied", applied_in_version: v.number });
         // As the API's import: the discussion change it came from is done.
-        const change = db.discussions?.changes?.find(
-          (c) =>
-            c.result_ref?.kind === "next_draft_change" &&
-            c.result_ref.id === r.id,
-        );
-        if (change?.status === "staged")
-          Object.assign(change, {
-            status: "done",
-            decision_note: `Applied in draft ${v.number}`,
-          });
+        const change = db.discussions?.changes?.find((c) => c.result_ref?.kind === "next_draft_change" && c.result_ref.id === r.id);
+        if (change?.status === "staged") Object.assign(change, { status: "done", decision_note: `Applied in draft ${v.number}` });
       }
       touch(db, doc.id);
       return {
@@ -4606,23 +2781,14 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   // runs._link_requests, at segment end and on retry-draft-import).
   // The brief a run was started from names its new document (the API's _intake_title).
   ctx.briefTitle = (runId) => {
-    const [intakeId] =
-      Object.entries(db.v2?.intake_runs ?? {}).find(
-        ([, r]) => r.run_id === runId,
-      ) ?? [];
-    return (
-      (intakeId && db.v2?.intakes.find((i) => i.id === intakeId)?.title) || null
-    );
+    const [intakeId] = Object.entries(db.v2?.intake_runs ?? {}).find(([, r]) => r.run_id === runId) ?? [];
+    return (intakeId && db.v2?.intakes.find((i) => i.id === intakeId)?.title) || null;
   };
   const importDraft = ctx.importDraft;
   ctx.importDraft = (slug, run, again) => {
     const imp = importDraft(slug, run, again);
-    const [intakeId] =
-      Object.entries(db.v2?.intake_runs ?? {}).find(
-        ([, r]) => r.run_id === run.id,
-      ) ?? [];
-    if (intakeId && imp.document_id && db.requests)
-      linkIntakeDocument(db.requests, intakeId, imp.document_id);
+    const [intakeId] = Object.entries(db.v2?.intake_runs ?? {}).find(([, r]) => r.run_id === run.id) ?? [];
+    if (intakeId && imp.document_id && db.requests) linkIntakeDocument(db.requests, intakeId, imp.document_id);
     return imp;
   };
   return ctx;
@@ -4657,287 +2823,141 @@ function load(): Db {
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   const db = seeded(
     "db",
-    scenario === "empty"
-      ? seedEmpty
-      : scenario === "large"
-        ? seedLarge
-        : scenario === "suggestions"
-          ? seedSuggestions
-          : scenario === "big-prd"
-            ? seedBigPrd
-            : scenario === "feature-set" ||
-                scenario === "run-discussions" ||
-                scenario === "discussion-change-kinds"
-              ? seedFeatureSet
-              : scenario === "baseline-review" ||
-                  scenario === "baseline-review-console"
-                ? () =>
-                    seedBaselineReview(scenario === "baseline-review-console")
-                : scenario === "scope-review" ||
-                    scenario === "scope-review-kept"
-                  ? () => seedScopeReview(scenario === "scope-review-kept")
-                  : scenario === "eng-review" ||
-                      scenario === DATE_BASES_SCENARIO
-                    ? seedEngReview
-                    : scenario === "eng-check"
-                      ? seedEngCheck
-                      : scenario === "eng-check-no-lead"
-                        ? seedEngCheckNoLead
-                        : scenario === "eng-check-unmapped"
-                          ? seedEngCheckUnmapped
-                          : scenario === "eng-check-unnamed"
-                            ? seedEngCheckUnnamed
-                            : scenario === "eng-check-unreadable"
-                              ? seedEngCheckUnreadable
-                              : scenario === "eng-check-long-key"
-                                ? seedEngCheckLongKey
-                                : scenario === "eng-dates"
-                                  ? seedEngDates
-                                  : scenario === "roadmap-items-console-held"
-                                    ? seedRoadmapItemsConsoleHeld
-                                    : scenario === "run-review" ||
-                                        scenario === DRAFT_NEW_ITEMS_SCENARIO
-                                      ? seedRunReview
-                                      : scenario === "no-document"
-                                        ? seedNoDocument
-                                        : scenario === "run-review-decider"
-                                          ? seedRunReviewDecider
-                                          : scenario === "priority-order"
-                                            ? seedPriorityOrder
-                                            : scenario === "next-draft" ||
-                                                scenario === "next-draft-costly"
-                                              ? () =>
-                                                  seedNextDraft(
-                                                    scenario ===
-                                                      "next-draft-costly",
-                                                  )
-                                              : scenario === "before-drafting"
-                                                ? seedBeforeDraftingScenario
-                                                : scenario === "late-answers"
-                                                  ? seedLateAnswersScenario
-                                                  : scenario ===
-                                                      "brief-goal-rejected"
-                                                    ? seedBriefGoalRejectedScenario
-                                                    : scenario === "questions"
-                                                      ? seedQuestions
-                                                      : scenario ===
-                                                          "private-finding"
-                                                        ? seedPrivateFinding
-                                                        : scenario ===
-                                                            "many-people"
-                                                          ? seedManyPeople
-                                                          : scenario ===
-                                                              "simple-deciders"
-                                                            ? seedSimpleDecidersScenario
-                                                            : scenario ===
-                                                                "simple-home"
-                                                              ? seedSimpleHomeScenario
-                                                              : scenario ===
-                                                                  "simple-home-deciders"
-                                                                ? seedSimpleHomeDecidersScenario
-                                                                : scenario ===
-                                                                    "simple-suggest-deciders"
-                                                                  ? seedSimpleSuggestDecidersScenario
-                                                                  : scenario ===
-                                                                      "simple-suggest-needs-look"
-                                                                    ? seedSimpleSuggestNeedsLookScenario
-                                                                    : scenario ===
-                                                                        "simple-home-milestones"
-                                                                      ? seedSimpleHomeMilestonesScenario
-                                                                      : scenario ===
-                                                                          "simple-home-one-prd"
-                                                                        ? seedSimpleHomeOnePrdScenario
-                                                                        : scenario ===
-                                                                            "simple-walk"
-                                                                          ? seedSimpleWalkScenario
-                                                                          : scenario ===
-                                                                              "simple-plan"
-                                                                            ? () =>
-                                                                                seedSimplePlanScenario()
-                                                                            : scenario ===
-                                                                                "simple-plan-lanes"
-                                                                              ? seedSimplePlanLanesScenario
-                                                                              : scenario ===
-                                                                                  "simple-plan-two"
-                                                                                ? seedSimplePlanTwoScenario
-                                                                                : scenario ===
-                                                                                    "simple-plan-undated"
-                                                                                  ? () => {
-                                                                                      // prd-timeline: Guided setup's plan whose milestones have no dates.
-                                                                                      const db =
-                                                                                        seedSimplePlanScenario();
-                                                                                      db.simple_roadmap!.plan!.undated = true;
-                                                                                      return db;
-                                                                                    }
-                                                                                  : scenario ===
-                                                                                      "simple-plan-partly-dated"
-                                                                                    ? () => {
-                                                                                        // fidelity prd (pick D, frame D3): only M1 has dates; M2 and M3 have none yet.
-                                                                                        const db =
-                                                                                          seedSimplePlanScenario();
-                                                                                        db.simple_roadmap!.plan!.partly_dated = true;
-                                                                                        return db;
-                                                                                      }
-                                                                                    : scenario ===
-                                                                                        "simple-plan-goalless"
-                                                                                      ? () => {
-                                                                                          // prd-timeline review: Guided setup's plan with work that names no goal.
-                                                                                          const db =
-                                                                                            seedSimplePlanScenario();
-                                                                                          db.simple_roadmap!.plan!.goalless = true;
-                                                                                          return db;
-                                                                                        }
-                                                                                      : scenario ===
-                                                                                            "simple-chat" ||
-                                                                                          scenario ===
-                                                                                            "simple-chat-stray" ||
-                                                                                          scenario ===
-                                                                                            "meet-chat-right-prd" ||
-                                                                                          scenario ===
-                                                                                            "roadmap-talk" ||
-                                                                                          scenario ===
-                                                                                            "roadmap-talk-own-decider"
-                                                                                        ? () => {
-                                                                                            const db =
-                                                                                              seedSimpleHomeScenario();
-                                                                                            db.simple_chat =
-                                                                                              seedSimpleChat(
-                                                                                                db.members,
-                                                                                              );
-                                                                                            // chat-reader: the two "Delivery …" items its rules talk about.
-                                                                                            if (
-                                                                                              db.simple_roadmap
-                                                                                            )
-                                                                                              seedReaderItems(
-                                                                                                db.simple_roadmap,
-                                                                                              );
-                                                                                            // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
-                                                                                            if (
-                                                                                              ![
-                                                                                                "simple-chat",
-                                                                                                "simple-chat-stray",
-                                                                                                "meet-chat-right-prd",
-                                                                                              ].includes(
-                                                                                                scenario,
-                                                                                              ) &&
-                                                                                              db.simple_roadmap
-                                                                                            )
-                                                                                              seedTalkItems(
-                                                                                                db.simple_roadmap,
-                                                                                              );
-                                                                                            // meet-chat-right-prd: the meeting reviews Guided setup, its features on its draft roadmap.
-                                                                                            if (
-                                                                                              scenario ===
-                                                                                                "meet-chat-right-prd" &&
-                                                                                              db.simple_roadmap
-                                                                                            )
-                                                                                              seedRightPrd(
-                                                                                                db.simple_roadmap,
-                                                                                                db.simple_chat,
-                                                                                              );
-                                                                                            // meet-chat-kind: the meeting chat already holds an earlier build's discussion reply.
-                                                                                            if (
-                                                                                              scenario ===
-                                                                                              "simple-chat-stray"
-                                                                                            ) {
-                                                                                              const owner =
-                                                                                                db.members.find(
-                                                                                                  (
-                                                                                                    m,
-                                                                                                  ) =>
-                                                                                                    m.role ===
-                                                                                                    "owner",
-                                                                                                )!;
-                                                                                              seedStrayReply(
-                                                                                                db.simple_chat,
-                                                                                                {
-                                                                                                  id: owner.id,
-                                                                                                  name: displayName(
-                                                                                                    owner.email,
-                                                                                                    owner.name,
-                                                                                                  ),
-                                                                                                },
-                                                                                              );
-                                                                                            }
-                                                                                            // fix5-cut-dependents review: approver@example.com is Alert rules engine's own
-                                                                                            // decider; the company's owners decide the items that wait on it.
-                                                                                            if (
-                                                                                              scenario ===
-                                                                                                "roadmap-talk-own-decider" &&
-                                                                                              db.simple_roadmap
-                                                                                            ) {
-                                                                                              const approver =
-                                                                                                db.members.find(
-                                                                                                  (
-                                                                                                    m,
-                                                                                                  ) =>
-                                                                                                    m.email ===
-                                                                                                    "approver@example.com",
-                                                                                                )!;
-                                                                                              const r =
-                                                                                                db.simple_roadmap;
-                                                                                              r.targets =
-                                                                                                {
-                                                                                                  ...r.targets,
-                                                                                                  [r
-                                                                                                    .ids[
-                                                                                                    "alert-rules"
-                                                                                                  ]]:
-                                                                                                    {
-                                                                                                      ...r
-                                                                                                        .targets?.[
-                                                                                                        r
-                                                                                                          .ids[
-                                                                                                          "alert-rules"
-                                                                                                        ]
-                                                                                                      ],
-                                                                                                      decider_id:
-                                                                                                        approver.id,
-                                                                                                    },
-                                                                                                };
-                                                                                            }
-                                                                                            return db;
-                                                                                          }
-                                                                                        : scenario ===
-                                                                                            "simple-500"
-                                                                                          ? () => ({
-                                                                                              ...seed(),
-                                                                                              simple_roadmap:
-                                                                                                seedSimpleMany(),
-                                                                                            })
-                                                                                          : scenario ===
-                                                                                                "strategy" ||
-                                                                                              scenario ===
-                                                                                                "strategy-no-vision"
-                                                                                            ? () =>
-                                                                                                seedStrategyScenario(
-                                                                                                  scenario ===
-                                                                                                    "strategy",
-                                                                                                )
-                                                                                            : scenario ===
-                                                                                                "strategy-plan"
-                                                                                              ? seedStrategyPlanScenario
-                                                                                              : scenario ===
-                                                                                                  "strategy-none"
-                                                                                                ? seedNoStrategyScenario
-                                                                                                : seed,
+    scenario === "empty" ? seedEmpty : scenario === "large" ? seedLarge : scenario === "suggestions"
+        ? seedSuggestions
+        : scenario === "big-prd"
+          ? seedBigPrd
+          : scenario === "feature-set" || scenario === "run-discussions" || scenario === "discussion-change-kinds"
+            ? seedFeatureSet
+          : scenario === "baseline-review" || scenario === "baseline-review-console"
+            ? () => seedBaselineReview(scenario === "baseline-review-console")
+          : scenario === "scope-review" || scenario === "scope-review-kept"
+            ? () => seedScopeReview(scenario === "scope-review-kept")
+          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
+            ? seedEngReview
+          : scenario === "eng-check"
+            ? seedEngCheck
+          : scenario === "eng-check-no-lead"
+            ? seedEngCheckNoLead
+          : scenario === "eng-check-unmapped"
+            ? seedEngCheckUnmapped
+          : scenario === "eng-check-unnamed"
+            ? seedEngCheckUnnamed
+          : scenario === "eng-check-unreadable"
+            ? seedEngCheckUnreadable
+          : scenario === "eng-check-long-key"
+            ? seedEngCheckLongKey
+          : scenario === "eng-dates"
+            ? seedEngDates
+          : scenario === "roadmap-items-console-held"
+            ? seedRoadmapItemsConsoleHeld
+          : scenario === "run-review" || scenario === DRAFT_NEW_ITEMS_SCENARIO
+            ? seedRunReview
+          : scenario === "no-document"
+            ? seedNoDocument
+          : scenario === "run-review-decider"
+            ? seedRunReviewDecider
+          : scenario === "priority-order"
+            ? seedPriorityOrder
+          : scenario === "next-draft" || scenario === "next-draft-costly"
+            ? () => seedNextDraft(scenario === "next-draft-costly")
+          : scenario === "before-drafting"
+            ? seedBeforeDraftingScenario
+          : scenario === "late-answers"
+            ? seedLateAnswersScenario
+          : scenario === "brief-goal-rejected"
+            ? seedBriefGoalRejectedScenario
+          : scenario === "questions"
+            ? seedQuestions
+            : scenario === "private-finding"
+              ? seedPrivateFinding
+              : scenario === "many-people"
+                ? seedManyPeople
+              : scenario === "simple-deciders"
+                ? seedSimpleDecidersScenario
+              : scenario === "simple-home"
+                ? seedSimpleHomeScenario
+              : scenario === "simple-home-deciders"
+                ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-suggest-deciders"
+                ? seedSimpleSuggestDecidersScenario
+              : scenario === "simple-suggest-needs-look"
+                ? seedSimpleSuggestNeedsLookScenario
+              : scenario === "simple-home-milestones"
+                ? seedSimpleHomeMilestonesScenario
+              : scenario === "simple-home-one-prd"
+                ? seedSimpleHomeOnePrdScenario
+              : scenario === "simple-walk"
+                ? seedSimpleWalkScenario
+              : scenario === "simple-plan"
+                ? () => seedSimplePlanScenario()
+              : scenario === "simple-plan-lanes"
+                ? seedSimplePlanLanesScenario
+              : scenario === "simple-plan-two"
+                ? seedSimplePlanTwoScenario
+              : scenario === "simple-plan-undated"
+                ? () => {
+                    // prd-timeline: Guided setup's plan whose milestones have no dates.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.undated = true;
+                    return db;
+                  }
+              : scenario === "simple-plan-partly-dated"
+                ? () => {
+                    // fidelity prd (pick D, frame D3): only M1 has dates; M2 and M3 have none yet.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.partly_dated = true;
+                    return db;
+                  }
+              : scenario === "simple-plan-goalless"
+                ? () => {
+                    // prd-timeline review: Guided setup's plan with work that names no goal.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.goalless = true;
+                    return db;
+                  }
+              : scenario === "simple-chat" || scenario === "simple-chat-stray" || scenario === "meet-chat-right-prd" || scenario === "roadmap-talk" || scenario === "roadmap-talk-own-decider"
+                ? () => {
+                    const db = seedSimpleHomeScenario();
+                    db.simple_chat = seedSimpleChat(db.members);
+                    // chat-reader: the two "Delivery …" items its rules talk about.
+                    if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
+                    // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
+                    if (!["simple-chat", "simple-chat-stray", "meet-chat-right-prd"].includes(scenario) && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
+                    // meet-chat-right-prd: the meeting reviews Guided setup, its features on its draft roadmap.
+                    if (scenario === "meet-chat-right-prd" && db.simple_roadmap) seedRightPrd(db.simple_roadmap, db.simple_chat);
+                    // meet-chat-kind: the meeting chat already holds an earlier build's discussion reply.
+                    if (scenario === "simple-chat-stray") {
+                      const owner = db.members.find((m) => m.role === "owner")!;
+                      seedStrayReply(db.simple_chat, { id: owner.id, name: displayName(owner.email, owner.name) });
+                    }
+                    // fix5-cut-dependents review: approver@example.com is Alert rules engine's own
+                    // decider; the company's owners decide the items that wait on it.
+                    if (scenario === "roadmap-talk-own-decider" && db.simple_roadmap) {
+                      const approver = db.members.find((m) => m.email === "approver@example.com")!;
+                      const r = db.simple_roadmap;
+                      r.targets = { ...r.targets, [r.ids["alert-rules"]]: { ...r.targets?.[r.ids["alert-rules"]], decider_id: approver.id } };
+                    }
+                    return db;
+                  }
+              : scenario === "simple-500"
+                ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
+                : scenario === "strategy" || scenario === "strategy-no-vision"
+                  ? () => seedStrategyScenario(scenario === "strategy")
+                  : scenario === "strategy-plan"
+                    ? seedStrategyPlanScenario
+                  : scenario === "strategy-none"
+                    ? seedNoStrategyScenario
+                    : seed,
   );
   // The 500-item scenario's plans, known only while its items are the roadmap's.
   knowManyPlans(db.simple_roadmap);
   // Revokes a disable could not make: none, unless a spec asks for them.
-  db.revoke_failures =
-    scenario === "revoke-failures" ? seedRevokeFailures() : [];
-  db.access_failures =
-    scenario === "access-failures" ? seedAccessFailures() : [];
+  db.revoke_failures = scenario === "revoke-failures" ? seedRevokeFailures() : [];
+  db.access_failures = scenario === "access-failures" ? seedAccessFailures() : [];
   // Launches (H6): three synthetic launches in the "launches" scenario; none otherwise, so
   // other specs' Inbox counts stay as they were.
-  if (scenario === "launches")
-    db.launches = seedLaunches(
-      launchesContext(
-        db,
-        db.members.find((x) => x.id === db.user_id)!,
-      ),
-    );
+  if (scenario === "launches") db.launches = seedLaunches(launchesContext(db, db.members.find((x) => x.id === db.user_id)!));
   // usage-alerts-roadmap v1 is in review by default (the Plan reads the document's state:
   // qa4-plan-3). It is approved where a scenario works on the approved plan: launches are
   // planned from it (New launch, #344, has items to pick), "plan-decider" (#346) edits it,
@@ -4945,22 +2965,12 @@ function load(): Db {
   // "outcomes" tracks outcomes of its items, "alerts-approved" is the approved plan alone, and
   // the "track-alerts" scenarios watch its milestones (an accepted slip moves an approved item).
   const approvedPlan = [
-    "launches",
-    "plan-decider",
-    "strategy-plan",
-    "outcomes",
-    DATE_BASES_SCENARIO,
-    ALERTS_APPROVED_SCENARIO,
-    "track-alerts",
-    "track-alerts-many",
-    "track-alerts-actions",
-    "track-alerts-history",
+    "launches", "plan-decider", "strategy-plan", "outcomes", DATE_BASES_SCENARIO, ALERTS_APPROVED_SCENARIO,
+    "track-alerts", "track-alerts-many", "track-alerts-actions", "track-alerts-history",
   ];
   if (approvedPlan.includes(scenario ?? "")) {
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
-    const v1 =
-      roadmap &&
-      db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+    const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
     if (roadmap && v1) {
       v1.approved_at = "2026-10-05T09:00:00Z";
       roadmap.status = "approved";
@@ -4971,12 +2981,9 @@ function load(): Db {
   // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
   // "outcomes-recorded" adds a verdict Oracle recorded (H11 at Act within limits) for the owner to change.
   if (scenario === "outcomes" || scenario === "outcomes-recorded") {
-    const goal = db.baseline.entities.find(
-      (e) => e.type === "goal" && e.title === "Raise activation",
-    );
+    const goal = db.baseline.entities.find((e) => e.type === "goal" && e.title === "Raise activation");
     const outcomes = goal ? seedOutcomes(db.user_id, goal.id, null) : [];
-    if (goal && scenario === "outcomes-recorded")
-      outcomes.push(seedOracleRecorded(db.user_id, goal.id));
+    if (goal && scenario === "outcomes-recorded") outcomes.push(seedOracleRecorded(db.user_id, goal.id));
     if (goal) db.quality = { outcomes, learnings: seedLearnings(db.user_id) };
   }
   db.autonomy = emptyAutonomy();
@@ -4992,11 +2999,7 @@ function load(): Db {
   db.discussions =
     scenario === "discussions"
       ? seedDiscussionInboxScenario(db, seedDiscussionsScenario(db))
-      : scenario === "discussion-replies" ||
-          scenario === POOL_SPENT_SCENARIO ||
-          scenario === STORED_REFUSALS_SCENARIO ||
-          scenario === RESEARCH_REFUSED_SCENARIO ||
-          scenario === RESEARCH_UNSAFE_LINK_SCENARIO
+      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO || scenario === STORED_REFUSALS_SCENARIO || scenario === RESEARCH_REFUSED_SCENARIO || scenario === RESEARCH_UNSAFE_LINK_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
         : scenario === SLACK_SCENARIO
           ? seedDiscussionsScenario(db, seedSlackBridge)
@@ -5007,8 +3010,7 @@ function load(): Db {
               : scenario === "discussion-change-kinds"
                 ? seedDiscussionChangeKindsScenario(db)
                 : emptyDiscussions();
-  if (scenario === "oracle-did")
-    db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
+  if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   // #524: what Oracle did at Act within limits on a launch (H6) and a ritual (H2), each row
   // linking to its subject.
   if (scenario === "oracle-did-launch-ritual") {
@@ -5016,30 +3018,17 @@ function load(): Db {
     db.launches = seedLaunches(launchesContext(db, owner));
     db.rituals = seedRituals(ritualsContext(db, owner), true);
     const launched = db.launches.launches.find((l) => l.state === "launched")!;
-    const refresh = db.rituals.rituals.find(
-      (r) => r.kind === "roadmap_refresh",
-    )!;
-    const occurrence = db.rituals.occurrences.find(
-      (o) => o.ritual_id === refresh.id,
-    )!;
-    db.autonomy.actions.push(
-      seedLaunchDid(db.user_id, uuid(), launched),
-      seedRitualDid(db.user_id, uuid(), refresh, occurrence.id),
-    );
+    const refresh = db.rituals.rituals.find((r) => r.kind === "roadmap_refresh")!;
+    const occurrence = db.rituals.occurrences.find((o) => o.ritual_id === refresh.id)!;
+    db.autonomy.actions.push(seedLaunchDid(db.user_id, uuid(), launched), seedRitualDid(db.user_id, uuid(), refresh, occurrence.id));
   }
   // #150: what Oracle did at Act within limits on a request (H11 requests): it merged a
   // request into the one it repeats; the row links to it on Requests.
   if (scenario === "oracle-did-request") {
     const requests = ensureRequests(db);
-    const merged = requests.requests.find(
-      (r) => r.state === "merged" && r.merged_into_id,
-    );
-    const into =
-      merged && requests.requests.find((r) => r.id === merged.merged_into_id);
-    if (merged && into)
-      db.autonomy.actions.push(
-        seedRequestDid(db.user_id, uuid(), merged, into),
-      );
+    const merged = requests.requests.find((r) => r.state === "merged" && r.merged_into_id);
+    const into = merged && requests.requests.find((r) => r.id === merged.merged_into_id);
+    if (merged && into) db.autonomy.actions.push(seedRequestDid(db.user_id, uuid(), merged, into));
   }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
   // #711 "long-title": the saved-carts PRD under a title as long as real PRD titles are.
@@ -5047,26 +3036,16 @@ function load(): Db {
     const carts = db.documents.find((d) => d.slug === "saved-carts");
     if (carts) carts.title = "Saved carts for returning buyers PRD";
   }
-  if (scenario === BLOCKER_NARROWED_SCENARIO)
-    narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
+  if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {
     const prd = db.documents.find((d) => d.kind === "prd");
-    db.review_v2 = seedReviewV2(
-      prd,
-      prd ? docVersions(db, prd).pop() : undefined,
-      db.user_id,
-      hash,
-    );
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
     const first = db.review_v2.patches[0];
     if (first) {
       db.review_v2.patches.push({
-        ...first,
-        id: "p0000000-0000-4000-8000-000000000002",
-        section_key: "launch-checklist",
-        heading: "Launch checklist",
-        base_hash: hash("launch-checklist"),
-        body_md: "Tell support a day before the cart change ships.",
+        ...first, id: "p0000000-0000-4000-8000-000000000002", section_key: "launch-checklist", heading: "Launch checklist",
+        base_hash: hash("launch-checklist"), body_md: "Tell support a day before the cart change ships.",
       });
     }
   }
@@ -5074,46 +3053,29 @@ function load(): Db {
     addGoalCodes(db.baseline);
     addCodedPrd(db);
     // An Inbox row quoting Oracle's text with a known code (G-B) and an unknown one (G-Z).
-    db.autonomy.actions.push(
-      seedOracleDid(
-        db.user_id,
-        uuid(),
-        "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z",
-      ),
-    );
+    db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
   }
-  if (scenario === "proposal-overlap")
-    addOverlappingProposals(db.baseline, uuid);
-  if (scenario === "proposal-overlap-status")
-    addStatusOverlapProposals(db.baseline, uuid);
+  if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
+  if (scenario === "proposal-overlap-status") addStatusOverlapProposals(db.baseline, uuid);
   if (scenario === "conflict-3way") addThreeWayConflict(db.baseline, uuid);
-  if (scenario === "goal-words")
-    addGoalWords(
-      db.baseline,
-      db.members.find((m) => m.email === "approver@example.com")!.id,
-    );
+  if (scenario === "goal-words") addGoalWords(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   // "strategy-plan" also has draft 2: a draft item's drift is measured on the draft, so the Plan
   // shows draft 2's rows only while the roadmap document has that unapproved version (qa4-plan-3).
-  if (scenario === DIFF_SCENARIO || scenario === "strategy-plan")
-    addRoadmapVersion(db);
+  if (scenario === DIFF_SCENARIO || scenario === "strategy-plan") addRoadmapVersion(db);
   if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
   // #561 review: a run, its segment, roadmap items and a next-draft build that failed on Oct 18 on a stored refusal; refinements refused now.
   if (scenario === STORED_REFUSALS_SCENARIO) {
     seedStoredRefusalRun(db.runs!, runsContext(db), SPENT);
     seedStoredRefusals(llmContext(db, db.user_id, "owner"));
     // #644 re-review: the "discussion-replies" seed's failed reply stored the refusal on Oct 18.
-    for (const m of db.discussions.messages)
-      if (m.status === "failed") m.error = SPENT;
+    for (const m of db.discussions.messages) if (m.status === "failed") m.error = SPENT;
   }
-  if (scenario === KEY_RENEWED_SCENARIO)
-    seedKeyRenewedRun(db.runs!, runsContext(db));
+  if (scenario === KEY_RENEWED_SCENARIO) seedKeyRenewedRun(db.runs!, runsContext(db));
   if (scenario === REPORT_PRD_MOVED_SCENARIO) addApprovedPrdV2(db);
   if (scenario === VERSION_WARNINGS_SCENARIO) {
     const prd = db.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
-    const v1 =
-      roadmap &&
-      db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+    const v1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
     if (prd && v1) v1.warnings = versionWarnings(prd.title, prd.slug);
   }
   save(db);
@@ -5125,16 +3087,10 @@ function load(): Db {
 /** fix4 "report-prd-moved": the Usage alerts PRD's v2 approved after the roadmap was built from v1. */
 function addApprovedPrdV2(db: Db) {
   const prd = db.documents.find((d) => d.slug === "usage-alerts");
-  const p1 =
-    prd && db.versions.find((v) => v.document_id === prd.id && v.number === 1);
+  const p1 = prd && db.versions.find((v) => v.document_id === prd.id && v.number === 1);
   if (!prd || !p1) return;
   const p2 = structuredClone(p1);
-  Object.assign(p2, {
-    id: uuid(),
-    number: 2,
-    created_at: "2026-10-21T09:00:00Z",
-    approved_at: "2026-10-22T09:00:00Z",
-  });
+  Object.assign(p2, { id: uuid(), number: 2, created_at: "2026-10-21T09:00:00Z", approved_at: "2026-10-22T09:00:00Z" });
   p2.sections = p2.sections.map((x) => ({ ...x, id: uuid() }));
   db.versions.push(p2);
   prd.updated_at = p2.created_at;
@@ -5143,17 +3099,11 @@ function addApprovedPrdV2(db: Db) {
 /** E3 "roadmap-diff": usage-alerts-roadmap v1 approved, then v2, a draft (./roadmap.ts gives each its items). */
 function addRoadmapVersion(db: Db) {
   const doc = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
-  const v1 =
-    doc && db.versions.find((v) => v.document_id === doc.id && v.number === 1);
+  const v1 = doc && db.versions.find((v) => v.document_id === doc.id && v.number === 1);
   if (!doc || !v1) return;
   v1.approved_at ??= "2026-10-05T09:00:00Z";
   const v2 = structuredClone(v1);
-  Object.assign(v2, {
-    id: uuid(),
-    number: 2,
-    created_at: "2026-10-20T09:00:00Z",
-    approved_at: null,
-  });
+  Object.assign(v2, { id: uuid(), number: 2, created_at: "2026-10-20T09:00:00Z", approved_at: null });
   v2.sections = v2.sections.map((s) => ({ ...s, id: uuid() }));
   db.versions.push(v2);
   doc.updated_at = v2.created_at;
@@ -5162,37 +3112,19 @@ function addRoadmapVersion(db: Db) {
 /** E3b "approved-plan": usage-alerts-roadmap v1 approved, then usage-alerts v2, a draft with a Spend limits section (./draft-roadmap.ts gives it its items). */
 function addApprovedPlan(db: Db) {
   const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
-  const r1 =
-    roadmap &&
-    db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
+  const r1 = roadmap && db.versions.find((v) => v.document_id === roadmap.id && v.number === 1);
   const prd = db.documents.find((d) => d.slug === "usage-alerts");
-  const p1 =
-    prd && db.versions.find((v) => v.document_id === prd.id && v.number === 1);
+  const p1 = prd && db.versions.find((v) => v.document_id === prd.id && v.number === 1);
   if (!roadmap || !r1 || !prd || !p1) return;
   r1.approved_at ??= "2026-10-05T09:00:00Z";
   roadmap.status = "approved";
   const p2 = structuredClone(p1);
-  Object.assign(p2, {
-    id: uuid(),
-    number: 2,
-    created_at: "2026-10-21T09:00:00Z",
-    approved_at: null,
-  });
+  Object.assign(p2, { id: uuid(), number: 2, created_at: "2026-10-21T09:00:00Z", approved_at: null });
   const heading = "3. Spend limits";
   const body = "Admins set a monthly spend limit; Oracle warns at 80% of it.";
   p2.sections = [
     ...p2.sections.map((x) => ({ ...x, id: uuid() })),
-    {
-      ...p2.sections[p2.sections.length - 1],
-      id: uuid(),
-      section_key: "limits",
-      ordinal: p2.sections.length,
-      heading,
-      body_md: body,
-      body_text: body,
-      content_hash: hash(`${heading}\n${body}`),
-      citation_keys: [],
-    },
+    { ...p2.sections[p2.sections.length - 1], id: uuid(), section_key: "limits", ordinal: p2.sections.length, heading, body_md: body, body_text: body, content_hash: hash(`${heading}\n${body}`), citation_keys: [] },
   ];
   p2.content_hash = hash(p2.sections.map((x) => x.content_hash).join(""));
   db.versions.push(p2);
@@ -5201,71 +3133,25 @@ function addApprovedPlan(db: Db) {
 }
 
 /** "discussions": the commenter's private discussion with the approver on team-workspaces v2's Problem. */
-function seedDiscussionsScenario(
-  db: Db,
-  seed: typeof seedDiscussions = seedDiscussions,
-): DiscussionsDb {
+function seedDiscussionsScenario(db: Db, seed: typeof seedDiscussions = seedDiscussions): DiscussionsDb {
   const doc = findDocument(db, "team-workspaces")!;
-  const heading = findVersion(db, doc, 2)!.sections.find(
-    (s) => s.section_key === "problem",
-  )!.heading;
-  return seed(
-    {
-      members: db.members,
-      resolve: () => ({ status: 500, detail: "unused" }),
-      uuid,
-      now,
-    },
-    doc.id,
-    `${doc.title} · ${heading}`,
-    `/documents/${doc.slug}/v/2#problem`,
-  );
+  const heading = findVersion(db, doc, 2)!.sections.find((s) => s.section_key === "problem")!.heading;
+  return seed({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, doc.id, `${doc.title} · ${heading}`, `/documents/${doc.slug}/v/2#problem`);
 }
 
 /** G6: the "discussions" seed plus the open discussion on saved-carts v2 whose rows wait in the Inbox. */
-function seedDiscussionInboxScenario(
-  db: Db,
-  discussions: DiscussionsDb,
-): DiscussionsDb {
+function seedDiscussionInboxScenario(db: Db, discussions: DiscussionsDb): DiscussionsDb {
   const doc = findDocument(db, "saved-carts")!;
-  const ctx = {
-    members: db.members,
-    resolve: () => ({ status: 500, detail: "unused" }),
-    uuid,
-    now,
-  };
-  seedDiscussionInbox(
-    ctx,
-    discussions,
-    doc.id,
-    doc.title,
-    `/documents/${doc.slug}/v/2`,
-  );
+  const ctx = { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now };
+  seedDiscussionInbox(ctx, discussions, doc.id, doc.title, `/documents/${doc.slug}/v/2`);
   // Criterion 7: a question Oracle asked the approver from that discussion names it.
   const d = discussions.discussions.find((x) => x.document_id === doc.id)!;
   const at = "2026-10-21T08:25:00Z";
   ensureV2(db).questions.push({
-    id: uuid(),
-    gap_id: null,
-    intake_id: null,
-    document_id: doc.id,
-    checkpoint_id: null,
-    item_ref: null,
-    entity_id: null,
-    module_key: null,
-    category: "general",
-    prompt: "How long should a guest's cart last?",
-    rationale: null,
-    priority: 100,
-    batch: null,
-    asked_to: db.members.find((m) => m.email === "approver@example.com")!.id,
-    asked_by: null,
-    section_key: null,
-    status: "asked",
-    created_at: at,
-    updated_at: at,
-    discussion_id: d.id,
-    discussion_title: d.title,
+    id: uuid(), gap_id: null, intake_id: null, document_id: doc.id, checkpoint_id: null, item_ref: null, entity_id: null,
+    module_key: null, category: "general", prompt: "How long should a guest's cart last?", rationale: null, priority: 100,
+    batch: null, asked_to: db.members.find((m) => m.email === "approver@example.com")!.id, asked_by: null, section_key: null,
+    status: "asked", created_at: at, updated_at: at, discussion_id: d.id, discussion_title: d.title,
   });
   return discussions;
 }
@@ -5273,16 +3159,7 @@ function seedDiscussionInboxScenario(
 /** G3 "discussion-record": Oracle's proposed date basis in an open discussion on checkout-redesign v2's guest-checkout item. */
 function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
   const prd = findDocument(db, "checkout-redesign")!;
-  return seedDiscussionRecord(
-    {
-      members: db.members,
-      resolve: () => ({ status: 500, detail: "unused" }),
-      uuid,
-      now,
-    },
-    prd,
-    2,
-  );
+  return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, prd, 2);
 }
 
 /** G3 "discussion-change-kinds": Oracle's priority move, ask and decision on the feature-set stop's saved-carts item. */
@@ -5291,18 +3168,11 @@ function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
   const cp = run.checkpoints.find((c) => c.status === "pending")!;
   const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
   const feature = (key: string) => {
-    const e = db.baseline.entities.find(
-      (x) => x.type === "feature" && x.key === key,
-    )!;
+    const e = db.baseline.entities.find((x) => x.type === "feature" && x.key === key)!;
     return { id: e.id, title: e.title };
   };
   return seedDiscussionChangeKinds(
-    {
-      members: db.members,
-      resolve: () => ({ status: 500, detail: "unused" }),
-      uuid,
-      now,
-    },
+    { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now },
     { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind },
     { moved: feature("f.saved-carts"), above: feature("f.guided-setup") },
   );
@@ -5310,10 +3180,7 @@ function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
 
 /** The roadmap routes' context (CR-11, F3 Date bases) for the signed-in member. */
 /** fix4 qa-plan-1: an alignment report's tracks, read off the roadmap mock's track overviews (the Plan's). */
-function reportLive(
-  db: Db,
-  me: { id: string; role: Role; email: string },
-): LiveTracks {
+function reportLive(db: Db, me: { id: string; role: Role; email: string }): LiveTracks {
   return (calm) => {
     const ctx = roadmapContext(db, me);
     db.roadmap = ensureRoadmap(db, ctx);
@@ -5321,10 +3188,7 @@ function reportLive(
   };
 }
 
-function roadmapContext(
-  db: Db,
-  me: { id: string; role: Role; email: string },
-): RoadmapContext {
+function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): RoadmapContext {
   return {
     userId: me.id,
     role: me.role,
@@ -5336,8 +3200,7 @@ function roadmapContext(
     versions: db.versions,
     approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
     drafts: () => draftDb(db).rows,
-    roadmapWatch: () =>
-      levelFor((db.autonomy ??= emptyAutonomy()), "roadmap_watch"),
+    roadmapWatch: () => levelFor((db.autonomy ??= emptyAutonomy()), "roadmap_watch"),
   };
 }
 
@@ -5346,15 +3209,7 @@ function seedRunDiscussionsScenario(db: Db): DiscussionsDb {
   const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
   const cp = run.checkpoints.find((c) => c.status === "pending")!;
   const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
-  return seedRunDiscussions(
-    {
-      members: db.members,
-      resolve: () => ({ status: 500, detail: "unused" }),
-      uuid,
-      now,
-    },
-    { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind },
-  );
+  return seedRunDiscussions({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind });
 }
 
 const CHECKPOINT_NAMES: Record<string, string> = {
@@ -5371,19 +3226,12 @@ const CHECKPOINT_NAMES: Record<string, string> = {
 
 /** #406: the text of the document version a discussion is on, as oracle.discussions.context reads it: the section first (the brief on the whole document), then the rest, citation markers stripped. */
 function discussionDocument(db: Db, d: DiscussionRow): DocumentSection[] {
-  if (
-    d.subject_kind !== "document" &&
-    d.subject_kind !== "section" &&
-    d.subject_kind !== "roadmap_item"
-  )
-    return [];
+  if (d.subject_kind !== "document" && d.subject_kind !== "section" && d.subject_kind !== "roadmap_item") return [];
   const doc = findDocument(db, String(d.subject.document_id));
   const v = doc ? findVersion(db, doc, Number(d.subject.version)) : undefined;
   if (!doc || !v) return [];
-  const first =
-    d.subject_kind === "section" ? String(d.subject.section_key) : null;
-  const later = (x: (typeof v.sections)[number]) =>
-    Number(first ? x.section_key !== first : x.layer !== "brief");
+  const first = d.subject_kind === "section" ? String(d.subject.section_key) : null;
+  const later = (x: (typeof v.sections)[number]) => Number(first ? x.section_key !== first : x.layer !== "brief");
   const sections = [...v.sections].sort((a, b) => later(a) - later(b));
   return sections.map((x) => ({
     document_id: doc.id,
@@ -5395,36 +3243,13 @@ function discussionDocument(db: Db, d: DiscussionRow): DocumentSection[] {
 }
 
 /** A `screen` subject's page name, never its route (oracle.discussions.context.page_name): "Home", "Settings · Members", "General" for /. */
-const SCREEN_PAGES: Record<string, string> = {
-  home: "Home",
-  requests: "Requests",
-  baseline: "Baseline",
-  documents: "PRDs",
-  priorities: "Priorities",
-  plan: "Plan",
-  roadmap: "Plan",
-  runs: "Runs",
-  inbox: "Inbox",
-  company: "Company",
-  sources: "Sources",
-  settings: "Settings",
-};
-const SCREEN_SIMPLE_PAGES: Record<string, string> = {
-  "": "Home",
-  roadmap: "Roadmap",
-  priorities: "Priorities",
-  decisions: "Decisions",
-  meetings: "Meetings",
-  prds: "One-pager",
-  "one-pagers": "One-pager",
-};
+const SCREEN_PAGES: Record<string, string> = { home: "Home", requests: "Requests", baseline: "Baseline", documents: "PRDs", priorities: "Priorities", plan: "Plan", roadmap: "Plan", runs: "Runs", inbox: "Inbox", company: "Company", sources: "Sources", settings: "Settings" };
+const SCREEN_SIMPLE_PAGES: Record<string, string> = { "": "Home", roadmap: "Roadmap", priorities: "Priorities", decisions: "Decisions", meetings: "Meetings", prds: "One-pager", "one-pagers": "One-pager" };
 function screenPageName(path: string): string {
   const parts = path.split("?")[0].split("/").filter(Boolean);
   if (parts.length === 0) return "General";
-  const simple =
-    parts[0] === "simple" ? SCREEN_SIMPLE_PAGES[parts[1] ?? ""] : undefined;
-  if (simple)
-    return simple === "One-pager" && parts.length < 3 ? "One-pagers" : simple;
+  const simple = parts[0] === "simple" ? SCREEN_SIMPLE_PAGES[parts[1] ?? ""] : undefined;
+  if (simple) return simple === "One-pager" && parts.length < 3 ? "One-pagers" : simple;
   const name = SCREEN_PAGES[parts[0]];
   if (!name) return path;
   if ((parts[0] === "settings" || parts[0] === "company") && parts[1]) {
@@ -5435,43 +3260,19 @@ function screenPageName(path: string): string {
 }
 
 /** A discussion's subject as the API resolves it (oracle.discussions.service): documents, sections and run checkpoints are checked; other kinds are taken as given. */
-function discussionSubject(
-  db: Db,
-  kind: string,
-  s: Record<string, unknown>,
-): SubjectInfo | { status: number; detail: string } {
+function discussionSubject(db: Db, kind: string, s: Record<string, unknown>): SubjectInfo | { status: number; detail: string } {
   if (kind === "document" || kind === "section" || kind === "roadmap_item") {
     const doc = findDocument(db, String(s.document_id));
     if (!doc) return { status: 404, detail: "Document not found" };
     const v = findVersion(db, doc, Number(s.version));
     if (!v) return { status: 404, detail: `Version ${s.version} not found` };
     const url = `/documents/${doc.slug}/v/${v.number}`;
-    if (kind === "document")
-      return {
-        key: `document:${doc.id}`,
-        label: doc.title,
-        url,
-        document_id: doc.id,
-      };
+    if (kind === "document") return { key: `document:${doc.id}`, label: doc.title, url, document_id: doc.id };
     if (kind === "roadmap_item")
-      return {
-        key: `roadmap_item:${doc.id}:${s.item_key}`,
-        label: `${doc.title} · ${s.item_key}`,
-        url: `${url}/items`,
-        document_id: doc.id,
-      };
+      return { key: `roadmap_item:${doc.id}:${s.item_key}`, label: `${doc.title} · ${s.item_key}`, url: `${url}/items`, document_id: doc.id };
     const section = v.sections.find((x) => x.section_key === s.section_key);
-    if (!section)
-      return {
-        status: 422,
-        detail: `Section ${s.section_key} is not in version ${v.number}`,
-      };
-    return {
-      key: `section:${doc.id}:${section.section_key}`,
-      label: `${doc.title} · ${section.heading}`,
-      url: `${url}#${section.section_key}`,
-      document_id: doc.id,
-    };
+    if (!section) return { status: 422, detail: `Section ${s.section_key} is not in version ${v.number}` };
+    return { key: `section:${doc.id}:${section.section_key}`, label: `${doc.title} · ${section.heading}`, url: `${url}#${section.section_key}`, document_id: doc.id };
   }
   if (kind === "checkpoint" || kind === "checkpoint_item") {
     const run = db.runs?.runs.find((r) => r.id === s.run_id);
@@ -5479,28 +3280,11 @@ function discussionSubject(
     const cp = run.checkpoints.find((c) => c.id === s.checkpoint_id);
     if (!cp) return { status: 404, detail: "Checkpoint not found" };
     const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
-    if (kind === "checkpoint")
-      return {
-        key: `checkpoint:${run.id}:${cp.kind}`,
-        label,
-        url: `/runs/${run.id}`,
-        run_id: run.id,
-      };
-    return {
-      key: `run_item:${run.id}:${cp.kind}:${s.item_key}`,
-      label: `${label} · ${s.item_key}`,
-      url: `/runs/${run.id}`,
-      run_id: run.id,
-    };
+    if (kind === "checkpoint") return { key: `checkpoint:${run.id}:${cp.kind}`, label, url: `/runs/${run.id}`, run_id: run.id };
+    return { key: `run_item:${run.id}:${cp.kind}:${s.item_key}`, label: `${label} · ${s.item_key}`, url: `/runs/${run.id}`, run_id: run.id };
   }
-  if (kind === "priorities")
-    return { key: "priorities", label: "Priority order", url: "/priorities" };
-  if (kind === "screen")
-    return {
-      key: `screen:${s.path}`,
-      label: screenPageName(String(s.path)),
-      url: String(s.path),
-    };
+  if (kind === "priorities") return { key: "priorities", label: "Priority order", url: "/priorities" };
+  if (kind === "screen") return { key: `screen:${s.path}`, label: screenPageName(String(s.path)), url: String(s.path) };
   const id = Object.values(s)[0];
   return { key: `${kind}:${id}`, label: kind.replace("_", " "), url: "/" };
 }
@@ -5544,43 +3328,18 @@ function addGeneralFeedback(
 }
 
 /** qa-docs-33 (as oracle.discussions.service.review_feedback): an open Discuss thread on a version under review is its whole-draft feedback. */
-function discussionReviewFeedback(
-  db: Db,
-  me: { id: string; role: Role },
-  d: DiscussionRow,
-  body: string,
-) {
-  if (
-    d.subject_kind !== "document" ||
-    d.origin !== "discuss" ||
-    d.visibility !== "open"
-  )
-    return;
+function discussionReviewFeedback(db: Db, me: { id: string; role: Role }, d: DiscussionRow, body: string) {
+  if (d.subject_kind !== "document" || d.origin !== "discuss" || d.visibility !== "open") return;
   const doc = findDocument(db, String(d.subject.document_id));
   const v = doc && findVersion(db, doc, Number(d.subject.version));
   if (!doc || !v || v.approved_at) return;
-  addGeneralFeedback(
-    db,
-    llmContext(db, me.id, me.role),
-    doc,
-    v,
-    me.id,
-    body,
-    null,
-    d.id,
-  );
+  addGeneralFeedback(db, llmContext(db, me.id, me.role), doc, v, me.id, body, null, d.id);
 }
 
 /** As discussions.service.close_for_feedback: closing whole-draft feedback made in Discuss closes its thread. */
 function closeFeedbackThread(db: Db, f: { discussion_id?: string | null }) {
-  const thread = f.discussion_id
-    ? db.discussions?.discussions.find((x) => x.id === f.discussion_id)
-    : null;
-  if (thread && thread.status !== "closed")
-    Object.assign(thread, {
-      status: "closed",
-      lock_version: thread.lock_version + 1,
-    });
+  const thread = f.discussion_id ? db.discussions?.discussions.find((x) => x.id === f.discussion_id) : null;
+  if (thread && thread.status !== "closed") Object.assign(thread, { status: "closed", lock_version: thread.lock_version + 1 });
 }
 
 /** As oracle.review.schemas.GENERAL_FEEDBACK_MAX and the API's FEEDBACK_TOO_LONG. */
@@ -5589,22 +3348,11 @@ const FEEDBACK_TOO_LONG =
   "During the review, the first message is feedback on the whole draft, which can be at most 4,000 characters. Shorten it, or say the rest in a reply.";
 
 /** fix3-discuss review: the refusal for a first message too long to be whole-draft feedback. */
-function discussionFeedbackRefusal(
-  db: Db,
-  d: DiscussionRow,
-  body: string,
-): string | null {
-  if (
-    d.subject_kind !== "document" ||
-    d.origin !== "discuss" ||
-    d.visibility !== "open"
-  )
-    return null;
+function discussionFeedbackRefusal(db: Db, d: DiscussionRow, body: string): string | null {
+  if (d.subject_kind !== "document" || d.origin !== "discuss" || d.visibility !== "open") return null;
   const doc = findDocument(db, String(d.subject.document_id));
   const v = doc && findVersion(db, doc, Number(d.subject.version));
-  return doc && v && !v.approved_at && body.length > GENERAL_FEEDBACK_MAX
-    ? FEEDBACK_TOO_LONG
-    : null;
+  return doc && v && !v.approved_at && body.length > GENERAL_FEEDBACK_MAX ? FEEDBACK_TOO_LONG : null;
 }
 
 /** An active member of this Oracle (a goal's owner must be one). */
@@ -5613,43 +3361,18 @@ function activeMember(db: Db, userId: string): boolean {
 }
 
 /** /v1/baseline/... through ./baseline.ts, with the caller and the lookups it needs. */
-function routeBaselineFor(
-  db: Db,
-  me: { id: string; role: Schemas["Me"]["role"] },
-  req: Request,
-  p: string[],
-  q: URLSearchParams,
-) {
+function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] }, req: Request, p: string[], q: URLSearchParams) {
   const runOf = (runId: string): Schemas["ProposalRun"] | null => {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const r = db.runs.runs.find((x) => x.id === runId);
-    return r
-      ? {
-          id: r.id,
-          flow: r.flow,
-          flow_title: r.flow_title,
-          status: r.status,
-          created_at: r.created_at,
-        }
-      : null;
+    return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
   };
-  const memberEmail = (userId: string) =>
-    db.members.find((m) => m.id === userId)?.email ?? null;
+  const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
   const member = db.members.find((m) => m.id === me.id);
-  const hidden = member
-    ? hiddenDecisionEntities(db, member)
-    : new Set<string>();
+  const hidden = member ? hiddenDecisionEntities(db, member) : new Set<string>();
   return routeBaseline(
     db.baseline,
-    {
-      userId: me.id,
-      role: me.role,
-      runOf,
-      memberEmail,
-      sourceItem,
-      isMember: (id) => activeMember(db, id),
-      hidden: (id) => hidden.has(id),
-    },
+    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id) },
     req,
     p.slice(2),
     q,
@@ -5659,8 +3382,7 @@ function routeBaselineFor(
 function save(db: Db) {
   const raw = JSON.stringify(db);
   // A read that changed nothing writes nothing (qa-plan-10).
-  if (localStorage.getItem(STORAGE_KEY) !== raw)
-    localStorage.setItem(STORAGE_KEY, raw);
+  if (localStorage.getItem(STORAGE_KEY) !== raw) localStorage.setItem(STORAGE_KEY, raw);
   cached = { raw, db };
 }
 
@@ -5682,15 +3404,10 @@ function findVersion(db: Db, doc: DocumentRow, n: number) {
 }
 
 function docVersions(db: Db, doc: DocumentRow) {
-  return db.versions
-    .filter((v) => v.document_id === doc.id)
-    .sort((a, b) => a.number - b.number);
+  return db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => a.number - b.number);
 }
 
-function versionSource(
-  doc: DocumentRow,
-  v: VersionRow,
-): Schemas["VersionSource"] {
+function versionSource(doc: DocumentRow, v: VersionRow): Schemas["VersionSource"] {
   return {
     document_id: doc.id,
     slug: doc.slug,
@@ -5702,25 +3419,15 @@ function versionSource(
   };
 }
 
-const DOC_LINK =
-  /\]\((\/documents\/([A-Za-z0-9][\w.-]*)\/v\/(\d+)(?:#([A-Za-z0-9][\w.:-]*))?)\)/g;
+const DOC_LINK = /\]\((\/documents\/([A-Za-z0-9][\w.-]*)\/v\/(\d+)(?:#([A-Za-z0-9][\w.:-]*))?)\)/g;
 
 /** A roadmap draft's links to its PRD version's sections, resolved or not (O4b). */
-function prdLinks(
-  v: VersionRow,
-  slug: string,
-  prd: VersionRow,
-): Schemas["PrdLinks"] {
+function prdLinks(v: VersionRow, slug: string, prd: VersionRow): Schemas["PrdLinks"] {
   const keys = new Set(prd.sections.map((s) => s.section_key));
   const out: Schemas["PrdLinks"] = { resolved: 0, unresolved: [] };
   for (const s of v.sections) {
     for (const m of s.body_md.matchAll(DOC_LINK)) {
-      if (
-        m[2] === slug &&
-        Number(m[3]) === prd.number &&
-        (!m[4] || keys.has(m[4]))
-      )
-        out.resolved += 1;
+      if (m[2] === slug && Number(m[3]) === prd.number && (!m[4] || keys.has(m[4]))) out.resolved += 1;
       else out.unresolved.push(m[1]);
     }
   }
@@ -5746,25 +3453,14 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
   };
 }
 
-function sectionLayer(
-  db: Db,
-  versionId: string,
-  key: string,
-): Schemas["SectionOut"]["layer"] | null {
-  return (
-    db.versions
-      .find((v) => v.id === versionId)
-      ?.sections.find((s) => s.section_key === key)?.layer ?? null
-  );
+function sectionLayer(db: Db, versionId: string, key: string): Schemas["SectionOut"]["layer"] | null {
+  return db.versions.find((v) => v.id === versionId)?.sections.find((s) => s.section_key === key)?.layer ?? null;
 }
 
 function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
   const vs = docVersions(db, d);
   const latest = vs[vs.length - 1];
-  const period =
-    d.kind === "update"
-      ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null)
-      : null;
+  const period = d.kind === "update" ? ((latest?.front_matter.period as UpdatePeriod | undefined) ?? null) : null;
   return {
     ...d,
     kind: d.kind ?? "prd",
@@ -5780,29 +3476,17 @@ function documentSummary(db: Db, d: DocumentRow): Schemas["DocumentSummary"] {
 
 /** D10: the latest run review checkpoint whose import made version `number` of the document. */
 function runReviewOf(db: Db, documentId: string, number: number) {
-  const found = (db.runs?.runs ?? []).flatMap((run) =>
-    run.checkpoints.map((cp) => ({ run, cp })),
-  );
-  return found
-    .filter(({ cp }) => {
-      const v = reviewedVersion(cp);
-      return v?.document_id === documentId && v.version === number;
-    })
-    .pop();
+  const found = (db.runs?.runs ?? []).flatMap((run) => run.checkpoints.map((cp) => ({ run, cp })));
+  return found.filter(({ cp }) => {
+    const v = reviewedVersion(cp);
+    return v?.document_id === documentId && v.version === number;
+  }).pop();
 }
 
 /** D10: the designated decider of the document a run review reviews (its review policy), if any. */
-function runReviewDecider(
-  db: Db,
-  cp: Pick<Schemas["CheckpointOut"], "kind" | "payload">,
-): string | null {
+function runReviewDecider(db: Db, cp: Pick<Schemas["CheckpointOut"], "kind" | "payload">): string | null {
   const v = reviewedVersion(cp);
-  return (
-    (v &&
-      db.review_v2?.policies.find((x) => x.document_id === v.document_id)
-        ?.decider_id) ||
-    null
-  );
+  return (v && db.review_v2?.policies.find((x) => x.document_id === v.document_id)?.decider_id) || null;
 }
 
 /**
@@ -5810,36 +3494,16 @@ function runReviewDecider(
  * published. With a designated decider, the last section's approval counts only when the
  * decider gave it; otherwise the run review waits for them.
  */
-function followRunReview(
-  db: Db,
-  doc: DocumentRow,
-  v: VersionRow,
-  published: boolean,
-  by: string,
-) {
+function followRunReview(db: Db, doc: DocumentRow, v: VersionRow, published: boolean, by: string) {
   const found = runReviewOf(db, doc.id, v.number);
   if (!found || found.cp.status !== "pending" || !db.runs) return;
   const decider = runReviewDecider(db, found.cp);
   if (!published && decider && decider !== by) return;
-  if (
-    !published &&
-    !v.sections.every(
-      (x) => latestReview(db, v.id, x.section_key)?.verdict === "approved",
-    )
-  )
-    return;
-  approveRunReview(
-    { ...runsContext(db), db: db.runs },
-    found.run.id,
-    found.cp.id,
-  );
+  if (!published && !v.sections.every((x) => latestReview(db, v.id, x.section_key)?.verdict === "approved")) return;
+  approveRunReview({ ...runsContext(db), db: db.runs }, found.run.id, found.cp.id);
 }
 
-function latestReview(
-  db: Db,
-  versionId: string,
-  key: string,
-): ReviewRow | undefined {
+function latestReview(db: Db, versionId: string, key: string): ReviewRow | undefined {
   return db.reviews
     .filter((r) => r.version_id === versionId && r.section_key === key)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -5849,11 +3513,7 @@ function latestReview(
 function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
   // E1: the version's draft roadmap summary (PRD versions only), for the Roadmap tab's label.
   const doc = db.documents.find((d) => d.id === v.document_id);
-  const draft_roadmap = draftRoadmapSummary(
-    doc?.kind === "prd" ? draftDb(db) : undefined,
-    doc,
-    v.number,
-  );
+  const draft_roadmap = draftRoadmapSummary(doc?.kind === "prd" ? draftDb(db) : undefined, doc, v.number);
   const out: Schemas["VersionOut"] = {
     ...v,
     date_marks: [],
@@ -5870,12 +3530,7 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
               reviewer_id: r.reviewer_id,
               created_at: r.created_at,
               // An approval that lapsed (C2): set on a stored review by the specs.
-              ...(r.lapsed_at
-                ? {
-                    lapsed_at: r.lapsed_at,
-                    lapse_reason: r.lapse_reason ?? null,
-                  }
-                : {}),
+              ...(r.lapsed_at ? { lapsed_at: r.lapsed_at, lapse_reason: r.lapse_reason ?? null } : {}),
             }
           : null,
       };
@@ -5886,9 +3541,7 @@ function versionOut(db: Db, v: VersionRow): Schemas["VersionOut"] {
 
 /** E1: the draft roadmaps' context: the signed-in member (role override included) and the mock's runs. */
 function draftCtx(db: Db): DraftRoadmapContext {
-  const member =
-    db.members.find((x) => x.email === sessionOf(db)) ??
-    db.members.find((m) => m.id === db.user_id)!;
+  const member = db.members.find((x) => x.email === sessionOf(db)) ?? db.members.find((m) => m.id === db.user_id)!;
   const me = withMockRole(member);
   return {
     role: me.role,
@@ -5905,21 +3558,14 @@ function draftCtx(db: Db): DraftRoadmapContext {
 function draftDb(db: Db): DraftRoadmapDb {
   return (db.draft_roadmaps ??= seeded("draft-roadmaps", () => {
     const drafts = seedDraftRoadmaps(draftCtx(db));
-    if (localStorage.getItem(MOCK_SCENARIO_KEY) === APPROVED_PLAN_SCENARIO)
-      seedApprovedPlanDraft(draftCtx(db), drafts);
-    if (localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO)
-      seedStoredRefusalDraft(draftCtx(db), drafts, SPENT);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === APPROVED_PLAN_SCENARIO) seedApprovedPlanDraft(draftCtx(db), drafts);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO) seedStoredRefusalDraft(draftCtx(db), drafts, SPENT);
     return drafts;
   }));
 }
 
 /** E1: a new PRD version queues its items-only roadmap (the API's version_imported handler). */
-function queueDraft(
-  db: Db,
-  documentId: string,
-  v: VersionRow,
-  origin?: "skeleton",
-) {
+function queueDraft(db: Db, documentId: string, v: VersionRow, origin?: "skeleton") {
   const doc = db.documents.find((d) => d.id === documentId);
   if (!doc || doc.kind !== "prd") return;
   const by = db.members.find((x) => x.email === sessionOf(db))?.id ?? null;
@@ -6023,8 +3669,7 @@ function addReview(
     feedback_item_id: null,
   };
   if (body.verdict !== "approved") {
-    const heading =
-      v.sections.find((s) => s.section_key === key)?.heading ?? key;
+    const heading = v.sections.find((s) => s.section_key === key)?.heading ?? key;
     r.feedback_item_id = uuid();
     db.feedback.push({
       id: r.feedback_item_id,
@@ -6035,8 +3680,7 @@ function addReview(
       section_review_id: r.id,
       section_key: key,
       summary: truncate(
-        body.note?.trim() ||
-          `${body.verdict === "rejected" ? "Rejected" : "Changes requested on"} ${heading}`,
+        body.note?.trim() || `${body.verdict === "rejected" ? "Rejected" : "Changes requested on"} ${heading}`,
       ),
       author_id: r.reviewer_id,
       anchor: null,
@@ -6053,10 +3697,7 @@ function addReview(
 }
 
 /** B6 Goals interview's context: its routes, and G3's Propose on a goal version, write through it. */
-function goalContext(
-  db: Db,
-  me: { id: string; role: Role },
-): GoalInterviewContext {
+function goalContext(db: Db, me: { id: string; role: Role }): GoalInterviewContext {
   return {
     baseline: db.baseline,
     discussions: () => (db.discussions ??= emptyDiscussions()),
@@ -6071,9 +3712,7 @@ function goalContext(
 
 function lockedKeys(db: Db, v: VersionRow): string[] {
   return v.sections
-    .filter(
-      (s) => latestReview(db, v.id, s.section_key)?.verdict === "approved",
-    )
+    .filter((s) => latestReview(db, v.id, s.section_key)?.verdict === "approved")
     .map((s) => s.section_key);
 }
 
@@ -6084,32 +3723,21 @@ function versionMarkdown(doc: DocumentRow, v: VersionRow): string {
         `  - id: ${c.cite_key}\n    source: ${c.source}\n    ref: ${c.ref}\n    title: ${JSON.stringify(c.title ?? "")}\n    excerpt: ${JSON.stringify(c.excerpt ?? "")}` +
         (c.item_id ? `\n    item: ${c.item_id}` : "") +
         (c.confidence != null ? `\n    confidence: ${c.confidence}` : "") +
-        (c.confidence_note
-          ? `\n    confidence_note: ${JSON.stringify(c.confidence_note)}`
-          : "") +
+        (c.confidence_note ? `\n    confidence_note: ${JSON.stringify(c.confidence_note)}` : "") +
         (c.low_confidence ? "\n    low_confidence: true" : ""),
     )
     .join("\n");
   const period = v.front_matter.period as UpdatePeriod | undefined;
-  const update =
-    doc.kind === "update"
-      ? `kind: update\ntemplate: ${doc.template}\n${period ? `period: {from: ${period.from}, to: ${period.to}}\n` : ""}`
-      : "";
+  const update = doc.kind === "update" ? `kind: update\ntemplate: ${doc.template}\n${period ? `period: {from: ${period.from}, to: ${period.to}}\n` : ""}` : "";
   const head = `---\ndocument: ${doc.slug}\ntitle: ${doc.title}\n${update}${v.snapshot ? `snapshot: ${v.snapshot}\n` : ""}citations:\n${cites || "  []"}\n---\n`;
   const body = v.sections
-    .map(
-      (s) =>
-        `${"#".repeat(s.level)} ${s.heading} {#${s.section_key}}\n\n${s.body_md}\n`,
-    )
+    .map((s) => `${"#".repeat(s.level)} ${s.heading} {#${s.section_key}}\n\n${s.body_md}\n`)
     .join("\n");
   return `${head}\n${body}`;
 }
 
 function escapeHtml(s: string) {
-  return s.replace(
-    /[&<>"]/g,
-    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!,
-  );
+  return s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
 }
 
 /** `audience`: O5, the label of the audience the export renders for (as the API's banner). */
@@ -6117,9 +3745,7 @@ function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
   // qa-docs-39: as the API's export banner (prd.html.j2): the state in words and a readable date.
   const status = (v.approved_at ? "approved" : doc.status).replace(/_/g, " ");
   const badge = audience ? ` · Audience ${audience}` : "";
-  const when = v.approved_at
-    ? `Approved ${formatDate(v.approved_at)}`
-    : `Imported ${formatDate(v.created_at)}`;
+  const when = v.approved_at ? `Approved ${formatDate(v.approved_at)}` : `Imported ${formatDate(v.created_at)}`;
   return `${doc.title} · Version ${v.number}${badge} · ${status.charAt(0).toUpperCase()}${status.slice(1)} · ${when}`;
 }
 
@@ -6157,8 +3783,7 @@ function bodyHtml(md: string): string {
         case "pre":
           return `<pre>${escapeHtml(b.v)}</pre>`;
         case "table": {
-          const tr = (r: Inline[][], tag: string) =>
-            `<tr>${b.head.map((_, n) => `<${tag}>${inlineHtml(r[n] ?? [])}</${tag}>`).join("")}</tr>`;
+          const tr = (r: Inline[][], tag: string) => `<tr>${b.head.map((_, n) => `<${tag}>${inlineHtml(r[n] ?? [])}</${tag}>`).join("")}</tr>`;
           return `<table><thead>${tr(b.head, "th")}</thead><tbody>${b.rows.map((r) => tr(r, "td")).join("")}</tbody></table>`;
         }
       }
@@ -6196,30 +3821,18 @@ th, td { border: 1px solid #d0d5dd; padding: 0.3rem 0.5rem; text-align: left; ve
  * `linkHolder`: a share link holder's page (as the API's oracle.shares.render, link_holder): the header names the
  * company, the title and the day it is as of; no version, status, audience or citations.
  */
-function exportHtml(
-  doc: DocumentRow,
-  v: VersionRow,
-  brand: BrandingDb = emptyBranding(),
-  audience?: string | null,
-  linkHolder = false,
-): string {
+function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null, linkHolder = false): string {
   // A roadmap rendered for an audience: the theme's card board, and its markdown tables as tables.
   const board = doc.kind === "roadmap" && !!audience;
   const section = (s: VersionRow["sections"][number]) => {
     const tag = `h${Math.min(s.level, 3)}`;
-    const attrs = board
-      ? ` class="prd-section level-${s.level}${spansRow(s.section_key) ? " section-wide" : ""}" data-section-key="${s.section_key}"`
-      : "";
+    const attrs = board ? ` class="prd-section level-${s.level}${spansRow(s.section_key) ? " section-wide" : ""}" data-section-key="${s.section_key}"` : "";
     return `<section id="${s.section_key}"${attrs}><${tag}>${escapeHtml(s.heading)}</${tag}>${bodyHtml(s.body_md ?? s.body_text)}</section>`;
   };
-  const groups: {
-    head: VersionRow["sections"][number];
-    children: VersionRow["sections"];
-  }[] = [];
+  const groups: { head: VersionRow["sections"][number]; children: VersionRow["sections"] }[] = [];
   for (const s of v.sections) {
     const last = groups[groups.length - 1];
-    if (board && s.level >= 3 && last && last.head.level === 2)
-      last.children.push(s);
+    if (board && s.level >= 3 && last && last.head.level === 2) last.children.push(s);
     else groups.push({ head: s, children: [] });
   }
   const sections = groups
@@ -6247,22 +3860,10 @@ function exportHtml(
 }
 
 /** A tiny single-page PDF (Helvetica, ASCII only) so the download flow can be exercised. */
-function exportPdf(
-  doc: DocumentRow,
-  v: VersionRow,
-  audience?: string | null,
-): string {
-  const ascii = (s: string) =>
-    s.replace(/[^\x20-\x7e]/g, "-").replace(/([\\()])/g, "\\$1");
-  const lines = [
-    banner(doc, v, audience),
-    "Mock export: the API renders the real PDF.",
-    "",
-    ...v.sections.map((s) => s.heading),
-  ];
-  const text = lines
-    .map((l, i) => `${i ? "T* " : ""}(${ascii(l)}) Tj`)
-    .join("\n");
+function exportPdf(doc: DocumentRow, v: VersionRow, audience?: string | null): string {
+  const ascii = (s: string) => s.replace(/[^\x20-\x7e]/g, "-").replace(/([\\()])/g, "\\$1");
+  const lines = [banner(doc, v, audience), "Mock export: the API renders the real PDF.", "", ...v.sections.map((s) => s.heading)];
+  const text = lines.map((l, i) => `${i ? "T* " : ""}(${ascii(l)}) Tj`).join("\n");
   const stream = `BT /F1 11 Tf 16 TL 72 740 Td\n${text}\nET`;
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
@@ -6279,9 +3880,7 @@ function exportPdf(
   });
   const xref = out.length;
   out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  out += offsets
-    .map((o) => `${String(o).padStart(10, "0")} 00000 n \n`)
-    .join("");
+  out += offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("");
   out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return out;
 }
@@ -6298,21 +3897,13 @@ function json(status: number, body: unknown): Response {
 const notFound = (what: string) => json(404, { detail: `${what} not found` });
 
 const ROLE_ORDER: Role[] = ["viewer", "commenter", "approver", "owner"];
-const atLeast = (role: Role, min: Role) =>
-  ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(min);
-const APPROVER_INVITES =
-  "Approvers invite viewers and commenters. Ask an owner to invite an approver.";
-const forbidden = (min: Role) =>
-  json(403, { detail: `Requires the ${min} role` });
+const atLeast = (role: Role, min: Role) => ROLE_ORDER.indexOf(role) >= ROLE_ORDER.indexOf(min);
+const APPROVER_INVITES = "Approvers invite viewers and commenters. Ask an owner to invite an approver.";
+const forbidden = (min: Role) => json(403, { detail: `Requires the ${min} role` });
 
 function meOut(db: Db, m: MemberRow): Schemas["Me"] {
   // A5: the roles they may invite with (owners any, approvers viewer and commenter).
-  const invite_roles: Role[] =
-    m.role === "owner"
-      ? ROLE_ORDER
-      : m.role === "approver"
-        ? ["viewer", "commenter"]
-        : [];
+  const invite_roles: Role[] = m.role === "owner" ? ROLE_ORDER : m.role === "approver" ? ["viewer", "commenter"] : [];
   return {
     kind: "user",
     tenant_id: db.tenant_id,
@@ -6322,9 +3913,7 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
     engineering_lead: !!m.engineering_lead,
     name: m.name ?? null,
     invite_roles,
-    company_timezone: String(
-      mockSettingValue("company_timezone") ?? "America/Los_Angeles",
-    ),
+    company_timezone: String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
   };
 }
 
@@ -6332,27 +3921,15 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
 /** F2 Ask's pre-fill (oracle.roadmap.alerts.lookups): the one active engineering lead, as the people directory shows them. */
 function onlyLead(db: Db): Schemas["PersonOut"] | null {
   const leads = engineeringLeads(db);
-  const m =
-    leads.length === 1 ? db.members.find((x) => x.id === leads[0]) : undefined;
-  return m
-    ? {
-        user_id: m.id,
-        name: displayName(m.email, m.name),
-        email: m.email,
-        role: m.role,
-        can_write: atLeast(m.role, "commenter"),
-      }
-    : null;
+  const m = leads.length === 1 ? db.members.find((x) => x.id === leads[0]) : undefined;
+  return m ? { user_id: m.id, name: displayName(m.email, m.name), email: m.email, role: m.role, can_write: atLeast(m.role, "commenter") } : null;
 }
 
 function engineeringLeads(db: Db): string[] {
-  return db.members
-    .filter((x) => x.engineering_lead && x.status !== "disabled")
-    .map((x) => x.id);
+  return db.members.filter((x) => x.engineering_lead && x.status !== "disabled").map((x) => x.id);
 }
 
-const VIEWER_REFUSED =
-  "A viewer can't be the engineering lead. Make them a commenter or above first.";
+const VIEWER_REFUSED = "A viewer can't be the engineering lead. Make them a commenter or above first.";
 
 /**
  * GET /v1/setup (A1), as oracle.setup: the caller's steps from the mock's own stores. The
@@ -6364,74 +3941,35 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   const sources = sourceCount();
   const people = db.members.filter((x) => x.status !== "disabled").length;
   // qa4-settings-3: as oracle.setup, an expired invite is not open (nobody can join through it).
-  const invites = db.invites.filter(
-    (i) => i.status === "open" && !expired(i),
-  ).length;
+  const invites = db.invites.filter((i) => i.status === "open" && !expired(i)).length;
   const built = lastBaselineBuild(db.runs);
   // qa-onboarding-10: the build under way, the first started (as the one-at-a-time rule names it).
   const building = (db.runs?.runs ?? [])
     .filter((r) => r.flow === "baseline" && BUILD_UNDER_WAY.includes(r.status))
     .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
   const personal: Schemas["SetupStep"][] = [
-    {
-      key: "connect",
-      done: facts.connections > 0,
-      count: facts.connections,
-      detail: null,
-    },
+    { key: "connect", done: facts.connections > 0, count: facts.connections, detail: null },
     { key: "sources", done: sources > 0, count: sources, detail: null },
   ];
   const owner: Schemas["SetupStep"][] = [
     // qa-onboarding-18: the open invites beside the people who joined.
-    {
-      key: "invite",
-      done: people >= 2 || invites >= 1,
-      count: people,
-      detail: null,
-      invited: invites,
-    },
+    { key: "invite", done: people >= 2 || invites >= 1, count: people, detail: null, invited: invites },
     {
       key: "domains",
       done: facts.domains.length > 0,
       count: facts.domains.length,
       detail: facts.domains.length === 1 ? facts.domains[0] : null,
     },
-    {
-      key: "eng_lead",
-      done: engineeringLeads(db).length > 0,
-      count: engineeringLeads(db).length,
-      detail: null,
-    },
+    { key: "eng_lead", done: engineeringLeads(db).length > 0, count: engineeringLeads(db).length, detail: null },
     { key: "horizons", done: facts.horizons, count: null, detail: null },
-    {
-      key: "timezone",
-      done: facts.timezone != null,
-      count: null,
-      detail: facts.timezone,
-    },
-    {
-      key: "build_baseline",
-      done: built != null,
-      count: null,
-      detail: built,
-      run_id: building?.id ?? null,
-    },
+    { key: "timezone", done: facts.timezone != null, count: null, detail: facts.timezone },
+    { key: "build_baseline", done: built != null, count: null, detail: built, run_id: building?.id ?? null },
   ];
   // The "setup-new-step" scenario: an API with a step this web build has no words for.
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === "setup-new-step") {
-    owner.push({
-      key: "calendar" as Schemas["SetupStep"]["key"],
-      done: false,
-      count: null,
-      detail: null,
-    });
+    owner.push({ key: "calendar" as Schemas["SetupStep"]["key"], done: false, count: null, detail: null });
   }
-  const steps =
-    me.role === "owner"
-      ? [...personal, ...owner]
-      : me.role === "viewer"
-        ? []
-        : personal;
+  const steps = me.role === "owner" ? [...personal, ...owner] : me.role === "viewer" ? [] : personal;
   return {
     steps,
     done: steps.filter((st) => st.done).length,
@@ -6456,12 +3994,7 @@ function welcomed(db: Db, me: MemberRow): boolean {
  */
 function claimInvite(db: Db, email: string): MemberRow | null {
   const at = now();
-  const invite = db.invites.find(
-    (i) =>
-      i.email === email &&
-      i.status === "open" &&
-      (!i.expires_at || i.expires_at > at),
-  );
+  const invite = db.invites.find((i) => i.email === email && i.status === "open" && (!i.expires_at || i.expires_at > at));
   if (!invite) return null;
   Object.assign(invite, { status: "accepted", accepted_at: at });
   const member: MemberRow = {
@@ -6486,19 +4019,12 @@ function claimInvite(db: Db, email: string): MemberRow | null {
  * the email was withdrawn, or is past its date. Null when there is no such invite.
  */
 function inviteRefusal(db: Db, email: string): string | null {
-  const invite = db.invites
-    .filter((i) => i.email === email && i.status !== "accepted")
-    .at(-1);
+  const invite = db.invites.filter((i) => i.email === email && i.status !== "accepted").at(-1);
   if (!invite) return null;
   const by = db.members.find((x) => x.id === invite.invited_by);
   const who = by ? displayName(by.email, by.name) : "an owner";
-  if (invite.status === "revoked")
-    return `Your invite was withdrawn. Ask ${who} to invite you again.`;
-  if (
-    invite.status === "open" &&
-    invite.expires_at &&
-    Date.parse(invite.expires_at) <= Date.now()
-  )
+  if (invite.status === "revoked") return `Your invite was withdrawn. Ask ${who} to invite you again.`;
+  if (invite.status === "open" && invite.expires_at && Date.parse(invite.expires_at) <= Date.now())
     return `Your invite expired on ${formatDay(invite.expires_at)}. Ask ${who} to resend it.`;
   return null;
 }
@@ -6530,10 +4056,7 @@ const ACCESS_SCENARIOS: Record<string, Schemas["AccessStateOut"]["state"]> = {
 const ACCESS_EMAIL = "new.person@example.com";
 
 /** An open invite past its expiry (A5): still a row, with Resend. */
-const expired = (i: InviteRow) =>
-  i.status === "open" &&
-  !!i.expires_at &&
-  Date.parse(i.expires_at) < Date.now();
+const expired = (i: InviteRow) => i.status === "open" && !!i.expires_at && Date.parse(i.expires_at) < Date.now();
 
 /** The background send: queued invite emails whose time has come are sent, or fail. */
 function settleInviteEmails(db: Db) {
@@ -6541,24 +4064,10 @@ function settleInviteEmails(db: Db) {
   if (scenario === "mail-stalls") return;
   const fails = scenario === "mail-fails";
   for (const i of db.invites) {
-    if (
-      i.email_status !== "queued" ||
-      Date.now() - Date.parse(i.email_at ?? "") < MAIL_DELAY_MS
-    )
-      continue;
+    if (i.email_status !== "queued" || Date.now() - Date.parse(i.email_at ?? "") < MAIL_DELAY_MS) continue;
     const resent = (db.invites_resent ??= []).includes(i.id);
-    if (fails && !resent)
-      Object.assign(i, {
-        email_status: "failed",
-        email_error: "the Gmail API answered 503",
-        email_at: now(),
-      });
-    else
-      Object.assign(i, {
-        email_status: "sent",
-        email_error: null,
-        email_at: now(),
-      });
+    if (fails && !resent) Object.assign(i, { email_status: "failed", email_error: "the Gmail API answered 503", email_at: now() });
+    else Object.assign(i, { email_status: "sent", email_error: null, email_at: now() });
   }
 }
 
@@ -6566,74 +4075,40 @@ type AccessRequestRow = Schemas["AccessRequestOut"];
 
 /** The A5 access requests, seeded once per mock db (one pending: new.person@example.com). */
 function accessRequests(db: Db): AccessRequestRow[] {
-  return (db.access_requests ??= MOCK_ACCESS_REQUESTS.map((r) => ({
-    ...r,
-    id: uuid(),
-    status: "pending" as const,
-    last_seen_at: r.last_seen_at,
-  })));
+  return (db.access_requests ??= MOCK_ACCESS_REQUESTS.map((r) => ({ ...r, id: uuid(), status: "pending" as const, last_seen_at: r.last_seen_at })));
 }
 
 /** As oracle.members.access.preset_role: the stored default role when `roles` has it, else the least of them. */
 function presetRole(roles: readonly Role[]): Role | null {
   if (!roles.length) return null;
-  const stored = String(
-    mockSettingValue("iap_default_role") ?? "commenter",
-  ) as Role;
+  const stored = String(mockSettingValue("iap_default_role") ?? "commenter") as Role;
   return roles.includes(stored) ? stored : roles[0];
 }
 
 /** The Inbox's access request rows (A5): pending ones, oldest first, for those who may approve them. */
-function inboxAccessRequests(
-  db: Db,
-  me: MemberRow,
-): Schemas["InboxAccessRequest"][] {
+function inboxAccessRequests(db: Db, me: MemberRow): Schemas["InboxAccessRequest"][] {
   const roles = meOut(db, me).invite_roles;
   const preset = presetRole(roles);
   if (!preset) return [];
   return accessRequests(db)
     .filter((r) => r.status === "pending")
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
-    .map((r) => ({
-      id: r.id,
-      email: r.email,
-      note: r.note ?? null,
-      requested_at: r.created_at,
-      last_seen_at: r.last_seen_at,
-      default_role: preset,
-      roles,
-    }));
+    .map((r) => ({ id: r.id, email: r.email, note: r.note ?? null, requested_at: r.created_at, last_seen_at: r.last_seen_at, default_role: preset, roles }));
 }
 
 /**
  * Members: owners only, as in the API. Invites and access requests (A5): approvers too, with
  * their invite_roles (viewer and commenter), and only the invites they sent.
  */
-async function membersRoute(
-  db: Db,
-  req: Request,
-  p: string[],
-  me: MemberRow,
-): Promise<Response> {
+async function membersRoute(db: Db, req: Request, p: string[], me: MemberRow): Promise<Response> {
   const m = req.method;
   const owner = atLeast(me.role, "owner");
-  if (!owner && (p[1] === "members" || !atLeast(me.role, "approver")))
-    return forbidden(p[1] === "members" ? "owner" : "approver");
+  if (!owner && (p[1] === "members" || !atLeast(me.role, "approver"))) return forbidden(p[1] === "members" ? "owner" : "approver");
   const inviteRoles = meOut(db, me).invite_roles;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const account = (db.account ??= seedAccount(db.members, uuid));
-  const out = (x: MemberRow): MemberRow => ({
-    ...x,
-    open_tokens: openTokens(account, x.id),
-  });
-  const detailCtx: MembersContext = {
-    db,
-    me,
-    uuid,
-    now,
-    openTokens: (id) => openTokens(account, id),
-    credentials: (id) => liveCredentials(account, id),
-  };
+  const out = (x: MemberRow): MemberRow => ({ ...x, open_tokens: openTokens(account, x.id) });
+  const detailCtx: MembersContext = { db, me, uuid, now, openTokens: (id) => openTokens(account, id), credentials: (id) => liveCredentials(account, id) };
   if (p[1] === "members") {
     if (!p[2] && m === "GET") return json(200, db.members.map(out));
     // A5: a member's detail, the preview of a change, and hand-over (./members.ts).
@@ -6642,44 +4117,22 @@ async function membersRoute(
     const target = db.members.find((x) => x.id === p[2]);
     if (!target) return notFound("Member");
     // A disabled owner is not another owner.
-    const otherOwner = db.members.some(
-      (x) =>
-        x.id !== target.id && x.role === "owner" && x.status !== "disabled",
-    );
+    const otherOwner = db.members.some((x) => x.id !== target.id && x.role === "owner" && x.status !== "disabled");
     if (m === "PATCH") {
       // A role, the engineering lead flag (A3), or both: role first.
-      const {
-        role,
-        engineering_lead: lead,
-        name,
-        hand_over,
-      } = await body<Schemas["MemberPatch"] & { hand_over?: HandOver[] }>();
-      if (role == null && lead == null && name === undefined)
-        return json(422, {
-          detail: "Send role, engineering_lead, name or more",
-        });
-      if (name != null && name.trim().length > 80)
-        return json(422, { detail: "A name is at most 80 characters" });
+      const { role, engineering_lead: lead, name, hand_over } = await body<Schemas["MemberPatch"] & { hand_over?: HandOver[] }>();
+      if (role == null && lead == null && name === undefined) return json(422, { detail: "Send role, engineering_lead, name or more" });
+      if (name != null && name.trim().length > 80) return json(422, { detail: "A name is at most 80 characters" });
       const nextRole = role ?? target.role;
-      if (
-        role != null &&
-        target.role === "owner" &&
-        role !== "owner" &&
-        target.status !== "disabled" &&
-        !otherOwner
-      ) {
-        return json(409, {
-          detail: "Cannot demote the last owner; make someone else owner",
-        });
+      if (role != null && target.role === "owner" && role !== "owner" && target.status !== "disabled" && !otherOwner) {
+        return json(409, { detail: "Cannot demote the last owner; make someone else owner" });
       }
-      if (lead && nextRole === "viewer")
-        return json(422, { detail: VIEWER_REFUSED });
+      if (lead && nextRole === "viewer") return json(422, { detail: VIEWER_REFUSED });
       // A5: hand-over first, then the role change; a refused move changes nothing.
       const refused = handOver(detailCtx, target.id, hand_over);
       if (refused) return refused;
       if (name !== undefined) target.name = name?.trim() || null;
-      if (role != null && role !== target.role)
-        applied(detailCtx, { ...target, role }, "role");
+      if (role != null && role !== target.role) applied(detailCtx, { ...target, role }, "role");
       target.role = nextRole;
       // A viewer never carries the flag: a demotion to viewer clears it.
       if (nextRole === "viewer") target.engineering_lead = false;
@@ -6690,46 +4143,30 @@ async function membersRoute(
     if ((m === "POST" && p[3] === "disable") || (m === "DELETE" && !p[3])) {
       if (target.status !== "disabled") {
         if (target.id === me.id) {
-          return json(409, {
-            detail: "You cannot remove yourself; another owner can remove you",
-          });
+          return json(409, { detail: "You cannot remove yourself; another owner can remove you" });
         }
         if (target.role === "owner" && !otherOwner) {
-          return json(409, {
-            detail: "Cannot remove the last owner; make someone else owner",
-          });
+          return json(409, { detail: "Cannot remove the last owner; make someone else owner" });
         }
         // A5: the hand-over applies first, then the disable; a refused move removes no one.
-        const input =
-          m === "POST" ? await body<{ hand_over?: HandOver[] } | null>() : null;
+        const input = m === "POST" ? await body<{ hand_over?: HandOver[] } | null>() : null;
         const refused = handOver(detailCtx, target.id, input?.hand_over);
         if (refused) return refused;
         applied(detailCtx, target, "remove");
-        Object.assign(target, {
-          status: "disabled",
-          disabled_at: now(),
-          disabled_by: me.id,
-        });
+        Object.assign(target, { status: "disabled", disabled_at: now(), disabled_by: me.id });
         // Their Google IAP access is taken away; in "iap-revoke-fails" Google refuses, and
         // the revoke is owed (the tick retries it).
-        if (localStorage.getItem(MOCK_SCENARIO_KEY) === "iap-revoke-fails")
-          target.access_pending = "revoke";
+        if (localStorage.getItem(MOCK_SCENARIO_KEY) === "iap-revoke-fails") target.access_pending = "revoke";
         // Every credential acting for them is revoked with the disable.
         revokeMemberTokens(account, target.id, target.disabled_at!);
         for (const i of db.invites) {
-          if (i.email === target.email && i.status === "open")
-            Object.assign(i, { status: "revoked", revoked_at: now() });
+          if (i.email === target.email && i.status === "open") Object.assign(i, { status: "revoked", revoked_at: now() });
         }
       }
       return m === "DELETE" ? json(204, undefined) : json(200, out(target));
     }
     if (m === "POST" && p[3] === "restore") {
-      Object.assign(target, {
-        status: "active",
-        disabled_at: null,
-        disabled_by: null,
-        access_pending: null,
-      });
+      Object.assign(target, { status: "active", disabled_at: null, disabled_by: null, access_pending: null });
       return json(200, out(target));
     }
   }
@@ -6738,28 +4175,17 @@ async function membersRoute(
     // turns it down, reopen (Undo) puts it back to pending and revokes an unclaimed invite.
     const rows = accessRequests(db);
     // As the API's preset_role: the stored default role when the caller may approve as it.
-    const withPreset = (r: AccessRequestRow): AccessRequestRow => ({
-      ...r,
-      default_role: presetRole(inviteRoles),
-    });
+    const withPreset = (r: AccessRequestRow): AccessRequestRow => ({ ...r, default_role: presetRole(inviteRoles) });
     if (!p[2] && m === "GET") {
       const status = new URL(req.url).searchParams.get("status") ?? "pending";
-      return json(
-        200,
-        rows
-          .filter((r) => status === "all" || r.status === status)
-          .sort((a, b) => b.created_at.localeCompare(a.created_at))
-          .map(withPreset),
-      );
+      return json(200, rows.filter((r) => status === "all" || r.status === status).sort((a, b) => b.created_at.localeCompare(a.created_at)).map(withPreset));
     }
     const row = rows.find((r) => r.id === p[2]);
     if (!row) return notFound("Access request");
     if (p[3] === "approve" && m === "POST") {
-      if (row.status !== "pending")
-        return json(409, { detail: `This request was already ${row.status}` });
+      if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
       const { role, name } = await body<Schemas["AccessApprove"]>();
-      if (!inviteRoles.includes(role))
-        return json(403, { detail: APPROVER_INVITES });
+      if (!inviteRoles.includes(role)) return json(403, { detail: APPROVER_INVITES });
       const invite: InviteRow = {
         id: uuid(),
         email: row.email,
@@ -6782,49 +4208,22 @@ async function membersRoute(
         access_request_id: row.id,
       };
       db.invites.unshift(invite);
-      Object.assign(row, {
-        status: "approved",
-        role,
-        invite_id: invite.id,
-        decided_by: me.id,
-        decided_at: now(),
-      });
+      Object.assign(row, { status: "approved", role, invite_id: invite.id, decided_by: me.id, decided_at: now() });
       return json(200, withPreset(row));
     }
     if (p[3] === "decline" && m === "POST") {
-      if (row.status !== "pending")
-        return json(409, { detail: `This request was already ${row.status}` });
-      Object.assign(row, {
-        status: "declined",
-        decided_by: me.id,
-        decided_at: now(),
-      });
+      if (row.status !== "pending") return json(409, { detail: `This request was already ${row.status}` });
+      Object.assign(row, { status: "declined", decided_by: me.id, decided_at: now() });
       return json(200, withPreset(row));
     }
     if (p[3] === "reopen" && m === "POST") {
-      if (row.status !== "approved" && row.status !== "declined")
-        return json(409, { detail: `This request is ${row.status}` });
+      if (row.status !== "approved" && row.status !== "declined") return json(409, { detail: `This request is ${row.status}` });
       const invite = db.invites.find((i) => i.id === row.invite_id);
       // Approvers revoke only the invites they sent.
-      if (
-        invite &&
-        !invite.revoked_at &&
-        me.role !== "owner" &&
-        invite.invited_by !== me.id
-      )
-        return json(403, {
-          detail:
-            "Another person approved this request; ask an owner to undo it",
-        });
-      if (invite)
-        Object.assign(invite, { status: "revoked", revoked_at: now() });
-      Object.assign(row, {
-        status: "pending",
-        role: null,
-        invite_id: null,
-        decided_by: null,
-        decided_at: null,
-      });
+      if (invite && !invite.revoked_at && me.role !== "owner" && invite.invited_by !== me.id)
+        return json(403, { detail: "Another person approved this request; ask an owner to undo it" });
+      if (invite) Object.assign(invite, { status: "revoked", revoked_at: now() });
+      Object.assign(row, { status: "pending", role: null, invite_id: null, decided_by: null, decided_at: null });
       return json(200, withPreset(row));
     }
   }
@@ -6844,48 +4243,27 @@ async function membersRoute(
           // A5: an open invite past its expiry reads expired; ?status=open lists both (each needs an action).
           .map((i) => (expired(i) ? { ...i, status: "expired" as const } : i))
           .map(withInviter)
-          .filter(
-            (i) =>
-              (status === "all" ||
-                i.status === status ||
-                (status === "open" && i.status === "expired")) &&
-              (owner || i.invited_by === me.id),
-          )
+          .filter((i) => (status === "all" || i.status === status || (status === "open" && i.status === "expired")) && (owner || i.invited_by === me.id))
           .sort((a, b) => b.created_at.localeCompare(a.created_at)),
       );
     }
     if (!p[2] && m === "POST") {
       const input = await body<Schemas["InviteCreate"]>();
       const email = input.email.trim().toLowerCase();
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
-        return json(422, { detail: "Not an email address" });
-      if (!inviteRoles.includes(input.role))
-        return json(403, { detail: APPROVER_INVITES });
-      if (input.engineering_lead && input.role === "viewer")
-        return json(422, { detail: VIEWER_REFUSED });
-      if ((input.message?.length ?? 0) > 500)
-        return json(422, {
-          detail: "The message is longer than 500 characters",
-        });
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(422, { detail: "Not an email address" });
+      if (!inviteRoles.includes(input.role)) return json(403, { detail: APPROVER_INVITES });
+      if (input.engineering_lead && input.role === "viewer") return json(422, { detail: VIEWER_REFUSED });
+      if ((input.message?.length ?? 0) > 500) return json(422, { detail: "The message is longer than 500 characters" });
       if (!SIGN_IN_DOMAINS.includes(email.split("@")[1])) {
         // A5 (3.4): the API's outside_company_domains refusal.
         return json(422, {
           detail: `${email} is outside the company's email domains (${SIGN_IN_DOMAINS.join(", ")}), so Google sign-in can't let them join. Add the domain under Sign-in first.`,
         });
       }
-      if (db.members.some((x) => x.email === email))
-        return json(409, { detail: `${email} is already a member` });
-      const before = db.invites.find(
-        (i) => i.email === email && i.status === "open",
-      );
-      if (before && expired(before))
-        return json(409, {
-          detail: `${email} has an expired invite; resend it`,
-        });
-      if (before)
-        return json(409, {
-          detail: `${email} already has an open invite; revoke it first`,
-        });
+      if (db.members.some((x) => x.email === email)) return json(409, { detail: `${email} is already a member` });
+      const before = db.invites.find((i) => i.email === email && i.status === "open");
+      if (before && expired(before)) return json(409, { detail: `${email} has an expired invite; resend it` });
+      if (before) return json(409, { detail: `${email} already has an open invite; revoke it first` });
       const invite: InviteRow = {
         id: uuid(),
         email,
@@ -6913,84 +4291,50 @@ async function membersRoute(
       return json(201, withInviter(invite));
     }
     // Approvers act on their own invites only; another's is not found.
-    const invite = db.invites.find(
-      (i) => i.id === p[2] && (owner || i.invited_by === me.id),
-    );
+    const invite = db.invites.find((i) => i.id === p[2] && (owner || i.invited_by === me.id));
     if (!invite) return notFound("Invite");
-    if (!owner && m === "POST" && (p[3] === "access" || p[3] === "email"))
-      return forbidden("owner");
+    if (!owner && m === "POST" && (p[3] === "access" || p[3] === "email")) return forbidden("owner");
     // A5: Resend gives an open or expired invite 14 more days.
     if (m === "POST" && p[3] === "resend") {
-      if (invite.status !== "open")
-        return json(409, {
-          detail: `This invite was ${invite.status}; invite them again`,
-        });
+      if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
       Object.assign(invite, {
         expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
         resent_at: now(),
         resend_count: (invite.resend_count ?? 0) + 1,
       });
       // As the API: its email goes out again unless one is under way or under a minute old.
-      const recent =
-        invite.email_status === "sent" &&
-        !!invite.email_at &&
-        Date.now() - Date.parse(invite.email_at) < 60_000;
+      const recent = invite.email_status === "sent" && !!invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000;
       if (invite.email_status !== "queued" && !recent) {
         (db.invites_resent ??= []).push(invite.id);
-        Object.assign(invite, {
-          email_status: scenario === "mail-off" ? "not_sent" : "queued",
-          email_error: null,
-          email_at: now(),
-        });
+        Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
       }
       return json(200, withInviter(invite));
     }
     if (m === "POST" && (p[3] === "access" || p[3] === "email")) {
-      if (invite.status !== "open")
-        return json(409, {
-          detail: `This invite was ${invite.status}; invite them again`,
-        });
+      if (invite.status !== "open") return json(409, { detail: `This invite was ${invite.status}; invite them again` });
       if (p[3] === "access") {
         // The grant is Google's IAP API under way: it takes a moment.
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
         Object.assign(
           invite,
           invite.email.includes("+")
-            ? {
-                access: "pending",
-                access_error: iapRefusal(invite.email),
-                access_at: now(),
-              }
+            ? { access: "pending", access_error: iapRefusal(invite.email), access_at: now() }
             : { access: "granted", access_error: null, access_at: now() },
         );
-      } else if (invite.email_status === "queued")
-        return json(409, { detail: "Oracle is sending this invite's email" });
-      else if (
-        invite.email_status === "sent" &&
-        invite.email_at &&
-        Date.now() - Date.parse(invite.email_at) < 60_000
-      ) {
-        const wait = Math.ceil(
-          (60_000 - (Date.now() - Date.parse(invite.email_at))) / 1000,
-        );
-        return json(429, {
-          detail: `Oracle emailed this invite under a minute ago; resend it in ${wait} seconds`,
-        });
+      }
+      else if (invite.email_status === "queued") return json(409, { detail: "Oracle is sending this invite's email" });
+      else if (invite.email_status === "sent" && invite.email_at && Date.now() - Date.parse(invite.email_at) < 60_000) {
+        const wait = Math.ceil((60_000 - (Date.now() - Date.parse(invite.email_at))) / 1000);
+        return json(429, { detail: `Oracle emailed this invite under a minute ago; resend it in ${wait} seconds` });
       } else {
         (db.invites_resent ??= []).push(invite.id);
-        Object.assign(invite, {
-          email_status: scenario === "mail-off" ? "not_sent" : "queued",
-          email_error: null,
-          email_at: now(),
-        });
+        Object.assign(invite, { email_status: scenario === "mail-off" ? "not_sent" : "queued", email_error: null, email_at: now() });
       }
       return json(200, withInviter(invite));
     }
     if (m === "DELETE") {
-      if (invite.status === "accepted")
-        return json(409, { detail: "This invite was already accepted" });
-      if (invite.status === "open")
-        Object.assign(invite, { status: "revoked", revoked_at: now() });
+      if (invite.status === "accepted") return json(409, { detail: "This invite was already accepted" });
+      if (invite.status === "open") Object.assign(invite, { status: "revoked", revoked_at: now() });
       return json(204, undefined);
     }
   }
@@ -6998,10 +4342,7 @@ async function membersRoute(
 }
 
 /** #346: the change-set mock's view of the db; a proposal imports the next version, copied from its base. */
-function planEditsContext(
-  db: Db,
-  me: { id: string; role: Role },
-): PlanEditsContext {
+function planEditsContext(db: Db, me: { id: string; role: Role }): PlanEditsContext {
   return {
     userId: me.id,
     role: me.role,
@@ -7009,9 +4350,7 @@ function planEditsContext(
     versions: db.versions,
     uuid,
     now,
-    deciderOf: (id) =>
-      db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ??
-      null,
+    deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
     seededItems: seededPlanItems,
     // The Plan mock's usage-alerts-roadmap v1 is its approved plan (./roadmap.ts, ALERTS_APPROVED).
     seededApproved: (slug) => (slug === ALERTS_ROADMAP_SLUG ? 1 : null),
@@ -7021,36 +4360,14 @@ function planEditsContext(
       const kept = row.sections.filter((s) => s.section_key !== "plan-changes");
       const at = kept.findIndex((s) => s.section_key === "sources");
       const added = {
-        ...kept[0],
-        id: uuid(),
-        section_key: "plan-changes",
-        level: 2,
-        heading: "Plan changes",
-        body_md: body,
-        body_text: plainText(body),
-        content_hash: hash("Plan changes\n" + body),
-        citation_keys: [],
-        layer: "detail" as const,
-        notes: null,
-        spec_states: [],
+        ...kept[0], id: uuid(), section_key: "plan-changes", level: 2, heading: "Plan changes", body_md: body,
+        body_text: plainText(body), content_hash: hash("Plan changes\n" + body), citation_keys: [], layer: "detail" as const, notes: null, spec_states: [],
       };
-      const sections = (
-        at < 0
-          ? [...kept, added]
-          : [...kept.slice(0, at), added, ...kept.slice(at)]
-      ).map((s, ordinal) => ({ ...s, ordinal }));
-      const number =
-        Math.max(...docVersions(db, document).map((v) => v.number)) + 1;
+      const sections = (at < 0 ? [...kept, added] : [...kept.slice(0, at), added, ...kept.slice(at)]).map((s, ordinal) => ({ ...s, ordinal }));
+      const number = Math.max(...docVersions(db, document).map((v) => v.number)) + 1;
       const next: VersionRow = {
-        ...structuredClone(row),
-        id: uuid(),
-        number,
-        approved_at: null,
-        approval_lapses: [],
-        created_at: now(),
-        imported_by: me.id,
-        sections,
-        content_hash: hash(sections.map((s) => s.content_hash).join("")),
+        ...structuredClone(row), id: uuid(), number, approved_at: null, approval_lapses: [], created_at: now(),
+        imported_by: me.id, sections, content_hash: hash(sections.map((s) => s.content_hash).join("")),
       };
       db.versions.push(next);
       document.status = "in_review";
@@ -7061,23 +4378,12 @@ function planEditsContext(
 }
 
 /** The webhooks mock's view of the db (./webhooks.ts); its Inbox rows are review-v2 notifications. */
-function webhooksContext(
-  db: Db,
-  me: { id: string; role: Role },
-): WebhooksContext {
+function webhooksContext(db: Db, me: { id: string; role: Role }): WebhooksContext {
   const base = {
     me: { id: me.id, role: me.role },
-    members: db.members
-      .filter((x) => x.status !== "disabled")
-      .map((x) => ({
-        id: x.id,
-        name: displayName(x.email, x.name),
-        role: x.id === me.id ? me.role : x.role,
-      })),
+    members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.id === me.id ? me.role : x.role })),
     tokens: (db.account ??= seedAccount(db.members, uuid)).tokens
-      .filter(
-        (t) => !t.user_id && (t.kind === "personal" || t.kind === "service"),
-      )
+      .filter((t) => !t.user_id && (t.kind === "personal" || t.kind === "service"))
       .map((t) => ({ id: t.id, name: t.name })),
     notifications: db.review_v2!.notifications,
     company: { id: "c0000000-0000-4000-8000-00000000c0de", name: "Example Co" },
@@ -7090,9 +4396,7 @@ function webhooksContext(
 
 /** The webhooks mock's view for sending run events: the signed-in member (who acted), if any. */
 function webhooksDeliveryContext(db: Db): WebhooksContext {
-  const member =
-    db.members.find((x) => x.email === sessionOf(db)) ??
-    db.members.find((m) => m.id === db.user_id)!;
+  const member = db.members.find((x) => x.email === sessionOf(db)) ?? db.members.find((m) => m.id === db.user_id)!;
   return webhooksContext(db, withMockRole(member));
 }
 
@@ -7109,33 +4413,12 @@ function reviewV2Context(db: Db, userId: string, role: Role) {
     now,
     hash,
     exportHtml: (doc: { id: string }, v: { id: string }) =>
-      exportHtml(
-        db.documents.find((d) => d.id === doc.id)!,
-        db.versions.find((x) => x.id === v.id)!,
-        db.branding,
-      ),
-    editSection: (
-      doc: { id: string },
-      key: string,
-      heading: string | null,
-      bodyMd: string,
-    ) => {
-      const latest = docVersions(
-        db,
-        db.documents.find((d) => d.id === doc.id)!,
-      ).pop()!;
+      exportHtml(db.documents.find((d) => d.id === doc.id)!, db.versions.find((x) => x.id === v.id)!, db.branding),
+    editSection: (doc: { id: string }, key: string, heading: string | null, bodyMd: string) => {
+      const latest = docVersions(db, db.documents.find((d) => d.id === doc.id)!).pop()!;
       const sections = latest.sections.map((s) =>
         s.section_key === key
-          ? {
-              ...s,
-              id: uuid(),
-              heading: heading ?? s.heading,
-              body_md: bodyMd,
-              body_text: plainText(bodyMd),
-              content_hash: hash(
-                `${s.level}\n${heading ?? s.heading}\n${bodyMd}`,
-              ),
-            }
+          ? { ...s, id: uuid(), heading: heading ?? s.heading, body_md: bodyMd, body_text: plainText(bodyMd), content_hash: hash(`${s.level}\n${heading ?? s.heading}\n${bodyMd}`) }
           : { ...s, id: uuid() },
       );
       const next: VersionRow = {
@@ -7167,25 +4450,12 @@ function goalLinks(db: Db): V2Db["section_links"] {
     const doc = findDocument(db, slug);
     const v = doc && docVersions(db, doc).at(-1);
     const e = db.baseline.entities.find((x) => x.key === entityKey);
-    if (!doc || !v || !e || !v.sections.some((s) => s.section_key === section))
-      return;
+    if (!doc || !v || !e || !v.sections.some((s) => s.section_key === section)) return;
     out.push({
-      id: uuid(),
-      document_id: doc.id,
-      version_id: v.id,
-      section_key: section,
-      section_hash: null,
-      composition_revision: null,
-      module_key: null,
-      kind: "implements",
-      entity_id: e.id,
-      evidence_id: null,
-      source_item_id: null,
-      precision: "section",
+      id: uuid(), document_id: doc.id, version_id: v.id, section_key: section, section_hash: null, composition_revision: null,
+      module_key: null, kind: "implements", entity_id: e.id, evidence_id: null, source_item_id: null, precision: "section",
       // As the API records it: whoever made the link (the signed-in owner here).
-      claim: null,
-      created_by: db.user_id,
-      created_at: v.created_at,
+      claim: null, created_by: db.user_id, created_at: v.created_at,
     });
   };
   link("checkout-redesign", "goal-trace", "g.activation");
@@ -7204,104 +4474,35 @@ function evidenceLinks(db: Db): V2Db["section_links"] {
   if (!doc) return [];
   const v2 = docVersions(db, doc)[1];
   const alerts = findDocument(db, "usage-alerts");
-  const approved = alerts
-    ? docVersions(db, alerts).find((v) => v.approved_at)
-    : undefined;
-  const entity = (key: string) =>
-    db.baseline.entities.find((e) => e.key === key)?.id ?? null;
-  const evidence = (ref: string) =>
-    db.baseline.evidence.find((e) => e.ref === ref)?.id ?? null;
+  const approved = alerts ? docVersions(db, alerts).find((v) => v.approved_at) : undefined;
+  const entity = (key: string) => db.baseline.entities.find((e) => e.key === key)?.id ?? null;
+  const evidence = (ref: string) => db.baseline.evidence.find((e) => e.ref === ref)?.id ?? null;
   const out: V2Db["section_links"] = [];
   const link = (
     v: VersionRow | undefined,
     section_key: string,
     kind: V2Db["section_links"][number]["kind"],
-    target: {
-      entity_id?: string | null;
-      evidence_id?: string | null;
-      source_item_id?: string | null;
-    },
-    more: {
-      precision?: "section" | "paragraph" | "claim";
-      claim?: string;
-      stale?: boolean;
-      module_key?: string;
-      at?: string;
-    } = {},
+    target: { entity_id?: string | null; evidence_id?: string | null; source_item_id?: string | null },
+    more: { precision?: "section" | "paragraph" | "claim"; claim?: string; stale?: boolean; module_key?: string; at?: string } = {},
   ) => {
     if (!v || !v.sections.some((s) => s.section_key === section_key)) return;
-    if (!target.entity_id && !target.evidence_id && !target.source_item_id)
-      return;
+    if (!target.entity_id && !target.evidence_id && !target.source_item_id) return;
     out.push({
-      id: uuid(),
-      document_id: v.document_id,
-      version_id: v.id,
-      section_key,
+      id: uuid(), document_id: v.document_id, version_id: v.id, section_key,
       // A stale link was made on an earlier revision of its section.
-      section_hash: more.stale
-        ? "0".repeat(16)
-        : (v.sections.find((s) => s.section_key === section_key)
-            ?.content_hash ?? null),
-      composition_revision: more.module_key ? 1 : null,
-      module_key: more.module_key ?? null,
-      kind,
-      entity_id: target.entity_id ?? null,
-      evidence_id: target.evidence_id ?? null,
-      source_item_id: target.source_item_id ?? null,
-      precision: more.precision ?? "section",
-      claim: more.claim ?? null,
-      created_by: db.user_id,
-      created_at: more.at ?? v.created_at,
+      section_hash: more.stale ? "0".repeat(16) : (v.sections.find((s) => s.section_key === section_key)?.content_hash ?? null),
+      composition_revision: more.module_key ? 1 : null, module_key: more.module_key ?? null, kind,
+      entity_id: target.entity_id ?? null, evidence_id: target.evidence_id ?? null, source_item_id: target.source_item_id ?? null,
+      precision: more.precision ?? "section", claim: more.claim ?? null, created_by: db.user_id, created_at: more.at ?? v.created_at,
     });
   };
-  link(
-    v2,
-    "problem",
-    "evidences",
-    { evidence_id: evidence("Sample store spec") },
-    { precision: "paragraph" },
-  );
-  link(
-    v2,
-    "problem",
-    "mentions",
-    { source_item_id: "6f1e2d3c-4b5a-4968-8778-a1b2c3d4e5f6" },
-    { precision: "paragraph" },
-  );
-  link(
-    v2,
-    "goal-trace",
-    "claims",
-    { evidence_id: evidence("#sales thread") },
-    {
-      precision: "claim",
-      claim: "Week-1 activation rises once the cost shows early.",
-    },
-  );
-  link(
-    v2,
-    "goal-trace",
-    "implements",
-    { entity_id: entity("f.usage-export") },
-    { stale: true, at: "2026-10-16T15:00:00Z" },
-  );
-  link(
-    v2,
-    "scope",
-    "tests",
-    { entity_id: entity("f.guided-setup") },
-    { precision: "paragraph", module_key: "acceptance-criteria" },
-  );
-  link(
-    v2,
-    "risks",
-    "evidences",
-    { evidence_id: evidence("Onboarding review (meeting)") },
-    { stale: true },
-  );
-  link(approved, "behaviour", "evidences", {
-    evidence_id: evidence("Sample store spec"),
-  });
+  link(v2, "problem", "evidences", { evidence_id: evidence("Sample store spec") }, { precision: "paragraph" });
+  link(v2, "problem", "mentions", { source_item_id: "6f1e2d3c-4b5a-4968-8778-a1b2c3d4e5f6" }, { precision: "paragraph" });
+  link(v2, "goal-trace", "claims", { evidence_id: evidence("#sales thread") }, { precision: "claim", claim: "Week-1 activation rises once the cost shows early." });
+  link(v2, "goal-trace", "implements", { entity_id: entity("f.usage-export") }, { stale: true, at: "2026-10-16T15:00:00Z" });
+  link(v2, "scope", "tests", { entity_id: entity("f.guided-setup") }, { precision: "paragraph", module_key: "acceptance-criteria" });
+  link(v2, "risks", "evidences", { evidence_id: evidence("Onboarding review (meeting)") }, { stale: true });
+  link(approved, "behaviour", "evidences", { evidence_id: evidence("Sample store spec") });
   return out;
 }
 
@@ -7309,30 +4510,19 @@ function evidenceLinks(db: Db): V2Db["section_links"] {
 /** Every use of a source item (A2 coverage): baseline evidence, citations and section links. */
 function itemUses(db: Db): Schemas["UsedIn"][] {
   const uses: Schemas["UsedIn"][] = [];
-  const entity = (id: string | null | undefined) =>
-    db.baseline.entities.find((e) => e.id === id);
+  const entity = (id: string | null | undefined) => db.baseline.entities.find((e) => e.id === id);
   const docOut = (id: string) => {
     const d = db.documents.find((x) => x.id === id);
     return d ? { slug: d.slug, title: d.title, kind: d.kind } : null;
   };
   for (const ev of db.baseline.evidence) {
     if (!ev.source_item) continue;
-    const e =
-      entity(ev.entity_id) ??
-      entity(db.baseline.edges.find((x) => x.id === ev.edge_id)?.src_id);
+    const e = entity(ev.entity_id) ?? entity(db.baseline.edges.find((x) => x.id === ev.edge_id)?.src_id);
     uses.push({
       kind: "evidence",
       at: ev.created_at,
       item: { id: ev.source_item.id, title: ev.source_item.title ?? null },
-      entity: e
-        ? {
-            id: e.id,
-            type: e.type,
-            key: e.key,
-            title: e.title,
-            status: e.status,
-          }
-        : null,
+      entity: e ? { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status } : null,
     });
   }
   for (const v of db.versions) {
@@ -7358,9 +4548,7 @@ function itemUses(db: Db): Schemas["UsedIn"][] {
       document: docOut(l.document_id),
       version: v?.number ?? null,
       section_key: l.section_key,
-      section_title:
-        v?.sections.find((x) => x.section_key === l.section_key)?.heading ??
-        null,
+      section_title: v?.sections.find((x) => x.section_key === l.section_key)?.heading ?? null,
     });
   }
   return uses;
@@ -7373,19 +4561,11 @@ function ensureQuality(db: Db): QualityDb {
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY) ?? "";
   const doc = findDocument(db, "team-workspaces");
   const v = doc && findVersion(db, doc, 2);
-  const id = (email: string) =>
-    db.members.find((m) => m.email === email)?.id ?? db.user_id;
+  const id = (email: string) => db.members.find((m) => m.email === email)?.id ?? db.user_id;
   if (scenario.startsWith("quality") && doc && v && db.llm) {
     seedQualityScenario(scenario, {
-      quality: db.quality,
-      v2: ensureV2(db),
-      jobs: db.llm.jobs,
-      disabled: db.llm.disabled,
-      documentId: doc.id,
-      versionId: v.id,
-      owner: db.user_id,
-      approver: id("approver@example.com"),
-      commenter: id("commenter@example.com"),
+      quality: db.quality, v2: ensureV2(db), jobs: db.llm.jobs, disabled: db.llm.disabled, documentId: doc.id, versionId: v.id,
+      owner: db.user_id, approver: id("approver@example.com"), commenter: id("commenter@example.com"),
     });
   }
   return db.quality;
@@ -7396,33 +4576,18 @@ function ensureV2(db: Db): V2Db {
     const prd = db.documents.find((d) => d.kind === "prd");
     const version = db.versions.find((v) => v.document_id === prd?.id) ?? null;
     db.v2 = seeded("v2", () => {
-      const v2 = seedV2(
-        prd?.id ?? db.tenant_id,
-        version?.id ?? null,
-        db.user_id,
-      );
+      const v2 = seedV2(prd?.id ?? db.tenant_id, version?.id ?? null, db.user_id);
       v2.section_links.push(...goalLinks(db));
       const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
       if (version && (scenario === "impact" || scenario === "impact-large")) {
-        const roadmap = db.documents.find(
-          (d) => d.slug === ALERTS_ROADMAP_SLUG,
-        );
-        seedImpact(
-          v2,
-          {
-            versionId: version.id,
-            roadmapVersionId:
-              db.versions.find((v) => v.document_id === roadmap?.id)?.id ??
-              null,
-            entity:
-              db.baseline.entities.find((e) => e.key === "f.guided-setup") ??
-              db.baseline.entities.find((e) => e.type !== "goal") ??
-              null,
-            userId: db.user_id,
-            uuid,
-          },
-          scenario === "impact-large",
-        );
+        const roadmap = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+        seedImpact(v2, {
+          versionId: version.id,
+          roadmapVersionId: db.versions.find((v) => v.document_id === roadmap?.id)?.id ?? null,
+          entity: db.baseline.entities.find((e) => e.key === "f.guided-setup") ?? db.baseline.entities.find((e) => e.type !== "goal") ?? null,
+          userId: db.user_id,
+          uuid,
+        }, scenario === "impact-large");
       }
       if (scenario === "evidence") v2.section_links.push(...evidenceLinks(db));
       return v2;
@@ -7435,10 +4600,8 @@ function ensureV2(db: Db): V2Db {
 function ensureDecisions(db: Db, ctx: DecisionsContext): DecisionsDb {
   db.decisions ??= seeded("decisions", () => {
     const log = seedDecisions(ctx);
-    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large")
-      enlargeDecisions(ctx, log, 250);
-    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "pricing")
-      seedPricingDecisions(db, ctx, log);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "large") enlargeDecisions(ctx, log, 250);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "pricing") seedPricingDecisions(db, ctx, log);
     return log;
   });
   return db.decisions;
@@ -7452,22 +4615,12 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     role,
     entities: () => db.baseline.entities,
     edges: () => db.baseline.edges,
-    decisions: decisionsCtx
-      ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx))
-      : undefined,
-    zone: () =>
-      String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
-    intakeTitle: (id) =>
-      ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
-    suggestionsShown: () =>
-      ["recommend", "act"].includes(
-        levelFor((db.autonomy ??= emptyAutonomy()), "requests"),
-      ),
+    decisions: decisionsCtx ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx)) : undefined,
+    zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+    suggestionsShown: () => ["recommend", "act"].includes(levelFor((db.autonomy ??= emptyAutonomy()), "requests")),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
-    features: () =>
-      db.baseline.entities.filter(
-        (e) => e.type === "feature" && e.status !== "rejected",
-      ),
+    features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
     people: () => db.members,
     documents: () =>
       db.documents
@@ -7490,14 +4643,10 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
 /** The requests rows, seeded on first use against the baseline's confirmed goals. */
 function ensureRequests(db: Db): RequestsDb {
   db.requests ??= seeded("requests", () => {
-    const features = db.baseline.entities.filter(
-      (e) => e.type === "feature" && e.status !== "rejected",
-    );
+    const features = db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected");
     const out = seedRequests({
       ownerId: db.user_id,
-      goals: db.baseline.entities.filter(
-        (e) => e.type === "goal" && e.status === "confirmed",
-      ),
+      goals: db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed"),
       features,
     });
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === WHY_NOT_SCENARIO) {
@@ -7505,49 +4654,19 @@ function ensureRequests(db: Db): RequestsDb {
       const feature = features[0];
       const at = "2026-10-12T09:00:00Z";
       const stop = {
-        id: uuid(),
-        type: "strategy_choice" as const,
-        key: "s.stop-custom-exports",
-        title: "Stop custom exports",
-        body: "We stop building one-off export formats; the API covers bulk data.",
-        attrs: { stance: "stop" },
-        status: "confirmed" as const,
-        origin: "agent" as const,
-        locked: false,
-        locked_by: null,
-        locked_at: null,
-        confidence: null,
-        run_id: null,
-        created_at: at,
-        updated_at: at,
+        id: uuid(), type: "strategy_choice" as const, key: "s.stop-custom-exports", title: "Stop custom exports",
+        body: "We stop building one-off export formats; the API covers bulk data.", attrs: { stance: "stop" }, status: "confirmed" as const,
+        origin: "agent" as const, locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
       };
       db.baseline.entities.push(stop as (typeof db.baseline.entities)[number]);
       if (feature) {
         db.baseline.edges.push({
-          id: uuid(),
-          src_id: stop.id,
-          dst_id: feature.id,
-          type: "affects",
-          attrs: {},
-          status: "confirmed",
-          origin: "agent",
-          locked: false,
-          locked_by: null,
-          locked_at: null,
-          confidence: null,
-          run_id: null,
-          created_at: at,
-          updated_at: at,
+          id: uuid(), src_id: stop.id, dst_id: feature.id, type: "affects", attrs: {}, status: "confirmed", origin: "agent",
+          locked: false, locked_by: null, locked_at: null, confidence: null, run_id: null, created_at: at, updated_at: at,
         } as (typeof db.baseline.edges)[number]);
       }
-      const commenter = db.members.find(
-        (x) => x.email === "commenter@example.com",
-      )!;
-      seedWhyNot(out, {
-        ownerId: db.user_id,
-        member: { id: commenter.id, name: displayName(commenter.email) },
-        featureId: feature?.id ?? null,
-      });
+      const commenter = db.members.find((x) => x.email === "commenter@example.com")!;
+      seedWhyNot(out, { ownerId: db.user_id, member: { id: commenter.id, name: displayName(commenter.email) }, featureId: feature?.id ?? null });
     }
     return out;
   });
@@ -7559,28 +4678,20 @@ function ensureInterviews(db: Db): InterviewsDb {
   db.interviews ??= seeded("interviews", () => ({
     ...seedInterviews({ ownerId: db.user_id }),
     // #604 re-review: the "stored-refusals" scenario's pool refuses every guide job.
-    ...(localStorage.getItem(MOCK_SCENARIO_KEY) ===
-      STORED_REFUSALS_SCENARIO && { refuse: true }),
+    ...(localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO && { refuse: true }),
   }));
   return db.interviews;
 }
 
-function interviewsContext(
-  db: Db,
-  userId: string,
-  role: Role,
-): InterviewsContext {
+function interviewsContext(db: Db, userId: string, role: Role): InterviewsContext {
   return {
     userId,
     role,
     company: MOCK_COMPANY,
     memberEmail: (id) => db.members.find((m) => m.id === id)?.email ?? null,
     memberName: (id) => specActorName(db, id),
-    intakeTitle: (id) =>
-      ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
-    themeTitle: (id) =>
-      ensureRequests(db).themes.find((t) => t.id === id && !t.archived_at)
-        ?.title ?? null,
+    intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+    themeTitle: (id) => ensureRequests(db).themes.find((t) => t.id === id && !t.archived_at)?.title ?? null,
     fileRequest: (input) => addInterviewRequest(ensureRequests(db), input),
   };
 }
@@ -7595,11 +4706,7 @@ function ensureBlockers(db: Db): BlockersDb {
       deposits && { documentId: deposits.id, v2 },
     );
     // A new company ("empty" scenario) has no blockers yet (qa-onboarding-25).
-    if (
-      typeof localStorage !== "undefined" &&
-      localStorage.getItem(MOCK_SCENARIO_KEY) === "empty"
-    )
-      db.blockers.blockers = [];
+    if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === "empty") db.blockers.blockers = [];
   }
   return db.blockers;
 }
@@ -7621,47 +4728,25 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
  * (Asks placeholder kept) for the period (default: the first of this month through today),
  * seen by owners and approvers.
  */
-function startUpdate(
-  db: Db,
-  me: MemberRow,
-  input: Schemas["StartDraftIn"],
-): Response {
-  if (me.role !== "owner")
-    return json(403, { detail: "Only an owner can start an update" });
+function startUpdate(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Response {
+  if (me.role !== "owner") return json(403, { detail: "Only an owner can start an update" });
   if (!isUpdateTemplate(input.template)) {
     return json(422, {
       detail: `template '${input.template}' is not an update template`,
-      problems: [
-        {
-          code: "kind_mismatch",
-          message: "an update uses board-product or investor-update",
-        },
-      ],
+      problems: [{ code: "kind_mismatch", message: "an update uses board-product or investor-update" }],
     });
   }
   const today = now().slice(0, 10);
-  const period: UpdatePeriod = input.period ?? {
-    from: `${today.slice(0, 8)}01`,
-    to: today,
-  };
-  if (
-    !ISO_DAY.test(period.from) ||
-    !ISO_DAY.test(period.to) ||
-    period.from > period.to
-  ) {
-    return json(422, {
-      detail: "period: from and to are dates, from on or before to",
-    });
+  const period: UpdatePeriod = input.period ?? { from: `${today.slice(0, 8)}01`, to: today };
+  if (!ISO_DAY.test(period.from) || !ISO_DAY.test(period.to) || period.from > period.to) {
+    return json(422, { detail: "period: from and to are dates, from on or before to" });
   }
-  const label =
-    input.template === "board-product" ? "Board update" : "Investor update";
+  const label = input.template === "board-product" ? "Board update" : "Investor update";
   const title = input.title?.trim() || `${label} · ${periodMonth(period)}`;
   const base = slugOf(input.slug || title);
-  if (input.slug && db.documents.some((d) => d.slug === base))
-    return json(409, { detail: `slug '${base}' is taken` });
+  if (input.slug && db.documents.some((d) => d.slug === base)) return json(409, { detail: `slug '${base}' is taken` });
   let slug = base;
-  for (let n = 2; db.documents.some((d) => d.slug === slug); n++)
-    slug = `${base}-${n}`;
+  for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${base}-${n}`;
   const created = now();
   const doc: DocumentRow = {
     id: uuid(),
@@ -7671,21 +4756,13 @@ function startUpdate(
     kind: "update",
     template: input.template,
     template_version: "1",
-    theme:
-      input.theme ??
-      (input.template === "board-product" ? "roadmap-board" : "one-page-brief"),
+    theme: input.theme ?? (input.template === "board-product" ? "roadmap-board" : "one-page-brief"),
     visibility: "approvers",
     created_at: created,
     updated_at: created,
   };
   const fm = updateFrontMatter(input.template, slug, title, period);
-  const v = buildVersion(doc, {
-    number: 1,
-    created_at: created,
-    sections: templateSections(input.template, title),
-    citations: [],
-    brief: fm.brief as string[],
-  });
+  const v = buildVersion(doc, { number: 1, created_at: created, sections: templateSections(input.template, title), citations: [], brief: fm.brief as string[] });
   v.front_matter = fm;
   v.imported_by = "draft-picker";
   db.documents.push(doc);
@@ -7703,71 +4780,28 @@ function startUpdate(
 }
 
 /** H9: a pricing memo from its template, for owners and approvers; the question and evidence window in its front matter. */
-function startPricing(
-  db: Db,
-  me: MemberRow,
-  input: Schemas["StartDraftIn"],
-): Response {
-  if (!atLeast(me.role, "approver"))
-    return json(403, { detail: "Only an approver can start a pricing memo" });
+function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Response {
+  if (!atLeast(me.role, "approver")) return json(403, { detail: "Only an approver can start a pricing memo" });
   const question = input.question?.trim() ?? "";
-  if (!question || question.length > 300)
-    return json(422, { detail: "Say the pricing question in one sentence" });
-  const today = todayIn(
-    String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
-  );
-  const window: EvidenceWindow = input.period ?? {
-    from: addMonths(today, -6),
-    to: today,
-  };
-  if (
-    !ISO_DAY.test(window.from) ||
-    !ISO_DAY.test(window.to) ||
-    window.from > window.to
-  )
-    return json(422, {
-      detail: "evidence_window: from and to are dates, from on or before to",
-    });
+  if (!question || question.length > 300) return json(422, { detail: "Say the pricing question in one sentence" });
+  const today = todayIn(String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"));
+  const window: EvidenceWindow = input.period ?? { from: addMonths(today, -6), to: today };
+  if (!ISO_DAY.test(window.from) || !ISO_DAY.test(window.to) || window.from > window.to) return json(422, { detail: "evidence_window: from and to are dates, from on or before to" });
   const title = input.title?.trim() || "Pricing memo";
   const base = slugOf(input.slug || title);
   let slug = base;
-  for (let n = 2; db.documents.some((d) => d.slug === slug); n++)
-    slug = `${base}-${n}`;
+  for (let n = 2; db.documents.some((d) => d.slug === slug); n++) slug = `${base}-${n}`;
   const created = now();
   const doc: DocumentRow = {
-    id: uuid(),
-    slug,
-    title,
-    status: "draft",
-    kind: "pricing",
-    template: PRICING_TEMPLATE,
-    template_version: "1",
-    theme: input.theme ?? "one-page-brief",
-    visibility: "approvers",
-    created_at: created,
-    updated_at: created,
+    id: uuid(), slug, title, status: "draft", kind: "pricing", template: PRICING_TEMPLATE, template_version: "1",
+    theme: input.theme ?? "one-page-brief", visibility: "approvers", created_at: created, updated_at: created,
   };
-  const v = buildVersion(doc, {
-    number: 1,
-    created_at: created,
-    sections: pricingTemplateSections(title),
-    citations: [],
-    brief: ["question", "recommendation", "options"],
-  });
+  const v = buildVersion(doc, { number: 1, created_at: created, sections: pricingTemplateSections(title), citations: [], brief: ["question", "recommendation", "options"] });
   v.front_matter = pricingFrontMatter(slug, title, question, window);
   v.imported_by = "draft-picker";
   db.documents.push(doc);
   db.versions.push(v);
-  return json(201, {
-    document_id: doc.id,
-    slug,
-    title,
-    kind: "pricing",
-    template: PRICING_TEMPLATE,
-    template_version: 1,
-    theme: doc.theme ?? null,
-    version: 1,
-  } satisfies Schemas["StartDraftOut"]);
+  return json(201, { document_id: doc.id, slug, title, kind: "pricing", template: PRICING_TEMPLATE, template_version: 1, theme: doc.theme ?? null, version: 1 } satisfies Schemas["StartDraftOut"]);
 }
 
 /**
@@ -7776,64 +4810,35 @@ function startPricing(
  * edit, a draft or Remind on one PRD never lands on another's. Drafts and changes are found by
  * their id, a new line edit by its target's document id.
  */
-async function onePagerOf(
-  db: Db,
-  req: Request,
-  p: string[],
-): Promise<OnePagerDb> {
+async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb> {
   const seeded = db.simple_one_pager!;
   const others = (db.simple_one_pagers ??= {});
   const all = [seeded, ...Object.values(others)];
   const forDoc = (ref: unknown): OnePagerDb | undefined => {
     const known = all.find((o) => o.doc.id === ref || o.doc.slug === ref);
     if (known) return known;
-    const d = db.documents.find(
-      (x) => x.kind === "prd" && (x.slug === ref || x.id === ref),
-    );
+    const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
     if (!d) return undefined;
     // qa4-simple-prd-3/9: as one_pager.published, the version read is the PRD's own latest approved
     // one, else its latest, dated by its approval (none: never published).
     const vs = docVersions(db, d);
     const read = [...vs].reverse().find((x) => x.approved_at) ?? vs.at(-1);
-    return (others[d.id] = {
-      ...seedOnePager(),
-      doc: { id: d.id, slug: d.slug, title: d.title },
-      visuals: db.simple_visuals,
-      flowKey: d.slug,
-      ...(read
-        ? { version: read.number, published_at: read.approved_at ?? null }
-        : {}),
-    });
+    return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals, flowKey: d.slug, ...(read ? { version: read.number, published_at: read.approved_at ?? null } : {}) });
   };
   if (p[1] !== "simple") return seeded;
   if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
   if (p[2] === "drafts") return all.find((o) => o.draft?.id === p[3]) ?? seeded;
-  if (p[2] === "changes" && p[3])
-    return all.find((o) => o.changes.some((c) => c.id === p[3])) ?? seeded;
+  if (p[2] === "changes" && p[3]) return all.find((o) => o.changes.some((c) => c.id === p[3])) ?? seeded;
   if (p[2] === "changes" && req.method === "POST") {
-    const b = ((await req
-      .clone()
-      .json()
-      .catch(() => ({}))) ?? {}) as {
-      op?: string;
-      target?: { document_id?: unknown };
-    };
+    const b = ((await req.clone().json().catch(() => ({}))) ?? {}) as { op?: string; target?: { document_id?: unknown } };
     if (b.op === "edit_line") return forDoc(b.target?.document_id) ?? seeded;
   }
   return seeded;
 }
 
 /** Oracle's Ask on one of Simple's pages answers from the plan first, as the API's. */
-function simplePlanReply(
-  db: Db,
-  me: MemberRow,
-  d: DiscussionRow,
-  question: string,
-): { pieces: string[]; citations: Record<string, unknown>[] } | null {
-  const path =
-    d.subject_kind === "screen"
-      ? String((d.subject as { path?: string }).path ?? "")
-      : "";
+function simplePlanReply(db: Db, me: MemberRow, d: DiscussionRow, question: string): { pieces: string[]; citations: Record<string, unknown>[] } | null {
+  const path = d.subject_kind === "screen" ? String((d.subject as { path?: string }).path ?? "") : "";
   if (path !== "/simple" && !path.startsWith("/simple/")) return null;
   const live = db.members.filter((x) => x.status !== "disabled");
   const ctx = {
@@ -7841,15 +4846,9 @@ function simplePlanReply(
     role: me.role,
     roles: Object.fromEntries(live.map((x) => [x.id, x.role])),
     owners: live.filter((x) => x.role === "owner").map((x) => x.id),
-    names: Object.fromEntries(
-      db.members.map((x) => [x.id, displayName(x.email, x.name)]),
-    ),
+    names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
   };
-  const answer = planAnswer(
-    (db.simple_roadmap ??= seedSimpleRoadmap()),
-    ctx,
-    question,
-  );
+  const answer = planAnswer((db.simple_roadmap ??= seedSimpleRoadmap()), ctx, question);
   return answer ? { pieces: [answer.text], citations: answer.citations } : null;
 }
 
@@ -7869,35 +4868,19 @@ async function route(db: Db, req: Request): Promise<Response> {
     db.account ??= seedAccount(db.members, uuid);
     const member =
       db.members.find((x) => x.email === address) ??
-      (passwordOk(db.account, address, password, MOCK_LOGIN.password)
-        ? claimInvite(db, address)
-        : null);
-    if (
-      !member &&
-      passwordOk(db.account, address, password, MOCK_LOGIN.password)
-    ) {
+      (passwordOk(db.account, address, password, MOCK_LOGIN.password) ? claimInvite(db, address) : null);
+    if (!member && passwordOk(db.account, address, password, MOCK_LOGIN.password)) {
       // qa-onboarding-14: an invite withdrawn or past its date is refused in words, naming who to ask.
       const refused = inviteRefusal(db, address);
       if (refused) return json(403, { detail: refused });
     }
-    if (
-      member?.status === "disabled" &&
-      passwordOk(db.account, member.email, password, MOCK_LOGIN.password)
-    ) {
+    if (member?.status === "disabled" && passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       // qa-settings-42: as oracle.auth.service: a removed member with the right password hears why.
-      const by = db.members.find(
-        (x) => x.id === member.disabled_by && x.status !== "disabled",
-      );
+      const by = db.members.find((x) => x.id === member.disabled_by && x.status !== "disabled");
       const who = by ? displayName(by.email, by.name) : "an owner";
-      return json(403, {
-        detail: `An owner removed you from this Oracle. Ask ${who} to restore you.`,
-      });
+      return json(403, { detail: `An owner removed you from this Oracle. Ask ${who} to restore you.` });
     }
-    if (
-      !member ||
-      member.status === "disabled" ||
-      !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)
-    ) {
+    if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
     }
     setSession(db, member.email);
@@ -7910,12 +4893,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // C3: the customer page's routes carry no member credential, only the link's token and cookie.
   if (p[1] === "public" && p[2] === "interviews") {
-    const out = await routePublicInterviews(
-      ensureInterviews(db),
-      interviewsContext(db, db.user_id, "viewer"),
-      req,
-      p,
-    );
+    const out = await routePublicInterviews(ensureInterviews(db), interviewsContext(db, db.user_id, "viewer"), req, p);
     if (out) return out;
   }
   // O5: a link holder's routes carry no member credential, only the token and its cookie.
@@ -7924,12 +4902,9 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (out) return out;
   }
   // A5: where a Google sign-in without membership stands (the access-* scenarios); /v1/me is then 401.
-  const access =
-    ACCESS_SCENARIOS[localStorage.getItem(MOCK_SCENARIO_KEY) ?? ""];
+  const access = ACCESS_SCENARIOS[localStorage.getItem(MOCK_SCENARIO_KEY) ?? ""];
   if (p[1] === "auth" && p[2] === "access") {
-    const signedIn = db.members.find(
-      (x) => x.email === sessionOf(db) && x.status !== "disabled",
-    );
+    const signedIn = db.members.find((x) => x.email === sessionOf(db) && x.status !== "disabled");
     const state = access ?? (signedIn ? "member" : "no_google_sign_in");
     const out: Schemas["AccessStateOut"] = {
       state,
@@ -7938,17 +4913,12 @@ async function route(db: Db, req: Request): Promise<Response> {
       requested_at: state === "pending" ? "2026-10-21T16:05:00Z" : null,
       note: (db.access_note ??= null),
       // qa-onboarding-34: past, from the mock's clock (14 days after an invite sent 17 days ago).
-      invite_expired_at:
-        state === "invite_expired"
-          ? new Date(Date.now() - 3 * 86_400_000).toISOString()
-          : null,
+      invite_expired_at: state === "invite_expired" ? new Date(Date.now() - 3 * 86_400_000).toISOString() : null,
     };
     if (p[3] === "note" && m === "POST") {
-      if (state !== "pending")
-        return json(409, { detail: "There is no request waiting for a note" });
+      if (state !== "pending") return json(409, { detail: "There is no request waiting for a note" });
       const { note } = await body<Schemas["AccessNote"]>();
-      if ((note ?? "").length > 500)
-        return json(422, { detail: "A note is at most 500 characters" });
+      if ((note ?? "").length > 500) return json(422, { detail: "A note is at most 500 characters" });
       db.access_note = out.note = note?.trim() || null;
       return json(200, out);
     }
@@ -7956,27 +4926,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   if (access) return json(401, { detail: "Not authenticated" });
   const member = db.members.find((x) => x.email === sessionOf(db));
-  if (!member || member.status === "disabled")
-    return json(401, { detail: "Not authenticated" });
+  if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
   // O5 lane 4: the company's branding and its logos (members read, owners change).
   if (p[0] === "uploads" || p[1] === "branding") {
-    return (
-      (await routeBranding(
-        (db.branding ??= emptyBranding()),
-        me.role,
-        req,
-        p,
-        q,
-      )) ?? notFound("Route")
-    );
+    return (await routeBranding((db.branding ??= emptyBranding()), me.role, req, p, q)) ?? notFound("Route");
   }
   // H8: an "approvers" document (an update) is absent for commenters and viewers, on every
   // documents path (its versions, markdown, exports, deck, feedback, comments, scope, ...).
   if (p[1] === "documents" && p[2]) {
     const hidden = findDocument(db, p[2]);
-    if (hidden && !canSee(me.role, hidden.visibility))
-      return notFound("Document");
+    if (hidden && !canSee(me.role, hidden.visibility)) return notFound("Document");
   }
   // H9 Pricing input: pricing memos, Decide, win and loss records, the pricing owner.
   if (p[1] === "pricing-memos" && atLeast(me.role, "approver")) {
@@ -7991,18 +4951,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       db: (db.trash ??= emptyTrash()),
       documents: db.documents,
       versions: db.versions,
-      runs: () =>
-        (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))).runs,
+      runs: () => (db.runs ??= seeded("runs", () => seedRuns(runsContext(db)))).runs,
       intakes: () => ensureV2(db).intakes,
-      specRequests: () =>
-        (db.specs ??= specsSeed(db)).specs.map((s) => ({
-          source_document_id: s.request.source_document_id,
-          document_slug: s.document_slug,
-        })),
+      specRequests: () => (db.specs ??= specsSeed(db)).specs.map((s) => ({ source_document_id: s.request.source_document_id, document_slug: s.document_slug })),
       me,
-      deciderOf: (id) =>
-        db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ??
-        null,
+      deciderOf: (id) => db.review_v2?.policies.find((x) => x.document_id === id)?.decider_id ?? null,
       uuid,
       now,
     },
@@ -8016,104 +4969,52 @@ async function route(db: Db, req: Request): Promise<Response> {
   // I1: webhooks check roles themselves; seeded before the notifications they write are read.
   const hooks = await webhooksRoute(webhooksContext(db, me), req, p, q);
   if (hooks) return hooks;
-  const reviewV2 = await routeReviewV2(
-    reviewV2Context(db, me.id, me.role),
-    req,
-    p,
-    q,
-  );
+  const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
   // O5: share links, the view log, public texts and the public check (./shares.ts).
   const shares = await routeShares(sharesContext(db, me), req, p, q);
   if (shares) return shares;
   if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
-    const caps = await capabilitiesOut(
-      me.role,
-      !!me.engineering_lead,
-      engineeringLeads(db).length > 0,
-    );
-    for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(","))
-      if (op.trim()) caps.operations[op.trim()] = false;
-    return json(200, {
-      ...caps,
-      simple_mode: localStorage.getItem(MOCK_SIMPLE_MODE_KEY) !== "off",
-    });
+    const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
+    for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
+    return json(200, { ...caps, simple_mode: localStorage.getItem(MOCK_SIMPLE_MODE_KEY) !== "off" });
   }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
-    const mine = (db.preferences[me.email] ??= {
-      document_view: "brief",
-      setup_hidden: false,
-      welcome_dismissed: false,
-      slack_pings: { ...SLACK_PINGS },
-    });
+    const mine = (db.preferences[me.email] ??= { document_view: "brief", setup_hidden: false, welcome_dismissed: false, slack_pings: { ...SLACK_PINGS } });
     mine.slack_pings = { ...SLACK_PINGS, ...mine.slack_pings }; // saved before Slack pings
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
-      if (
-        patch.document_view &&
-        !["brief", "full"].includes(patch.document_view)
-      )
-        return json(422, { detail: "document_view" });
-      if (
-        patch.experience &&
-        !["simple", "detailed"].includes(patch.experience)
-      )
-        return json(422, { detail: "experience" });
+      if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
+      if (patch.experience && !["simple", "detailed"].includes(patch.experience)) return json(422, { detail: "experience" });
       const pings = patch.slack_pings ?? {};
-      if (Object.keys(pings).some((k) => !(k in SLACK_PINGS)))
-        return json(422, { detail: "slack_pings" });
+      if (Object.keys(pings).some((k) => !(k in SLACK_PINGS))) return json(422, { detail: "slack_pings" });
       if (patch.document_view) mine.document_view = patch.document_view;
       if (patch.experience) mine.experience = patch.experience;
       if (patch.priorities_line != null) {
         // Roadmap-plus: where Simple's priorities draw the line (preferences.PrioritiesLine).
-        if (
-          !/^(now|(key_date|milestone):[0-9a-f-]{36}|date:\d{4}-\d{2}-\d{2})$/.test(
-            patch.priorities_line,
-          )
-        )
-          return json(422, { detail: "priorities_line" });
+        if (!/^(now|(key_date|milestone):[0-9a-f-]{36}|date:\d{4}-\d{2}-\d{2})$/.test(patch.priorities_line)) return json(422, { detail: "priorities_line" });
         mine.priorities_line = patch.priorities_line;
       }
       if (patch.simple_roadmap != null) {
         // The Simple roadmap's Roadmap filter (preferences.SimpleRoadmapPick).
-        if (!/^(all|[0-9a-f-]{36})$/.test(patch.simple_roadmap))
-          return json(422, { detail: "simple_roadmap" });
+        if (!/^(all|[0-9a-f-]{36})$/.test(patch.simple_roadmap)) return json(422, { detail: "simple_roadmap" });
         mine.simple_roadmap = patch.simple_roadmap;
       }
       if (patch.simple_filters != null) {
         // Its PRD, Goal and Track picks (preferences.SimpleFilters).
         const picks = patch.simple_filters as Record<string, unknown>;
-        if (
-          Object.keys(picks).some(
-            (k) => !["prd", "goal", "track"].includes(k),
-          ) ||
-          Object.values(picks).some(
-            (v) => typeof v !== "string" || !/^[A-Za-z0-9_.-]{0,200}$/.test(v),
-          )
-        )
-          return json(422, { detail: "simple_filters" });
-        mine.simple_filters = {
-          prd: picks.prd ?? "",
-          goal: picks.goal ?? "",
-          track: picks.track ?? "",
-        } as Schemas["SimpleFilters"];
+        if (Object.keys(picks).some((k) => !["prd", "goal", "track"].includes(k)) || Object.values(picks).some((v) => typeof v !== "string" || !/^[A-Za-z0-9_.-]{0,200}$/.test(v))) return json(422, { detail: "simple_filters" });
+        mine.simple_filters = { prd: picks.prd ?? "", goal: picks.goal ?? "", track: picks.track ?? "" } as Schemas["SimpleFilters"];
       }
       if (patch.simple_decisions_view != null) {
         // prd-questions: how Simple's Decisions opens (preferences.DecisionsView).
-        if (
-          !["list", "board", "meetings"].includes(patch.simple_decisions_view)
-        )
-          return json(422, { detail: "simple_decisions_view" });
+        if (!["list", "board", "meetings"].includes(patch.simple_decisions_view)) return json(422, { detail: "simple_decisions_view" });
         mine.simple_decisions_view = patch.simple_decisions_view;
       }
-      if (typeof patch.setup_hidden === "boolean")
-        mine.setup_hidden = patch.setup_hidden;
-      if (typeof patch.welcome_dismissed === "boolean")
-        mine.welcome_dismissed = patch.welcome_dismissed;
-      for (const [k, v] of Object.entries(pings))
-        if (typeof v === "boolean")
-          mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
+      if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
+      if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
+      for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
     }
     mine.setup_hidden ??= false; // saved before A1
     mine.welcome_dismissed ??= false; // saved before the A1 welcome
@@ -8125,19 +5026,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     if ((mine.experience as string) === "studio") mine.experience = "detailed"; // its name before #723's rename, as the API reads it
     return json(200, mine);
   }
-  if (p[1] === "setup" && !p[2] && m === "GET")
-    return json(200, setupOut(db, me));
+  if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
   // I1: revoking a live user-less API token pauses the webhooks it made (members.service.revoke_api_token).
-  const revoking =
-    m === "DELETE" && p[1] === "api-tokens" && !p[3] && me.role === "owner"
-      ? (db.account ??= seedAccount(db.members, uuid)).tokens.find(
-          (t) =>
-            t.id === p[2] &&
-            !t.user_id &&
-            !t.revoked_at &&
-            (t.kind === "personal" || t.kind === "service"),
-        )
-      : undefined;
+  const revoking = m === "DELETE" && p[1] === "api-tokens" && !p[3] && me.role === "owner"
+    ? (db.account ??= seedAccount(db.members, uuid)).tokens.find((t) => t.id === p[2] && !t.user_id && !t.revoked_at && (t.kind === "personal" || t.kind === "service"))
+    : undefined;
   const accountOut = await accountRoute(
     {
       db: (db.account ??= seedAccount(db.members, uuid)),
@@ -8151,15 +5044,13 @@ async function route(db: Db, req: Request): Promise<Response> {
         setSession(db, null);
         db.tab_sessions = {};
       },
-      readOnly:
-        localStorage.getItem(MOCK_SCENARIO_KEY) === "read-only-credential",
+      readOnly: localStorage.getItem(MOCK_SCENARIO_KEY) === "read-only-credential",
     },
     req,
     p,
     q,
   );
-  if (revoking && accountOut?.status === 204)
-    tokenRevoked(webhooksContext(db, me), revoking.id);
+  if (revoking && accountOut?.status === 204) tokenRevoked(webhooksContext(db, me), revoking.id);
   if (accountOut) return accountOut;
   if (p[1] === "me") return json(200, meOut(db, me));
   if (p[1] === "discussions" || p[1] === "discussion-changes") {
@@ -8170,8 +5061,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       me: { id: me.id, role: me.role },
       resolve: (kind, subject) => discussionSubject(db, kind, subject),
       reviewFeedback: (d, body) => discussionReviewFeedback(db, me, d, body),
-      reviewFeedbackRefusal: (d, body) =>
-        discussionFeedbackRefusal(db, d, body),
+      reviewFeedbackRefusal: (d, body) => discussionFeedbackRefusal(db, d, body),
       feedbackEdited: (d, body) => {
         const f = db.feedback.find((x) => x.discussion_id === d.id);
         if (!f) return null;
@@ -8185,40 +5075,20 @@ async function route(db: Db, req: Request): Promise<Response> {
       feedbackWithdrawn: (d) => {
         const f = db.feedback.find((x) => x.discussion_id === d.id);
         if (!f) return;
-        const decided = db.llm?.suggestions.some(
-          (x) =>
-            x.feedback_item_id === f.id &&
-            x.status !== "open" &&
-            x.status !== "superseded",
-        );
-        if (
-          f.status !== "open" ||
-          f.resolution_note ||
-          f.staged_for_agents_at ||
-          decided
-        ) {
+        const decided = db.llm?.suggestions.some((x) => x.feedback_item_id === f.id && x.status !== "open" && x.status !== "superseded");
+        if (f.status !== "open" || f.resolution_note || f.staged_for_agents_at || decided) {
           Object.assign(f, { discussion_id: null, updated_at: now() });
         } else {
           db.feedback = db.feedback.filter((x) => x.id !== f.id);
-          if (db.llm)
-            db.llm.suggestions = db.llm.suggestions.filter(
-              (x) => x.feedback_item_id !== f.id,
-            );
+          if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
         }
         touch(db, f.document_id);
       },
       uuid,
       now,
       refusal: () => poolRefusal(localStorage.getItem(MOCK_SCENARIO_KEY)),
-      researchRefusal: () =>
-        localStorage.getItem(MOCK_SCENARIO_KEY) === RESEARCH_REFUSED_SCENARIO
-          ? RESEARCH_REFUSED
-          : null,
-      researchLink: () =>
-        localStorage.getItem(MOCK_SCENARIO_KEY) ===
-        RESEARCH_UNSAFE_LINK_SCENARIO
-          ? RESEARCH_UNSAFE_LINK
-          : null,
+      researchRefusal: () => (localStorage.getItem(MOCK_SCENARIO_KEY) === RESEARCH_REFUSED_SCENARIO ? RESEARCH_REFUSED : null),
+      researchLink: () => (localStorage.getItem(MOCK_SCENARIO_KEY) === RESEARCH_UNSAFE_LINK_SCENARIO ? RESEARCH_UNSAFE_LINK : null),
       // A streaming reply writes after its response: in turn with every other request.
       persist: (change) => {
         const next = queue.then(() => {
@@ -8232,38 +5102,19 @@ async function route(db: Db, req: Request): Promise<Response> {
       current: () => load().discussions ?? emptyDiscussions(),
       // B6: the scripted Oracle of a goals interview.
       // Simple's Ask reads the company's plan first (./simple-chat.ts planAnswer).
-      replyScript: (d, asked) =>
-        goalInterviewReply(db.baseline, d, asked.body, (id) =>
-          activeMember(db, id),
-        ) ?? simplePlanReply(db, me, d, asked.body),
+      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)) ?? simplePlanReply(db, me, d, asked.body),
       // #710: Oracle reads the asker's Fireflies live in a private chat (./live.ts).
       liveReply: (asked, alone) => liveReply(asked.body, alone),
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
-      slack: (d, r) =>
-        discussionSlackRoute(
-          d,
-          {
-            me,
-            integration: ensureReports(db, db.user_id, reportLive(db, me))
-              .integration,
-          },
-          r,
-        ),
+      slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id, reportLive(db, me)).integration }, r),
       documentText: (d) => discussionDocument(db, d),
       // G4: an approver's Stage of a section change writes its next_draft_changes row, as the API's.
       stageNextDraft: (d, c, reason) => {
         const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
         const rows = (llm.next_draft_changes ??= []);
-        const p = (c.edited_payload ?? c.payload) as {
-          section_key?: string;
-          instruction?: string;
-          text?: string;
-        };
-        const version =
-          typeof d.subject.version === "number" ? d.subject.version : null;
-        const latest = db.versions
-          .filter((v) => v.document_id === d.document_id)
-          .reduce((n, v) => Math.max(n, v.number), 0);
+        const p = (c.edited_payload ?? c.payload) as { section_key?: string; instruction?: string; text?: string };
+        const version = typeof d.subject.version === "number" ? d.subject.version : null;
+        const latest = db.versions.filter((v) => v.document_id === d.document_id).reduce((n, v) => Math.max(n, v.number), 0);
         const id = uuid();
         rows.push({
           id,
@@ -8287,86 +5138,36 @@ async function route(db: Db, req: Request): Promise<Response> {
       // G3 Record: F3's date rights and its schedule-basis route, as the API's record() uses them.
       dateRights: () => {
         const leads = engineeringLeads(db);
-        if (
-          me.role === "owner" ||
-          (leads.includes(me.id) && atLeast(me.role, "commenter"))
-        )
-          return "verify";
-        return atLeast(me.role, "approver")
-          ? leads.length
-            ? "propose"
-            : "verify"
-          : null;
+        if (me.role === "owner" || (leads.includes(me.id) && atLeast(me.role, "commenter"))) return "verify";
+        return atLeast(me.role, "approver") ? (leads.length ? "propose" : "verify") : null;
       },
       lockedSection: (documentId, sectionKey) => {
-        const v = db.versions
-          .filter((x) => x.document_id === documentId)
-          .sort((a, b) => b.number - a.number)[0];
-        const s =
-          v && lockedKeys(db, v).includes(sectionKey)
-            ? v.sections.find((x) => x.section_key === sectionKey)
-            : undefined;
-        return s
-          ? `Section ${/^\d/.test(s.heading) ? s.heading : `${s.ordinal}. ${s.heading}`} is approved and locked`
-          : null;
+        const v = db.versions.filter((x) => x.document_id === documentId).sort((a, b) => b.number - a.number)[0];
+        const s = v && lockedKeys(db, v).includes(sectionKey) ? v.sections.find((x) => x.section_key === sectionKey) : undefined;
+        return s ? `Section ${/^\d/.test(s.heading) ? s.heading : `${s.ordinal}. ${s.heading}`} is approved and locked` : null;
       },
-      proposeGoalMeasure: (c, d, payload) =>
-        proposeVersion(goalContext(db, me), c, d, payload),
+      proposeGoalMeasure: (c, d, payload) => proposeVersion(goalContext(db, me), c, d, payload),
       recordBasis: async (b) => {
         const ctx = roadmapContext(db, me);
         db.roadmap = ensureRoadmap(db, ctx);
-        const post = new Request("http://mock/v1/schedule-bases", {
-          method: "POST",
-          body: JSON.stringify(b),
-        });
-        return (await routeRoadmap(
-          ctx,
-          db.roadmap,
-          post,
-          ["v1", "schedule-bases"],
-          new URLSearchParams(),
-        ))!;
+        const post = new Request("http://mock/v1/schedule-bases", { method: "POST", body: JSON.stringify(b) });
+        return (await routeRoadmap(ctx, db.roadmap, post, ["v1", "schedule-bases"], new URLSearchParams()))!;
       },
       // G3: the features and requirements a change names, the question Ask asks, and the decision Propose proposes.
-      entityTitle: (id) =>
-        db.baseline.entities.find((e) => e.id === id)?.title ?? null,
+      entityTitle: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
       askQuestion: (x) => {
         const at = now();
         const qid = uuid();
         ensureV2(db).questions.push({
-          id: qid,
-          gap_id: null,
-          intake_id: null,
-          document_id: x.discussion.document_id,
-          checkpoint_id: null,
-          item_ref: null,
-          entity_id: null,
-          module_key: null,
-          category: x.category as V2Db["questions"][number]["category"],
-          prompt: x.prompt,
-          rationale: x.rationale,
-          priority: 100,
-          batch: null,
-          asked_to: x.asked_to,
-          asked_by: me.id,
-          section_key: null,
-          status: "asked",
-          created_at: at,
-          updated_at: at,
-          discussion_id: x.discussion.id,
-          discussion_title: x.discussion.title,
+          id: qid, gap_id: null, intake_id: null, document_id: x.discussion.document_id, checkpoint_id: null, item_ref: null, entity_id: null,
+          module_key: null, category: x.category as V2Db["questions"][number]["category"], prompt: x.prompt, rationale: x.rationale, priority: 100,
+          batch: null, asked_to: x.asked_to, asked_by: me.id, section_key: null,
+          status: "asked", created_at: at, updated_at: at, discussion_id: x.discussion.id, discussion_title: x.discussion.title,
         });
         return qid;
       },
       // G4: a change's D8 action at a waiting stop, as the API's put_action with the discussion as its source.
-      stopAction: (at, action, source, mode) =>
-        putDiscussionAction(
-          { ...runsContext(db), db: db.runs! },
-          at,
-          action,
-          source,
-          mode,
-        ),
+      stopAction: (at, action, source, mode) => putDiscussionAction({ ...runsContext(db), db: db.runs! }, at, action, source, mode),
       asksAtStop: (at) => asksAtStop({ db: db.runs! }, at),
       scopeStop: (named, own) =>
         scopeStop({ db: db.runs! }, named, own, (id) => {
@@ -8375,47 +5176,25 @@ async function route(db: Db, req: Request): Promise<Response> {
         }),
       proposeDecision: async (b) => {
         const ctx = decisionsContext(db, me);
-        const post = new Request("http://mock/v1/decisions", {
-          method: "POST",
-          body: JSON.stringify(b),
-        });
-        return (await routeDecisions(
-          ctx,
-          ensureDecisions(db, ctx),
-          post,
-          ["v1", "decisions"],
-          new URLSearchParams(),
-        ))!;
+        const post = new Request("http://mock/v1/decisions", { method: "POST", body: JSON.stringify(b) });
+        return (await routeDecisions(ctx, ensureDecisions(db, ctx), post, ["v1", "decisions"], new URLSearchParams()))!;
       },
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
     if (res) return res;
   }
-  if (p[1] === "members" || p[1] === "invites" || p[1] === "access-requests")
-    return membersRoute(db, req, p, me);
+  if (p[1] === "members" || p[1] === "invites" || p[1] === "access-requests") return membersRoute(db, req, p, me);
   // A5: who becomes a member on a Google sign-in (Settings › Members › Sign-in), owners only.
   if (p[1] === "sign-in-rules" && !p[2] && m === "GET") {
     if (!atLeast(me.role, "owner")) return forbidden("owner");
     const stored = mockSettingValue("company_email_domains");
-    const set = (Array.isArray(stored) ? stored : [])
-      .map(String)
-      .filter((d) => !SIGN_IN_DOMAINS.includes(d));
+    const set = (Array.isArray(stored) ? stored : []).map(String).filter((d) => !SIGN_IN_DOMAINS.includes(d));
     const rules: Schemas["SignInRulesOut"] = {
       google_sign_in: true,
       new_sign_ins_off: false,
-      domains: [
-        ...SIGN_IN_DOMAINS.map((domain) => ({
-          domain,
-          from: "deployment" as const,
-        })),
-        ...set.map((domain) => ({ domain, from: "settings" as const })),
-      ],
-      without_invite: String(
-        mockSettingValue("sign_in_without_invite") ?? "request",
-      ) as Schemas["SignInRulesOut"]["without_invite"],
-      default_role: String(
-        mockSettingValue("iap_default_role") ?? "commenter",
-      ) as Role,
+      domains: [...SIGN_IN_DOMAINS.map((domain) => ({ domain, from: "deployment" as const })), ...set.map((domain) => ({ domain, from: "settings" as const }))],
+      without_invite: String(mockSettingValue("sign_in_without_invite") ?? "request") as Schemas["SignInRulesOut"]["without_invite"],
+      default_role: String(mockSettingValue("iap_default_role") ?? "commenter") as Role,
     };
     return json(200, rules);
   }
@@ -8426,28 +5205,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     me: { id: me.id, email: me.email, canWrite: atLeast(me.role, "commenter") },
     now,
     uuid,
-    refuse:
-      localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO,
+    refuse: localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO,
   });
   if (briefs) return briefs;
   // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
-  if (
-    p[1] === "trace" &&
-    p[2] === "staleness" &&
-    p[3] === "actions" &&
-    m === "POST"
-  ) {
-    const acted = await specStalenessAction(
-      {
-        db: (db.specs ??= specsSeed(db)),
-        userId: me.id,
-        name: (id) => specActorName(db, id),
-        role: me.role,
-        uuid,
-        now,
-      },
-      req,
-    );
+  if (p[1] === "trace" && p[2] === "staleness" && p[3] === "actions" && m === "POST") {
+    const acted = await specStalenessAction({ db: (db.specs ??= specsSeed(db)), userId: me.id, name: (id) => specActorName(db, id), role: me.role, uuid, now }, req);
     if (acted) return acted;
   }
   // Trace, impact, staleness and evidence-inspector routes (./trace.ts), on the v2 rows.
@@ -8472,32 +5235,18 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (traced) return traced;
   }
   // B2: what a run wrote to the baseline (viewer+), its rows read under its shared draft.
-  if (
-    p[1] === "baseline" &&
-    p[2] === "from-run" &&
-    p[3] &&
-    req.method === "GET"
-  ) {
+  if (p[1] === "baseline" && p[2] === "from-run" && p[3] && req.method === "GET") {
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
     const found = fromRunCheckpoint({ ...runsContext(db), db: db.runs }, p[3]);
     if (!found) return json(404, { detail: `run ${p[3]} not found` });
-    return json(200, {
-      ...found,
-      ...fromRun(db.baseline, p[3], found.actions),
-      checkpoint: found.checkpoint,
-    });
+    return json(200, { ...found, ...fromRun(db.baseline, p[3], found.actions), checkpoint: found.checkpoint });
   }
   // B6 Goals interview: its routes write discussions and proposals, so they come first.
   if (p[1] === "baseline") {
     const goalCtx = goalContext(db, me);
     const res = await routeGoalInterview(goalCtx, req, p);
     if (res) return res;
-    if (
-      p[2] === "proposals" &&
-      p[3] &&
-      p[4] === "accept" &&
-      req.method === "POST"
-    ) {
+    if (p[2] === "proposals" && p[3] && p[4] === "accept" && req.method === "POST") {
       const accepted = await routeBaselineFor(db, me, req, p, q);
       if (accepted.ok) afterAccept(goalCtx, p[3]);
       return accepted;
@@ -8510,12 +5259,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     return routeSources(req, p, q, {
       scenario: localStorage.getItem(MOCK_SCENARIO_KEY),
       me: { email: me.email, role: me.role },
-      members: db.members.map((x) => ({
-        id: x.id,
-        email: x.email,
-        role: x.role,
-        disabled: x.status === "disabled",
-      })),
+      members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, disabled: x.status === "disabled" })),
       uses: () => itemUses(db),
     });
   }
@@ -8529,60 +5273,27 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Undo calls the stored route as the person, where the mock has it (decisions' reviews).
   const autonomy = await routeAutonomy(db.autonomy, req, p, me, async (u) =>
     String(u.path).startsWith("/v1/decisions/")
-      ? route(
-          db,
-          new Request(new URL(String(u.path), req.url), {
-            method: String(u.method),
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(u.body ?? null),
-          }),
-        )
+      ? route(db, new Request(new URL(String(u.path), req.url), { method: String(u.method), headers: { "Content-Type": "application/json" }, body: JSON.stringify(u.body ?? null) }))
       : null,
   );
   if (autonomy) return autonomy;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
-  if (p[1] === "settings" && !atLeast(me.role, "owner"))
-    return forbidden("owner");
+  if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const browse = sourceBrowseRoute(req, p, q);
   if (browse) return browse;
   const connections = await connectionsRoute(req, p, me.role, me.email);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
-  const pool = await claudeAccountsRoute(
-    req,
-    p,
-    q,
-    me.role,
-    localStorage.getItem(MOCK_SCENARIO_KEY),
-  );
+  const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
   if (pool) return pool;
   // G8: the Slack install's status (every member) and its channels (commenters and up).
-  const slack = slackRoute(
-    ensureReports(db, db.user_id, reportLive(db, me)).integration,
-    me,
-    req,
-    p,
-  );
+  const slack = slackRoute(ensureReports(db, db.user_id, reportLive(db, me)).integration, me, req, p);
   if (slack) return slack;
   // Alignment reports and the company Slack install check roles themselves (./reports.ts).
   // H5: metrics, their variances and the analytics connection check roles themselves (./metrics.ts).
-  const metricsOut = await routeMetrics(
-    metricsContext(db, me),
-    ensureMetrics(db, me),
-    req,
-    p,
-    q,
-  );
+  const metricsOut = await routeMetrics(metricsContext(db, me), ensureMetrics(db, me), req, p, q);
   if (metricsOut) return metricsOut;
-  const reports = await reportsRoute(
-    db,
-    db.user_id,
-    me,
-    req,
-    p,
-    q,
-    reportLive(db, me),
-  );
+  const reports = await reportsRoute(db, db.user_id, me, req, p, q, reportLive(db, me));
   if (reports) return reports;
   // Built-in model jobs check roles themselves (approvers decide, owners set them up).
   db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
@@ -8601,9 +5312,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       {
         llm,
         role: me.role,
-        checkpoint: (id) =>
-          runs.runs.flatMap((r) => r.checkpoints).find((c) => c.id === id) ??
-          null,
+        checkpoint: (id) => runs.runs.flatMap((r) => r.checkpoints).find((c) => c.id === id) ?? null,
         draft: (id) => runs.drafts?.[id] ?? null,
       },
       req,
@@ -8623,14 +5332,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     findVersion: (ref, n) => {
       const doc = findDocument(db, ref);
       const v = doc && findVersion(db, doc, n);
-      return doc && v
-        ? {
-            documentId: doc.id,
-            slug: doc.slug,
-            versionId: v.id,
-            authorId: v.imported_by ?? null,
-          }
-        : null;
+      return doc && v ? { documentId: doc.id, slug: doc.slug, versionId: v.id, authorId: v.imported_by ?? null } : null;
     },
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
     queueReview: (documentId, n) => queueQualityReview(llm, documentId, n),
@@ -8644,29 +5346,17 @@ async function route(db: Db, req: Request): Promise<Response> {
     db.specs ??= specsSeed(db);
     // An artifact request of the v2 rows (the Impact plan's outputs) that the specs mock does
     // not hold: Propose regeneration as the API's (a draft run, nothing settled or started).
-    const v2req =
-      p[3] === "regenerate" &&
-      m === "POST" &&
-      !db.specs.specs.some((x) => x.request.id === p[2])
-        ? ensureV2(db).artifact_requests.find((x) => x.id === p[2])
-        : undefined;
+    const v2req = p[3] === "regenerate" && m === "POST" && !db.specs.specs.some((x) => x.request.id === p[2])
+      ? ensureV2(db).artifact_requests.find((x) => x.id === p[2])
+      : undefined;
     if (v2req) {
-      if (!atLeast(me.role, "approver"))
-        return json(403, { detail: "Requires the approver role" });
+      if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
       const proposed = (db.impact_runs ??= {});
-      if (proposed[v2req.id])
-        return json(409, {
-          detail:
-            "this spec's run has not ended (it is draft): let it finish, or cancel it on its run page, first",
-        });
+      if (proposed[v2req.id]) return json(409, { detail: "this spec's run has not ended (it is draft): let it finish, or cancel it on its run page, first" });
       const prd = db.documents.find((d) => d.id === v2req.source_document_id);
       const out: Schemas["RegenerationOut"] = {
-        request_id: v2req.id,
-        run_id: uuid(),
-        prd_version: prd ? (docVersions(db, prd).pop()?.number ?? 1) : 1,
-        section_keys: v2req.section_keys,
-        dropped_section_keys: [],
-        reasons: [],
+        request_id: v2req.id, run_id: uuid(), prd_version: prd ? (docVersions(db, prd).pop()?.number ?? 1) : 1,
+        section_keys: v2req.section_keys, dropped_section_keys: [], reasons: [],
       };
       proposed[v2req.id] = out.run_id;
       return json(201, out);
@@ -8683,34 +5373,19 @@ async function route(db: Db, req: Request): Promise<Response> {
         // the engineering leads who may approve, and drafts its prd_to_spec run.
         documents: db.documents,
         versions: db.versions,
-        entityTitle: (id) =>
-          db.baseline.entities.find((e) => e.id === id)?.title ??
-          planEntityTitle(id),
+        entityTitle: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? planEntityTitle(id),
         // As the API's _lead_approvers: the leads of approver rank or above, by email.
         leadApprovers: () =>
           db.members
-            .filter(
-              (x) =>
-                engineeringLeads(db).includes(x.id) &&
-                atLeast(x.role, "approver"),
-            )
+            .filter((x) => engineeringLeads(db).includes(x.id) && atLeast(x.role, "approver"))
             .sort((a, b) => a.email.localeCompare(b.email))
             .map((x) => x.id),
         techBrief: techBriefOf,
         draftRun: async (input) => {
           db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
-          const run = new Request(new URL("/v1/runs", req.url), {
-            method: "POST",
-            body: JSON.stringify(input),
-          });
-          const out =
-            (await routeRuns({ ...runsContext(db), db: db.runs }, run, [
-              "v1",
-              "runs",
-            ])) ?? notFound("Route");
-          return out.status === 201
-            ? ((await out.json()) as { id: string }).id
-            : out;
+          const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
+          const out = (await routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"])) ?? notFound("Route");
+          return out.status === 201 ? ((await out.json()) as { id: string }).id : out;
         },
       },
       req,
@@ -8733,27 +5408,12 @@ async function route(db: Db, req: Request): Promise<Response> {
         const doc = findDocument(db, ref);
         if (!doc || doc.kind !== "prd") return null;
         // The newest version's sections stand in for the template's (the brief ones flagged).
-        const latest = db.versions
-          .filter((v) => v.document_id === doc.id)
-          .sort((a, b) => b.number - a.number)[0];
-        const sections = latest?.sections.map((s) => ({
-          key: s.section_key,
-          heading: s.heading,
-          level: s.level,
-          brief: s.layer === "brief",
-        }));
-        return {
-          id: doc.id,
-          slug: doc.slug,
-          template: doc.template ?? null,
-          sections,
-        };
+        const latest = db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => b.number - a.number)[0];
+        const sections = latest?.sections.map((s) => ({ key: s.section_key, heading: s.heading, level: s.level, brief: s.layer === "brief" }));
+        return { id: doc.id, slug: doc.slug, template: doc.template ?? null, sections };
       },
       approvedVersion: (documentId, n) =>
-        db.versions.find(
-          (v) =>
-            v.document_id === documentId && v.number === n && v.approved_at,
-        )?.id ?? null,
+        db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
       learned: () => nudges(db.quality?.learnings, "module"),
     },
     req,
@@ -8763,53 +5423,19 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (modules) return modules;
   // Team interviews (C3 lane 2): the member's interview on an intake and its turns, which
   // record answers through the intake mock's answer path.
-  if (
-    (p[1] === "intakes" && p[3] === "interview") ||
-    (p[1] === "interviews" && p[3] === "turns")
-  ) {
+  if ((p[1] === "intakes" && p[3] === "interview") || (p[1] === "interviews" && p[3] === "turns")) {
     const recordAnswer = async (id: string, body: string) => {
-      const answer = new Request(
-        new URL(`/v1/questions/${id}/answers`, req.url),
-        {
-          method: "POST",
-          body: JSON.stringify({
-            kind: "answer",
-            body,
-            knowledge_state: "user_decision",
-            evidence_ids: [],
-          }),
-        },
-      );
-      const ctx = {
-        userId: me.id,
-        role: me.role,
-        people: db.members,
-        createRun: async () => notFound("Route"),
-      };
-      return (
-        (await routeIntake(
-          v2db,
-          ctx,
-          answer,
-          ["v1", "questions", id, "answers"],
-          new URLSearchParams(),
-        )) ?? notFound("Route")
-      );
+      const answer = new Request(new URL(`/v1/questions/${id}/answers`, req.url), {
+        method: "POST",
+        body: JSON.stringify({ kind: "answer", body, knowledge_state: "user_decision", evidence_ids: [] }),
+      });
+      const ctx = { userId: me.id, role: me.role, people: db.members, createRun: async () => notFound("Route") };
+      return (await routeIntake(v2db, ctx, answer, ["v1", "questions", id, "answers"], new URLSearchParams())) ?? notFound("Route");
     };
     const nextQuestion = (intakeId: string, after: string) =>
       v2db.questions
-        .filter(
-          (x) =>
-            x.intake_id === intakeId &&
-            x.asked_to === me.id &&
-            (x.status === "asked" || x.status === "delegated") &&
-            x.id !== after,
-        )
-        .sort(
-          (a, b) =>
-            (a.batch ?? 0) - (b.batch ?? 0) ||
-            a.created_at.localeCompare(b.created_at),
-        )[0]?.id ?? null;
+        .filter((x) => x.intake_id === intakeId && x.asked_to === me.id && (x.status === "asked" || x.status === "delegated") && x.id !== after)
+        .sort((a, b) => (a.batch ?? 0) - (b.batch ?? 0) || a.created_at.localeCompare(b.created_at))[0]?.id ?? null;
     const team = await routeTeamInterviews(
       ensureInterviews(db),
       {
@@ -8828,22 +5454,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // answer and propose, approvers decide, owners accept a critical risk.
   // Questions to people (C2): Ask a teammate, reassign or withdraw, the Inbox's questions
   // and the member directory, with the API's rules.
-  if (
-    ["intakes", "gaps", "questions", "intake-proposals", "people"].includes(
-      p[1],
-    ) ||
-    (p[1] === "inbox" && p[2] === "questions")
-  ) {
+  if (["intakes", "gaps", "questions", "intake-proposals", "people"].includes(p[1]) || (p[1] === "inbox" && p[2] === "questions")) {
     const createRun = (input: Schemas["RunCreate"]) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
-      const run = new Request(new URL("/v1/runs", req.url), {
-        method: "POST",
-        body: JSON.stringify(input),
-      });
-      return routeRuns({ ...runsContext(db), db: db.runs }, run, [
-        "v1",
-        "runs",
-      ]).then((r) => r ?? notFound("Route"));
+      const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
+      return routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"]).then((r) => r ?? notFound("Route"));
     };
     const subjects: SubjectLookup = {
       document: (id) => {
@@ -8855,18 +5470,14 @@ async function route(db: Db, req: Request): Promise<Response> {
           title: doc.title,
           status: doc.status,
           latest: latest.number,
-          heading: (key) =>
-            latest.sections.find((x) => x.section_key === key)?.heading ?? null,
+          heading: (key) => latest.sections.find((x) => x.section_key === key)?.heading ?? null,
         };
       },
-      entity: (id) =>
-        db.baseline.entities.find((e) => e.id === id)?.title ?? null,
+      entity: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
       roadmapItem: (id, key) => {
         // A PRD the caller cannot see has no items for them (as oracle.intake.questions).
         const doc = db.documents.find((d) => d.id === id);
-        return doc && canSee(me.role, doc.visibility)
-          ? planItemTitle(doc.slug, key)
-          : null;
+        return doc && canSee(me.role, doc.visibility) ? planItemTitle(doc.slug, key) : null;
       },
       checkpoint: (id) => {
         for (const run of db.runs?.runs ?? []) {
@@ -8879,106 +5490,49 @@ async function route(db: Db, req: Request): Promise<Response> {
     const updateRun = async (id: string, body: Schemas["RunPatch"]) => {
       const run = db.runs?.runs.find((r) => r.id === id);
       if (!run || run.status !== "draft") return null;
-      const patch = new Request(new URL(`/v1/runs/${id}`, req.url), {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      return routeRuns({ ...runsContext(db), db: db.runs! }, patch, [
-        "v1",
-        "runs",
-        id,
-      ]).then((r) => r ?? notFound("Route"));
+      const patch = new Request(new URL(`/v1/runs/${id}`, req.url), { method: "PATCH", body: JSON.stringify(body) });
+      return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
     };
-    const confirmedGoals = () =>
-      new Map(
-        db.baseline.entities
-          .filter((e) => e.type === "goal" && e.status === "confirmed")
-          .map((e) => [e.id, e.title]),
-      );
-    const goalKeys = () =>
-      new Map(
-        db.baseline.entities
-          .filter((e) => e.type === "goal" && e.status === "confirmed")
-          .map((e) => [e.id, e.key]),
-      );
+    const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+    const goalKeys = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.key]));
     const lockedSections = (ref: string) => {
       const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
-      const latest =
-        doc &&
-        db.versions
-          .filter((v) => v.document_id === doc.id)
-          .sort((a, b) => b.number - a.number)[0];
+      const latest = doc && db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => b.number - a.number)[0];
       if (!latest) return [];
-      return latest.sections
-        .map((s) => s.section_key)
-        .filter((k) => {
-          const r = latestReview(db, latest.id, k);
-          return r?.verdict === "approved" && !r.lapsed_at;
-        });
+      return latest.sections.map((s) => s.section_key).filter((k) => {
+        const r = latestReview(db, latest.id, k);
+        return r?.verdict === "approved" && !r.lapsed_at;
+      });
     };
     // C1 lane 2: the brief's "Requests behind it".
     const requests = {
       refusal: (ids: string[]) =>
         behindBriefRefusal(ensureRequests(db), ids, {
-          intake: (id) =>
-            ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
-          document: (id) =>
-            db.documents.find((d) => d.id === id)?.title ?? null,
+          intake: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+          document: (id) => db.documents.find((d) => d.id === id)?.title ?? null,
         }),
-      link: (intakeId: string, ids: string[]) =>
-        putBehindBrief(ensureRequests(db), intakeId, ids),
+      link: (intakeId: string, ids: string[]) => putBehindBrief(ensureRequests(db), intakeId, ids),
       release: (intakeId: string) => releaseBrief(ensureRequests(db), intakeId),
     };
     // C5 late answers: a whole-draft item on the PRD's latest version, as late_answers._raise.
-    const raiseFeedback = (
-      ref: string,
-      input: {
-        summary: string;
-        author_id: string | null;
-        intake_question_id: string;
-        intake_answer_id: string;
-      },
-    ) => {
+    const raiseFeedback = (ref: string, input: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string }) => {
       const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
       const latest = doc ? docVersions(db, doc).pop() : undefined;
       if (!doc || !latest) return null;
       const at = now();
       // An item kept with its quote withheld reads in full again.
-      const kept = db.feedback.find(
-        (f) => f.intake_answer_id === input.intake_answer_id,
-      );
+      const kept = db.feedback.find((f) => f.intake_answer_id === input.intake_answer_id);
       if (kept) {
-        Object.assign(kept, {
-          summary: input.summary,
-          withheld_at: null,
-          updated_at: at,
-        });
+        Object.assign(kept, { summary: input.summary, withheld_at: null, updated_at: at });
         touch(db, kept.document_id);
         return { slug: doc.slug, version: kept.raised_on_version };
       }
       db.feedback.push({
-        id: uuid(),
-        document_id: doc.id,
-        raised_on_version: latest.number,
-        kind: "general",
-        comment_id: null,
-        section_review_id: null,
-        section_key: null,
-        summary: input.summary,
-        author_id: input.author_id,
-        anchor: null,
-        verdict: null,
-        status: "open",
-        addressed_in_version: null,
-        resolution_note: null,
-        severity: null,
-        created_at: at,
-        updated_at: at,
-        intake_id:
-          v2db.questions.find((x) => x.id === input.intake_question_id)
-            ?.intake_id ?? null,
-        intake_question_id: input.intake_question_id,
-        intake_answer_id: input.intake_answer_id,
+        id: uuid(), document_id: doc.id, raised_on_version: latest.number, kind: "general", comment_id: null, section_review_id: null,
+        section_key: null, summary: input.summary, author_id: input.author_id, anchor: null, verdict: null, status: "open",
+        addressed_in_version: null, resolution_note: null, severity: null, created_at: at, updated_at: at,
+        intake_id: v2db.questions.find((x) => x.id === input.intake_question_id)?.intake_id ?? null,
+        intake_question_id: input.intake_question_id, intake_answer_id: input.intake_answer_id,
       });
       touch(db, doc.id);
       onFeedback(llm, doc.id, latest.number);
@@ -8990,33 +5544,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       const kept: string[] = [];
       for (let i = db.feedback.length - 1; i >= 0; i--) {
         const f = db.feedback[i];
-        if (!f.intake_answer_id || !answerIds.includes(f.intake_answer_id))
-          continue;
-        const decided = db.llm?.suggestions.some(
-          (x) =>
-            x.feedback_item_id === f.id &&
-            x.status !== "open" &&
-            x.status !== "superseded",
-        );
-        if (
-          f.status !== "open" ||
-          f.resolution_note ||
-          f.staged_for_agents_at ||
-          decided
-        ) {
-          if (!f.withheld_at)
-            Object.assign(f, {
-              summary: LATE_ANSWER_WITHHELD,
-              withheld_at: now(),
-              updated_at: now(),
-            });
+        if (!f.intake_answer_id || !answerIds.includes(f.intake_answer_id)) continue;
+        const decided = db.llm?.suggestions.some((x) => x.feedback_item_id === f.id && x.status !== "open" && x.status !== "superseded");
+        if (f.status !== "open" || f.resolution_note || f.staged_for_agents_at || decided) {
+          if (!f.withheld_at) Object.assign(f, { summary: LATE_ANSWER_WITHHELD, withheld_at: now(), updated_at: now() });
           kept.push(f.intake_answer_id);
         } else {
           db.feedback.splice(i, 1);
-          if (db.llm)
-            db.llm.suggestions = db.llm.suggestions.filter(
-              (x) => x.feedback_item_id !== f.id,
-            );
+          if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
         }
         touch(db, f.document_id);
       }
@@ -9024,23 +5559,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(
       v2db,
-      {
-        userId: me.id,
-        role: me.role,
-        createRun,
-        updateRun,
-        people: db.members,
-        subjects,
-        confirmedGoals,
-        goalKeys,
-        lockedSections,
-        requests,
-        questionsLevel: () =>
-          levelFor((db.autonomy ??= emptyAutonomy()), "questions"),
-        learned: () => nudges(db.quality?.learnings, "question_category"),
-        raiseFeedback,
-        withdrawFeedback,
-      },
+      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
       req,
       p,
       q,
@@ -9049,41 +5568,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   }
   // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.
   if (p[1] === "interviews") {
-    const interviews = await routeInterviews(
-      ensureInterviews(db),
-      interviewsContext(db, me.id, me.role),
-      req,
-      p,
-      q,
-    );
+    const interviews = await routeInterviews(ensureInterviews(db), interviewsContext(db, me.id, me.role), req, p, q);
     if (interviews) return interviews;
   }
   // Requests and their themes (C1) check roles themselves: commenters add, approvers decide.
-  if (
-    [
-      "requests",
-      "request-themes",
-      "request-candidates",
-      "request-replies",
-    ].includes(p[1])
-  ) {
-    const requests = await routeRequests(
-      ensureRequests(db),
-      requestsContext(db, me.id, me.role),
-      req,
-      p,
-      q,
-    );
+  if (["requests", "request-themes", "request-candidates", "request-replies"].includes(p[1])) {
+    const requests = await routeRequests(ensureRequests(db), requestsContext(db, me.id, me.role), req, p, q);
     if (requests) return requests;
   }
   // Launches and changelog (H6) check roles themselves: a task's owner edits their task.
-  const launches = await routeLaunches(
-    launchesContext(db, me),
-    ensureLaunches(db),
-    req,
-    p,
-    q,
-  );
+  const launches = await routeLaunches(launchesContext(db, me), ensureLaunches(db), req, p, q);
   if (launches) return launches;
   // The API's role checks: viewers read, commenters comment, approvers decide. A checkpoint's
   // shared draft (D8, ./runs.ts) checks its own: commenters suggest, approvers stage. So does
@@ -9092,24 +5586,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   // So do F3's schedule bases (./roadmap.ts date rights): a named engineering lead below the
   // approver role records, verifies, rejects and withdraws them. So do Simple's routes
   // (./simple-changes.ts: commenters propose, D-a track owners decide as approvers).
-  const draftWrite =
-    p[1] === "runs" &&
-    p[3] === "checkpoints" &&
-    (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
+  const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
   // As the API: any member asks for a template recommendation or a theme's preview (they write nothing).
-  const readOnlyPost =
-    (p[1] === "drafts" && p[2] === "recommend") ||
-    (p[1] === "themes" && (p[2] === "preview" || p[2] === "validate"));
+  const readOnlyPost = (p[1] === "drafts" && p[2] === "recommend") || (p[1] === "themes" && (p[2] === "preview" || p[2] === "validate"));
   const need: Role | null =
-    m === "GET" ||
-    draftWrite ||
-    readOnlyPost ||
-    p[1] === "decisions" ||
-    p[1] === "schedule-bases" ||
-    p[1] === "simple"
+    m === "GET" || draftWrite || readOnlyPost || p[1] === "decisions" || p[1] === "schedule-bases" || p[1] === "simple"
       ? null
-      : p[1] === "comments" ||
-          ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
+      : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
           // As the API: commenters propose a blocker's solution options.
           (p[1] === "blockers" && p[3] === "options" && m === "POST")
         ? "commenter"
@@ -9138,9 +5621,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     }
     if (m === "PATCH") {
       if (c.author_id !== me.id && !atLeast(me.role, "approver")) {
-        return json(403, {
-          detail: "Only the author or an approver can change this comment",
-        });
+        return json(403, { detail: "Only the author or an approver can change this comment" });
       }
       const patch = await body<Schemas["CommentPatch"]>();
       if (patch.resolved != null) c.resolved_at = patch.resolved ? now() : null;
@@ -9154,8 +5635,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (!f) return notFound("Feedback item");
     const patch = await body<Schemas["FeedbackPatch"]>();
     // As the API: reopening clears the version it was addressed in, unless one is given.
-    if (patch.status === "open" && !("addressed_in_version" in patch))
-      patch.addressed_in_version = null;
+    if (patch.status === "open" && !("addressed_in_version" in patch)) patch.addressed_in_version = null;
     Object.assign(f, patch, { updated_at: now() });
     // fix3-discuss review: resolving whole-draft feedback made in Discuss closes its thread.
     if (patch.status && patch.status !== "open") closeFeedbackThread(db, f);
@@ -9165,20 +5645,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Product Oracle v2 read routes; viewers read (lanes add writes in ./v2.ts).
   const v2Db = ensureV2(db);
   // Blocker strategy routes (CR-04): writes on the v2 option, experiment and event rows.
-  const blockerContext = {
-    userId: me.id,
-    role: me.role,
-    v2: v2Db,
-    documents: db.documents,
-    baseline: db.baseline,
-  };
-  const blockers = await routeBlockers(
-    blockerContext,
-    ensureBlockers(db),
-    req,
-    p,
-    q,
-  );
+  const blockerContext = { userId: me.id, role: me.role, v2: v2Db, documents: db.documents, baseline: db.baseline };
+  const blockers = await routeBlockers(blockerContext, ensureBlockers(db), req, p, q);
   if (blockers) return blockers;
   const v2 = routeV2(v2Db, req, p, q, me.id);
   if (v2) return v2;
@@ -9186,23 +5654,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Roadmap alignment and product tracks (CR-11).
   const roadmapCtx = roadmapContext(db, me);
   // E1: a PRD draft's roadmap items and the PRD's "Derive for each new draft" switch.
-  const draftRes = await routeDraftRoadmap(
-    draftCtx(db),
-    draftDb(db),
-    req,
-    p,
-    q,
-  );
+  const draftRes = await routeDraftRoadmap(draftCtx(db), draftDb(db), req, p, q);
   if (draftRes) return draftRes;
   db.roadmap = ensureRoadmap(db, roadmapCtx);
   db.plan_edits ??= emptyPlanEdits();
-  const editsRes = await routeChangeSets(
-    planEditsContext(db, me),
-    db.plan_edits,
-    req,
-    p,
-    q,
-  );
+  const editsRes = await routeChangeSets(planEditsContext(db, me), db.plan_edits, req, p, q);
   if (editsRes) return editsRes;
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
@@ -9213,19 +5669,15 @@ async function route(db: Db, req: Request): Promise<Response> {
   // "one-pager-not-in-prd": Oracle marked a block the PRD lacks "Not in the PRD yet".
   // "one-pager-run-prd": a run's Goal-traced PRD, its lines cited, while Oracle writes the page.
   // "one-pager-quick-read": the same PRD, its one_pager job failed: the quick read stays.
-  db.simple_one_pager ??=
-    localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
-      ? seedRunPrdOnePager()
-      : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-quick-read"
-        ? { ...seedRunPrdOnePager(), writing: false, quickRead: true }
-        : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
-          ? seedNeedsLookOnePager()
-          : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-not-in-prd"
-            ? seedNotInPrdOnePager()
-            : seedOnePager(
-                localStorage.getItem(MOCK_SCENARIO_KEY) ===
-                  "one-pager-no-owner",
-              );
+  db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
+    ? seedRunPrdOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-quick-read"
+    ? { ...seedRunPrdOnePager(), writing: false, quickRead: true }
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
+    ? seedNeedsLookOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-not-in-prd"
+    ? seedNotInPrdOnePager()
+    : seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
@@ -9235,19 +5687,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     db.simple_visuals,
     // As the API: an item is named with its code, or its title (subject_name).
     {
-      id: me.id,
-      role: me.role,
-      names: Object.fromEntries(
-        db.members.map((x) => [x.id, displayName(x.email, x.name)]),
-      ),
-      itemName: (id) => itemSubjectName(roadmapItems, id),
+      id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])), itemName: (id) => itemSubjectName(roadmapItems, id),
       // As the one-pager's can_draw_flow (drafts.can_edit): Guided setup's decider, else its approver track owner.
       edits: (doc) => {
         if (me.role === "owner") return true;
         if (doc !== db.simple_one_pager?.doc.id) return false;
-        const decider = db.members.find(
-          (x) => x.email === "dana.decider@example.com",
-        )?.id;
+        const decider = db.members.find((x) => x.email === "dana.decider@example.com")?.id;
         if (decider) return me.id === decider;
         return mockApproverOwnsTrack() && me.email === "approver@example.com";
       },
@@ -9257,17 +5702,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (visualsRes) return visualsRes;
   db.simple_roadmap.visuals = db.simple_visuals;
-  const simpleRoles = Object.fromEntries(
-    db.members
-      .filter((x) => x.status !== "disabled")
-      .map((x) => [x.id, x.role]),
-  );
-  const simpleOwners = db.members
-    .filter((x) => x.role === "owner" && x.status !== "disabled")
-    .map((x) => x.id);
-  const simpleNames = Object.fromEntries(
-    db.members.map((x) => [x.id, displayName(x.email, x.name)]),
-  );
+  const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
+  const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
+  const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
     // served the same invented page under its own slug and title, with its own draft and changes.
@@ -9277,57 +5714,22 @@ async function route(db: Db, req: Request): Promise<Response> {
       {
         id: me.id,
         role: me.role,
-        owners: db.members
-          .filter((x) => x.role === "owner" && x.status !== "disabled")
-          .map((x) => x.id),
-        names: Object.fromEntries(
-          db.members.map((x) => [x.id, displayName(x.email, x.name)]),
-        ),
+        owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+        names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
         // The PRD's required reviewer: the seeded approver.
-        reviewers: db.members
-          .filter(
-            (x) =>
-              x.email === "approver@example.com" && x.status !== "disabled",
-          )
-          .map((x) => x.id),
+        reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
         // Its decider and track owners, as the meetings mock's Guided setup (simple-meetings prds).
-        decider:
-          onePagerDb.doc.slug === "guided-setup"
-            ? (db.members.find((x) => x.email === "dana.decider@example.com")
-                ?.id ?? null)
-            : null,
-        trackOwners:
-          onePagerDb.doc.slug === "guided-setup" && mockApproverOwnsTrack()
-            ? db.members
-                .filter((x) => x.email === "approver@example.com")
-                .map((x) => x.id)
-            : [],
+        decider: onePagerDb.doc.slug === "guided-setup" ? (db.members.find((x) => x.email === "dana.decider@example.com")?.id ?? null) : null,
+        trackOwners: onePagerDb.doc.slug === "guided-setup" && mockApproverOwnsTrack() ? db.members.filter((x) => x.email === "approver@example.com").map((x) => x.id) : [],
         notify: (user_id, kind, title, data, version) =>
           ensureReviewV2(db).notifications.push({
-            id: uuid(),
-            user_id,
-            kind,
-            title,
-            document_id: onePagerDb.doc.id,
-            version_number: version,
-            section_key: null,
-            comment_id: null,
-            campaign_id: null,
-            actor: `user:${me.id}`,
-            data,
-            read_at: null,
-            created_at: now(),
+            id: uuid(), user_id, kind, title, document_id: onePagerDb.doc.id, version_number: version, section_key: null,
+            comment_id: null, campaign_id: null, actor: `user:${me.id}`, data, read_at: null, created_at: now(),
           }),
-        planPages:
-          onePagerDb.doc.slug === PLAN_PRD_SLUG &&
-          db.simple_roadmap?.plan &&
-          !db.simple_roadmap.plan.undated
-            ? planMilestones().map((m) => `${m.code} ${m.name}`)
-            : undefined,
-        overflowPages:
-          localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow"
-            ? 2
-            : undefined,
+        planPages: onePagerDb.doc.slug === PLAN_PRD_SLUG && db.simple_roadmap?.plan && !db.simple_roadmap.plan.undated
+          ? planMilestones().map((m) => `${m.code} ${m.name}`)
+          : undefined,
+        overflowPages: localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-overflow" ? 2 : undefined,
       },
       r,
       p,
@@ -9338,112 +5740,53 @@ async function route(db: Db, req: Request): Promise<Response> {
       db.simple_roadmap!.plan,
       me.role,
       (ref) => {
-        if (
-          ref === PLAN_PRD_SLUG ||
-          ref === db.simple_one_pager!.doc.id ||
-          ref === stableUuid("simple-prd/onboarding-roadmap")
-        )
-          return { ...db.simple_one_pager!.doc };
-        const d = db.documents.find(
-          (x) => x.kind === "prd" && (x.slug === ref || x.id === ref),
-        );
+        if (ref === PLAN_PRD_SLUG || ref === db.simple_one_pager!.doc.id || ref === stableUuid("simple-prd/onboarding-roadmap")) return { ...db.simple_one_pager!.doc };
+        const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
         return d ? { id: d.id, slug: d.slug, title: d.title } : null;
       },
       r,
       p,
     );
     if (planRes) return planRes;
-    const simpleRes = await routeSimpleRoadmap(
-      db.simple_roadmap!,
-      {
-        id: me.id,
-        role: me.role,
-        roles: simpleRoles,
-        owners: simpleOwners,
-        names: simpleNames,
-      },
-      r,
-      p,
-      q,
-    );
+    const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
-    const companyGoals = db.baseline.entities
-      .filter((e) => e.type === "goal" && e.status === "confirmed")
-      .map((e) => ({ id: e.id, key: e.key, title: e.title }));
-    return routeSimpleChanges(
-      db.simple_roadmap!,
-      {
-        id: me.id,
-        role: me.role,
-        owners: simpleOwners,
-        names: simpleNames,
-        roles: simpleRoles,
-        companyGoals,
-      },
-      r,
-      p,
-      q,
-    );
+    const companyGoals = db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => ({ id: e.id, key: e.key, title: e.title }));
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, companyGoals }, r, p, q);
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
   // A meeting's chat (/simple/meetings/{id}/chat...) is S9's, below: its invented meeting lives in its own db.
-  if (
-    p[1] === "simple" &&
-    p[4] !== "chat" &&
-    (p[2] === "meetings" || p[2] === "decisions" || db.simple_meetings)
-  ) {
+  if (p[1] === "simple" && p[4] !== "chat" && (p[2] === "meetings" || p[2] === "decisions" || db.simple_meetings)) {
     const meetingsCtx: MeetingsCtx = {
       me: { id: me.id, role: me.role },
-      members: db.members
-        .filter((x) => x.status !== "disabled")
-        .map((x) => ({
-          id: x.id,
-          name: displayName(x.email, x.name),
-          role: x.role,
-          email: x.email,
-        })),
+      members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
-      documents: () =>
-        db.documents
-          .filter((d) => d.kind === "prd")
-          .map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+      documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
       chatLines: (id) =>
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)
-          .flatMap((t) =>
-            t.messages
-              .filter((x) => x.author_kind === "person")
-              .map((x) => x.body),
-          ),
+          .flatMap((t) => t.messages.filter((x) => x.author_kind === "person").map((x) => x.body)),
     };
     // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
-    meetingsCtx.view = () =>
-      db.preferences?.[me.email]?.simple_decisions_view ?? null;
+    meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
     meetingsCtx.othersWaiting = () => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
       const ctx = decisionsContext(db, me);
       ensureDecisions(db, ctx);
-      return decisionInbox(ctx, db.decisions!, null).filter(
-        (d) => d.counts && d.reason === "needs_decision",
-      ).length;
+      return decisionInbox(ctx, db.decisions!, null).filter((d) => d.counts && d.reason === "needs_decision").length;
     };
     const meetingsDb = ensureMeetings(db, meetingsCtx);
     const meetingsRes =
       (await routeMeetingQuestions(meetingsDb, meetingsCtx, req, p)) ??
-      (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ??
-      (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
+      (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
     if (meetingsRes) return meetingsRes;
   }
   const simpleRes = await simpleRoute(req);
   if (simpleRes) return simpleRes;
   // Simple S9: change by chat and "Walk me through it", through the change engine above.
-  if (
-    p[1] === "simple" &&
-    ["chat", "chats", "meetings", "walk"].includes(p[2] ?? "")
-  ) {
+  if (p[1] === "simple" && ["chat", "chats", "meetings", "walk"].includes(p[2] ?? "")) {
     db.simple_chat ??= seedSimpleChat(db.members);
     // S8's review meetings host the chat too (their notes, agenda and decisions), read and seeded on first use.
     const roadmapDb = db.simple_roadmap;
@@ -9452,152 +5795,65 @@ async function route(db: Db, req: Request): Promise<Response> {
     const reviews = chatMeetings(() => {
       const ctx: MeetingsCtx = (reviewsCtx ??= {
         me: { id: me.id, role: me.role },
-        members: db.members
-          .filter((x) => x.status !== "disabled")
-          .map((x) => ({
-            id: x.id,
-            name: displayName(x.email, x.name),
-            role: x.role,
-            email: x.email,
-          })),
+        members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
         roadmap: roadmapDb,
         onePager: onePagerDb,
         rituals: ensureRituals(db, me),
-        documents: () =>
-          db.documents
-            .filter((d) => d.kind === "prd")
-            .map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+        documents: () => db.documents.filter((d) => d.kind === "prd").map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
       });
       return { db: ensureMeetings(db, ctx), ctx };
     });
     // A commenter's decision on Ask: an open decision of the decision log (Home's "Decisions waiting for you"), shown on Decisions too.
     const proposeDecision = async (b: Schemas["DecisionCreate"]) => {
       const dctx = decisionsContext(db, me);
-      const post = new Request("http://mock/v1/decisions", {
-        method: "POST",
-        body: JSON.stringify(b),
-      });
-      const res = (await routeDecisions(
-        dctx,
-        ensureDecisions(db, dctx),
-        post,
-        ["v1", "decisions"],
-        new URLSearchParams(),
-      ))!;
+      const post = new Request("http://mock/v1/decisions", { method: "POST", body: JSON.stringify(b) });
+      const res = (await routeDecisions(dctx, ensureDecisions(db, dctx), post, ["v1", "decisions"], new URLSearchParams()))!;
       if (!res.ok) return null;
       const doc = b.subjects?.find((x) => x.kind === "document")?.id ?? null;
       const id = ((await res.json()) as Schemas["DecisionOut"]).id;
       reviews.propose(b.title, b.approver_id, doc, id);
       return id;
     };
-    const chatCtx = {
-      id: me.id,
-      role: me.role,
-      owners: simpleOwners,
-      names: simpleNames,
-      roles: simpleRoles,
-      proposeDecision,
-      proposeTo: (d: string | null) => reviews.proposeTo(d),
-      ownsDiscussion: (id: string) =>
-        !!(db.discussions ??= emptyDiscussions()).discussions.find(
-          (d) => d.id === id && d.origin === "panel" && d.started_by === me.id,
-        ),
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
+      ownsDiscussion: (id: string) => !!(db.discussions ??= emptyDiscussions()).discussions.find((d) => d.id === id && d.origin === "panel" && d.started_by === me.id),
       // Recent chats: a chat whose first line went to Oracle's Ask is named by that line, in its Ask chat.
       askQuestion: (id: string) =>
         (db.discussions ??= emptyDiscussions()).messages
-          .filter(
-            (x) =>
-              x.discussion_id === id &&
-              x.author_kind === "person" &&
-              !x.deleted_at,
-          )
-          .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]?.body ??
-        null,
+          .filter((x) => x.discussion_id === id && x.author_kind === "person" && !x.deleted_at)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]?.body ?? null,
     };
-    const chatRes = await routeSimpleChat(
-      db.simple_roadmap,
-      db.simple_chat,
-      chatCtx,
-      req,
-      p,
-      reviews,
-    );
+    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, chatCtx, req, p, reviews);
     if (chatRes) return chatRes;
   }
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
-  const goals = db.baseline.entities
-    .filter((e) => e.type === "goal")
-    .map((e) => ({ id: e.id, key: e.key }));
-  const drift = (key: string, origin: "approved" | "draft") =>
-    planDrift(db.strategy, me.role, key, origin);
-  const planRes = routePlan(
-    { ...roadmapCtx, goals, edits: db.plan_edits, drift },
-    db.roadmap,
-    req,
-    p,
-    q,
-  );
+  const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
+  const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
+  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift }, db.roadmap, req, p, q);
   if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
-    if (!atLeast(me.role, "approver"))
-      return json(403, { detail: "Requires the approver role" });
+    if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
     const run = trackRunBody(roadmapCtx, db.roadmap, p[2]);
     if (!run) return notFound("Track");
     db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
-    const forwarded = new Request(new URL("/v1/runs", req.url), {
-      method: "POST",
-      body: JSON.stringify(run),
-      headers: { "Content-Type": "application/json" },
-    });
-    return (await routeRuns({ ...runsContext(db), db: db.runs }, forwarded, [
-      "v1",
-      "runs",
-    ]))!;
+    const forwarded = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(run), headers: { "Content-Type": "application/json" } });
+    return (await routeRuns({ ...runsContext(db), db: db.runs }, forwarded, ["v1", "runs"]))!;
   }
 
   // O5: the roadmap audience registry (./audience.ts), every member.
-  if (p[1] === "roadmap-audiences" && p.length === 2 && m === "GET")
-    return json(200, AUDIENCES);
+  if (p[1] === "roadmap-audiences" && p.length === 2 && m === "GET") return json(200, AUDIENCES);
   // H8: an update starts from its template with its period (owners only); other kinds as before.
   if (p[1] === "drafts" && p.length === 2 && m === "POST") {
     const input = (await req.clone().json()) as Schemas["StartDraftIn"] | null;
     if (input?.kind === "update") return startUpdate(db, me, input);
     if (input?.kind === "pricing") return startPricing(db, me, input);
   }
-  if (
-    p[1] === "priorities" &&
-    p[2] === "calibration" &&
-    p.length === 3 &&
-    m === "GET"
-  )
-    return json(200, trackRecord(db));
-  const handled = await laneF(
-    db,
-    req,
-    p,
-    m,
-    me.role,
-    localStorage.getItem(MOCK_SCENARIO_KEY),
-    { id: me.id, name: memberName(me) },
-  );
+  if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
+  const handled = await laneF(db, req, p, m, me.role, localStorage.getItem(MOCK_SCENARIO_KEY), { id: me.id, name: memberName(me) });
   // E1: a draft started from the template's empty skeleton has nothing to derive yet.
-  if (
-    handled?.status === 201 &&
-    p[1] === "drafts" &&
-    p.length === 2 &&
-    m === "POST"
-  ) {
-    const started = (await handled.clone().json()) as {
-      document_id?: string;
-      version?: number;
-    };
-    const v = db.versions.find(
-      (x) =>
-        x.document_id === started.document_id &&
-        x.number === (started.version ?? 1),
-    );
-    if (v && started.document_id)
-      queueDraft(db, started.document_id, v, "skeleton");
+  if (handled?.status === 201 && p[1] === "drafts" && p.length === 2 && m === "POST") {
+    const started = (await handled.clone().json()) as { document_id?: string; version?: number };
+    const v = db.versions.find((x) => x.document_id === started.document_id && x.number === (started.version ?? 1));
+    if (v && started.document_id) queueDraft(db, started.document_id, v, "skeleton");
   }
   if (handled) return handled;
 
@@ -9609,113 +5865,59 @@ async function route(db: Db, req: Request): Promise<Response> {
   const decisionsCtx = decisionsContext(db, me);
   ensureDecisions(db, decisionsCtx);
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
-  if (
-    decided?.ok &&
-    req.method === "POST" &&
-    p[1] === "decisions" &&
-    (p[3] === "decide" || p[3] === "withdraw")
-  ) {
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && (p[3] === "decide" || p[3] === "withdraw")) {
     // An Ask proposal's Decide or Decline (withdraw) shows on Simple's Decisions page (one decisions row in the API).
-    const logged = db.decisions!.decisions.find(
-      (d) => String(d.number) === p[2] || d.id === p[2],
-    );
-    const copy =
-      logged && db.simple_meetings?.decisions.find((d) => d.id === logged.id);
-    if (copy && (logged.status === "decided" || logged.status === "withdrawn"))
-      copy.status = logged.status;
+    const logged = db.decisions!.decisions.find((d) => String(d.number) === p[2] || d.id === p[2]);
+    const copy = logged && db.simple_meetings?.decisions.find((d) => d.id === logged.id);
+    if (copy && (logged.status === "decided" || logged.status === "withdrawn")) copy.status = logged.status;
   }
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);
   // Market (H7): alternatives, the change log and positioning; seeded in the "market" scenario only.
   const market = await routeMarket(
-    {
-      me: { id: me.id, email: me.email, name: me.name ?? null, role: me.role },
-      uuid,
-      companyTimezone: ritualsCtx.companyTimezone,
-    },
+    { me: { id: me.id, email: me.email, name: me.name ?? null, role: me.role }, uuid, companyTimezone: ritualsCtx.companyTimezone },
     ensureMarket(db),
     req,
     p,
     q,
   );
   if (market) return market;
-  const ritual = await routeRituals(
-    ritualsCtx,
-    ensureRituals(db, me),
-    req,
-    p,
-    q,
-  );
+  const ritual = await routeRituals(ritualsCtx, ensureRituals(db, me), req, p, q);
   if (ritual) return ritual;
   const seenBefore = db.inbox_seen?.[me.id] ?? null;
   // E1: the ticker moves each PRD draft's derivation one step (queued -> running -> ready).
-  if (p[1] === "internal" && p[2] === "tick" && m === "POST")
-    tickDraftRoadmaps(draftCtx(db), draftDb(db));
+  if (p[1] === "internal" && p[2] === "tick" && m === "POST") tickDraftRoadmaps(draftCtx(db), draftDb(db));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
-  if (
-    runs?.ok &&
-    req.method === "POST" &&
-    p[1] === "runs" &&
-    p[3] === "start" &&
-    p.length === 4
-  ) {
+  if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) {
     startedIntakeRun(ensureV2(db), p[2]);
     // C1 lane 2: a brief's run on a PRD links the requests behind the brief.
-    const [intakeId] =
-      Object.entries(ensureV2(db).intake_runs ?? {}).find(
-        ([, r]) => r.run_id === p[2],
-      ) ?? [];
+    const [intakeId] = Object.entries(ensureV2(db).intake_runs ?? {}).find(([, r]) => r.run_id === p[2]) ?? [];
     const documentId = db.runs?.runs.find((r) => r.id === p[2])?.document_id;
-    if (intakeId && documentId)
-      linkIntakeDocument(ensureRequests(db), intakeId, documentId);
+    if (intakeId && documentId) linkIntakeDocument(ensureRequests(db), intakeId, documentId);
   }
   if (runs && p[1] === "inbox") {
     tick(llm);
-    const withStates = withInboxStates(
-      db,
-      llm,
-      me,
-      await runs.json(),
-      q.get("mark_seen") === "true",
-    );
+    const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
     // Decision rows: proposals I decide and reviews due count; informed and done do not.
     const decisions = decisionInbox(decisionsCtx, db.decisions!, seenBefore);
     const counted = decisions.filter((d) => d.counts).length;
-    const inbox = {
-      ...withStates,
-      decisions,
-      total: withStates.total + counted,
-      needs_me: (withStates.needs_me ?? 0) + counted,
-    };
+    const inbox = { ...withStates, decisions, total: withStates.total + counted, needs_me: (withStates.needs_me ?? 0) + counted };
     // Launch rows (H6): Ready to launch, Set tier and Notes to send count; Shipped is shown only.
-    const launchRows = launchInboxRows(
-      launchesContext(db, me),
-      ensureLaunches(db),
-    );
+    const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
     // Simple S3a: proposals waiting for me count; decisions on mine are shown.
     const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore, {
-      owners: db.members
-        .filter((x) => x.role === "owner" && x.status !== "disabled")
-        .map((x) => x.id),
-      roles: Object.fromEntries(
-        db.members
-          .filter((x) => x.status !== "disabled")
-          .map((x) => [x.id, x.role]),
-      ),
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
     });
     Object.assign(inbox, simpleRows);
     inbox.total += simpleRows.simple_proposals.length;
     inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;
     // Simple S8: minutes sent to me as an attendee (shown, not counted).
-    inbox.simple_minutes = meetingInboxRows(
-      db.simple_meetings,
-      me.id,
-      seenBefore,
-    );
+    inbox.simple_minutes = meetingInboxRows(db.simple_meetings, me.id, seenBefore);
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
     const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;
@@ -9728,19 +5930,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.outcomes = outcomeRows;
     inbox.total += outcomeRows.filter((r) => r.counts).length;
     // Request rows (H10): Replies to send and Asked again count; Answer to your request is shown.
-    const requestRows = requestInboxRows(
-      db.requests,
-      requestsContext(db, me.id, me.role),
-    );
+    const requestRows = requestInboxRows(db.requests, requestsContext(db, me.id, me.role));
     inbox.requests = requestRows;
     inbox.total += requestRows.filter((r) => r.counts).length;
-    inbox.needs_me =
-      (inbox.needs_me ?? 0) + requestRows.filter((r) => r.counts).length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + requestRows.filter((r) => r.counts).length;
     // Metric rows (H5): Explain a variance, Find out and Metric not read for a day; all count.
-    const metricRows = metricInbox(
-      metricsContext(db, me),
-      ensureMetrics(db, me),
-    );
+    const metricRows = metricInbox(metricsContext(db, me), ensureMetrics(db, me));
     const metricCounted = metricRows.filter((r) => r.counts).length;
     inbox.metrics = metricRows;
     inbox.total += metricCounted;
@@ -9748,53 +5943,32 @@ async function route(db: Db, req: Request): Promise<Response> {
     // Owners also see the provider revokes a removed member's disable could not make.
     db.revoke_failures ??= [];
     const failures = atLeast(me.role, "owner")
-      ? db.revoke_failures
-          .filter((r) => !r.dismissed)
-          .map((r) => ({ ...r, dismissed: undefined }))
+      ? db.revoke_failures.filter((r) => !r.dismissed).map((r) => ({ ...r, dismissed: undefined }))
       : [];
-    const accessFailures = atLeast(me.role, "owner")
-      ? (db.access_failures ??= [])
-      : [];
+    const accessFailures = atLeast(me.role, "owner") ? (db.access_failures ??= []) : [];
     // Owners also get the weekly alignment reports and the posts Slack refused (F6), and
     // one strategy drift row however many findings are open (H4). Those Oracle told: what
     // it did on its own (H11); unopened rows count.
-    const reported = inboxReports(
-      ensureReports(db, db.user_id, reportLive(db, me)),
-      me,
-    );
+    const reported = inboxReports(ensureReports(db, db.user_id, reportLive(db, me)), me);
     const strategy = inboxStrategy(db.strategy, me.role);
     const did = inboxActions((db.autonomy ??= emptyAutonomy()), me.id);
     const open = did.filter((a) => a.counts).length;
     // F3: proposed date bases, for the engineering leads (and owners while none is named).
     const leads = engineeringLeads(db);
-    const verifiesDates =
-      (leads.includes(me.id) && atLeast(me.role, "commenter")) ||
-      (me.role === "owner" && !leads.length);
+    const verifiesDates = (leads.includes(me.id) && atLeast(me.role, "commenter")) || (me.role === "owner" && !leads.length);
     const dates =
       verifiesDates && db.roadmap
         ? db.roadmap.bases
             .filter((b) => b.status === "proposed")
             .flatMap((b) => {
               const prd = db.documents.find((d) => d.id === b.prd_document_id);
-              return prd
-                ? [
-                    {
-                      ...b,
-                      prd: { id: prd.id, slug: prd.slug, title: prd.title },
-                    },
-                  ]
-                : [];
+              return prd ? [{ ...b, prd: { id: prd.id, slug: prd.slug, title: prd.title } }] : [];
             })
         : [];
     // F2: the track group (the track's owner, else every owner); its new and open alerts count.
     const tracked = inboxTracks(roadmapCtx, db.roadmap, seenBefore);
     // G6: invitations, mentions and changes proposed in discussions; new and open ones count.
-    const discussions = discussionInboxRows(
-      db.discussions ?? emptyDiscussions(),
-      db.members,
-      me,
-      seenBefore,
-    );
+    const discussions = discussionInboxRows(db.discussions ?? emptyDiscussions(), db.members, me, seenBefore);
     const discussing = discussions.filter((r) => r.state !== "done").length;
     // A5: pending access requests, for owners and approvers; each counts.
     const accessRequestRows = inboxAccessRequests(db, me);
@@ -9813,18 +5987,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       oracle_actions: did,
       dates,
       discussions,
-      total:
-        inbox.total +
-        failures.length +
-        accessFailures.length +
-        reported.unread +
-        (strategy ? 1 : 0) +
-        open +
-        dates.length +
-        tracked.total +
-        discussing +
-        accessRequestRows.length +
-        shareRevocations.length,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing + accessRequestRows.length + shareRevocations.length,
     });
   }
   if (runs) return runs;
@@ -9846,26 +6009,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   const doc = findDocument(db, p[2]);
   if (!doc) return notFound("Document");
   if (p.length === 3) {
-    return json(200, {
-      ...documentSummary(db, doc),
-      versions: docVersions(db, doc).map(summary),
-    });
+    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary) });
   }
   // H8: who sees the document (owners only, with a reason; the API audits it).
   if (p[3] === "visibility" && p.length === 4 && m === "PATCH") {
-    if (me.role !== "owner")
-      return json(403, { detail: "Requires the owner role" });
+    if (me.role !== "owner") return json(403, { detail: "Requires the owner role" });
     const input = await body<Partial<Schemas["VisibilityIn"]>>();
-    if (!input?.reason?.trim())
-      return json(422, { detail: "Give a reason for the change" });
-    if (input.visibility !== "company" && input.visibility !== "approvers")
-      return json(422, { detail: "visibility is company or approvers" });
+    if (!input?.reason?.trim()) return json(422, { detail: "Give a reason for the change" });
+    if (input.visibility !== "company" && input.visibility !== "approvers") return json(422, { detail: "visibility is company or approvers" });
     doc.visibility = input.visibility;
     doc.updated_at = now();
-    return json(200, {
-      ...documentSummary(db, doc),
-      versions: docVersions(db, doc).map(summary),
-    });
+    return json(200, { ...documentSummary(db, doc), versions: docVersions(db, doc).map(summary) });
   }
 
   if (p[3] === "diff") {
@@ -9889,31 +6043,15 @@ async function route(db: Db, req: Request): Promise<Response> {
       .filter((f) => !status || f.status === status)
       .filter((f) => !version || f.raised_on_version === Number(version))
       // As the API: by the version raised on, then age.
-      .sort(
-        (a, b) =>
-          a.raised_on_version - b.raised_on_version ||
-          a.created_at.localeCompare(b.created_at) ||
-          a.id.localeCompare(b.id),
-      )
-      .map((f) =>
-        withAuthorName(
-          db,
-          withSuggestion(
-            db.llm,
-            f,
-            docVersions(db, doc).at(-1)?.number ?? null,
-          ),
-        ),
-      );
+      .sort((a, b) => a.raised_on_version - b.raised_on_version || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+      .map((f) => withAuthorName(db, withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null)));
     return json(200, items);
   }
 
   if (p[3] !== "versions") return notFound("Route");
   if (p.length === 4) {
     if (m === "GET") return json(200, docVersions(db, doc).map(summary));
-    return json(501, {
-      detail: "Importing drafts is not available in mock mode",
-    });
+    return json(501, { detail: "Importing drafts is not available in mock mode" });
   }
 
   const v = findVersion(db, doc, Number(p[4]));
@@ -9931,15 +6069,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     return json(200, { ...versionOut(db, v), date_marks: marks });
   }
   if (sub === "markdown") {
-    return new Response(versionMarkdown(doc, v), {
-      headers: { "content-type": "text/markdown" },
-    });
+    return new Response(versionMarkdown(doc, v), { headers: { "content-type": "text/markdown" } });
   }
   if (sub === "comments") {
     if (m === "POST") {
       const input = await body<Schemas["CommentCreate"]>();
-      if (!v.sections.some((s) => s.section_key === input.section_key))
-        return notFound("Section");
+      if (!v.sections.some((s) => s.section_key === input.section_key)) return notFound("Section");
       const c = addComment(db, v, input, { author_id: me.id });
       touch(db, doc.id);
       onFeedback(llm, doc.id, v.number);
@@ -9957,30 +6092,15 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (sub === "feedback" && m === "POST") {
     const input = await body<Schemas["GeneralFeedbackCreate"]>();
     const text = (input.body ?? "").trim();
-    if (!text || input.body.length > 4000)
-      return json(422, { detail: "Feedback needs 1 to 4,000 characters" });
-    const f = addGeneralFeedback(
-      db,
-      llm,
-      doc,
-      v,
-      me.id,
-      input.body,
-      input.severity ?? null,
-    );
+    if (!text || input.body.length > 4000) return json(422, { detail: "Feedback needs 1 to 4,000 characters" });
+    const f = addGeneralFeedback(db, llm, doc, v, me.id, input.body, input.severity ?? null);
     return json(201, withAuthorName(db, withSuggestion(db.llm, f)));
   }
   if (sub === "sections" && p[7] === "review" && m === "PUT") {
-    if (!v.sections.some((s) => s.section_key === p[6]))
-      return notFound("Section");
+    if (!v.sections.some((s) => s.section_key === p[6])) return notFound("Section");
     // H8: approvers comment and suggest on an update; owners set its verdicts.
-    if (doc.kind === "update" && me.role !== "owner")
-      return json(403, {
-        detail: "Only an owner can set a section verdict on an update",
-      });
-    const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), {
-      reviewer_id: me.id,
-    });
+    if (doc.kind === "update" && me.role !== "owner") return json(403, { detail: "Only an owner can set a section verdict on an update" });
+    const r = addReview(db, v, p[6], await body<Schemas["SectionReviewIn"]>(), { reviewer_id: me.id });
     touch(db, doc.id);
     if (r.feedback_item_id) onFeedback(llm, doc.id, v.number);
     // D10: the last section approved approves the run review of this version.
@@ -9992,39 +6112,18 @@ async function route(db: Db, req: Request): Promise<Response> {
     // changed in their own sources since the draft's run pinned them (oracle.docs.fresh).
     const found = runReviewOf(db, doc.id, v.number);
     const author = found ? found.run.created_by : v.imported_by;
-    if (!author || author !== me.id)
-      return json(200, {
-        version: v.number,
-        as_of: null,
-        count: null,
-        visible: false,
-      });
+    if (!author || author !== me.id) return json(200, { version: v.number, as_of: null, count: null, visible: false });
     const as_of = found?.run.snapshot_as_of ?? v.created_at;
-    return json(200, {
-      version: v.number,
-      as_of,
-      count: itemsChangedSince(
-        as_of,
-        db.members.find((x) => x.id === author)?.email ?? "",
-        me.email,
-      ),
-      visible: true,
-    });
+    return json(200, { version: v.number, as_of, count: itemsChangedSince(as_of, db.members.find((x) => x.id === author)?.email ?? "", me.email), visible: true });
   }
   if (sub === "run-review" && m === "GET") {
     const found = runReviewOf(db, doc.id, v.number);
     if (!found) return json(404, { detail: "no run review for this version" });
     const { run, cp } = found;
     const decider = runReviewDecider(db, cp);
-    const reviews = v.sections.map((x) =>
-      latestReview(db, v.id, x.section_key),
-    );
+    const reviews = v.sections.map((x) => latestReview(db, v.id, x.section_key));
     const entries = sendBackEntries(runsContext(db), doc.id, v.number);
-    const staged = db.feedback.filter(
-      (f) =>
-        f.document_id === doc.id &&
-        isStaged(withSuggestion(db.llm, f).suggestion),
-    ).length;
+    const staged = db.feedback.filter((f) => f.document_id === doc.id && isStaged(withSuggestion(db.llm, f).suggestion)).length;
     return json(200, {
       checkpoint_id: cp.id,
       run_id: run.id,
@@ -10037,23 +6136,11 @@ async function route(db: Db, req: Request): Promise<Response> {
         reviewed: reviews.filter(Boolean).length,
         approved: reviews.filter((x) => x?.verdict === "approved").length,
       },
-      feedback: {
-        open: entries - staged,
-        staged,
-        verdicts: reviews.filter((x) => x && x.verdict !== "approved").length,
-      },
+      feedback: { open: entries - staged, staged, verdicts: reviews.filter((x) => x && x.verdict !== "approved").length },
       wait: { state: "none" },
       decider_id: decider,
-      decider_name: decider
-        ? displayName(
-            db.members.find((x) => x.id === decider)?.email ?? decider,
-          )
-        : null,
-      can_decide:
-        cp.status === "pending" &&
-        run.status === "awaiting_checkpoint" &&
-        atLeast(me.role, cp.approver_role) &&
-        (!decider || decider === me.id),
+      decider_name: decider ? displayName(db.members.find((x) => x.id === decider)?.email ?? decider) : null,
+      can_decide: cp.status === "pending" && run.status === "awaiting_checkpoint" && atLeast(me.role, cp.approver_role) && (!decider || decider === me.id),
     });
   }
   if (sub === "feedback-package") {
@@ -10064,10 +6151,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       version: v.number,
       markdown: versionMarkdown(doc, v),
       open_items: db.feedback.filter(
-        (f) =>
-          f.document_id === doc.id &&
-          f.status === "open" &&
-          f.raised_on_version <= v.number,
+        (f) => f.document_id === doc.id && f.status === "open" && f.raised_on_version <= v.number,
       ),
       locked_section_keys: lockedKeys(db, v),
       generated_at: now(),
@@ -10076,107 +6160,56 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (sub === "resolution-report") {
     const items = db.feedback
       .filter((f) => f.document_id === doc.id && f.raised_on_version < v.number)
-      .map((f) =>
-        withAuthorName(
-          db,
-          withSuggestion(
-            db.llm,
-            f,
-            docVersions(db, doc).at(-1)?.number ?? null,
-          ),
-        ),
-      );
+      .map((f) => withAuthorName(db, withSuggestion(db.llm, f, docVersions(db, doc).at(-1)?.number ?? null)));
     const counts: Record<string, number> = {};
     for (const f of items) counts[f.status] = (counts[f.status] ?? 0) + 1;
     return json(200, { document_id: doc.id, version: v.number, items, counts });
   }
   if (sub === "approve" && m === "POST") {
     // F2: the designated decider, when the review policy names one, is the only one who approves.
-    const decider = db.review_v2?.policies.find(
-      (x) => x.document_id === doc.id,
-    )?.decider_id;
-    if (decider && decider !== me.id)
-      return json(403, {
-        detail: "Only the designated decider approves this document's versions",
-      });
+    const decider = db.review_v2?.policies.find((x) => x.document_id === doc.id)?.decider_id;
+    if (decider && decider !== me.id) return json(403, { detail: "Only the designated decider approves this document's versions" });
     // H4: a vision or a product strategy is an owner's to approve.
-    const words =
-      doc.kind === "vision"
-        ? "a vision"
-        : doc.kind === "strategy"
-          ? "a product strategy"
-          : doc.kind === "update"
-            ? "an update"
-            : doc.kind === "pricing"
-              ? "a pricing memo"
-              : null;
-    if (words && me.role !== "owner")
-      return json(403, { detail: `Only an owner can approve ${words}` });
+    const words = doc.kind === "vision" ? "a vision" : doc.kind === "strategy" ? "a product strategy" : doc.kind === "update" ? "an update" : doc.kind === "pricing" ? "a pricing memo" : null;
+    if (words && me.role !== "owner") return json(403, { detail: `Only an owner can approve ${words}` });
     // #346: a proposal a later one superseded can't be approved, and says why.
-    const superseded =
-      doc.kind === "roadmap" && db.plan_edits && !v.approved_at
-        ? supersededRefusal(db.plan_edits, doc.slug, v.number)
-        : null;
+    const superseded = doc.kind === "roadmap" && db.plan_edits && !v.approved_at ? supersededRefusal(db.plan_edits, doc.slug, v.number) : null;
     if (superseded) return json(409, { detail: superseded });
     // #396: a spec version that may be stale is refused, in the app's words; its id in refs.
-    const stale =
-      doc.kind === "spec" && !v.approved_at
-        ? staleSpecRefusal((db.specs ??= specsSeed(db)), doc.slug, v.number)
-        : null;
+    const stale = doc.kind === "spec" && !v.approved_at ? staleSpecRefusal((db.specs ??= specsSeed(db)), doc.slug, v.number) : null;
     if (stale) return json(422, stale);
     // The publish gate (T2 follow-up): a PRD is refused while blocked, or when not the latest.
     if (doc.kind === "prd") {
       // #254: a version that is still only its template's text is never approved.
-      if (!v.approved_at && nothingWritten(db, doc, v.sections))
-        return json(409, { detail: NOTHING_WRITTEN, blocking: [], dates: [] });
+      if (!v.approved_at && nothingWritten(db, doc, v.sections)) return json(409, { detail: NOTHING_WRITTEN, blocking: [], dates: [] });
       const latest = docVersions(db, doc).pop()!.number;
-      const refusal = publishRefusal(
-        qualityCtx,
-        { documentId: doc.id, slug: doc.slug, versionId: v.id },
-        v.number,
-        latest,
-        (id) => ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,
+      const refusal = publishRefusal(qualityCtx, { documentId: doc.id, slug: doc.slug, versionId: v.id }, v.number, latest, (id) =>
+        ensureBlockers(db).blockers.find((b) => b.id === id)?.statement,
       );
       if (refusal) return json(409, refusal);
     }
     // O4 'document dates' (owner, 2026-10-20): not while a date of the roadmap is marked.
     if (doc.kind === "roadmap" && db.roadmap && !v.approved_at) {
-      const marked = dateMarks(
-        db.roadmap,
-        v.source?.document_id,
-        v.sections,
-      ).filter((d) => d.label);
+      const marked = dateMarks(db.roadmap, v.source?.document_id, v.sections).filter((d) => d.label);
       if (marked.length) {
         return json(409, {
           detail: `${marked.length} date${marked.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${marked
             .map((d) => `${formatDate(d.date)} (${d.section_key}: ${d.label})`)
             .join(", ")}`,
-          blocking: marked.map((d) => ({
-            key: "unverified_date",
-            id: `${d.section_key}:${d.text}`,
-            title: formatDate(d.date),
-            rationale: `${formatDate(d.date)} is not backed by a confirmed schedule`,
-          })),
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: formatDate(d.date), rationale: `${formatDate(d.date)} is not backed by a confirmed schedule` })),
           dates: marked,
         });
       }
     }
     // H8: an update's dates follow the same rule, against every PRD with an active track.
     if (doc.kind === "update" && !v.approved_at) {
-      const marked = updateDateMarks(db.roadmap, v.sections).filter(
-        (d) => d.label,
-      );
+      const marked = updateDateMarks(db.roadmap, v.sections).filter((d) => d.label);
       if (marked.length) {
         return json(409, {
           detail: `${marked.length} date${marked.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${marked
             .map((d) => `${formatDate(d.date)} (${d.section_key}: ${d.label})`)
             .join(", ")}`,
-          blocking: marked.map((d) => ({
-            key: "unverified_date",
-            id: `${d.section_key}:${d.text}`,
-            title: formatDate(d.date),
-            rationale: `${formatDate(d.date)} is not backed by a confirmed schedule`,
-          })),
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: formatDate(d.date), rationale: `${formatDate(d.date)} is not backed by a confirmed schedule` })),
           dates: marked,
         });
       }
@@ -10215,35 +6248,13 @@ async function route(db: Db, req: Request): Promise<Response> {
         me.id,
       );
     }
-    return json(200, {
-      document_id: doc.id,
-      document_status: doc.status,
-      version: summary(v),
-    });
+    return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
   // O5: audience= renders a roadmap for Board, Team or Engineering (./audience.ts).
-  const audience =
-    sub === "deck" || sub === "export" ? q.get("audience") : null;
-  const refused = audienceRefusal(
-    audience,
-    doc.kind,
-    me.role,
-    sub === "export" ? (q.get("format") ?? "html") : "html",
-  );
+  const audience = sub === "deck" || sub === "export" ? q.get("audience") : null;
+  const refused = audienceRefusal(audience, doc.kind, me.role, sub === "export" ? (q.get("format") ?? "html") : "html");
   if (refused) return json(refused.status, refused.body);
-  return exportRoute(
-    db,
-    doc,
-    isAudience(audience)
-      ? {
-          ...v,
-          sections: audienceSections(v.sections, audience, boardItems(db, v)),
-        }
-      : v,
-    sub,
-    q,
-    audience,
-  );
+  return exportRoute(db, doc, isAudience(audience) ? { ...v, sections: audienceSections(v.sections, audience, boardItems(db, v)) } : v, sub, q, audience);
 }
 
 /** approved-prd-roadmap: a PRD version's milestones table, as oracle.simple.plan.parse reads it
@@ -10298,155 +6309,82 @@ function prdMilestones(
  * company nothing is measured, so no item is left out.
  */
 function boardItems(db: Db, v: VersionRow): BoardItem[] {
-  const goals = new Map(
-    db.baseline.entities
-      .filter((e) => e.type === "goal" && e.status === "confirmed")
-      .map((e) => [e.id, e.title]),
-  );
-  return (db.roadmap?.items[v.id] ?? db.sharing_items?.[v.id] ?? []).map(
-    (i) => {
-      const feature =
-        i.feature?.id ??
-        db.baseline.entities.find(
-          (e) => e.type === "feature" && e.key === i.item_key,
-        )?.id;
-      const served = db.baseline.edges
-        .filter(
-          (e) =>
-            e.src_id === feature &&
-            e.type === "supports" &&
-            e.status === "confirmed" &&
-            goals.has(e.dst_id),
-        )
-        .map((e) => goals.get(e.dst_id)!);
-      const rank = (i.priority as { rank?: unknown } | undefined)?.rank;
-      return {
-        key: i.item_key,
-        title: i.title,
-        outcome: i.outcome,
-        horizon: i.horizon,
-        position: i.position,
-        confidence: i.confidence ?? null,
-        rank: typeof rank === "number" ? rank : null,
-        goals: served.slice(0, 1),
-        no_goal: goals.size > 0 && !served.length,
-        // The owner decision of 2026-10-26: grouped under the first, by title, of the goals it reaches.
-        group:
-          [...served].sort((a, b) =>
-            a.toLowerCase() < b.toLowerCase()
-              ? -1
-              : a.toLowerCase() > b.toLowerCase()
-                ? 1
-                : a < b
-                  ? -1
-                  : a > b
-                    ? 1
-                    : 0,
-          )[0] ?? null,
-      };
-    },
-  );
+  const goals = new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+  return (db.roadmap?.items[v.id] ?? db.sharing_items?.[v.id] ?? []).map((i) => {
+    const feature = i.feature?.id ?? db.baseline.entities.find((e) => e.type === "feature" && e.key === i.item_key)?.id;
+    const served = db.baseline.edges
+      .filter((e) => e.src_id === feature && e.type === "supports" && e.status === "confirmed" && goals.has(e.dst_id))
+      .map((e) => goals.get(e.dst_id)!);
+    const rank = (i.priority as { rank?: unknown } | undefined)?.rank;
+    return {
+      key: i.item_key,
+      title: i.title,
+      outcome: i.outcome,
+      horizon: i.horizon,
+      position: i.position,
+      confidence: i.confidence ?? null,
+      rank: typeof rank === "number" ? rank : null,
+      goals: served.slice(0, 1),
+      no_goal: goals.size > 0 && !served.length,
+      // The owner decision of 2026-10-26: grouped under the first, by title, of the goals it reaches.
+      group: [...served].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0))[0] ?? null,
+    };
+  });
 }
 
 /** A version's deck and export (O5: `v` already rendered for its audience, if any). */
-function exportRoute(
-  db: Db,
-  doc: DocumentRow,
-  v: VersionRow,
-  sub: string | undefined,
-  q: URLSearchParams,
-  audience: string | null,
-): Response {
+function exportRoute(db: Db, doc: DocumentRow, v: VersionRow, sub: string | undefined, q: URLSearchParams, audience: string | null): Response {
   const badge = isAudience(audience) ? audienceLabel(audience) : null;
-  if (
-    sub === "deck" ||
-    (sub === "export" && (q.get("layer") ?? "full") !== "full")
-  ) {
+  if (sub === "deck" || (sub === "export" && (q.get("layer") ?? "full") !== "full")) {
     if (!v.sections.some((s) => s.layer === "brief")) {
-      return json(422, {
-        detail: `version ${v.number} of '${doc.slug}' has no brief sections; export the full document instead`,
-      });
+      return json(422, { detail: `version ${v.number} of '${doc.slug}' has no brief sections; export the full document instead` });
     }
   }
   if (sub === "deck") {
     const versions = docVersions(db, doc);
     const deck = deckOut({
-      document_id: doc.id,
-      slug: doc.slug,
-      title: doc.title,
-      kind: doc.kind,
-      number: v.number,
-      latest: versions[versions.length - 1].number,
-      status: v.approved_at ? "approved" : doc.status,
-      created_at: v.created_at,
-      source: v.source ?? null,
-      sections: v.sections,
-      citations: v.citations,
-      // H8: a board update groups its brief sections into slides (front matter `slides`).
-      slides: Array.isArray(v.front_matter.slides)
-        ? (v.front_matter.slides as string[][])
-        : undefined,
+        document_id: doc.id,
+        slug: doc.slug,
+        title: doc.title,
+        kind: doc.kind,
+        number: v.number,
+        latest: versions[versions.length - 1].number,
+        status: v.approved_at ? "approved" : doc.status,
+        created_at: v.created_at,
+        source: v.source ?? null,
+        sections: v.sections,
+        citations: v.citations,
+        // H8: a board update groups its brief sections into slides (front matter `slides`).
+        slides: Array.isArray(v.front_matter.slides) ? (v.front_matter.slides as string[][]) : undefined,
     });
     // As the API's deck banner: "Audience Board" after the version.
-    if (badge)
-      deck.banner = deck.banner.replace(
-        ` · Version ${v.number}`,
-        ` · Version ${v.number} · Audience ${badge}`,
-      );
+    if (badge) deck.banner = deck.banner.replace(` · Version ${v.number}`, ` · Version ${v.number} · Audience ${badge}`);
     return json(200, deck);
   }
   if (sub === "export") {
     const format = q.get("format") ?? "html";
     const layer = q.get("layer") ?? "full";
     if (!LAYER_FORMATS[layer]?.includes(format)) {
-      return json(422, {
-        detail: `the ${layer} layer exports as ${LAYER_FORMATS[layer]?.join(", ")}, not ${format}`,
-      });
+      return json(422, { detail: `the ${layer} layer exports as ${LAYER_FORMATS[layer]?.join(", ")}, not ${format}` });
     }
     if (layer === "deck") {
-      if (format === "pptx")
-        return new Response(`PK mock deck: ${banner(doc, v, badge)}`, {
-          headers: { "content-type": PPTX_TYPE },
-        });
-      return new Response(
-        exportPdf(
-          doc,
-          { ...v, sections: v.sections.filter((s) => s.layer === "brief") },
-          badge,
-        ),
-        {
-          headers: { "content-type": "application/pdf" },
-        },
-      );
-    }
-    if (layer === "brief") {
-      const brief = {
-        ...v,
-        sections: v.sections.filter((s) => s.layer === "brief"),
-      };
-      if (format === "pdf")
-        return new Response(exportPdf(doc, brief, badge), {
-          headers: { "content-type": "application/pdf" },
-        });
-      return new Response(exportHtml(doc, brief, db.branding, badge), {
-        headers: { "content-type": "text/html" },
-      });
-    }
-    if (format === "md") {
-      return new Response(
-        `<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`,
-        {
-          headers: { "content-type": "text/markdown" },
-        },
-      );
-    }
-    if (format === "pdf")
-      return new Response(exportPdf(doc, v, badge), {
+      if (format === "pptx") return new Response(`PK mock deck: ${banner(doc, v, badge)}`, { headers: { "content-type": PPTX_TYPE } });
+      return new Response(exportPdf(doc, { ...v, sections: v.sections.filter((s) => s.layer === "brief") }, badge), {
         headers: { "content-type": "application/pdf" },
       });
-    return new Response(exportHtml(doc, v, db.branding, badge), {
-      headers: { "content-type": "text/html" },
-    });
+    }
+    if (layer === "brief") {
+      const brief = { ...v, sections: v.sections.filter((s) => s.layer === "brief") };
+      if (format === "pdf") return new Response(exportPdf(doc, brief, badge), { headers: { "content-type": "application/pdf" } });
+      return new Response(exportHtml(doc, brief, db.branding, badge), { headers: { "content-type": "text/html" } });
+    }
+    if (format === "md") {
+      return new Response(`<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`, {
+        headers: { "content-type": "text/markdown" },
+      });
+    }
+    if (format === "pdf") return new Response(exportPdf(doc, v, badge), { headers: { "content-type": "application/pdf" } });
+    return new Response(exportHtml(doc, v, db.branding, badge), { headers: { "content-type": "text/html" } });
   }
   return notFound("Route");
 }
@@ -10462,21 +6400,12 @@ let queue: Promise<unknown> = Promise.resolve();
  * gives up on its first post; `__poMockSlack.posting({title})` makes it wait for its first
  * post (no thread yet).
  */
-if (
-  typeof window !== "undefined" &&
-  process.env.NEXT_PUBLIC_API_MOCKS === "1"
-) {
+if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") {
   (globalThis as { __poMockSlack?: unknown }).__poMockSlack = {
     reply: (input: { title: string; email: string; text: string }) => {
       const next = queue.then(() => {
         const db = load();
-        const id = injectSlackReply(
-          (db.discussions ??= emptyDiscussions()),
-          db.members,
-          input,
-          now(),
-          uuid(),
-        );
+        const id = injectSlackReply((db.discussions ??= emptyDiscussions()), db.members, input, now(), uuid());
         save(db);
         return id;
       });
@@ -10509,13 +6438,8 @@ if (
  * the app's own calls (each reads the data, answers, then saves it), so a call in flight never
  * saves over a seed. Resolves with what `change` returns, once saved.
  */
-if (
-  typeof window !== "undefined" &&
-  process.env.NEXT_PUBLIC_API_MOCKS === "1"
-) {
-  (globalThis as { __poMockWrite?: unknown }).__poMockWrite = <T>(
-    change: (db: Db) => T,
-  ): Promise<T> => {
+if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_API_MOCKS === "1") {
+  (globalThis as { __poMockWrite?: unknown }).__poMockWrite = <T>(change: (db: Db) => T): Promise<T> => {
     const next = queue.then(() => {
       const db = load();
       const out = change(db);
@@ -10530,69 +6454,37 @@ if (
 export async function mockFetch(req: Request): Promise<Response> {
   // Every call, in order: tests count them (Home's call budget).
   const url = new URL(req.url);
-  const log = ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ??=
-    []);
+  const log = ((globalThis as { __poMockCalls?: string[] }).__poMockCalls ??= []);
   // Tests act as Oracle's ticker (POST /v1/internal/tick) through this, as they would with page.request against the API.
-  (globalThis as { __poMockFetch?: typeof mockFetch }).__poMockFetch ??=
-    mockFetch;
+  (globalThis as { __poMockFetch?: typeof mockFetch }).__poMockFetch ??= mockFetch;
   log.push(`${req.method} ${url.pathname}${url.search}`);
   await new Promise((r) => setTimeout(r, LATENCY_MS));
-  if (
-    req.method === "GET" &&
-    url.pathname === localStorage.getItem(MOCK_FAIL_KEY)
-  ) {
-    return new Response(JSON.stringify({ detail: "Mock failure" }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_FAIL_KEY)) {
+    return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
   }
-  if (
-    localStorage.getItem(MOCK_FAIL_ONCE_KEY) === `${req.method} ${url.pathname}`
-  ) {
+  if (localStorage.getItem(MOCK_FAIL_ONCE_KEY) === `${req.method} ${url.pathname}`) {
     localStorage.removeItem(MOCK_FAIL_ONCE_KEY);
-    return new Response(JSON.stringify({ detail: "Mock failure" }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+    return new Response(JSON.stringify({ detail: "Mock failure" }), { status: 500, headers: { "content-type": "application/json" } });
   }
   const next = queue.then(async () => {
     const db = load();
     const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     const res = await route(db, req);
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).
-    if (marks)
-      await captureRunChanges(
-        webhooksDeliveryContext(db),
-        marks,
-        db.runs?.runs,
-      );
+    if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
     // S9: a meeting chat's poll (every 2 s, in each attendee's tab) writes nothing, so it never
     // saves a stale copy over another tab's line, card or sign-in.
     // chat-reader: unless it read a pending line (the reader's job ended).
     const readerWrote = takeReaderWrote();
-    if (
-      !(
-        req.method === "GET" &&
-        /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)
-      ) ||
-      readerWrote
-    )
-      save(db);
+    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) || readerWrote) save(db);
     return res;
   });
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
   const prefix = slow?.endsWith("*") ? slow.slice(0, -1) : null;
-  if (
-    (req.method === "GET" &&
-      (url.pathname === slow ||
-        (prefix?.startsWith("/") && url.pathname.startsWith(prefix)))) ||
-    slow === `${req.method} ${url.pathname}`
-  ) {
+  if ((req.method === "GET" && (url.pathname === slow || (prefix?.startsWith("/") && url.pathname.startsWith(prefix)))) || slow === `${req.method} ${url.pathname}`) {
     const ms = Number(localStorage.getItem(MOCK_SLOW_MS_KEY)) || MOCK_SLOW_MS;
-    return next.then(
-      (res) => new Promise<Response>((r) => setTimeout(() => r(res), ms)),
-    );
+    return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), ms)));
   }
   return next;
 }
