@@ -22424,7 +22424,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
@@ -43974,7 +43975,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/chat": {
@@ -45286,7 +45288,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/dates": {
@@ -45359,7 +45362,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/leave-out": {
@@ -45422,7 +45426,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/end": {
