@@ -18,11 +18,15 @@ import { expect, test, type Page } from "./test";
  *   measured is not in the PRD yet", who has it lists labels or a job story, a bet reads
  *   "F-01 every newly connected ...", "2027-03-31" shows, or "Needs a look" appears;
  *   no_claim=the API's reading (api/tests/test_simple_one_pager_walkb.py).
+ * - protects=on "simple-plan-by-job" (a run's PRD with no milestones table, so Read the plan
+ *   again queues Oracle's job, which answers "reading"), the last plan stays shown and says it
+ *   is updating, then the plan Oracle read shows; fails_when=the plan vanishes while it reads,
+ *   or nothing says it is reading; no_claim=the job's reading itself.
  */
 const URL = "/simple/one-pagers/guided-setup";
 
-async function open(page: Page) {
-  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, "one-pager-run-prd-walk"] as const);
+async function open(page: Page, scenario = "one-pager-run-prd-walk") {
+  await page.context().addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_SCENARIO_KEY, scenario] as const);
   await login(page);
   await page.goto(URL);
 }
@@ -58,6 +62,19 @@ for (const phone of [false, true]) {
       expect(pdf).toContain("F-01 Pacing plan gives every new account a pace to follow.");
       expect(pdf).toContain("by Mar 31, 2027");
       expect(pdf).not.toContain("2027-03-31");
+    });
+
+    test("Read the plan again keeps the last plan shown, marked as updating, while Oracle reads it", async ({ page }) => {
+      await open(page, "simple-plan-by-job");
+      const noDates = page.getByTestId("timeline-no-dates").first();
+      await expect(noDates).toContainText("No dates yet:");
+      await noDates.getByRole("button", { name: "Read the plan again" }).click();
+      // While the job reads: the last plan, said to be updating; never an empty page.
+      await expect(page.getByTestId("plan-updating")).toHaveText("Oracle is reading the plan again. This is the last plan until it is done.");
+      await expect(page.getByTestId("timeline-no-dates").first()).toBeVisible();
+      // Then the plan Oracle read, its milestones dated.
+      await expect(page.getByTestId("plan-updating")).toHaveCount(0);
+      await expect(page.getByTestId("timeline-no-dates")).toHaveCount(0);
     });
   });
 }

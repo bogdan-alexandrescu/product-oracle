@@ -216,6 +216,14 @@ export interface PlanDb {
   goalless?: boolean;
   /** fidelity prd ("simple-plan-partly-dated", frame D3): only M1 has dates. */
   partly_dated?: boolean;
+  /**
+   * walkb-onepager ("simple-plan-by-job"): a run's PRD with no milestones table, so reading it
+   * again queues Oracle's prd_plan job (plan.ensure): the answer is "reading" with no
+   * milestones, and the next read finds the job done (its milestones now dated).
+   */
+  by_job?: boolean;
+  /** The prd_plan job is reading the plan (by_job, after Read the plan again). */
+  reading?: boolean;
 }
 
 export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", version: 3 });
@@ -224,6 +232,10 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
   const can = role === "owner";
   if (!plan) {
     return { prd, version: null, status: "none", source: null, dated: false, message: "This PRD has no approved version yet.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: null, summary: [] };
+  }
+  if (plan.reading) {
+    // As plan.plan_out of a row still "reading": no milestones yet.
+    return { prd, version: plan.version, status: "reading", source: null, dated: false, message: "Oracle is reading the plan from this PRD.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: plan.read_at, summary: [] };
   }
   if (plan.undated) {
     const ms = planMilestones().map((m) => ({ ...m, start_date: null, end_date: null, planned_weeks: 0, feature_codes: [], source: "prd" as const }));
@@ -291,10 +303,16 @@ export function routeSimplePlan(
   const prd = prdOf(p[3]);
   if (!prd) return json(404, { detail: "No such PRD" });
   const mine = prd.slug === PLAN_PRD_SLUG ? plan : undefined;
-  if (!p[5] && req.method === "GET") return json(200, planOut(mine, prd, role));
+  if (!p[5] && req.method === "GET") {
+    const out = planOut(mine, prd, role);
+    // by_job: the job answers by the next read, with the dates the PRD's text gives.
+    if (mine?.reading) Object.assign(mine, { reading: false, undated: false });
+    return json(200, out);
+  }
   if (p[5] === "read-again" && !p[6] && req.method === "POST") {
     if (role !== "owner") return json(403, { detail: "Only an owner reads the plan again" });
     if (mine) mine.read_at = new Date().toISOString();
+    if (mine?.by_job) mine.reading = true;
     return json(200, planOut(mine, prd, role));
   }
   return null;

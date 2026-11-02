@@ -2902,6 +2902,13 @@ function load(): Db {
                     db.simple_roadmap!.plan!.undated = true;
                     return db;
                   }
+              : scenario === "simple-plan-by-job"
+                ? () => {
+                    // walkb-onepager: a run's PRD with no milestones table: Oracle's job reads it.
+                    const db = seedSimplePlanScenario();
+                    Object.assign(db.simple_roadmap!.plan!, { undated: true, by_job: true });
+                    return db;
+                  }
               : scenario === "simple-plan-partly-dated"
                 ? () => {
                     // fidelity prd (pick D, frame D3): only M1 has dates; M2 and M3 have none yet.
