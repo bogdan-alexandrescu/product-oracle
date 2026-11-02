@@ -6,8 +6,9 @@ import { useState, type FormEvent } from "react";
 
 import { Field, INPUT, SELECT_FIELD } from "@/app/settings/_components/fields";
 import { FormActions } from "@/app/settings/_components/FormActions";
+import { KEY_RE } from "@/app/settings/_components/KeyField";
 import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
-import { Button, Notice, PageHeader, Panel } from "@/components/ds";
+import { Button, Notice, PageHeader, Panel, confirmInPage } from "@/components/ds";
 import { ProblemList, TemplateBodyEditor, useTemplateCheck } from "@/components/TemplateBodyEditor";
 import { ApiError, api, unwrap } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
@@ -20,6 +21,9 @@ const keyFromName = (name: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+
+/** A guide as a Markdown comment's words: "-->" would close the comment and spill the rest into the body. */
+const commentSafe = (text: string) => text.trim().replace(/-{2,}>/g, "->");
 
 type Sec = { heading: string; guide: string; brief: boolean };
 
@@ -46,7 +50,7 @@ function bodyOf(theme: string, when: string, secs: Sec[]) {
     "",
     "# <Title> {#title}",
     "",
-    ...keyed.flatMap((s) => [`## ${s.heading.trim()} {#${s.key}}`, `<!-- ${s.guide.trim()} -->`, ""]),
+    ...keyed.flatMap((s) => [`## ${s.heading.trim()} {#${s.key}}`, `<!-- ${commentSafe(s.guide)} -->`, ""]),
     SOURCES,
   ].join("\n");
 }
@@ -88,11 +92,30 @@ export default function NewTemplatePage() {
     ? null
     : !name.trim() || !key
       ? "Enter a name to create the template."
-      : live.pending || !live.data
+      : !KEY_RE.test(key)
+        ? "Make the name at least two letters or digits long."
+        : live.pending || !live.data
         ? "Checking the template…"
         : !live.data.valid
           ? "Fix the problems in the template to create it."
           : null;
+
+  // Back to fields drops the Markdown: typed changes ask first.
+  async function toggleMarkdown() {
+    if (raw == null) return setRaw(bodyOf(theme, when, secs));
+    if (
+      raw !== bodyOf(theme, when, secs) &&
+      !(await confirmInPage({
+        title: "Discard your changes?",
+        message: "The fields do not hold what you typed in the Markdown. Going back to them throws it away.",
+        action: "Discard",
+        cancel: "Keep editing",
+        destructive: true,
+      }))
+    )
+      return;
+    setRaw(null);
+  }
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -134,7 +157,7 @@ export default function NewTemplatePage() {
           <Panel
             title={raw == null ? "Sections" : "Markdown"}
             tools={
-              <Button variant="ghost" onClick={() => setRaw(raw == null ? bodyOf(theme, when, secs) : null)} data-testid="toggle-markdown">
+              <Button variant="ghost" onClick={() => void toggleMarkdown()} data-testid="toggle-markdown">
                 {raw == null ? "Edit as Markdown" : "Back to fields"}
               </Button>
             }

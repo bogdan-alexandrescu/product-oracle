@@ -127,9 +127,11 @@ export function NewRequestDialog({
   const [title, setTitle] = useState(from?.title ?? "");
   // A found item's own words, or its excerpt, say what they asked.
   const [body, setBody] = useState(from?.body ?? from?.source.excerpt ?? "");
+  const [startBody] = useState(body);
   const [goalIds, setGoalIds] = useState<string[]>([]);
   const [requester, setRequester] = useState(from ? (from.requester_name ?? "") : myName);
   const [channel, setChannel] = useState<Request["channel"]>(from?.channel ?? "in_app");
+  const [startChannel] = useState(channel);
   const [kind, setKind] = useState<Kind>("unknown");
   // In the app the requester is the signed-in member unless an owner names someone; another
   // channel's requester is whoever asked there.
@@ -141,7 +143,7 @@ export function NewRequestDialog({
   // qa-onboarding-1: typed words ask "Discard your changes?" before Escape, the X or Cancel throws them away.
   const [renamed, setRenamed] = useState(false);
   const dirty = from
-    ? title !== from.title || goalIds.length > 0 || kind !== "unknown" || renamed
+    ? title !== from.title || body !== startBody || channel !== startChannel || goalIds.length > 0 || kind !== "unknown" || renamed
     : !!title.trim() || !!body.trim() || goalIds.length > 0 || channel !== "in_app" || renamed || kind !== "unknown";
   /** The request already filed under this title, once asked; the title it was found for. */
   const [twin, setTwin] = useState<{ request: Request; title: string } | null>(null);
