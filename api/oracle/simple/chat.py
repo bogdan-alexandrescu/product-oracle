@@ -2066,6 +2066,21 @@ async def cards_out(
             names.update(await _names(db, {i for i in asks if i not in names}))
         elif c.status == "proposed":
             asks = routes.get(c.change_id, []) if c.change_id else []
+        asks_all: list[uuid.UUID] = []
+        here_all = True
+        if may_all == "propose" and e is not None:
+            # walkc-meeting review: the cut with its dependents goes to whoever decides every
+            # item it cuts (changes.create's cut_route), so the card names them for it.
+            cut = [e, *waiting]
+            asks_all = changes.cut_route(cut, read_.deciders)
+            if not asks_all:
+                owners = owners if owners is not None else await changes._company_owners(db)
+                asks_all = owners
+            if rules is not None:
+                asks_all, here_all = await changes.meeting_route(
+                    db, rules, cut, read_.deciders, asks_all
+                )
+            names.update(await _names(db, {i for i in asks_all if i not in names}))
         outs.append(ChatCardOut(
             id=c.id, message_id=c.message_id, op=c.op, target=c.target,  # type: ignore[arg-type]
             before=c.before, after=c.after, summary=c.summary, item_id=c.item_id,
@@ -2079,6 +2094,8 @@ async def cards_out(
             may_with_dependents=may_all,  # type: ignore[arg-type]
             can_undo=c.status == "applied" and _undo_bar(principal, c, rules, read_) is None,
             asks=[names[i] for i in asks if i in names], asks_outside=not here,
+            asks_with_dependents=[names[i] for i in asks_all if i in names],
+            asks_with_dependents_outside=not here_all,
         ))  # fmt: skip
     return outs
 

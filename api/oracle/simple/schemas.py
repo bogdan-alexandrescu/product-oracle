@@ -1377,6 +1377,10 @@ class ChatCardOut(BaseModel):
     # meeting may decide, so Propose asks these people outside it.
     asks: list[str] = []
     asks_outside: bool = False
+    # walkc-meeting review: who "Propose: cut it and its dependents" asks, by every item
+    # it cuts (changes.cut_route), and whether that is outside the meeting.
+    asks_with_dependents: list[str] = []
+    asks_with_dependents_outside: bool = False
 
 
 class ChatChoiceOut(BaseModel):
