@@ -40,6 +40,7 @@ export function Dialog({
   size = "md",
   phoneSheet = false,
   scrollBody = false,
+  fullHeight = false,
   closeButton = true,
   children,
 }: {
@@ -67,6 +68,11 @@ export function Dialog({
    * scrolling body clips popovers opened inside it.
    */
   scrollBody?: boolean;
+  /**
+   * walkb-review 5g: with `scrollBody`, the dialog is the window's height from the start, so
+   * content that loads in after it opens never moves the footer under the pointer.
+   */
+  fullHeight?: boolean;
   /** false: no close X in the head row; Cancel, Escape and the backdrop close it (qa-company-24). */
   closeButton?: boolean;
   children: ReactNode;
@@ -162,6 +168,8 @@ export function Dialog({
         data-testid={testId}
         className={`w-full ${SIZE[size]} min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none ${phoneSheet ? "max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0" : ""} ${
           scrollBody ? `flex max-h-[calc(100dvh-5rem)] flex-col ${phoneSheet ? "max-[600px]:max-h-dvh" : "max-[600px]:max-h-[calc(100dvh-2rem)]"}` : ""
+        } ${
+          scrollBody && fullHeight ? `h-[calc(100dvh-5rem)] ${phoneSheet ? "max-[600px]:h-dvh" : "max-[600px]:h-[calc(100dvh-2rem)]"}` : ""
         }`}
       >
         <div className="flex min-h-14 flex-none items-start gap-3 border-b border-line py-3 pr-3 pl-5 max-[600px]:pl-4">

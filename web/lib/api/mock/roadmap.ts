@@ -115,6 +115,8 @@ export const DATE_BASES_SCENARIO = "date-bases";
 export const TWO_WAY_DATES_SCENARIO = "two-way-dates";
 /** The GA date as the "two-way-dates" scenario writes it, and the reading ENG-413 backs. */
 export const TWO_WAY_GA = { written: "03/04/2027", backed: "2027-03-04" } as const;
+/** walkb-roadmap review 5e: a verified basis on the Simple roadmap's "alert-rules" item, as an engineering dates run records one for a roadmap built from a PRD. */
+export const SIMPLE_ITEM_BASIS_SCENARIO = "simple-item-basis";
 /** #396: the default company, GA's date with no basis, and usage-alerts-roadmap v1 carrying the API's date and citation warnings. */
 export const VERSION_WARNINGS_SCENARIO = "version-warnings";
 /** The mock scenario whose usage-alerts-roadmap v2 moved, added and dropped one item each since the approved v1 (E3). */
@@ -219,7 +221,8 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const twoWay = scenario === TWO_WAY_DATES_SCENARIO;
   const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO || twoWay;
   const planStale = scenario === PLAN_STALE_SCENARIO;
-  const key = withItems || withDiff || noGaBasis || planStale ? `roadmap:${scenario}` : "roadmap";
+  const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
+  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
@@ -254,6 +257,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     const all: (readonly [reference: string, day: string, status: "verified" | "proposed" | "withdrawn", itemKey?: string])[] = [
       ...seeds,
       ...(track.plan ? ([["ENG-402", "2026-11-20", "verified", "threshold-alerts"]] as const) : []),
+      ...(simpleItemBasis ? ([["ENG-450", "2026-12-04", "verified", "alert-rules"]] as const) : []),
     ];
     for (const [reference, day, status, itemKey] of all) {
       const proposed = status === "proposed";
@@ -1113,8 +1117,8 @@ const ISO_DATE = /(?<![0-9])(\d{4})-(\d{2})-(\d{2})(?![0-9])/g;
 // A numeric day/month date (oracle.roadmap.doc_dates "dmy", slashes only here): 03/04/2027.
 const NUMERIC_DATE = /(?<![0-9./-])(\d{1,2})\/(\d{1,2})\/(\d{4})(?![0-9])/g;
 
-/** Each date written in `text` with the day(s) it reads as, sorted (a numeric one may read two ways). */
-function datesIn(text: string): [string, string[]][] {
+/** Each date written in `text`, where, and the day(s) it reads as, sorted (a numeric one may read two ways). */
+function datesIn(text: string): [number, string, string[]][] {
   const out: [number, string, string[]][] = [...text.matchAll(ISO_DATE)].map((m) => [m.index, m[0], [m[0]]]);
   const day = (y: string, m: number, d: number) => {
     const at = new Date(Date.UTC(Number(y), m - 1, d));
@@ -1125,16 +1129,21 @@ function datesIn(text: string): [string, string[]][] {
     const days = [...new Set([day(m[3], b, a), day(m[3], a, b)].filter((d): d is string => !!d))].sort();
     if (days.length) out.push([m.index, m[0], days]);
   }
-  return out.sort((x, y) => x[0] - y[0]).map(([, w, d]) => [w, d]);
+  return out.sort((x, y) => x[0] - y[0]);
 }
 const MARK_RANK = { withdrawn: 0, unverified: 1, verified: 2 } as const;
 const ITEM_ANCHOR = /^(?:now|next|later)-(.+)$/;
+/** walkb-roadmap, as doc_dates: not schedule dates (the "As of" line, Changes since last version). */
+const AS_OF = /\bas of\s*$/i;
+/** The roadmap's own sections, which no item owns: an item's verified basis backs a date there. */
+const NOT_ITEMS = new Set(["title", "roadmap", "summary", "goals", "problems", "brief-items", "brief-roadmap", "not-doing", "top-risks", "decisions", "full", "layout", "now", "next", "later", "risks"]);
 
 /**
  * The dates a roadmap version's text writes, each checked against its PRD's schedule
  * bases now (oracle.roadmap.doc_dates, simplified: ISO dates in headings and bodies; a
- * basis with an item key counts in that item's own section). One mark per date and
- * section, worst status; Sources and data points (and its sub-sections) are not read.
+ * basis with an item key counts in that item's own section and, when the item is one of
+ * this roadmap's, in the roadmap's own sections). One mark per date and section, worst status; Sources and data points and
+ * Changes since last version (and their sub-sections), and an "As of" date, are not read.
  */
 export function dateMarks(
   db: RoadmapDb,
@@ -1142,9 +1151,11 @@ export function dateMarks(
   sections: { section_key: string; level: number; heading: string; body_md: string }[],
 ): Schemas["DateMarkOut"][] {
   const out = new Map<string, Schemas["DateMarkOut"]>();
+  // walkb-roadmap review: this roadmap's own items; only their bases back a date outside every item.
+  const own = new Set(sections.map((s) => ITEM_ANCHOR.exec(s.section_key)?.[1] ?? s.section_key).filter((k) => !NOT_ITEMS.has(k)));
   let sourcesLevel: number | null = null;
   for (const s of sections) {
-    if (s.section_key === "sources") {
+    if (s.section_key === "sources" || s.section_key === "changes") {
       sourcesLevel = s.level;
       continue;
     }
@@ -1157,9 +1168,10 @@ export function dateMarks(
       ["body", s.body_md.replace(/\]\([^)\s]*\)/g, "]()")],
     ];
     for (const [where, text] of places) {
-      for (const [written, days] of datesIn(text)) {
+      for (const [at, written, days] of datesIn(text)) {
+        if (AS_OF.test(text.slice(Math.max(0, at - 12), at))) continue;
         const day = days[0];
-        const covers = (b: Basis, d: string) => b.prd_document_id === prdId && b.supports_date === d && (!b.item_key || b.item_key === owner);
+        const covers = (b: Basis, d: string) => b.prd_document_id === prdId && b.supports_date === d && (!b.item_key || b.item_key === owner || (NOT_ITEMS.has(s.section_key) && own.has(b.item_key)));
         // O4: a date that reads two ways (03/04/2027) is backed only when each reading is.
         const backedBy = (status: Basis["status"]) => {
           const per = days.map((d) => db.bases.filter((b) => b.status === status && covers(b, d)));

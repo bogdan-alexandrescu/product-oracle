@@ -37,7 +37,8 @@ async function brokenTile(page: Page): Promise<number> {
 }
 
 const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
-const mobilePush = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Mobile alert push: / });
+// walkb-roadmap: Mobile alert push (end-only) no longer breaks on a made-up start; the digest still breaks.
+const brokenRow = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: / }).first();
 
 test("qa-simple-home-3: Home's sentence and its list count every broken link the tile counts", async ({ page }) => {
   // fails_when: the sentence counts only the links I decide, or the list stops at three
@@ -100,7 +101,7 @@ test("qa-simple-home-10: a goal's weight reads as its share of the score", async
 test("qa-simple-home-13: Accept as risk shows pressed, asks for a reason, and saves a risk note", async ({ page }) => {
   // fails_when: the field's submit is "Accept the risk" beside the unpressed opener, with no hint
   await signIn(page, EMAILS.owner);
-  const row = mobilePush(page);
+  const row = brokenRow(page);
   // qa-simple-home-10 (fix4): open, the reason line takes the opener's place, its submit in the same words.
   const opener = row.getByRole("button", { name: "Accept as risk" });
   await expect(opener).toHaveAttribute("aria-expanded", "false");
@@ -118,7 +119,7 @@ test("qa-simple-home-13: Accept as risk shows pressed, asks for a reason, and sa
 
 test("qa-simple-home-13: a commenter's risk note is a proposal", async ({ page }) => {
   await signIn(page, EMAILS.commenter);
-  const row = mobilePush(page);
+  const row = brokenRow(page);
   await row.getByRole("button", { name: "Propose: accept as risk" }).click();
   await expect(row.getByRole("button", { name: "Propose: accept as risk" })).toBeDisabled();
 });

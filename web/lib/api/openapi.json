@@ -115183,6 +115183,11 @@
             "title": "Change Log",
             "default": []
           },
+          "published": {
+            "type": "boolean",
+            "title": "Published",
+            "default": true
+          },
           "can_withdraw": {
             "type": "boolean",
             "title": "Can Withdraw",
@@ -116432,6 +116437,16 @@
             "type": "boolean",
             "title": "In Draft",
             "default": false
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -116498,6 +116513,16 @@
               }
             ],
             "title": "Date"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

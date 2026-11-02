@@ -38244,6 +38244,11 @@ export interface components {
              */
             change_log: components["schemas"]["SimpleDraftChange"][];
             /**
+             * Published
+             * @default true
+             */
+            published: boolean;
+            /**
              * Can Withdraw
              * @default false
              */
@@ -38732,6 +38737,7 @@ export interface components {
              * @default false
              */
             in_draft: boolean;
+            prd?: components["schemas"]["SimpleDocRef"] | null;
         };
         /**
          * SimpleKeyDateRoadmap
@@ -38769,6 +38775,7 @@ export interface components {
             label: string;
             /** Date */
             date?: string | null;
+            prd?: components["schemas"]["SimpleDocRef"] | null;
         };
         /** SimpleMatch */
         SimpleMatch: {

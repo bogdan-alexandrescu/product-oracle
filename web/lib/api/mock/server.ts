@@ -165,7 +165,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { approvedPrdToDraft, itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { approvedPrdToDraft, itemSubjectName, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -569,6 +569,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * meeting's chat (meet-chat-kind).
  * "meet-chat-right-prd" as "simple-chat" with the meeting reviewing Guided setup, whose features
  * are only on its draft roadmap (Setup checklist, Setup reminders).
+ * "simple-unapproved-roadmap" as the default company with Simple's Alerts roadmap built from its
+ * PRD and not approved yet (walkb-roadmap review 5a).
  */
 export { MOCK_SCENARIO_KEY };
 /**
@@ -1039,6 +1041,54 @@ function seedSimplePlanScenario(datedAll = false): Db {
     id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "approved", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
+  return db;
+}
+
+/**
+ * roadmap-keydates, the "roadmap-keydates" scenario: "simple-plan" whose PRD (Guided setup)
+ * states two milestones in its approved version 3 (M1 Prove it ends Nov 27, M2 Scale volume
+ * Dec 25), and whose version 4, waiting to be published, moves M2 to Jan 8: the onboarding
+ * roadmap's Key dates read both from the PRD, beside its own Board meeting. Invented data.
+ */
+export const KEYDATES_PRD_DAYS = { m1: "2026-11-27", m2: "2026-12-25", m2_moved: "2027-01-08" };
+
+function seedRoadmapKeyDatesScenario(): Db {
+  const db = seedSimplePlanScenario();
+  const doc = db.documents.find((d) => d.slug === PLAN_PRD_SLUG)!;
+  doc.status = "in_review";
+  const body = (m2: string) => ({
+    number: 0,
+    created_at: "",
+    citations: [],
+    sections: [
+      { key: "title", level: 1, heading: "Guided setup", body: "Help new admins finish setup on their first day." },
+      { key: "problem", level: 2, heading: "Problem", body: "New workspace admins stall during setup and do not know which step comes next." },
+      {
+        key: "milestones",
+        level: 2,
+        heading: "Milestones",
+        body: `| Milestone | Name | Start | End |\n| --- | --- | --- | --- |\n| M1 | Prove it | 2026-11-02 | ${KEYDATES_PRD_DAYS.m1} |\n| M2 | Scale volume | 2026-11-30 | ${m2} |`,
+      },
+    ],
+  });
+  const v3 = buildVersion(doc, { ...body(KEYDATES_PRD_DAYS.m2), number: 3, created_at: "2026-10-20T15:00:00Z" });
+  v3.approved_at = "2026-10-20T15:05:00Z";
+  const v4 = buildVersion(doc, { ...body(KEYDATES_PRD_DAYS.m2_moved), number: 4, created_at: "2026-10-27T10:00:00Z" });
+  db.versions.push(v3, v4);
+  return db;
+}
+
+/**
+ * roadmap-keydates review, the "roadmap-keydates-uncoded" scenario: "roadmap-keydates" with no
+ * read plan, whose onboarding track holds a milestone named without its code, "Prove it", on
+ * the day the PRD's M1 · Prove it ends (Nov 27): the chart draws it once. Invented data.
+ */
+function seedRoadmapKeyDatesUncodedScenario(): Db {
+  const db = seedRoadmapKeyDatesScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = undefined;
+  rm.items.find((x) => x.key === "setup-checklist")!.record = "Prove it";
+  rm.record_dates = { "Prove it": KEYDATES_PRD_DAYS.m1 };
   return db;
 }
 
@@ -3029,8 +3079,26 @@ function load(): Db {
                 ? seedSimpleHomeOnePrdScenario
               : scenario === "simple-walk"
                 ? seedSimpleWalkScenario
+              : scenario === "simple-walk-long-name"
+                ? () => {
+                    // walkb-roadmap review 5f: a roadmap built from a PRD with a long title.
+                    const db = seedSimpleWalkScenario();
+                    db.simple_roadmap!.titles = { "onboarding-roadmap": "Guided setup for new workspace admins and their first teams roadmap" };
+                    return db;
+                  }
+              : scenario === "simple-unapproved-roadmap"
+                ? () => {
+                    // walkb-roadmap review 5a: the Alerts roadmap was built from its PRD and has no approved version yet.
+                    const db = seed();
+                    (db.simple_roadmap = seedSimpleRoadmap()).unapproved = ["alerts-roadmap"];
+                    return db;
+                  }
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
+              : scenario === "roadmap-keydates"
+                ? seedRoadmapKeyDatesScenario
+              : scenario === "roadmap-keydates-uncoded"
+                ? seedRoadmapKeyDatesUncodedScenario
               : scenario === "simple-plan-lanes"
                 ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
@@ -3576,6 +3644,37 @@ function findDocument(db: Db, ref: string) {
 
 function findVersion(db: Db, doc: DocumentRow, n: number) {
   return db.versions.find((v) => v.document_id === doc.id && v.number === n);
+}
+
+/**
+ * roadmap-keydates: each PRD's dated milestones as its latest approved version states them (a
+ * milestones table: "| M1 | Prove it | 2 Nov 2026 | 27 Nov 2026 |", the end day its last day),
+ * as oracle.simple.plan.views reads them; a plan PRD whose versions state none keeps the
+ * plan mock's (./simple-plan.ts).
+ */
+function prdMilestonesOf(db: Db): Record<string, PrdMilestone[]> {
+  const out = planPrdMilestones(db.simple_roadmap?.plan);
+  const day = (cell: string): string | null => {
+    const t = cell.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const ms = /^\d{1,2} [A-Z][a-z]{2,8} \d{4}$/.test(t) ? Date.parse(`${t} 00:00 UTC`) : NaN;
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString().slice(0, 10);
+  };
+  for (const doc of db.documents) {
+    if (doc.kind !== "prd") continue;
+    const v = docVersions(db, doc).filter((x) => x.approved_at).at(-1);
+    if (!v) continue;
+    const rows = v.sections.flatMap((sec) =>
+      sec.body_md.split("\n").flatMap((line) => {
+        const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        if (!/^M\d+$/.test(cells[0] ?? "")) return [];
+        const date = cells.slice(2).map(day).filter((d): d is string => !!d).at(-1);
+        return date ? [{ code: cells[0], name: cells[1] ?? "", date }] : [];
+      }),
+    );
+    if (rows.length) out[doc.slug] = rows;
+  }
+  return out;
 }
 
 function docVersions(db: Db, doc: DocumentRow) {
@@ -5880,6 +5979,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (visualsRes) return visualsRes;
   db.simple_roadmap.visuals = db.simple_visuals;
+  // walkb-roadmap review: the one-pager whose bets' flows an item built from its PRD shows.
+  db.simple_roadmap.onePager = db.simple_one_pager;
+  // roadmap-keydates: each PRD's milestones as its latest approved version has them (its key dates on the roadmap).
+  db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));

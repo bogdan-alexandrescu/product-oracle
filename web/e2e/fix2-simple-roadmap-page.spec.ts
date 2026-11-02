@@ -111,13 +111,11 @@ test.describe("desktop", () => {
     await open(page);
     await gantt(page);
     await expect(depArrow(page, "alert-rules", "alert-digest")).toHaveAttribute("data-state", "red");
-    await expect(depArrow(page, "alert-rules", "alert-mobile")).toHaveAttribute("data-state", "red");
+    // walkb-roadmap: Mobile alert push has only an end, after Alert rules engine ends: no made-up start, no broken link.
+    await expect(depArrow(page, "alert-rules", "alert-mobile")).toHaveAttribute("data-state", "ok");
     await page.getByTestId("needs-decision").click();
     const tray = page.getByTestId("decision-tray");
-    await expect(tray.getByTestId("tray-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(1);
-    await tray.getByRole("button", { name: "Close" }).click();
-
-    await page.getByTestId("needs-decision").click();
+    await expect(tray.getByTestId("tray-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
     await tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" }).getByRole("button", { name: "Move the dependents" }).first().click();
     await expect(page.getByText(/Moved what depends on 'Alert rules engine' in your working draft/)).toBeVisible();
 
@@ -241,9 +239,9 @@ test.describe("phone", () => {
     await open(page);
     await page.getByTestId("format-waterfall").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
-    const c = conflict(page, "alert-mobile");
+    const c = conflict(page, "alert-digest");
     await expect(c).toBeVisible();
-    await expect(c).toContainText("Mobile alert push");
+    await expect(c).toContainText("Weekly alert digest");
     const box = edges((await c.boundingBox())!);
     expect(box.left).toBeGreaterThanOrEqual(-1);
     expect(box.right).toBeLessThanOrEqual(PHONE.viewport.width + 1);

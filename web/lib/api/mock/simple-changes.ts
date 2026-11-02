@@ -370,6 +370,7 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
     can_approve: d.out.status === "submitted" && edits,
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
+    published: !(db.unapproved ?? []).includes(d.roadmap),
   };
 }
 

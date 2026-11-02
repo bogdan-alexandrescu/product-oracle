@@ -376,6 +376,10 @@ class SimpleKeyDate(BaseModel):
     note: str | None = None
     # Added or changed in the roadmap's working draft (not published yet).
     in_draft: bool = False
+    # roadmap-keydates (the owner, Nov 1): a milestone of a PRD on the roadmap, read from the
+    # PRD's plan (its latest approved version): read-only, changed in the PRD. None: the
+    # roadmap's own key date.
+    prd: "SimpleDocRef | None" = None
 
 
 class SimpleKeyDateRoadmap(BaseModel):
@@ -718,6 +722,9 @@ class SimpleDraftOut(BaseModel):
     # D-d: every applied change it holds, not undone, oldest first (one shared draft per
     # roadmap: approving it publishes them all).
     change_log: list[SimpleDraftChange] = []
+    # walkb-roadmap review 5a: the roadmap has an approved version readers see; false for a
+    # roadmap built from a PRD and not approved yet (the banner claims no approved roadmap).
+    published: bool = True
     # The draft's author or the decider withdraws a submitted draft back to working.
     can_withdraw: bool = False
     # approved-prd-roadmap: the items and key dates approved PRDs put in it.
@@ -1011,6 +1018,9 @@ class SimpleLine(BaseModel):
     kind: Literal["now", "key_date", "milestone", "date"]
     label: str
     date: dt.date | None = None
+    # priorities-keydates: a key date read from a PRD's milestone (SimpleKeyDate.prd), marked
+    # "From the PRD"; None: any other line.
+    prd: SimpleDocRef | None = None
 
 
 class SimplePrioritiesOut(BaseModel):

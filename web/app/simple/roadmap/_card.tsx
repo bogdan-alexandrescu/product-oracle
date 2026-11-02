@@ -173,6 +173,9 @@ export function FlagLine({ flag }: { flag: Flag }) {
   );
 }
 
+/** The least room beside a bar a callout takes, cut, rather than sit on the bar. */
+const MIN_CALLOUT_W = 160;
+
 /** The red callout by a broken bar, inside its own row: its one-line reason and its
  * one-click fixes (on a phone, the reason; the fixes are on the item's sheet). */
 export function Callout({
@@ -206,24 +209,40 @@ export function Callout({
   const ref = useRef<HTMLDivElement>(null);
   const words = useRef<HTMLSpanElement>(null);
   const [left, setLeft] = useState(Math.max(4, x));
+  /** walkb-review-5b: the callout's width when the room beside its bar is too short for it whole. */
+  const [cap, setCap] = useState<number | null>(null);
+  const natural = useRef(0);
   useLayoutEffect(() => {
     // qa4-simple-roadmap-24: the callout's whole width, its words uncut (a cut reason's
     // overflow added back), so a callout too wide for the room right of its bar flips left of
     // it whole rather than staying right with its sentence cut at the chart's edge.
     const span = words.current;
-    const w = Math.min((ref.current?.offsetWidth ?? 0) + (span ? Math.max(0, span.scrollWidth - span.clientWidth) : 0), Math.max(160, maxX - 8));
-    // Right of the bar when it fits; else left of the bar; else slid inside, never past either edge.
+    // A capped (wrapped) callout keeps the whole width it last measured uncapped.
+    const whole = Math.max(ref.current?.offsetWidth ?? 0, ref.current?.scrollWidth ?? 0) + (span ? Math.max(0, span.scrollWidth - span.clientWidth) : 0);
+    if (cap == null) natural.current = whole;
+    const w = Math.min(natural.current || whole, Math.max(160, maxX - 8));
+    // Right of the bar when it fits; else left of the bar; else (walkb-review-5b) on the side
+    // with more room, its reason cut to that room, so the bar stays in sight; only with no
+    // room on either side is it slid inside, never past either edge.
+    // A callout on its own line under its bar (no `before`) never covers it: it slides as before.
+    const right = maxX - 4 - x;
+    const lefty = before != null ? before - 4 : 0;
+    const room = Math.max(right, lefty);
+    const wide = before != null && x + w + 4 > maxX && before - w < 4 && room >= MIN_CALLOUT_W;
+    setCap(wide ? room : null);
     if (x + w + 4 <= maxX) setLeft(Math.max(4, x));
     else if (before != null && before - w >= 4) setLeft(before - w);
+    else if (wide) setLeft(right >= lefty ? x : 4);
     else setLeft(Math.max(4, Math.min(x, maxX - w - 4)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cap is this effect's own output
   }, [x, before, maxX, flag.reason, compact]);
   return (
     <div
       ref={ref}
       data-testid="broken-callout"
       data-item={item.key}
-      style={{ left, top: y + 3, minHeight: h - 6, maxWidth: Math.max(160, maxX - 8) }}
-      className="pointer-events-none absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 focus-within:z-20 hover:z-20 [&_button]:pointer-events-auto"
+      style={{ left, top: y + 3, minHeight: h - 6, maxWidth: cap ?? Math.max(160, maxX - 8) }}
+      className={`pointer-events-none absolute z-10 flex ${cap != null ? "flex-wrap" : "flex-nowrap"} items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 focus-within:z-20 hover:z-20 [&_button]:pointer-events-auto`}
     >
       {/* fix4 review (qa-simple-roadmap-6): a phone has no hover for a cut reason's full
        * words, so there the reason wraps inside the callout instead. qa4-simple-roadmap-24: on
@@ -753,10 +772,17 @@ export function FloatingCard({
     <Part title="Flow" testId="card-flow">
       {/* fix4 qa-simple-roadmap-39: the same row (its thumbnail, or "Ask Oracle to draw it") on
        * a desktop, a phone and the card widened beside its talk; qa-simple-roadmap-3: no code. */}
+      {/* walkb-roadmap review: an item built from a PRD with no flow of its own shows the flow
+       * its one-pager draws for the item's bet (the API's item.flow names that bet). */}
       <FlowPanel
         key={`row-${item.id}`}
         row
-        subject={{ kind: "feature", id: item.id }}
+        subject={
+          item.flow?.subject_kind === "one_pager_line" && item.flow.subject_id
+            ? { kind: "one_pager_line", id: item.flow.subject_id }
+            : { kind: "feature", id: item.id }
+        }
+        documentId={item.flow?.subject_kind === "one_pager_line" ? item.prd?.id : undefined}
         openLabel="Open the item's flow"
         code={null}
         name={item.title}

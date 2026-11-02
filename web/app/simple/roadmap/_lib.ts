@@ -201,7 +201,11 @@ export function liveBreaks(items: Map<string, Item>, id: string, start: string, 
   }
   for (const n of it.needed_by) {
     const next = items.get(n);
-    if (next && next.status !== "cut" && end >= next.start.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it starts ${shortDay(next.start.date)}`);
+    if (!next || next.status === "cut") continue;
+    // walkb-roadmap: a dependent's estimated start is no date to break; its real end is.
+    if (next.start.estimated) {
+      if (!next.end.estimated && end >= next.end.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it ends ${shortDay(next.end.date)}`);
+    } else if (end >= next.start.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it starts ${shortDay(next.start.date)}`);
   }
   return out;
 }
@@ -432,6 +436,20 @@ export const milestoneWords = (name: string): string => name.replace(/\s*·\s*/,
 export const planMilestones = (data: Roadmap): Milestone[] =>
   data.milestones.filter((m) => m.start_date && m.end_date).sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
 
+/**
+ * roadmap-keydates: the key dates the charts draw: the roadmap's own, and a PRD's milestone
+ * unless the chart already draws it as a milestone (its code, or its name without the code
+ * as a track milestone "Prove it" for "M1 · Prove it", on its day).
+ */
+export function drawnKeyDates(data: Roadmap): KeyDate[] {
+  const code = (name: string) => name.split(/[\s·]/)[0];
+  const words = (name: string) => name.replace(/^[A-Z][A-Z0-9]*-?\d+[a-z]?\s*[·:.\-–—]?\s*/, "").trim().toLowerCase();
+  const drawn = new Set(
+    data.milestones.flatMap((m) => [m.end_date, m.date].filter(Boolean).flatMap((d) => [`${code(m.name)}|${d}`, `~${words(m.name)}|${d}`])),
+  );
+  return (data.key_dates ?? []).filter((k) => !k.prd || !(drawn.has(`${code(k.name)}|${k.date}`) || (!!words(k.name) && drawn.has(`~${words(k.name)}|${k.date}`))));
+}
+
 /** The milestone a person is in now: the one running today, else the next one, else the last. */
 export function currentMilestone(data: Roadmap): Milestone | null {
   const list = planMilestones(data);
@@ -451,10 +469,19 @@ export function milestonePrd(data: Roadmap, m: Milestone): { slug: string; title
   return prd ? { slug: prd.slug, title: prd.title } : null;
 }
 
+/** The goal a planned item's PRD gives it: the one most of its slices name (the first on a tie); null: none. */
+function planGoal(item: Item | undefined): string | null {
+  const n = new Map<string, number>();
+  for (const x of item?.slices ?? []) if (x.goal) n.set(x.goal, (n.get(x.goal) ?? 0) + 1);
+  let best: string | null = null;
+  for (const [goal, k] of n) if (best === null || k > n.get(best)!) best = goal;
+  return best;
+}
+
 /**
- * The rows' lanes. Goal: the API's goal groups, an item with no goal of its own going under the
- * goal its plan slices move most (the API's lane of that goal when there is one; one lane per
- * goal, "No goal" last); Milestone: an item under its PRD's milestone of its first slice, in code
+ * The rows' lanes. Goal: the API's goal groups, a planned item going under the goal its PRD's
+ * plan slices move most, not another goal its feature supports (the API's lane of that goal
+ * when there is one; one lane per goal, "No goal" last); Milestone: an item under its PRD's milestone of its first slice, in code
  * order, titled with the PRD when the plan's items come from more than one; an item with no
  * slice under the track milestone it leads to (fix4 qa-simple-roadmap-11: the milestone naming
  * it, else its own milestone's, else the first of its track's it ends on or before), by date
@@ -473,7 +500,9 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
   if (by === "goal") {
     for (const g of data.groups)
       for (const id of g.item_ids) {
-        const goal = g.key === "none" ? byId.get(id)?.slices.find((x) => x.goal)?.goal : null;
+        // walkb-roadmap review 5c: a planned item sits under its PRD's goal (the one its slices
+        // name most), never under another goal its feature also supports.
+        const goal = planGoal(byId.get(id));
         const named = goal ? data.groups.find((x) => x.key !== "none" && x.title === goal) : undefined;
         if (named) put(named.key, named.title, id);
         else if (goal) put(`plan-goal:${goal}`, goal, id);

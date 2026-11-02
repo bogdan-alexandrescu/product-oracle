@@ -38,6 +38,7 @@ import {
   type Scale,
   whereAttr,
   yearSpan,
+  drawnKeyDates,
 } from "./_lib";
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
@@ -420,7 +421,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       list.push({ key: `end-${m.id}`, kind: "end", x: sc.x(m.end_date!) + sc.px, words: compact ? `${code} ends` : `${code} ends ${shortDay(m.end_date!)}`, side: "before" });
     }
     for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: m.name, side: "after" });
-    for (const k of data.key_dates ?? []) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
+    for (const k of drawnKeyDates(data)) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
     // finding 18: pack rows in date order left to right, so a later mark never takes a lower
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
     // dates, not by date).
@@ -877,7 +878,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   </g>
                 );
               })}
-            {(data.key_dates ?? []).map((k) => {
+            {drawnKeyDates(data).map((k) => {
               const mk = marks.find((x) => x.key === `key-${k.id}`);
               if (!mk) return null;
               const kx = mk.x;
@@ -1166,7 +1167,9 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
                 y={y + pad}
                 width={pw}
                 height={h - 2 * pad}
-                fill={p.estimated ? `url(#simple-hatch-${p.key})` : tone.ink}
+                // walkb-review-5b: hatched means the item's dates are estimated, as on the
+                // Timeline and the Gantt; a dated item's phases are solid, gate or not.
+                fill={kind === "estimated" ? `url(#simple-hatch-${p.key})` : tone.ink}
                 opacity={closedItem(item) ? 0.4 : 1}
               >
                 <title>{`${tone.label}: ${shortDay(p.start)} – ${shortDay(p.end)}${p.estimated ? ", estimated" : ""}`}</title>

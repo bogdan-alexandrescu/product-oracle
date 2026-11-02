@@ -56,6 +56,7 @@ import {
   type Where,
   setRoadmapToday,
   yearSpan,
+  drawnKeyDates,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
 import { ConflictPanel, ZoomTimeline } from "./_zoom";
@@ -104,7 +105,7 @@ const time = (at: string) => plainClock(at, displayZone());
 
 /** fix4 qa-simple-roadmap-35: a key date's two marks: filled, and hollow while it is only in the draft. */
 function keyDateEntries(data: Roadmap): LegendEntry[] {
-  const kds = data.key_dates ?? [];
+  const kds = drawnKeyDates(data);
   const out: LegendEntry[] = [];
   if (kds.some((k) => !k.in_draft)) out.push({ key: "key", swatch: <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, words: "Key date" });
   if (kds.some((k) => k.in_draft))
@@ -327,12 +328,14 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, title
   const submittable = working.filter((d) => d.status === "working" && d.can_submit && (d.changes > 0 || !!d.from_prds?.length));
   // approved-prd-roadmap: what each approved PRD put in the draft.
   const fromPrds = working.flatMap((d) => d.from_prds ?? []);
+  // walkb-roadmap review 5a: a roadmap built from a PRD and not approved yet has no approved roadmap to keep published.
+  const published = working.every((d) => d.published);
   return (
     <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
         <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
-          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · the approved roadmap stays published until review passes
+          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · {published ? "the approved roadmap stays published until review passes" : "no approved version yet: it is published once review passes"}
         </p>
         <Button variant="ghost" disabled={!last} onClick={() => last && onUndo(last.id)}>
           Undo
@@ -1209,7 +1212,7 @@ export function SimpleRoadmap() {
           const r = await api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: d.id } } });
           if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
         }
-        toast({ message: "Sent for review: the approved roadmap stays published until it passes" });
+        toast({ message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
         await reload();
       }}
     />
@@ -1222,7 +1225,9 @@ export function SimpleRoadmap() {
         {/* A phone's header bar names the page (D3): the H1 is for screen readers there. */}
         <h1 className={phone ? "sr-only" : "text-2xl font-semibold"}>Roadmap</h1>
         {data.roadmap ? (
-          <span data-testid="roadmap-scope" className="rounded-full bg-accent-soft px-3 py-0.5 text-[15px] font-semibold whitespace-nowrap text-accent-ink">
+          // walkb-roadmap review 5f: a long name (a PRD's) wraps inside the page, never cut off; a
+          // one-line chip stays a pill (its radius is over half its height).
+          <span data-testid="roadmap-scope" className="max-w-full rounded-2xl bg-accent-soft px-3 py-0.5 text-[15px] font-semibold break-words text-accent-ink">
             {data.roadmap.title}
           </span>
         ) : (
@@ -1484,7 +1489,7 @@ export function SimpleRoadmap() {
               ),
               words: p.key === "beta" ? "Beta phase" : p.label,
             }))),
-            { key: "solid", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "var(--accent)", borderColor: "var(--accent)" }} />, words: "Dated by a milestone or gate" },
+            { key: "solid", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "var(--accent)", borderColor: "var(--accent)" }} />, words: "Dated" },
             {
               key: "hatched",
               swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "repeating-linear-gradient(45deg, var(--accent-soft) 0 2.6px, var(--accent) 2.6px 5.6px)", borderColor: "var(--accent)" }} />,

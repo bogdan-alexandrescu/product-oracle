@@ -40,6 +40,9 @@ export function DatesTab() {
   // Every row's title, a draft's too: a roadmap still in review has no approved rows, and a
   // basis on one of its items is named, never shown by its key (qa4-plan-3).
   const plan = useQuery("plan|all|basis", () => unwrap(api.GET("/v1/plan", { params: { query: { scope: "all" } } })));
+  // walkb-roadmap review 5e: an item of a roadmap read in Simple (one built from a PRD) is
+  // named from that roadmap's items when the Plan has no row for it.
+  const simple = useQuery("simple|roadmap|basis", () => unwrap(api.GET("/v1/simple/roadmap")));
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [picked, setPicked] = useState<Filter | null>(null);
   const [dialog, setDialog] = useState<{ kind: "record" } | { kind: "withdraw" | "reject"; basis: Basis } | null>(null);
@@ -60,7 +63,12 @@ export function DatesTab() {
   const shown = (rows ?? []).filter((b) => filter === "all" || b.status === filter);
   // qa-plan-27: every filter chip carries its count.
   const count = (s: Basis["status"]) => (rows ? rows.filter((b) => b.status === s).length : null);
-  const itemTitle = (prd: string, key: string) => plan.data?.items.find((i) => i.key === key && i.prd?.id === prd)?.title;
+  const itemTitle = (prd: string, key: string) => {
+    const named = [...(plan.data?.items ?? []), ...(simple.data?.items ?? [])].filter((i) => i.key === key);
+    // Its own PRD's item; else the key's one name, when no two items with that key differ.
+    const titles = new Set(named.map((i) => i.title));
+    return named.find((i) => i.prd?.id === prd)?.title ?? (titles.size === 1 ? named[0].title : undefined);
+  };
   const prdTitle = (id: string) => prds.data?.find((d) => d.id === id)?.title ?? "PRD";
   const who = (id: string | null | undefined) => (id ? (names.get(id) ?? "a member") : "a member");
 

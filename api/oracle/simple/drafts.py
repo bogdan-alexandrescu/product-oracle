@@ -760,6 +760,18 @@ async def outs(
     from oracle.simple import prd_roadmap
 
     sources = {d.id: await prd_roadmap.sources_out(db, d) for d in ds}
+    approved = (
+        set(
+            await db.scalars(
+                select(DocumentVersion.document_id).where(
+                    DocumentVersion.document_id.in_({d.document_id for d in ds}),
+                    DocumentVersion.approved_at.is_not(None),
+                )
+            )
+        )
+        if ds
+        else set()
+    )
     me = _me(principal)
     out = []
     for d in ds:
@@ -788,6 +800,7 @@ async def outs(
                 can_approve=d.status == "submitted"
                 and (_approver_of(principal, d, w) or me in (d.waiting_on or [])),
                 change_log=logs.get(d.id, []),
+                published=d.document_id in approved,
                 can_withdraw=d.status == "submitted"
                 and me is not None
                 and (me == d.created_by or _approver_of(principal, d, w)),

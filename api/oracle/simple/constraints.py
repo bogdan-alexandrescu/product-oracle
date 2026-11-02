@@ -121,6 +121,17 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
                 continue
             if dep.end.estimated and n.start.estimated:
                 continue
+            if n.start.estimated:
+                # walkb-roadmap: an invented start breaks no link; a real end before the
+                # dependency's end does, said by that end.
+                if not n.end.estimated and dep.end.date >= n.end.date:
+                    years = n.end.date.year != dep.end.date.year
+                    reason = (
+                        f"‘{_t(n.title)}’ ends {_day(n.end.date, years)}, but "
+                        f"‘{_t(dep.title)}’, which it depends on, ends {_day(dep.end.date, years)}"
+                    )
+                    flags.append(_flag(n, "dependency_order", reason, dep.id))
+                continue
             if dep.end.date >= n.start.date:
                 # Named both ways: a change card lists the dependents' lines under the moved
                 # item, so "Starts ..." alone read as the moved item's own start.
