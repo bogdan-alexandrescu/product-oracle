@@ -37951,6 +37951,24 @@ export interface components {
              * @default false
              */
             can_withdraw: boolean;
+            /**
+             * From Prds
+             * @default []
+             */
+            from_prds: components["schemas"]["SimpleDraftPrd"][];
+        };
+        /**
+         * SimpleDraftPrd
+         * @description approved-prd-roadmap: what an approved PRD put in the draft.
+         */
+        SimpleDraftPrd: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version?: number | null;
+            /** Items */
+            items: number;
+            /** Key Dates */
+            key_dates: number;
         };
         /**
          * SimpleEmailDelivery

@@ -114345,6 +114345,14 @@
             "type": "boolean",
             "title": "Can Withdraw",
             "default": false
+          },
+          "from_prds": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDraftPrd"
+            },
+            "type": "array",
+            "title": "From Prds",
+            "default": []
           }
         },
         "type": "object",
@@ -114369,6 +114377,40 @@
         ],
         "title": "SimpleDraftOut",
         "description": "A working draft of one roadmap (S3b): its changes until submitted, then the version\nin review and who it waits on."
+      },
+      "SimpleDraftPrd": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "key_dates": {
+            "type": "integer",
+            "title": "Key Dates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "items",
+          "key_dates"
+        ],
+        "title": "SimpleDraftPrd",
+        "description": "approved-prd-roadmap: what an approved PRD put in the draft."
       },
       "SimpleEmailDelivery": {
         "properties": {

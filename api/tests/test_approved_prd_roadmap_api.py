@@ -90,9 +90,10 @@ async def world() -> tuple[Ctx, dict[str, uuid.UUID]]:
         rm = await _add(s, Document(slug="outdoors", title="Outdoors", kind="roadmap",
                                     status="approved", visibility="company"))  # fmt: skip
         body = "# Outdoors v1\n"
-        rv = await _add(s, DocumentVersion(document_id=rm.id, number=1, markdown=body,
-                                           content_hash=hashlib.sha256(body.encode()).hexdigest(),
-                                           approved_at=datetime(2026, 10, 1, tzinfo=UTC)))  # fmt: skip
+        rv = await _add(s, DocumentVersion(
+            document_id=rm.id, number=1, markdown=body,
+            content_hash=hashlib.sha256(body.encode()).hexdigest(),
+            approved_at=datetime(2026, 10, 1, tzinfo=UTC)))  # fmt: skip
         pv = await _version(s, prd, 1, _body(1, "2027-01-29"))
         s.add(RoadmapItem(roadmap_document_id=rm.id, roadmap_version_id=rv.id,
                           item_key="offline-sync", title="Offline sync", horizon="now",

@@ -634,6 +634,15 @@ class SimpleDraftChange(BaseModel):
     titles: list[str] = []
 
 
+class SimpleDraftPrd(BaseModel):
+    """approved-prd-roadmap: what an approved PRD put in the draft."""
+
+    prd: SimpleDocRef
+    version: int | None = None
+    items: int
+    key_dates: int
+
+
 class SimpleDraftOut(BaseModel):
     """A working draft of one roadmap (S3b): its changes until submitted, then the version
     in review and who it waits on."""
@@ -666,6 +675,8 @@ class SimpleDraftOut(BaseModel):
     change_log: list[SimpleDraftChange] = []
     # The draft's author or the decider withdraws a submitted draft back to working.
     can_withdraw: bool = False
+    # approved-prd-roadmap: the items and key dates approved PRDs put in it.
+    from_prds: list[SimpleDraftPrd] = []
 
 
 class SimpleNotApproved(BaseModel):
