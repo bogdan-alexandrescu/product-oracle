@@ -553,16 +553,19 @@ async def tasks_waiting(db: AsyncSession, me: uuid.UUID | None) -> list[SimpleTa
 
     if me is None:
         return []
-    readable = set(await db.scalars(select(Document.id).where(Document.kind == "roadmap")))
-    rows = [
-        t
-        for t in await db.scalars(
+    # The join keeps the roadmaps the session may read (RLS on documents).
+    rows = list(
+        await db.scalars(
             select(RoadmapItemTask)
-            .where(RoadmapItemTask.owner_id == me, RoadmapItemTask.status.in_(("todo", "doing")))
+            .join(Document, Document.id == RoadmapItemTask.roadmap_document_id)
+            .where(
+                Document.kind == "roadmap",
+                RoadmapItemTask.owner_id == me,
+                RoadmapItemTask.status.in_(("todo", "doing")),
+            )
             .order_by(RoadmapItemTask.due_date.asc().nulls_last(), RoadmapItemTask.created_at)
         )
-        if t.roadmap_document_id in readable
-    ]
+    )
     if not rows:
         return []
     titles = {
