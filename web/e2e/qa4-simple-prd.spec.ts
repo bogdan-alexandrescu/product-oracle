@@ -27,7 +27,7 @@ test.describe("desktop", () => {
 
   test("Start review opens the form for any PRD, named by its title (qa4-simple-prd-1, 28)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD");
-    await page.getByRole("button", { name: "Start review" }).click();
+    await page.getByRole("button", { name: "Start a review meeting" }).click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
     await expect(sheet.getByRole("button", { name: "Start", exact: true })).toBeVisible();
     await expect(sheet).toContainText("Saved carts PRD");
@@ -35,7 +35,7 @@ test.describe("desktop", () => {
     await sheet.getByRole("button", { name: "Close" }).click();
 
     await page.goto("/simple/one-pagers/usage-alerts");
-    await page.getByRole("button", { name: "Start review" }).click();
+    await page.getByRole("button", { name: "Start a review meeting" }).click();
     await expect(page.getByRole("dialog", { name: "Start a review" })).toContainText("Usage alerts PRD");
   });
 
@@ -227,7 +227,7 @@ test.describe("phone", () => {
   test("a viewer sees no Start review (qa4-simple-prd-26)", async ({ page }) => {
     await openFromList(page, "Saved carts PRD", VIEWER);
     await expect(page.getByRole("link", { name: "Open in Detailed" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start a review meeting" })).toHaveCount(0);
     await expect(page.getByTestId("start-review-why")).toHaveCount(0);
   });
 
@@ -236,7 +236,7 @@ test.describe("phone", () => {
     const why = page.getByTestId("start-review-why");
     await expect(why).toHaveText("Ask an owner to start a review");
     const box = (await why.boundingBox())!;
-    for (const name of ["Present", "Export PDF", "Start review"]) expect(overlaps(box, (await page.getByRole("button", { name }).boundingBox())!)).toBe(false);
+    for (const name of ["Present", "Export PDF", "Start a review meeting"]) expect(overlaps(box, (await page.getByRole("button", { name }).boundingBox())!)).toBe(false);
     expect(overlaps(box, (await page.getByRole("link", { name: "Open in Detailed" }).boundingBox())!)).toBe(false);
   });
 });

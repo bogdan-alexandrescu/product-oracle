@@ -39,7 +39,7 @@ async function tap(l: Locator) {
 
 async function startReview(page: Page) {
   await page.goto("/simple/prds/guided-setup");
-  await tap(page.getByRole("button", { name: "Start review" }));
+  await tap(page.getByRole("button", { name: "Start a review meeting" }));
   await tap(page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 }

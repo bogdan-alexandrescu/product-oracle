@@ -37,7 +37,7 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
       const bet = line(page, "bets-1");
       await bet.hover();
       await expect(bet.getByRole("button", { name: "Edit “A setup checklist that shows" })).toBeAttached();
-      const start = page.getByRole("button", { name: "Start review" });
+      const start = page.getByRole("button", { name: "Start a review meeting" });
       await expect(start).toBeDisabled();
       await expect(page.getByText("Ask an owner to start a review")).toBeVisible();
       await expect(page.getByText(/owner or approver/)).toHaveCount(0);
@@ -46,7 +46,7 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
     test("the PRD's decider starts its review from the one-pager (qa-10)", async ({ page }) => {
       await seed(page, MOCK_SCENARIO_KEY, "simple-deciders");
       await open(page, "dana.decider@example.com");
-      await page.getByRole("button", { name: "Start review" }).click();
+      await page.getByRole("button", { name: "Start a review meeting" }).click();
       const sheet = page.getByRole("dialog", { name: "Start a review" });
       await expect(sheet.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
       await expect(sheet.getByTestId("start-not-allowed")).toHaveCount(0);
@@ -56,7 +56,7 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
     test("a viewer is offered no Start review (qa-10, qa4-simple-prd-26)", async ({ page }) => {
       await seed(page, MOCK_SCENARIO_KEY, "simple-deciders");
       await open(page, "viewer@example.com");
-      await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Start a review meeting" })).toHaveCount(0);
       await expect(page.getByText("Ask Dana Decider or an owner to start a review")).toHaveCount(0);
     });
   });
@@ -70,7 +70,7 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
     const sources = page.getByRole("region", { name: "Sources of “A setup checklist that shows" });
     await expect(sources).toBeVisible();
-    await page.getByRole("button", { name: "Start review" }).click();
+    await page.getByRole("button", { name: "Start a review meeting" }).click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
     await expect(sheet).toBeVisible();
     await page.keyboard.press("Escape");

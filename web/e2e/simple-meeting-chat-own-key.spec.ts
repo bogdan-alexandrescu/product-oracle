@@ -31,7 +31,7 @@ async function startReview(page: Page) {
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto("/simple/prds/guided-setup");
-  await tap(page.getByRole("button", { name: "Start review" }));
+  await tap(page.getByRole("button", { name: "Start a review meeting" }));
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();

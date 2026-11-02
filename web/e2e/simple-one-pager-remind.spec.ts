@@ -29,8 +29,9 @@ async function submitted(page: Page) {
   await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(bar(page)).toContainText("1 change");
-  await bar(page).getByRole("button", { name: "Submit for review" }).click();
-  await expect(bar(page).getByTestId("draft-waits-on")).toContainText("waiting on review from");
+  await bar(page).getByRole("button", { name: "Send for approval…" }).click();
+  await page.getByTestId("send-for-approval").getByRole("button", { name: "Send for approval" }).click();
+  await expect(bar(page).getByTestId("draft-waits-on")).toContainText("Sent for approval · waiting on");
 }
 
 /** Switches people: the account menu lives in the desktop rail, so sign out there and come
@@ -63,7 +64,7 @@ for (const phone of [false, true]) {
         const nudge = page.getByText(/is waiting for your review of Guided setup/).first();
         await expect(nudge).toBeVisible();
         await page.goto(URL);
-        await expect(bar(page)).toContainText("waiting on review from");
+        await expect(bar(page)).toContainText("Sent for approval · waiting on");
         await expect(bar(page).getByRole("button", { name: "Remind" })).toHaveCount(0);
 
         await switchTo(page);
@@ -78,7 +79,7 @@ for (const phone of [false, true]) {
         await page.goto(URL);
         await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Remind" })).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "Submit for review" })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "Send for approval…" })).toHaveCount(0);
       });
     });
   }

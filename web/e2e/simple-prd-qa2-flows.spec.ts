@@ -167,7 +167,7 @@ test.describe("desktop", () => {
 
   test("qa-46: the start sheet uses the app's controls, has Cancel beside Start and dims the whole page", async ({ page }) => {
     await open(page);
-    await page.getByRole("button", { name: "Start review" }).click();
+    await page.getByRole("button", { name: "Start a review meeting" }).click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
     await expect(sheet.getByRole("checkbox", { name: "Avery Stone" })).toBeVisible();
     const looks = await sheet.evaluate((root) => {

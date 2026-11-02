@@ -87,7 +87,7 @@ for (const phone of [false, true]) {
         await expect(sheet(page).getByRole("checkbox", { name: "Priya Raman" })).toBeChecked();
         await sheet(page).getByRole("button", { name: "Close" }).click();
         await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("button", { name: "Start a review meeting" }).click();
         await expect(sheet(page).getByRole("region", { name: "What is reviewed" })).toContainText("Guided setup");
         await expect(sheet(page).getByLabel("PRD")).toHaveCount(0);
         // qa-simple-decide-35: a review needs one attendee besides the presenter.

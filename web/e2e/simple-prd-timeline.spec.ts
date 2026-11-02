@@ -341,7 +341,7 @@ for (const phone of [false, true]) {
         await page.goto("/simple/prds/guided-setup");
         await expect(page.getByTestId("milestone-part")).toBeVisible();
         await expect(page.getByRole("article", { name: "One-pager" })).toHaveCount(0);
-        await page.getByRole("button", { name: "Start review", exact: true }).click();
+        await page.getByRole("button", { name: "Start a review meeting", exact: true }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();

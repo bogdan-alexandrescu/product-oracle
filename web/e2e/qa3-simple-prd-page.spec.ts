@@ -193,7 +193,7 @@ test.describe("desktop, no plan", () => {
     const detailed = page.getByRole("link", { name: "Open in Detailed" }).first();
     const style = (l: typeof present) => l.evaluate((el) => { const s = getComputedStyle(el); return [s.borderTopWidth, s.borderTopStyle, s.textDecorationLine, s.minHeight].join(" "); });
     expect(await style(detailed)).toBe(await style(present));
-    const start = (await page.getByRole("button", { name: "Start review" }).boundingBox())!;
+    const start = (await page.getByRole("button", { name: "Start a review meeting" }).boundingBox())!;
     const why = (await page.getByTestId("start-review-why").boundingBox())!;
     expect(why.y).toBeGreaterThanOrEqual(start.y + start.height);
   });
