@@ -35,9 +35,9 @@ export const NEWPRD = {
     },
     {
       id: "q3",
-      text: "What is left out of the first release?",
-      why: "So nobody plans work that waits for later.",
-      answer: "Sharing with people outside the household, and price checks across shops.",
+      text: "What could stop this from shipping at all?",
+      why: "The draft lists what it waits on.",
+      answer: "Lists need the new household sign-in, planned for next month.",
     },
     {
       id: "q4",

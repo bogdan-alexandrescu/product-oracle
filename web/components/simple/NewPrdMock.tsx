@@ -3,24 +3,21 @@
 // ?np1=a|b|c|d, with &open=1, &phase=fill|ask|hard and &made=1 for each frame's state.
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { type ReactNode } from "react";
 
+import { Chip } from "@/components/ds";
 import { Icon } from "@/components/ds/Icon";
 import { NEWPRD, type NewPrdQuestion } from "@/lib/api/mock/newprd";
 
 export type Np1 = "a" | "b" | "c" | "d" | null; // MOCK-HOOK
 export type NpState = { np1: Np1; open: boolean; phase: string | null; made: boolean }; // MOCK-HOOK
 
-/** MOCK-HOOK: the switch, read after the first paint so a prerender matches. */
+/** MOCK-HOOK: the switch, from the address (a link to the same page with new switches updates it). */
 export function useNp(): NpState {
-  const [s, setS] = useState<NpState>({ np1: null, open: false, phase: null, made: false }); // MOCK-HOOK
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search); // MOCK-HOOK
-    const v = p.get("np1"); // MOCK-HOOK
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- MOCK-HOOK
-    setS({ np1: v === "a" || v === "b" || v === "c" || v === "d" ? v : null, open: p.get("open") === "1", phase: p.get("phase"), made: p.get("made") === "1" }); // MOCK-HOOK
-  }, []);
-  return s; // MOCK-HOOK
+  const p = useSearchParams(); // MOCK-HOOK
+  const v = p.get("np1"); // MOCK-HOOK
+  return { np1: v === "a" || v === "b" || v === "c" || v === "d" ? v : null, open: p.get("open") === "1", phase: p.get("phase"), made: p.get("made") === "1" }; // MOCK-HOOK
 }
 
 const FIELD = "w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-[16px] leading-6 text-text placeholder:text-text2 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"; // MOCK-HOOK
@@ -44,17 +41,17 @@ export function NewPrdButton({ np, from }: { np: NpState; from: "home" | "one-pa
 }
 
 /** MOCK-HOOK: the new PRD, once it drafts, as a One-pagers row (a, b, c, d: the result). */
-export function MadeRow() {
+export function MadeRow({ np }: { np: NpState }) {
   return (
     <li data-testid="one-pager-row" className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line bg-accent-soft/40 py-3 last:border-b-0">
       <Link href="/simple/one-pagers" className="min-w-0 font-semibold break-words">
         {NEWPRD.title}
       </Link>
-      <span className="simple-status simple-status-quiet">{NEWPRD.made.status}</span>
+      <Chip kind="warn" dot>{NEWPRD.made.status}</Chip>
       <span className="simple-small">
-        {NEWPRD.made.eta} · 1 question waits on {NEWPRD.questions[4].later}
+        {np.np1 === "a" ? `${NEWPRD.made.eta} · 3 questions still open in Detailed` : `${NEWPRD.made.eta} · 1 question waits on ${NEWPRD.questions[4].later}`}
       </span>
-      <span className="simple-small ml-auto">Updated Oct 22</span>
+      <span className="simple-small ml-auto">Updated just now</span>
     </li>
   );
 }
@@ -75,7 +72,7 @@ export function DraftingCard() {
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-semibold">{NEWPRD.title}</span>
-          <span className="simple-status simple-status-quiet">Drafting</span>
+          <Chip kind="warn" dot>Drafting</Chip>
           <span className="simple-small">{NEWPRD.made.eta}</span>
         </div>
         <div aria-hidden className="h-2 overflow-hidden rounded-full bg-surface2">
@@ -246,11 +243,11 @@ export function GoalStart({ np, goal }: { np: NpState; goal: string }) {
     return (
       <p className="simple-small flex flex-wrap items-center gap-2" data-testid="np-goal-made">
         <span className="font-semibold text-text">{NEWPRD.title}</span>
-        <span className="simple-status simple-status-quiet">Drafting</span>
+        <Chip kind="warn" dot>Drafting</Chip>
       </p>
     );
   return (
-    <Link href={`/simple/prds/new?np1=c&goal=${encodeURIComponent(goal)}`} data-testid="np-goal-start" className="simple-link inline-flex items-center gap-1 self-start">
+    <Link href={`/simple/new-prd?np1=c&goal=${encodeURIComponent(goal)}`} data-testid="np-goal-start" className="simple-link inline-flex items-center gap-1 self-start">
       <Icon name="plus" size={16} /> Start a PRD for this goal
     </Link>
   );
@@ -449,7 +446,7 @@ export function NewPrdChat({ np }: { np: NpState }) {
           <p>Thanks. I am drafting it now.</p>
           <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-3" data-testid="np-chat-made">
             <span className="flex flex-wrap items-center gap-2">
-              <b>{NEWPRD.title}</b> <span className="simple-status simple-status-quiet">Drafting</span>
+              <b>{NEWPRD.title}</b> <Chip kind="warn" dot>Drafting</Chip>
             </span>
             <span className="simple-small">{NEWPRD.made.eta}. 1 question waits on Priya Raman; 1 is marked open.</span>
             <Link href="/simple/one-pagers?np1=d&made=1" className="simple-link">

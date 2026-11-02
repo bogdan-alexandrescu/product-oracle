@@ -46,7 +46,7 @@ export default function OnePagers() {
           // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
           // link stretches over the row (one link still, its name the title).
           <ul className="flex flex-col">
-            {np.made && <MadeRow />} {/* MOCK-HOOK */}
+            {np.made && <MadeRow np={np} />} {/* MOCK-HOOK */}
             {rows.map((d) => (
               <li key={d.id} data-testid="one-pager-row" className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-3 last:border-b-0 hover:bg-bg/50">
                 <Link href={`/simple/one-pagers/${d.slug}`} className="min-w-0 font-semibold break-words after:absolute after:inset-0 after:content-[''] hover:underline">
