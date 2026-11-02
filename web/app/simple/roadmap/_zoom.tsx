@@ -487,7 +487,7 @@ function DayChart(props: TimelineProps) {
                 data-add-where={whereAttr("quarter", quarterValue(q.start))}
                 data-add-label={q.label}
                 className="absolute top-11 bottom-0"
-                style={{ left: labelW + x(q.start), width: x(addDays(q.end, 1)) - x(q.start) }}
+                style={{ left: labelW + Math.max(0, x(q.start)), width: Math.max(0, Math.min(trackW, x(addDays(q.end, 1))) - Math.max(0, x(q.start))) }}
               />
             ))}
           {months.map((m) => (
