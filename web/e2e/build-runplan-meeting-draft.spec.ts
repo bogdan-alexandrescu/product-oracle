@@ -97,7 +97,8 @@ test.describe("desktop", () => {
 
     // The items are on the Simple roadmap now.
     await page.goto("/simple/roadmap?prd=saved-carts");
-    await expect(page.getByRole("button", { name: /^Turn a cart into a quote: May 3 to Jun 25, 2027/ })).toBeVisible();
+    // vqa-simple-runs: the Timeline's bars move by drag and arrow keys since train AH (the owner's answer), and say so in their name.
+    await expect(page.getByRole("button", { name: /^Turn a cart into a quote, May 3 – Jun 25, 2027\. Arrows move it/ })).toBeVisible();
 
     // runplan-r2: the decision is in Company > Decisions and its PRD link opens the PRD.
     await page.goto("/company/decisions?state=all");
