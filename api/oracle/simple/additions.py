@@ -1048,6 +1048,22 @@ async def reject(
     return next(x for x in out.suggestions if x.id == str(s.id))
 
 
+async def reopen(db: AsyncSession, principal: Any, suggestion_id: uuid.UUID) -> SuggestionOut:
+    """Undo of a decline: a rejected suggestion is open again (reason and decider cleared)."""
+    s = await db.get(SimpleGoalSuggestion, suggestion_id, with_for_update=True)
+    if s is None:
+        raise ChangeError(404, "No such suggestion")
+    await _decide(db, principal, s)
+    if s.status != "rejected":
+        raise ChangeError(409, f"This suggestion is {s.status} already")
+    s.status, s.reason, s.decided_by, s.decided_at = "open", None, None, None
+    await db.flush()
+    await audit.record(db, principal, "simple_goal_suggestion.reopened", "simple_goal_suggestion",
+                       s.id, data={})  # fmt: skip
+    out = await listing(db, principal, s.goal_id, None)
+    return next(x for x in out.suggestions if x.id == str(s.id))
+
+
 # --------------------------------------------------------------------------- people's
 
 

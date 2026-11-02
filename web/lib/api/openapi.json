@@ -43734,6 +43734,59 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/goal-suggestions/{suggestion_id}/reopen": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Reopen Goal Suggestion",
+        "description": "Undo of a reject: the suggestion is open again.",
+        "operationId": "reopen_goal_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalSuggestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/chat": {
       "get": {
         "tags": [
