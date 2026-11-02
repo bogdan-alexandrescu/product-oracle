@@ -48,7 +48,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       const publish = page.getByTestId("publish-button");
       await expect(publish).toHaveText("Publish v4");
       await publish.click();
-      await expect(publish).toHaveCount(0);
+      await page.getByRole("dialog", { name: "Publish v4?" }).getByRole("button", { name: "Publish", exact: true }).click();
+      await expect(page.getByTestId("published-chip")).toHaveText("Published v4");
 
       await openKeyDates(page);
       await expect(row(page, "M2 · Scale volume").getByTestId("key-date-day")).toHaveText("· Jan 8, 2027");
