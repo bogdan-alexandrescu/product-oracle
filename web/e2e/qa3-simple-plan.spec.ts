@@ -65,13 +65,15 @@ test.describe("QA pass 3: simple-plan, the line", () => {
     await expect(page.getByTestId("line-caption")).not.toContainText(", 1");
     await expect(page.getByTestId("line-day-preview")).toHaveText("Dec 1, 2026");
     await page.getByRole("button", { name: "Apply" }).click();
-    await expect(page.getByTestId("line-caption")).toContainText("miss Dec 1, 2026");
+    // build-plan QP1: the caption, or the parts' headings when the line regroups the list, name the day.
+    await expect(page.locator('[data-testid="line-caption"], [data-testid="prio-part-head"]').first()).toContainText("Dec 1, 2026");
     await expect(page.locator("#prio-line")).toContainText("Date: Dec 1, 2026");
     // Cancel is a visible, named button.
     await page.getByLabel("Line", { exact: true }).selectOption({ label: "Pick another date…" });
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByLabel("The line's date")).toHaveCount(0);
-    await expect(page.getByTestId("line-caption")).toContainText("miss Dec 1, 2026");
+    // build-plan QP1: the caption, or the parts' headings when the line regroups the list, name the day.
+    await expect(page.locator('[data-testid="line-caption"], [data-testid="prio-part-head"]').first()).toContainText("Dec 1, 2026");
   });
 
   /* qa-simple-plan-25, -2, -27: the options in date order, one style; any line splits the list at the line. */
@@ -92,7 +94,10 @@ test.describe("QA pass 3: simple-plan, the line", () => {
       const first = above.indexOf("false");
       if (first >= 0) {
         expect(above.slice(first).every((a) => a === "false")).toBe(true);
-        await expect(page.getByTestId("line-divider")).toHaveCount(1);
+        // build-plan QP1: a regrouped list is two headed parts; one in rank order keeps the divider.
+        const parts = await page.getByTestId("prio-part-head").count();
+        if (parts) expect(parts).toBe(2);
+        else await expect(page.getByTestId("line-divider")).toHaveCount(1);
       }
       if (label.startsWith("Milestone: Beta")) {
         // Weekly alert digest is tagged Milestone Beta and misses it: said in so many words.

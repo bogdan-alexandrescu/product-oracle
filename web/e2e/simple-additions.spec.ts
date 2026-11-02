@@ -223,7 +223,7 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     /**
-     * Card simple-additions-suggest: protects = "✦ Ask Oracle for more" in a goal's panel
+     * Card simple-additions-suggest: protects = "✦ Get more from Oracle" in a goal's panel
      * (opened from the goal's card over the chart: roadmap-milestones D draws no button on the
      * chart's goal row) asks Oracle, the panel says "Oracle is suggesting features…" while the
      * job runs, then shows 3 new suggestions; fails_when = no job, the pending line never shows
@@ -237,7 +237,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(panel).toBeVisible();
       await panel.getByRole("tab", { name: "✦ Oracle · 0" }).click();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(0);
-      await panel.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
+      await panel.getByRole("button", { name: "✦ Get more from Oracle" }).click();
       await expect(panel.getByTestId("suggest-pending")).toHaveText("Oracle is suggesting features…");
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(3, { timeout: 10_000 });
       await expect(panel.getByTestId("suggest-pending")).toHaveCount(0);
@@ -294,7 +294,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(2);
       await expect(panel.getByRole("button", { name: "Accept" })).toHaveCount(0);
       await expect(panel.getByRole("button", { name: "Reject" })).toHaveCount(0);
-      await expect(panel.getByRole("button", { name: "✦ Ask Oracle for more" })).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: "✦ Get more from Oracle" })).toHaveCount(0);
     });
 
     /**
@@ -312,7 +312,7 @@ for (const scheme of ["light", "dark"] as const) {
       await drawer.getByRole("tab", { name: "✦ Oracle · 1" }).click();
       const s = drawer.locator('[data-testid="goal-suggestion"][data-title="Alert templates for new teams"]');
       await expect(s).toBeVisible();
-      await expect(drawer.getByRole("button", { name: "✦ Ask Oracle for more" })).toBeVisible();
+      await expect(drawer.getByRole("button", { name: "✦ Get more from Oracle" })).toBeVisible();
       await s.getByRole("button", { name: "Accept" }).click();
       await expect(toastWith(page, "Added Alert templates for new teams as a draft")).toBeVisible();
       await expect(s).toHaveCount(0);
@@ -409,7 +409,7 @@ for (const scheme of ["light", "dark"] as const) {
       await panel.locator('[data-testid="goal-suggestion"][data-title="Quiet hours for alerts"]').getByRole("button", { name: "Accept" }).click();
       await expect(toastWith(page, "Added Quiet hours for alerts as a draft")).toBeVisible();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(1);
-      await panel.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
+      await panel.getByRole("button", { name: "✦ Get more from Oracle" }).click();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(4, { timeout: 10_000 });
       await noSidewaysScroll(page);
     });

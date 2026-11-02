@@ -7,7 +7,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * Pick D+E (the owner, 2026-10-28): each goal's ONE button "Suggestions · N" (Home's goal cards,
  * Priorities' goal buckets) opens its drawer: the "Suggest a feature" form on top (who decides
  * named), "Suggest from the chat", then the tabs "People · N" and "✦ Oracle · N". Oracle suggests
- * only when asked ("✦ Ask Oracle for more"; the button says "Oracle is suggesting..." until it is
+ * only when asked ("✦ Get more from Oracle"; the button says "Oracle is suggesting..." until it is
  * done); only the decider sees Accept / Reject, and their form folds to one line. From the chat,
  * "Suggest a feature for <goal>: <words>" is restated with its look-alikes and ONE card; Apply
  * files it as the person's own suggestion (People). Mock data is invented
@@ -75,7 +75,7 @@ for (const phone of [false, true]) {
        * Card simple-suggest-drawer: protects = a commenter's goal card has ONE "Suggestions · N"
        * button; its drawer has the form (Feature name, What it does and for whom, the goal set,
        * "<decider> will review your suggestion.") and the People / ✦ Oracle tabs; Send suggestion lands under People
-       * with who sent it; "✦ Ask Oracle for more" makes the button say "Oracle is suggesting..."
+       * with who sent it; "✦ Get more from Oracle" makes the button say "Oracle is suggesting..."
        * and the count changes only once it is done; the commenter sees no Accept / Reject; the
        * owner (the decider) sees the form folded to one line and accepts the person's suggestion;
        * goal targets read in words with their unit; fails_when = the button or tabs are missing,
@@ -111,7 +111,7 @@ for (const phone of [false, true]) {
         await expect(first.getByTestId("oracle-suggested")).toHaveText("✦ Oracle suggested");
         await expect(first.getByTestId("suggestion-why")).toContainText("Why:");
         await expect(first.getByTestId("suggestion-evidence")).toContainText("Sources:");
-        await drawer.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
+        await drawer.getByRole("button", { name: "✦ Get more from Oracle" }).click();
         await expect(drawer.getByTestId("suggest-pending")).toBeVisible();
         // While Oracle suggests, the count holds and the button says why.
         await expect(retentionButton(page)).toHaveText("Oracle is suggesting...");
@@ -292,7 +292,7 @@ for (const phone of [false, true]) {
         await expect(drawer.getByRole("button", { name: "Ask Oracle in the chat" })).toHaveCount(0);
         await drawer.getByRole("tab", { name: "✦ Oracle · 1" }).click();
         await expect(drawer.getByTestId("goal-suggestion")).toHaveCount(1);
-        await expect(drawer.getByRole("button", { name: "✦ Ask Oracle for more" })).toHaveCount(0);
+        await expect(drawer.getByRole("button", { name: "✦ Get more from Oracle" })).toHaveCount(0);
         await expect(drawer.getByRole("button", { name: "Accept" })).toHaveCount(0);
       });
     });
