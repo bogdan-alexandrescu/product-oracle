@@ -784,6 +784,41 @@ async def test_a_new_feature_ranked_above_what_it_depends_on_is_blocking(client,
     assert new["depends_on"] == ["address-lookup"]
 
 
+async def test_an_order_saved_by_oracle_adds_its_new_features_too(client, owner, runtime):  # noqa: F811
+    """build-runplan review: with no person deciding (the stop off, Oracle saves the order)
+    the new features still join the baseline as proposed, for the run's creator."""
+    tenant_id, _ = owner
+    run = await at_priority(
+        client, owner, runtime, ORDER_NEW, checkpoints={"priority_order": False}
+    )
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    async with tenant_session(tenant_id) as s:
+        entity = await s.scalar(select(Entity).where(Entity.key == "bulk-edit"))
+        proposal = await s.scalar(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"])))
+    assert entity is not None and entity.status == "proposed"
+    assert proposal.status == "accepted"
+
+
+async def test_two_open_creates_of_one_new_feature_approve_once(client, owner, runtime):  # noqa: F811
+    """build-runplan review: a run with two open creates for the same key approves its
+    order; one is accepted, the other rejected as the same feature."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW)
+    await propose_feature(tenant_id, run["id"])
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    async with tenant_session(tenant_id) as s:
+        entities = list(await s.scalars(select(Entity).where(Entity.key == "bulk-edit")))
+        proposals = list(
+            await s.scalars(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"])))
+        )
+    assert len(entities) == 1
+    assert sorted(p.status for p in proposals) == ["accepted", "rejected"]
+
+
 async def test_approving_the_order_adds_its_new_features_as_proposed(client, owner, runtime):  # noqa: F811
     tenant_id, auth = owner
     run = await at_priority(client, owner, runtime, ORDER_NEW)
