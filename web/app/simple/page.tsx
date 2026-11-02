@@ -154,11 +154,16 @@ export default function SimpleHome() {
   // vqa-simple-runs: Back to Home shows the page as it was left (cacheComponents keeps its
   // state): read everything again, and draw no run stop until the Inbox is read, so a stop just
   // approved on the run's page never shows again. Before paint, so nothing stale flashes.
+  // vqa-simple-runs (RD3 a, frame "done"): a question decided on its PRD's card stays in its row,
+  // with the answer, who and when, and Undo there (no toast), until Home is left: coming
+  // back reads the questions again, so a row decided before shows as the API now has it.
+  const [decidedHere, setDecidedHere] = useState<Question[]>([]);
   const shownBefore = useRef(false);
   const [revisit, setRevisit] = useState(false);
   useLayoutEffect(() => {
     if (shownBefore.current) {
       invalidateWaiting();
+      setDecidedHere([]);
       setRevisit(true);
       setStamp((s) => s + 1);
     }
@@ -187,14 +192,12 @@ export default function SimpleHome() {
     { keepPrevious: true },
   );
   const questionActions = useQuestionActions(reloadAll);
-  // vqa-simple-runs (RD3 a, frame "done"): a question decided on its PRD's card stays in its row,
-  // with the answer, who and when, and Undo there (no toast), until Home is left.
-  const [decidedHere, setDecidedHere] = useState<Question[]>([]);
   const prdActions: typeof questionActions = {
     ...questionActions,
     decide: async (q, a) => {
       const r = await questionActions.decide(q, a, true);
-      if (r && r.change.status !== "proposed") {
+      // Only when it can be undone: otherwise the toast says it and the row goes as on any list.
+      if (r && r.change.status !== "proposed" && r.change.can_undo) {
         const label = [r.words, me?.name, meetingMoment(new Date().toISOString(), zone)].filter(Boolean).join(" · ");
         setDecidedHere((d) => [...d.filter((x) => x.id !== q.id), { ...q, column: "decided", chosen: r.words, decided_label: label, undo_id: r.change.id }]);
       }
