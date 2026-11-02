@@ -203,20 +203,35 @@ def _milestones(header: list[str], rows: list[list[str]], ref: date) -> list[dic
     return out
 
 
-def _features(header: list[str], rows: list[list[str]], known: set[str]) -> list[dict[str, Any]]:
+def _features(
+    header: list[str],
+    rows: list[list[str]],
+    known: set[str],
+    names: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
     c_code, c_name = _col(header, "feature", "code", "id"), _col(header, "name", "title")
     c_ms = _col(header, "milestone")
     c_eff = _col(header, "effort", "engineer", contains="week")
     c_goal, c_order = _col(header, "goal"), _col(header, "when", "order", "placement", "timing")
     c_owner = _col(header, "owner")
     c_kind, c_what = _col(header, "kind", "type"), _col(header, "what")
+    names = names or {}
     out = []
+    # A Goal-traced PRD names a milestone on the first row of its group only (CLD's walk B,
+    # 2026-11-01): a row with an empty milestone cell is the milestone's above it.
+    last = ""
     for r in rows:
-        head = _cell(r, c_code)
+        ms_cell = _cell(r, c_ms).strip() or last
+        last = ms_cell
+        # A cell's link reads as its words ("[F-02 Late alerts](#f-02)").
+        head = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", _cell(r, c_code))
         m = _CODE.search(head)
         if not m:
             continue
-        mss = [f"M{int(x)}" for x in _MS.findall(_cell(r, c_ms))]
+        mss = [f"M{int(x)}" for x in _MS.findall(ms_cell)]
+        # A milestone named by its name ("[Rollout](#rollout)").
+        named = names.get(re.sub(r"\]\([^)]*\)|[\[\]*_`]", "", ms_cell).strip().lower())
+        mss = mss or ([named] if named else [])
         mss = [x for i, x in enumerate(mss) if x in known and x not in mss[:i]]
         if not mss:
             continue
@@ -342,13 +357,14 @@ def parse(text: str, ref: date) -> dict[str, Any] | None:
         return None
     known = {m["code"] for m in milestones}
     by_code = {m["code"]: m for m in milestones}
+    names = {str(m["name"]).strip().lower(): m["code"] for m in milestones}
     features: list[dict[str, Any]] = []
     goals: list[str] = []
     for h, rows in found:
         if _part_col(h) is not None and _col(h, "milestone") is not None:
             _part(h, rows, by_code, ref)
         elif _col(h, "feature") is not None and _col(h, "milestone") is not None:
-            features += _features(h, rows, known)
+            features += _features(h, rows, known, names)
         elif h and h[0].startswith("goal"):
             cols = {i: f"M{int(m[1])}" for i, x in enumerate(h) if (m := _MS.fullmatch(x))}
             for r in rows:
@@ -436,6 +452,29 @@ def clean(answer: Any) -> dict[str, Any] | None:
     summary = [str(x)[:300] for x in answer.get("summary") or [] if str(x).strip()][:3]
     return {"milestones": milestones, "features": features, "goals": goals, "holidays": holidays,
             "summary": summary}  # fmt: skip
+
+
+def with_prd_features(data: dict[str, Any] | None, text: str) -> dict[str, Any] | None:
+    """The job's plan with every feature the PRD's own features table places in one of its
+    milestones (CLD's walk B, 2026-11-01: an answer that left a PRD's new features out read
+    "nothing planned yet"); the answer's own reading of a feature stays."""
+    if not data:
+        return data
+    known = {m["code"] for m in data["milestones"]}
+    names = {str(m["name"]).strip().lower(): m["code"] for m in data["milestones"]}
+    have = {f["code"] for f in data["features"]}
+    for h, rows in tables(text or ""):
+        if (
+            _part_col(h) is None
+            and _col(h, "feature") is not None
+            and _col(h, "milestone") is not None
+        ):
+            for f in _features(h, rows, known, names):
+                if f["code"] not in have:
+                    have.add(f["code"])
+                    data["features"].append(f)
+                    data["goals"] += [g for g in f["goals"] if g not in data["goals"]]
+    return data
 
 
 def _risk(v: Any) -> dict[str, Any] | None:
@@ -940,7 +979,7 @@ async def run_job(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
         "approved_on": (v.approved_at or company_time.now()).date().isoformat(),
         "text": (v.markdown or "")[:MAX_TEXT],
     }
-    data = clean(await ask("prd_plan", payload))
+    data = with_prd_features(clean(await ask("prd_plan", payload)), v.markdown or "")
     row = await s.scalar(select(SimplePrdPlan).where(SimplePrdPlan.document_id == document.id))
     if row is None or row.version_id != v.id:
         return {"read": False, "reason": "a newer version's plan is read already"}
