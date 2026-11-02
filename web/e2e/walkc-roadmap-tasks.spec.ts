@@ -13,6 +13,9 @@ const URL = "/simple/roadmap";
 const PHONE = { width: 390, height: 844 };
 
 const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
+/** The picked Timeline (build-roadmap) draws one bar per item, in the item's row. */
+const timelineBar = (page: Page, key: string): Locator =>
+  page.locator(`[data-testid="timeline-row"][data-item="${key}"]`).getByTestId("timeline-bar");
 
 async function drag(page: Page, key: string, dx: number) {
   const body = bar(page, key).locator("rect[data-body]");
@@ -69,8 +72,8 @@ async function startReview(page: Page) {
 
 /**
  * Card walkc-moved-drawn-where-it-moved: protects = after a review meeting moves "Sample data
- * import" (F-02, dated by its PRD slice) to Later, the Timeline's and the Gantt's slice bars
- * start where the Waterfall's bar does, the item's new dates, not the plan's Nov 9;
+ * import" (F-02, dated by its PRD slice) to Later, the Timeline's item bar and the Gantt's
+ * slice bars start where the Waterfall's bar does, the item's new dates, not the plan's Nov 9;
  * fails_when = a moved item is drawn at its slice's old dates; no_claim = an estimated
  * item's slices, which stay on the plan.
  */
@@ -86,11 +89,13 @@ for (const where of ["desktop", "phone"] as const) {
     await page.getByTestId("format-waterfall").click();
     const now = await bar(page, "setup-import").getAttribute("data-start");
     expect(now).not.toBe("2026-11-09");
-    const formats = where === "phone" ? ["gantt"] : ["timeline", "gantt"];
-    for (const f of formats) {
-      await page.getByTestId(`format-${f}`).click();
-      await expect(page.locator('g[data-testid="slice-bar"][data-code^="F-02"]').first(), f).toHaveAttribute("data-start", now!);
+    if (where === "desktop") {
+      // The picked Timeline draws the item itself, not its slices: its bar starts there too.
+      await page.getByTestId("format-timeline").click();
+      await expect(timelineBar(page, "setup-import"), "timeline").toHaveAttribute("data-start", now!);
     }
+    await page.getByTestId("format-gantt").click();
+    await expect(page.locator('g[data-testid="slice-bar"][data-code^="F-02"]').first(), "gantt").toHaveAttribute("data-start", now!);
   });
 }
 
@@ -191,7 +196,7 @@ for (const where of ["desktop", "phone"] as const) {
 /**
  * Card walkc-review-estimated-moved: protects = after a review meeting moves "Team invites"
  * (F-05, no dates of its own: estimated, as the API reads an undated item) to Later, its
- * Timeline and Gantt slice bars start where the Waterfall's bar does, in Later's window, not
+ * Timeline bar and Gantt slice bars start where the Waterfall's bar does, in Later's window, not
  * at the plan's dates; fails_when = an estimated item's slices stay at the plan's dates
  * after a move; no_claim = how long the slices are drawn.
  */
@@ -207,11 +212,13 @@ for (const where of ["desktop", "phone"] as const) {
     await page.getByTestId("format-waterfall").click();
     await expect(bar(page, "plan-f-05")).toHaveAttribute("data-kind", "estimated");
     const now = (await bar(page, "plan-f-05").getAttribute("data-start"))!;
-    const formats = where === "phone" ? ["gantt"] : ["timeline", "gantt"];
-    for (const f of formats) {
-      await page.getByTestId(`format-${f}`).click();
-      await expect(page.locator('g[data-testid="slice-bar"][data-code^="F-05"]').first(), f).toHaveAttribute("data-start", now);
+    if (where === "desktop") {
+      // The picked Timeline draws the item itself, not its slices: its bar starts there too.
+      await page.getByTestId("format-timeline").click();
+      await expect(timelineBar(page, "plan-f-05"), "timeline").toHaveAttribute("data-start", now);
     }
+    await page.getByTestId("format-gantt").click();
+    await expect(page.locator('g[data-testid="slice-bar"][data-code^="F-05"]').first(), "gantt").toHaveAttribute("data-start", now);
   });
 }
 
@@ -225,8 +232,9 @@ test("an item with no tasks shows no Tasks part on its card", async ({ page }) =
   await login(page);
   await page.goto(URL);
   await expect(page.getByTestId("simple-chart")).toBeVisible();
-  await bar(page, "alert-rules").click();
-  const card = page.getByTestId("floating-card");
+  // The page opens on the picked Timeline: an item's bar opens its card in the side panel.
+  await timelineBar(page, "alert-rules").click();
+  const card = page.getByTestId("item-panel").getByTestId("floating-card");
   await expect(card).toBeVisible();
   await expect(card.getByText("Proposals on it")).toBeVisible();
   await expect(card.getByTestId("card-tasks")).toHaveCount(0);

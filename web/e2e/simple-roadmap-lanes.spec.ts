@@ -4,22 +4,27 @@ import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
- * timeline-overlap B (the owner's pick, 2026-10-28): the roadmap's Timeline as goal lanes,
- * built to frames B2 (desktop) and B3 (phone). Driven through the UI against the mock's
- * "simple-plan-lanes" scenario (invented data: Guided setup's plan on the onboarding roadmap,
- * M1 Prove it 2 Nov - 27 Nov, M2 Scale volume 30 Nov - 25 Dec, M3 Open to all 28 Dec - 12 Feb,
- * a year-end break 28 Dec - 1 Jan, and only planned work on the roadmap, as B2 draws it), on a
- * desktop (1366x820) and a phone (390x844), light and dark.
+ * timeline-overlap B (the owner's pick, 2026-10-28) drew the roadmap's Timeline as goal lanes
+ * (frames B2 desktop, B3 phone). Train AH's build-roadmap (47361c89, the owner's picked
+ * mk-qa4-roadmap designs) replaced it on screen: the Timeline is one row per item under its
+ * goal's lane (QR1 A, _zoom.tsx), always grouped by goal, and a phone's Timeline is a list by
+ * quarter; the pieces, milestone ends, holidays and Group by live on the Gantt (and the
+ * Waterfall). Each test keeps its card's promise on the new design. Driven through the UI
+ * against the mock's "simple-plan-lanes" scenario (invented data: Guided setup's plan on the
+ * onboarding roadmap, M1 Prove it 2 Nov - 27 Nov, M2 Scale volume 30 Nov - 25 Dec, M3 Open to
+ * all 28 Dec - 12 Feb, a year-end break 28 Dec - 1 Jan, and only planned work on the roadmap),
+ * on a desktop (1366x820) and a phone (390x844), light and dark.
  */
 
 const URL = "/simple/roadmap?roadmap=onboarding-roadmap";
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 
-const lane = (page: Page, title: string): Locator => page.getByTestId("chart-group").filter({ has: page.locator("b", { hasText: new RegExp(`^${title}$`) }) });
 const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 const slice = (page: Page, code: string): Locator => page.locator(`g[data-testid="slice-bar"][data-code="${code}"]`);
-const phoneLane = (page: Page, title: string): Locator => page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: new RegExp(`^${title}$`) }) });
+const group = (page: Page, title: string): Locator => page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: new RegExp(`^${title}$`) }) });
+const row = (page: Page, key: string): Locator => page.locator(`[data-testid="timeline-row"][data-item="${key}"]`);
+const label = (page: Page, title: string): Locator => page.getByTestId("chart-label").filter({ has: page.getByTestId("label-title").getByText(title, { exact: true }) });
 
 async function open(page: Page, scheme: "light" | "dark") {
   await page.context().addInitScript(
@@ -36,14 +41,27 @@ async function open(page: Page, scheme: "light" | "dark") {
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
 }
 
-/** The lane (its key) a bar sits in, and its row there. */
-async function placeOf(page: Page, key: string) {
-  const b = bar(page, key);
-  return { lane: await b.getAttribute("data-lane"), row: Number(await b.getAttribute("data-row")) };
+async function format(page: Page, f: "gantt" | "waterfall" | "timeline") {
+  await page.getByTestId(`format-${f}`).click();
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", f);
 }
 
-async function laneKey(page: Page, title: string) {
-  return lane(page, title).getAttribute("data-lane");
+/** The Timeline's lane (its title) an item's row sits under: the nearest lane header above it. */
+async function laneOf(page: Page, key: string) {
+  return row(page, key).evaluate((el) => {
+    let e = el.previousElementSibling;
+    while (e && e.getAttribute("data-testid") !== "timeline-lane") e = e.previousElementSibling;
+    return (e?.textContent ?? "").split(" · ")[0].trim();
+  });
+}
+
+/** The Gantt's group (its title) an item's row sits under. */
+async function groupOf(page: Page, title: string) {
+  return label(page, title).evaluate((el) => {
+    let e = el.parentElement!.previousElementSibling;
+    while (e && e.getAttribute("data-testid") !== "chart-group") e = e.previousElementSibling;
+    return (e?.querySelector("span")?.textContent ?? "").trim();
+  });
 }
 
 for (const scheme of ["light", "dark"] as const) {
@@ -51,74 +69,112 @@ for (const scheme of ["light", "dark"] as const) {
     test.use({ ...DESKTOP, colorScheme: scheme });
 
     /**
-     * Card lanes-b2-draw: protects = B2's goal lanes: one lane per goal with its name and item
-     * count, then PM-owned ("3 items · no engineering"); each piece a pill coloured by its
-     * milestone (F-05a in M1 and F-05b in M2 differ), a feature's slices on one row joined by a
-     * dotted line; pieces that overlap stack (Setup checklist and Sample data import take two
-     * rows of Activation, the PRD's goal for both), pieces one after the other share a row (Setup failure alerts
-     * and Setup error report); the month row, the week row with the Today pill, each milestone's
-     * end a flag "M1 ends Nov 27" with a dashed line, the year-end break hatched, the legend in
-     * the card (M1, M2, M3, No engineering work, Today, Holidays, One bar per part of a feature) and the Group by's
-     * hint; fails_when = a lane, a count, the PM-owned lane, a colour, the connector, the
-     * stacking, a flag or a legend entry is missing or wrong; no_claim = pixels.
+     * Card lanes-b2-draw: protects = the goal lanes: one lane per goal with its name and item
+     * count, then PM-owned, as the Timeline (QR1 A) draws them; PM-owned work (F-04, F-10,
+     * F-18) in its own lane and drawn grey and dashed on the Gantt; pieces that overlap never
+     * share a row (Setup checklist and Sample data import, both Activation's), pieces one after
+     * the other sit in their lane in start order (Setup failure alerts, then Setup error report);
+     * a feature's two slices are one bar on one row of the Gantt, each piece named by its name and
+     * its milestone (F-05a in M1, F-05b in M2); the Timeline's months and Today, the Gantt's
+     * weeks and Today pill, each milestone's end "M1 ends Nov 27" with a dashed line, the
+     * year-end break, the legend (One bar per part of a feature, Milestone ends, Holidays, No
+     * engineering work, Today); the Timeline always groups by goal, so it offers no Group by and
+     * no lanes hint; fails_when = a lane, a count, the PM-owned lane, a milestone, the one-bar
+     * slices, the stacking, a milestone end or a legend entry is missing or wrong; no_claim =
+     * pixels, the slices' colours (the Gantt draws every bar in the accent by design).
      */
     test(`B2: goal lanes with stacked pieces (desktop, ${scheme})`, async ({ page }) => {
       await open(page, scheme);
-      const titles = await page.getByTestId("chart-group").locator("b").allInnerTexts();
-      expect(titles).toEqual(["Activation", "Reliability", "Revenue", "Growth", "PM-owned"]);
-      await expect(lane(page, "Reliability").getByTestId("lane-count")).toHaveText("5 items");
-      await expect(lane(page, "PM-owned").getByTestId("lane-count")).toHaveText("3 items · no engineering");
-      // PM-owned work (F-04, F-10, F-18) sits in its own lane, grey and dashed.
-      const pm = await laneKey(page, "PM-owned");
-      for (const code of ["F-04", "F-10", "F-18"]) {
+      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
+      const lanes = await page.getByTestId("timeline-lane").allInnerTexts();
+      expect(lanes).toEqual(["Activation · 5 items", "Reliability · 5 items", "Revenue · 3 items", "Growth · 4 items", "PM-owned · 3 items"]);
+      // The Timeline always draws its rows under their goal: no Group by, no stale lanes hint.
+      await expect(page.getByTestId("group-milestone")).toHaveCount(0);
+      await expect(page.getByTestId("lanes-hint")).toHaveCount(0);
+      // PM-owned work (F-04, F-10, F-18) sits in its own lane.
+      for (const key of ["plan-f-04", "plan-f-10", "plan-f-18"]) expect(await laneOf(page, key)).toBe("PM-owned");
+      // Overlapping pieces never share a row; pieces one after the other sit in start order in their lane.
+      expect(await laneOf(page, "setup-checklist")).toBe("Activation");
+      expect(await laneOf(page, "setup-import")).toBe("Activation");
+      const [checklist, sample] = [(await row(page, "setup-checklist").boundingBox())!, (await row(page, "setup-import").boundingBox())!];
+      expect(Math.abs(checklist.y - sample.y)).toBeGreaterThanOrEqual(checklist.height - 1);
+      await expect(row(page, "setup-checklist").getByTestId("timeline-bar")).toHaveAttribute("data-end", "2026-11-20");
+      await expect(row(page, "setup-import").getByTestId("timeline-bar")).toHaveAttribute("data-start", "2026-11-09");
+      expect(await laneOf(page, "plan-f-03")).toBe("Reliability");
+      expect(await laneOf(page, "plan-f-06")).toBe("Reliability");
+      expect((await row(page, "plan-f-03").boundingBox())!.y).toBeLessThan((await row(page, "plan-f-06").boundingBox())!.y);
+      // The Timeline's axis: months, Today (its line and its day in the key).
+      await expect(page.getByTestId("timeline-month").filter({ hasText: /^Dec$/ })).toHaveCount(1);
+      await expect(page.getByTestId("today-line")).toHaveCount(1);
+      await expect(page.getByTestId("timeline-key").locator('li[data-key="today"]')).toHaveText(/^Today \w{3} \d+$/);
+      let w = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(w).toBeLessThanOrEqual(1367);
+
+      await format(page, "gantt");
+      // The Gantt draws PM-owned work grey and dashed, in the PM-owned group.
+      await expect(group(page, "PM-owned")).toHaveCount(1);
+      for (const [code, title] of [["F-04", "Pricing page words"], ["F-10", "Launch email"], ["F-18", "Pricing questions page"]]) {
         await expect(slice(page, code)).toHaveAttribute("data-pm-owned", "true");
-        expect(await slice(page, code).locator("xpath=..").getAttribute("data-lane")).toBe(pm);
+        await expect(slice(page, code).locator("rect[data-slice-body]")).toHaveAttribute("stroke-dasharray", /\d/);
+        expect(await groupOf(page, title)).toBe("PM-owned");
       }
-      // Overlapping pieces stack; pieces one after the other share a row.
-      const [checklist, sample] = [await placeOf(page, "setup-checklist"), await placeOf(page, "setup-import")];
-      expect(checklist.lane).toBe(sample.lane);
-      expect(checklist.row).not.toBe(sample.row);
-      const [alerts, report] = [await placeOf(page, "plan-f-03"), await placeOf(page, "plan-f-06")];
-      expect(alerts.lane).toBe(report.lane);
-      expect(alerts.row).toBe(report.row);
-      // A feature's two slices: one row, two milestone colours, a dotted line between them.
+      // A feature's two slices: one bar, one row, each piece in its own milestone, named by its name.
+      await expect(bar(page, "plan-f-05").getByTestId("slice-bar")).toHaveCount(2);
       await expect(slice(page, "F-05a")).toHaveAttribute("data-milestone", "M1");
       await expect(slice(page, "F-05b")).toHaveAttribute("data-milestone", "M2");
-      expect(await slice(page, "F-05a").getAttribute("data-colour")).not.toBe(await slice(page, "F-05b").getAttribute("data-colour"));
+      await expect(bar(page, "plan-f-05")).toHaveAttribute("aria-label", /F-05a in M1 Prove it, F-05b in M2 Scale volume/);
       const a = (await slice(page, "F-05a").locator("rect[data-slice-body]").boundingBox())!;
       const b = (await slice(page, "F-05b").locator("rect[data-slice-body]").boundingBox())!;
       expect(Math.abs(a.y - b.y)).toBeLessThan(1);
-      await expect(page.locator('[data-testid="slice-connector"][data-feature="F-05"]')).toHaveAttribute("stroke-dasharray", /\d/);
-      // fix4 qa-simple-roadmap-3: a slice is labelled by its name, never its code.
-      await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText(/^Team invites/);
-      // The axis: months, weeks, Today; the milestones' flags; the holidays.
-      await expect(page.getByTestId("axis-tick").filter({ hasText: "Dec" })).toHaveCount(1);
-      await expect(page.getByTestId("axis-week").filter({ hasText: /^16$/ })).toHaveCount(1);
+      await expect(slice(page, "F-05a").locator("title")).toHaveText(/^Team invites, part 1 of 2 · M1 Prove it/);
+      await expect(slice(page, "F-05b").locator("title")).toHaveText(/^Team invites, part 2 of 2 · M2 Scale volume/);
+      // Each piece's visible label reads its name or its part, never its code.
+      for (const [code, part] of [["F-05a", "1"], ["F-05b", "2"]]) {
+        await expect(slice(page, code).getByTestId("slice-label")).toBeVisible();
+        await expect(slice(page, code).getByTestId("slice-label")).toHaveText(new RegExp(`^(Team invites|Tea…|Part ${part} of 2)`));
+        await expect(slice(page, code).getByTestId("slice-label")).not.toHaveText(/F-\d/);
+      }
+      // The Gantt's axis: weeks, the Today pill; the milestones' ends; the holidays; the legend.
+      await expect(page.getByTestId("axis-tick").filter({ hasText: /^Dec 7$/ })).toHaveCount(1);
       await expect(page.getByTestId("today-pill")).toHaveText("Today");
+      const m1 = page.getByTestId("milestone-end").filter({ has: page.getByTestId("milestone-end-label").getByText(/^M1 ends/) });
+      await expect(m1.getByTestId("milestone-end-label")).toHaveText("M1 ends Nov 27");
+      await expect(m1.getByTestId("milestone-end-line")).toHaveAttribute("stroke-dasharray", /\d/);
+      await expect(page.getByTestId("milestone-end-label").filter({ hasText: /^M2 ends/ })).toHaveText("M2 ends Dec 25");
+      await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
+      const legend = page.getByTestId("legend");
+      for (const words of ["One bar per part of a feature", "Milestone ends (dashed line)", "Holidays year-end break", "No engineering work", /^Today$/])
+        await expect(legend.getByTestId("legend-item").filter({ hasText: words })).toHaveCount(1);
+      w = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(w).toBeLessThanOrEqual(1367);
+
+      // The Waterfall shows the whole plan: all three milestones' ends, each with its dashed line.
+      await format(page, "waterfall");
       const ends = page.getByTestId("milestone-end");
       await expect(ends).toHaveCount(3);
-      await expect(ends.nth(0).getByTestId("milestone-end-label")).toHaveText("M1 ends Nov 27");
-      await expect(ends.nth(1).getByTestId("milestone-end-label")).toHaveText("M2 ends Dec 25");
-      await expect(ends.nth(2).getByTestId("milestone-end-label")).toHaveText("M3 ends Feb 12, 2027");
-      await expect(ends.nth(0).getByTestId("milestone-flag")).toBeAttached();
-      await expect(ends.nth(0).getByTestId("milestone-end-line")).toHaveAttribute("stroke-dasharray", /\d/);
-      await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
-      const legend = page.getByTestId("simple-chart").getByTestId("legend");
-      for (const words of ["M1", "M2", "M3", "No engineering work", /^Today \w{3} \d+$/, "Holidays Dec 28 – Jan 1, 2027", "One bar per part of a feature"])
-        await expect(legend.getByTestId("legend-item").filter({ hasText: words })).toHaveCount(1);
-      await expect(page.getByTestId("lanes-hint")).toHaveText("Pieces stack inside a lane when they run at once");
-      const w = await page.evaluate(() => document.documentElement.scrollWidth);
-      expect(w).toBeLessThanOrEqual(1367);
+      await expect(ends.getByTestId("milestone-end-label")).toHaveText(["M1 ends Nov 27", "M2 ends Dec 25", /^M3 ends Feb 12/]);
+      for (let n = 0; n < 3; n++) await expect(ends.nth(n).getByTestId("milestone-end-line")).toHaveAttribute("stroke-dasharray", /\d/);
+      await expect(group(page, "PM-owned").getByTestId("lane-count")).toHaveText("3 items");
     });
 
     /**
-     * Card lanes-b2-card: protects = clicking a piece in its lane opens the item's floating card
-     * (as the row model did), naming the item and its slices; fails_when = a click opens
-     * nothing or another item; no_claim = the card's lines (simple-roadmap specs).
+     * Card lanes-b2-card: protects = clicking an item opens the item's card, naming the item and
+     * its slices: on the Timeline its bar opens the card in the side panel (QR4 A) and marks its
+     * row open; on the Gantt a piece (F-05b) opens the same item's card; fails_when = a click
+     * opens nothing or another item; no_claim = the card's lines (simple-roadmap specs).
      */
     test(`B2: a piece opens its item's card (desktop, ${scheme})`, async ({ page }) => {
       await open(page, scheme);
-      await slice(page, "F-05b").click();
+      await row(page, "plan-f-05").getByTestId("timeline-bar").click();
+      const panel = page.getByTestId("item-panel");
+      await expect(panel.getByRole("heading", { name: "Team invites" })).toBeVisible();
+      await expect(panel.getByTestId("card-slice")).toHaveCount(2);
+      await expect(row(page, "plan-f-05")).toHaveAttribute("data-open", "true");
+      await panel.getByRole("button", { name: "Close" }).click();
+      await expect(panel).toHaveCount(0);
+
+      await format(page, "gantt");
+      await slice(page, "F-05b").locator("rect[data-slice-body]").click();
       const card = page.getByTestId("floating-card");
       await expect(card.getByRole("heading", { name: "Team invites" })).toBeVisible();
       await expect(card.getByTestId("card-slice")).toHaveCount(2);
@@ -126,39 +182,48 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     /**
-     * Card lanes-group-by: protects = Group by Track, PRD and Milestone draw lanes of that
-     * grouping with the same stacking: by Milestone, M1 Prove it, M2 Scale volume and M3 Open to
-     * all (Team invites under M1, its first slice, still drawn as both slices), by Track the
-     * track "Guided setup track", by PRD Guided setup; in each, Setup checklist and Sample data import
-     * (they overlap) take two rows of one lane, and PM-owned work stays in its group's lane;
-     * fails_when = a grouping draws the goal lanes, a lane is missing, or overlapping pieces
-     * share a row; no_claim = the groups' order beyond the API's.
+     * Card lanes-group-by: protects = Group by Track, PRD and Milestone draw groups of that
+     * grouping (on the Gantt: the Timeline always groups by goal and offers no Group by): by
+     * Milestone, M1 Prove it, M2 Scale volume and M3 Open to all (Team invites under M1, its
+     * first slice, still drawn as both slices), by Track the track "Guided setup track", by PRD
+     * Guided setup; in each, Setup checklist and Sample data import (they overlap) sit in one
+     * group on two rows, and PM-owned work stays in its group; fails_when = a grouping draws the
+     * goal groups, a group is missing, or overlapping pieces share a row; on the Waterfall each
+     * milestone's group heads its count of items (M1 6, M2 6, M3 8); no_claim = the groups'
+     * order beyond the API's.
      */
     test(`Group by Milestone, Track and PRD draw their own lanes (desktop, ${scheme})`, async ({ page }) => {
       await open(page, scheme);
+      await expect(page.getByTestId("group-milestone")).toHaveCount(0);
+      await format(page, "gantt");
       await page.getByTestId("group-milestone").click();
-      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", "milestone");
-      for (const t of ["M1 Prove it", "M2 Scale volume", "M3 Open to all"]) await expect(lane(page, t)).toHaveCount(1);
-      await expect(lane(page, "PM-owned")).toHaveCount(0);
-      expect((await placeOf(page, "plan-f-05")).lane).toBe(await laneKey(page, "M1 Prove it"));
+      await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
+      for (const t of ["M1 Prove it", "M2 Scale volume", "M3 Open to all"]) await expect(group(page, t)).toHaveCount(1);
+      await expect(group(page, "PM-owned")).toHaveCount(0);
+      await expect.poll(() => groupOf(page, "Team invites")).toBe("M1 Prove it");
       await expect(slice(page, "F-05b")).toBeAttached();
-      for (const group of ["milestone", "track", "prd"] as const) {
-        await page.getByTestId(`group-${group}`).click();
-        await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", group);
-        // The chart takes the new grouping at once but keeps the last answer's lanes until the new one lands
-        // (train AB re-review): wait for the new grouping's own lane, matched exactly, and for both bars in it.
-        const title = group === "track" ? "Guided setup track" : group === "prd" ? "Guided setup" : null;
-        if (title) await expect(lane(page, title)).toHaveCount(1);
+      for (const g of ["milestone", "track", "prd"] as const) {
+        await page.getByTestId(`group-${g}`).click();
+        await expect(page.getByTestId(`group-${g}`)).toHaveAttribute("aria-pressed", "true");
+        const title = g === "track" ? "Guided setup track" : g === "prd" ? "Guided setup" : "M1 Prove it";
+        await expect(group(page, title)).toHaveCount(1);
+        await expect(group(page, "Activation")).toHaveCount(0);
         await expect
           .poll(async () => {
-            const want = title ? await lane(page, title).getAttribute("data-lane") : null;
-            const [checklist, sample] = [await placeOf(page, "setup-checklist"), await placeOf(page, "setup-import")];
-            const inLane = title ? checklist.lane === want && sample.lane === want : checklist.lane === sample.lane;
-            return inLane && checklist.row !== sample.row ? "one lane, two rows" : `${checklist.lane}:${checklist.row} ${sample.lane}:${sample.row} want ${want}`;
-          }, { message: `${group}: Setup checklist and Sample data import share ${title ?? "one"} lane on two rows` })
-          .toBe("one lane, two rows");
-        await expect(lane(page, "PM-owned")).toHaveCount(0);
+            const [gc, gs] = [await groupOf(page, "Setup checklist"), await groupOf(page, "Sample data import")];
+            const [c, s] = [(await bar(page, "setup-checklist").boundingBox())!, (await bar(page, "setup-import").boundingBox())!];
+            return gc === title && gs === title && Math.abs(c.y - s.y) >= 1 ? "one group, two rows" : `${gc}:${c.y} ${gs}:${s.y} want ${title}`;
+          }, { message: `${g}: Setup checklist and Sample data import share ${title} on two rows` })
+          .toBe("one group, two rows");
+        await expect(group(page, "PM-owned")).toHaveCount(0);
       }
+      // The Waterfall, by Milestone, heads each milestone's group with its count of items.
+      await page.getByTestId("group-milestone").click();
+      await format(page, "waterfall");
+      await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
+      // (Team invites counts once, under M1, its first slice.)
+      for (const [t, n] of [["M1 Prove it", "6 items"], ["M2 Scale volume", "6 items"], ["M3 Open to all", "8 items"]])
+        await expect(group(page, t).getByTestId("lane-count")).toHaveText(n);
     });
   });
 
@@ -166,55 +231,45 @@ for (const scheme of ["light", "dark"] as const) {
     test.use({ ...PHONE, colorScheme: scheme });
 
     /**
-     * Card lanes-b3-phone: protects = B3: one thin lane per goal with its name and count, each
-     * lane's work as one bar per run of a milestone (Activation's two M1 pieces are one
-     * bar, 2 Nov - 27 Nov), the lane with the most work (the first of a tie) open below ("open below", its pieces
-     * listed with code, name, milestone dot and dates, "5 items, up to 1 at once"); tapping
-     * another lane opens it, tapping a listed piece opens the item's card as a sheet; the page
-     * never scrolls sideways; fails_when = a lane, a run, the list or the card is missing or
-     * wrong; no_claim = pixels.
+     * Card lanes-b3-phone: protects = a phone's Timeline (the list by quarter that replaced B3's
+     * thin lanes): each quarter names itself and its count, today's quarter carries the Today
+     * pill; each item reads its name, its dates and its goal (Setup checklist, Nov 2 – Nov 20,
+     * Faster activation), in start order; tapping an item opens its card as a bottom sheet, its
+     * row marked open; the page never scrolls sideways; Group by is the Gantt's (Milestone: a
+     * group per milestone, no PM-owned); fails_when = a quarter, a row, the dates, the sheet or
+     * a grouping is missing or wrong; no_claim = pixels.
      */
     test(`B3: thin lanes, the open one listed below (phone, ${scheme})`, async ({ page }) => {
       await open(page, scheme);
-      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "lanes-phone");
-      await expect(page.getByTestId("phone-lane")).toHaveCount(5);
-      const fa = phoneLane(page, "Activation");
-      await expect(fa.getByTestId("lane-count")).toHaveText("5 items");
-      await expect(fa.getByTestId("lane-run").first()).toHaveAttribute("data-start", "2026-11-02");
-      await expect(fa.getByTestId("lane-run").first()).toHaveAttribute("data-end", "2026-11-27");
-      await expect(phoneLane(page, "Growth").getByTestId("lane-run")).toHaveCount(3);
-      // The milestones' ends (flags "M1", "M2", "M3" and their lines), Today and the holidays, as B3 draws them.
-      await expect(page.getByTestId("milestone-end")).toHaveCount(3);
-      await expect(page.getByTestId("milestone-end").first().getByTestId("milestone-end-label")).toHaveText("M1");
-      await expect(page.getByTestId("today-pill")).toHaveText("Today");
-      await expect(page.getByTestId("no-work")).toHaveAttribute("data-start", "2026-12-28");
-      await expect(fa).toHaveAttribute("data-open", "true");
-      await phoneLane(page, "Reliability").click();
-      await expect(phoneLane(page, "Reliability")).toHaveAttribute("data-open", "true");
-      await expect(phoneLane(page, "Reliability").getByTestId("lane-open-chip")).toHaveText("Listed below");
-      const list = page.getByTestId("lane-list");
-      await expect(list).toContainText("Reliability");
-      await expect(list.getByTestId("lane-list-count")).toHaveText("5 items");
-      await expect(list.getByTestId("lane-row")).toHaveCount(5);
-      await expect(list.getByTestId("lane-row").first()).toContainText(/^Setup failure alerts\s*Nov 2 – Nov 13/);
+      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
+      const list = page.getByTestId("timeline-list");
+      const quarters = list.getByTestId("timeline-quarter");
+      await expect(quarters).toHaveCount(2);
+      await expect(quarters.nth(0).locator("h3")).toHaveText(/^Q4 2026\s*Oct – Dec 2026 · 12 items\s*Today \w{3} \d+$/);
+      await expect(quarters.nth(1).locator("h3")).toHaveText(/^Q1 2027\s*Jan – Mar 2027 · 8 items$/);
+      await expect(list.getByTestId("timeline-row")).toHaveCount(20);
+      await expect(row(page, "setup-checklist")).toHaveText(/^Setup checklist\s*Nov 2 – Nov 20 · Faster activation$/);
+      await expect(row(page, "plan-f-03")).toHaveText(/^Setup failure alerts\s*Nov 2 – Nov 13/);
+      await expect(quarters.nth(1).getByTestId("timeline-row").first()).toHaveText(/^Public signup\s*Jan 4 – Jan 29, 2027/);
+      await expect(page.getByTestId("group-milestone")).toHaveCount(0);
 
-      await phoneLane(page, "Growth").click();
-      await expect(phoneLane(page, "Growth")).toHaveAttribute("aria-expanded", "true");
-      await expect(list.getByTestId("lane-list-count")).toHaveText("4 items");
-      await expect(list.getByTestId("lane-row")).toHaveCount(6);
-      await list.locator('[data-testid="lane-row"][data-code="F-05b"]').click();
+      await row(page, "plan-f-05").getByTestId("timeline-bar").click();
       const card = page.getByTestId("floating-card");
       await expect(card).toHaveAttribute("data-sheet", "bottom");
       await expect(card.getByRole("heading", { name: "Team invites" })).toBeVisible();
+      await expect(card.getByTestId("card-slice")).toHaveCount(2);
+      await expect(row(page, "plan-f-05")).toHaveAttribute("data-open", "true");
       await card.getByRole("button", { name: "Close" }).click();
+      await expect(card).toHaveCount(0);
       const w = await page.evaluate(() => document.documentElement.scrollWidth);
       expect(w).toBeLessThanOrEqual(391);
 
-      // Group by Milestone: a thin lane per milestone (the same runs).
+      // Group by Milestone (the Gantt's): a group per milestone.
+      await format(page, "gantt");
       await page.getByTestId("group-milestone").click();
-      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", "milestone");
-      for (const t of ["M1 Prove it", "M2 Scale volume", "M3 Open to all"]) await expect(phoneLane(page, t)).toHaveCount(1);
-      await expect(phoneLane(page, "PM-owned")).toHaveCount(0);
+      await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
+      for (const t of ["M1 Prove it", "M2 Scale volume", "M3 Open to all"]) await expect(group(page, t)).toHaveCount(1);
+      await expect(group(page, "PM-owned")).toHaveCount(0);
     });
   });
 }

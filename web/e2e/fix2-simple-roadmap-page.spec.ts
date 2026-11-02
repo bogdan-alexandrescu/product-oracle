@@ -232,8 +232,9 @@ test.describe("phone", () => {
   test.use(PHONE);
 
   /**
-   * #5: on a phone's Waterfall, the broken link of the estimated dependent (Mobile alert
-   * push) reads in the panel above the chart, not cut off at either edge of the screen.
+   * #5: on a phone's Waterfall, a broken link (Weekly alert digest's: it starts before Alert
+   * rules engine ends; walkb-roadmap: end-only Mobile alert push no longer breaks) reads in
+   * the panel above the chart, not cut off at either edge of the screen.
    */
   test("a broken link is not cut off on a phone Waterfall", async ({ page }) => {
     await open(page);

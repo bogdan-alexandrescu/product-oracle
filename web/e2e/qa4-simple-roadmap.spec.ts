@@ -183,7 +183,9 @@ test.describe("desktop only", () => {
   test("qa4-19 / 23: a span in another year says its years; the cut row says 1st to return", async ({ page }) => {
     await open(page);
     const welcome = page.locator('[data-testid="timeline-row"][data-item="setup-video"] [data-testid="timeline-bar"]').first();
-    await expect(welcome).toHaveAttribute("aria-label", /^Welcome video, Jul 1, 2027 – [A-Z][a-z]+ \d+, 2028(\. Arrows .*)?$/);
+    // walkb-roadmap (e4cdf478): an estimated item starts after its dependency (Welcome tour),
+    // keeping its length, so Welcome video now runs Sep 15, 2027 to Jan 6, 2029.
+    await expect(welcome).toHaveAttribute("aria-label", /^Welcome video, Sep 15, 2027 – Jan 6, 2029(\. Arrows .*)?$/);
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("return-place").first()).toHaveText("1st to return");
   });

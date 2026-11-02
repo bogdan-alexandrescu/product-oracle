@@ -474,7 +474,11 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   return { start, end };
 }
 
-/** The dates the roadmap shows for an item (stored, typed or estimated), as its bar draws them. */
+/**
+ * An item's own dates (stored, typed or estimated), before afterDependencies: an end-only item
+ * that depends on another keeps its window's start here, not the start its bar takes after that
+ * work. Its one caller (simple-home-move) stores these as typed, so its bar draws them as given.
+ */
 export function shownDates(db: SimpleDb, key: string): { start: string; end: string } {
   const s = db.items.find((x) => x.key === key)!;
   const r = resolve(db, s, simpleWindows(companyToday())[s.horizon]);
@@ -513,6 +517,13 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; en
 function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   const prd = ROADMAPS[s.roadmap].prd;
   return { id: stableUuid(`simple-prd/${s.roadmap}`), slug: prd.toLowerCase().replace(/ /g, "-"), title: prd };
+}
+
+/** The PRD an item reads as its own: the one it was added from, else its roadmap's (the API's item.prd). */
+function ownPrd(s: SeedItem): Schemas["SimpleDocRef"] {
+  if (s.prd_doc) return s.prd_doc;
+  if (s.from_prd) return { id: stableUuid(`simple-prd/${s.from_prd.slug}`), slug: s.from_prd.slug, title: s.from_prd.title };
+  return itemPrd(s);
 }
 
 /** A milestone no plan dates (the new SimpleMilestone fields, empty). */
@@ -869,9 +880,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
-      prd: s.prd_doc ?? (s.from_prd
-        ? { id: stableUuid(`simple-prd/${s.from_prd.slug}`), slug: s.from_prd.slug, title: s.from_prd.title }
-        : itemPrd(s)),
+      prd: ownPrd(s),
       goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
@@ -1010,8 +1019,9 @@ function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: st
  */
 function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"]): Schemas["SimpleKeyDate"][] {
   const hidden = new Set(db.plan?.hidden ?? []);
-  // roadmap-keydates review: every PRD the roadmap's items come from, as the API reads them.
-  const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap).map((s) => [itemPrd(s).id, itemPrd(s)])).values()];
+  // roadmap-keydates review: every PRD the roadmap's items come from, each item's own (an item
+  // added from another approved PRD names that one), as the API's key_date_prds reads them.
+  const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap).map((s) => [ownPrd(s).id, ownPrd(s)])).values()];
   return prds
     .filter((p) => !hidden.has(p.slug))
     .sort((a, b) => a.title.localeCompare(b.title))

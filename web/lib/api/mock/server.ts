@@ -1093,6 +1093,37 @@ function seedRoadmapKeyDatesUncodedScenario(): Db {
 }
 
 /**
+ * roadmap-keydates review, the "roadmap-keydates-two-prds" scenario: "roadmap-keydates" plus a
+ * second approved PRD, Team templates (M1 First templates ends Dec 11), and one onboarding item
+ * built from it, Starter templates: the roadmap's Key dates read both PRDs' milestones, each
+ * naming its own PRD, as the API reads each item's own PRD. Invented data.
+ */
+function seedRoadmapKeyDatesTwoPrdsScenario(): Db {
+  const db = seedRoadmapKeyDatesScenario();
+  const at = "2026-10-21T10:00:00Z";
+  const doc: DocumentRow = {
+    id: stableUuid("simple-prd/team-templates"), slug: "team-templates", title: "Team templates", status: "approved", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  };
+  db.documents.push(doc);
+  const v1 = buildVersion(doc, {
+    number: 1,
+    created_at: at,
+    citations: [],
+    sections: [
+      { key: "title", level: 1, heading: "Team templates", body: "Give new teams a ready set of templates." },
+      { key: "milestones", level: 2, heading: "Milestones", body: "| Milestone | Name | Start | End |\n| --- | --- | --- | --- |\n| M1 | First templates | 2026-11-16 | 2026-12-11 |" },
+    ],
+  });
+  v1.approved_at = "2026-10-21T10:05:00Z";
+  db.versions.push(v1);
+  const rm = db.simple_roadmap!;
+  rm.items.push({ key: "starter-templates", title: "Starter templates", horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", from_prd: { slug: doc.slug, title: doc.title } });
+  rm.ids["starter-templates"] = stableUuid("simple-item/starter-templates");
+  return db;
+}
+
+/**
  * timeline-overlap B2, the "simple-plan-lanes" scenario: "simple-plan" whose onboarding roadmap
  * holds only the plan's work, as the owner's picked frame draws it (every piece planned, nothing
  * broken or waiting): the cut tour, the welcome video and the draft nudges gone, the checklist's
@@ -3099,6 +3130,8 @@ function load(): Db {
                 ? seedRoadmapKeyDatesScenario
               : scenario === "roadmap-keydates-uncoded"
                 ? seedRoadmapKeyDatesUncodedScenario
+              : scenario === "roadmap-keydates-two-prds"
+                ? seedRoadmapKeyDatesTwoPrdsScenario
               : scenario === "simple-plan-lanes"
                 ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
