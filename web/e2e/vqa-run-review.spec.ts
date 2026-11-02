@@ -66,19 +66,20 @@ test(`desktop ${viewport.width}x${viewport.height}: the list runs down to the ba
   await page.mouse.move(900, 400);
   await page.mouse.wheel(0, 300);
   await expect.poll(async () => page.evaluate(() => scrollY)).toBeGreaterThan(0);
-  const l2 = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
-  const b2 = (await page.getByTestId("decision-bar").boundingBox())!;
+  // Both edges read in one frame: read one call apart, a smooth scroll still moving the page
+  // between them reads a gap the page never draws.
+  const gap = () =>
+    page.evaluate(() => {
+      const l = document.querySelector('[aria-label="Features"]')!.getBoundingClientRect();
+      return Math.round(l.bottom - document.querySelector('[data-testid="decision-bar"]')!.getBoundingClientRect().top);
+    });
   // The same promise as build-engcheck's hard case: once scrolled the list ends at the bar's top
   // edge within 1px, never above it and never under it.
-  expect(l2.y + l2.height, "the list still ends at the bar's top edge").toBeGreaterThanOrEqual(b2.y - 1);
-  expect(l2.y + l2.height, "the list never runs under the bar once scrolled").toBeLessThanOrEqual(b2.y + 1);
+  expect(await gap(), "the list still ends at the bar's top edge").toBeGreaterThanOrEqual(-1);
+  expect(await gap(), "the list never runs under the bar once scrolled").toBeLessThanOrEqual(1);
   // And at the page's very end, where the page's own gap once pushed the list 16px above the bar.
   await page.mouse.wheel(0, 5000);
   await expect.poll(async () => page.evaluate(() => Math.ceil(scrollY + innerHeight) >= document.documentElement.scrollHeight)).toBe(true);
-  const gap = async () => {
-    const l3 = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
-    return Math.round(l3.y + l3.height - (await page.getByTestId("decision-bar").boundingBox())!.y);
-  };
   await expect.poll(gap, { message: "the list ends at the bar's top edge at the page's very end" }).toBeGreaterThanOrEqual(-1);
   expect(Math.abs(await gap()), "the list ends at the bar's top edge at the page's very end, never under it").toBeLessThanOrEqual(1);
 });

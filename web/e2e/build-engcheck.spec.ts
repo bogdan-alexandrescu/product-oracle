@@ -116,10 +116,13 @@ test("hard case: 15 features at 1512 wide, the list scrolls on its own above the
   // Wait on the scrolled state, not on a timing: the page has scrolled and the list's end has
   // settled at the bar's top edge, never under it.
   await expect.poll(async () => page.evaluate(() => scrollY)).toBeGreaterThan(0);
-  const gap = async () => {
-    const l = await box(list(page));
-    return Math.round(l.y + l.height - (await box(bar(page))).y);
-  };
+  // Both edges read in one frame: read one call apart, a smooth scroll still moving the page
+  // between them reads a gap the page never draws.
+  const gap = () =>
+    page.evaluate(() => {
+      const l = document.querySelector('[aria-label="Features"]')!.getBoundingClientRect();
+      return Math.round(l.bottom - document.querySelector('[data-testid="decision-bar"]')!.getBoundingClientRect().top);
+    });
   await expect.poll(gap, { message: "the list ends at the bar's top edge once scrolled, never under it" }).toBeGreaterThanOrEqual(-1);
   expect(Math.abs(await gap()), "the list ends at the bar's top edge once scrolled, never under it").toBeLessThanOrEqual(1);
   await expect(row(page, "f.invoice-pdf")).toBeInViewport();
