@@ -110,6 +110,9 @@ INBOX_DAYS = 30
 UPCOMING_MAX = 20
 # A minutes job still drafting after this long: "still drafting", send what is written.
 MINUTES_SLOW = timedelta(minutes=2)
+# walkc-meeting: past this a queued or running minutes job is taken as failed (its call
+# times out at 180 s; the walk waited 13-15 minutes).
+MINUTES_STUCK = timedelta(minutes=6)
 SUMMARY_MAX = 4000
 MAX_QUESTIONS = 5
 MAX_ACTIONS = 8
@@ -1190,11 +1193,18 @@ async def _minutes_job(db: AsyncSession, m: SimpleMeeting) -> str | None:
     job = await db.get(LlmJob, m.minutes_job_id) if m.minutes_job_id else None
     if job is None or job.status in ("failed", "cancelled"):
         return "failed"
-    if job.status == "succeeded":
-        return "drafting"  # its answer lands with the next read of the job's commit
     # Queued, started or requeued (Draft again) last: each touches updated_at, on the job
     # runner's clock (the wall clock).
-    return "slow" if jobs._now() - job.updated_at > MINUTES_SLOW else "drafting"
+    waited = jobs._now() - job.updated_at
+    if job.status == "succeeded":
+        # Its answer lands with the next read of the job's commit; a job that succeeded
+        # long ago without writing them never will (walkc-meeting: never "drafting" on).
+        return "failed" if waited > MINUTES_SLOW else "drafting"
+    # walkc-meeting: a job still queued or running past MINUTES_STUCK is not coming (a
+    # stalled queue, a lost worker): said as failed, so Draft again is offered.
+    if waited > MINUTES_STUCK:
+        return "failed"
+    return "slow" if waited > MINUTES_SLOW else "drafting"
 
 
 async def _sees_change(db: AsyncSession, principal: Any, c: SimpleChange) -> bool:
@@ -1487,7 +1497,9 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
         meeting_id = uuid.UUID(str((job.input or {}).get("meeting_id")))
     except ValueError as e:
         raise JobInputError("the job names no meeting") from e
-    m = await s.get(SimpleMeeting, meeting_id, with_for_update=True)
+    # walkc-meeting: the meeting's row is not held across the model's call (up to 180 s):
+    # Save, Send and Draft again lock it; it is locked again to write the answer.
+    m = await s.get(SimpleMeeting, meeting_id)
     if m is None:
         raise JobInputError("the meeting no longer exists")
     document = await s.get(Document, m.prd_document_id)
@@ -1525,6 +1537,11 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
         "waits": [{"what": w["what"], "on": [p["name"] for p in w["on"]]} for w in waits],
     }
     answer = await ask("meeting_minutes", payload)
+    m = await s.get(SimpleMeeting, meeting_id, with_for_update=True, populate_existing=True)
+    if m is None:
+        raise JobInputError("the meeting no longer exists")
+    if m.minutes_job_id not in (None, job.id):
+        return {"written": False, "reason": "Draft again queued a newer job"}
     if (m.minutes or {}).get("written_by") == "edited" or m.minutes_state == "sent":
         return {"written": False, "reason": "a person edited or sent the minutes first"}
     summary = " ".join(str(answer.get("summary") or "").split())[:SUMMARY_MAX]
@@ -1564,6 +1581,12 @@ async def redraft(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Si
     if await _minutes_job(db, m) != "failed":
         raise MeetingError(409, "Oracle is not failing to draft these minutes")
     job = await db.get(LlmJob, m.minutes_job_id) if m.minutes_job_id else None
+    if job is not None and job.status not in ("failed", "cancelled"):
+        # walkc-meeting: a stuck job (queued or running past MINUTES_STUCK) is cancelled and
+        # a new one queued, so the stalled one can never write over it.
+        job.status = "cancelled"
+        job.error = "Stalled: Draft again queued a new one"
+        job = None
     try:
         if job is not None:
             job = await jobs.retry(db, principal, job.id)
