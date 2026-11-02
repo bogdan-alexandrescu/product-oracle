@@ -156,7 +156,14 @@ for (const phone of [false, true]) {
        */
       test(`a planned bar says how its dates change (${where})`, async ({ page }) => {
         await open(page, scheme);
-        // build-roadmap (8ba0ac46): the Timeline draws no slices; the planned bar is the Gantt's.
+        // build-roadmap (8ba0ac46): the desktop's Timeline draws Team invites as one bar that
+        // stays put, and says why; a phone's Timeline is a list (no bars).
+        if (!phone) {
+          const row = page.locator('[data-testid="timeline-row"][data-item="plan-f-05"] [data-testid="timeline-bar"]');
+          await expect(row).toHaveAccessibleName(/Its dates follow the PRD's plan: change them in the PRD/);
+          await expect(row).not.toHaveAccessibleName(/Arrows move/);
+        }
+        // The slices are the Gantt's: its planned bar says the same.
         await gantt(page);
         const bar = page.locator('g[data-testid="bar"]').filter({ has: slice(page, "F-05a") });
         await expect(bar).toHaveCount(1);
