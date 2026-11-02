@@ -39,19 +39,28 @@ async function newPrdFromHome(page: Page) {
 
 const title = (page: Page) => page.getByRole("textbox", { name: "Title" });
 
-/** The button's fill once its colour transition has ended: read until two reads 100 ms apart agree. */
+const leave = (page: Page) => page.getByRole("dialog", { name: "Discard your changes?" });
+
+/**
+ * The button's fill once its colour transition has ended: no animation is running and two
+ * reads 100 ms apart agree. The first probe only records a read, so every comparison spans
+ * a full interval.
+ */
 async function settledFill(button: Locator) {
   let last = "";
-  let fill = await button.evaluate((el) => getComputedStyle(el).backgroundColor);
+  let fill = "";
   await expect
     .poll(async () => {
-      [last, fill] = [fill, await button.evaluate((el) => getComputedStyle(el).backgroundColor)];
-      return fill === last;
+      const read = await button.evaluate((el) => ({
+        fill: getComputedStyle(el).backgroundColor,
+        running: el.getAnimations().length,
+      }));
+      [last, fill] = [fill, read.fill];
+      return last !== "" && fill === last && read.running === 0;
     }, { intervals: [100] })
     .toBe(true);
   return fill;
 }
-const leave = (page: Page) => page.getByRole("dialog", { name: "Discard your changes?" });
 
 for (const [name, viewport, home] of [
   ["desktop", DESKTOP, "nav-home"],
