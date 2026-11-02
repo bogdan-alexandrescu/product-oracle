@@ -320,8 +320,30 @@ async def read_key_dates(
     prds = key_date_prds(principal, docs, entries)
     if views is None:
         views = await plans.views(db, {p.id for of in prds.values() for p in of})
+    old = published_copies(docs, prds, views)
+    own = [k for k in own if (k.id, k.name, k.note) not in old]
     out = sorted(own + prd_key_dates(docs, prds, views), key=lambda k: (k.date, k.name))
     return out, roadmaps
+
+
+def published_copies(
+    docs: dict[uuid.UUID, Document],
+    prds: dict[uuid.UUID, list[Document]],
+    views: dict[uuid.UUID, Any],
+) -> set[tuple[uuid.UUID, str, str]]:
+    """ah-prd-milestones-once review: the (id, name, note) an approved PRD's milestone was
+    copied with as a key date before its milestones were read-only from the PRD (id
+    ``uuid5(roadmap, "<prd>:<code>")``, its name, "From <PRD>"), for each milestone
+    :func:`prd_key_dates` shows. A roadmap that published such a copy skips it when read, so
+    the milestone shows once, from the PRD, whatever day the copy holds (the PRD may have
+    moved it since); one the owner renamed or re-noted since is theirs and stays."""
+    return {
+        (uuid.uuid5(doc_id, f"{prd.id}:{m.code}"), m.name, f"From {prd.title}")
+        for doc_id in docs
+        for prd in prds.get(doc_id, [])
+        for m in getattr(views.get(prd.id), "milestones", None) or []
+        if m.end_date is not None
+    }
 
 
 def key_date_prds(
