@@ -40,6 +40,7 @@ from oracle.runs.schemas import (
     PrdScopeReview,
     ScopeEnhanceAccept,
     ScopeEnhanceIn,
+    ScopeEvidence,
     ScopeGoal,
     ScopeGoalChoice,
     ScopeGoalIn,
@@ -253,6 +254,72 @@ async def _title(db: AsyncSession, run: Run | None) -> str | None:
     return str(slug) if slug else None
 
 
+async def _evidence(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, ScopeEvidence]:
+    """Each evidence id by its source's name: a baseline evidence row's source item, or a
+    source item itself; an id that names neither is left out (never shown bare)."""
+    from oracle.baseline.models import Evidence
+    from oracle.sources.models import SourceItem
+
+    if not ids:
+        return {}
+    out: dict[uuid.UUID, ScopeEvidence] = {}
+    rows = (
+        await db.execute(
+            select(Evidence.id, Evidence.source_item_id, Evidence.url, Evidence.ref).where(
+                Evidence.id.in_(ids)
+            )
+        )
+    ).all()
+    item_ids = set(ids) | {r.source_item_id for r in rows if r.source_item_id}
+    items = {
+        i.id: i for i in await db.scalars(select(SourceItem).where(SourceItem.id.in_(item_ids)))
+    }
+    for r in rows:
+        item = items.get(r.source_item_id) if r.source_item_id else None
+        title = (item.title if item else None) or r.ref
+        if title:
+            out[r.id] = ScopeEvidence(
+                id=r.id, title=title, url=(item.url if item else None) or r.url
+            )
+    for i in items.values():
+        if i.id in ids and i.title and i.id not in out:
+            out[i.id] = ScopeEvidence(id=i.id, title=i.title, url=i.url)
+    return out
+
+
+async def _baseline_goals(
+    db: AsyncSession, entity_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[ScopeGoal]]:
+    """The confirmed goals each baseline feature supports (its "supports" edges)."""
+    from oracle.baseline.models import Edge
+
+    if not entity_ids:
+        return {}
+    rows = await db.execute(
+        select(Edge.src_id, Edge.attrs, Entity.id, Entity.key)
+        .join(Entity, Entity.id == Edge.dst_id)
+        .where(
+            Edge.type == "supports",
+            Edge.status != "rejected",
+            Edge.src_id.in_(entity_ids),
+            Entity.type == "goal",
+            Entity.status == "confirmed",
+        )
+        .order_by(Entity.key)
+    )
+    out: dict[uuid.UUID, list[ScopeGoal]] = {}
+    for src, attrs, goal_id, key in rows.all():
+        contribution = (attrs or {}).get("contribution")
+        out.setdefault(src, []).append(
+            ScopeGoal(
+                goal_id=goal_id,
+                key=key,
+                contribution=int(contribution) if contribution is not None else None,
+            )
+        )
+    return out
+
+
 async def read(db: AsyncSession, principal: Principal, scope_id: uuid.UUID) -> PrdScopeReview:
     scope = await _scope(db, scope_id)
     items = await feature_set.scope_items(db, scope.id)
@@ -262,6 +329,8 @@ async def read(db: AsyncSession, principal: Principal, scope_id: uuid.UUID) -> P
     names = await _names(db, [i.decided_by for i in items if i.decided_by])
     base = feature_set.scope_out(scope, items)
     by_id = {i.id: i for i in items}
+    named = await _evidence(db, [e for i in items for e in i.evidence_ids or []])
+    served = await _baseline_goals(db, [i.entity_id for i in items if i.entity_id and not i.goals])
     features = []
     for f in base.features:
         row = by_id[f.id]
@@ -273,6 +342,8 @@ async def read(db: AsyncSession, principal: Principal, scope_id: uuid.UUID) -> P
                 position=row.position,
                 lock_version=row.lock_version,
                 evidence_ids=list(row.evidence_ids or []),
+                evidence=[named[e] for e in row.evidence_ids or [] if e in named],
+                baseline_goals=served.get(row.entity_id, []) if not f.goals else [],
                 edited=is_edited(row),
                 reasons=mine,
                 needs_you=any(not r.answered for r in mine),

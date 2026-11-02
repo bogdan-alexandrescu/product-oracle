@@ -35740,6 +35740,21 @@ export interface components {
             /** Instruction */
             instruction?: string | null;
         };
+        /**
+         * ScopeEvidence
+         * @description A feature's evidence by its source's name (walk-eng-check 6): never a bare id.
+         */
+        ScopeEvidence: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+        };
         /** ScopeFeatureOut */
         ScopeFeatureOut: {
             /**
@@ -36115,6 +36130,16 @@ export interface components {
              * @default []
              */
             evidence_ids: string[];
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["ScopeEvidence"][];
+            /**
+             * Baseline Goals
+             * @default []
+             */
+            baseline_goals: components["schemas"]["ScopeGoal"][];
             /**
              * Edited
              * @default false

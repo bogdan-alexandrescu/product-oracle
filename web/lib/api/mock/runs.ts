@@ -4454,7 +4454,7 @@ const EDIT: SpecFeature = {
   goals: [{ key: "g.early-churn", contribution: 1 }],
   depends_on: ["saved-addresses"],
   confidence: 0.7,
-  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout", ["Changes apply to this order"])],
+  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout and ships in stage 2 of rollout (proposed in stage 3, awaiting the founder, stage 3 Q8.)", ["Changes apply to this order"])],
 };
 const NOTES: SpecFeature = {
   key: "delivery-notes",
@@ -4464,6 +4464,15 @@ const NOTES: SpecFeature = {
   depends_on: ["saved-addresses"],
   confidence: 0.7,
   requirements: [req("delivery-notes-text", "A saved address keeps a note for the courier", ["Notes are 140 characters at most"])],
+};
+/** The goals the baseline links the rows left out to (walk-eng-check 5). */
+const SCOPE_BASELINE_GOALS: Record<string, string[]> = { "address-book-export": ["g.activation"], "address-sharing": ["g.paid-conversion"] };
+/** Evidence by its source's name (walk-eng-check 6). */
+const SCOPE_EVIDENCE: Record<string, { id: string; title: string; url: string | null }[]> = {
+  "saved-addresses": [
+    { id: "58a87cc0-0000-4000-8000-0000000000e1", title: "Checkout interviews, September", url: "https://example.com/research/checkout-interviews" },
+    { id: "58a87cc0-0000-4000-8000-0000000000e2", title: "Support tickets: retyped addresses", url: null },
+  ],
 };
 const EXPORT_OUT = { key: "address-book-export", reason: "not_now" };
 const SHARING_OUT = { key: "address-sharing", reason: "out_of_scope" };
@@ -4523,6 +4532,12 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
     // A row the set leaves out reads as a name ("Address book export"), as the agents titled it.
     if (f.title === f.key) f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, " ");
     f.flags = [...(flags[f.key] ?? [])];
+    // walk-eng-check 5, 6: a row left out keeps the goal it serves in the baseline; evidence by its source's name.
+    const served = SCOPE_BASELINE_GOALS[f.key];
+    f.baseline_goals = served && !f.goals.length ? served.map((key) => ({ key, goal_id: goals.get(key) ?? null, contribution: null })) : [];
+    const ev = SCOPE_EVIDENCE[f.key];
+    f.evidence = ev ?? [];
+    f.evidence_ids = (ev ?? []).map((e) => e.id);
   }
   prepareScope(scope);
   const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;

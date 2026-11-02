@@ -77,7 +77,7 @@ async function openCheckAsLead(page: Page) {
   await login(page, "commenter@example.com");
   await page.goto("/inbox");
   const inboxRow = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "Engineering check" });
-  await expect(inboxRow.getByTestId("checkpoint-label")).toHaveText("Engineering check · guided-onboarding · 3 features · 1 blocking");
+  await expect(inboxRow.getByTestId("checkpoint-label")).toHaveText("Engineering check · Guided onboarding · 3 features · 1 blocking");
   await inboxRow.getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+$/);
   await expect(page.getByTestId("brief-row")).toHaveCount(3);

@@ -581,11 +581,22 @@ class ScopeReviewRequirement(ScopeRequirementOut):
     history: ScopeHistory = ScopeHistory()
 
 
+class ScopeEvidence(BaseModel):
+    """A feature's evidence by its source's name (walk-eng-check 6): never a bare id."""
+
+    id: uuid.UUID
+    title: str
+    url: str | None = None
+
+
 class ScopeReviewFeature(ScopeFeatureOut):
     text: str | None = None
     position: int
     lock_version: int
     evidence_ids: list[uuid.UUID] = []
+    evidence: list[ScopeEvidence] = []
+    # The baseline's goals of a feature the set leaves out, when the set names none for it.
+    baseline_goals: list[ScopeGoal] = []
     edited: bool = False
     reasons: list[ScopeReason] = []
     # Open reasons left (not answered): the row needs a person.

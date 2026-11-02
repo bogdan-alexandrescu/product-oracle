@@ -74,8 +74,8 @@ test("qa-work-20: the run's document reads For <document> on a document that exi
   await page.goto("/runs");
   await page.locator('[data-testid="run-row"][data-document="usage-alerts-v2"]').getByRole("link").first().click();
   const written = header(page).getByTestId("run-document");
-  await expect(written).toHaveText("Usage alerts v2 PRD (written by this run)");
-  await expect(written.locator("xpath=..")).toHaveText(/^For\s*Usage alerts v2 PRD \(written by this run\)$/);
+  await expect(written).toHaveText("Usage alerts v2 (written by this run)");
+  await expect(written.locator("xpath=..")).toHaveText(/^For\s*Usage alerts v2 \(written by this run\)$/);
   // Dark and medium weight, as the linked one: not grey.
   const [a, b] = await Promise.all([written, header(page).getByTestId("run-decision-log")].map((l) => l.evaluate((el) => getComputedStyle(el).fontWeight)));
   expect(a).toBe(b);
