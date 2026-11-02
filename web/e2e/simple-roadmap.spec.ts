@@ -196,6 +196,7 @@ test("the drag shows dates and constraint flags live", async ({ page }) => {
   await page.goto(URL);
   const tl = page.locator('[data-testid="timeline-row"][data-item="alert-mobile"] [data-testid="timeline-bar"]');
   await expect(tl).toBeVisible();
+  await tl.scrollIntoViewIfNeeded();
   // Mobile alert push depends on the rules engine: any span before the rules end is broken.
   const box = (await tl.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
