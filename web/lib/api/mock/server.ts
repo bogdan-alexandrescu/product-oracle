@@ -6589,7 +6589,6 @@ async function route(db: Db, req: Request): Promise<Response> {
               source: lead ? ("engineering" as const) : ("accepted" as const),
             };
           }),
-          milestones: prdMilestones(v),
         },
         me.id,
       );
@@ -6601,52 +6600,6 @@ async function route(db: Db, req: Request): Promise<Response> {
   const refused = audienceRefusal(audience, doc.kind, me.role, sub === "export" ? (q.get("format") ?? "html") : "html");
   if (refused) return json(refused.status, refused.body);
   return exportRoute(db, doc, isAudience(audience) ? { ...v, sections: audienceSections(v.sections, audience, boardItems(db, v)) } : v, sub, q, audience);
-}
-
-/** approved-prd-roadmap: a PRD version's milestones table, as oracle.simple.plan.parse reads it
- * (a Milestone column and no Feature or Goal column; the End day, else the Start day). */
-function prdMilestones(
-  v: VersionRow,
-): { code: string; name: string; date: string }[] {
-  const DAY = /^\d{4}-\d{2}-\d{2}$/;
-  for (const s of v.sections) {
-    const rows = (s.body_md ?? "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("|") && !/^[|:\-\s]+$/.test(l))
-      .map((l) =>
-        l
-          .replace(/^\||\|$/g, "")
-          .split("|")
-          .map((c) => c.trim()),
-      );
-    if (rows.length < 2) continue;
-    const h = rows[0].map((c) => c.toLowerCase());
-    const col = (...w: string[]) =>
-      h.findIndex((c) => w.some((x) => c.startsWith(x)));
-    const code = col("milestone", "code");
-    if (code < 0 || col("feature") >= 0 || col("goal") >= 0) continue;
-    const [name, start, end] = [
-      col("name", "title"),
-      col("start", "from", "begin"),
-      col("end", "finish", "due"),
-    ];
-    const out = rows.slice(1).flatMap((r) => {
-      const m = /M\s*(\d+)/i.exec(r[code] ?? "");
-      const day = [r[end], r[start]].find((x) => DAY.test(x ?? ""));
-      return m && day
-        ? [
-            {
-              code: `M${Number(m[1])}`,
-              name: (name >= 0 && r[name]) || `M${Number(m[1])}`,
-              date: day,
-            },
-          ]
-        : [];
-    });
-    if (out.length) return out;
-  }
-  return [];
 }
 
 /**

@@ -3,8 +3,9 @@ import { expect, test, type Locator, type Page } from "./test";
 
 /**
  * approved-prd-roadmap (the owner's pick: 'Add them as a roadmap draft'): publishing (approving)
- * a PRD version puts its dated items and its milestones (as key dates) on its roadmap's working
- * draft, marked as from the PRD; no run. Simple › Roadmap's PRD filter then lists the PRD and
+ * a PRD version puts its dated items on its roadmap's working draft, marked as from the PRD; no
+ * run. Its milestones are no key dates of the draft's: they show read-only from the PRD
+ * (ah-prd-milestones-once). Simple › Roadmap's PRD filter then lists the PRD and
  * the working draft says how many items came from it, with Review. Driven through the UI
  * against the mock (web/lib/api/mock/server.ts approve, simple-roadmap.ts approvedPrdToDraft):
  * the invented "Visit reminders" PRD, its v1 given derived items for the Alerts roadmap
@@ -141,7 +142,7 @@ for (const [label, use] of [
   test.describe(label, () => {
     test.use(use);
 
-    test("publishing a PRD puts its dated items and milestones on the roadmap's working draft", async ({
+    test("publishing a PRD puts its dated items on the roadmap's working draft, its milestones read-only", async ({
       page,
     }) => {
       await login(page);
@@ -162,7 +163,7 @@ for (const [label, use] of [
       const from = page.getByTestId("draft-from-prd");
       await expect(from).toHaveCount(1);
       await expect(from).toContainText(
-        "2 items and 2 key dates came from Visit reminders (version 1)",
+        "2 items came from Visit reminders (version 1)",
       );
       // The dated items are on the board; the undated one is not.
       await expect(boardCard(page, "reminder-texts")).toBeVisible();
@@ -186,17 +187,18 @@ for (const [label, use] of [
       ).toHaveValue(PRD);
       await expect(page.getByTestId("board-card")).toHaveCount(2);
 
-      // Its milestones are key dates in the draft, noted as from the PRD.
+      // Its milestones are key dates read-only from the PRD, once each; none is the draft's.
       await page.getByTestId("key-dates-open").click();
-      for (const [name, day] of [
-        ["Pilot clinics", "Dec 18"],
-        ["All clinics", "Feb 12"],
+      for (const [name, plain, day] of [
+        ["M1 · Pilot clinics", "Pilot clinics", "Dec 18"],
+        ["M2 · All clinics", "All clinics", "Feb 12"],
       ]) {
         const row = kdRow(page, name);
         await expect(row).toBeVisible();
         await expect(row.getByTestId("key-date-day")).toContainText(day);
-        await expect(row.getByTestId("key-date-in-draft")).toBeVisible();
-        await expect(row).toContainText("From Visit reminders");
+        await expect(row.getByTestId("key-date-from-prd")).toHaveText("From the PRD");
+        await expect(row.getByTestId("key-date-in-draft")).toHaveCount(0);
+        await expect(kdRow(page, plain)).toHaveCount(0);
       }
       await page.screenshot({
         path: test.info().outputPath(`approved-prd-roadmap-${label}.png`),
