@@ -5,7 +5,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * ah-prd-milestones-once (the owner's pick: 'Read-only from the PRD'): publishing (approving) a
  * PRD with two dated milestones adds its items to the roadmap's working draft and no key dates;
  * Simple › Roadmap shows each milestone once, as a read-only key date from the PRD (no Edit, no
- * Remove), in Key dates and on the Timeline. Driven through the UI against the mock
+ * Remove), in Key dates and on every dated format's markers. Driven through the UI against the mock
  * (web/lib/api/mock/server.ts approve, simple-roadmap.ts approvedPrdToDraft): the invented
  * "Visit reminders" PRD, given a dated item for the Alerts roadmap and a milestones table
  * (M1 Pilot clinics ends Dec 18, M2 All clinics ends Feb 12); desktop and phone.
@@ -88,11 +88,15 @@ for (const [label, use] of [
       await page.screenshot({ path: test.info().outputPath(`ah-prd-milestones-once-${label}.png`) });
       await page.getByTestId("key-dates-open").click();
 
-      // The Timeline marks each milestone once.
-      await page.getByTestId("format-timeline").click();
-      for (const [name, plain] of MILESTONES) {
-        await expect(page.locator(`[data-testid="key-date-marker"][data-name="${name}"]`)).toHaveCount(1);
-        await expect(page.locator(`[data-testid="key-date-marker"][data-name="${plain}"]`)).toHaveCount(0);
+      // The Gantt and the Waterfall mark each milestone once, from the PRD; the Timeline (which
+      // draws no key dates over its chart, train AH's build-roadmap) never shows a copy.
+      for (const f of ["gantt", "waterfall", "timeline"] as const) {
+        await page.getByTestId(`format-${f}`).click();
+        await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", f);
+        for (const [name, plain] of MILESTONES) {
+          await expect(page.locator(`[data-testid="key-date-marker"][data-name="${name}"]`)).toHaveCount(f === "timeline" ? 0 : 1);
+          await expect(page.locator(`[data-testid="key-date-marker"][data-name="${plain}"]`)).toHaveCount(0);
+        }
       }
     });
   });
