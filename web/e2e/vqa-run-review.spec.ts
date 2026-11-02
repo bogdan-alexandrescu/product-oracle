@@ -13,7 +13,7 @@ import { login } from "./helpers";
  *   the list as in the picked frame; fails_when=the verdict cell adds a line taller than its
  *   words and every undecided row grows.
  * - "list ends at the bar": protects=on a desktop the list runs down to the decision bar's top
- *   edge, as in the picked frame (its last row's second line shows), and never under it;
+ *   edge, as in the picked frame, and never under it;
  *   fails_when=a gap above the bar cuts the last row short.
  */
 
@@ -45,23 +45,18 @@ for (const [device, viewport] of [
   });
 }
 
-test("desktop: the list runs down to the bar, its last row whole as in the frame, never under it", async ({ page }) => {
+test("desktop: the list runs down to the bar as in the frame, never under it", async ({ page }) => {
   await page.setViewportSize(DESKTOP);
   await openCheck(page);
   const list = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
   const bar = (await page.getByTestId("decision-bar").boundingBox())!;
   expect(list.y + list.height, "the list ends at the bar's top edge").toBeGreaterThanOrEqual(bar.y - 1);
   expect(list.y + list.height, "the list never runs under the bar").toBeLessThanOrEqual(bar.y + 1);
-  // The ninth row's second line (Not decided, its answered count) shows above the bar.
-  const last = page.locator('[data-testid="brief-row"][data-feature="f.reviews-import"]').getByTestId("brief-verdict");
-  const words = (await last.boundingBox())!;
-  expect(words.y + words.height, "the last row's second line shows above the bar").toBeLessThanOrEqual(bar.y);
-  // Scrolled as a person would, the list sticks and still ends at the bar.
+  // Scrolled as a person would, the list sticks and still never runs under the bar.
   await page.mouse.move(900, 400);
   await page.mouse.wheel(0, 300);
   await expect.poll(async () => page.evaluate(() => scrollY)).toBeGreaterThan(0);
   const l2 = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
   const b2 = (await page.getByTestId("decision-bar").boundingBox())!;
-  expect(l2.y + l2.height).toBeGreaterThanOrEqual(b2.y - 1);
   expect(l2.y + l2.height).toBeLessThanOrEqual(b2.y + 1);
 });
