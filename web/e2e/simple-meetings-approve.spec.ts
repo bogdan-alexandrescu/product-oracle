@@ -1,5 +1,5 @@
 import { MINUTES_LATER_MS, MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
-import { login } from "./helpers";
+import { joinMeeting, login } from "./helpers";
 import { expect, test, type BrowserContext, type Page } from "./test";
 
 /**
@@ -48,8 +48,11 @@ async function flags(context: BrowserContext, value: string) {
   await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_MEETINGS_KEY, value] as const);
 }
 
-/** `attendee`: the one ticked besides the presenter (qa-simple-decide-35); never the reviewer a test needs absent. */
-async function startWithAnEdit(page: Page, absent?: string, attendee = "Theo Brandt") {
+/**
+ * `attendee`: the one ticked besides the presenter (qa-simple-decide-35); never the reviewer a test needs absent.
+ * `join`: Priya Raman, the PRD's invited reviewer, presses Join (walkc-meeting-r2 review: only joined attendees are present).
+ */
+async function startWithAnEdit(page: Page, absent?: string, attendee = "Theo Brandt", join = false) {
   await login(page);
   await page.goto("/simple/prds/guided-setup");
   await page.getByRole("button", { name: "Start a review meeting" }).click();
@@ -57,6 +60,10 @@ async function startWithAnEdit(page: Page, absent?: string, attendee = "Theo Bra
   await page.getByRole("dialog", { name: "Start a review" }).getByRole("checkbox", { name: attendee }).check();
   await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+  if (join) {
+    await joinMeeting(page, "approver@example.com");
+    await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+  }
   if (absent) {
     // qa-simple-decide-29: on a phone the attendees fold into one row.
     if (await page.getByTestId("meeting-people-toggle").isVisible()) await page.getByTestId("meeting-people-toggle").click();
@@ -130,8 +137,8 @@ for (const phone of [false, true]) {
 
       test("Approve with a required section's reviewer absent waits on that person", async ({ page, context }) => {
         await flags(context, "section-reviewer");
-        // Theo Brandt, the section's reviewer, is not in the meeting; Priya Raman (the PRD's reviewer) is.
-        await startWithAnEdit(page, undefined, "Priya Raman");
+        // Theo Brandt, the section's reviewer, is not in the meeting; Priya Raman (the PRD's reviewer) is, and has joined.
+        await startWithAnEdit(page, undefined, "Priya Raman", true);
         await expect(page.getByTestId("approved-banner")).toHaveText(
           "Approved in Review: Guided setup · not yet published: Waiting on Theo Brandt's approval",
         );
@@ -145,7 +152,7 @@ for (const phone of [false, true]) {
 
       test("Approve held by a required section with nobody to approve it says so on the one-pager", async ({ page, context }) => {
         await flags(context, "section-needs-reviewer");
-        await startWithAnEdit(page);
+        await startWithAnEdit(page, undefined, "Theo Brandt", true);
         await expect(page.getByTestId("approved-banner")).toHaveText(
           "Approved in Review: Guided setup · not yet published: Sections What we will build need a reviewer",
         );

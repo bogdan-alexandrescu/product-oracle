@@ -153,7 +153,7 @@ def _move_kw(
     card = chat._kw(f"Move {label(e)}{how} to {span(start, end)}", "move_dates", e,
                     {"item_id": str(e.row.id)}, chat._dates(e), {"start_date": s, "end_date": en},
                     {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
-                     "end_date": en, "roadmap": True})  # fmt: skip
+                     "end_date": en, "roadmap": True, "current": chat._current(e)})  # fmt: skip
     if shift is not None:
         # A move by a span (as chat._b_move and the mock's talkMove): offered again on
         # newer dates, it moves from those (chat.rebase).

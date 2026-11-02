@@ -59613,6 +59613,7 @@
               "open",
               "applied",
               "proposed",
+              "declined",
               "discarded",
               "undone"
             ],
@@ -59795,6 +59796,32 @@
           "can_undo": {
             "type": "boolean",
             "title": "Can Undo",
+            "default": false
+          },
+          "asks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asks",
+            "default": []
+          },
+          "asks_outside": {
+            "type": "boolean",
+            "title": "Asks Outside",
+            "default": false
+          },
+          "asks_with_dependents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asks With Dependents",
+            "default": []
+          },
+          "asks_with_dependents_outside": {
+            "type": "boolean",
+            "title": "Asks With Dependents Outside",
             "default": false
           }
         },
@@ -113993,6 +114020,11 @@
           "present": {
             "type": "boolean",
             "title": "Present",
+            "default": true
+          },
+          "joined": {
+            "type": "boolean",
+            "title": "Joined",
             "default": true
           }
         },

@@ -1,5 +1,5 @@
 import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
-import { login, signOut } from "./helpers";
+import { joinMeeting, login, signOut } from "./helpers";
 import { expect, test, type BrowserContext, type Page } from "./test";
 
 /**
@@ -197,6 +197,9 @@ for (const phone of [false, true]) {
         const sheet = page.getByRole("dialog", { name: "Start a review" });
         await sheet.getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
+        await joinMeeting(page, "approver@example.com");
+        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         const onePager = page.getByTestId("meeting-screen").getByTestId("one-pager");
         await expect(onePager).toContainText("Version 3");
         await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
@@ -224,6 +227,9 @@ for (const phone of [false, true]) {
         await page.goto("/simple/prds/guided-setup");
         await page.getByRole("button", { name: "Start a review meeting" }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
+        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
+        await joinMeeting(page, "approver@example.com");
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
         await page.getByLabel("New wording for").fill("A checklist that names the next step");

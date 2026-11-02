@@ -241,7 +241,7 @@ async def test_every_action_is_a_meeting_decision(client):
         "Proposed: Moved Change_Horizon A to Next",
         f"Accepted {who}'s proposal: Moved Change_Horizon A to Next",
         "Proposed: Cut Cut A",
-        f"Declined {who}'s proposal: Cut Cut A",
+        f"Declined {who}'s proposal: cut Cut A",
         "Undone: Renamed Edit_Title A",
     ]
     assert "Comment: Keep the beta" not in titles
@@ -312,6 +312,9 @@ async def test_approve_absent_reviewer_then_publish(client):
     assert [a["present"] for a in r.json()["attendees"] if a["id"] == uid(w, "reviewer2")] == [
         False
     ]
+    # walkc-meeting-r2 review: the present reviewer has joined (an invited one is not present).
+    r = await client.post(f"{MEETINGS}/{m['id']}/join", headers=w.ctx.as_("approver"))
+    assert r.status_code == 200, r.text
     assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
     for who in ("approver", "commenter"):
         r = await client.post(f"{MEETINGS}/{m['id']}/approve", headers=w.ctx.as_(who))

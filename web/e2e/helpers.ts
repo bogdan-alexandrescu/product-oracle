@@ -97,6 +97,29 @@ export async function signOut(page: Page) {
 }
 
 /**
+ * walkc-meeting-r2 review: `email` opens the live meeting on `page` and presses Join (only
+ * joined attendees count as present for the meeting's Approve), then `back` signs in again
+ * and reopens it. The meeting screen covers the rail's account menu, so each sign-out is
+ * from Home on a desktop-wide page.
+ */
+export async function joinMeeting(page: Page, email: string, back: string = ADMIN.email) {
+  const url = page.url();
+  const size = page.viewportSize()!;
+  await page.setViewportSize({ width: 1366, height: 820 });
+  await page.goto("/home");
+  await signOut(page);
+  await login(page, email);
+  await page.goto(url);
+  await page.getByRole("button", { name: "Join", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Join", exact: true })).toHaveCount(0);
+  await page.goto("/home");
+  await signOut(page);
+  await login(page, back);
+  await page.setViewportSize(size);
+  await page.goto(url);
+}
+
+/**
  * Picks `zone` ("Asia/Tokyo") in Settings › Company's time zone picker (a combobox,
  * qa-settings-12): types its city and clicks its option. `scope`: the page or the panel.
  */

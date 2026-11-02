@@ -1619,8 +1619,14 @@ def problem_message(
 
 
 def problem_refs(mark: Mark, prd_slug: str | None) -> dict[str, str]:
-    """The ids an agent needs about a marked date (the message names none of them)."""
-    return {"date": mark.text, **({"prd": prd_slug} if prd_slug else {})}
+    """The ids an agent needs about a marked date (the message names none of them), and
+    the date as people read it (``shown``: "Nov 30, 2026", never "2026-11-30"; as written,
+    with the days it reads as, when it reads as more than one day)."""
+    return {
+        "date": mark.text,
+        "shown": shown(mark) + _reads_as(mark),
+        **({"prd": prd_slug} if prd_slug else {}),
+    }
 
 
 SOURCES_NOT_LAST = (

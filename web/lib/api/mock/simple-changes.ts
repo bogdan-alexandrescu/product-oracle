@@ -185,9 +185,49 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   return decides(db, ctx, c.target.item_id);
 }
 
+/** walkc-meeting: mark a proposal as made in a meeting (its session a meeting's). Kept in the
+ * company's own stored db (`meeting_proposals`), so it survives a reload, is the same in every
+ * tab, and goes with the company when the scenario changes or the mock data is reset. */
+export function markMeetingProposal(db: SimpleDb, id: string): void {
+  const ids = (db.meeting_proposals ??= []);
+  if (!ids.includes(id)) ids.push(id);
+}
+
+/** walkc-meeting (changes.routed_to): who a proposal on this item would go to now. */
+export function proposalRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemId: string): string[] {
+  const key = keyOf(db, itemId);
+  if (!key) return ctx.owners;
+  const ids = deciderIds(db, seed(db, key), ctx.roles);
+  return ids.length ? ids : ctx.owners;
+}
+
+/** walkc-meeting (changes.meeting_deciders): the attendees who may decide every one of these
+ * items (service.can_decide: an owner, the item's or roadmap's decider, else its track owner
+ * while an approver), in the meeting's order; no known item: nobody. */
+function meetingDeciders(db: SimpleDb, attendees: string[], ctx: Pick<SimpleChangesCtx, "roles">, itemIds: string[]): string[] {
+  const keys = itemIds.map((id) => keyOf(db, id)).filter((k): k is string => !!k);
+  if (!keys.length) return [];
+  return attendees.filter((i, n) => {
+    const role = ctx.roles?.[i];
+    return attendees.indexOf(i) === n && !!role && keys.every((k) => canDecideItem(db, seed(db, k), { id: i, role }));
+  });
+}
+
+/** walkc-meeting (changes.meeting_route): in a meeting a proposal on these items goes to its
+ * deciders (those of `route` in it, else every attendee who may decide them all); only when
+ * nobody in it may, to `route`. */
+export function meetingRoute(db: SimpleDb, attendees: string[], ctx: Pick<SimpleChangesCtx, "roles">, itemIds: string[], route: string[]): { ids: string[]; here: boolean } {
+  const inside = meetingDeciders(db, attendees, ctx, itemIds);
+  const here = route.filter((i) => inside.includes(i));
+  const ids = here.length ? here : inside;
+  return ids.length ? { ids, here: true } : { ids: route, here: false };
+}
+
 /** changes.current_route: who decides an open proposal now; else its stored route. */
 function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c: Change): string[] {
   if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op)) return c.routed_to;
+  // walkc-meeting: a proposal made in a meeting stays with the meeting's deciders.
+  if (db.meeting_proposals?.includes(c.id) && c.routed_to.length) return c.routed_to;
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) {
     const decider = db.deciders?.[slugOf(c.target.roadmap_id) ?? ""];
     return decider ? [decider] : ctx.owners;
@@ -200,7 +240,7 @@ function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c:
 }
 
 /** changes.cut_route: the deciders every item of a cut with its dependents shares, else the company's owners. */
-function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
+export function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
   let common: string[] | null = null;
   for (const id of itemIds) {
     const key = keyOf(db, id);

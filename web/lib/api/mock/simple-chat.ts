@@ -21,7 +21,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, stableUuid } from "./ids";
 import { changePhrase } from "./simple-change-words";
-import { CUT_ALL, cutDependents, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
+import { CUT_ALL, cutDependents, cutRoute, markMeetingProposal, meetingRoute, proposalRoute, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
@@ -35,9 +35,13 @@ function seenDates(i: Item): { start: string | null; end: string | null } {
   const own = (d: Item["start"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
   return { start: own(i.start), end: own(i.end) };
 }
+/** walkc-meeting r2 (5b): the dates the item shows now and their source (chat._current): a move card's Before. */
+function currentDates(i: Item): { start_date: string; end_date: string; source: Item["source"] } {
+  return { start_date: i.start.date, end_date: i.end.date, source: i.source };
+}
 type Role = Schemas["Me"]["role"];
 type Preview =
-  | { kind: "dates"; item_id: string; start_date: string; end_date: string; shift?: [number, number] }
+  | { kind: "dates"; item_id: string; start_date: string; end_date: string; shift?: [number, number]; current?: ReturnType<typeof currentDates> }
   | { kind: "horizon"; item_id: string; horizon: string }
   | { kind: "title"; item_id: string; title: string }
   | { kind: "milestone"; item_id: string; name: string; date: string }
@@ -405,7 +409,8 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       : build();
   const card = (summary: string, op: string, item: Item | null, target: Values, before: Values, after: Values, preview: Preview = null, flow: Schemas["SimpleFlow"] | null = null): Reply => ({
     kind: "cards",
-    body: "Here is the change. Preview it, then apply or discard it.",
+    // walkc-meeting r2 (5g, chat.HERE_PLAIN): a card with no Preview is not asked to be previewed.
+    body: preview ? "Here is the change. Preview it, then apply or discard it." : "Here is the change. Apply or discard it.",
     cards: [{ op, target, before, after, summary, item_id: item?.id ?? null, item_title: item?.title ?? null, preview, flow, fixes: [] }],
   });
   const stored = (i: Item) => {
@@ -413,7 +418,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     return { start_date: s.start, end_date: s.end };
   };
   const move = (i: Item, start: string, end: string) =>
-    card(`Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, "move_dates", i, { item_id: i.id }, stored(i), { start_date: start, end_date: end }, { kind: "dates", item_id: i.id, start_date: start, end_date: end });
+    card(`Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, "move_dates", i, { item_id: i.id }, stored(i), { start_date: start, end_date: end }, { kind: "dates", item_id: i.id, start_date: start, end_date: end, current: currentDates(i) });
   const length = (i: Item) => Math.round((msOf(i.end.date) - msOf(i.start.date)) / DAY);
 
   if ((m = /^move (.+) to (now|next|later)$/i.exec(t))) {
@@ -484,7 +489,21 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     });
   }
   if ((m = /^add a task ["'“‘](.+?)["'”’] to (.+?)(?: for (.+?))?(?: by ([a-z]+ \d{1,2}))?$/i.exec(t))) {
-    const [, title, x, who, by] = m;
+    const [, title, said, saidWho, by] = m;
+    // walkc-meeting (chat._task_item): an item's own name may hold " for ": the longest known name wins.
+    let x: string = said;
+    let who: string | undefined = saidWho;
+    if (saidWho) {
+      const parts = `${said} for ${saidWho}`.split(" for ");
+      const titles = new Set(items.map((i) => i.title.toLowerCase()));
+      for (let k = parts.length; k > 0; k--) {
+        if (titles.has(parts.slice(0, k).join(" for ").toLowerCase())) {
+          x = parts.slice(0, k).join(" for ");
+          who = parts.slice(k).join(" for ") || undefined;
+          break;
+        }
+      }
+    }
     return change(() => {
       const i = findItem(items, x);
       if (!isItem(i)) return i;
@@ -731,7 +750,7 @@ function moveDraft(db: SimpleDb, i: Item, start: string, end: string, shift?: [n
     op: "move_dates", target: { item_id: i.id }, before: { start_date: s.start, end_date: s.end }, after: { start_date: start, end_date: end },
     summary: `Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, item_id: i.id, item_title: i.title,
     // A move by a span carries it (as the API's chat._b_move): offered again on newer dates, it moves from those.
-    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end, ...(shift ? { shift } : {}) }, flow: null, fixes: [],
+    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end, ...(shift ? { shift } : {}), current: currentDates(i) }, flow: null, fixes: [],
   };
 }
 
@@ -1344,6 +1363,9 @@ function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): strin
 
 function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   const check = c.flag !== undefined ? { flags: c.flag ? [c.flag] : [] } : asIf(db, c);
+  // walkc-meeting (chat.cards_out): an open card's fixes are checked again on each read, on
+  // the working state (the meeting's applied changes), never kept from when it was made.
+  if (c.status === "open" && "fixes" in check) c.fixes = check.fixes;
   const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, decided_by: _by, ...rest } = c;
   void _undo;
   void _by;
@@ -1357,7 +1379,34 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   // Review major (chat.cards_out): "Cut it and its dependents" applies only when the reader decides every item it cuts.
   const allMine = [c.item_id, ...waiting.map((i) => i.id)].every((id) => !!items.find((i) => i.id === id)?.can_decide);
   const may_with_dependents = waiting.length && may.may ? (allMine ? "apply" : "propose") : null;
-  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
+  // walkc-meeting (chat.cards_out): who Propose asks, and who a proposed card went to.
+  const m = meetingOf(chat, c);
+  let asks: string[] = [];
+  let here = true;
+  if (may.may === "propose" && c.item_id && c.op !== "add_item") {
+    const route = proposalRoute(db, ctx, c.item_id);
+    ({ ids: asks, here } = m ? meetingRoute(db, m.attendee_ids, ctx, [c.item_id], route) : { ids: route, here: true });
+  } else if (c.status === "proposed" && c.change_id) {
+    asks = db.changes?.find((x) => x.id === c.change_id)?.routed_to ?? [];
+  }
+  // walkc-meeting review (chat.cards_out): who the cut with its dependents asks, by every item it cuts.
+  let asksAll: string[] = [];
+  let hereAll = true;
+  if (may_with_dependents === "propose" && c.item_id) {
+    const cut = [c.item_id, ...waiting.map((i) => i.id)];
+    const route = cutRoute(db, ctx, cut);
+    ({ ids: asksAll, here: hereAll } = m ? meetingRoute(db, m.attendee_ids, ctx, cut, route) : { ids: route, here: true });
+  }
+  const asksOut = {
+    asks: asks.map((i) => ctx.names[i] ?? "someone"),
+    asks_outside: !here,
+    asks_with_dependents: asksAll.map((i) => ctx.names[i] ?? "someone"),
+    asks_with_dependents_outside: !hereAll,
+  };
+  // walkc-meeting r2 (chat.cards_out): a proposed card whose proposal was declined since reads as declined, by whom and when.
+  const no = c.status === "proposed" && c.change_id ? db.changes?.find((x) => x.id === c.change_id && x.status === "declined") : undefined;
+  const declined = no ? { status: "declined" as const, decided_by_name: no.decided_by ? (ctx.names[no.decided_by] ?? "someone") : null, decided_at: no.decided_at ?? null } : {};
+  return { change_words: null, correct: null, ...rest, ...declined, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -1505,6 +1554,17 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     return res;
   }
   const result = (await res.json()) as Schemas["SimpleChangeResult"];
+  const inMeeting = meetingOf(chat, c);
+  if (inMeeting && result.change.status === "proposed") {
+    // walkc-meeting (changes.create): a proposal made in a meeting goes to its deciders.
+    const stored = db.changes?.find((x) => x.id === result.change.id);
+    // The items it is on (changes.create: the cut's items, else its own item; none for an addition).
+    const on = result.change.op === CUT_ALL ? Object.keys(result.change.after ?? {}) : typeof result.change.target.item_id === "string" ? [result.change.target.item_id] : [];
+    const routed = meetingRoute(db, inMeeting.attendee_ids, ctx, on, result.change.routed_to).ids;
+    if (stored) stored.routed_to = routed;
+    result.change.routed_to = routed;
+    markMeetingProposal(db, result.change.id);
+  }
   afterApplied(db, c, result);
   if (withDependents) {
     const t = result.change.target as Record<string, unknown>;

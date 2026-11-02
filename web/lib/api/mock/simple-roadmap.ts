@@ -91,6 +91,9 @@ interface SimpleDb {
   /** Simple S3a (./simple-changes.ts): sessions and changes. */
   sessions?: Schemas["SimpleSessionOut"][];
   changes?: Schemas["SimpleChangeOut"][];
+  /** walkc-meeting (./simple-changes.ts markMeetingProposal): the ids of proposals made in a
+   * meeting, which stay with the meeting's deciders (changes.current_route). */
+  meeting_proposals?: string[];
   /** Simple S3b (./simple-changes.ts): working drafts, each with its roadmap's published items. */
   drafts?: MockDraft[];
   /** walkb-roadmap review 5a: roadmaps built from a PRD with no approved version yet (their drafts' `published` is false). */

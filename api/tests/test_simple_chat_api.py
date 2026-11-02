@@ -390,6 +390,9 @@ async def test_preview_then_discard_leaves_nothing(client):
     ctx = await make_people()
     w = await World(ctx).build()
     card = (await say(client, ctx, "owner", "move Ledger v2 to March 3"))["cards"][0]
+    # walkc-meeting r2 (5b): with the dates the item has now and their source.
+    current = card["preview"].pop("current")
+    assert current["start_date"] == "2026-10-01" and current["source"] == "typed"
     assert card["preview"] == {"kind": "dates", "item_id": w.ids["Ledger v2"],
                                "start_date": "2027-03-03", "end_date": "2027-04-17"}  # fmt: skip
     # The constraint check as if applied: Bulk import would start before Ledger v2 ends.

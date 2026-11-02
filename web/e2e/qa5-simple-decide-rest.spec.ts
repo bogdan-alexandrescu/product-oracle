@@ -1,4 +1,4 @@
-import { login } from "./helpers";
+import { joinMeeting, login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -103,6 +103,9 @@ for (const phone of [false, true]) {
 
     test("qa4-simple-decide-25: once published, the version line moves on and the margin says where the edits went", async ({ page }) => {
       await startReview(page);
+      // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
+      await joinMeeting(page, "approver@example.com");
+      await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
       const meta = page.getByTestId("one-pager-meta");
       await expect(meta).toContainText(/[Vv](ersion )?3 · Oct 20, 2026/);
       await editLine(page);
@@ -119,8 +122,11 @@ for (const phone of [false, true]) {
 
     test("review: a later meeting that published nothing does not say its edits were published", async ({ page }) => {
       test.skip(phone, "the margin is a desktop column");
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
       await startReview(page);
+      // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
+      await joinMeeting(page, "approver@example.com");
+      await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
       await editLine(page);
       await tap(page.getByRole("button", { name: "Approve and publish one-pager edits (1)" }));
       await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();

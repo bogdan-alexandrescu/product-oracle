@@ -18007,7 +18007,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "open" | "applied" | "proposed" | "discarded" | "undone";
+            status: "open" | "applied" | "proposed" | "declined" | "discarded" | "undone";
             /** May */
             may: ("apply" | "propose") | null;
             /** Why Not */
@@ -18054,6 +18054,26 @@ export interface components {
              * @default false
              */
             can_undo: boolean;
+            /**
+             * Asks
+             * @default []
+             */
+            asks: string[];
+            /**
+             * Asks Outside
+             * @default false
+             */
+            asks_outside: boolean;
+            /**
+             * Asks With Dependents
+             * @default []
+             */
+            asks_with_dependents: string[];
+            /**
+             * Asks With Dependents Outside
+             * @default false
+             */
+            asks_with_dependents_outside: boolean;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
@@ -37750,6 +37770,11 @@ export interface components {
              * @default true
              */
             present: boolean;
+            /**
+             * Joined
+             * @default true
+             */
+            joined: boolean;
         };
         /**
          * SimpleChangeConflict

@@ -1388,7 +1388,8 @@ class SimpleSuggestionRejectIn(BaseModel):
 
 # --------------------------------------------------------------------------- S9 chat
 
-CardStatus = Literal["open", "applied", "proposed", "discarded", "undone"]
+# "declined" is read, never stored: a proposed card whose proposal was declined (chat.cards_out).
+CardStatus = Literal["open", "applied", "proposed", "declined", "discarded", "undone"]
 ChangeMode = Literal["everyone", "presenter", "named"]
 
 
@@ -1458,6 +1459,15 @@ class ChatCardOut(BaseModel):
     may_with_dependents: Literal["apply", "propose"] | None = None
     # qa4-simple-decide-1: an applied card the reader may undo (Apply's own rule).
     can_undo: bool = False
+    # walkc-meeting: who Propose asks (an open card the reader proposes), or who a proposed
+    # card went to, by name; in a meeting its deciders. ``asks_outside``: nobody in the
+    # meeting may decide, so Propose asks these people outside it.
+    asks: list[str] = []
+    asks_outside: bool = False
+    # walkc-meeting review: who "Propose: cut it and its dependents" asks, by every item
+    # it cuts (changes.cut_route), and whether that is outside the meeting.
+    asks_with_dependents: list[str] = []
+    asks_with_dependents_outside: bool = False
 
 
 class ChatChoiceOut(BaseModel):
@@ -1615,7 +1625,10 @@ class SimpleAttendee(BaseModel):
     name: str
     # What the person is to the PRD: decider, required reviewer, owner (its tracks').
     roles: list[Literal["decider", "reviewer", "owner", "presenter"]] = []
+    # The presenter's roll call: false once marked away.
     present: bool = True
+    # walkc-meeting r2 (5a): false while an invited attendee has not pressed Join.
+    joined: bool = True
 
 
 class SimpleDecidedFlow(BaseModel):
