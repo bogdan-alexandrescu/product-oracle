@@ -238,5 +238,70 @@ for (const size of SIZES) {
       await expect(page.getByTestId("version-body")).toContainText("## Support readiness {#support-readiness}");
       expect(await noSideScroll(page)).toBe(true);
     });
+
+    test("review: File as request asks before Escape throws away an edited body", async ({ page }) => {
+      // protects=in a form filled from a found item, editing What it is and why and pressing
+      // Escape asks "Discard your changes?"; Keep editing keeps the words; fails_when=the edit
+      // is thrown away without asking; no_claim=the blank New request form (requests-new.spec).
+      await login(page);
+      await page.goto("/requests");
+      const found = page.getByTestId("found-in-sources");
+      await found.getByTestId("found-item").filter({ hasText: "Reorder last week's basket" }).getByRole("button", { name: "File as request" }).click();
+      const dialog = page.getByRole("dialog", { name: "New request" });
+      const body = dialog.getByLabel("What it is and why");
+      await body.fill("They want to reorder a past basket from the order page.");
+      await body.press("Escape");
+      await expect(dialog.getByTestId("dialog-discard")).toContainText("Discard your changes?");
+      await dialog.getByRole("button", { name: "Keep editing" }).click();
+      await expect(body).toHaveValue("They want to reorder a past basket from the order page.");
+    });
+
+    test("review: Back to fields asks before it throws away Markdown edits", async ({ page }) => {
+      // protects=after typing in Edit as Markdown, Back to fields asks "Discard your changes?";
+      // Keep editing keeps the Markdown, Discard shows the fields; unchanged Markdown goes back
+      // without asking; fails_when=the edits are dropped without asking; no_claim=leaving the page.
+      await login(page);
+      await page.goto("/settings/templates/new");
+      await page.getByRole("button", { name: "Edit as Markdown" }).click();
+      await page.getByRole("button", { name: "Back to fields" }).click();
+      await expect(page.getByTestId("template-section")).toHaveCount(3);
+
+      await page.getByRole("button", { name: "Edit as Markdown" }).click();
+      const md = page.getByLabel("Body", { exact: true });
+      await md.fill(`${await md.inputValue()}\nA line typed by hand.`);
+      await page.getByRole("button", { name: "Back to fields" }).click();
+      const ask = page.getByRole("alertdialog", { name: "Discard your changes?" });
+      await expect(ask).toBeVisible();
+      await ask.getByRole("button", { name: "Keep editing" }).click();
+      await expect(md).toHaveValue(/A line typed by hand\./);
+      await page.getByRole("button", { name: "Back to fields" }).click();
+      await ask.getByRole("button", { name: "Discard", exact: true }).click();
+      await expect(page.getByTestId("template-section")).toHaveCount(3);
+    });
+
+    test("review: a one-letter name cannot make a template", async ({ page }) => {
+      // protects=a name whose key would be one letter keeps Create template off and says why;
+      // two letters turn it on; fails_when=Create turns on and the save is refused; no_claim=keys taken.
+      await login(page);
+      await page.goto("/settings/templates/new");
+      const create = page.getByRole("button", { name: "Create template" });
+      await page.getByTestId("template-name").fill("A");
+      await expect(create).toBeDisabled();
+      await expect(page.locator("#create-template-reason")).toHaveText("Make the name at least two letters or digits long.");
+      await page.getByTestId("template-name").fill("Ab");
+      await expect(create).toBeEnabled();
+    });
+
+    test("review: a guide with --> stays inside its comment", async ({ page }) => {
+      // protects=a guide that holds "-->" is written into the template as one comment, so none of
+      // its words land in the body; fails_when=the arrow closes the comment early; no_claim=the API's check.
+      await login(page);
+      await page.goto("/settings/templates/new");
+      await page.getByLabel("Section 1 guide").fill("Old flow --> new flow, in the customer's words.");
+      await page.getByRole("button", { name: "Edit as Markdown" }).click();
+      const md = page.getByLabel("Body", { exact: true });
+      await expect(md).toHaveValue(/<!-- Old flow -> new flow, in the customer's words\. -->/);
+      expect((await md.inputValue()).match(/-->/g)).toHaveLength(4);
+    });
   });
 }
