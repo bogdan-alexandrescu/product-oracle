@@ -1129,6 +1129,8 @@ export function SimpleRoadmap() {
           {pickers}
         </div>
       )}
+      {/* The Timeline always draws its rows under their goal (rowsOf), so it offers no Group by. */}
+      {format !== "timeline" && (
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
         Group by
         <SegmentedControl<Lane>
@@ -1144,16 +1146,11 @@ export function SimpleRoadmap() {
           ]}
         />
       </span>
+      )}
       {format === "gantt" && !phone && (
         <span className="flex items-center gap-1.5 text-sm text-text2">
           Scale
           {scaleSwitch}
-        </span>
-      )}
-      {/* timeline-overlap B2: the Group by's line says how the lanes stack. */}
-      {format === "timeline" && !phone && (
-        <span className="ml-auto text-[15px] text-text-faint" data-testid="lanes-hint">
-          Pieces stack inside a lane when they run at once
         </span>
       )}
     </div>
