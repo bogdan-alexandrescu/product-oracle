@@ -16,7 +16,7 @@ import oracle.main  # noqa: F401 - registers the lanes' checks
 from oracle import company_time
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap.models import DraftRoadmap, RoadmapItem, ScheduleBasis
-from oracle.simple.models import SimpleDraft
+from oracle.simple.models import RoadmapKeyDate, SimpleDraft
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 
@@ -210,3 +210,135 @@ async def test_reapproval_replaces_the_prds_items_rather_than_adding_them_again(
     again = await read(client, ctx)
     assert sorted(i["key"] for i in again["items"]) == ["offline-sync", "route-search"]
     assert len(again["key_dates"]) == 2
+
+
+CHANGES = "/v1/simple/changes"
+
+
+async def change(client, ctx: Ctx, op: str, target: dict, before: dict, after: dict) -> dict:
+    r = await client.post(CHANGES, json={"op": op, "target": target, "before": before,
+                                         "after": after}, headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    return r.json()["change"]
+
+
+async def retitle(client, ctx: Ctx, item: dict, title: str) -> dict:
+    return await change(client, ctx, "edit_title", {"item_id": item["id"]},
+                        {"title": item["title"]}, {"title": title})  # fmt: skip
+
+
+async def source(client, ctx: Ctx, roadmap: uuid.UUID) -> dict:
+    drafts = (await client.get(DRAFTS, headers=ctx.as_("owner"))).json()
+    [d] = [d for d in drafts if d["document"]["id"] == str(roadmap)]
+    return d
+
+
+async def version(ctx: Ctx, ids: dict, n: int, launch_end: str, items: list[dict]) -> None:
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.get(Document, ids["prd"])
+        rm = await s.get(Document, ids["roadmap"])
+        pv = await _version(s, prd, n, _body(n, launch_end))
+        await _items(s, prd, pv, rm, items)
+        await s.commit()
+
+
+async def test_reapproval_keeps_the_owners_edits_to_the_prds_items(client):
+    """protects=approving the PRD again keeps what the owner changed in the draft on its
+    items (an added item's title, a published item's title), and the change that did it
+    still undoes; fails_when=re-approval deletes the edited added item (its change left
+    pointing at nothing) or drops the owner's edit to a published item."""
+    ctx, ids = await world()
+    await approve(client, ctx, 1)
+    await version(ctx, ids, 2, "2027-02-05", [
+        {"key": "offline-sync", "title": "Offline sync",
+         "start": date(2026, 11, 9), "end": date(2026, 12, 22)},
+        {"key": "route-search", "title": "Route search"},
+    ])  # fmt: skip
+    await approve(client, ctx, 2)
+    items = by_key(await read(client, ctx))
+    edited = await retitle(client, ctx, items["route-search"], "Route search by trail")
+    await retitle(client, ctx, items["offline-sync"], "Offline sync everywhere")
+    await approve(client, ctx, 2)
+    out = await read(client, ctx)
+    items = by_key(out)
+    assert sorted(i["key"] for i in out["items"]) == ["offline-sync", "route-search"]
+    assert items["route-search"]["title"] == "Route search by trail"
+    assert items["offline-sync"]["title"] == "Offline sync everywhere"
+    assert items["offline-sync"]["end"]["date"] == "2026-12-22"
+    d = await source(client, ctx, ids["roadmap"])
+    assert [s["items"] for s in d["from_prds"]] == [2]
+    r = await client.post(f"{CHANGES}/{edited['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert by_key(await read(client, ctx))["route-search"]["title"] == "Route search"
+
+
+async def test_first_approval_keeps_the_owners_earlier_edit_to_a_published_item(client):
+    """protects=a published item of the PRD the owner already changed in the draft keeps
+    the owner's change when the PRD is approved; fails_when=approval writes the PRD's title
+    and dates over it."""
+    ctx, ids = await world()
+    items = by_key(await read(client, ctx))
+    await retitle(client, ctx, items["offline-sync"], "Offline sync everywhere")
+    await approve(client, ctx, 1)
+    items = by_key(await read(client, ctx))
+    assert items["offline-sync"]["title"] == "Offline sync everywhere"
+    assert items["offline-sync"]["end"]["date"] == "2026-12-15"
+    assert set(items) == {"offline-sync", "route-search", "trip-reports"}
+
+
+async def test_the_banner_counts_only_what_is_still_in_the_draft(client):
+    """protects=the draft's 'came from <PRD>' counts leave out an added item the owner cut
+    and a key date the owner removed; fails_when=the counts stay as at approval."""
+    ctx, ids = await world()
+    await approve(client, ctx, 1)
+    out = await read(client, ctx)
+    trips = by_key(out)["trip-reports"]
+    await change(client, ctx, "cut", {"item_id": trips["id"]}, {"cut": False}, {"cut": True})
+    [launch] = [k for k in out["key_dates"] if k["name"] == "Launch"]
+    seen = {"name": "Launch", "date": launch["date"], "note": launch["note"]}
+    await change(client, ctx, "remove_key_date",
+                 {"document_id": str(ids["roadmap"]), "key_date_id": launch["id"]},
+                 {"key_date": seen}, {"key_date": None})  # fmt: skip
+    [src] = (await source(client, ctx, ids["roadmap"]))["from_prds"]
+    assert (src["items"], src["key_dates"]) == (1, 1)
+
+
+async def test_an_approver_who_cannot_edit_the_roadmap_does_not_own_its_new_draft(client):
+    """protects=when approving a PRD opens the roadmap's draft, it is opened for the people
+    who change the roadmap, not for an approver who may not; fails_when=the approver
+    becomes the draft's creator (can_resume, can_withdraw)."""
+    ctx, ids = await world()
+    await approve_as(client, ctx, 1, "approver")
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft).where(SimpleDraft.status == "working"))
+        assert d is not None
+        assert d.created_by == ctx.users["owner"].id
+        assert ctx.users["approver"].id not in (d.participant_ids or [])
+
+
+async def approve_as(client, ctx: Ctx, n: int, who: str) -> None:
+    r = await client.post(f"/v1/documents/{PRD}/versions/{n}/approve", headers=ctx.as_(who))
+    assert r.status_code == 200, r.text
+
+
+async def test_a_draft_holding_only_the_prds_additions_submits_and_publishes(client):
+    """protects=a draft whose only content is what an approved PRD added submits, and its
+    approval publishes the PRD's items and writes its milestones as the roadmap's key dates;
+    fails_when=submit says there is nothing to submit, or publishing drops the items or the
+    key dates."""
+    ctx, ids = await world()
+    await approve(client, ctx, 1)
+    d = await source(client, ctx, ids["roadmap"])
+    r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=ctx.as_("owner"))
+    assert r.status_code == 200 and r.json()["status"] == "approved", r.text
+    out = (await client.get(ROADMAP, headers=ctx.as_("viewer"))).json()
+    assert set(by_key(out)) == {"offline-sync", "route-search", "trip-reports"}
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = list(await s.scalars(select(RoadmapKeyDate).order_by(RoadmapKeyDate.on_date)))
+        assert [(r.name, r.on_date) for r in rows] == [
+            ("Private beta", date(2026, 12, 4)),
+            ("Launch", date(2027, 1, 29)),
+        ]
+        assert all(r.roadmap_document_id == ids["roadmap"] for r in rows)
