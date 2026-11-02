@@ -64,6 +64,7 @@ from oracle.simple.one_pager_checks import resolved
 from oracle.simple.schemas import (
     OnePagerBlock,
     OnePagerDraft,
+    OnePagerInReview,
     OnePagerItem,
     OnePagerLine,
     OnePagerLook,
@@ -1045,6 +1046,9 @@ def sees_draft(principal: Any, d: SimpleDraft, w: Who) -> bool:
         or me in (d.participant_ids or [])
         or me in w.reviewers
         or me in w.track_owners
+        # Whom it waits on, and the reviewers its sender added (drafts.sees).
+        or me in (d.waiting_on or [])
+        or me in drafts.added_ids(d)
     )
 
 
@@ -1211,6 +1215,12 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
     hidden = (len(proposals) - len(shown)) + (
         0 if sees or d is None else (await drafts.counts(db, [d]))[d.id]
     )
+    # The changes behind that count, listed (build-review): the hidden draft's line changes
+    # and the proposals not shown. A counted draft change with no line (a change of another
+    # kind in the same draft) is skipped, so the list can be shorter than the count.
+    unseen = await drafts._live_changes(db, d) if d is not None and not sees else []
+    unseen = [c for c in unseen if c.op == "edit_line"]
+    not_shown = [c for c in proposals if not sees_change(principal, c)]
     live = [c for c in live if c.op == "edit_line"]
     sids = {c.session_id for c in live if c.session_id}
     sessions = (
@@ -1219,8 +1229,16 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         else {}
     )
     ids = {c.by for c in live + shown} | ({w.decider} if w.decider else set()) | set(w.track_owners)
+    ids |= {c.by for c in unseen + not_shown} | {i for c in not_shown for i in c.routed_to or []}
+    required: list[uuid.UUID] = []
     if d is not None:
         ids |= set(d.waiting_on or [])
+        if sees and d.status == "working":
+            # build-review: Send for approval names who approves before it is sent.
+            from oracle.review.state import effective_policy
+
+            required = list((await effective_policy(db, document)).mandatory_reviewer_ids)
+            ids |= set(required)
     owner_id = await document_owner(db, document, b.version, w)
     if owner_id:
         ids.add(owner_id)
@@ -1384,6 +1402,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
             waiting_on=[
                 SimplePersonRef(id=i, name=names.get(i, "someone")) for i in d.waiting_on or []
             ],
+            reviewers=[SimplePersonRef(id=i, name=names.get(i, "someone")) for i in required],
             can_submit=d.status == "working" and decides(principal, w),
             reminded_at=reminded_at(d),
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
@@ -1400,6 +1419,20 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         if x.section_key in used
     ]
     person = lambda i: SimplePersonRef(id=i, name=names.get(i, "someone")) if i else None  # noqa: E731
+    waits = (
+        [person(i) for i in d.waiting_on or []] if d is not None and d.status == "submitted" else []
+    )
+
+    def in_review(c: SimpleChange, kind: str, waiting_on: list) -> OnePagerInReview:
+        return OnePagerInReview(
+            line_id=str(c.target.get("line_id")),
+            kind=kind,  # type: ignore[arg-type]
+            before=str(c.before.get("line") or ""),
+            after=str(c.after.get("line") or ""),
+            by_name=names.get(c.by, "someone"),
+            waiting_on=waiting_on,
+        )
+
     return OnePagerOut(
         document=SimpleDocRef(id=document.id, slug=document.slug, title=document.title),
         version=b.version.number,
@@ -1418,6 +1451,8 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         notes=notes,
         draft=draft,
         changes_in_review=hidden,
+        in_review=[in_review(c, "change", waits) for c in unseen]
+        + [in_review(c, "proposal", [person(i) for i in c.routed_to or []]) for c in not_shown],
         can_edit=decides(principal, w),
         can_propose=not decides(principal, w)
         and _me(principal) is not None

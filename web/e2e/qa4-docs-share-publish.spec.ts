@@ -26,7 +26,7 @@ test.describe("desktop", () => {
     await open(page, "usage-alerts-roadmap");
     await expect(page.getByTestId("block-row")).toHaveCount(1);
     const lines = inspector(page).getByTestId("on-publish").getByRole("listitem");
-    await expect(lines).toContainText(["Roadmap status set to Published"]);
+    await expect(lines).toContainText(["Roadmap status set to Approved"]);
     await expect(inspector(page)).not.toContainText("PRD status");
     await expect(page.getByRole("region", { name: "Advisory" })).toHaveCount(0);
     await expect(page.getByText("Problem and user clarity")).toHaveCount(0);
@@ -40,12 +40,11 @@ test.describe("desktop", () => {
     await expect(checks.getByTestId("dates-check")).toContainText("Fail");
   });
 
-  test("qa4-docs-share-22: a published roadmap's breadcrumb says Published, as the page does", async ({ page }) => {
+  test("build-review: an approved roadmap's breadcrumb says Approved, as in Simple", async ({ page }) => {
     await open(page, "usage-alerts-roadmap", "owner", "approved-plan");
-    await expect(page.getByTestId("published-chip")).toHaveText("Published v1");
     const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
-    await expect(crumb).toContainText("Published");
-    await expect(crumb).not.toContainText("Approved");
+    await expect(crumb).toContainText("Approved");
+    await expect(crumb).not.toContainText("Published");
   });
 
   test("qa4-docs-share-11: the advisory blocker check does not pass while the hard check has an open critical blocker", async ({ page }) => {

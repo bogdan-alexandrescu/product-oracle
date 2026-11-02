@@ -197,7 +197,7 @@ async def test_a_withdrawn_basis_marks_the_approved_version_s_dates(client, owne
     assert version["date_marks"] == [
         {"section_key": "now-payment-step", "text": "2026-11-30", "date": "2026-11-30",
          "status": "withdrawn", "label": "date withdrawn", "bases": ["ENG-412"],
-         "where": "body"}
+         "where": "body", "days": ["2026-11-30"], "missing": ["2026-11-30"]}
     ]  # fmt: skip
     # The approved text is not rewritten: the markdown carries a comment after the date,
     # which an import drops.

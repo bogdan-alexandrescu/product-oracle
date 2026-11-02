@@ -262,100 +262,69 @@ function newest(pubs: Schemas["PublicationSummary"][] | null | undefined) {
   return [...(pubs ?? [])].sort((a, b) => b.number - a.number)[0] ?? null;
 }
 
+const FIX = "font-semibold whitespace-nowrap text-accent-ink underline";
+
+/** One thing left before sharing: done or not, what it is, and its fix link. */
+function LeftRow({ done, children, fix }: { done: boolean; children: ReactNode; fix?: ReactNode }) {
+  return (
+    <li data-testid="share-left" data-done={done} className="flex min-h-9 items-center gap-2 border-t border-line py-1.5 first:border-t-0">
+      <Icon name={done ? "check" : "alert"} size={16} className={`flex-none ${done ? "text-pass" : "text-warn"}`} />
+      <span className={`min-w-0 flex-1 ${done ? "text-text2" : "font-medium text-text"}`}>{children}</span>
+      {!done && fix}
+    </li>
+  );
+}
+
 /**
- * qa-docs-2: what still keeps the latest version from being published (a share needs a
- * publication): the dates its approve refuses, else the publish check's own problems; when
- * nothing does, the approver publishes it from here.
+ * build-review (QV4 a, picked Nov 1): before v is published, Share roadmap lists everything
+ * left as a short checklist, each with its fix link; Publish approves it too, in one step.
  */
-function NotPublished({ doc, n, onClose, onPublished }: { doc: string; n: number; onClose: () => void; onPublished: () => void }) {
-  const { can } = useMe();
+function NotPublished({ doc, n, onClose }: { doc: string; n: number; onClose: () => void }) {
   const q = useQuery(`share-unpublished|${doc}|${n}`, () =>
     Promise.all([
       unwrap(api.GET("/v1/documents/{doc}/versions/{n}/publish-check", { params: { path: { doc, n } } })),
       unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
     ]),
   );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const publishLink = (
-    <LinkButton variant="primary" href={`/documents/${doc}/publish`} onClick={onClose}>
-      Go to Publish
-    </LinkButton>
-  );
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   if (!q.data) return <Loading />;
   const [check, version] = q.data;
   const dates = dateBlocksOf(version.date_marks, new Map(version.sections.map((s) => [s.section_key, s.heading])));
-  const problems = check.blockers.filter((b) => b.code !== "already_published");
-  const publish = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/publish", { params: { path: { doc, n } }, body: { content_hash: check.content_hash } }));
-      onPublished();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (dates.length > 0) {
-    return (
-      <div role="status" className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
-        <p className="font-semibold" data-testid="share-not-published">
-          v{n} can&apos;t be published yet: {plural(dates.length, "date")} {dates.length === 1 ? "has" : "have"} no date source yet.
-        </p>
-        <ul className="my-1 list-disc pl-5" data-testid="share-blocks">
-          {dates.map((b) => (
-            <li key={b.id}>{b.title}</li>
-          ))}
-        </ul>
-        {/* qa4-docs-share-18: the words Plan › Dates uses (Add a date source). */}
-        <p>Add a date source for each date on Plan › Dates, or ask the engineering lead to. Then publish v{n}.</p>
-        {/* qa-docs-16: the way to fix it, as buttons, not only words. */}
-        <div className="mt-2 flex flex-wrap gap-2">
-          <LinkButton variant="primary" href="/plan/dates" onClick={onClose}>
-            Go to Plan › Dates
-          </LinkButton>
-          <LinkButton href={`/documents/${doc}/v/${n}/items`} onClick={onClose}>
-            See v{n}&apos;s items
-          </LinkButton>
-        </div>
-      </div>
-    );
-  }
-  if (check.can_publish) {
-    return (
-      <div role="status" className="rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
-        <p data-testid="share-not-published">v{n} is approved but not published yet. A link shows a published version, never a draft.</p>
-        {can("publish_version") ? (
-          <div className="mt-2">
-            <Button variant="primary" disabled={busy} onClick={publish}>
-              {busy ? "Publishing…" : `Publish v${n}`}
-            </Button>
-          </div>
-        ) : (
-          <p className="mt-1">Ask an approver or owner to publish it.</p>
-        )}
-        {error && <ErrorNote>{error}</ErrorNote>}
-      </div>
-    );
-  }
+  const other = check.blockers.filter((b) => b.code !== "already_published" && b.code !== "version_not_approved");
+  const left = Number(dates.length > 0) + other.length + 1;
+  const publishFix = (
+    <Link href={`/documents/${doc}/publish`} onClick={onClose} className={FIX}>
+      Fix on Publish page
+    </Link>
+  );
   return (
-    <div role="status" className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
+    <div className="space-y-2">
       <p className="font-semibold" data-testid="share-not-published">
-        Publish v{n} first: a link shows a published version, never a draft.{problems.length > 0 && " What still stops it:"}
+        Before you can share v{n}, {left === 1 ? "1 thing is" : `${left} things are`} left:
       </p>
-      {/* "Already published" is no reason it can't be (it was filtered out above): no list, no heading, when nothing else is left. */}
-      {problems.length > 0 && (
-        <ul className="my-1 list-disc pl-5" data-testid="share-blocks">
-          {problems.map((b, i) => (
-            // A code can come twice (two sections, two messages): the place keeps each key apart.
-            <li key={`${b.code}-${i}`}>{b.code === "version_not_approved" ? `v${n} is not approved yet` : b.message}</li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-2">{publishLink}</div>
+      <ul className="rounded-lg border border-line px-3" data-testid="share-blocks">
+        <LeftRow
+          done={dates.length === 0}
+          fix={
+            <Link href="/plan/dates" onClick={onClose} className={FIX}>
+              Fix in Plan › Dates
+            </Link>
+          }
+        >
+          {dates.length === 0 ? "Dates have a source" : `Pick where dates come from: ${plural(dates.length, "date")} ${dates.length === 1 ? "has" : "have"} no source yet`}
+        </LeftRow>
+        {other.map((b, i) => (
+          // A code can come twice (two sections, two messages): the place keeps each key apart.
+          <LeftRow key={`${b.code}-${i}`} done={false} fix={publishFix}>
+            {b.message}
+          </LeftRow>
+        ))}
+        <LeftRow done={false} fix={publishFix}>
+          Publish v{n}
+          {version.approved_at ? "" : " (this approves it too)"}
+        </LeftRow>
+      </ul>
+      <p className="text-sm text-text2">A link shows a published version, never a draft.</p>
     </div>
   );
 }
@@ -367,7 +336,8 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
   const [audience, setAudience] = useState<Audience>(initial);
   const [label, setLabel] = useState("");
   const [expires, setExpires] = useState<Expiry>("14d");
-  const [download, setDownload] = useState(true);
+  // build-review (QV4 a): Allow PDF download starts unticked.
+  const [download, setDownload] = useState(false);
   const [passcode, setPasscode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -456,7 +426,7 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
     >
       {pubs.error && <ErrorNote>{pubs.error}</ErrorNote>}
       {!pubs.data && !pubs.error && <Loading />}
-      {pubs.data && !pub && <NotPublished doc={doc} n={n} onClose={onClose} onPublished={() => void pubs.reload()} />}
+      {pubs.data && !pub && <NotPublished doc={doc} n={n} onClose={onClose} />}
       {pub && (
         <>
           <p className="text-text2" data-testid="share-shares">

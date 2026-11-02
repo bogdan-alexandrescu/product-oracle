@@ -3,7 +3,7 @@
 import { useId, useState, type FormEvent } from "react";
 
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
-import { Button, Chip, Icon, Panel, Sheet } from "@/components/ds";
+import { Button, Chip, Icon, LinkButton, Panel, Sheet } from "@/components/ds";
 import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -538,6 +538,7 @@ function ChangedNote({ was, now, people }: { was: SectionState; now: SectionStat
 export function Campaigns({ doc }: { doc: string }) {
   const { can } = useMe();
   const canEdit = can("create_review_campaign");
+  const canComment = can("create_comment");
   const today = useToday();
   const q = useQuery(`campaigns|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}/campaigns", { params: { path: { doc } } })));
   const [asking, setAsking] = useState(false);
@@ -607,6 +608,8 @@ export function Campaigns({ doc }: { doc: string }) {
             {/* qa4-docs-share-36: an open campaign past its due date says so. */}
             {c.due_at && c.status === "open" && pastDue(c.due_at, today) && <Chip kind="warn">{`Overdue ${formatDay(c.due_at)}`}</Chip>}
             <span className="flex-1" />
+            {/* build-review (QV2 a): someone asked for feedback has a way in from the overview. */}
+            {!canEdit && canComment && c.status === "open" && <LinkButton href={`/documents/${doc}/v/${c.version_number}`}>Give feedback</LinkButton>}
             {canEdit && (
               // qa-docs-30: what the action does to the campaign, not a bare Close.
               <Button variant="secondary" aria-label={`${c.status === "open" ? "End campaign" : "Reopen"} ${c.title}`} disabled={toggling === c.id} onClick={() => (c.status === "open" ? setEnding(c) : toggle(c))}>

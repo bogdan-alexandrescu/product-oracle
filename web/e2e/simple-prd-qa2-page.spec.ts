@@ -107,7 +107,7 @@ for (const scheme of ["light", "dark"] as const) {
       await page.getByRole("button", { name: "Present" }).click();
       const paper = page.getByTestId("one-pager");
       await expect(paper).toHaveAttribute("data-presenting", "true");
-      for (const name of ["Export PDF", "Start review"]) await expect(page.getByRole("button", { name })).toHaveCount(0);
+      for (const name of ["Export PDF", "Start a review meeting"]) await expect(page.getByRole("button", { name })).toHaveCount(0);
       await expect(paper.getByRole("link", { name: "Open in Detailed" })).toHaveCount(0);
       await expect(paper.getByRole("link", { name: "One-pagers" })).toHaveCount(0);
       // Esc out of full screen: the browser says so with fullscreenchange.
@@ -120,7 +120,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     test("a viewer sees no Start review and no empty margin (qa-10, 34, qa4-simple-prd-26)", async ({ page }) => {
       await open(page, "viewer@example.com");
-      await expect(page.getByRole("button", { name: "Start review" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Start a review meeting" })).toHaveCount(0);
       await expect(page.getByText("Ask an owner to start a review")).toHaveCount(0);
       await expect(page.getByText(/No changes yet/)).toBeHidden();
     });

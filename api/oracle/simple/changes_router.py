@@ -14,7 +14,8 @@ S3b, working drafts (oracle.simple.drafts):
 - ``GET /v1/simple/drafts``: viewer and up; the open drafts the caller may see.
 - ``GET /v1/simple/drafts/{id}``: one of them.
 - ``POST /v1/simple/drafts/{id}/submit``: an owner or the roadmap's decider (with none, its
-  owner): the draft becomes the next version, in review.
+  owner): the draft becomes the next version, in review; an optional body
+  ``{"reviewer_ids": [...]}`` adds reviewers it waits on too.
 - ``POST /v1/simple/drafts/{id}/approve``: the decider (held until the required reviewers
   have approved) or a required reviewer.
 - ``POST /v1/simple/changes/{id}/withdraw``: its proposer, while it is proposed: closed as
@@ -34,7 +35,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import Principal, TenantDB
 from oracle.export.pdf import PdfUnavailable, html_to_pdf, overflow_headers
@@ -53,6 +54,7 @@ from oracle.simple.schemas import (
     SimpleResumeOut,
     SimpleSessionIn,
     SimpleSessionOut,
+    SimpleSubmitIn,
 )
 
 log = logging.getLogger(__name__)
@@ -254,11 +256,17 @@ async def _commit(db, coro):
 @router.post("/drafts/{draft_id}/submit", response_model=SimpleDraftOut,
              name="submit_simple_draft")  # fmt: skip
 async def submit_simple_draft(
-    draft_id: uuid.UUID, principal: Commenter, db: TenantDB
+    draft_id: uuid.UUID,
+    principal: Commenter,
+    db: TenantDB,
+    body: Annotated[SimpleSubmitIn | None, Body()] = None,
 ) -> SimpleDraftOut:
     """Submit the draft: it is imported as the roadmap's next version and goes through the
-    document's review policy; readers keep the published version until it is approved."""
-    return await _commit(db, drafts.submit(db, principal, draft_id))
+    document's review policy; readers keep the published version until it is approved.
+    An optional body names people to add as reviewers: the draft waits on them too, after
+    the required reviewers (422 for anyone who is not an active member who may approve)."""
+    reviewers = body.reviewer_ids if body is not None else []
+    return await _commit(db, drafts.submit(db, principal, draft_id, reviewers))
 
 
 @router.post("/drafts/{draft_id}/approve", response_model=SimpleDraftOut,

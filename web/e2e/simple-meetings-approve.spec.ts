@@ -52,7 +52,7 @@ async function flags(context: BrowserContext, value: string) {
 async function startWithAnEdit(page: Page, absent?: string, attendee = "Theo Brandt") {
   await login(page);
   await page.goto("/simple/prds/guided-setup");
-  await page.getByRole("button", { name: "Start review" }).click();
+  await page.getByRole("button", { name: "Start a review meeting" }).click();
   // qa-simple-decide-35: a review needs one attendee besides the presenter.
   await page.getByRole("dialog", { name: "Start a review" }).getByRole("checkbox", { name: attendee }).check();
   await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();

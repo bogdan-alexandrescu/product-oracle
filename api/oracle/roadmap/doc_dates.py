@@ -833,6 +833,17 @@ def covering(found: Found, bases: Iterable[schedule.Basis]) -> list[schedule.Bas
     return out
 
 
+def unbacked(found: Found, bases: Iterable[schedule.Basis]) -> tuple[date, ...]:
+    """The days this date reads as that no basis in scope supports (all of them backed:
+    none)."""
+    bases = list(bases)
+    return tuple(
+        day
+        for day in found.days
+        if not any(b.supports_date == day and _in_scope(b, found) for b in bases)
+    )
+
+
 def _in_scope(b: schedule.Basis, found: Found) -> bool:
     owner = (found.owner or "").lower()
     if b.item_key:
@@ -1339,6 +1350,8 @@ class Mark:
     end: int = 0
     insert_at: int = 0
     in_code: bool = False
+    # The readings no verified basis supports yet (a date that reads two ways needs both).
+    missing: tuple[date, ...] = ()
 
     @property
     def label(self) -> str | None:
@@ -1353,6 +1366,8 @@ class Mark:
             "label": self.label,
             "bases": self.bases,
             "where": self.where,
+            "days": list(self.days or (self.day,)),
+            "missing": list(self.missing),
         }
         return out
 
@@ -1490,6 +1505,7 @@ def check_found(
                 f.end,
                 f.insert_at,
                 f.in_code,
+                () if support else unbacked(f, verified),
             )
         )
     return out

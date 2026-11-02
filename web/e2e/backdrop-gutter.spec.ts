@@ -96,7 +96,7 @@ for (const [name, viewport] of [["desktop", DESKTOP], ["phone", PHONE]] as const
       await page.goto("/simple/prds/guided-setup");
       await expect(page.getByTestId("one-pager")).toBeVisible();
       await showScrollbar(page, desktop);
-      await page.getByRole("button", { name: "Start review" }).click();
+      await page.getByRole("button", { name: "Start a review meeting" }).click();
       const sheet = page.getByRole("dialog", { name: "Start a review" });
       await expect(sheet).toBeVisible();
       await expectCoversWindow(page.getByTestId("start-backdrop"));

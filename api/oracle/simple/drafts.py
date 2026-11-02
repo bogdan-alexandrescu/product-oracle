@@ -291,8 +291,9 @@ def sees(principal: Any, d: SimpleDraft, w: Who) -> bool:
         return False
     if has_role(principal.role, "owner") or me == d.created_by or me in (d.participant_ids or []):
         return True
-    if me in (d.waiting_on or []):
-        # A section's reviewer it waits on (their Inbox request), #723 review.
+    if me in (d.waiting_on or []) or me in added_ids(d):
+        # A section's reviewer it waits on (their Inbox request), #723 review; a reviewer
+        # its sender added (build-review), before and after their approval.
         return True
     doc = d.document_id
     return (
@@ -300,6 +301,48 @@ def sees(principal: Any, d: SimpleDraft, w: Who) -> bool:
         or me in w.reviewers.get(doc, [])
         or me in w.owners.get(doc, set())
     )
+
+
+def added_ids(d: SimpleDraft) -> list[uuid.UUID]:
+    """The reviewers the draft's sender added (build-review), in their order."""
+    return [uuid.UUID(r["id"]) for r in d.added_reviewers or []]
+
+
+def added_pending(d: SimpleDraft) -> list[uuid.UUID]:
+    """The added reviewers who have not approved yet: the draft waits on them."""
+    return [uuid.UUID(r["id"]) for r in d.added_reviewers or [] if not r.get("approved_at")]
+
+
+def _added_approve(d: SimpleDraft, ids: list[uuid.UUID]) -> None:
+    """Record the approval of each added reviewer in ``ids`` still to approve."""
+    marked = {str(i) for i in ids} & {str(i) for i in added_pending(d)}
+    if not marked:
+        return
+    at = company_time.now().isoformat()
+    d.added_reviewers = [
+        {**r, "approved_at": at} if r["id"] in marked else r for r in d.added_reviewers or []
+    ]
+
+
+async def _added_reviewers(
+    db: AsyncSession, ids: list[uuid.UUID], required: list[uuid.UUID]
+) -> list[dict[str, Any]]:
+    """Send for approval's added reviewers, checked: each an active member who may
+    approve (commenter and up); the required reviewers and repeats dropped."""
+    ids = [i for i in dict.fromkeys(ids) if i not in required]
+    if not ids:
+        return []
+    users = {u.id: u for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+    if any(i not in users or users[i].disabled_at is not None for i in ids):
+        raise DraftError(422, "Each reviewer you add must be an active member of the company")
+    viewers = [
+        users[i].name or users[i].email for i in ids if not has_role(users[i].role, "commenter")
+    ]
+    if viewers:
+        raise DraftError(
+            422, f"{_people(viewers)} can only view, so cannot approve: pick someone else"
+        )
+    return [{"id": str(i), "approved_at": None} for i in ids]
 
 
 def _approver_of(principal: Any, d: SimpleDraft, w: Who) -> bool:
@@ -809,9 +852,15 @@ async def _live_changes(db: AsyncSession, d: SimpleDraft) -> list[SimpleChange]:
     return [c for c in rows if c.id not in undone]
 
 
-async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -> SimpleDraftOut:
+async def submit(
+    db: AsyncSession,
+    principal: Principal,
+    draft_id: uuid.UUID,
+    reviewer_ids: list[uuid.UUID] | None = None,
+) -> SimpleDraftOut:
     """The draft becomes the roadmap's next version, in review under its policy (the
-    caller commits)."""
+    caller commits). ``reviewer_ids``: people the sender adds as reviewers; the draft
+    waits on them too, after the required reviewers (build-review)."""
     from oracle.docs import service as docs_service
     from oracle.roadmap import changeset, schedule, views
     from oracle.roadmap import items as items_mod
@@ -826,6 +875,9 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
     live = await _live_changes(db, d)
     if not live:
         raise DraftError(422, "Nothing to submit: the draft has no changes")
+    d.added_reviewers = await _added_reviewers(
+        db, list(reviewer_ids or []), w.reviewers.get(d.document_id, [])
+    )
     document = await db.get(Document, d.document_id)
     if document.kind != "roadmap":
         return await _submit_sections(db, principal, d, document, live)
@@ -985,7 +1037,7 @@ async def _in_review(
         now,
         principal.user_id,
     )
-    d.waiting_on = list(policy.mandatory_reviewer_ids)
+    d.waiting_on = list(dict.fromkeys([*policy.mandatory_reviewer_ids, *added_pending(d)]))
     d.reminders = {}
     for sd in await db.scalars(
         select(SimpleSessionDraft).where(SimpleSessionDraft.draft_id == d.id)
@@ -1178,6 +1230,8 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
             [
                 *(i for b in blockers if b.code == "mandatory_reviewer_pending" for i in b.ids),
                 *_section_people(blockers, states),
+                # The reviewers the sender added, until each approves (build-review).
+                *added_pending(d),
             ]
         )
     )
@@ -1224,6 +1278,8 @@ async def _approve(
     waited_on = actor.user_id in (d.waiting_on or [])
     if not is_approver and actor.user_id not in reviewers and not waited_on:
         raise DraftError(403, "Only the decider and the required reviewers approve this draft")
+    # An added reviewer's approval (build-review): theirs, and those present in a meeting.
+    _added_approve(d, [actor.user_id, *present])
     for r in dict.fromkeys([*([actor.user_id] if actor.user_id in reviewers else []), *present]):
         if r in reviewers:
             rp = actor if r == actor.user_id else await principal_for(db, tenant_id, r)
@@ -1332,7 +1388,7 @@ async def _return_to_working(
         ]
     number = version.number if version is not None else None
     d.status, d.version_id, d.submitted_at, d.submitted_by = "working", None, None, None
-    d.decider_approval, d.waiting_on = None, []
+    d.decider_approval, d.waiting_on, d.added_reviewers = None, [], []
     for sd in await db.scalars(
         select(SimpleSessionDraft).where(SimpleSessionDraft.draft_id == d.id)
     ):

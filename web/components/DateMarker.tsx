@@ -7,6 +7,7 @@ import { DateBasisDialog, shortDay, type Basis, type DateRights } from "@/compon
 import { Button } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
 import { IGNORE_ATTR } from "@/lib/anchor";
+import { calendarDay } from "@/lib/dates";
 import { api, unwrap, type DateMarkOut } from "@/lib/api/client";
 
 /**
@@ -36,6 +37,21 @@ function title(mark: DateMarkOut): string {
   return mark.status === "withdrawn"
     ? `The basis of this date (${mark.bases.join(", ")}) was withdrawn`
     : "No verified estimate, capacity or commitment of the PRD supports this date";
+}
+
+const YEAR = { month: "short", day: "numeric", year: "numeric" } as const;
+
+/**
+ * What the popover says of a date with no source: a date that reads two ways (03/04/2027)
+ * needs one for each reading (O4), so it names the readings and the one still without.
+ */
+export function noSourceWords(mark: DateMarkOut): string {
+  const days = mark.days ?? [];
+  const missing = mark.missing ?? [];
+  if (days.length < 2) return "No date source backs this date yet.";
+  const all = days.map((d) => calendarDay(d, YEAR)).join(" or ");
+  const left = missing.length && missing.length < days.length ? missing : days;
+  return `It reads as ${all}, so each needs a date source. ${left.map((d) => calendarDay(d, YEAR)).join(" and ")} ${left.length === 1 ? "has" : "have"} none yet.`;
 }
 
 /** The marker after a date that rests on no verified basis (not part of the anchored text). */
@@ -128,7 +144,7 @@ export function DateMarker({ mark }: { mark: DateMarkOut }) {
                       withdrawn.basis.withdrawn_reason ? `: ${withdrawn.basis.withdrawn_reason}` : ""
                     }.`
                   : `${mark.bases.join(", ")} was withdrawn.`
-                : "No date source backs this date yet."}
+                : noSourceWords(mark)}
             </span>
             <span className="mt-2 block">
               {mayRecord ? (
@@ -147,7 +163,8 @@ export function DateMarker({ mark }: { mark: DateMarkOut }) {
           rights={ctx.rights}
           prefill={{
             prd: ctx.prd ?? undefined,
-            supports_date: mark.date,
+            // The first reading still without a source (a two-way date's other one).
+            supports_date: mark.missing?.[0] ?? mark.date,
             reference: namedReference(ctx.sectionText(mark.section_key), mark.text),
           }}
           onClose={() => setRecording(false)}

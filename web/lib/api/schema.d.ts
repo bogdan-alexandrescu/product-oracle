@@ -12497,6 +12497,8 @@ export interface paths {
          * Submit Simple Draft
          * @description Submit the draft: it is imported as the roadmap's next version and goes through the
          *     document's review policy; readers keep the published version until it is approved.
+         *     An optional body names people to add as reviewers: the draft waits on them too, after
+         *     the required reviewers (422 for anyone who is not an active member who may approve).
          */
         post: operations["submit_simple_draft"];
         delete?: never;
@@ -19883,6 +19885,16 @@ export interface components {
              * @enum {string}
              */
             where: "title" | "heading" | "body";
+            /**
+             * Days
+             * @default []
+             */
+            days: string[];
+            /**
+             * Missing
+             * @default []
+             */
+            missing: string[];
         };
         /** DateRightsOut */
         DateRightsOut: {
@@ -29978,6 +29990,11 @@ export interface components {
             decider_approved: boolean;
             /** Waiting On */
             waiting_on: components["schemas"]["SimplePersonRef"][];
+            /**
+             * Reviewers
+             * @default []
+             */
+            reviewers: components["schemas"]["SimplePersonRef"][];
             /** Can Submit */
             can_submit: boolean;
             /** Reminded At */
@@ -30015,6 +30032,28 @@ export interface components {
             subject_id?: string | null;
             /** Version */
             version?: number | null;
+        };
+        /**
+         * OnePagerInReview
+         * @description One change in review a reader may not see in full (build-review): a line change in
+         *     the PRD's draft or someone's proposal, in the same words its margin note would use.
+         */
+        OnePagerInReview: {
+            /** Line Id */
+            line_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "change" | "proposal";
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
+            /** By Name */
+            by_name: string;
+            /** Waiting On */
+            waiting_on: components["schemas"]["SimplePersonRef"][];
         };
         /**
          * OnePagerItem
@@ -30211,6 +30250,11 @@ export interface components {
             draft: components["schemas"]["OnePagerDraft"] | null;
             /** Changes In Review */
             changes_in_review: number;
+            /**
+             * In Review
+             * @default []
+             */
+            in_review: components["schemas"]["OnePagerInReview"][];
             /** Can Edit */
             can_edit: boolean;
             /** Can Propose */
@@ -40012,6 +40056,19 @@ export interface components {
             starters: components["schemas"]["SimplePersonRef"][];
             /** Default Attendee Ids */
             default_attendee_ids: string[];
+        };
+        /**
+         * SimpleSubmitIn
+         * @description Send for approval's optional body (build-review): people the sender adds as
+         *     reviewers. The draft waits on them too, after the document's required reviewers; each
+         *     must be an active member who may approve (commenter and up).
+         */
+        SimpleSubmitIn: {
+            /**
+             * Reviewer Ids
+             * @default []
+             */
+            reviewer_ids: string[];
         };
         /** SimpleSuggestJobOut */
         SimpleSuggestJobOut: {
@@ -69795,7 +69852,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SimpleSubmitIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

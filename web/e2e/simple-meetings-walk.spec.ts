@@ -193,7 +193,7 @@ for (const phone of [false, true]) {
       test("Approve and Undo in a meeting: the one-pager reads its new version, no stale draft bar", async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("button", { name: "Start a review meeting" }).click();
         const sheet = page.getByRole("dialog", { name: "Start a review" });
         await sheet.getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
@@ -222,7 +222,7 @@ for (const phone of [false, true]) {
       test("A second screen on the meeting reads the new version after Approve, without a reload", async ({ page, context }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("button", { name: "Start a review meeting" }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
