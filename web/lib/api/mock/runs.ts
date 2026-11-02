@@ -13,6 +13,7 @@ import { companyDayInWords, companyDayIso, companyStamp } from "./connections";
 import { ranking } from "./lane-f";
 import type { RowTally } from "./from-run";
 import { fileItems } from "./checkpoint-review";
+import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from "./agent-questions";
 import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
 import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
@@ -67,6 +68,8 @@ export interface RunsDb {
   priority_snapshots?: SnapshotRow[];
   /** D8: checkpoint id -> its shared draft (absent until someone writes it). */
   drafts?: Record<string, DraftRow>;
+  /** AQ1: checkpoint id -> the questions its run's agents asked there, with their answers. */
+  agent_questions?: Record<string, StoredAgentQuestion[]>;
 }
 
 /** B2: what the baseline says of a run at Confirm the baseline (./from-run.ts, over the baseline mock). */
@@ -3862,11 +3865,37 @@ function waitOf(payload: CheckpointOut["payload"]): Schemas["WaitInfo"] {
 
 const KINDS = ["accept", "edit", "drop", "restore", "split", "merge", "question", "waive", "look_again", "add"];
 
+/**
+ * AQ1, as oracle.runs.agent_questions: GET …/agent-questions (any member) and PUT
+ * …/agent-questions/{id}/answer (the stop's approver role or above, while it is pending).
+ */
+async function routeAgentQuestions(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: Request, rest: string[], role: Schemas["Me"]["role"] | null): Promise<Response> {
+  const stored = ctx.db.agent_questions?.[cp.id] ?? [];
+  const me = ctx.member?.id ?? ctx.userId;
+  const seq = cp.segment_seq;
+  // The step after the stop's segment that runs (one whose stop is off is skipped).
+  const next = seq != null ? (r.segments.find((s) => s.seq > seq && s.status !== "skipped")?.title ?? null) : null;
+  const may = mayStage(ctx, r, cp, role);
+  const out = () => json(200, agentQuestionsOut(stored, me, next, cp.status === "pending" && may));
+  if (rest.length === 1 && req.method === "GET") return out();
+  if (rest.length !== 3 || rest[2] !== "answer" || req.method !== "PUT") return fail(404, "Not Found");
+  if (!may) return fail(403, `Requires the ${cp.approver_role} role`);
+  if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
+  const q = stored.find((x) => x.id === decodeURIComponent(rest[1]));
+  if (!q) return fail(404, `question ${rest[1]} not found`);
+  const body = JSON.parse((await req.text()) || "{}") as Schemas["AgentAnswerIn"];
+  if (!q.options.some((o) => o.key === body.option)) return fail(422, `${body.option} is not an option of this question`);
+  const name = displayName(ctx.member?.email ?? ctx.userName ?? "admin@example.com");
+  q.answer = { option: body.option, note: body.note?.trim() || null, by: { id: me, name, role }, at: new Date(mockNowMs()).toISOString() };
+  return out();
+}
+
 /** GET .../review and the four writes (oracle.runs.actions), over the stored items check. */
 async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: Request, rest: string[]): Promise<Response> {
   const m = req.method;
   const me = ctx.member ?? null;
   const role = me?.role ?? ctx.userRole ?? null;
+  if (rest[0] === "agent-questions") return routeAgentQuestions(ctx, r, cp, req, rest, role);
   const draft = draftOf(ctx, cp.id);
   const out = () => json(200, reviewOut(ctx, r, cp, draft, role));
   if (rest[0] === "review" && rest.length === 1 && m === "GET") return out();
@@ -4574,9 +4603,11 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
  * blocking row is open, so the approval is held). With `kept`, that row is also new and a likely
  * duplicate, both kept by one call staged before each reason had its own.
  */
-export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false) {
+export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false, manyQuestions = false) {
   // Pick address in one step is new as well as low in confidence: one feature, two calls.
   const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
+  // AQ1: the analyst's and architect's questions at this stop; the hard case asks eleven.
+  (db.agent_questions ??= {})[first.cp.id] = seedAgentQuestions(manyQuestions);
   const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
   if (commenter) {
     db.drafts![first.cp.id] = {
