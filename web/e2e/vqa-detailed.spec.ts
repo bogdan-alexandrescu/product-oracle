@@ -1,6 +1,7 @@
 import { expect, test } from "./test";
 
 import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
 /*
  * Visual QA of the picked Detailed screens as merged (train AH), each check driven as a person
@@ -86,3 +87,33 @@ for (const [where, use] of [
     });
   });
 }
+
+test("QD1 a review: a card hides the stock reason by the patch's flag, whatever its wording", async ({ page }) => {
+  // protects=the card skips the reason the API flags as its stock one; fails_when=the API
+  // rewords that reason and every card shows it again; no_claim=a rewrite with its own reason.
+  await page.addInitScript((key) => localStorage.setItem(key, "held-reworded"), MOCK_SCENARIO_KEY);
+  await login(page);
+  await page.goto("/documents/checkout-redesign/v/2");
+  await page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Held rewrites" });
+  await expect(drawer.getByTestId("held-intro")).toContainText("The approved text was kept until someone decides.");
+  await expect(drawer.getByTestId("held-rewrite")).toContainText("Goal trace");
+  await expect(drawer.getByTestId("held-rewrite")).not.toContainText("changed this approved section");
+});
+
+test.describe("phone, a hand-made sheet", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("QD2 a review: the meeting's start sheet is marked as a sheet, so a dialog from it opens above it", async ({ page }) => {
+    // protects=a Dialog opened over the start sheet reads it as an open sheet and rises above
+    // it (Dialog's data-sheet check); fails_when=the start sheet goes unmarked and stays on top;
+    // no_claim=what the sheet holds.
+    await page.context().addInitScript((key) => localStorage.removeItem(key), MOCK_SCENARIO_KEY);
+    await login(page);
+    await page.goto("/simple/prds/guided-setup");
+    await expect(page.getByTestId("one-pager")).toBeVisible();
+    await page.getByRole("button", { name: "Start a review meeting" }).filter({ visible: true }).click();
+    await expect(page.getByRole("dialog", { name: "Start a review" })).toBeVisible();
+    await expect(page.getByTestId("start-backdrop")).toHaveAttribute("data-sheet", /.*/);
+  });
+});
