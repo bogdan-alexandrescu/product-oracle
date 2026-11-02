@@ -312,6 +312,14 @@ def _words(text: str, n: int) -> str:
     return text if len(w) <= n else " ".join(w[:n]).rstrip(",;:") + "…"
 
 
+def _upto(text: str, chars: int) -> str:
+    """At most ``chars``, cut at a word with "…", never mid-word."""
+    if len(text) <= chars:
+        return text
+    head = text[: chars - 1]
+    return (head.rsplit(" ", 1)[0] if " " in head else head).rstrip(",;: ") + "…"
+
+
 def _uncomment(text: str) -> str:
     return _COMMENT.sub(" ", text)
 
@@ -563,9 +571,9 @@ def clean_answer(
             m = raw.get("metric")
             if spec.kind == "metrics" and isinstance(m, dict) and m.get("name") and m.get("to"):
                 line["metric"] = {
-                    "name": resolved(str(m["name"])).strip()[:120],
-                    "from": resolved(str(m.get("from") or "")).strip()[:40],
-                    "to": resolved(str(m["to"])).strip()[:40],
+                    "name": _upto(resolved(str(m["name"])).strip(), 120),
+                    "from": _upto(resolved(str(m.get("from") or "")).strip(), 60),
+                    "to": _upto(resolved(str(m["to"])).strip(), 80),
                 }
             lines.append(line)
         lines = lines[: spec.max_lines]
