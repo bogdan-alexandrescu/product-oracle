@@ -161,7 +161,7 @@ import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimple
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { itemSubjectName, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -1004,6 +1004,40 @@ function seedSimplePlanScenario(datedAll = false): Db {
     id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "approved", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
+  return db;
+}
+
+/**
+ * roadmap-keydates, the "roadmap-keydates" scenario: "simple-plan" whose PRD (Guided setup)
+ * states two milestones in its approved version 3 (M1 Prove it ends Nov 27, M2 Scale volume
+ * Dec 25), and whose version 4, waiting to be published, moves M2 to Jan 8: the onboarding
+ * roadmap's Key dates read both from the PRD, beside its own Board meeting. Invented data.
+ */
+export const KEYDATES_PRD_DAYS = { m1: "2026-11-27", m2: "2026-12-25", m2_moved: "2027-01-08" };
+
+function seedRoadmapKeyDatesScenario(): Db {
+  const db = seedSimplePlanScenario();
+  const doc = db.documents.find((d) => d.slug === PLAN_PRD_SLUG)!;
+  doc.status = "in_review";
+  const body = (m2: string) => ({
+    number: 0,
+    created_at: "",
+    citations: [],
+    sections: [
+      { key: "title", level: 1, heading: "Guided setup", body: "Help new admins finish setup on their first day." },
+      { key: "problem", level: 2, heading: "Problem", body: "New workspace admins stall during setup and do not know which step comes next." },
+      {
+        key: "milestones",
+        level: 2,
+        heading: "Milestones",
+        body: `| Milestone | Name | Start | End |\n| --- | --- | --- | --- |\n| M1 | Prove it | 2026-11-02 | ${KEYDATES_PRD_DAYS.m1} |\n| M2 | Scale volume | 2026-11-30 | ${m2} |`,
+      },
+    ],
+  });
+  const v3 = buildVersion(doc, { ...body(KEYDATES_PRD_DAYS.m2), number: 3, created_at: "2026-10-20T15:00:00Z" });
+  v3.approved_at = "2026-10-20T15:05:00Z";
+  const v4 = buildVersion(doc, { ...body(KEYDATES_PRD_DAYS.m2_moved), number: 4, created_at: "2026-10-27T10:00:00Z" });
+  db.versions.push(v3, v4);
   return db;
 }
 
@@ -2907,6 +2941,8 @@ function load(): Db {
                   }
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
+              : scenario === "roadmap-keydates"
+                ? seedRoadmapKeyDatesScenario
               : scenario === "simple-plan-lanes"
                 ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
@@ -3417,6 +3453,37 @@ function findDocument(db: Db, ref: string) {
 
 function findVersion(db: Db, doc: DocumentRow, n: number) {
   return db.versions.find((v) => v.document_id === doc.id && v.number === n);
+}
+
+/**
+ * roadmap-keydates: each PRD's dated milestones as its latest approved version states them (a
+ * milestones table: "| M1 | Prove it | 2 Nov 2026 | 27 Nov 2026 |", the end day its last day),
+ * as oracle.simple.plan.views reads them; a plan PRD whose versions state none keeps the
+ * plan mock's (./simple-plan.ts).
+ */
+function prdMilestonesOf(db: Db): Record<string, PrdMilestone[]> {
+  const out = planPrdMilestones(db.simple_roadmap?.plan);
+  const day = (cell: string): string | null => {
+    const t = cell.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const ms = /^\d{1,2} [A-Z][a-z]{2,8} \d{4}$/.test(t) ? Date.parse(`${t} 00:00 UTC`) : NaN;
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString().slice(0, 10);
+  };
+  for (const doc of db.documents) {
+    if (doc.kind !== "prd") continue;
+    const v = docVersions(db, doc).filter((x) => x.approved_at).at(-1);
+    if (!v) continue;
+    const rows = v.sections.flatMap((sec) =>
+      sec.body_md.split("\n").flatMap((line) => {
+        const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        if (!/^M\d+$/.test(cells[0] ?? "")) return [];
+        const date = cells.slice(2).map(day).filter((d): d is string => !!d).at(-1);
+        return date ? [{ code: cells[0], name: cells[1] ?? "", date }] : [];
+      }),
+    );
+    if (rows.length) out[doc.slug] = rows;
+  }
+  return out;
 }
 
 function docVersions(db: Db, doc: DocumentRow) {
@@ -5720,6 +5787,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   db.simple_roadmap.visuals = db.simple_visuals;
   // walkb-roadmap review: the one-pager whose bets' flows an item built from its PRD shows.
   db.simple_roadmap.onePager = db.simple_one_pager;
+  // roadmap-keydates: each PRD's milestones as its latest approved version has them (its key dates on the roadmap).
+  db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));

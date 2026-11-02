@@ -120,7 +120,13 @@ interface SimpleDb {
   decided_in?: Record<string, { id: string; number: number; title: string }[]>;
   /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
   plan?: PlanDb;
+  /** roadmap-keydates: each PRD's dated milestones as its latest approved version has them
+   * (PRD slug -> milestones), read by the server before every request (prdMilestonesOf). */
+  prd_milestones?: Record<string, PrdMilestone[]>;
 }
+
+/** roadmap-keydates: a PRD's milestone as its plan reads it: its code, name and end day. */
+export type PrdMilestone = { code: string; name: string; date: string };
 
 /** A roadmap's key date (roadmap_key_dates): invented names and days. */
 export interface MockKeyDate {
@@ -261,9 +267,13 @@ function betFlow(db: SimpleDb, s: SeedItem): Schemas["SimpleFlow"] | null {
   const bets = op.blocks.find((b) => b.key === "bets")?.lines ?? [];
   const words = (t: string) => ` ${t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
   const code = prdCode(s.section);
-  const named = bets.find((l) => (code && words(l.text).includes(words(code))) || words(l.text).includes(words(s.title)));
-  const sourced = bets.filter((l) => l.keys.includes(s.section!));
-  const line = named ?? (sourced.length === 1 ? sourced[0] : undefined);
+  // roadmap-keydates: its own bet: the one naming its code, else the one bet from its section
+  // alone, else the one bet its title names (a short title two bets mention names neither).
+  const one = <T,>(xs: T[]): T | undefined => (xs.length === 1 ? xs[0] : undefined);
+  const line =
+    one(bets.filter((l) => !!code && words(l.text).includes(words(code)))) ??
+    one(bets.filter((l) => l.keys.includes(s.section!))) ??
+    one(bets.filter((l) => !!s.title.trim() && words(l.text).includes(words(s.title))));
   return line ? flowFor(db.visuals, "one_pager_line", betSubject(op.flowKey ? `${op.flowKey}/${line.id}` : line.id)) : null;
 }
 
@@ -918,15 +928,53 @@ function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: st
   const keyDates = slugs
     .flatMap((slug) => {
       const pub = draftOf(slug)?.published.key_dates ?? null;
-      return (db.key_dates?.[slug] ?? []).map((k) => {
+      const own = (db.key_dates?.[slug] ?? []).map((k) => {
         const was = pub?.find((x) => x.id === k.id);
         const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
-        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft };
+        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft, prd: null };
       });
+      return [...own, ...prdKeyDates(db, slug, ref(slug))];
     })
     .sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1));
   const may = me.role !== "viewer";
   return { key_dates: keyDates, key_date_roadmaps: slugs.map((slug) => ({ roadmap: ref(slug), applies: may && canEditRoadmap(full, slug, me), can_change: may })) };
+}
+
+/**
+ * roadmap-keydates (the owner, Nov 1: "Read-only from the PRD"): each dated milestone of the
+ * PRDs on the roadmap (key_dates.prd_key_dates), "M1 · Prove it" on its end day, its PRD
+ * named: no row of the roadmap's, so never edited here; it moves when the PRD does.
+ */
+function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"]): Schemas["SimpleKeyDate"][] {
+  const hidden = new Set(db.plan?.hidden ?? []);
+  const prds = [...new Set(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap).map((s) => s.roadmap))].map((rm) => ({
+    id: stableUuid(`simple-prd/${rm}`),
+    slug: ROADMAPS[rm].prd.toLowerCase().replace(/ /g, "-"),
+    title: ROADMAPS[rm].prd,
+  }));
+  return prds
+    .filter((p) => !hidden.has(p.slug))
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .flatMap((prd) =>
+      (db.prd_milestones?.[prd.slug] ?? []).map((m) => ({
+        id: stableUuid(`simple-prd-key-date/${slug}/${prd.slug}/${m.code}`),
+        roadmap,
+        name: m.name ? `${m.code} · ${m.name}` : m.code,
+        date: m.date,
+        note: null,
+        in_draft: false,
+        prd,
+      })),
+    );
+}
+
+/** roadmap-keydates: the plan PRDs' dated milestones when no approved version of theirs states any (the "simple-plan" scenarios). */
+export function planPrdMilestones(plan: PlanDb | undefined): Record<string, PrdMilestone[]> {
+  if (!plan || plan.undated) return {};
+  const ms = planMilestones()
+    .filter((m, i) => !plan.partly_dated || i === 0)
+    .map((m) => ({ code: m.code, name: m.name, date: m.end_date }));
+  return Object.fromEntries([PLAN_PRD_SLUG, ...(plan.prds ?? [])].map((slug) => [slug, ms]));
 }
 
 function json(status: number, body: unknown): Response {

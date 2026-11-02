@@ -409,6 +409,16 @@ export const milestoneWords = (name: string): string => name.replace(/\s*·\s*/,
 export const planMilestones = (data: Roadmap): Milestone[] =>
   data.milestones.filter((m) => m.start_date && m.end_date).sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
 
+/**
+ * roadmap-keydates: the key dates the charts draw: the roadmap's own, and a PRD's milestone
+ * unless the chart already draws it as a milestone (its code, on its day).
+ */
+export function drawnKeyDates(data: Roadmap): KeyDate[] {
+  const code = (name: string) => name.split(/[\s·]/)[0];
+  const drawn = new Set(data.milestones.flatMap((m) => [m.end_date, m.date].filter(Boolean).map((d) => `${code(m.name)}|${d}`)));
+  return (data.key_dates ?? []).filter((k) => !k.prd || !drawn.has(`${code(k.name)}|${k.date}`));
+}
+
 /** The milestone a person is in now: the one running today, else the next one, else the last. */
 export function currentMilestone(data: Roadmap): Milestone | null {
   const list = planMilestones(data);

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
@@ -157,6 +158,11 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
                   <span className="flex-none whitespace-nowrap text-text2" data-testid="key-date-day">
                     · {dayWords(k.date, data.today)}
                   </span>
+                  {k.prd && (
+                    <span className="ml-1 flex-none rounded-full bg-surface2 px-2 text-xs whitespace-nowrap text-text2" data-testid="key-date-from-prd">
+                      From the PRD
+                    </span>
+                  )}
                   {k.in_draft && (
                     <span className="ml-1 flex-none rounded-full bg-surface2 px-2 text-xs whitespace-nowrap text-text2" data-testid="key-date-in-draft">
                       in the draft
@@ -164,8 +170,17 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
                   )}
                 </div>
                 {k.note && <div className="text-sm text-text2">{k.note}</div>}
+                {/* roadmap-keydates (the owner, Nov 1): a PRD's milestone is read from the PRD; it changes there. */}
+                {k.prd && (
+                  <div className="text-sm text-text2" data-testid="key-date-where">
+                    Change it in the PRD,{" "}
+                    <Link href={`/documents/${k.prd.slug}`} className="font-semibold text-accent-ink hover:underline">
+                      {k.prd.title}
+                    </Link>
+                  </div>
+                )}
               </div>
-              {mayChange && !!of(k.roadmap.id)?.can_change && (
+              {!k.prd && mayChange && !!of(k.roadmap.id)?.can_change && (
                 <span className="flex flex-none gap-1">
                   <Button
                     aria-label={`Edit ${k.name}`}

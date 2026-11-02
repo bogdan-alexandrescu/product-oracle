@@ -56,6 +56,7 @@ import {
   type Where,
   setRoadmapToday,
   yearSpan,
+  drawnKeyDates,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
 
@@ -103,7 +104,7 @@ const time = (at: string) => plainClock(at, displayZone());
 
 /** fix4 qa-simple-roadmap-35: a key date's two marks: filled, and hollow while it is only in the draft. */
 function keyDateEntries(data: Roadmap): LegendEntry[] {
-  const kds = data.key_dates ?? [];
+  const kds = drawnKeyDates(data);
   const out: LegendEntry[] = [];
   if (kds.some((k) => !k.in_draft)) out.push({ key: "key", swatch: <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, words: "Key date" });
   if (kds.some((k) => k.in_draft))
