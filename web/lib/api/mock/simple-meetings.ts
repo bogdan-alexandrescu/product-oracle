@@ -49,6 +49,7 @@ import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
+import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 
@@ -81,6 +82,8 @@ export interface MeetingsCtx {
   documents?: () => { id: string; slug: string; title: string }[];
   /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
   runs?: (prd: string | null) => Schemas["SimpleRunGroup"][];
+  /** runplan-r2: a meeting decision is a row of the decision log too (Company > Decisions), as the API's one decisions row. */
+  logDecision?: (d: { id: string; title: string; at: string; approver_id: string; subjects: { kind: string; id: string; ref?: string }[]; chosen: string; meeting_title: string }) => void;
 }
 
 interface Meeting {
@@ -129,6 +132,8 @@ interface Decision {
   subjects: { kind: string; id: string; ref?: string }[];
   meeting_id: string | null;
   change_ids: string[];
+  /** Its one option's key, as the API's chosen_option: "decided", or "draft-dates:N" for Approve these N dates. */
+  chosen?: string;
   /** The roadmap items its changes touched (meetings.decided_flows reads them). */
   item_ids?: string[];
   /** A PRD's question decided in the meeting: its code, title and answer (the Decisions page's row, as the API's). */
@@ -513,6 +518,8 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     not_approved: [],
     notes: m.notes ?? [],
     agenda: m.agenda_state ?? { next: null, skipped: [] },
+    // build-runplan RP2: the run's draft roadmap of the PRD (meeting_draft.draft_out).
+    draft_roadmap: draftRoadmapOut(ctx.roadmap, p.ids, approvedHere(db, m, p.ids)),
   };
 }
 
@@ -622,13 +629,20 @@ function decidedFlow(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecidedFlow"
   return { kind: "draft_item", id: item.id, title: item.title, flow };
 }
 
-function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = []): Decision {
+/** How many items this meeting's Approve these N dates put on the roadmap, or null: its newest such decision on the PRD, by its chosen option (meeting_draft._approved_here). */
+function approvedHere(db: MeetingsDb, m: Meeting, prdIds: string[]): number | null {
+  const d = db.decisions.filter((x) => x.meeting_id === m.id && x.chosen?.startsWith(`${APPROVED_KEY}:`) && x.subjects.some((s) => prdIds.includes(s.id))).sort(newestFirst)[0];
+  return d ? Number(d.chosen!.slice(APPROVED_KEY.length + 1)) : null;
+}
+
+function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = [], chosen = "decided"): Decision {
   const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
   const d: Decision = {
     id: crypto.randomUUID(), number, title, origin: "meeting", status: "decided", approver_id: ctx.me.id, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
-    subjects, meeting_id: m.id, change_ids: changeIds, item_ids: itemIds,
+    subjects, meeting_id: m.id, change_ids: changeIds, item_ids: itemIds, chosen,
   };
   db.decisions.push(d);
+  ctx.logDecision?.({ id: d.id, title, at: d.at, approver_id: ctx.me.id, subjects, chosen, meeting_title: m.title });
   // The items and lines it names link to it (decided_in, a line's decisions), newest first.
   for (const s of subjects) {
     const row = { id: d.id, number: d.number, title: d.title };
@@ -1068,6 +1082,22 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const note: MeetingNote = { id: `comment-${crypto.randomUUID()}`, kind: "comment", text, by_name: nameOf(ctx, ctx.me.id), at: iso(mockNowMs()), card_id: null };
     (m.notes ??= []).push(note);
     return json(201, one(ctx, db, m));
+  }
+  // build-runplan RP2 (meeting_draft): Change dates, Leave out and Approve these N dates on the run's draft.
+  if (p[4] === "draft-items" && method === "POST") {
+    if (m.status !== "live") return json(409, { detail: "The meeting has ended" });
+    if (!mayChange(m, ctx.me.id)) return json(403, { detail: "You cannot change things in this meeting" });
+    const b = (await body(req)) as { start?: string; end?: string };
+    const act = p[5] === "approve" ? ({ kind: "approve" } as const) : p[6] === "dates" ? ({ kind: "dates", id: p[5]!, start: b.start ?? "", end: b.end ?? "" } as const) : p[6] === "leave-out" ? ({ kind: "leave", id: p[5]! } as const) : null;
+    if (!act) return null;
+    const r = draftAct(ctx.roadmap, prd.ids, act);
+    if ("status" in r) return json(r.status, { detail: r.detail });
+    if (act.kind === "approve") {
+      // The PRD by its slug (Company > Decisions links to it); the count in the chosen option, so the step says so after a reload (meeting_draft.approve_dates).
+      const subject = { kind: "document", id: prd.ids[0]!, ref: prd.slug };
+      record(db, ctx, m, `${prd.title} dates approved: ${r.n} item${r.n === 1 ? "" : "s"} on the roadmap`, [subject], [], [], `${APPROVED_KEY}:${r.n}`);
+    }
+    return ok();
   }
   if (p[4] === "approve" && method === "POST") {
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });

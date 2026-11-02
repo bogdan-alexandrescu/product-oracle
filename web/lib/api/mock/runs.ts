@@ -10,7 +10,7 @@ import { mockName as displayName } from "./people";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { companyDayInWords, companyDayIso, companyStamp } from "./connections";
-import { ranking } from "./lane-f";
+import { FORMULAS, ranking } from "./lane-f";
 import type { RowTally } from "./from-run";
 import { fileItems } from "./checkpoint-review";
 import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from "./agent-questions";
@@ -1172,8 +1172,27 @@ function decideScope(ctx: Pick<RunsContext, "db" | "now">, r: RunOut, decision: 
 /** A priority order as priority.yaml lists it (C8, oracle.priorities.run_order): ranks follow the list. */
 interface OrderSpec {
   method: Method;
-  order: { key: string; score: number; explanation: string }[];
+  order: OrderEntry[];
 }
+
+/**
+ * One row of priority.yaml. A feature new in this PRD (a proposal of the run, not in the
+ * baseline yet: `title` set here) also gives the formula's inputs (run_order.NEW_INPUTS).
+ */
+interface OrderEntry {
+  key: string;
+  score: number;
+  explanation: string;
+  title?: string;
+  depends_on?: string[];
+  goal?: string;
+  weight?: number;
+  contribution?: number;
+  confidence?: number;
+  effort?: number;
+}
+
+const NEW_INPUTS = ["goal", "weight", "contribution", "confidence", "effort"] as const;
 
 /** The local runtime's order of its feature set: clean. */
 const LOCAL_ORDER: OrderSpec = {
@@ -1188,7 +1207,10 @@ const LOCAL_ORDER: OrderSpec = {
 /** priority.yaml (version 1) for an order. */
 function priorityYaml(spec: OrderSpec, segment: string, attempt: number): string {
   const lines = [`# ${segment} (attempt ${attempt})`, "version: 1", `method: ${spec.method}`, "order:"];
-  spec.order.forEach((o, i) => lines.push(`  - key: ${o.key}`, `    rank: ${i + 1}`, `    score: ${o.score}`, `    explanation: ${JSON.stringify(o.explanation)}`));
+  spec.order.forEach((o, i) => {
+    lines.push(`  - key: ${o.key}`, `    rank: ${i + 1}`, `    score: ${o.score}`, `    explanation: ${JSON.stringify(o.explanation)}`);
+    for (const n of NEW_INPUTS) if (o[n] != null) lines.push(`    ${n}: ${o[n]}`);
+  });
   return `${lines.join("\n")}\n`;
 }
 
@@ -1211,11 +1233,14 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
   const rank = Object.fromEntries(keys.map((k, i) => [k, i + 1]));
   const deps: Record<string, string[]> = Object.fromEntries(live.map((f) => [f.key, [...f.depends_on]]));
   for (const f of scope ?? []) deps[f.key] = [...(deps[f.key] ?? []), ...f.depends_on];
+  // The run's own proposals (new in this PRD) are known, as the scope's are in the API.
+  const proposed = new Set(spec.order.filter((o) => o.title).map((o) => o.key));
+  for (const o of spec.order) if (o.title) deps[o.key] = [...(o.depends_on ?? [])];
   const problems: PriorityCheck["problems"] = [];
   const add = (code: string, feature: string, message: string, blocking = true) => problems.push({ code, blocking, feature, message });
   const inScope = new Set((scope ?? []).map((f) => f.key));
   for (const k of keys) {
-    if (!live.some((f) => f.key === k) && !inScope.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
+    if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
     else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
   }
   for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.key} is in the approved PRD scope and not ranked`);
@@ -1226,7 +1251,8 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
   }
   const order = spec.order.map((o, i) => {
     const at = restricted.indexOf(o.key);
-    return { key: o.key, rank: i + 1, score: o.score, explanation: o.explanation, live_rank: at < 0 ? null : at + 1 };
+    const inputs = Object.fromEntries(NEW_INPUTS.filter((n) => o[n] != null).map((n) => [n, o[n]]));
+    return { key: o.key, rank: i + 1, score: o.score, explanation: o.explanation, live_rank: at < 0 ? null : at + 1, ...inputs };
   });
   for (const o of order) {
     if (o.live_rank != null && Math.abs(o.live_rank - o.rank) > 2) {
@@ -1259,7 +1285,11 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
   const same = all.find((x) => x.run_id === r.id && x.status === "proposed" && x.params.segment_seq === seq && x.params.attempt === attempt);
   for (const x of all) if (x !== same && x.run_id === r.id && x.status === "proposed") Object.assign(x, { status: "discarded", decided_at: ctx.now() });
   const live = Object.fromEntries(ranking(spec.method).features.map((f) => [f.key, f]));
-  const rows = check.order!.filter((o) => live[o.key]).map((o) => ({ ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation }));
+  const titles = Object.fromEntries(spec.order.filter((o) => o.title).map((o) => [o.key, o]));
+  const liveRows = Object.values(live);
+  const rows = check.order!.filter((o) => live[o.key] || titles[o.key]).map((o) =>
+    live[o.key] ? { ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation } : newFeature(titles[o.key], o.rank, spec.method, liveRows, spec.order),
+  );
   const snap: SnapshotRow = {
     id: same?.id ?? ctx.uuid(),
     method: spec.method,
@@ -1283,6 +1313,61 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
   if (same) Object.assign(same, snap);
   else all.push(snap);
   return same ?? snap;
+}
+
+const num = (v: number) => String(Number(v.toFixed(4)));
+
+/**
+ * As oracle.priorities.run_order.new_feature: a feature new in this PRD scored on the same
+ * formula (goal weight × contribution × confidence ÷ effort) from the inputs the run set,
+ * marked `new`; its confidence is the run's, with no evidence yet. What it depends on, and
+ * what waits on it, are the edges the run's feature set gives (`depends_on`).
+ */
+function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotRow["ranking"], order: OrderEntry[]): SnapshotRow["ranking"][number] {
+  const goalTitle = live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal)?.title ?? o.goal ?? "";
+  const goals: SnapshotRow["ranking"][number]["explanation"]["goals"] = [];
+  const steps: string[] = [];
+  const missing: string[] = [];
+  let score: number | null = o.score;
+  let value: number | null = null;
+  if (o.goal != null && o.weight != null && o.contribution != null) {
+    value = o.weight * o.contribution;
+    goals.push({ goal: o.goal, title: goalTitle, weight: o.weight, weight_assumed: false, contribution: o.contribution, contribution_assumed: false, link_status: "proposed", term: value });
+    // In the scorer's words, so the page shows them as every row's (confidence as a percent, two decimals).
+    steps.push(`goal value = ${num(o.weight)}×${num(o.contribution)} (${goalTitle}) = ${num(value)}`);
+    if (o.confidence != null && o.effort) {
+      score = Math.round((value * o.confidence * 10000) / o.effort) / 10000;
+      steps.push(`score = ${num(value)} × ${num(o.confidence)} ÷ ${num(o.effort)} = ${num(score)}`);
+    }
+  } else missing.push("goal");
+  if (o.confidence == null) missing.push("confidence");
+  if (o.effort == null) missing.push("effort");
+  return {
+    rank,
+    score_rank: rank,
+    entity_id: "",
+    key: o.key,
+    title: o.title!,
+    status: "proposed",
+    score,
+    serves_goal: goals.length > 0,
+    flags: [],
+    depends_on: [...new Set(o.depends_on ?? [])].filter((k) => k !== o.key).sort(),
+    dependents: order.filter((x) => x.key !== o.key && x.depends_on?.includes(o.key)).map((x) => x.key).sort(),
+    explanation: {
+      method,
+      formula: FORMULAS[method],
+      inputs: { effort: { value: o.effort ?? null, attr: "effort", raw: o.effort ?? null }, goal_value: { value, terms: goals } },
+      confidence: { value: o.confidence ?? 0, source: o.confidence != null ? "attrs" : "default", explain: "Set by the run: new in this PRD, no evidence yet", evidence: [] },
+      goals,
+      missing,
+      steps,
+      order: [],
+    },
+    live_rank: null,
+    run_explanation: o.explanation,
+    new: true,
+  };
 }
 
 /** As the API (rules 3-5): approving saves the order for the PRD (`by` null: Oracle, the stop was off); requesting changes discards it. */
@@ -2879,15 +2964,25 @@ export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schem
 export const PRIORITY_RUN = "7a11c0de-0000-4000-8000-0000000000c8";
 export const PRIORITY_BLOCKED_RUN = "7a11c0de-0000-4000-8000-0000000000c9";
 
-/** Saved addresses: one feature ranked well above the live ranking (differs_from_live, advisory). */
+/**
+ * Saved addresses: one feature ranked well above the live ranking (differs_from_live,
+ * advisory), and the 6 features the PRD adds (new, not in the baseline yet) scored on the
+ * same formula and ranked among the rest (RP1, invented).
+ */
 const SAVED_ADDRESSES_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
     { key: "F-5", score: 1.8, explanation: "Saved addresses read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3" },
     { key: "F-4", score: 0.6, explanation: "Alerts keep teams active; ranked early on purpose: G2 weight 2 x contribution 1 x 0.3 / 1" },
     { key: "F-2", score: 8.1, explanation: "Needs F-5 first; G1 weight 3 x contribution 3 x 0.9 / 1" },
+    { key: "N-1", title: "Address book per account", goal: "g.activation", weight: 3, contribution: 2, confidence: 0.7, effort: 1, score: 4.2, explanation: "New in this PRD. Every other address feature needs the book first." },
+    { key: "N-2", title: "Default delivery address", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 3, confidence: 0.6, effort: 2, score: 2.7, explanation: "New in this PRD. Asked for in 14 interviews." },
+    { key: "N-3", title: "Address check at checkout", depends_on: ["N-1"], goal: "g.paid-conversion", weight: 2, contribution: 2, confidence: 0.6, effort: 1, score: 2.4, explanation: "New in this PRD. Wrong addresses are the top reason a paid order fails." },
     { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "N-4", title: "Import addresses from a spreadsheet, with a preview before saving", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 2, confidence: 0.6, effort: 2, score: 1.8, explanation: "New in this PRD. Large customers keep addresses in sheets." },
+    { key: "N-5", title: "Shared team addresses", goal: "g.paid-conversion", weight: 2, contribution: 1, confidence: 0.6, effort: 1, score: 1.2, explanation: "New in this PRD. Teams re-type the same office address." },
     { key: "F-7", score: 1, explanation: "G2 weight 2 x contribution 2 x 0.5 / 2" },
+    { key: "N-6", title: "Address labels and notes", goal: "g.paid-conversion", weight: 2, contribution: 3, confidence: 0.3, effort: 4, score: 0.45, explanation: "New in this PRD. A guess: no evidence yet." },
   ],
 };
 

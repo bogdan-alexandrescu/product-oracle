@@ -13192,6 +13192,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/meetings/{meeting_id}/draft-items/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Simple Meeting Draft Dates
+         * @description Approve these N dates (RP2): the run's draft items go on the roadmap with their
+         *     dates; the meeting records the decision. The PRD still needs its own approval.
+         */
+        post: operations["approve_simple_meeting_draft_dates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Simple Meeting Draft Dates
+         * @description Change dates on a draft item of the run's draft roadmap: it stays draft.
+         */
+        post: operations["change_simple_meeting_draft_dates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/leave-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave Out Simple Meeting Draft Item
+         * @description Leave out a draft item: it never goes on the roadmap.
+         */
+        post: operations["leave_out_simple_meeting_draft_item"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/meetings/{meeting_id}/end": {
         parameters: {
             query?: never;
@@ -18980,6 +19041,11 @@ export interface components {
             live_explanation: string | null;
             /** Problems */
             problems: components["schemas"]["PriorityProblem"][];
+            /**
+             * New
+             * @default false
+             */
+            new: boolean;
         };
         /** CompareRun */
         CompareRun: {
@@ -32658,6 +32724,11 @@ export interface components {
             live_rank?: number | null;
             /** Run Explanation */
             run_explanation?: string | null;
+            /**
+             * New
+             * @default false
+             */
+            new: boolean;
             override?: components["schemas"]["RowOverride"] | null;
             /** Held Below */
             held_below?: string | null;
@@ -38063,6 +38134,22 @@ export interface components {
             titles: string[];
         };
         /**
+         * SimpleDraftDatesIn
+         * @description Change dates on a draft item: it stays draft.
+         */
+        SimpleDraftDatesIn: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+        };
+        /**
          * SimpleDraftOut
          * @description A working draft of one roadmap (S3b): its changes until submitted, then the version
          *     in review and who it waits on.
@@ -38146,6 +38233,44 @@ export interface components {
             items: number;
             /** Key Dates */
             key_dates: number;
+        };
+        /**
+         * SimpleDraftRoadmap
+         * @description The run's draft roadmap of the meeting's PRD (RP2, 'Meeting step as draft'): its
+         *     dated items, shown hatched in the Roadmap step until the meeting approves the dates.
+         */
+        SimpleDraftRoadmap: {
+            /** Items */
+            items: components["schemas"]["SimpleDraftRoadmapItem"][];
+            /** Approved */
+            approved?: number | null;
+        };
+        /**
+         * SimpleDraftRoadmapItem
+         * @description An item of the run's draft roadmap with its dates: not on the roadmap yet.
+         */
+        SimpleDraftRoadmapItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Horizon */
+            horizon: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
         };
         /**
          * SimpleEmailDelivery
@@ -38896,6 +39021,7 @@ export interface components {
              *     }
              */
             agenda: components["schemas"]["SimpleAgenda"];
+            draft_roadmap?: components["schemas"]["SimpleDraftRoadmap"] | null;
         };
         /** SimpleMeetingRulesIn */
         SimpleMeetingRulesIn: {
@@ -70979,6 +71105,105 @@ export interface operations {
             header?: never;
             path: {
                 meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_simple_meeting_draft_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_simple_meeting_draft_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleDraftDatesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leave_out_simple_meeting_draft_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+                item_id: string;
             };
             cookie?: never;
         };

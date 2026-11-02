@@ -21,6 +21,7 @@ import { opWords } from "../../roadmap/_card";
 import { usePhone } from "../../priorities/priorities";
 import { DeliveryLine, emailWords, slackWords } from "../_delivery";
 import { DecidedItem, LINK, momentWords } from "../_flow";
+import { DraftDates } from "./_draft";
 import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
 
 // Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
@@ -458,6 +459,7 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
     await reload();
   });
   const [said, setSaid] = useState<string | null>(null);
+  const [approved, setApproved] = useState<number | null>(null);
   // qa4-simple-decide-16: the line says what moved ("Moved Sample data import to Later").
   const change = (body: Schemas["SimpleChangeIn"], words: string) =>
     act(async () => {
@@ -481,6 +483,9 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
     });
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
+  // build-runplan RP2: the run's draft roadmap, hatched until the meeting approves its dates.
+  // The meeting's own count once it approved the dates, so a reload keeps the done view.
+  if (m.draft_roadmap || approved !== null) return <DraftDates m={m} reload={reload} roadmap={q} approved={approved ?? m.draft_roadmap?.approved ?? null} onApproved={setApproved} />;
   // qa4-simple-decide-15: Now, Next, Later, then Cut; the roadmap's order within each.
   const all = q.data.items;
   const rank = (i: (typeof all)[number]) => ORDER[i.status === "cut" ? "cut" : i.horizon] ?? 4;

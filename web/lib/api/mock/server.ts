@@ -23,7 +23,7 @@ import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type Bra
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
-import { decidePricing, decisionInbox, enlargeDecisions, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -163,6 +163,7 @@ import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, 
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { approvedPrdToDraft, itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
@@ -1624,6 +1625,19 @@ function seedPriorityOrder(): Db {
 }
 
 /**
+ * build-runplan RP2 "meeting-draft-dates" scenario: the Simple home's data, the Saved carts PRD a
+ * draft whose run dated six items on its draft roadmap (./meeting-draft.ts).
+ */
+function seedMeetingDraftDatesScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  // The fixtures' Saved carts PRD, named as the review shows it.
+  const doc = db.documents.find((d) => d.slug === SAVED_CARTS.slug)!;
+  doc.title = SAVED_CARTS.title;
+  if (db.simple_roadmap) seedMeetingDraftDates(db.simple_roadmap, doc.id);
+  return db;
+}
+
+/**
  * D12 "next-draft" scenario: the fleet PRD on draft 2 with two accepted section-text
  * changes (F-33, F-34), a whole-draft remark staged for the agents and one nobody staged
  * yet. "next-draft-costly": the same, with the agents' run estimated over the owner-approval
@@ -2947,6 +2961,8 @@ function load(): Db {
             ? seedRunReviewDecider
           : scenario === "priority-order"
             ? seedPriorityOrder
+          : scenario === "meeting-draft-dates"
+            ? seedMeetingDraftDatesScenario
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
@@ -5867,6 +5883,12 @@ async function route(db: Db, req: Request): Promise<Response> {
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)
           .flatMap((t) => t.messages.filter((x) => x.author_kind === "person").map((x) => x.body)),
+    };
+    // runplan-r2: a meeting's decision is in the decision log too (one decisions row in the API).
+    meetingsCtx.logDecision = (d) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const ctx = decisionsContext(db, me);
+      logMeetingDecision(ctx, ensureDecisions(db, ctx), d);
     };
     // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
     meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;

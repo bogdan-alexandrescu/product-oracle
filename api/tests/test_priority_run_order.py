@@ -55,7 +55,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import select
 
-from oracle.baseline.models import Edge, Entity
+from oracle.baseline.models import Edge, Entity, Proposal
 from oracle.docs.models import Document
 from oracle.models import AuditEvent
 from oracle.priorities import run_order
@@ -136,13 +136,13 @@ async def seed_baseline(tenant_id) -> None:
         await s.commit()
 
 
-async def at_priority(client, owner, runtime, text=ORDER, **knobs) -> dict:  # noqa: F811
-    """A baseline_to_prd run past its approved feature set, its priority segment ended
-    with ``text`` as priority.yaml."""
+async def at_priority(client, owner, runtime, text=ORDER, features=CLEAN, **knobs) -> dict:  # noqa: F811
+    """A baseline_to_prd run past its approved feature set (``features``), its priority
+    segment ended with ``text`` as priority.yaml."""
     tenant_id, auth = owner
     await seed_baseline(tenant_id)
     runtime.script["feature_set"] = [
-        Outcome(artifacts={"feature_set.yaml": CLEAN, "design.md": "# Design\n"})
+        Outcome(artifacts={"feature_set.yaml": features, "design.md": "# Design\n"})
     ]
     runtime.script["priority"] = [Outcome(artifacts={"priority.yaml": text})]
     run = await started(client, auth, document=DOC, **knobs)
@@ -361,7 +361,8 @@ async def test_segment_end_stores_a_proposed_snapshot(client, owner, runtime):  
     assert [(r["key"], r["rank"], r["live_rank"]) for r in snap.ranking] == [
         ("address-lookup", 1, 1),
         ("saved-addresses", 2, 2),
-    ]  # bulk-edit is not in the live ranking: it stays in the check's order only
+        ("bulk-edit", 3, None),
+    ]  # bulk-edit is new in this PRD: ranked with the rest (RP1), not in the live ranking
     assert snap.ranking[1]["run_explanation"].startswith("Needs address-lookup first")
     assert snap.ranking[0]["explanation"]["method"] == "rice"
     assert [(r["key"], r["rank"], r["live_rank"]) for r in snap.check_result["order"]] == [
@@ -692,3 +693,141 @@ async def test_a_proposed_order_names_its_prd_by_title_before_the_import(client,
     (snap,) = await snapshots(tenant_id, run["id"])
     cmp = (await client.get(f"/v1/priorities/snapshots/{snap.id}/compare", headers=auth)).json()
     assert cmp["snapshot"]["document"]["title"] == "E2E test · Saved replies"
+
+
+# The run's new feature (bulk-edit, proposed by the run) scored on the baseline's formula,
+# with its own inputs, and ranked among the rest (build-runplan RP1 'Scored with the rest').
+ORDER_NEW = """\
+version: 1
+method: goal_weighted
+order:
+  - key: address-lookup
+    rank: 1
+    score: 2.1
+    explanation: "Activation weight 3 x contribution 1 x confidence 0.7 / effort 1"
+  - key: bulk-edit
+    rank: 2
+    score: 1.8
+    goal: activation
+    weight: 3
+    contribution: 2
+    confidence: 0.6
+    effort: 2
+    explanation: "New in this PRD; large customers edit in bulk"
+  - key: saved-addresses
+    rank: 3
+    score: 3.6
+    explanation: "Needs address-lookup first"
+"""
+
+
+async def test_a_new_feature_is_scored_and_ranked_with_the_rest(client, owner, runtime):  # noqa: F811
+    tenant_id, auth = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert [(r["key"], r["rank"], r.get("new", False)) for r in snap.ranking] == [
+        ("address-lookup", 1, False),
+        ("bulk-edit", 2, True),
+        ("saved-addresses", 3, False),
+    ]
+    new = snap.ranking[1]
+    assert new["title"] == "Bulk edit" and new["status"] == "proposed"
+    assert new["score"] == 1.8 and new["live_rank"] is None
+    e = new["explanation"]
+    assert e["confidence"]["value"] == 0.6 and e["confidence"]["source"] == "attrs"
+    assert e["inputs"]["effort"]["value"] == 2
+    assert [(g["goal"], g["title"], g["weight"], g["contribution"]) for g in e["goals"]] == [
+        ("activation", "Activation", 3, 2)
+    ]
+    assert e["steps"] == [
+        "goal value = 3×2 (Activation) = 6",
+        "score = 6 × 0.6 ÷ 2 = 1.8",
+    ]
+    resp = await client.get(f"/v1/priorities/snapshots/{snap.id}/compare", headers=auth)
+    assert resp.status_code == 200, resp.text
+    rows = {r["key"]: r for r in resp.json()["rows"]}
+    assert rows["bulk-edit"]["new"] is True and rows["bulk-edit"]["run_rank"] == 2
+    assert rows["address-lookup"]["new"] is False
+    assert rows["bulk-edit"]["title"] == "Bulk edit"
+    ranked = {r["key"]: r for r in resp.json()["snapshot"]["ranking"]}
+    assert ranked["bulk-edit"]["new"] is True and ranked["bulk-edit"]["score"] == 1.8
+
+
+# The run's feature set says bulk-edit, new in this PRD, depends on address-lookup.
+NEW_DEPENDS = CLEAN.replace(
+    "    title: Bulk edit\n    goals: []\n",
+    "    title: Bulk edit\n    goals: []\n    depends_on: [address-lookup]\n",
+)
+
+
+async def test_a_new_feature_keeps_what_it_depends_on(client, owner, runtime):  # noqa: F811
+    """build-runplan review: the order's Depends on column of a new feature reads what the
+    run's feature set says it depends on, and the features that wait on it."""
+    tenant_id, _ = owner
+    assert NEW_DEPENDS != CLEAN
+    run = await at_priority(client, owner, runtime, ORDER_NEW, features=NEW_DEPENDS)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert run_order.blocking_of(snap.check_result) == 0, snap.check_result
+    new = {r["key"]: r for r in snap.ranking}["bulk-edit"]
+    assert new["depends_on"] == ["address-lookup"] and new["dependents"] == []
+
+
+async def test_a_new_feature_ranked_above_what_it_depends_on_is_blocking(client, owner, runtime):  # noqa: F811
+    tenant_id, _ = owner
+    above = ORDER_NEW.replace("rank: 1\n", "rank: X\n").replace("rank: 2\n", "rank: 1\n")
+    above = above.replace("rank: X\n", "rank: 2\n")
+    run = await at_priority(client, owner, runtime, above, features=NEW_DEPENDS)
+    (snap,) = await snapshots(tenant_id, run["id"])
+    codes = [(p["code"], p["feature"]) for p in snap.check_result["problems"] if p["blocking"]]
+    assert codes == [("before_prerequisite", "bulk-edit")]
+    new = {r["key"]: r for r in snap.ranking}["bulk-edit"]
+    assert new["depends_on"] == ["address-lookup"]
+
+
+async def test_an_order_saved_by_oracle_adds_its_new_features_too(client, owner, runtime):  # noqa: F811
+    """build-runplan review: with no person deciding (the stop off, Oracle saves the order)
+    the new features still join the baseline as proposed, for the run's creator."""
+    tenant_id, _ = owner
+    run = await at_priority(
+        client, owner, runtime, ORDER_NEW, checkpoints={"priority_order": False}
+    )
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    async with tenant_session(tenant_id) as s:
+        entity = await s.scalar(select(Entity).where(Entity.key == "bulk-edit"))
+        proposal = await s.scalar(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"])))
+    assert entity is not None and entity.status == "proposed"
+    assert proposal.status == "accepted"
+
+
+async def test_two_open_creates_of_one_new_feature_approve_once(client, owner, runtime):  # noqa: F811
+    """build-runplan review: a run with two open creates for the same key approves its
+    order; one is accepted, the other rejected as the same feature."""
+    tenant_id, _ = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW)
+    await propose_feature(tenant_id, run["id"])
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    async with tenant_session(tenant_id) as s:
+        entities = list(await s.scalars(select(Entity).where(Entity.key == "bulk-edit")))
+        proposals = list(
+            await s.scalars(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"])))
+        )
+    assert len(entities) == 1
+    assert sorted(p.status for p in proposals) == ["accepted", "rejected"]
+
+
+async def test_approving_the_order_adds_its_new_features_as_proposed(client, owner, runtime):  # noqa: F811
+    tenant_id, auth = owner
+    run = await at_priority(client, owner, runtime, ORDER_NEW)
+    approver = await as_user(tenant_id, "approver")
+    run = await decide(client, approver, run, note="Good order")
+    (snap,) = await snapshots(tenant_id, run["id"])
+    assert snap.status == "saved"
+    async with tenant_session(tenant_id) as s:
+        entity = await s.scalar(select(Entity).where(Entity.key == "bulk-edit"))
+        proposal = await s.scalar(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"])))
+    assert entity is not None and entity.status == "proposed" and entity.title == "Bulk edit"
+    assert proposal.status == "accepted"

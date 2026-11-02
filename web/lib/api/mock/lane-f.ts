@@ -67,7 +67,7 @@ const notFound = (what: string) => json(404, { detail: `${what} not found` });
 
 // ---------------------------------------------------------------- priorities
 
-const FORMULAS: Record<Method, string> = {
+export const FORMULAS: Record<Method, string> = {
   goal_weighted: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
   rice: "score = reach × impact × confidence ÷ effort",
   moscow: "rank = must (4) > should (3) > could (2) > won't (1); ties by goal value",
@@ -321,6 +321,7 @@ function scoreFeature(f: FeatureSeed, method: Method, cal: TrackRecord = null): 
   return {
     entity_id: `00000000-0000-4000-8000-${hash(f.key).padStart(12, "0")}`,
     key: f.key,
+    new: false,
     title: f.title,
     status: f.status,
     score: score == null ? null : round(method === "moscow" ? Math.floor(score) : score),
@@ -1957,6 +1958,8 @@ function compare(db: Db, snap: SnapshotRow): Schemas["CompareOut"] {
       run_explanation: o.explanation ?? null,
       live_explanation: f ? [f.explanation.formula, ...f.explanation.steps.slice(0, 3)].join(" ") : null,
       problems: problems.filter((p) => p.feature === o.key),
+      // New in this PRD when the run ranked it (RP1): still marked once the order adds it.
+      new: !!snap.ranking.find((x) => x.key === o.key)?.new,
     };
   });
   const run = snap.run_id ? db.runs?.runs.find((r) => r.id === snap.run_id) : undefined;

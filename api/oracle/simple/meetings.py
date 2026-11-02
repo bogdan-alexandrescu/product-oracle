@@ -210,10 +210,11 @@ async def record_meeting_decision(
     title: str,
     subjects: list[dict],
     change_ids: list[uuid.UUID],
+    chosen: str = "decided",
 ) -> uuid.UUID:
     """One meeting decision: a ``decisions`` row (origin ``meeting``, decided, approver
-    the caller), linked to the meeting and the changes it made. 404 for no such meeting,
-    409 once it ended. The caller commits."""
+    the caller), linked to the meeting and the changes it made; ``chosen`` is its one
+    option's key. 404 for no such meeting, 409 once it ended. The caller commits."""
     from oracle.decisions import capture
 
     me = _me(principal)
@@ -237,8 +238,8 @@ async def record_meeting_decision(
         source_kind=SOURCE_KIND,
         source_id=uuid.uuid4(),
         title=title,
-        options=[{"key": "decided", "label": title}],
-        chosen_option="decided",
+        options=[{"key": chosen, "label": title}],
+        chosen_option=chosen,
         rationale=f"Decided in {m.title}",
         approver_id=me,
         context=f"Decided in the review meeting {m.title}",
@@ -941,7 +942,7 @@ async def _prd_items(db: AsyncSession, document: Document) -> tuple[set, set]:
 
 async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
               not_approved: list | None = None) -> SimpleMeetingOut:  # fmt: skip
-    from oracle.simple import changes, questions
+    from oracle.simple import changes, meeting_draft, questions
 
     m, document = await _get(db, principal, meeting_id)
     w = await prd_who(db, document)
@@ -1029,6 +1030,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         not_approved=not_approved or [],
         notes=await _notes_out(db, m),
         agenda=await _agenda_out(db, m),
+        draft_roadmap=await meeting_draft.draft_out(db, document, m.id),
     )
 
 

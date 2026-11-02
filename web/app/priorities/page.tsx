@@ -461,7 +461,10 @@ function FeatureInspector({
   // The steps name each goal by its code and name, not its key (#304).
   const words = (s: string) => e.goals.reduce((t, g) => t.split(`(${g.goal})`).join(`(${goalText(g.goal, g.title)})`), s);
   // A feature the run ranks that Oracle's live ranking lacks (a proposal of the run): its own line only.
-  const live = !run || run.live_rank != null || f.entity_id !== "";
+  // A feature new in the run's PRD is scored on the same formula (RP1): its steps show.
+  const live = !run || run.live_rank != null || f.entity_id !== "" || !!f.new;
+  // Its run row as the order shows it; a new feature reads as any scored row, no Live tile.
+  const runRow = f.new ? undefined : run;
   const given = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
   // Confidence is an input of every formula that multiplies by it: its row reads as the steps do.
   const inputs: [string, Record<string, unknown> | null][] =
@@ -475,6 +478,8 @@ function FeatureInspector({
         title={f.title}
         label={`Feature ${f.title}`}
         testId="priority-inspector"
+        // Four tiles two by two, so no score or label breaks across lines at 1440 or 1512.
+        statColumns={runRow ? 2 : undefined}
         // On the theme's card surface like every other card, not a dark hero (qa-plan-33).
         tone="card"
         chips={
@@ -490,13 +495,13 @@ function FeatureInspector({
             label: "Rank",
             value: f.formula_rank != null && f.formula_rank !== f.rank ? `#${f.rank} · Oracle #${f.formula_rank}` : `#${f.rank}`,
           },
-          ...(run ? [{ label: "Live", value: run.live_rank == null ? "—" : `#${run.live_rank}` }] : []),
+          ...(runRow ? [{ label: "Live", value: runRow.live_rank == null ? "—" : `#${runRow.live_rank}` }] : []),
           { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} text={confidencePercent(e.confidence.value)} size={46} /> },
           // The score always fits its tile (qa-plan-6): a long one ("5,400", "83.33") in smaller figures.
           { label: "Score", testId: "inspector-score", figure: <TileFigure text={scoreText(f.score, e.method)} /> },
         ]}
       >
-        {run && (
+        {run && runRow && (
           <InspectorSection label={`Why rank ${run.run_rank}`} testId="run-explanation">
             <p className="text-sm break-words">{run.run_explanation ?? "The run gave no explanation."}</p>
             <p className="tnum mt-1.5 text-sm text-text2">
@@ -763,6 +768,7 @@ function placeholder(c: CompareRow, method: Method): RankedFeature {
     rank: c.run_rank,
     score_rank: c.run_rank,
     entity_id: "",
+    new: c.new,
     key: c.key,
     title: c.title,
     status: "proposed",
@@ -786,6 +792,30 @@ function placeholder(c: CompareRow, method: Method): RankedFeature {
 }
 
 const STATUS_TEXT = { saved: "Saved", proposed: "Proposed", discarded: "Discarded" } as const;
+
+/**
+ * The features new in the run's PRD (RP1, 'Scored with the rest'): ranked here among the
+ * rest; approving the order adds them to the baseline as proposed.
+ */
+function NewFeaturesNote({ c }: { c: CompareOut }) {
+  const n = c.rows.filter((r) => r.new).length;
+  if (n === 0) return null;
+  const features = n === 1 ? "1 feature" : `${n} features`;
+  if (c.snapshot.status === "saved")
+    return (
+      <Notice tone="pass" testId="new-features-note">
+        {`Order approved. The ${n === 1 ? "new feature" : `${n} new features`} joined the baseline as proposed, at the ${n === 1 ? "rank" : "ranks"} you approved.`}
+      </Notice>
+    );
+  if (c.snapshot.status !== "proposed") return null;
+  // As the frame words it: "the 6 features Saved addresses adds", the PRD named without its kind.
+  const prd = c.snapshot.document ? prdName(c.snapshot.document).replace(/ PRD$/, "") : "this PRD";
+  return (
+    <Notice tone="info" testId="new-features-note">
+      {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest. Approving the order adds ${n === 1 ? "it" : "them"} to the baseline as proposed.`}
+    </Notice>
+  );
+}
 
 /**
  * Run mode's band (C8): whose order this is and where it stands, and the priority stop's
@@ -1100,6 +1130,13 @@ function Priorities() {
             data-testid="feature-name"
           >
             {f.title}
+            {f.new && (
+              <span className="ml-2 inline-block align-middle">
+                <Chip kind="acc" title="Not in the baseline yet: proposed by this PRD's run">
+                  New in this PRD
+                </Chip>
+              </span>
+            )}
           </button>
         );
       },
@@ -1354,6 +1391,7 @@ function Priorities() {
             }}
           />
         )}
+        {cmp && <NewFeaturesNote c={cmp} />}
 
         <Split inspector={!phone && inspector}>
           <Panel>
