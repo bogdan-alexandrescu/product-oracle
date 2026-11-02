@@ -120,11 +120,46 @@ for (const [device, viewport] of [
       await expect(card(page, SEND).getByText("(the agent's pick)")).toBeVisible();
     });
 
+    test("Cancel after Change keeps the saved answer and puts the card back in Answered", async ({ page }) => {
+      await seeded(page, APPROVER);
+      await openReview(page);
+      await card(page, SEND).getByRole("radio", { name: /Build a new send path/ }).click();
+      await card(page, SEND).getByLabel("Note for the next agent (optional)").fill("The checkout team owns it from Nov 16");
+      await card(page, SEND).getByRole("button", { name: "Save answer" }).click();
+      await expect(block(page).getByTestId("agent-questions-count")).toHaveText("2 open · 2 answered");
+      // Change, pick the other option, then Cancel: nothing saved, the card back in Answered.
+      await card(page, SEND).getByRole("button", { name: "Change" }).click();
+      await expect(card(page, SEND)).toHaveAttribute("data-state", "open");
+      await expect(block(page).getByTestId("agent-questions-count")).toHaveText("3 open · 1 answered");
+      await card(page, SEND).getByRole("radio", { name: /Reuse the order service path/ }).click();
+      await card(page, SEND).getByRole("button", { name: "Cancel" }).click();
+      const back = card(page, SEND);
+      await expect(back).toHaveAttribute("data-state", "answered");
+      await expect(block(page).getByTestId("agent-questions-count")).toHaveText("2 open · 2 answered");
+      await expect(back.getByText("Build a new send path")).toBeVisible();
+      await expect(back.getByText("“The checkout team owns it from Nov 16”")).toBeVisible();
+      // After Clear the pick is gone, and Cancel still leads back.
+      await back.getByRole("button", { name: "Change" }).click();
+      await card(page, SEND).getByRole("button", { name: "Clear" }).click();
+      await expect(card(page, SEND).getByRole("button", { name: "Save answer" })).toHaveCount(0);
+      await card(page, SEND).getByRole("button", { name: "Cancel" }).click();
+      await expect(card(page, SEND)).toHaveAttribute("data-state", "answered");
+      await expect(card(page, SEND).getByText("Build a new send path")).toBeVisible();
+      // A question nobody answered has nothing to go back to: no Cancel.
+      const bulk = card(page, "Who edits addresses in bulk");
+      await bulk.getByRole("radio").first().click();
+      await expect(bulk.getByRole("button", { name: "Clear" })).toBeVisible();
+      await expect(bulk.getByRole("button", { name: "Cancel" })).toHaveCount(0);
+    });
+
     test("a viewer reads the questions but cannot answer them", async ({ page }) => {
       await seeded(page, VIEWER);
       await openReview(page);
       const send = card(page, SEND);
       await expect(send).toBeVisible();
+      // Not asked to answer: the header line only says where the answers go.
+      await expect(block(page).getByTestId("agent-questions-lede")).toHaveText("Each answer goes to Priority order with the decision.");
+      await expect(block(page).getByText("Answer here before you decide")).toHaveCount(0);
       await expect(send.getByRole("radio", { name: /Build a new send path/ })).toBeDisabled();
       await expect(block(page).getByRole("button", { name: "Save answer" })).toHaveCount(0);
     });
