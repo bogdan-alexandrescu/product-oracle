@@ -92,3 +92,31 @@ def test_accepted_engineering_dates_date_the_plan():
     assert view.dated
     # With none accepted, the PRD's own (missing) dates stay.
     assert plan.with_accepted(data, []) == data
+
+
+# The query behind it, against Postgres: the date the lead changed to at a run's Engineering
+# dates stop is the one the plan reads, never the proposed one.
+from tests.test_eng_dates_stop import (  # noqa: E402
+    _act,
+    _approve,
+    _at_dates,
+    derivations_start,  # noqa: F401 - autouse
+    owner,  # noqa: F401 - fixture
+    runtime,  # noqa: F401 - fixture
+)
+
+
+async def test_accepted_dates_reads_the_leads_changed_day(client, owner, runtime):  # noqa: F811
+    import uuid
+
+    from oracle.tenancy import tenant_session
+
+    tenant_id, auth = owner
+    run = await _at_dates(client, auth)
+    value = {"kind": "commitment", "reference": "ENG-412", "supports_date": "2026-12-04"}
+    body = {"item_key": "price-early", "kind": "edit", "field": "estimate", "value": value}
+    assert (await _act(client, auth, run, body)).status_code in (200, 201)
+    assert (await _approve(client, auth, run)).status_code == 200
+    async with tenant_session(tenant_id) as s:
+        got = await plan.accepted_dates(s, uuid.UUID(run["document_id"]))
+    assert [a.day for a in got] == [date(2026, 12, 4)]
