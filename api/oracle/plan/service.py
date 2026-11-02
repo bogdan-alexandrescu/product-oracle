@@ -542,6 +542,7 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
     drift_of = await _drift(db, viewer_role)
     items: list[PlanItem] = []
     drafts_of_prd: dict[uuid.UUID, list[PlanItem]] = defaultdict(list)
+    item_rows: list[tuple[PlanItem, RoadmapItem]] = []
     order = sorted(roadmaps, key=lambda d: d.updated_at, reverse=True)
     for roadmap in order:
         a = approved_v[roadmap.id]
@@ -576,8 +577,17 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
             )  # fmt: skip
             item.drift = drift_of(row, origin)
             items.append(item)
+            item_rows.append((item, row))
             if origin == "draft" and (row.prd_document_id or fallback_prd):
                 drafts_of_prd[row.prd_document_id or fallback_prd].append(item)
+
+    # walkc-roadmap-tasks: each item's decided decisions, who, when and the minutes (as
+    # Simple's item sheet reads them, in any version of its roadmap).
+    from oracle.simple.service import decided_of_rows
+
+    decided = await decided_of_rows(db, [r for _, r in item_rows])
+    for item, row in item_rows:
+        item.decisions = decided.get(row.id, [])
 
     # The PRDs in play (F1 §4).
     run_of_prd: dict[uuid.UUID, Run] = {}

@@ -319,7 +319,7 @@ class SimpleRoadmapItem(BaseModel):
     )
 
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
-    decided_in: list[SimpleOpenDecision] = []
+    decided_in: list["SimpleDecidedRef"] = []
     # walkc-roadmap-tasks: the work under the item (not dropped), in order.
     tasks: list["SimpleItemTask"] = []
     # plan-model: one slice per milestone its feature spans in the PRD's plan, and those
@@ -534,6 +534,21 @@ class SimpleDecisionIn(BaseModel):
 class SimplePersonRef(BaseModel):
     id: uuid.UUID
     name: str
+
+
+class SimpleMeetingRef(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleDecidedRef(SimpleOpenDecision):
+    """A decided decision naming the item: who decided, when, and (decided in a meeting)
+    the meeting and its minutes' page."""
+
+    decided_by: SimplePersonRef | None = None
+    decided_at: dt.datetime | None = None
+    meeting: SimpleMeetingRef | None = None
+    minutes_url: str | None = None
 
 
 class SimpleItemTask(BaseModel):

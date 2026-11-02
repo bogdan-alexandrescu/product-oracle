@@ -30742,6 +30742,11 @@ export interface components {
              * @default []
              */
             drift: components["schemas"]["PlanDrift"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["SimpleDecidedRef"][];
             engineering: components["schemas"]["PlanEngineering"];
             next: components["schemas"]["PlanNext"];
         };
@@ -37661,6 +37666,28 @@ export interface components {
             title: string;
             flow?: components["schemas"]["SimpleFlow"] | null;
         };
+        /**
+         * SimpleDecidedRef
+         * @description A decided decision naming the item: who decided, when, and (decided in a meeting)
+         *     the meeting and its minutes' page.
+         */
+        SimpleDecidedRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            decided_by?: components["schemas"]["SimplePersonRef"] | null;
+            /** Decided At */
+            decided_at?: string | null;
+            meeting?: components["schemas"]["SimpleMeetingRef"] | null;
+            /** Minutes Url */
+            minutes_url?: string | null;
+        };
         /** SimpleDecisionIn */
         SimpleDecisionIn: {
             /** Reason */
@@ -37777,6 +37804,11 @@ export interface components {
              * @default 0
              */
             approvals_waiting: number;
+            /**
+             * Tasks
+             * @default []
+             */
+            tasks: components["schemas"]["SimpleTaskWaiting"][];
         };
         /** SimpleDelivery */
         SimpleDelivery: {
@@ -38333,6 +38365,28 @@ export interface components {
             start_date?: string | null;
         };
         /**
+         * SimpleItemTask
+         * @description A task under a roadmap item (oracle.simple.models.RoadmapItemTask): who does it, by
+         *     when.
+         */
+        SimpleItemTask: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "todo" | "doing" | "done" | "dropped";
+            owner?: components["schemas"]["SimplePersonRef"] | null;
+            /** Due Date */
+            due_date?: string | null;
+        };
+        /**
          * SimpleKeyDate
          * @description Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
          *     meeting), as the reader reads it (the working draft's when they see it).
@@ -38702,6 +38756,16 @@ export interface components {
              *     }
              */
             agenda: components["schemas"]["SimpleAgenda"];
+        };
+        /** SimpleMeetingRef */
+        SimpleMeetingRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
         };
         /** SimpleMeetingRulesIn */
         SimpleMeetingRulesIn: {
@@ -39637,7 +39701,12 @@ export interface components {
              * Decided In
              * @default []
              */
-            decided_in: components["schemas"]["SimpleOpenDecision"][];
+            decided_in: components["schemas"]["SimpleDecidedRef"][];
+            /**
+             * Tasks
+             * @default []
+             */
+            tasks: components["schemas"]["SimpleItemTask"][];
             /**
              * Slices
              * @default []
@@ -39857,6 +39926,41 @@ export interface components {
         SimpleSuggestionRejectIn: {
             /** Reason */
             reason?: string | null;
+        };
+        /**
+         * SimpleTaskWaiting
+         * @description An open task waiting on the reader (Home's "Waiting for you"), with its item.
+         */
+        SimpleTaskWaiting: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "todo" | "doing" | "done" | "dropped";
+            owner?: components["schemas"]["SimplePersonRef"] | null;
+            /** Due Date */
+            due_date?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Item Title */
+            item_title: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /**
+             * Late
+             * @default false
+             */
+            late: boolean;
         };
         /** SimpleTrackRef */
         SimpleTrackRef: {

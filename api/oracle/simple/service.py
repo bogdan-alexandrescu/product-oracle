@@ -860,11 +860,17 @@ def task_out(t: Any, names: dict[uuid.UUID, str]) -> SimpleItemTask:
 async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
     """S8: the decided decisions naming each item, in any version of its roadmap (an
     approved draft is a new version: its rows are new, its keys are the same)."""
+
+    return await decided_of_rows(db, [e.row for e in shown])
+
+
+async def decided_of_rows(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, list]:
+    """_decided for roadmap item rows (Detailed's Plan items too), keyed by row id."""
     from oracle.simple import meetings
 
-    if not shown:
+    if not rows:
         return {}
-    keyed = {(e.row.roadmap_document_id, e.row.item_key): e.row.id for e in shown}
+    keyed = {(r.roadmap_document_id, r.item_key): r.id for r in rows}
     alias: dict[uuid.UUID, uuid.UUID] = {}
     for rid, doc, key in (
         await db.execute(

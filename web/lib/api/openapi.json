@@ -93993,6 +93993,14 @@
             "title": "Drift",
             "default": []
           },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDecidedRef"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
           "engineering": {
             "$ref": "#/components/schemas/PlanEngineering"
           },
@@ -113753,6 +113761,74 @@
         "title": "SimpleDecidedFlow",
         "description": "The new flow or feature a meeting decision decided (a draft item) and its flow\n(oracle.simple.visuals, S10); ``flow`` is None until one is drawn (\"No flow yet\")."
       },
+      "SimpleDecidedRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "meeting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMeetingRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minutes_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title"
+        ],
+        "title": "SimpleDecidedRef",
+        "description": "A decided decision naming the item: who decided, when, and (decided in a meeting)\nthe meeting and its minutes' page."
+      },
       "SimpleDecisionIn": {
         "properties": {
           "reason": {
@@ -114008,6 +114084,14 @@
             "type": "integer",
             "title": "Approvals Waiting",
             "default": 0
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleTaskWaiting"
+            },
+            "type": "array",
+            "title": "Tasks",
+            "default": []
           }
         },
         "type": "object",
@@ -115419,6 +115503,59 @@
         ],
         "title": "SimpleItemMilestone"
       },
+      "SimpleItemTask": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "doing",
+              "done",
+              "dropped"
+            ],
+            "title": "Status"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "title": "SimpleItemTask",
+        "description": "A task under a roadmap item (oracle.simple.models.RoadmapItemTask): who does it, by\nwhen."
+      },
       "SimpleKeyDate": {
         "properties": {
           "id": {
@@ -116290,6 +116427,25 @@
           "can"
         ],
         "title": "SimpleMeetingOut"
+      },
+      "SimpleMeetingRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleMeetingRef"
       },
       "SimpleMeetingRulesIn": {
         "properties": {
@@ -118559,10 +118715,18 @@
           },
           "decided_in": {
             "items": {
-              "$ref": "#/components/schemas/SimpleOpenDecision"
+              "$ref": "#/components/schemas/SimpleDecidedRef"
             },
             "type": "array",
             "title": "Decided In",
+            "default": []
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleItemTask"
+            },
+            "type": "array",
+            "title": "Tasks",
             "default": []
           },
           "slices": {
@@ -119150,6 +119314,87 @@
         "additionalProperties": false,
         "type": "object",
         "title": "SimpleSuggestionRejectIn"
+      },
+      "SimpleTaskWaiting": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "doing",
+              "done",
+              "dropped"
+            ],
+            "title": "Status"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "item_title": {
+            "type": "string",
+            "title": "Item Title"
+          },
+          "roadmap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roadmap Id"
+          },
+          "late": {
+            "type": "boolean",
+            "title": "Late",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "item_title",
+          "roadmap_id"
+        ],
+        "title": "SimpleTaskWaiting",
+        "description": "An open task waiting on the reader (Home's \"Waiting for you\"), with its item."
       },
       "SimpleTrackRef": {
         "properties": {
