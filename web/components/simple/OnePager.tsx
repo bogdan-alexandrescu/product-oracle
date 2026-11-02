@@ -115,6 +115,41 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   // qa-simple-prd-p3-4: a plan-led page shows the PRD's lines (and their Edit) on asking.
   const [linesShown, setLinesShown] = useState(false);
   const [planNow, setPlanNow] = useState<Schemas["SimplePlanOut"] | null>(null);
+  // walkb-onepager: while Oracle reads the plan again (its prd_plan job), the last plan stays
+  // shown, marked as updating, until the read is done. The page stops asking when the API
+  // fails, or after two minutes, and says so.
+  const [updating, setUpdating] = useState(false);
+  const [planNote, setPlanNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!updating) return;
+    let stop = false;
+    const end = (note: string | null) => {
+      stop = true;
+      clearInterval(t);
+      setUpdating(false);
+      setPlanNote(note);
+    };
+    const until = Date.now() + 120_000;
+    const t = setInterval(() => {
+      if (Date.now() >= until) {
+        end("Oracle is still reading the plan. Come back in a few minutes to see it.");
+        return;
+      }
+      void unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd: doc } } }))
+        .then((p) => {
+          if (stop || p.status === "reading") return;
+          setPlanNow(p);
+          end(null);
+        })
+        .catch(() => {
+          if (!stop) end("Oracle could not check on the plan. Try Read the plan again.");
+        });
+    }, 1500);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [updating, doc]);
   useEffect(() => {
     if (seenRefresh.current === refresh) return;
     seenRefresh.current = refresh;
@@ -502,7 +537,25 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
         />
         {toast}
         {error && <ErrorNote>{error}</ErrorNote>}
-        {planShown && <PrdPlan plan={plan!} title={v.document.title} onPlan={setPlanNow} />}
+        {planShown && updating && (
+          <p role="status" data-testid="plan-updating" className="text-[14px] text-text2">
+            Oracle is reading the plan again. This is the last plan until it is done.
+          </p>
+        )}
+        {planShown && !updating && planNote && (
+          <p role="status" data-testid="plan-note" className="text-[14px] text-text2">
+            {planNote}
+          </p>
+        )}
+        {planShown && (
+          <div aria-busy={updating} className={updating ? "opacity-60" : undefined}>
+            <PrdPlan plan={plan!} title={v.document.title} onPlan={(p) => {
+              setPlanNote(null);
+              if (p.status === "reading") setUpdating(true);
+              else setPlanNow(p);
+            }} />
+          </div>
+        )}
         {planShown && (v.can_edit || v.can_propose) && !presenting && !sessionId && (
           // qa-simple-prd-p3-4: the plan's words come from the PRD's lines; they are changed there.
           <p data-testid="plan-lines-door" className="simple-noprint flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px] text-text2">

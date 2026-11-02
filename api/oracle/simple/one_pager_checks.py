@@ -135,10 +135,41 @@ _LABEL = re.compile(
 )
 
 
+# A job story ("When ..., I want ...") or a note on the people ("The primary segment is a
+# hypothesis ...") says what they do or how sure we are, never who they are (CLD's walk B,
+# 2026-11-01).
+_STORY = re.compile(r"^\s*(?:when\b.*\bI\b|as an?\b.*,\s*I\b|I\s+want\b)", re.I)
+_NOTE_LINE = re.compile(r"\bhypothes|\bassum|\bto be (?:confirmed|validated|tested)\b", re.I)
+WHO_WORDS = 30
+
+
+def _said_not_who(text: str) -> bool:
+    return bool(_STORY.search(text) or _NOTE_LINE.search(text))
+
+
+def _whole(text: str, words: int = WHO_WORDS) -> str:
+    """A sentence whole, never cut mid-way: over ``words`` it is its first clause (up to a
+    comma, semicolon or dash), and "" when even that is too long."""
+    text = " ".join(text.split()).rstrip(".")
+    if len(text.split()) <= words:
+        return text
+    clause = re.split(r"\s*(?:[,;]|—|–| - )\s*", text, maxsplit=1)[0]
+    return clause if len(clause.split()) <= words else ""
+
+
 def _sentence(text: str) -> str:
-    """A labelled line's words as who has it: its first sentence, at most 30 words."""
-    first = re.split(r"(?<=[.!?])\s+", text.strip())[0].rstrip(".")
-    return " ".join(first.split()[:30])
+    """A labelled line's words as who has it: its first sentence, whole."""
+    return _whole(re.split(r"(?<=[.!?])\s+", text.strip())[0])
+
+
+def _joined(names: list[str]) -> str:
+    """Names joined with "; ", as many whole ones as fit in :data:`WHO_WORDS` words."""
+    out: list[str] = []
+    for n in names:
+        if out and len(" ".join([*out, n]).split()) > WHO_WORDS:
+            break
+        out.append(n)
+    return "; ".join(out)
 
 
 def _labelled(pairs: list[tuple[str, str]]) -> str | None:
@@ -150,41 +181,51 @@ def _labelled(pairs: list[tuple[str, str]]) -> str | None:
     for label, words in pairs:
         # A lead among labelled lines ("New admins: ...") names its people.
         if not (m := _LABEL.match(label.strip())):
-            kinds["people"].append(" ".join(label.split()[:12]))
+            if len(label.split()) <= 8 and not _said_not_who(label):
+                kinds["people"].append(label.strip())
         elif words := _sentence(words):
             kinds[next(k for k, v in m.groupdict().items() if v)].append(words)
-    named = kinds["primary"] or kinds["people"] or kinds["story"]
-    return " ".join("; ".join(named).split()[:30])
+    # A job story names no one ("When ..., I want ..."): never who has it.
+    named = kinds["primary"] or kinds["people"]
+    return _joined(named)
 
 
 def who_has_it(sections: list[Section]) -> str | None:
-    """Who has the problem, from the PRD's users or personas section: each bullet's lead
-    ("New admins: ..." -> "New admins"), else its first sentence; labelled lines
-    ("Primary: ...") by their words (:func:`_labelled`). None when the PRD has no such
-    section (the page says :data:`WHO_SAYS_NOTHING`)."""
+    """Who has the problem, from the PRD's users or personas section, as one plain line:
+    labelled lines ("Primary: ...") by the primary people's words (:func:`_labelled`), else
+    each bullet's lead ("New admins: ..." -> "New admins"), else a sentence naming people,
+    whole. Never a label, a job story or a note on the people ("The primary segment is a
+    hypothesis"). None when the PRD has no such section (the page says
+    :data:`WHO_SAYS_NOTHING`)."""
     heads = [x for x in sections if _WHO_HEAD.search(x.heading or "")]
     heads = [x for x in heads if not _WHO_NOT.search(x.heading or "")]
     heads.sort(key=lambda x: not _WHO_BEST.search(x.heading or ""))
+    split = re.compile(r"\s*(?::|—|–| - )\s*")
     for sec in heads:
         bullets, rows, prose = _rows(_guidanceless(sec.body_md or ""))
-        pairs = [
-            (p[0], p[1])
-            for b in bullets
-            if len(p := re.split(r"\s*(?::|—|–| - )\s*", b, maxsplit=1)) == 2
-        ]
+        # A bold lead in prose ("**Job story:** When ...") is a labelled line too.
+        lines = bullets + [p for p in prose if re.match(r"^[A-Z][\w ]{0,30}:\s", p)]
+        prose = [p for p in prose if p not in lines]
+        pairs = [(p[0], p[1]) for b in lines if len(p := split.split(b, maxsplit=1)) == 2]
         pairs += [(r[0], " ".join(r[1:])) for r in rows if len(r) > 1 and r[0]]
-        if pairs and len(pairs) == len(bullets) + len([r for r in rows if r and r[0]]):
-            if (who := _labelled(pairs)) is not None:
-                if who:
-                    return who
-                continue
-        named = [re.split(r"\s*(?::|—|–| - )\s*", b, maxsplit=1)[0] for b in bullets]
+        if any(_LABEL.match(label.strip()) for label, _ in pairs):
+            if who := _labelled(pairs):
+                return who
+            continue
+        named = []
+        for b in lines:
+            p = split.split(b, maxsplit=1)
+            if len(p) == 2 and len(p[0].split()) <= 8:
+                named.append(p[0])
+            elif not _said_not_who(b):
+                named.append(_sentence(b))
         named += [r[0] for r in rows if r and r[0]]
-        if not named and prose:
-            named = [re.split(r"(?<=[.!?])\s+", " ".join(prose))[0].rstrip(".")]
-        named = [" ".join(n.split()[:12]) for n in named if n.strip()]
+        if not named:
+            said = re.split(r"(?<=[.!?])\s+", " ".join(prose))
+            named = [_sentence(x) for x in said if x and not _said_not_who(x)][:1]
+        named = [n for n in named if n.strip()]
         if named:
-            return " ".join("; ".join(named).split()[:30])
+            return _joined(named)
     return None
 
 
@@ -279,6 +320,45 @@ def _cited(raw: str, cites: Cites) -> Measure | None:
     return m
 
 
+# A success measures section (CLD's walk B, 2026-11-01): its lines say how each outcome is
+# measured in their own words ("from 55% to 80% by Mar 31, recomputed daily"), with no
+# "counted as". A clause that is the target, the baseline or the time frame is not how.
+_SUCCESS_HEAD = re.compile(r"\b(?:success|outcomes?|measures?|metrics?|kpis?)\b", re.I)
+_TARGET_CLAUSE = re.compile(
+    r"(?:→|->|\bfrom\b[^,;]*\d[^,;]*\bto\b|^\s*(?:by|before|target|baseline|goal|today|now"
+    r"|up|down|at least|at most|no more|no less|within)\b|^[\s~<>≥≤$€£]*\d[\d.,%]*\s*\S{0,8}\s*$)",
+    re.I,
+)
+_TARGET = re.compile(
+    r"\s(?:from\s+)?[~<>]?[$€£]?\d[\d.,]*\s?\S*\s*(?:→|->|\bto\b)\s*[~<>]?[$€£]?\d", re.I
+)
+_LEAD = re.compile(r"^(?P<name>[^:—–]{2,80}?)\s*(?::|—|–| - )\s*(?P<rest>.+)$")
+
+
+def _stated(text: str) -> Measure | None:
+    """How a success line measures its outcome in its own words: the line's clauses less its
+    name, its target and its time frame ("Onboarding on time: from 55% to 80% by Mar 31,
+    recomputed daily from the tracker" -> "recomputed daily", source "the tracker")."""
+    text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", _plain(text)).rstrip(".")
+    lead = _LEAD.match(text)
+    name, rest = (lead.group("name"), lead.group("rest")) if lead else ("", text)
+    if not lead:
+        at = _TARGET.search(text)
+        if at is None:
+            return None
+        name, rest = text[: at.start()], text[at.start() :]
+    # "from 55% to 80% by Mar 31": the target, its time frame with it.
+    rest = re.sub(r"\bfrom\b[^,;(]*?\d[^,;(]*?(?:\bto\b|→|->)[^,;(]*", ";", rest, flags=re.I)
+    s = _SOURCE.search(rest)
+    source = s.group("s").strip(" :,;·-—–.") if s else None
+    rest = rest[: s.start()] if s else rest
+    clauses = [c.strip(" :,;·-—–.") for c in re.split(r"[,;·]|\s—\s|\s–\s|\(|\)", rest)]
+    kept = [c for c in clauses if re.search(r"[A-Za-z]{3}", c) and not _TARGET_CLAUSE.search(c)]
+    if not kept or not name.strip():
+        return None
+    return Measure(name.strip(" :,;·-—–"), ", ".join(kept), source or None)
+
+
 def measures(sections: list[Section], cites: Cites | None = None) -> list[Measure]:
     """Every measure the PRD states: "<metric> ... counted as <what> · from <source>"
     lines, and a table's definition and source columns (its first cell names the metric),
@@ -287,8 +367,11 @@ def measures(sections: list[Section], cites: Cites | None = None) -> list[Measur
     out: list[Measure] = []
     for sec in sections:
         bullets, rows, prose = _rows(sec.body_md or "", cites=True)
+        success = bool(_SUCCESS_HEAD.search(sec.heading or ""))
         for text in bullets + re.split(r"(?<=[.!?])\s+", " ".join(prose)):
             if m := _cited(text, cites):
+                out.append(m)
+            elif success and not _MEASURE.search(text) and (m := _stated(text)):
                 out.append(m)
         head = _header(sec.body_md or "")
         mcol = next((i for i, h in enumerate(head) if i and _MEASURE_COL.search(h)), None)
@@ -304,6 +387,8 @@ def measures(sections: list[Section], cites: Cites | None = None) -> list[Measur
                 if measure:
                     out.append(Measure(_plain(r[0]), _plain(measure), src or None))
             elif m := _cited(" · ".join(r), cites):
+                out.append(m)
+            elif success and r and r[0] and (m := _stated(f"{r[0]}: {'; '.join(r[1:])}")):
                 out.append(m)
     return out
 
@@ -331,7 +416,9 @@ CODE = re.compile(r"\b(?!(?:ISO|RFC|UTF|IEC|SHA|CVE|EN|IEEE)-)(?:[A-Z]{1,3}-\d{1
 # A priority code the PRD never names reads as the usual words.
 PRIORITY = {"P0": "top priority", "P1": "high priority", "P2": "medium priority",
             "P3": "low priority"}  # fmt: skip
-_NAMED = re.compile(r"^\s*(?:[:=—–]|\s-\s|\()\s*(?P<n>[A-Za-z][^.;,()|:\n]*)")
+# A name starts with a capital: "F-01: every newly connected account gets a plan" says what
+# F-01 does, never its name (CLD's walk B, 2026-11-01).
+_NAMED = re.compile(r"^\s*(?:[:=—–]|\s-\s|\()\s*(?P<n>[A-Z][^.;,()|:\n]*)")
 _CAPITAL = re.compile(r"^\s+(?P<n>[A-Z][^.;,()|:\n]*)")
 
 
@@ -370,6 +457,12 @@ def glossary(sections: list[Section]) -> dict[str, str]:
             elif (n := _AFTER.match(rest)) and _name(n.group("n")):
                 after.setdefault(c.group(0), _name(n.group("n")))
 
+    # A feature's own section names it best: "### F-01 Pacing plan {#f-01}".
+    for sec in sections:
+        head = _plain((sec.heading or "").lstrip("# "))
+        rest = head[c.end() :] if (c := CODE.match(head)) else ""
+        if c and (n := _CAPITAL.match(rest) or _NAMED.match(rest)):
+            out.setdefault(c.group(0), _name(n.group("n")))
     for sec in sections:
         lines = [sec.heading or ""] + (sec.body_md or "").splitlines()
         for raw in lines:
@@ -400,6 +493,11 @@ def with_names(text: str, names: dict[str, str]) -> tuple[str, list[str]]:
             return code
         after = text[m.end() :].lstrip(" :—–-(")
         if after.lower().startswith(name.lower()):
+            return code
+        # Already named where it stands: "Pacing plan (F-01)", "F-01 Pace gives ...".
+        before = text[: m.start()].rstrip(" (—–-:").lower()
+        named_here = PRIORITY.get(code) is None and _AFTER.match(text[m.end() :])
+        if before.endswith(name.lower()) or named_here:
             return code
         return f"{code} {name}"
 
@@ -460,6 +558,7 @@ _COUNT = re.compile(
     r"(?P<tail>(?:\s+[a-z]+){0,3})",
     re.I,
 )
+_FIELD = re.compile(r"^[A-Z][\w ]{0,24}:\s")
 _HEAD_COUNT = re.compile(r"(?:·|\()\s*(?P<n>\d+)\s+items?\b", re.I)
 _PER = re.compile(
     rf"\b(?:each|every|per)\s+(?P<thing>[a-z]+?)s?\s+(?:[a-z]+\s+){{0,2}}?(?P<n>{_NUM})\s+"
@@ -509,10 +608,18 @@ def numbers(sections: list[Section]) -> list[Look]:
         target = shown if shown is not None else listed
         if not target:
             continue
+        # A count disagrees only with a list of the same things (CLD's walk B, 2026-11-01):
+        # "M1 ships two features" above its scope, exit and date lines ("Scope: ...") is no
+        # list of features. Such a list counts only when its heading or header names them.
+        listing = f"{head} {' '.join(_header(sec.body_md or ''))}".lower()
+        fields = bool(bullets) and not rows and all(_FIELD.match(b) for b in bullets)
         for s in [head, *re.split(r"(?<=[.!?])\s+", " ".join(prose))]:
             for m in _COUNT.finditer(s):
                 n = _num(m.group("n"))
                 if n is None or n == target:
+                    continue
+                noun = m.group("noun").lower().removesuffix("s").removesuffix("ie")
+                if hm is None and fields and noun not in listing:
                     continue
                 said = f"{m.group('n')} {m.group('noun')}{m.group('tail')}".strip()
                 looks.append(Look(
@@ -564,6 +671,36 @@ def _per_unit(sections: list[Section]) -> list[Look]:
     return looks
 
 
+# --------------------------------------------------------------------------- read as words
+
+_MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+_ISO = re.compile(
+    r"\b(?P<y>20\d\d)-(?P<m>0[1-9]|1[0-2])-(?P<d>0[1-9]|[12]\d|3[01])(?:T[\d:.]+Z?)?\b"
+)
+# An internal pointer: a link's or heading's anchor ("(#feature-pacing-plan)", "{#f-01}").
+_POINTER = re.compile(r"\(\s*#[\w-]+\s*\)|\{#[^}]*\}")
+
+
+def month_first(text: str) -> str:
+    """Generated words as people read them: an ISO date month first ("2027-03-31" -> "Mar
+    31, 2027"), no anchor or pointer left."""
+    if not text:
+        return text
+    text = _ISO.sub(lambda m: f"{_MONTHS[int(m['m']) - 1]} {int(m['d'])}, {m['y']}", text)
+    text = re.sub(r"\[([^\]]*)\]\(#[^)]*\)", r"\1", text)
+    return " ".join(_POINTER.sub("", text).split())
+
+
+def whole_word(cut: str, said: str) -> str:
+    """A target an older build cut mid-word ("80% of acc") whole again from its line's
+    words ("80% of accounts"); as it is when the line has no longer word there."""
+    cut = cut.rstrip("…").strip()
+    if not cut:
+        return cut
+    m = re.search(re.escape(cut) + r"[^\s,;.)]*", said or "")
+    return m.group(0) if m else cut
+
+
 # --------------------------------------------------------------------------- the read
 
 
@@ -580,7 +717,7 @@ def annotate(blocks: list[Any], sections: list[Section], cites: Cites | None = N
     unnamed: dict[str, list[str]] = {}
     for b in blocks:
         if b.key == "problem":
-            b.who = who
+            b.who = month_first(who) if who else who
         for x in b.lines:
             said = x.full or x.text
             x.text, missing = with_names(x.text, names)
@@ -591,15 +728,19 @@ def annotate(blocks: list[Any], sections: list[Section], cites: Cites | None = N
             x.text, x.footnotes = marked(x.text, notes)
             if x.full:
                 x.full = marked(x.full, notes)[0]
+            x.text = month_first(x.text)
+            x.full = month_first(x.full) if x.full else x.full
             if x.metric is not None:
-                x.metric.name = marked(with_names(x.metric.name, names)[0], notes)[0]
-                x.metric.to = marked(x.metric.to, notes)[0]
+                x.metric.name = month_first(marked(with_names(x.metric.name, names)[0], notes)[0])
+                to = whole_word(x.metric.to, _plain(said))
+                x.metric.to = month_first(marked(to, notes)[0])
             # The Edit box starts from the PRD's words, not the names and marks put in.
             x.words = said if (x.full or x.text) != said else None
             if b.kind == "metrics":
                 m = measure_for(x.full or x.text, x.metric.name if x.metric else None, found)
                 if m is not None:
-                    x.measure, x.measure_source = m.measure, m.source
+                    x.measure = month_first(with_names(m.measure, names)[0])
+                    x.measure_source = month_first(m.source) if m.source else None
     heads = {s.section_key: _plain(s.heading or "") for s in sections}
     for code, keys in unnamed.items():
         keys = list(dict.fromkeys(keys))

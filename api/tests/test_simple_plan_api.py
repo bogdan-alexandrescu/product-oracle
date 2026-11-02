@@ -49,6 +49,10 @@ Test cards (protects / fails_when / no_claim):
 - test_views_parse_a_version_once (review): protects=reading the plans again does not
   parse an unchanged approved version's text again; fails_when=every read re-parses;
   no_claim=the stored plan's reads.
+- test_views_read_accepted_dates_once (review): protects=the plans of many PRDs read
+  their lead's accepted dates in one read of the schedule bases, whatever the number of
+  PRDs (portfolio, chat, priorities, suggestions and questions read them all);
+  fails_when=one read per PRD; no_claim=which dates are accepted (test_simple_plan_walkb).
 - test_priorities_carry_the_plan (parametrized owner, decider, approver, commenter, viewer):
   protects=Priorities carries the plan "this quarter" is (plan-charts' Goal buckets header):
   its PRD, milestones with dates, capacity and planned weeks, slices, engineer-weeks per goal
@@ -484,3 +488,35 @@ async def test_views_parse_a_version_once(client, monkeypatch):
         again = await plan.views(s, {ids["prd"]})
     assert first[ids["prd"]].span == again[ids["prd"]].span
     assert len(calls) <= 1
+
+
+async def test_views_read_accepted_dates_once(client):
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+
+    ctx = await make_ctx()
+    ids = {(await seed(ctx))["prd"]}
+    async with tenant_session(ctx.tenant_id) as s:
+        for n in range(3):
+            doc = Document(slug=f"guided-setup-{n}", title=f"Guided setup {n}", kind="prd",
+                           status="approved", visibility="company")  # fmt: skip
+            s.add(doc)
+            await s.flush()
+            await version(s, doc, 1, FIXTURE)
+            ids.add(doc.id)
+        await s.commit()
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        async with tenant_session(ctx.tenant_id) as s:
+            got = await plan.views(s, ids)
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    assert set(got) == ids
+    assert len([st for st in statements if "FROM schedule_bases" in st]) == 1

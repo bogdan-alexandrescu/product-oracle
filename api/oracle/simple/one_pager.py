@@ -313,6 +313,14 @@ def _words(text: str, n: int) -> str:
     return text if len(w) <= n else " ".join(w[:n]).rstrip(",;:") + "…"
 
 
+def _upto(text: str, chars: int) -> str:
+    """At most ``chars``, cut at a word with "…", never mid-word."""
+    if len(text) <= chars:
+        return text
+    head = text[: chars - 1]
+    return (head.rsplit(" ", 1)[0] if " " in head else head).rstrip(",;: ") + "…"
+
+
 def _uncomment(text: str) -> str:
     return _COMMENT.sub(" ", text)
 
@@ -564,9 +572,9 @@ def clean_answer(
             m = raw.get("metric")
             if spec.kind == "metrics" and isinstance(m, dict) and m.get("name") and m.get("to"):
                 line["metric"] = {
-                    "name": resolved(str(m["name"])).strip()[:120],
-                    "from": resolved(str(m.get("from") or "")).strip()[:40],
-                    "to": resolved(str(m["to"])).strip()[:40],
+                    "name": _upto(resolved(str(m["name"])).strip(), 120),
+                    "from": _upto(resolved(str(m.get("from") or "")).strip(), 60),
+                    "to": _upto(resolved(str(m["to"])).strip(), 80),
                 }
             lines.append(line)
         lines = lines[: spec.max_lines]
@@ -956,6 +964,13 @@ async def document_owner(
         ):
             return person
     return None
+
+
+def span_words(start: date, end: date) -> str:
+    """A span as people read it, month first: "Nov 2 – Dec 23, 2026", "Nov 2, 2026 – Feb 26,
+    2027"; never ISO."""
+    first = f"{start:%b} {start.day}" + ("" if start.year == end.year else f", {start.year}")
+    return f"{first} – {end:%b} {end.day}, {end.year}"
 
 
 def milestone_span(items: list[plan_strip.PlanItem]) -> tuple[date, date] | None:
@@ -1382,7 +1397,13 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         if i.status != "cut"
     ]
     plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
-    span = milestone_span(plan_items(slice_.items))
+    # A dated plan's span is the one its timeline draws (its milestones, or the dates the
+    # lead accepted); else the items' dated milestones.
+    view = (await plan_model.views(db, {document.id})).get(document.id)
+    if view is not None and view.dated and view.span:
+        span: tuple[date, date] | None = (view.span.start, view.span.end)
+    else:
+        span = milestone_span(plan_items(slice_.items))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
@@ -2122,7 +2143,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     if out.decider:
         meta.append(f"decider {escape(out.decider.name)}")
     if out.span_start and out.span_end:
-        meta.append(f"{out.span_start.isoformat()} – {out.span_end.isoformat()}")
+        meta.append(span_words(out.span_start, out.span_end))
     parts.append(f"<div class='meta'>{' · '.join(meta)}</div>")
     published_lines = await _published_lines(db, out)
     for blk in out.blocks:

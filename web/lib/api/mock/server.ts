@@ -159,7 +159,7 @@ import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simpl
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
 import { runGroupsOut } from "./simple-runs";
-import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
@@ -3021,6 +3021,35 @@ function load(): Db {
                     db.simple_roadmap!.plan!.undated = true;
                     return db;
                   }
+              : scenario === "simple-plan-by-job"
+                ? () => {
+                    // walkb-onepager: a run's PRD with no milestones table: Oracle's job reads it.
+                    const db = seedSimplePlanScenario();
+                    Object.assign(db.simple_roadmap!.plan!, { undated: true, by_job: true });
+                    return db;
+                  }
+              : scenario === "simple-plan-by-job-stuck" || scenario === "simple-plan-by-job-down"
+                ? () => {
+                    // walkb-onepager review: Oracle's job never answers, or the API fails while it reads.
+                    const db = seedSimplePlanScenario();
+                    const how = scenario === "simple-plan-by-job-stuck" ? { stuck: true } : { down: true };
+                    Object.assign(db.simple_roadmap!.plan!, { undated: true, by_job: true, ...how });
+                    return db;
+                  }
+              : scenario === "simple-plan-lead-dated"
+                ? () => {
+                    // walkb-onepager review: only M1 has dates in the PRD; the lead accepted
+                    // M2's end and F-13's (in M3) at the run's Engineering dates stop.
+                    const db = seedSimplePlanScenario();
+                    Object.assign(db.simple_roadmap!.plan!, {
+                      partly_dated: true,
+                      accepted: [
+                        { milestone: "M2", feature: "F-07", day: "2027-01-15" },
+                        { milestone: null, feature: "F-13", day: "2027-02-26" },
+                      ],
+                    });
+                    return db;
+                  }
               : scenario === "simple-plan-partly-dated"
                 ? () => {
                     // fidelity prd (pick D, frame D3): only M1 has dates; M2 and M3 have none yet.
@@ -5794,8 +5823,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // "one-pager-not-in-prd": Oracle marked a block the PRD lacks "Not in the PRD yet".
   // "one-pager-run-prd": a run's Goal-traced PRD, its lines cited, while Oracle writes the page.
   // "one-pager-quick-read": the same PRD, its one_pager job failed: the quick read stays.
+  // "one-pager-run-prd-walk": a run's approved PRD as Oracle's job wrote its page (CLD's walk B).
   db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
     ? seedRunPrdOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd-walk"
+    ? seedRunPrdWalkOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-quick-read"
     ? { ...seedRunPrdOnePager(), writing: false, quickRead: true }
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"

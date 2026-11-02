@@ -1,7 +1,7 @@
 """Migration 0080_simple_one_pagers (Simple S5, #723).
 
 Card: protects=simple_one_pagers and the llm_jobs kind one_pager come and go with the
-revision, chained on 0079_simple_drafts as the single head; fails_when=the table or the
+revision, chained on 0079_simple_drafts, with one head; fails_when=the table or the
 kind is missing, or the downgrade leaves either; no_claim=the routes' use
 (tests/test_simple_one_pager_api.py).
 

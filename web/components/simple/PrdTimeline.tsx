@@ -368,8 +368,10 @@ function NoDates({ plan, onPlan }: { plan: Plan; onPlan: (p: Plan) => void }) {
     setBusy(true);
     setError(null);
     try {
-      onPlan(await unwrap(api.POST("/v1/simple/prds/{prd}/plan/read-again", { params: { path: { prd: plan.prd.slug } } })));
-      setAgain(true);
+      const read = await unwrap(api.POST("/v1/simple/prds/{prd}/plan/read-again", { params: { path: { prd: plan.prd.slug } } }));
+      onPlan(read);
+      // Oracle's job still reads it: the page says so; what it found shows when it is done.
+      setAgain(read.status !== "reading");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
