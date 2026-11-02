@@ -21,7 +21,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, stableUuid } from "./ids";
 import { changePhrase } from "./simple-change-words";
-import { CUT_ALL, MEETING_PROPOSALS, cutDependents, meetingRoute, proposalRoute, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
+import { CUT_ALL, cutDependents, markMeetingProposal, meetingRoute, proposalRoute, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
@@ -1380,7 +1380,7 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   let here = true;
   if (may.may === "propose" && c.item_id && c.op !== "add_item") {
     const route = proposalRoute(db, ctx, c.item_id);
-    ({ ids: asks, here } = m ? meetingRoute(m.attendee_ids, ctx, route) : { ids: route, here: true });
+    ({ ids: asks, here } = m ? meetingRoute(db, m.attendee_ids, ctx, [c.item_id], route) : { ids: route, here: true });
   } else if (c.status === "proposed" && c.change_id) {
     asks = db.changes?.find((x) => x.id === c.change_id)?.routed_to ?? [];
   }
@@ -1537,10 +1537,12 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   if (inMeeting && result.change.status === "proposed") {
     // walkc-meeting (changes.create): a proposal made in a meeting goes to its deciders.
     const stored = db.changes?.find((x) => x.id === result.change.id);
-    const routed = meetingRoute(inMeeting.attendee_ids, ctx, result.change.routed_to).ids;
+    // The items it is on (changes.create: the cut's items, else its own item; none for an addition).
+    const on = result.change.op === CUT_ALL ? Object.keys(result.change.after ?? {}) : typeof result.change.target.item_id === "string" ? [result.change.target.item_id] : [];
+    const routed = meetingRoute(db, inMeeting.attendee_ids, ctx, on, result.change.routed_to).ids;
     if (stored) stored.routed_to = routed;
     result.change.routed_to = routed;
-    MEETING_PROPOSALS.add(result.change.id);
+    markMeetingProposal(db, result.change.id);
   }
   afterApplied(db, c, result);
   if (withDependents) {

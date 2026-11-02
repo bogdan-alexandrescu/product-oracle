@@ -25,7 +25,9 @@
  * "minutes-failed" (the job fails: "failed", Draft again requeues it, which then answers) or
  * "minutes-slow" (still drafting past 2 minutes: "slow"), "minutes-later" (drafting, then
  * Oracle's minutes MINUTES_LATER_MS after End on the mock clock) or "minutes-later-failed"
- * (drafting, then failed); Send works in every state.
+ * (drafting, then failed), or "minutes-stuck" (queued and never answering: "drafting", "slow"
+ * past MINUTES_SLOW_MS, and past MINUTES_STUCK_MS on the mock clock "failed" with Draft again,
+ * as meetings._minutes_job takes a stalled job); Send works in every state.
  *
  * "no-reviewers": Guided setup has no required reviewer (a PRD started from an empty skeleton).
  * Approve publishes only when nothing holds it: an absent required reviewer, or (with
@@ -55,6 +57,10 @@ import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
 export const MINUTES_LATER_MS = 20_000;
+/** meetings.MINUTES_SLOW: past this a minutes job still drafting reads "slow". */
+export const MINUTES_SLOW_MS = 2 * 60_000;
+/** meetings.MINUTES_STUCK: past this a queued or running minutes job reads "failed" (Draft again). */
+export const MINUTES_STUCK_MS = 6 * 60_000;
 
 type Role = Schemas["Me"]["role"];
 type Ref = Schemas["SimplePersonRef"];
@@ -106,6 +112,8 @@ interface Meeting {
   minutes_state: "drafting" | "ready" | "sent" | null;
   /** The minutes job while drafting (meetings._minutes_job). */
   minutes_job?: "drafting" | "slow" | "failed" | null;
+  /** When (mock clock, ms) the minutes job was queued (meetings._minutes_job's wait). */
+  minutes_job_at?: number | null;
   /** "minutes-later": when (mock clock, ms) the job ends, and how. */
   minutes_due?: { at: number; outcome: "succeeded" | "failed" } | null;
   delivery: Delivery | null;
@@ -469,6 +477,17 @@ function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
     m.minutes_job = null;
   }
   m.minutes_due = null;
+}
+
+/** walkc-meeting (meetings._minutes_job): a job still queued or running past MINUTES_STUCK_MS is
+ * not coming (a stalled queue, a lost worker): it reads "failed", so Draft again is offered;
+ * past MINUTES_SLOW_MS it reads "slow". */
+function settleStuck(m: Meeting) {
+  if (m.status !== "ended" || m.minutes_state !== "drafting" || m.minutes_job_at == null) return;
+  if (m.minutes_job !== "drafting" && m.minutes_job !== "slow") return;
+  const waited = mockNowMs() - m.minutes_job_at;
+  if (waited > MINUTES_STUCK_MS) m.minutes_job = "failed";
+  else if (waited > MINUTES_SLOW_MS) m.minutes_job = "slow";
 }
 
 function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] & { notes: MeetingNote[]; agenda: MeetingAgenda } {
@@ -1029,6 +1048,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   const ok = () => json(200, one(ctx, db, m));
   endIdle(ctx, db, m);
   settleLater(ctx, db, m);
+  settleStuck(m);
   if (!p[4] && method === "GET") return ok();
   if (p[4] === "join" && method === "POST") {
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
@@ -1103,8 +1123,10 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.minutes = extract(ctx, db, m);
     const job = flags().includes("minutes-failed") ? "failed" : flags().includes("minutes-slow") ? "slow" : null;
     const later = flags().includes("minutes-later-failed") ? "failed" : flags().includes("minutes-later") ? "succeeded" : null;
-    m.minutes_state = job || later ? "drafting" : "ready";
-    m.minutes_job = later ? "drafting" : job;
+    const stuck = !job && !later && flags().includes("minutes-stuck");
+    m.minutes_state = job || later || stuck ? "drafting" : "ready";
+    m.minutes_job = later || stuck ? "drafting" : job;
+    m.minutes_job_at = m.minutes_state === "drafting" ? mockNowMs() : null;
     m.minutes_due = later ? { at: mockNowMs() + MINUTES_LATER_MS, outcome: later } : null;
     return ok();
   }
