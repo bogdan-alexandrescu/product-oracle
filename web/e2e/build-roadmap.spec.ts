@@ -172,6 +172,24 @@ for (const [name, use] of [
   });
 }
 
+test.describe("desktop Group by", () => {
+  test.use(DESKTOP);
+
+  // The Timeline always puts its rows under their goal, so it offers no Group by that would do nothing;
+  // the Gantt still groups by Goal, Track, PRD or Milestone.
+  test("Group by shows on the Gantt, not on the Timeline that always groups by goal", async ({ page }) => {
+    await open(page);
+    await expect(page.getByRole("radiogroup", { name: "Group by" }).or(page.getByTestId("group-track"))).toHaveCount(0);
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+    await page.getByTestId("group-track").click();
+    await expect(page.getByTestId("group-track")).toBeVisible();
+    await page.getByTestId("format-timeline").click();
+    await expect(page.getByTestId("zoom-timeline")).toBeVisible();
+    await expect(page.getByTestId("group-track")).toHaveCount(0);
+  });
+});
+
 test.describe("phone", () => {
   test.use(PHONE);
 

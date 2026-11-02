@@ -46,7 +46,7 @@ test.describe("desktop", () => {
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
     await expect(page.getByTestId("milestone-end-label").first()).toHaveText("M1 ends Nov 27");
-    await expect(page.getByTestId("legend")).toContainText("Holidays Dec 28 – Jan 1");
+    await expect(page.getByTestId("legend")).toContainText("Holidays year-end break");
     await expect(page.getByTestId("legend")).not.toContainText(/\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/);
   });
 
