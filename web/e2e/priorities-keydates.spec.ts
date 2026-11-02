@@ -33,9 +33,13 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       const m1 = select.locator("option", { hasText: "From the PRD: M1 · Prove it" });
       await expect(m1).toHaveAttribute("title", "A key date from the PRD; change it in the PRD, Guided setup");
 
-      // Picking it draws the line on its day.
+      // Picking it draws the line on its day: since build-plan QP1 the list's two parts say so in
+      // their headings (Makes, then Misses, the line's milestone and day), not a caption.
       await select.selectOption((await m1.getAttribute("value"))!);
-      await expect(page.getByTestId("line-caption").first()).toContainText("miss M1 · Prove it · Nov 27, 2026");
+      const heads = page.getByTestId("prio-part-head");
+      await expect(heads).toHaveCount(2);
+      await expect(heads.nth(0)).toHaveAttribute("aria-label", "Makes M1 · Prove it · Nov 27, 2026");
+      await expect(heads.nth(1)).toHaveAttribute("aria-label", "Misses M1 · Prove it · Nov 27, 2026");
 
       // The PRD changes: its next version, moving M2 to Jan 8, is published.
       await page.goto("/documents/guided-setup/publish");
