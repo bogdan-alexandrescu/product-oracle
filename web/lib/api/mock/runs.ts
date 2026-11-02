@@ -3809,7 +3809,7 @@ function datesInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null 
   return "edit takes the field estimate or no_date";
 }
 
-type DateDecision = { decision: "accepted" | "changed"; estimate: DateBasis } | { decision: "no_date"; reason: string };
+type DateDecision = { decision: "accepted" | "changed"; estimate: DateBasis } | { decision: "no_date"; reason: string; removed?: true };
 
 /**
  * As oracle.engineering.dates.decisions, on Approve: each item's last staged choice (a
@@ -3826,7 +3826,7 @@ function approveEngDates(cp: CheckpointOut, staged: DraftActionRow[]) {
       if (i.no_date_reason) dates[i.key] = { decision: "no_date", reason: i.no_date_reason };
     } else if (a.kind === "accept" && i.proposed) dates[i.key] = { decision: "accepted", estimate: i.proposed };
     else if (a.field === "estimate") dates[i.key] = { decision: "changed", estimate: a.value as DateBasis };
-    else if (a.field === "no_date") dates[i.key] = { decision: "no_date", reason: (a.value as { reason: string }).reason };
+    else if (a.field === "no_date") dates[i.key] = { decision: "no_date", reason: (a.value as { reason: string }).reason, ...(i.proposed ? { removed: true as const } : {}) };
   }
   cp.payload = { ...cp.payload, dates };
 }
@@ -4799,7 +4799,7 @@ export function seedFinishedBaselineBuild(ctx: Omit<RunsContext, "db">, db: Runs
 }
 
 /** build-rundecide "run-decisions" scenario: one finished stop of a seeded run, as a person decided it. */
-type DecidedStop = { kind: CheckpointOut["kind"]; seq: number; status: "approved" | "changes_requested"; by: string; role: "owner" | "approver"; at: string; note?: string; attempt?: number };
+type DecidedStop = { kind: CheckpointOut["kind"]; seq: number; status: "approved" | "changes_requested"; by: string; role: "owner" | "approver"; at: string; note?: string; attempt?: number; dates?: Record<string, DateDecision> };
 
 /**
  * build-rundecide RD1 a, the "run-decisions" scenarios: Baseline to PRD runs on PRDs whose
@@ -4820,7 +4820,14 @@ export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, peopl
         a("eng_review", 3, "2026-10-22T17:00:00Z", "Quiet hours now follow each workspace's time zone.", "approved", 2),
         o("priority_order", 4, "2026-10-22T19:00:00Z"),
         a("prd_review", 5, "2026-10-26T17:00:00Z", "Good to build from version 3."),
-        o("eng_dates", 6, "2026-10-27T17:00:00Z", "Weekly alert digest moved from Nov 20 to Dec 4."),
+        // The approver changed one date at the stop and accepted the other (approveEngDates).
+        {
+          ...o("eng_dates", 6, "2026-10-27T17:00:00Z", "Weekly alert digest moved from Nov 20 to Dec 4."),
+          dates: {
+            "R-1": { decision: "changed", estimate: { kind: "estimate", reference: "Digest sizing", supports_date: "2026-12-04" } },
+            "R-2": { decision: "accepted", estimate: { kind: "estimate", reference: "Alert rules sizing", supports_date: "2026-11-13" } },
+          },
+        },
       ],
     },
   ];
@@ -4851,7 +4858,7 @@ export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, peopl
     const r = seedRun(ctx, db, "baseline_to_prd", p.doc, { checkpoints: { eng_review: true, eng_dates: true } }, p.created_at);
     r.checkpoints = p.stops.map((s) => ({
       id: ctx.uuid(), run_id: r.id, kind: s.kind, status: s.status, approver_role: "approver", segment_seq: s.seq,
-      decided_by: s.by, decided_at: s.at, note: s.note ?? null, payload: { segment_seq: s.seq, attempt: s.attempt ?? 1, decided: { role: s.role, by: s.by, via: "oracle" } }, created_at: s.at, can_decide: false, lead_stop: false, cannot_approve: null,
+      decided_by: s.by, decided_at: s.at, note: s.note ?? null, payload: { segment_seq: s.seq, attempt: s.attempt ?? 1, decided: { role: s.role, by: s.by, via: "oracle" }, ...(s.dates ? { dates: s.dates } : {}) }, created_at: s.at, can_decide: false, lead_stop: false, cannot_approve: null,
       approve_label: "Approve", needs_agents: [],
     }));
     Object.assign(r, { status: "running", started_at: p.created_at });

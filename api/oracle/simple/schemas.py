@@ -2058,12 +2058,15 @@ class SimpleRunStepOut(BaseModel):
 class SimpleRunStopOut(BaseModel):
     """build-rundecide RD1 a: one stop of a run as a decision row: "Engineering check:
     approved after a change", the person's name, their role, the note and the day. `trail`
-    lists every step when the stop was sent back before it was approved."""
+    lists every step when the stop was sent back before it was approved. `dates_changed`:
+    how many dates the approver changed at a Dates stop (eng_dates) before approving it,
+    "Approved with one date changed"; 0 for every other stop."""
 
     checkpoint_id: uuid.UUID
     kind: str
     stop: str
     outcome: str
+    dates_changed: int = 0
     who: str | None = None
     role: str | None = None
     day: dt.date | None = None
