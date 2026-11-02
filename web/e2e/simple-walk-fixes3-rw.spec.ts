@@ -15,7 +15,8 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * Card walk3-later-window: protects = on the Now / Next / Later board, Later's window starts
  * the day after Next ends (Next "Jan 1 – Jun 30, 2027", Later "Jul 1, 2027 – Oct 22, 2028")
- * and an undated Later item's estimate starts there too; fails_when = Later starts a year
+ * and an undated Later item's estimate is that window, moved past what it depends on (Welcome
+ * video, after In-app tour: "Sep 15, 2027 – Jan 6, 2029"); fails_when = Later starts a year
  * from today (Oct 22, 2027), leaving a gap after Next; no_claim = the Settings page's
  * planning horizons and the timeline's quarter axis.
  */
@@ -62,7 +63,11 @@ for (const phone of [false, true]) {
         await later.scrollIntoViewIfNeeded();
         await expect(later).toContainText("Jul 1, 2027 – Oct 22, 2028");
         await expect(later).not.toContainText("Oct 22, 2027");
-        await expect(boardCard(page, "setup-video").getByTestId("board-dates")).toContainText("Jul 1, 2027 –");
+        // walkb-roadmap (e4cdf478): an estimated item starts the day after what it depends on
+        // ends, keeping its length. Welcome video's estimate is Later's window (Jul 1, 2027 –
+        // Oct 22, 2028) moved past In-app tour (to Sep 14, 2027); from a window that started a
+        // year from today (Oct 22, 2027) it would not move and read "Oct 22, 2027 –".
+        await expect(boardCard(page, "setup-video").getByTestId("board-dates")).toContainText("Sep 15, 2027 – Jan 6, 2029");
       });
     });
   }

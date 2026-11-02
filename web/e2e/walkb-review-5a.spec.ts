@@ -8,7 +8,9 @@ import { login } from "./helpers";
 // says "the approved roadmap stays published": there is none. In the mock's
 // "simple-unapproved-roadmap" scenario the Alerts roadmap has no approved version yet.
 
-const bar = (page: Page, key: string) => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
+// build-roadmap (47361c89): the picked Timeline draws a bar per item in its own row; the arrow
+// keys move a focused bar as the Gantt's did.
+const bar = (page: Page, key: string) => page.locator(`[data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`);
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
   test.describe(`${viewport.width}px`, () => {
@@ -16,7 +18,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 
     test("a roadmap with no approved version: its draft banner claims none", async ({ page }) => {
       await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-unapproved-roadmap"]);
-      // The change is made on a desktop width (a phone's Timeline draws lanes, not bars), then read at the test's width.
+      // The change is made on a desktop width (a phone's Timeline is a list by quarter, not bars), then read at the test's width.
       await page.setViewportSize({ width: 1440, height: 900 });
       await login(page);
       await page.goto("/simple/roadmap");

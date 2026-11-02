@@ -24,6 +24,7 @@ import {
   daysBetween,
   liveBreaks,
   ms,
+  planGoal,
   quarterValue,
   quarters,
   shortDay,
@@ -845,6 +846,8 @@ function QuarterList(props: TimelineProps) {
               {items.map((i) => {
                 const lk = lookOf(i);
                 const sel = openKey === i.key;
+                // ah2-roadmap-specs review: the goal its Gantt lane names (its PRD's, else its own).
+                const goal = planGoal(i) ?? i.goal?.title;
                 return (
                   <li
                     key={i.id}
@@ -881,7 +884,7 @@ function QuarterList(props: TimelineProps) {
                         </span>
                         <span className="block text-xs text-text2">
                           {spanWords(i.start.date, i.end.date, data.today)}
-                          {i.goal ? ` · ${i.goal.title}` : ""}
+                          {goal ? ` · ${goal}` : ""}
                         </span>
                         {brokenFlag(i) && (
                           <span className="block text-xs text-crit">

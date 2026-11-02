@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Page } from "./test";
 
 // walkb-roadmap review 5c: a roadmap built from one PRD puts each of its items in the lane of
 // the goal its PRD gives it. Guided setup's plan (invented data, the "simple-plan-lanes"
@@ -8,9 +8,41 @@ import { expect, test, type Locator, type Page } from "./test";
 // goal; they were drawn in the lane of Faster activation, a goal of another roadmap's items.
 
 const URL = "/simple/roadmap?roadmap=onboarding-roadmap";
-const lane = (page: Page, title: string): Locator => page.getByTestId("chart-group").filter({ has: page.locator("b", { hasText: new RegExp(`^${title}$`) }) });
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
-const phoneLane = (page: Page, title: string): Locator => page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: new RegExp(`^${title}$`) }) });
+/**
+ * build-roadmap (47361c89): the picked Timeline draws a header per goal lane ("Activation · 5
+ * items") with its items' rows under it, and a phone's Timeline is a list by quarter, so a
+ * phone reads the goal lanes on the Gantt. Each lane's title and the items drawn under it, in
+ * the order the page draws them.
+ */
+async function timelineLanes(page: Page): Promise<{ title: string; items: string[] }[]> {
+  await expect(page.getByTestId("timeline-lane").first()).toBeVisible();
+  return page.getByTestId("simple-chart").evaluate((root) => {
+    const out: { title: string; items: string[] }[] = [];
+    for (const r of root.querySelectorAll<HTMLElement>('[data-testid="timeline-lane"], [data-testid="timeline-row"]')) {
+      if (r.dataset.testid === "timeline-lane") out.push({ title: (r.textContent ?? "").replace(/\s+/g, " ").trim(), items: [] });
+      else out[out.length - 1]?.items.push(r.dataset.item!);
+    }
+    return out;
+  });
+}
+
+async function ganttLanes(page: Page): Promise<{ title: string; items: string[] }[]> {
+  await page.getByTestId("format-gantt").click();
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+  await expect(page.getByTestId("chart-group").first()).toBeVisible();
+  const heads: { title: string; y: number }[] = [];
+  for (const g of await page.locator('[data-testid="chart-group"], [data-testid="below-the-line"]').all())
+    heads.push({ title: (await g.locator("span[title]").first().getAttribute("title")) ?? "", y: (await g.boundingBox())!.y });
+  heads.sort((a, b) => a.y - b.y);
+  const out = heads.map((h) => ({ title: h.title, items: [] as string[] }));
+  for (const b of await page.locator('g[data-testid="bar"]').all()) {
+    const box = (await b.boundingBox())!;
+    const mid = box.y + box.height / 2;
+    const at = heads.findLastIndex((h) => h.y <= mid);
+    if (at >= 0) out[at].items.push((await b.getAttribute("data-item"))!);
+  }
+  return out;
+}
 
 for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
   test.describe(`${viewport.width}px`, () => {
@@ -24,17 +56,35 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await login(page);
       await page.goto(URL);
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
-      if (viewport.width > 600) {
-        const activation = lane(page, "Activation");
-        await expect(activation.getByTestId("lane-count")).toHaveText("5 items");
-        await expect(lane(page, "Faster activation")).toHaveCount(0);
-        const key = await activation.getAttribute("data-lane");
-        for (const item of ["setup-checklist", "setup-import"]) await expect(bar(page, item)).toHaveAttribute("data-lane", key!);
-      } else {
-        await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "lanes-phone");
-        await expect(phoneLane(page, "Activation").getByTestId("lane-count")).toHaveText("5 items");
-        await expect(phoneLane(page, "Faster activation")).toHaveCount(0);
-      }
+      const lanes = viewport.width > 600 ? await timelineLanes(page) : await ganttLanes(page);
+      const activation = lanes.find((l) => /^Activation( · \d+ items?)?$/.test(l.title));
+      expect(activation, `an Activation lane among ${lanes.map((l) => l.title).join(", ")}`).toBeTruthy();
+      // The desktop's header counts its items; both count five drawn under it.
+      if (viewport.width > 600) expect(activation!.title).toBe("Activation · 5 items");
+      expect(activation!.items).toHaveLength(5);
+      expect(lanes.filter((l) => l.title.startsWith("Faster activation"))).toEqual([]);
+      for (const item of ["setup-checklist", "setup-import"]) expect(activation!.items).toContain(item);
     });
+
+    // The phone's Timeline is a list by quarter with no lane headers: each row names its goal
+    // under its title ("Oct 5 – Nov 2 · Activation"), so the same promise reads off the rows.
+    if (viewport.width < 600)
+      test("a phone's Timeline names each PRD item's own goal", async ({ page }) => {
+        await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan-lanes"] as const);
+        await login(page);
+        await page.goto(URL);
+        await expect(page.getByTestId("timeline-list")).toBeVisible();
+        const rows = page.getByTestId("timeline-list").getByTestId("timeline-row");
+        await expect(rows.first()).toBeVisible();
+        for (const item of ["setup-checklist", "setup-import"]) {
+          const row = rows.and(page.locator(`[data-item="${item}"]`));
+          await expect(row.first(), `${item} names its PRD's goal`).toContainText(/ · Activation\b/);
+        }
+        await expect(rows.filter({ hasText: "Faster activation" })).toHaveCount(0);
+        // An item that started before this quarter is listed in both; count each item once.
+        const activation = new Set<string>();
+        for (const r of await rows.all()) if (/ · Activation\b/.test((await r.textContent()) ?? "")) activation.add((await r.getAttribute("data-item"))!);
+        expect(activation.size).toBe(5);
+      });
   });
 }
