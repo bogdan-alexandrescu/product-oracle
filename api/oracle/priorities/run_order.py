@@ -376,7 +376,7 @@ def ranking_of(check: OrderCheck, known: Known) -> list[dict[str, Any]]:
         f = live.get(r["key"])
         if f is None:
             if r["key"] in known.features:
-                rows.append(new_feature(r, known.features[r["key"]], method, live_rows))
+                rows.append(new_feature(r, known.features[r["key"]], method, live_rows, known))
             continue
         rows.append(
             {
@@ -402,11 +402,16 @@ def _num(v: float) -> str:
 
 
 def new_feature(
-    r: dict[str, Any], title: str, method: str, live_rows: list[dict[str, Any]]
+    r: dict[str, Any],
+    title: str,
+    method: str,
+    live_rows: list[dict[str, Any]],
+    known: Known | None = None,
 ) -> dict[str, Any]:
     """A feature new in this PRD as a ``RankedFeature``: goal weight × contribution ×
     confidence ÷ effort from the inputs the run set; the file's score when one is missing.
-    Its confidence is the run's, with no evidence yet."""
+    Its confidence is the run's, with no evidence yet. What it depends on, and what waits
+    on it, are the edges the baseline and the run's feature set give (``known``)."""
     from oracle.priorities.scoring import FORMULAS
 
     goal, weight, contribution = r.get("goal"), r.get("weight"), r.get("contribution")
@@ -442,6 +447,10 @@ def new_feature(
         missing.append("confidence")
     if effort is None:
         missing.append("effort")
+    edges = known.depends_on if known is not None else {}
+    key = r["key"]
+    depends_on = sorted(d for d in edges.get(key, ()) if d != key)
+    dependents = sorted(k for k, deps in edges.items() if k != key and key in deps)
     return {
         "rank": r["rank"],
         "score_rank": r["rank"],
@@ -452,8 +461,8 @@ def new_feature(
         "score": score,
         "serves_goal": bool(goals),
         "flags": [],
-        "depends_on": [],
-        "dependents": [],
+        "depends_on": depends_on,
+        "dependents": dependents,
         "explanation": {
             "method": method,
             "formula": FORMULAS.get(method, ""),
