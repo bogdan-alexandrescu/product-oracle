@@ -21,6 +21,13 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
  * the card is silent before Propose, or says "Proposed to the decider" after a reload;
  * no_claim = who outside a meeting is asked (api tests/test_walkc_meeting.py routes the
  * proposal to the meeting's deciders, never an owner outside it).
+ *
+ * Card publish-end-delivery: protects = the Publish dialog counts the draft's edits and
+ * says the lines below are the changes that made them ("with 1 edit, made by this change
+ * in this meeting"); End meeting warns that the meeting's edits are not approved yet; the
+ * Delivery step says the Decisions page shows the minutes already (Send marks them sent);
+ * fails_when = End says nothing of the unapproved edit, or Delivery says Send posts to the
+ * Decisions page; no_claim = what Approve publishes (simple-meetings-approve.spec.ts).
  */
 
 async function flags(context: BrowserContext, value: string) {
@@ -85,6 +92,20 @@ for (const phone of [false, true]) {
       await expect(said.getByRole("listitem").first()).toContainText("record its basis on the roadmap or drop the date");
       await expect(said).toContainText("And 2 more like these.");
       await expect(page.getByText(/draft rejected/)).toHaveCount(0);
+    });
+
+    test(`Publish counts edits, End warns of unapproved edits, Delivery says the truth (${where})`, async ({ page }) => {
+      await startWithAnEdit(page);
+      await page.getByRole("button", { name: /^Approve and publish one-pager edits/ }).click();
+      const ask = page.getByRole("alertdialog");
+      await expect(ask).toContainText("This publishes Guided setup with 1 edit, made by this change in this meeting:");
+      await ask.getByRole("button", { name: "Back" }).click();
+      await expect(ask).toHaveCount(0);
+      await page.getByRole("button", { name: "End meeting" }).click();
+      await expect(ask).toContainText("The edit made in this meeting is not approved yet: it stays in a working draft until the decider approves.");
+      await ask.getByRole("button", { name: "End meeting" }).click();
+      await expect(page.getByTestId("end-screen")).toBeVisible();
+      await expect(page.getByRole("region", { name: "Delivery" })).toContainText("Decisions page · shows them already; Send marks them sent");
     });
 
     test(`a meeting card says who Propose asks, before and after (${where})`, async ({ page, context }) => {

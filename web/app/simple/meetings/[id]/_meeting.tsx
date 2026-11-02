@@ -200,7 +200,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
     const yes = await confirmInPage({
       action: "Approve and publish",
       title: `Publish ${what}?`,
-      message: `This publishes ${what} with ${edits === 1 ? "this edit" : `these ${edits} edits`}: ${made.length ? made.join("; ") : `${edits} ${edits === 1 ? "edit" : "edits"} made in this meeting`}. Everyone then reads the new version.`,
+      // walkc-meeting: the count is the draft's edits; the lines are the meeting's changes that made them (several changes can make one edit).
+      message: `This publishes ${what} with ${edits === 1 ? "1 edit" : `${edits} edits`}${made.length ? `, made by ${made.length === 1 ? "this change" : `these ${made.length} changes`} in this meeting: ${made.join("; ")}` : " made in this meeting"}. Everyone then reads the new version.`,
       cancel: "Back",
     });
     if (!yes) return;
@@ -225,7 +226,11 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
     const warn = waiting.length
       ? ` ${waiting.length} ${waiting.length === 1 ? "proposal still waits" : "proposals still wait"} for a decision: ${waiting.map((c) => `${c.by_name} proposes to ${proposalWords(c)}`).join("; ")}.`
       : "";
-    const yes = await confirmInPage({ action: "End meeting", message: `End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.${warn}`, destructive: true });
+    // walkc-meeting: ending does not approve the meeting's edits: say so first.
+    const unapproved = edits
+      ? ` ${edits === 1 ? "The edit made in this meeting is" : `The ${edits} edits made in this meeting are`} not approved yet: ${edits === 1 ? "it stays" : "they stay"} in a working draft until the decider approves.`
+      : "";
+    const yes = await confirmInPage({ action: "End meeting", message: `End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.${unapproved}${warn}`, destructive: true });
     if (yes) await act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/end", path)));
   };
   // e2e-minors-simple: past its length the clock says by how much, and the page offers to end it.
@@ -911,7 +916,8 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               </div>
             ) : m.can.end ? (
               <>
-                <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> Decisions page</label>
+                {/* walkc-meeting: the Decisions page shows the minutes already; Send marks them sent there. */}
+                <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> Decisions page<span className="simple-small"> · shows them already; Send marks them sent</span></label>
                 <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> Each attendee&apos;s Inbox</label>
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={email} disabled={!m.email_available} onChange={(e) => setEmail(e.target.checked)} /> Email the attendees
