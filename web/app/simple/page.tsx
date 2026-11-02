@@ -264,10 +264,12 @@ export default function SimpleHome() {
   const nothingToWalk = counted && decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
   // qa-simple-home-16: nothing waits on me (no decision, no proposal): one line, not two empty cards and two 0 tiles.
   // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
-  const decisionRows = waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined;
+  // build-rundecide RD3 a: the PRDs' questions I own wait in a card per PRD; this card keeps the other judgement calls.
+  const decisionRows = waiting.data && decisions.data ? homeDecisionRows([], decisions.data) : undefined;
+  const prdWaiting = waitingByPrd(waiting.data?.questions ?? []);
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
-  const quiet = decisionsEmpty && proposalsEmpty && mineApart.length === 0;
+  const quiet = decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0;
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
@@ -281,7 +283,9 @@ export default function SimpleHome() {
       ],
       ["broken-links", roadmap.data ? broken.length : null, broken.length === 1 ? "broken link" : "broken links", broken.length === 1 ? "broken link" : "broken links"],
     ] as const
-  ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty : !proposalsEmpty));
+  ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty || prdWaiting.length > 0 : !proposalsEmpty));
+  // build-rundecide review: with no other judgement call the Decisions card is not drawn; its tile goes to the first PRD's card.
+  const tileAnchor = (id: string) => (id === "decisions" && decisionsEmpty && prdWaiting[0] ? `waiting-${prdWaiting[0].prd.slug}` : id);
   // The goal band's weights as their share of the score ("50% of the score").
   const weightSum = (tiles ?? []).reduce((n, g) => n + (g.weight != null && g.weight > 0 ? g.weight : 0), 0);
   /** A goal's features on the roadmap (filtered to it), or Priorities when none is planned yet. */
@@ -551,7 +555,7 @@ export default function SimpleHome() {
             {tilesShown.map(([id, n, label, short]) => (
               <li key={id}>
                 <a
-                  href={`#${id}`}
+                  href={`#${tileAnchor(id)}`}
                   data-testid={`home-summary-${id}`}
                   className="flex h-full flex-col rounded-xl bg-surface2 px-4 py-3 hover:bg-accent-soft max-[600px]:px-2.5 max-[600px]:py-2"
                 >
@@ -606,6 +610,22 @@ export default function SimpleHome() {
         </section>
       )}
 
+      {!reads &&
+        prdWaiting.map(({ prd, questions }) => (
+          <section key={prd.slug} id={`waiting-${prd.slug}`} className="simple-card scroll-mt-6" aria-label={`Waiting for you: ${prd.title}`} data-testid="home-prd-waiting">
+            <header className="flex flex-wrap items-baseline gap-x-3">
+              <h2 className="simple-h2 flex-1">Waiting for you: {prd.title}</h2>
+              <span className="simple-meta">
+                {questions.length} {questions.length === 1 ? "decision" : "decisions"} you own · also on its review meeting&apos;s agenda
+              </span>
+            </header>
+            <div className="mt-3">
+              <Top rows={questions} max={phone ? 2 : 3} more={`/simple/decisions?prd=${encodeURIComponent(prd.slug)}`} what={`of ${prd.title}'s decisions`}>
+                {(q) => <QuestionRow key={q.id} q={q} mode="list" testId="home-question" actions={questionActions} plain />}
+              </Top>
+            </div>
+          </section>
+        ))}
       {!reads && !decisionsEmpty && (
         <HomeCard
           id="decisions"
@@ -1016,6 +1036,19 @@ function SetupCard({ setup, owner, onHide }: { setup: Schemas["SetupOut"]; owner
 function stored(i: Schemas["SimpleRoadmapItem"]) {
   const own = (d: Schemas["SimpleDate"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
   return { start_date: own(i.start), end_date: own(i.end) };
+}
+
+/** build-rundecide RD3 a: the questions I own, one group per PRD, the PRD with the soonest due first; each soonest first. */
+function waitingByPrd(questions: Question[]): { prd: Question["prd"]; questions: Question[] }[] {
+  const by = new Map<string, { prd: Question["prd"]; questions: Question[] }>();
+  for (const q of questions) {
+    const g = by.get(q.prd.slug) ?? { prd: q.prd, questions: [] };
+    g.questions.push(q);
+    by.set(q.prd.slug, g);
+  }
+  const due = (q: Question) => q.due_on ?? "9999";
+  const groups = [...by.values()].map((g) => ({ ...g, questions: [...g.questions].sort((a, b) => due(a).localeCompare(due(b)) || a.number - b.number) }));
+  return groups.sort((a, b) => due(a.questions[0]!).localeCompare(due(b.questions[0]!)));
 }
 
 /** Home's decision rows: the late questions first, then the other judgement calls, then the rest of the questions (soonest first). */

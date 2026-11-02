@@ -4660,3 +4660,64 @@ export function seedFinishedBaselineBuild(ctx: Omit<RunsContext, "db">, db: Runs
   for (const s of run.segments) Object.assign(s, { status: "succeeded", cost_usd: s.estimate_usd ?? 0 });
   return run;
 }
+
+/** build-rundecide "run-decisions" scenario: one finished stop of a seeded run, as a person decided it. */
+type DecidedStop = { kind: CheckpointOut["kind"]; seq: number; status: "approved" | "changes_requested"; by: string; role: "owner" | "approver"; at: string; note?: string; attempt?: number };
+
+/**
+ * build-rundecide RD1 a, the "run-decisions" scenarios: Baseline to PRD runs on PRDs whose
+ * stops people decided (one sent back, then approved), for Simple › Decisions' Runs card.
+ * `many`: three more runs on other PRDs. `people`: the owner's and an approver's member ids.
+ */
+export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, people: { owner: string; approver: string }, many = false): RunOut[] {
+  const { owner, approver } = people;
+  const o = (kind: DecidedStop["kind"], seq: number, at: string, note?: string): DecidedStop => ({ kind, seq, status: "approved", by: owner, role: "owner", at, note });
+  const a = (kind: DecidedStop["kind"], seq: number, at: string, note?: string, status: DecidedStop["status"] = "approved", attempt = 1): DecidedStop => ({ kind, seq, status, by: approver, role: "approver", at, note, attempt });
+  const plans: { doc: string; created_at: string; stops: DecidedStop[] }[] = [
+    {
+      doc: "usage-alerts",
+      created_at: "2026-10-19T16:00:00Z",
+      stops: [
+        o("feature_set", 2, "2026-10-20T17:00:00Z", "Keep the weekly digest; leave text messages for later."),
+        a("eng_review", 3, "2026-10-21T17:00:00Z", "Quiet hours need a time zone per workspace, not one for the company.", "changes_requested"),
+        a("eng_review", 3, "2026-10-22T17:00:00Z", "Quiet hours now follow each workspace's time zone.", "approved", 2),
+        o("priority_order", 4, "2026-10-22T19:00:00Z"),
+        a("prd_review", 5, "2026-10-26T17:00:00Z", "Good to build from version 3."),
+        o("eng_dates", 6, "2026-10-27T17:00:00Z", "Weekly alert digest moved from Nov 20 to Dec 4."),
+      ],
+    },
+  ];
+  if (many)
+    plans.push(
+      {
+        doc: "saved-carts",
+        created_at: "2026-10-11T16:00:00Z",
+        stops: [o("feature_set", 2, "2026-10-12T17:00:00Z", "Checklist first, sample project second."), a("eng_review", 3, "2026-10-13T17:00:00Z"), o("priority_order", 4, "2026-10-14T17:00:00Z"), a("prd_review", 5, "2026-10-16T17:00:00Z"), o("eng_dates", 6, "2026-10-17T17:00:00Z")],
+      },
+      {
+        doc: "team-workspaces",
+        created_at: "2026-10-23T16:00:00Z",
+        stops: [
+          o("feature_set", 2, "2026-10-24T17:00:00Z", "Seats only; no usage pricing this quarter."),
+          a("eng_review", 3, "2026-10-25T17:00:00Z", "Proration needs the new invoice service first.", "changes_requested"),
+          a("eng_review", 3, "2026-10-28T17:00:00Z", undefined, "approved", 2),
+          o("priority_order", 4, "2026-10-29T17:00:00Z"),
+        ],
+      },
+      {
+        doc: "checkout-redesign",
+        created_at: "2026-10-26T16:00:00Z",
+        stops: [o("feature_set", 2, "2026-10-27T17:00:00Z"), a("eng_review", 3, "2026-10-28T17:00:00Z", "Host it ourselves, behind the same sign-in."), o("priority_order", 4, "2026-10-29T17:00:00Z"), a("prd_review", 5, "2026-10-30T17:00:00Z")],
+      },
+    );
+  return plans.map((p) => {
+    const r = seedRun(ctx, db, "baseline_to_prd", p.doc, { checkpoints: { eng_review: true, eng_dates: true } }, p.created_at);
+    r.checkpoints = p.stops.map((s) => ({
+      id: ctx.uuid(), run_id: r.id, kind: s.kind, status: s.status, approver_role: "approver", segment_seq: s.seq,
+      decided_by: s.by, decided_at: s.at, note: s.note ?? null, payload: { segment_seq: s.seq, attempt: s.attempt ?? 1, decided: { role: s.role, by: s.by, via: "oracle" } }, created_at: s.at, can_decide: false, lead_stop: false, cannot_approve: null,
+      approve_label: "Approve", needs_agents: [],
+    }));
+    Object.assign(r, { status: "running", started_at: p.created_at });
+    return r;
+  });
+}

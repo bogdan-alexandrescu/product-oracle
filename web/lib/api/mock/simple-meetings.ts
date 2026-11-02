@@ -79,6 +79,8 @@ export interface MeetingsCtx {
   othersWaiting?: () => number;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
   documents?: () => { id: string; slug: string; title: string }[];
+  /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
+  runs?: (prd: string | null) => Schemas["SimpleRunGroup"][];
 }
 
 interface Meeting {
@@ -941,6 +943,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     questions: qs,
     ...(({ waiting_count, late_count, approvals_waiting, approvals_example }) => ({ waiting_count, late_count, approvals_waiting, approvals_example }))(questionsCounts(ctx, qd, qs)),
     view: ctx.view?.() ?? "list",
+    // build-rundecide RD1 a (as decisions_page): the runs' stops, unless a goal or a meeting is picked.
+    runs: meetingQ || goal ? [] : (ctx.runs?.(prd?.slug ?? null) ?? []),
   };
   return json(200, out);
 }

@@ -119,7 +119,7 @@ test.describe("desktop", () => {
     await expect(home(page).getByTestId("home-goal").locator(".simple-code")).toHaveCount(0);
     await expect(home(page).getByTestId("home-question").first()).toBeVisible();
     await expect(home(page).getByTestId("home-question").locator(".simple-code")).toHaveCount(0);
-    await expect(home(page).getByTestId("home-decisions")).not.toContainText(/Blocks M\d|\b[A-Z]{1,3}-\d+\s/);
+    await expect(home(page).getByTestId("home-prd-waiting").first()).not.toContainText(/Blocks M\d|\b[A-Z]{1,3}-\d+\s/);
     await expect(home(page).getByTestId("home-since")).not.toContainText(/\b[A-Z]{1,3}-\d+\s/);
     await expect(home(page).getByTestId("home-decisions-count")).toHaveCount(0);
     await expect(home(page).getByTestId("home-proposals-count")).toHaveCount(0);

@@ -200,14 +200,13 @@ export function decidedOutsideRows(ctx: QuestionsCtx, db: QuestionsDb, shown: Qu
 }
 
 /**
- * A review meeting's agenda (questions.due_for): the open questions blocking the milestone the
- * soonest one blocks, and those decided in this meeting (they stay, with Undo for who decided
+ * A review meeting's agenda (questions.due_for): every open question of its PRD, whoever owns it
+ * (build-rundecide RD3 a), and those decided in this meeting (they stay, with Undo for who decided
  * them while it runs); soonest first.
  */
 export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: string; session_id: string; live: boolean }): Question[] {
   const all = questionsOut(ctx, db);
   const open = all.filter((q) => q.status === "proposed");
-  const ms = open.find((q) => q.blocks?.milestone)?.blocks?.milestone ?? null;
   const here = new Set(db.questions.filter((q) => decided(q) && q.meeting_id === meeting.id).map((q) => stableUuid(`simple-question/${q.n}`)));
   const done = all
     .filter((q) => here.has(q.id))
@@ -219,7 +218,7 @@ export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: str
         : undefined;
       return { ...q, undo_id: c?.change.id ?? null };
     });
-  return [...open.filter((q) => !ms || q.blocks?.milestone === ms), ...done].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.number - b.number);
+  return [...open, ...done].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.number - b.number);
 }
 
 /** GET /v1/simple/decisions/waiting: `others` is the decision log's judgement calls waiting for me. */

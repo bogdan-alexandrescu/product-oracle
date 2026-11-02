@@ -1282,8 +1282,16 @@ async def list_decisions(
     if principal.run_id is not None and principal.run_id != run_id:
         raise NotFound(f"run {run_id} not found")
     run = await _get_run(db, run_id)
-    flow = _flow(run)
-    decided = [c for c in await _checkpoints(db, [run.id]) if c.status in _LISTED]
+    return (await decisions_of_runs(db, [run]))[run.id]
+
+
+async def decisions_of_runs(
+    db: AsyncSession, runs: list[Run]
+) -> dict[uuid.UUID, list[RunDecision]]:
+    """:func:`list_decisions` of runs the caller has read and may see, in one read of their
+    checkpoints, roles and names for all of them (Simple › Decisions' Runs group)."""
+    flows_of = {r.id: _flow(r) for r in runs}
+    decided = [c for c in await _checkpoints(db, list(flows_of)) if c.status in _LISTED]
     # Decisions recorded before the decider was kept on the checkpoint: their role now.
     ids = {
         c.decided_by
@@ -1303,8 +1311,9 @@ async def list_decisions(
             )
     by = {cp.id: _decider_of(cp) for cp in decided}
     people = await _people_named(db, {i for i in by.values() if i})
-    out: list[RunDecision] = []
+    out: dict[uuid.UUID, list[RunDecision]] = {i: [] for i in flows_of}
     for cp in decided:
+        flow = flows_of[cp.run_id]
         payload = cp.payload or {}
         who = people.get(by[cp.id]) if by[cp.id] else None
         mark = payload.get("decided")
@@ -1320,7 +1329,7 @@ async def list_decisions(
             title = flow.segment(name).title
         extra = payload.get("review") if isinstance(payload.get("review"), dict) else {}
         delivered = not _owes(cp)
-        out.append(
+        out[cp.run_id].append(
             RunDecision(
                 checkpoint_id=cp.id,
                 kind=cp.kind,  # type: ignore[arg-type]
@@ -1340,7 +1349,8 @@ async def list_decisions(
             )
         )
     far = datetime.max.replace(tzinfo=UTC)
-    out.sort(key=lambda d: (d.segment_seq or 0, d.decided_at or far))
+    for lst in out.values():
+        lst.sort(key=lambda d: (d.segment_seq or 0, d.decided_at or far))
     return out
 
 

@@ -1910,6 +1910,42 @@ class SimpleQuestion(BaseModel):
     undo_id: uuid.UUID | None = None
 
 
+class SimpleRunStepOut(BaseModel):
+    """One decision at a run's stop: what was done ("Sent back", "Approved"), by whom, the
+    day (the company's) and the note given."""
+
+    what: str
+    who: str | None = None
+    day: dt.date | None = None
+    note: str | None = None
+
+
+class SimpleRunStopOut(BaseModel):
+    """build-rundecide RD1 a: one stop of a run as a decision row: "Engineering check:
+    approved after a change", the person's name, their role, the note and the day. `trail`
+    lists every step when the stop was sent back before it was approved."""
+
+    checkpoint_id: uuid.UUID
+    kind: str
+    stop: str
+    outcome: str
+    who: str | None = None
+    role: str | None = None
+    day: dt.date | None = None
+    note: str | None = None
+    trail: list[SimpleRunStepOut] = []
+
+
+class SimpleRunGroup(BaseModel):
+    """build-rundecide RD1 a: one run's decided stops, in order, under its name and PRD
+    ("Usage alerts plan · Usage alerts PRD · 5 decisions")."""
+
+    run_id: uuid.UUID
+    name: str
+    prd: SimpleFilterOption | None = None
+    stops: list[SimpleRunStopOut]
+
+
 class SimpleDecisionsOut(BaseModel):
     """Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
     them, newest first, then the decisions taken outside meetings. prd-questions: the
@@ -1930,6 +1966,8 @@ class SimpleDecisionsOut(BaseModel):
     # One of them, for the page's foot ("D-12 Approve Baseline confirm").
     approvals_example: str | None = None
     view: DecisionsView = "list"
+    # build-rundecide RD1 a: the runs' decided stops, one group per run, newest run first.
+    runs: list[SimpleRunGroup] = []
 
 
 class SimpleDecisionsWaitingOut(BaseModel):

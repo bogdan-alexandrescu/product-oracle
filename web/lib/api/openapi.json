@@ -113940,6 +113940,14 @@
             ],
             "title": "View",
             "default": "list"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRunGroup"
+            },
+            "type": "array",
+            "title": "Runs",
+            "default": []
           }
         },
         "type": "object",
@@ -118681,6 +118689,175 @@
           "milestones"
         ],
         "title": "SimpleRoadmapOut"
+      },
+      "SimpleRunGroup": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFilterOption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRunStopOut"
+            },
+            "type": "array",
+            "title": "Stops"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "name",
+          "stops"
+        ],
+        "title": "SimpleRunGroup",
+        "description": "build-rundecide RD1 a: one run's decided stops, in order, under its name and PRD\n(\"Usage alerts plan \u00b7 Usage alerts PRD \u00b7 5 decisions\")."
+      },
+      "SimpleRunStepOut": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "title": "What"
+          },
+          "who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Who"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what"
+        ],
+        "title": "SimpleRunStepOut",
+        "description": "One decision at a run's stop: what was done (\"Sent back\", \"Approved\"), by whom, the\nday (the company's) and the note given."
+      },
+      "SimpleRunStopOut": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "stop": {
+            "type": "string",
+            "title": "Stop"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Who"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "trail": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRunStepOut"
+            },
+            "type": "array",
+            "title": "Trail",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "kind",
+          "stop",
+          "outcome"
+        ],
+        "title": "SimpleRunStopOut",
+        "description": "build-rundecide RD1 a: one stop of a run as a decision row: \"Engineering check:\napproved after a change\", the person's name, their role, the note and the day. `trail`\nlists every step when the stop was sent back before it was approved."
       },
       "SimpleSendIn": {
         "properties": {
