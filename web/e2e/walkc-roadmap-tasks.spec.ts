@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { ADMIN, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -91,5 +91,99 @@ for (const where of ["desktop", "phone"] as const) {
       await page.getByTestId(`format-${f}`).click();
       await expect(page.locator('g[data-testid="slice-bar"][data-code^="F-02"]').first(), f).toHaveAttribute("data-start", now!);
     }
+  });
+}
+
+/** Signs in as `email` with the mock's one password (as simple-roadmap-talk.spec.ts). */
+async function signIn(page: Page, email: string) {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(ADMIN.password);
+  await tap(page.getByRole("button", { name: "Sign in" }));
+  await expect(page).not.toHaveURL(/\/login/);
+}
+
+/**
+ * Card walkc-tasks-reach-their-owner: protects = a task added to an item in its talk with
+ * Oracle ("for Theo Brandt by Nov 20") is listed under the item's Tasks with its owner and due
+ * day, and Theo's Simple Home lists it under "Tasks waiting for you" (no "Nothing waits on
+ * you"), desktop and phone; fails_when = the task is only a past chat line, or never reaches
+ * its owner; no_claim = editing or closing a task.
+ */
+for (const where of ["desktop", "phone"] as const) {
+  test(`a task added to an item is listed and reaches its owner (${where})`, async ({ page }) => {
+    const phone = where === "phone";
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk"] as const);
+    if (phone) await page.setViewportSize(PHONE);
+    await signIn(page, ADMIN.email);
+    await page.goto(URL);
+    if (phone) await tap(page.getByTestId("format-gantt"));
+    await expect(bar(page, "adaptive-pacing")).toBeVisible();
+    await bar(page, "adaptive-pacing").click();
+    const card = page.getByTestId("floating-card");
+    await expect(card.getByTestId("card-tasks")).toContainText("No tasks yet");
+    if (phone) await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
+    else await tap(card.getByRole("button", { name: "Talk to Oracle" }));
+    const talk = card.getByTestId("item-talk");
+    await talk.getByRole("textbox", { name: "Message Oracle" }).fill("add a task 'Draft the pacing copy' to Adaptive pacing for Theo Brandt by nov 20");
+    await tap(talk.getByRole("button", { name: "Send" }));
+    const c = talk.getByTestId("chat-card").filter({ hasText: "Draft the pacing copy" });
+    await tap(c.getByRole("button", { name: "Apply" }));
+    await expect(c).toHaveAttribute("data-status", "applied");
+    if (phone) await tap(card.getByRole("tab", { name: "Details" }));
+    const task = card.getByTestId("card-task");
+    await expect(task).toHaveCount(1);
+    await expect(task).toHaveText("Draft the pacing copy · Theo Brandt · due Nov 20 · To do");
+    // The account menu is the desktop rail's: sign out there, then come back as Theo.
+    if (phone) await page.setViewportSize({ width: 1366, height: 820 });
+    await signOut(page);
+    if (phone) await page.setViewportSize(PHONE);
+    await signIn(page, "commenter@example.com");
+    await page.goto("/simple");
+    const mine = page.getByTestId("home-tasks");
+    await expect(mine).toBeVisible();
+    await expect(mine.getByTestId("home-task")).toHaveText(/^Draft the pacing copy · Adaptive pacing · due Nov 20/);
+    await expect(page.getByTestId("home-nothing-waits")).toHaveCount(0);
+  });
+}
+
+/**
+ * Card walkc-decisions-who-when-minutes: protects = a decision taken in a review meeting
+ * ("Moved Weekly alert digest", in "Review: Usage alerts") shows on the item's sheet and on
+ * Detailed's Plan item with who decided, when (month first) and a link to the meeting's
+ * minutes, which opens them; fails_when = either shows the title alone or the Plan item
+ * shows no decision; no_claim = decisions made outside a meeting (who and when, no minutes).
+ */
+for (const where of ["desktop", "phone"] as const) {
+  test(`an item's decisions say who, when and link the minutes (${where})`, async ({ page }) => {
+    const phone = where === "phone";
+    if (phone) await page.setViewportSize(PHONE);
+    await login(page);
+    // Simple's Decisions page first: the meetings and their decisions are read there.
+    await page.goto("/simple/decisions");
+    await expect(page.getByText("Moved Weekly alert digest").first()).toBeVisible();
+    await page.goto(URL);
+    await page.getByTestId("format-gantt").click();
+    await bar(page, "alert-digest").click();
+    const card = page.getByTestId("floating-card");
+    const decided = card.getByTestId("card-decided-in");
+    await expect(decided).toContainText("Moved Weekly alert digest");
+    const who = decided.getByTestId("decided-who").first();
+    await expect(who).toContainText(/Decided by \S+.* · [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M/);
+    const minutes = who.getByTestId("decided-minutes");
+    await expect(minutes).toHaveText("Minutes of Review: Usage alerts");
+    await expect(minutes).toHaveAttribute("href", /^\/simple\/meetings\/[0-9a-f-]+$/);
+    const href = await minutes.getAttribute("href");
+    await page.goto("/plan");
+    const row = page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Daily alert digest email" });
+    await row.getByTestId("plan-title").click();
+    const panel = page.getByTestId(phone ? "sheet-plan-item" : "plan-inspector").filter({ visible: true });
+    const list = panel.getByTestId("plan-decided");
+    await expect(list).toContainText("Moved Weekly alert digest");
+    await expect(list.getByTestId("decided-who").first()).toContainText(/Decided by \S+/);
+    await expect(list.getByTestId("decided-minutes").first()).toHaveAttribute("href", href!);
+    await tap(list.getByTestId("decided-minutes").first());
+    await expect(page).toHaveURL(new RegExp(`${href}$`));
+    await expect(page.getByRole("region", { name: "Minutes" })).toBeVisible();
   });
 }
