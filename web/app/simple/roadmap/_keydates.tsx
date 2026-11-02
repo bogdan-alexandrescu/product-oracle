@@ -145,9 +145,11 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
               </div>
             </li>
           ) : (
-            <li key={k.id} className="flex items-start gap-2 rounded-lg border border-line p-2" data-testid="key-date-row" data-name={k.name}>
+            <li key={k.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-line p-2" data-testid="key-date-row" data-name={k.name}>
               <span aria-hidden className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 bg-accent-ink" />
-              <div className="min-w-0 flex-1">
+              {/* vqa-detailed: the text keeps room for its name, day and badge; Edit and Remove go
+                  under it when the row is narrow, so a name never breaks one letter a line. */}
+              <div className="min-w-[min(16rem,calc(100%-1.5rem))] flex-1">
                 {/* fix4 qa-simple-roadmap-36: one line: the name (its whole in title= when cut), its day and the badge, each kept whole. */}
                 <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
                   {/* qa4-simple-roadmap-37: the name wraps, never cut mid-word. */}
@@ -166,7 +168,7 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
                 {k.note && <div className="text-sm text-text2">{k.note}</div>}
               </div>
               {mayChange && !!of(k.roadmap.id)?.can_change && (
-                <span className="flex flex-none gap-1">
+                <span className="ml-auto flex flex-none gap-1">
                   <Button
                     aria-label={`Edit ${k.name}`}
                     onClick={() => {
