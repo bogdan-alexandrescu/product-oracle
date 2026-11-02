@@ -15,7 +15,8 @@ Test cards (protects / fails_when / no_claim):
   draft item; fails_when=a change reaches the roadmap or a viewer may change.
 - test_approve_these_dates_puts_them_on_the_roadmap: protects=Approve these N dates: the
   items join the roadmap with their dates and the meeting records the decision;
-  fails_when=the items stay draft, lose their dates or no decision is recorded.
+  fails_when=the items stay draft, lose their dates, no decision is recorded or its PRD
+  subject's ref is not the PRD's slug (Company > Decisions links to /documents/<ref>).
 """
 
 import datetime as dt
@@ -136,6 +137,12 @@ async def test_approve_these_dates_puts_them_on_the_roadmap(client):
     assert [d["title"] for d in out["meeting_decisions"]] == [
         f"{title} dates approved: 3 items on the roadmap"
     ]
+    # runplan-r2: the decision names the PRD by its slug, so Company > Decisions links to it.
+    decided = out["meeting_decisions"][0]
+    assert decided["subjects"] == [{"kind": "document", "id": out["prd"]["id"], "ref": PRD}]
+    r = await client.get(f"/v1/decisions/{decided['id']}", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json()["subjects"] == [{"kind": "document", "id": out["prd"]["id"], "ref": PRD}]
     assert sorted(await on_roadmap(client, w)) == sorted(t for t, *_ in ITEMS)
     r = await client.get("/v1/simple/roadmap", params={"prd": PRD}, headers=w.ctx.as_("decider"))
     by_title = {i["title"]: i for i in r.json()["items"]}
