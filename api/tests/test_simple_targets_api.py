@@ -430,7 +430,10 @@ async def test_item_tasks_are_listed_and_reach_their_owner(client):
     assert r.status_code == 200, r.text
     [mine] = r.json()["tasks"]
     assert (mine["title"], mine["item_id"], mine["item_title"]) == (
-        "Write the migration", w.ids["x"], x["title"])
+        "Write the migration",
+        w.ids["x"],
+        x["title"],
+    )
     assert mine["due_date"] == "2026-11-20"
     r = await client.get("/v1/simple/decisions/waiting", headers=ctx.as_("viewer"))
     assert r.json()["tasks"] == []
