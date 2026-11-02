@@ -61,6 +61,14 @@ for (const phone of [false, true]) {
       // Down: the pointer just inside the bottom of the row three below.
       await moveTo(page, 0, 3, (h) => h - 6);
     });
+
+    test("a drop in the gap between two rows lands on the nearer row", async ({ page }) => {
+      await open(page, null);
+      // Down: the pointer in the gap 4 px above the row two below, nearer it than the row above it.
+      await moveTo(page, 0, 2, () => -4);
+      // Down: the pointer in the gap 4 px below the row three below, nearer it than the row under it.
+      await moveTo(page, 0, 3, (h) => h + 4);
+    });
   });
 }
 
@@ -69,6 +77,9 @@ test("on a phone long milestone names wrap inside each card and the page does no
   await open(page, "simple-priorities-long-milestones");
   const milestone = page.getByText(/^Milestone M1 · /).first();
   await expect(milestone).toContainText("Milestone M1 · Guided setup ready for the first paying teams");
+  // Each code in a milestone name is shown with its name, never bare.
+  await expect(milestone).toContainText("(F-30a Team invites); F-30b Billing page follows");
+  await expect(milestone).not.toContainText(/F-\d+[a-z]?[);]/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
   for (const r of await page.getByTestId("prio-row").all()) {
     const box = (await r.boundingBox())!;
