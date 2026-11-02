@@ -2889,6 +2889,13 @@ function load(): Db {
                 ? seedSimpleHomeOnePrdScenario
               : scenario === "simple-walk"
                 ? seedSimpleWalkScenario
+              : scenario === "simple-walk-long-name"
+                ? () => {
+                    // walkb-roadmap review 5f: a roadmap built from a PRD with a long title.
+                    const db = seedSimpleWalkScenario();
+                    db.simple_roadmap!.titles = { "onboarding-roadmap": "Guided setup for new workspace admins and their first teams roadmap" };
+                    return db;
+                  }
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
               : scenario === "simple-plan-lanes"

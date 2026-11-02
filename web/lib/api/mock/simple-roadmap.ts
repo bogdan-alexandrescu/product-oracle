@@ -99,6 +99,9 @@ interface SimpleDb {
   /** Roadmap-plus (api/oracle/simple/key_dates.py): each roadmap's key dates as its working
    * draft has them (roadmap slug -> key dates); a draft keeps the published ones. */
   key_dates?: Record<string, MockKeyDate[]>;
+  /** A roadmap's own name when it differs from ROADMAPS' (roadmap slug -> title), as Build
+   * roadmap names one after its PRD ("simple-walk-long-name"). */
+  titles?: Record<string, string>;
   /** S7 (./simple-suggestions.ts): Oracle's feature suggestions for goals, its suggest jobs
    * (goal key -> when the job is done, mock ms) and the goals suggested for automatically. */
   goal_suggestions?: GoalSuggestionRow[];
@@ -879,14 +882,16 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     // One roadmap chosen: its key dates; all roadmaps: every readable one's (oracle.simple.service).
     ...keyDatesOut(db, reader.full, chosen ? [chosen] : readable, me ?? { id: "", role }),
     roadmaps: keyDatesOut(db, reader.full, readable, me ?? { id: "", role }).key_date_roadmaps,
-    roadmap: chosen ? { id: roadmapId(chosen), slug: chosen, title: ROADMAPS[chosen].title } : null,
+    roadmap: chosen ? { id: roadmapId(chosen), slug: chosen, title: roadmapTitle(db, chosen) } : null,
   };
 }
 
+const roadmapTitle = (db: SimpleDb, slug: string): string => db.titles?.[slug] ?? ROADMAPS[slug].title;
+
 /** Roadmap-plus: the shown roadmaps' key dates (the draft's to who sees it) and who may change them. */
 function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: string; role: Role }): Pick<Schemas["SimpleRoadmapOut"], "key_dates" | "key_date_roadmaps"> {
-  const slugs = [...shown].sort((a, b) => ROADMAPS[a].title.localeCompare(ROADMAPS[b].title));
-  const ref = (slug: string) => ({ id: stableUuid(`simple-doc/${slug}`), slug, title: ROADMAPS[slug].title });
+  const slugs = [...shown].sort((a, b) => roadmapTitle(db, a).localeCompare(roadmapTitle(db, b)));
+  const ref = (slug: string) => ({ id: stableUuid(`simple-doc/${slug}`), slug, title: roadmapTitle(db, slug) });
   const draftOf = (slug: string) => (full.drafts ?? []).find((d) => d.roadmap === slug && OPEN_DRAFT.includes(d.out.status));
   const keyDates = slugs
     .flatMap((slug) => {
