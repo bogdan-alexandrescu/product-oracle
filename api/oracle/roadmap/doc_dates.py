@@ -113,6 +113,10 @@ _RANK = {"withdrawn": 0, "unverified": 1, "verified": 2}
 
 SOURCES_KEY = layers.SOURCES_SECTION_ID
 LAYOUT_KEY = "layout"
+# walkb-roadmap: not schedule dates. "Changes since last version" records what moved and
+# when; the line under the title says which day the roadmap is as of.
+CHANGES_KEY = "changes"
+AS_OF = re.compile(r"\bas of\s*$", re.IGNORECASE)
 TITLE_KEY = ""  # the section_key of a date in the front matter title
 
 _md = MarkdownIt("commonmark", {"html": False}).enable("table")
@@ -756,6 +760,8 @@ def _found_in(
         # Past closing emphasis right after the date (``**Nov 30, 2026**``).
         while not in_code and insert < len(source) and source[insert] in "*_~":
             insert += 1
+        if AS_OF.search(rendered.text[max(0, a - 12) : a]):
+            continue
         line = _line_of(starts, start)
         owner = section_item
         block_text = rendered.text
@@ -797,6 +803,16 @@ def find(
             title, section_key=TITLE_KEY, where="title", section_item=None, ref=ref, plain=True
         )
     sc = scope(sections)
+    keys = [s.section_key for s in sections]
+    changes = (
+        set(
+            layers.subtree(
+                [layers.SectionRef(s.section_key, s.level) for s in sections], CHANGES_KEY
+            )
+        )
+        if CHANGES_KEY in keys
+        else set()
+    )
     # The item a section belongs to: its own anchor, else its parent item section's.
     stack: list[tuple[int, str | None]] = []
     for s in sections:
@@ -804,7 +820,7 @@ def find(
             stack.pop()
         item = _item_of_anchor(s.section_key) or (stack[-1][1] if stack else None)
         stack.append((s.level, item))
-        if s.section_key in sc.exempt:
+        if s.section_key in sc.exempt or s.section_key in changes:
             continue
         out += _found_in(
             s.heading or "", section_key=s.section_key, where="heading", section_item=item, ref=ref
@@ -836,6 +852,10 @@ def covering(found: Found, bases: Iterable[schedule.Basis]) -> list[schedule.Bas
 def _in_scope(b: schedule.Basis, found: Found) -> bool:
     owner = (found.owner or "").lower()
     if b.item_key:
+        # walkb-roadmap: a date outside every item (a summary, a brief table) is backed by
+        # an item's verified basis for that day, as Plan › Dates shows it verified.
+        if not owner:
+            return True
         return owner == b.item_key.lower()
     if b.tracker_key:
         if schedule._names(b.tracker_key, found.block):

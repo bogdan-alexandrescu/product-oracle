@@ -460,7 +460,8 @@ export function roadmapFromPrd(prd: {
   const count = (h: string) => items.filter((i) => i.horizon.key === h).length;
   const title = `${prd.title.replace(/\s*PRD$/, "")} roadmap`;
   const sections: SectionSeed[] = [
-    { key: "title", level: 1, heading: title, body: `Built from [${prd.title} v${prd.version}](${link()}).` },
+    // walkb-roadmap: as the real template, the line under the title says which day it is as of.
+    { key: "title", level: 1, heading: title, body: `As of 2026-10-02. Built from [${prd.title} v${prd.version}](${link()}).` },
     {
       key: "summary",
       level: 2,
@@ -494,6 +495,7 @@ export function roadmapFromPrd(prd: {
               : `From the PRD: [${i.from.heading}](${link(i.from.key)}).`,
         })),
     ]),
+    { key: "changes", level: 2, heading: "Changes since last version", body: "First version, built 2026-10-02." },
     { key: "sources", level: 2, heading: "Sources and data points", body: `- [${prd.title} v${prd.version}](${link()})` },
   ];
   return { title, sections, brief: ["summary", "brief-items"] };

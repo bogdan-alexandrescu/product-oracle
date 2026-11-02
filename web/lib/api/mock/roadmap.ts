@@ -1101,12 +1101,17 @@ export function trackRunBody(ctx: RoadmapContext, db: RoadmapDb, trackId: string
 const ISO_DATE = /(?<![0-9])(\d{4})-(\d{2})-(\d{2})(?![0-9])/g;
 const MARK_RANK = { withdrawn: 0, unverified: 1, verified: 2 } as const;
 const ITEM_ANCHOR = /^(?:now|next|later)-(.+)$/;
+/** walkb-roadmap, as doc_dates: not schedule dates (the "As of" line, Changes since last version). */
+const AS_OF = /\bas of\s*$/i;
+/** The roadmap's own sections, which no item owns: an item's verified basis backs a date there. */
+const NOT_ITEMS = new Set(["title", "roadmap", "summary", "goals", "problems", "brief-items", "brief-roadmap", "not-doing", "top-risks", "decisions", "full", "layout", "now", "next", "later", "risks"]);
 
 /**
  * The dates a roadmap version's text writes, each checked against its PRD's schedule
  * bases now (oracle.roadmap.doc_dates, simplified: ISO dates in headings and bodies; a
- * basis with an item key counts in that item's own section). One mark per date and
- * section, worst status; Sources and data points (and its sub-sections) are not read.
+ * basis with an item key counts in that item's own section and in the roadmap's own
+ * sections). One mark per date and section, worst status; Sources and data points and
+ * Changes since last version (and their sub-sections), and an "As of" date, are not read.
  */
 export function dateMarks(
   db: RoadmapDb,
@@ -1116,7 +1121,7 @@ export function dateMarks(
   const out = new Map<string, Schemas["DateMarkOut"]>();
   let sourcesLevel: number | null = null;
   for (const s of sections) {
-    if (s.section_key === "sources") {
+    if (s.section_key === "sources" || s.section_key === "changes") {
       sourcesLevel = s.level;
       continue;
     }
@@ -1131,7 +1136,8 @@ export function dateMarks(
     for (const [where, text] of places) {
       for (const m of text.matchAll(ISO_DATE)) {
         const day = m[0];
-        const covers = (b: Basis) => b.prd_document_id === prdId && b.supports_date === day && (!b.item_key || b.item_key === owner);
+        if (AS_OF.test(text.slice(Math.max(0, m.index - 12), m.index))) continue;
+        const covers = (b: Basis) => b.prd_document_id === prdId && b.supports_date === day && (!b.item_key || b.item_key === owner || NOT_ITEMS.has(s.section_key));
         const verified = db.bases.filter((b) => b.status === "verified" && covers(b));
         const withdrawn = db.bases.filter((b) => b.status === "withdrawn" && covers(b));
         const status = verified.length ? "verified" : withdrawn.length ? "withdrawn" : "unverified";
