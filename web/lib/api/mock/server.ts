@@ -897,6 +897,23 @@ function seedSimpleHomeMilestonesScenario(): Db {
 }
 
 /**
+ * walkb-priorities: the default company whose milestones carry long names, as a production
+ * walk found them (Simple › Priorities on a phone kept each row's milestone on one line).
+ */
+function seedSimplePrioritiesLongMilestonesScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  const names = [
+    "M1 · Guided setup ready for the first paying teams on the new plan (F-30a); F-30b follows in the same release",
+    "M2 · Alert rules, digests and the mobile push all reach every workspace (F-31a); F-31b and F-31c follow",
+  ];
+  rm.items.forEach((i, n) => {
+    if (i.horizon === "now") i.milestone = { name: names[n % names.length], day: i.end ?? 60 };
+  });
+  return db;
+}
+
+/**
  * One PRD in play (#723 polish review): "simple-home" with every item but the onboarding
  * roadmap's (Guided setup) moved half a year out, so Home's plan needs no ranking.
  */
@@ -2885,6 +2902,8 @@ function load(): Db {
                 ? seedSimpleSuggestNeedsLookScenario
               : scenario === "simple-home-milestones"
                 ? seedSimpleHomeMilestonesScenario
+              : scenario === "simple-priorities-long-milestones"
+                ? seedSimplePrioritiesLongMilestonesScenario
               : scenario === "simple-home-one-prd"
                 ? seedSimpleHomeOnePrdScenario
               : scenario === "simple-walk"
