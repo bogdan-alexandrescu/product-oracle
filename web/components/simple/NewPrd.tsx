@@ -134,6 +134,8 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
   const [picked, setPicked] = useState<Person | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The questions the draft waits on, when the person may not go on without them. */
+  const [held, setHeld] = useState<string[] | null>(null);
   const panel = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -142,11 +144,12 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    const html = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
+    const locked = [document.documentElement, document.body];
+    const was = locked.map((el) => el.style.overflow);
+    for (const el of locked) el.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.documentElement.style.overflow = html;
+      locked.forEach((el, i) => (el.style.overflow = was[i]!));
       back?.focus?.();
     };
   }, [onClose]);
@@ -220,6 +223,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
       );
       setGiven((g) => [...g, kind === "answer" ? { kind: "answer", text: answer.trim() } : kind === "dont_know" ? { kind: "unknown" } : { kind: "later", name: picked!.name }]);
       setAnswer("");
+      setHeld(null);
       setAsking(false);
       setPicked(null);
       onStarted();
@@ -230,12 +234,14 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
     }
   }
 
-  /** Draft with what I gave: the brief's run, estimated and started. A critical point still
-   * open is drafted as open (its risk accepted, as the person chose to go on without it). */
+  /** Draft with what I gave: the brief's run, estimated and started. A critical blocker still
+   * open is drafted as open, its risk accepted, when the person may accept it (an owner, B4);
+   * anyone else is told which questions the draft waits on. */
   async function draft() {
     if (!intake || busy) return;
     setBusy(true);
     setError(null);
+    setHeld(null);
     const path = { params: { path: { intake_id: intake.id } } };
     try {
       const body = { knobs: { depth: "standard" as const, roles: {}, checkpoints: {} } };
@@ -244,8 +250,14 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
         run = await unwrap(api.POST("/v1/intakes/{intake_id}/runs", { ...path, body }));
       } catch (e) {
         if (!(e instanceof ApiError) || e.status !== 409) throw e;
-        const blocking = (await unwrap(api.GET("/v1/intakes/{intake_id}/summary", path))).readiness.blocking_gap_ids;
+        const summary = await unwrap(api.GET("/v1/intakes/{intake_id}/summary", path));
+        const blocking = summary.readiness.blocking_gap_ids;
         if (blocking.length === 0) throw e;
+        // Every blocker is critical: only an owner may accept its risk.
+        if (!can("decide_knowledge_gap", false)) {
+          setHeld(blocking.map((id) => questions.find((q) => q.gap_id === id)?.prompt ?? summary.gaps.find((g) => g.id === id)?.statement ?? "A critical question"));
+          return;
+        }
         for (const gap_id of blocking)
           await unwrap(
             api.POST("/v1/gaps/{gap_id}/decisions", {
@@ -402,17 +414,13 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
                 </button>
               ) : (
                 <button type="button" className="simple-button simple-button-primary" aria-disabled={!answer.trim() || busy} onClick={() => void reply("answer")}>
-                  {at + 1 < questions.length ? "Next question" : "Save answer"}
+                  Next question
                 </button>
               )}
               <button type="button" className="simple-button" aria-disabled={busy} onClick={() => void reply("dont_know")}>
                 I don&apos;t know
               </button>
-              {asking ? (
-                <button type="button" className="simple-button" onClick={() => setAsking(false)}>
-                  Answer it myself
-                </button>
-              ) : (
+              {!asking && (
                 <button type="button" className="simple-button" onClick={() => setAsking(true)}>
                   Ask someone later
                 </button>
@@ -461,6 +469,17 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
             <p role="alert" className="simple-small mt-3 text-danger">
               {error}
             </p>
+          )}
+          {held && (
+            <div role="alert" className="simple-small mt-3 flex flex-col gap-1" data-testid="np-held">
+              <span>{held.length === 1 ? "This needs" : "These need"} an answer before it can draft:</span>
+              <ul className="list-disc pl-5">
+                {held.map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ul>
+              <span>Or ask an owner to draft it.</span>
+            </div>
           )}
         </div>
         <footer className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">{foot}</footer>
