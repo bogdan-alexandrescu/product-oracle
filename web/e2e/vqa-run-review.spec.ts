@@ -67,7 +67,9 @@ test(`desktop ${viewport.width}x${viewport.height}: the list runs down to the ba
   await expect.poll(async () => page.evaluate(() => scrollY)).toBeGreaterThan(0);
   const l2 = (await page.getByRole("region", { name: "Features" }).boundingBox())!;
   const b2 = (await page.getByTestId("decision-bar").boundingBox())!;
-  expect(l2.y + l2.height, "the list still ends at the bar's top edge").toBeGreaterThanOrEqual(b2.y - 1);
+  // At the page's very end the grid stops one page gap (16px) above the bar: the list may stop
+  // there, no higher.
+  expect(l2.y + l2.height, "the list still runs down to the bar").toBeGreaterThanOrEqual(b2.y - 17);
   expect(l2.y + l2.height).toBeLessThanOrEqual(b2.y + 1);
 });
 }
