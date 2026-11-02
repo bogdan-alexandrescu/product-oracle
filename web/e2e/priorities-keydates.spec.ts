@@ -5,8 +5,9 @@ import { expect, test } from "./test";
 // priorities-keydates (the owner, Nov 2: Priorities shows a PRD's milestones too, the same
 // way): the onboarding roadmap is built from the Guided setup PRD, whose approved version
 // states two milestones (M1 Prove it ends Nov 27, M2 Scale volume Dec 25). Simple > Priorities'
-// Line picker offers both as key dates marked "From the PRD", as Simple > Roadmap's Key dates
-// marks them, beside the roadmap's own Board meeting, which is not marked. Picking one draws
+// Line picker offers both as key dates marked "From the PRD" ("From the PRD: M1 · Prove it ·
+// Nov 27, 2026"), as Simple > Roadmap's Key dates marks them, beside the roadmap's own Board
+// meeting, which reads "Key date: Board meeting · <day>". Picking one draws
 // the line on its day; publishing the PRD's next version, which moves M2 to Jan 8, moves its
 // key date here too. Invented data ("roadmap-keydates" scenario).
 
@@ -21,16 +22,16 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(page.getByTestId("simple-priorities")).toBeVisible();
       const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
       await expect(select).toBeVisible();
-      const keyDates = async () => (await select.locator("option").allTextContents()).filter((t) => t.startsWith("Key date: "));
+      const keyDates = async () => (await select.locator("option").allTextContents()).filter((t) => /^(Key date|From the PRD): /.test(t));
       await expect.poll(keyDates).toEqual(
         expect.arrayContaining([
-          "Key date: M1 · Prove it · Nov 27, 2026 (From the PRD)",
-          "Key date: M2 · Scale volume · Dec 25, 2026 (From the PRD)",
+          "From the PRD: M1 · Prove it · Nov 27, 2026",
+          "From the PRD: M2 · Scale volume · Dec 25, 2026",
           expect.stringMatching(/^Key date: Board meeting · [A-Z][a-z]{2} \d{1,2}, \d{4}$/),
         ]),
       );
-      const m1 = select.locator("option", { hasText: "Key date: M1 · Prove it" });
-      await expect(m1).toHaveAttribute("title", "Change it in the PRD, Guided setup");
+      const m1 = select.locator("option", { hasText: "From the PRD: M1 · Prove it" });
+      await expect(m1).toHaveAttribute("title", "A key date from the PRD; change it in the PRD, Guided setup");
 
       // Picking it draws the line on its day.
       await select.selectOption((await m1.getAttribute("value"))!);
@@ -46,8 +47,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 
       await page.goto("/simple/priorities");
       await expect(page.getByTestId("simple-priorities")).toBeVisible();
-      await expect.poll(keyDates).toContain("Key date: M2 · Scale volume · Jan 8, 2027 (From the PRD)");
-      expect(await keyDates()).not.toContain("Key date: M2 · Scale volume · Dec 25, 2026 (From the PRD)");
+      await expect.poll(keyDates).toContain("From the PRD: M2 · Scale volume · Jan 8, 2027");
+      expect(await keyDates()).not.toContain("From the PRD: M2 · Scale volume · Dec 25, 2026");
     });
   });
 }

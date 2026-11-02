@@ -1520,7 +1520,7 @@ function lineWords(data: Out): string {
   return !l || l.kind === "now" ? "not this quarter" : `not planned to finish by ${l.label.replace(/^By /, "")}`;
 }
 
-/** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones marked "From the PRD") · each dated milestone · Pick a date. */
+/** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date (a PRD's milestones "From the PRD: <name> · <day>") · each dated milestone · Pick a date. */
 function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
   const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
   // Picking a date, the date field takes the select's place (one control); a picked day is the select's own option.
@@ -1597,9 +1597,10 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
           }}
         >
           {offered.map((l) => (
-            // priorities-keydates: a PRD's milestone is marked as the roadmap marks it; it changes in the PRD, never here.
-            <option key={l.key} value={l.key} title={l.prd ? `Change it in the PRD, ${l.prd.title}` : undefined}>
-              {l.kind === "key_date" ? `Key date: ${l.label}${l.prd ? " (From the PRD)" : ""}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+            // priorities-keydates: a PRD's milestone is a key date marked as the roadmap marks it ("From the PRD", in
+            // place of "Key date", so the chosen line fits a phone's box); it changes in the PRD, never here.
+            <option key={l.key} value={l.key} title={l.prd ? `A key date from the PRD; change it in the PRD, ${l.prd.title}` : undefined}>
+              {l.kind === "key_date" ? `${l.prd ? "From the PRD" : "Key date"}: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
             </option>
           ))}
           {current.kind === "date" && <option value="picked">{`Date: ${current.label.replace(/^By /, "")}`}</option>}
