@@ -18,7 +18,6 @@ import {
   Notice,
   Page,
   PageHeader,
-  PageSkeleton,
   Panel,
   Split,
 } from "@/components/ds";
@@ -332,13 +331,6 @@ const subscribe = (cb: () => void) => {
   window.addEventListener("storage", cb);
   return () => window.removeEventListener("storage", cb);
 };
-
-const subscribeNever = () => () => {};
-
-/** False on the server and while the page hydrates, true from then on (and on a client-side visit). */
-function useHydrated(): boolean {
-  return useSyncExternalStore(subscribeNever, () => true, () => false);
-}
 
 function useLastChoice(kind: Kind): Choice | null {
   const raw = useSyncExternalStore(
@@ -1070,7 +1062,6 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   const kind = "prd" as const;
   const router = useRouter();
   const { can, capsReady } = useMe();
-  const hydrated = useHydrated();
   // #370: Continue creates an intake not linked to a PRD (the handler only asks an approver to link one).
   const canWrite = can("create_intake", true);
   const canSkeleton = can("start_draft", true);
@@ -1190,11 +1181,6 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
       PRDs
     </Link>
   );
-
-  // The server draws the skeleton, not the form: GET /v1/me can answer before the page's
-  // streamed boundary hydrates, so React draws the form again on the client and the
-  // server's copy stays behind, hidden, under <body> (two of every field and panel).
-  if (!hydrated) return <PageSkeleton />;
 
   // QA docs-10: a viewer is told up front, and gets no form to fill in for nothing. Until
   // the role is known the form shows at once, its fields disabled (walk-brief: a blank
