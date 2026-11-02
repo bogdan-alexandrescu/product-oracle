@@ -1,4 +1,4 @@
-import { login, signOut } from "./helpers";
+import { joinMeeting, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -84,6 +84,36 @@ for (const phone of [false, true]) {
       await expect(chip(page, "Theo Brandt").getByTestId("attendee-invited")).toHaveCount(0);
       await expect(chip(page, "Priya Raman").getByTestId("attendee-invited")).toBeVisible();
       if (phone) await expect(page.getByTestId("meeting-people-toggle")).toContainText("2 of 3 here");
+    });
+
+    // Card invited-not-approved-for (walkc-meeting-r2 review): protects = the meeting's Approve
+    // waits on a required reviewer who was invited but never pressed Join, as on one marked away;
+    // once they join, Approve approves for them and publishes; fails_when = Approve publishes over
+    // an invited reviewer who has not joined; no_claim = the API (tests/test_walkc_meeting.py).
+    test(`Approve waits on an invited reviewer until they join (${where})`, async ({ page }) => {
+      await startWithTheo(page);
+      await openPeople(page, phone);
+      await expect(chip(page, "Priya Raman").getByTestId("attendee-invited")).toBeVisible();
+      await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+      await page.getByLabel("New wording for").fill("A checklist that names the next step");
+      await page.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+      await tap(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }));
+      await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
+      await expect(page.getByTestId("approved-banner")).toHaveText("Approved in Review: Guided setup · not yet published: Waiting on Priya Raman's approval");
+    });
+
+    test(`an invited reviewer who joined is approved for (${where})`, async ({ page }) => {
+      await startWithTheo(page);
+      await joinMeeting(page, "approver@example.com");
+      await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+      await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+      await page.getByLabel("New wording for").fill("A checklist that names the next step");
+      await page.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+      await tap(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }));
+      await page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }).click();
+      await expect(page.getByTestId("approved-banner")).toHaveText("Approved in Review: Guided setup · published");
     });
 
     test(`the Decisions page gives times and the minutes name whom things wait on (${where})`, async ({ page }) => {
