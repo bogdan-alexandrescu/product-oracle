@@ -36,6 +36,8 @@ export interface OnePagerCtx {
   role: Role;
   owners: string[];
   names: Record<string, string>;
+  /** Each active member's role (a viewer cannot be added as a reviewer). */
+  roles?: Record<string, Role>;
   /** The PRD's required reviewers (its review policy). */
   reviewers: string[];
   /** The PRD's decider (Dana Decider in "simple-deciders", as the meetings mock), and its track owners. */
@@ -609,6 +611,10 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     // build-review: Send for approval… may add reviewers (members only), after the required ones.
     const added = ((await body(req)).reviewer_ids ?? []) as string[];
     if (added.some((i) => !(i in ctx.names))) return json(422, { detail: "Each reviewer you add must be an active member of the company" });
+    // As oracle.simple.drafts._added_reviewers: a viewer cannot approve.
+    const viewers = added.filter((i) => ctx.roles?.[i] === "viewer" && !ctx.reviewers.includes(i)).map((i) => ctx.names[i]);
+    if (viewers.length)
+      return json(422, { detail: `${viewers.length === 1 ? viewers[0] : `${viewers.slice(0, -1).join(", ")} and ${viewers[viewers.length - 1]}`} can only view, so cannot approve: pick someone else` });
     db.draft.status = "submitted";
     db.draft.waiting_on = [...new Set([...ctx.reviewers, ...added])];
     db.draft.reminders = {};

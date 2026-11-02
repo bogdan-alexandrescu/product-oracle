@@ -13,7 +13,8 @@ import { expect, test, type Page } from "./test";
  * dialog with the changes (old and new words) and who approves (the required reviewer,
  * already there), "+ Add a reviewer" adds a person by name, and sending names everyone it
  * waits on; the header says "Start a review meeting"; fails_when = it sends without asking,
- * an added reviewer is dropped, or the header says "Start review"; no_claim = the Inbox note.
+ * an added reviewer is dropped, a viewer is offered as a reviewer, or the header says "Start
+ * review"; no_claim = the Inbox note.
  *
  * Card changes-list (QV2 a): protects = a viewer's bar says how many changes are in review
  * with "See the N changes", listing each edit, who made it and who it waits on; a commenter
@@ -58,6 +59,10 @@ async function sendWithTheo(page: Page) {
   const dialog = page.getByTestId("send-for-approval");
   await expect(dialog.getByRole("heading", { name: "Send 1 change for approval" })).toBeVisible();
   await dialog.getByRole("button", { name: "+ Add a reviewer" }).click();
+  // A viewer (Lena Ortiz) can only view, so cannot approve: the picker never offers them.
+  await dialog.getByLabel("Find a person").fill("Lena");
+  await expect(dialog.getByTestId("person-picker")).toContainText("Nobody found");
+  await expect(dialog.getByRole("option", { name: /Lena Ortiz/ })).toHaveCount(0);
   await dialog.getByLabel("Find a person").fill("Theo");
   await dialog.getByRole("option", { name: /Theo Brandt/ }).click();
   await dialog.getByRole("button", { name: "Send for approval" }).click();

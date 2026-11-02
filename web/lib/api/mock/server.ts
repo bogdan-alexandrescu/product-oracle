@@ -5722,6 +5722,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         role: me.role,
         owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
         names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+        roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
         // The PRD's required reviewer: the seeded approver.
         reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
         // Its decider and track owners, as the meetings mock's Guided setup (simple-meetings prds).
