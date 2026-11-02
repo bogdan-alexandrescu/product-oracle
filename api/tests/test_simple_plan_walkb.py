@@ -68,3 +68,27 @@ def test_job_answer_keeps_the_prds_features():
         "F-01": ["M1"], "F-02": ["M1"], "F-03": ["M2"], "F-04": ["M2"],
     }  # fmt: skip
     assert next(f for f in data["features"] if f["code"] == "F-02")["name"] == "Late alerts"
+
+
+def test_accepted_engineering_dates_date_the_plan():
+    data = plan.parse(
+        PRD.replace("Dec 18, 2026", "").replace("Jan 4, 2027", "").replace("Feb 26, 2027", ""),
+        date(2026, 11, 1),
+    )
+    assert data is not None and not plan.compute(data).dated
+    accepted = [
+        plan.Accepted("M1", "F-01", date(2026, 12, 11)),
+        # The lead changed M1's other item to a later day: the milestone ends on it.
+        plan.Accepted("M1", "F-02", date(2026, 12, 23)),
+        # An item that names its milestone by name only, and one by its feature only.
+        plan.Accepted("Rollout", None, date(2027, 2, 12)),
+        plan.Accepted(None, "F-04", date(2027, 3, 5)),
+    ]
+    view = plan.compute(plan.with_accepted(data, accepted))
+    assert [(m.code, m.start_date, m.end_date) for m in view.milestones] == [
+        ("M1", date(2026, 11, 2), date(2026, 12, 23)),
+        ("M2", date(2026, 12, 24), date(2027, 3, 5)),
+    ]
+    assert view.dated
+    # With none accepted, the PRD's own (missing) dates stay.
+    assert plan.with_accepted(data, []) == data
