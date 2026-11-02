@@ -1302,7 +1302,8 @@ class SimpleSuggestionRejectIn(BaseModel):
 
 # --------------------------------------------------------------------------- S9 chat
 
-CardStatus = Literal["open", "applied", "proposed", "discarded", "undone"]
+# "declined" is read, never stored: a proposed card whose proposal was declined (chat.cards_out).
+CardStatus = Literal["open", "applied", "proposed", "declined", "discarded", "undone"]
 ChangeMode = Literal["everyone", "presenter", "named"]
 
 
@@ -1538,7 +1539,10 @@ class SimpleAttendee(BaseModel):
     name: str
     # What the person is to the PRD: decider, required reviewer, owner (its tracks').
     roles: list[Literal["decider", "reviewer", "owner", "presenter"]] = []
+    # The presenter's roll call: false once marked away.
     present: bool = True
+    # walkc-meeting r2 (5a): false while an invited attendee has not pressed Join.
+    joined: bool = True
 
 
 class SimpleDecidedFlow(BaseModel):

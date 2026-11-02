@@ -344,7 +344,8 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
         {/* qa4-simple-decide-21: the PRD's name only when the title does not already say it, with or
             without the kind word its document's title may carry ("Usage alerts PRD", qa4-simple-prd-28). */}
         <span className="simple-meta" data-testid="meeting-group-when">
-          {[momentWords(m.started_at, zone, true), m.status === "live" ? "live" : null, m.title.includes(m.prd.title.replace(/\s+PRD$/, "")) ? null : m.prd.title].filter(Boolean).join(" · ")}
+          {/* walkc-meeting r2 (5j): the meeting's day and time ("Fri Oct 30, 2:49 PM"); the zone is in the lead. */}
+          {[momentWords(m.started_at, zone), m.status === "live" ? "live" : null, m.title.includes(m.prd.title.replace(/\s+PRD$/, "")) ? null : m.prd.title].filter(Boolean).join(" · ")}
         </span>
       </div>
       {minutes?.summary && <p>{minutes.summary}</p>}
@@ -415,7 +416,7 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
 /** qa-simple-decide-19: a decision's state in plain words. */
 const STATUS_WORDS: Record<string, string> = { proposed: "waiting for a decider", superseded: "replaced", rejected: "declined", withdrawn: "withdrawn" };
 
-/** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day. */
+/** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day and time. */
 function Rows({ rows }: { rows: Row[] }) {
   const zone = useCompanyZone();
   return (
@@ -442,7 +443,7 @@ function Rows({ rows }: { rows: Row[] }) {
                 <span className="simple-code">{code}</span> <b className="font-[650]">{title}</b>
               </span>
               <span className="simple-meta">
-                {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone, true), done ? null : STATUS_WORDS[r.status] ?? "open"]
+                {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open"]
                   .filter(Boolean)
                   .join(" · ")}
               </span>

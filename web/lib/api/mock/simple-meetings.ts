@@ -97,6 +97,8 @@ interface Meeting {
   presenter_id: string;
   attendee_ids: string[];
   absent_ids: string[];
+  /** walkc-meeting r2 (5a): the presenter, then whoever pressed Join (stored meetings without it: everyone). */
+  joined_ids?: string[];
   change_mode: "everyone" | "presenter" | "named";
   change_people: string[];
   length_min: number;
@@ -204,6 +206,8 @@ function prds(ctx: MeetingsCtx): Prd[] {
 }
 
 const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === "owner").map((m) => m.id);
+/** walkc-meeting r2 (5j, meetings._waits): who approves a meeting's drafts: the PRD's decider, else the company's owners. */
+const approversOf = (ctx: MeetingsCtx, p: Prd) => (p.decider ? [p.decider] : owners(ctx));
 const nameOf = (ctx: MeetingsCtx, id: string) => ctx.members.find((m) => m.id === id)?.name ?? "someone";
 const ref = (ctx: MeetingsCtx, id: string): Ref => ({ id, name: nameOf(ctx, id) });
 const docRef = (p: Prd) => ({ id: p.id, slug: p.slug, title: p.title });
@@ -259,7 +263,7 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
     ],
     meetings: [{
       id: past, title: "Review: Usage alerts", prd: "usage-alerts", origin: "one_pager", occurrence_id: null, session_id: stableUuid("simple-meeting-session/past"),
-      presenter_id: owner, attendee_ids: people, absent_ids: [], change_mode: "everyone", change_people: [], length_min: 60, status: "ended",
+      presenter_id: owner, attendee_ids: people, absent_ids: [], joined_ids: people, change_mode: "everyone", change_people: [], length_min: 60, status: "ended",
       started_at: startedAt, ended_at: iso(Date.parse(startedAt) + 50 * 60_000), ended_by: owner,
       // qa-simple-decide-1: the comment made in this meeting is a note, not a decision.
       notes: [{ id: stableUuid("simple-meeting-note/past-comment"), kind: "comment", text: "keep quiet hours on by default", by_name: nameOf(ctx, approver ?? owner), at: iso(Date.parse(startedAt) + 35 * 60_000), card_id: null }],
@@ -268,7 +272,8 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
         summary: "1 decision taken.",
         open_questions: ["D-3: Should muted teams still get the weekly digest?"],
         action_items: commenter ? [{ title: "Draft the quiet hours copy", owner_id: commenter.id, owner_name: nameOf(ctx, commenter.id), due_date: iso(now + 7 * day).slice(0, 10) }] : [],
-        waits: [{ what: "Usage alerts: the working draft is not approved yet", on: [] }],
+        // walkc-meeting r2 (5j): as meetings._waits, the wait names whom it is on.
+        waits: [{ what: "Usage alerts: the working draft is not approved yet", on: approversOf(ctx, alerts).map((i) => ref(ctx, i)) }],
         written_by: "oracle",
       },
       minutes_state: "sent", delivery: seededDelivery(people, approver),
@@ -381,7 +386,7 @@ function attendees(ctx: MeetingsCtx, m: Meeting, p: Prd): Schemas["SimpleAttende
     if (i === m.presenter_id) roles.push("presenter");
     if (i === p.decider) roles.push("decider");
     if (p.reviewers.includes(i)) roles.push("reviewer");
-    return { id: i, name: nameOf(ctx, i), roles, present: !m.absent_ids.includes(i) };
+    return { id: i, name: nameOf(ctx, i), roles, present: !m.absent_ids.includes(i), joined: i === m.presenter_id || (m.joined_ids ?? m.attendee_ids).includes(i) };
   });
 }
 
@@ -664,7 +669,16 @@ const OP_WORDS: Record<string, string> = {
 /** A change in words and the subjects it names (as meetings.describe). */
 const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
 
-function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
+/** walkc-meeting r2 (meetings.PROPOSAL_WORDS): what a proposal asked for. */
+const PROPOSAL_WORDS: Record<string, string> = {
+  move_dates: "new dates for", accept_date_suggestion: "accept Oracle's dates for", change_horizon: "move", reorder: "reorder", cut: "cut",
+  restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
+  move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", add_key_date: "add the key date",
+  edit_key_date: "change the key date", remove_key_date: "remove the key date", add_item: "add", merge_item: "merge",
+  keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:",
+};
+
+function describe(ctx: MeetingsCtx, c: Change, proposal = false): [string, Decision["subjects"]] {
   const subjects: Decision["subjects"] = [];
   let name = "";
   const item = items(ctx).find((i) => i.id === c.target.item_id);
@@ -684,9 +698,14 @@ function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
       if (other) subjects.push({ kind: "roadmap_item", id: other.id, ref: other.key });
     }
   } else if (!name) name = String(c.after.title ?? c.target.title ?? "");
+  const h = HORIZON_TO[String(c.after.horizon)];
+  if (proposal) {
+    // walkc-meeting r2 (meetings.describe): what a declined proposal asked for, never "Moved".
+    if (c.op === "change_horizon" && name && h) return [`move ${name} to ${h}`, subjects];
+    return [`${PROPOSAL_WORDS[c.op] ?? c.op.replace(/_/g, " ")} ${name}`.trim(), subjects];
+  }
   const words = OP_WORDS[c.op] ?? c.op.replace(/_/g, " ");
   // qa4-simple-decide-12 (meetings.describe): a move says where to.
-  const h = HORIZON_TO[String(c.after.horizon)];
   if (c.op === "change_horizon" && name && h) return [`Moved ${name} to ${h}`, subjects];
   return [`${words} ${name}`.trim(), subjects];
 }
@@ -732,7 +751,7 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   const out = (await res.clone().json()) as Schemas["SimpleChangeResult"];
   const c = out.change;
   m.last_change_at = iso(mockNowMs());
-  const [words, subjects] = describe(ctx, c);
+  const [words, subjects] = describe(ctx, c, verb === "Declined");
   // qa4-simple-decide-12 (meetings.after_change): an accepted or declined proposal says whose.
   const whose = verb && c.by_name ? `${verb} ${c.by_name}'s proposal: ` : verb ? `${verb}: ` : null;
   const title = whose ? `${whose}${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
@@ -859,7 +878,7 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const waits: Schemas["SimpleWait"][] = [];
   for (const d of meetingDrafts(ctx, db, m, p)) {
     if (d.status === "submitted" && d.waiting_on.length) waits.push({ what: `Publishing ${d.document.title}: their approval`, on: d.waiting_on.map((i) => ref(ctx, i)) });
-    else if (d.status === "working") waits.push({ what: `${d.document.title}: the working draft is not approved yet`, on: [] });
+    else if (d.status === "working") waits.push({ what: `${d.document.title}: the working draft is not approved yet`, on: approversOf(ctx, p).map((i) => ref(ctx, i)) });
   }
   const made = new Set(db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.change_ids));
   // qa4-simple-decide-3 (as meetings._waits: every proposal of the meeting's session still
@@ -869,7 +888,7 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const ran = (c: Change) => Date.parse(c.at) >= Date.parse(m.started_at) && (!m.ended_at || Date.parse(c.at) <= Date.parse(m.ended_at));
   const ofPrd = (c: Change) => ids.has(String(c.target.item_id)) || (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.some((x) => x.id === c.id));
   for (const c of [...(ctx.roadmap.changes ?? []), ...ctx.onePager.changes]) {
-    if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
+    if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: (c.routed_to.length ? c.routed_to : approversOf(ctx, p)).map((i) => ref(ctx, i)) });
   }
   return {
     summary: summary.slice(0, 4000),
@@ -1015,7 +1034,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const title = (b.title ?? "").trim() || (occ ? `${occ.ritual_title}: ${prd.title}` : `Review: ${prd.title}`);
     const m: Meeting = {
       id: crypto.randomUUID(), title: title.slice(0, 200), prd: prd.slug, origin: occ ? "ritual" : (b.origin ?? "one_pager"), occurrence_id: occ?.id ?? null,
-      session_id: crypto.randomUUID(), presenter_id: ctx.me.id, attendee_ids: att, absent_ids: [], change_mode: mode, change_people: people,
+      session_id: crypto.randomUUID(), presenter_id: ctx.me.id, attendee_ids: att, absent_ids: [], joined_ids: [ctx.me.id], change_mode: mode, change_people: people,
       length_min: length, status: "live", started_at: now, ended_at: null, ended_by: null, minutes: null, minutes_state: null, delivery: null, sent_at: null, approved: null,
     };
     db.meetings.push(m);
@@ -1054,6 +1073,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
     if (!m.attendee_ids.includes(ctx.me.id)) m.attendee_ids.push(ctx.me.id);
     m.absent_ids = m.absent_ids.filter((i) => i !== ctx.me.id);
+    if (!(m.joined_ids ?? m.attendee_ids).includes(ctx.me.id)) m.joined_ids = [...(m.joined_ids ?? m.attendee_ids), ctx.me.id];
     return ok();
   }
   if (p[4] === "rules" && method === "PATCH") {

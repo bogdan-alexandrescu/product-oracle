@@ -162,6 +162,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const [people, setPeople] = useState(false);
   const [notApproved, setNotApproved] = useState<Meeting["not_approved"]>([]);
   const [problems, setProblems] = useState<DraftProblems | null>(null);
+  const [cardTick, setCardTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const { busy, error, act } = useAct(reload);
   useEffect(() => {
@@ -181,7 +182,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const name = namer(m);
   const { me, can } = useMe();
   const phone = usePhone();
-  const joined = m.attendees.some((a) => a.id === me?.user_id);
+  // walkc-meeting r2 (5a): an invited attendee has not joined until they press Join.
+  const joined = m.attendees.some((a) => a.id === me?.user_id && a.joined);
   // qa-simple-decide-2: Approve says what it approves (the one-pager's edits in this meeting); none: no button.
   // Approve approves every draft the meeting worked on: the label names them all.
   const toApprove = m.drafts.filter((d) => !d.decider_approved && d.changes > 0);
@@ -238,9 +240,13 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const overBy = elapsed > m.length_min * 60_000 ? Math.max(1, Math.round(elapsed / 60_000 - m.length_min)) : 0;
   // qa-simple-decide-42: a change applied in the chat shows at once in the stage and All decisions (read now and once the chat has settled).
   const changed = () => {
+    setCardTick((n) => n + 1);
     void reload();
     window.setTimeout(() => void reload(), 800);
   };
+  // walkc-meeting r2 (5d): the Roadmap step reads its items again when a chat card changes
+  // something, or the meeting's decisions or drafts move on (another attendee's change).
+  const roadmapRefresh = `${cardTick}|${m.meeting_decisions.map((d) => d.id).join()}|${m.drafts.map((d) => `${d.status}-${d.changes}`).join()}`;
   return (
     <div className="flex min-h-full flex-col">
       {/* qa-simple-decide-48: on a phone the header scrolls away with the page (not sticky). */}
@@ -293,19 +299,23 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
       )}
       {/* qa-simple-decide-29: on a phone the attendees and the mode fold into one row. */}
       <button type="button" className={`hidden border-b border-line px-4 py-2 text-left text-base max-[600px]:block ${PHONE_TAP}`} aria-expanded={people} data-testid="meeting-people-toggle" onClick={() => setPeople((x) => !x)}>
-        {m.attendees.filter((a) => a.present).length} of {m.attendees.length} here · Who changes things: {MODE_WORDS[m.change_mode]} <span aria-hidden>{people ? "▴" : "▾"}</span>
+        {m.attendees.filter((a) => a.present && a.joined).length} of {m.attendees.length} here · Who changes things: {MODE_WORDS[m.change_mode]} <span aria-hidden>{people ? "▴" : "▾"}</span>
       </button>
       <div className={`flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-4 py-2 text-base ${people ? "" : "max-[600px]:hidden"}`} data-testid="meeting-people">
         <ul aria-label="Attendees" className="flex flex-wrap gap-2">
-          {m.attendees.map((a) => (
+          {m.attendees.map((a) => {
             // qa-simple-decide-41: an absent attendee reads "away" with a grey dot, never struck through.
-            <li key={a.id} data-present={a.present ? "true" : "false"} className={`flex items-center rounded-full border border-line px-3 py-0.5 max-[600px]:min-h-11 ${a.present ? "" : "text-text2"}`}>
+            // walkc-meeting r2 (5a): one invited who has not pressed Join reads "not joined yet", never here.
+            const here = a.present && a.joined;
+            return (
+            <li key={a.id} data-present={here ? "true" : "false"} className={`flex items-center rounded-full border border-line px-3 py-0.5 max-[600px]:min-h-11 ${here ? "" : "text-text2"}`}>
               <span>
-                <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${a.present ? "bg-accent" : "bg-text-faint"}`} />
+                <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${here ? "bg-accent" : "bg-text-faint"}`} />
                 {a.name}
               </span>
               {a.roles.length > 0 && <span className="text-sm text-text-faint">&nbsp;· {a.roles.join(", ")}</span>}
               {!a.present && <span className="text-sm text-text-faint" data-testid="attendee-away">&nbsp;· away</span>}
+              {a.present && !a.joined && <span className="text-sm text-text-faint" data-testid="attendee-invited">&nbsp;· invited, not joined yet</span>}
               {/* qa4-simple-decide-23: a visible control whose name follows the state. */}
               {m.can.set_rules && a.id !== m.presenter.id && (
                 <button
@@ -320,7 +330,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                 </button>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
         {m.can.set_rules ? (
           <ChangeMode m={m} busy={busy} onSave={rules} />
@@ -374,7 +385,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               />
             </MeetingClock.Provider>
           )}
-          {step === 1 && <RoadmapSlice m={m} reload={reload} />}
+          {step === 1 && <RoadmapSlice m={m} reload={reload} refresh={roadmapRefresh} />}
           {step === 2 && <DecisionsStep m={m} reload={reload} />}
         </section>
         <aside aria-label="Chat column" className="flex min-w-0 flex-col gap-4">
@@ -493,9 +504,17 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
 
 const HORIZONS = ["now", "next", "later"] as const;
 
-function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
+function RoadmapSlice({ m, reload, refresh }: { m: Meeting; reload: () => Promise<unknown>; refresh: string }) {
   const zone = useCompanyZone();
   const q = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
+  // walkc-meeting r2 (5d): a card applied in the chat (or another attendee's change) shows here at once.
+  const seenRefresh = useRef(refresh);
+  const reloadRoadmap = q.reload;
+  useEffect(() => {
+    if (seenRefresh.current === refresh) return;
+    seenRefresh.current = refresh;
+    void reloadRoadmap();
+  }, [refresh, reloadRoadmap]);
   const { busy, error, act } = useAct(async () => {
     await q.reload();
     await reload();

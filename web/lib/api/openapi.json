@@ -58974,6 +58974,7 @@
               "open",
               "applied",
               "proposed",
+              "declined",
               "discarded",
               "undone"
             ],
@@ -113282,6 +113283,11 @@
           "present": {
             "type": "boolean",
             "title": "Present",
+            "default": true
+          },
+          "joined": {
+            "type": "boolean",
+            "title": "Joined",
             "default": true
           }
         },

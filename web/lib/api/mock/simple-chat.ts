@@ -35,9 +35,13 @@ function seenDates(i: Item): { start: string | null; end: string | null } {
   const own = (d: Item["start"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
   return { start: own(i.start), end: own(i.end) };
 }
+/** walkc-meeting r2 (5b): the dates the item shows now and their source (chat._current): a move card's Before. */
+function currentDates(i: Item): { start_date: string; end_date: string; source: Item["source"] } {
+  return { start_date: i.start.date, end_date: i.end.date, source: i.source };
+}
 type Role = Schemas["Me"]["role"];
 type Preview =
-  | { kind: "dates"; item_id: string; start_date: string; end_date: string; shift?: [number, number] }
+  | { kind: "dates"; item_id: string; start_date: string; end_date: string; shift?: [number, number]; current?: ReturnType<typeof currentDates> }
   | { kind: "horizon"; item_id: string; horizon: string }
   | { kind: "title"; item_id: string; title: string }
   | { kind: "milestone"; item_id: string; name: string; date: string }
@@ -405,7 +409,8 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       : build();
   const card = (summary: string, op: string, item: Item | null, target: Values, before: Values, after: Values, preview: Preview = null, flow: Schemas["SimpleFlow"] | null = null): Reply => ({
     kind: "cards",
-    body: "Here is the change. Preview it, then apply or discard it.",
+    // walkc-meeting r2 (5g, chat.HERE_PLAIN): a card with no Preview is not asked to be previewed.
+    body: preview ? "Here is the change. Preview it, then apply or discard it." : "Here is the change. Apply or discard it.",
     cards: [{ op, target, before, after, summary, item_id: item?.id ?? null, item_title: item?.title ?? null, preview, flow, fixes: [] }],
   });
   const stored = (i: Item) => {
@@ -413,7 +418,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     return { start_date: s.start, end_date: s.end };
   };
   const move = (i: Item, start: string, end: string) =>
-    card(`Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, "move_dates", i, { item_id: i.id }, stored(i), { start_date: start, end_date: end }, { kind: "dates", item_id: i.id, start_date: start, end_date: end });
+    card(`Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, "move_dates", i, { item_id: i.id }, stored(i), { start_date: start, end_date: end }, { kind: "dates", item_id: i.id, start_date: start, end_date: end, current: currentDates(i) });
   const length = (i: Item) => Math.round((msOf(i.end.date) - msOf(i.start.date)) / DAY);
 
   if ((m = /^move (.+) to (now|next|later)$/i.exec(t))) {
@@ -745,7 +750,7 @@ function moveDraft(db: SimpleDb, i: Item, start: string, end: string, shift?: [n
     op: "move_dates", target: { item_id: i.id }, before: { start_date: s.start, end_date: s.end }, after: { start_date: start, end_date: end },
     summary: `Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, item_id: i.id, item_title: i.title,
     // A move by a span carries it (as the API's chat._b_move): offered again on newer dates, it moves from those.
-    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end, ...(shift ? { shift } : {}) }, flow: null, fixes: [],
+    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end, ...(shift ? { shift } : {}), current: currentDates(i) }, flow: null, fixes: [],
   };
 }
 
@@ -1398,7 +1403,10 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
     asks_with_dependents: asksAll.map((i) => ctx.names[i] ?? "someone"),
     asks_with_dependents_outside: !hereAll,
   };
-  return { change_words: null, correct: null, ...rest, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
+  // walkc-meeting r2 (chat.cards_out): a proposed card whose proposal was declined since reads as declined, by whom and when.
+  const no = c.status === "proposed" && c.change_id ? db.changes?.find((x) => x.id === c.change_id && x.status === "declined") : undefined;
+  const declined = no ? { status: "declined" as const, decided_by_name: no.decided_by ? (ctx.names[no.decided_by] ?? "someone") : null, decided_at: no.decided_at ?? null } : {};
+  return { change_words: null, correct: null, ...rest, ...declined, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {

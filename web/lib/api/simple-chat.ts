@@ -6,7 +6,8 @@
 import { api, unwrap, type Schemas } from "./client";
 
 export type ChatPreview =
-  | { kind: "dates"; item_id: string; start_date: string; end_date: string }
+  // walkc-meeting r2 (5b): `current`, the dates the item shows now and their source (chat._current).
+  | { kind: "dates"; item_id: string; start_date: string; end_date: string; current?: { start_date: string; end_date: string; source: Schemas["SimpleDate"]["source"] } }
   | { kind: "horizon"; item_id: string; horizon: "now" | "next" | "later" }
   | { kind: "title"; item_id: string; title: string }
   | { kind: "milestone"; item_id: string; name: string; date: string }
@@ -47,7 +48,8 @@ export type ChatCard = {
   summary: string;
   item_id: string | null;
   item_title: string | null;
-  status: "open" | "applied" | "proposed" | "discarded" | "undone";
+  // "declined": a proposed card whose proposal was declined since (chat.cards_out).
+  status: "open" | "applied" | "proposed" | "declined" | "discarded" | "undone";
   may: "apply" | "propose" | null;
   why_not: string | null;
   flags: Schemas["SimpleItemFlags"][];

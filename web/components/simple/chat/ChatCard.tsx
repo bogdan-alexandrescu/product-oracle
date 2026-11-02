@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
-import { shortDay, spanWords } from "@/app/simple/roadmap/_lib";
+import { shortDay, sourceWord, spanWords } from "@/app/simple/roadmap/_lib";
 import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
 import { api, unwrap } from "@/lib/api/client";
 import { applyCard, CORRECT_FIELDS, discardCard, FLOW_OPS, isActionPreview, sendApplied, sendCardChanged, sendPreview, undoCard, type ActionPreview, type ChatCard as Card, type ChatPreview } from "@/lib/api/simple-chat";
@@ -21,10 +21,14 @@ function changeWords(card: Card): { before: string; after: string } | null {
   if (card.op === "move_dates" && typeof b.start_date === "string" && typeof b.end_date === "string" && typeof a.start_date === "string" && typeof a.end_date === "string") {
     return { before: spanWords(b.start_date, b.end_date), after: spanWords(a.start_date, a.end_date) };
   }
-  // fix4 qa-simple-roadmap-26: a move of an item with no dates of its own (Oracle's estimate)
-  // still reads Before → After, like the item talk's move card.
+  // fix4 qa-simple-roadmap-26: a move of an item with no dates of its own still reads Before →
+  // After, like the item talk's move card. walkc-meeting r2 (5b): its Before says the dates
+  // the item shows now and where they come from (the engineering lead's, the tracker's),
+  // "Estimated by Oracle" only when they are Oracle's estimate.
   if (!card.change_words && card.op === "move_dates" && typeof a.start_date === "string" && typeof a.end_date === "string") {
-    return { before: "Estimated by Oracle", after: spanWords(a.start_date, a.end_date) };
+    const p = card.preview && !isActionPreview(card.preview) && card.preview.kind === "dates" ? card.preview.current : undefined;
+    const before = p && p.source !== "estimated" ? `${spanWords(p.start_date, p.end_date)} · ${sourceWord(p.source)}` : "Estimated by Oracle";
+    return { before, after: spanWords(a.start_date, a.end_date) };
   }
   return card.change_words ?? null;
 }
@@ -40,20 +44,22 @@ export const flagKey = (itemId: string, kind: string, subject: string | null | u
  */
 export const ItemTalkContext = createContext<{ known: ReadonlySet<string> } | null>(null);
 
-/** qa4-simple-roadmap-41: a roadmap ghost in words ("On the roadmap: Adaptive pacing moves to Nov 30 – Dec 11"). */
-function ghostWords(p: ChatPreview, title: string): string | null {
+/** qa4-simple-roadmap-41: a roadmap ghost in words ("On the roadmap: Adaptive pacing moves to
+ * Nov 30 – Dec 11"). walkc-meeting r2 (5c): away from the roadmap (a meeting's chat, the Ask
+ * panel) nothing draws the ghost, so the card says it ("After this change: ..."). */
+function ghostWords(p: ChatPreview, title: string, lead: string): string | null {
   if (!p) return null;
   switch (p.kind) {
     case "dates":
-      return `On the roadmap: ${title} moves to ${spanWords(p.start_date, p.end_date)}`;
+      return `${lead}: ${title} moves to ${spanWords(p.start_date, p.end_date)}`;
     case "horizon":
-      return `On the roadmap: ${title} moves to ${p.horizon[0].toUpperCase()}${p.horizon.slice(1)}`;
+      return `${lead}: ${title} moves to ${p.horizon[0].toUpperCase()}${p.horizon.slice(1)}`;
     case "title":
-      return `On the roadmap: ${title} is renamed “${p.title}”`;
+      return `${lead}: ${title} is renamed “${p.title}”`;
     case "milestone":
-      return `On the roadmap: ${title} moves to ${p.name} (${shortDay(p.date)})`;
+      return `${lead}: ${title} moves to ${p.name} (${shortDay(p.date)})`;
     case "cut":
-      return `On the roadmap: ${title} goes below the line, cut`;
+      return `${lead}: ${title} goes below the line, cut`;
   }
   return null;
 }
@@ -206,7 +212,8 @@ export function ChatCard({
   // Each keeps its own index: Apply names the fix by its place in the card's list.
   const stale = (f: Card["fixes"][number]) => typeof f.target.item_id === "string" && typeof f.target.subject === "string" && known(f.target.item_id, "dependency_order", f.target.subject);
   const fixes = cutting ? [] : card.fixes.map((f, n) => ({ ...f, n })).filter((f) => !stale(f));
-  const ghost = talk && previewing && card.preview && !action ? ghostWords(card.preview as ChatPreview, card.item_title ?? "The item") : null;
+  // walkc-meeting r2 (5c): every Preview shows in the card; only the item's talk sits on the roadmap's ghost.
+  const ghost = previewing && card.preview && !action ? ghostWords(card.preview as ChatPreview, card.item_title ?? "The item", talk ? "On the roadmap" : "After this change") : null;
   // The walk: Apply when no fix makes the card's own change, named by what it does.
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const applyShown = !actionsOnly || !card.fixes.some((f) => f.op === card.op && same(f.target, card.target));
@@ -392,6 +399,8 @@ export function ChatCard({
               (action?.kind === "decision" && action.proposed_to
                 ? proposedWords(action.proposed_to)
                 : `Proposed to ${routedTo?.length ? listWords(routedTo) : card.asks?.length ? listWords(card.asks) : "the decider"} by ${mine ? "you" : (card.decided_by_name ?? "someone")}`)}
+            {/* walkc-meeting r2 (5e): a proposal declined since says so, and by whom. */}
+            {card.status === "declined" && `Declined by ${mine ? "you" : (card.decided_by_name ?? "the decider")}: nothing changed`}
             {card.status === "discarded" && (correct ? "Rejected: nothing changed" : "Discarded: nothing changed")}
             {card.status === "undone" && "Undone"}
           </span>

@@ -621,6 +621,11 @@ class SimpleMeeting(TenantScoped, Base):
     absent_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
+    # walkc-meeting r2 (5a): the presenter, then whoever pressed Join; the other attendees
+    # are invited and have not joined yet.
+    joined_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
     change_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="everyone")
     change_people: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(Uuid), nullable=False, server_default="{}"

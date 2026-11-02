@@ -461,6 +461,7 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
         presenter_id=me,
         attendee_ids=attendees,
         absent_ids=[],
+        joined_ids=[me],
         change_mode=body.change_mode,
         change_people=people,
         length_min=body.length_min,
@@ -592,6 +593,8 @@ async def join(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Simpl
         m.attendee_ids = [*m.attendee_ids, me]
     if me in m.absent_ids:
         m.absent_ids = [i for i in m.absent_ids if i != me]
+    if me not in (m.joined_ids or []):
+        m.joined_ids = [*(m.joined_ids or []), me]
     await db.flush()
     await audit.record(db, principal, "simple_meeting.joined", "simple_meeting", m.id)
     return m
@@ -629,8 +632,37 @@ async def set_rules(
 # --------------------------------------------------------------------------- deciding
 
 
-async def describe(db: AsyncSession, c: SimpleChange) -> tuple[str, list[dict]]:
-    """A change in words, and the subjects it names (its item, its PRD's line)."""
+# walkc-meeting r2: what a proposal asked for, for one that did not happen ("Declined
+# Ada's proposal: move Sample to Later"), never in the past tense of a change made.
+PROPOSAL_WORDS = {
+    "move_dates": "new dates for",
+    "accept_date_suggestion": "accept Oracle's dates for",
+    "change_horizon": "move",
+    "reorder": "reorder",
+    "cut": "cut",
+    "restore": "restore",
+    "edit_title": "rename",
+    "edit_outcome": "new outcome for",
+    "accept_risk": "accept a risk on",
+    "shift_dependents": "move the dependents of",
+    "move_dependency": "move the dependency of",
+    "confirm_item": "confirm",
+    "edit_line": "new wording for",
+    "add_key_date": "add the key date",
+    "edit_key_date": "change the key date",
+    "remove_key_date": "remove the key date",
+    "add_item": "add",
+    "merge_item": "merge",
+    "keep_both": "keep beside its look-alikes:",
+    "cut_with_dependents": "cut with its dependents:",
+}
+
+
+async def describe(
+    db: AsyncSession, c: SimpleChange, proposal: bool = False
+) -> tuple[str, list[dict]]:
+    """A change in words, and the subjects it names (its item, its PRD's line). With
+    ``proposal``, what it asked for ("move Sample to Later"), for one not made."""
     t = c.target or {}
     subjects: list[dict] = []
     name = ""
@@ -667,6 +699,12 @@ async def describe(db: AsyncSession, c: SimpleChange) -> tuple[str, list[dict]]:
                 subjects.append({"kind": "roadmap_item", "id": str(row.id), "ref": row.item_key})
     elif not name:
         name = str((c.after or {}).get("title") or t.get("title") or "")
+    if proposal:
+        words = PROPOSAL_WORDS.get(c.op) or c.op.replace("_", " ")
+        h = change_words.HORIZON_WORDS.get(str((c.after or {}).get("horizon")))
+        if c.op == "change_horizon" and name and h:
+            return f"move {name} to {h}", subjects
+        return f"{words} {name}".strip(), subjects
     words = drafts.OP_WORDS.get(c.op) or c.op.replace("_", " ").capitalize()
     if c.op == "change_horizon" and name:
         # qa4-simple-decide-12: a move says where to ("Moved Sample data import to Later").
@@ -692,7 +730,7 @@ async def after_change(
     c = await db.get(SimpleChange, change_id)
     if c is None:
         return None
-    title, subjects = await describe(db, c)
+    title, subjects = await describe(db, c, proposal=verb == "Declined")
     if verb in ("Accepted", "Declined") and c.by is not None:
         # qa4-simple-decide-12: an accepted or declined proposal says whose it was.
         who = (await _names(db, {c.by})).get(c.by)
@@ -910,7 +948,8 @@ def _attendees(m: SimpleMeeting, w: PrdWho, names: dict) -> list[SimpleAttendee]
         if i in w.owners:
             roles.append("owner")
         out.append(SimpleAttendee(id=i, name=names.get(i, "someone"), roles=roles,  # type: ignore[arg-type]
-                                  present=i not in m.absent_ids))  # fmt: skip
+                                  present=i not in m.absent_ids,
+                                  joined=i in [m.presenter_id, *(m.joined_ids or [])]))  # fmt: skip
     return out
 
 
@@ -1403,23 +1442,31 @@ async def _waits(db: AsyncSession, m: SimpleMeeting) -> list[dict]:
             )
         )
     )
+    # walkc-meeting r2 (5j): a working draft waits on whoever approves the meeting's drafts
+    # (the PRD's decider, else the company's owners), and a proposal routed to nobody on them too.
+    approvers: list[uuid.UUID] = []
+    if any(d.status == "working" for d in ds) or any(not c.routed_to for c in proposals):
+        prd = await db.get(Document, m.prd_document_id)
+        decider = (await prd_who(db, prd)).decider if prd is not None else None
+        approvers = [decider] if decider else await _company_owners(db)
     names = await _names(
         db, {i for d in ds for i in d.waiting_on or []}
-        | {i for c in proposals for i in c.routed_to or []},
+        | {i for c in proposals for i in c.routed_to or []} | set(approvers),
     )  # fmt: skip
+
+    def on(ids: list[uuid.UUID]) -> list[dict]:
+        return [{"id": str(i), "name": names.get(i, "someone")} for i in ids]
+
     for d in ds:
         title = docs[d.document_id].title if d.document_id in docs else "a document"
         if d.status == "submitted" and d.waiting_on:
-            out.append({"what": f"Publishing {title}: their approval",
-                        "on": [{"id": str(i), "name": names.get(i, "someone")}
-                               for i in d.waiting_on]})  # fmt: skip
+            out.append({"what": f"Publishing {title}: their approval", "on": on(d.waiting_on)})
         elif d.status == "working":
-            out.append({"what": f"{title}: the working draft is not approved yet", "on": []})
+            out.append({"what": f"{title}: the working draft is not approved yet",
+                        "on": on(approvers)})  # fmt: skip
     for c in proposals:
         title, _ = await describe(db, c)
-        out.append({"what": f"Proposal: {title}",
-                    "on": [{"id": str(i), "name": names.get(i, "someone")}
-                           for i in c.routed_to or []]})  # fmt: skip
+        out.append({"what": f"Proposal: {title}", "on": on(list(c.routed_to or []) or approvers)})
     return out
 
 
@@ -1747,15 +1794,17 @@ async def send(
     return m
 
 
-def _plain(m: SimpleMeeting, minutes: dict, names: dict) -> str:
-    lines = [f"Minutes: {m.title}", "", minutes.get("summary") or ""]
+def _plain(m: SimpleMeeting, minutes: dict, names: dict, zone: str) -> str:
+    # walkc-meeting r2 (5j): when the meeting was, month first with its time and zone.
+    lines = [f"Minutes: {m.title}", f"Held {company_time.stamp(m.started_at, zone)}", "",
+             minutes.get("summary") or ""]  # fmt: skip
     if minutes.get("open_questions"):
         lines += ["", "Open questions:", *[f"- {q}" for q in minutes["open_questions"]]]
     if minutes.get("action_items"):
         lines += ["", "Action items:"]
         for a in minutes["action_items"]:
             who = names.get(uuid.UUID(a["owner_id"]), "someone") if a.get("owner_id") else "someone"
-            due = f" by {a['due_date']}" if a.get("due_date") else ""
+            due = f" by {company_time.calendar_day(a['due_date'])}" if a.get("due_date") else ""
             lines.append(f"- {a['title']} ({who}{due})")
     if minutes.get("waits"):
         lines += ["", "Waiting:"]
@@ -1857,7 +1906,7 @@ async def deliver(db: AsyncSession, meeting_id: uuid.UUID) -> int:
     # mid-send tries it again then), then send with the meeting unlocked.
     names = {u.id: u.name or u.email for u in users.values()} if due else await _names(
         db, set(m.attendee_ids))  # fmt: skip
-    text = _plain(m, m.minutes or {}, names)
+    text = _plain(m, m.minutes or {}, names, await company_time.company_time_zone(db))
     subject = f"Minutes: {m.title}"
     lease = (now + timedelta(minutes=RETRY_AFTER_MINUTES[0])).isoformat()
     tried = {k: dict(d["email_to"][k]) for k in due}

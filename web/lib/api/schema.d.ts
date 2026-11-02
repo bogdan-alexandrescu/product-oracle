@@ -17815,7 +17815,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "open" | "applied" | "proposed" | "discarded" | "undone";
+            status: "open" | "applied" | "proposed" | "declined" | "discarded" | "undone";
             /** May */
             may: ("apply" | "propose") | null;
             /** Why Not */
@@ -37521,6 +37521,11 @@ export interface components {
              * @default true
              */
             present: boolean;
+            /**
+             * Joined
+             * @default true
+             */
+            joined: boolean;
         };
         /**
          * SimpleChangeConflict
