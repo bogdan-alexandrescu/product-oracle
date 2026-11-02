@@ -545,6 +545,7 @@ function DayChart(props: TimelineProps) {
         <div className="relative" style={{ width: labelW + trackW }}>
           <div className="sticky top-0 z-20 flex h-11 border-b border-line bg-surface">
             <div
+              data-testid="timeline-names-head"
               className="sticky left-0 z-20 flex-none border-r border-line bg-surface"
               style={{ width: labelW }}
             />
@@ -554,6 +555,7 @@ function DayChart(props: TimelineProps) {
                 .map((m) => (
                   <span
                     key={m.day}
+                    data-testid="timeline-month"
                     className="absolute top-1 text-xs whitespace-nowrap text-text2"
                     style={{ left: x(m.day) + 4 }}
                   >
