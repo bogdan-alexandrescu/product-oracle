@@ -224,6 +224,12 @@ export interface PlanDb {
   by_job?: boolean;
   /** The prd_plan job is reading the plan (by_job, after Read the plan again). */
   reading?: boolean;
+  /**
+   * walkb-onepager review ("simple-plan-lead-dated"): the dates the PRD's engineering lead
+   * accepted at a run's Engineering dates stop (plan.accepted_dates): a milestone by its code
+   * or name, else the feature it holds, and the day.
+   */
+  accepted?: { milestone: string | null; feature: string | null; day: string }[];
   /** walkb-onepager review ("simple-plan-by-job-stuck"): the job never answers. */
   stuck?: boolean;
   /** walkb-onepager review ("simple-plan-by-job-down"): the API fails while the job reads. */

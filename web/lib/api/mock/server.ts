@@ -2917,6 +2917,20 @@ function load(): Db {
                     Object.assign(db.simple_roadmap!.plan!, { undated: true, by_job: true, ...how });
                     return db;
                   }
+              : scenario === "simple-plan-lead-dated"
+                ? () => {
+                    // walkb-onepager review: only M1 has dates in the PRD; the lead accepted
+                    // M2's end and F-13's (in M3) at the run's Engineering dates stop.
+                    const db = seedSimplePlanScenario();
+                    Object.assign(db.simple_roadmap!.plan!, {
+                      partly_dated: true,
+                      accepted: [
+                        { milestone: "M2", feature: "F-07", day: "2027-01-15" },
+                        { milestone: null, feature: "F-13", day: "2027-02-26" },
+                      ],
+                    });
+                    return db;
+                  }
               : scenario === "simple-plan-partly-dated"
                 ? () => {
                     // fidelity prd (pick D, frame D3): only M1 has dates; M2 and M3 have none yet.

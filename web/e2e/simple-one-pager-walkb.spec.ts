@@ -27,6 +27,11 @@ import { expect, test, type Page } from "./test";
  *   ("simple-plan-by-job-stuck"), after two minutes the page stops asking and says to come
  *   back later; the last plan stays shown; fails_when=the page keeps saying it is reading,
  *   with no word to the person; no_claim=the job itself.
+ * - protects=(walkb-onepager review) on "simple-plan-lead-dated" (only M1 dated in the PRD;
+ *   the engineering lead accepted M2's end, Jan 15, and F-13's in M3, Feb 26), the plan is
+ *   dated by the lead: no milestone is "No dates yet" and M2 and M3 end on the lead's days;
+ *   fails_when=M2 or M3 reads "No dates yet" or ends on another day; no_claim=the API's
+ *   reading (api/tests/test_simple_plan_walkb.py).
  */
 const URL = "/simple/one-pagers/guided-setup";
 
@@ -98,6 +103,20 @@ for (const phone of [false, true]) {
       await expect(page.getByTestId("plan-updating")).toHaveCount(0);
       await expect(page.getByText("Oracle is still reading the plan. Come back in a few minutes to see it.")).toBeVisible();
       await expect(page.getByTestId("timeline-no-dates").first()).toBeVisible();
+    });
+
+    test("the plan reads the dates the engineering lead accepted", async ({ page }) => {
+      await open(page, "simple-plan-lead-dated");
+      const tl = page.getByRole("region", { name: "Timeline" }).first();
+      await expect(tl).toBeVisible();
+      await expect(page.getByTestId("timeline-no-dates")).toHaveCount(0);
+      if (!phone) {
+        await expect(tl.getByRole("button", { name: "M1 ends Nov 27" })).toBeVisible();
+        await expect(tl.getByRole("button", { name: "M2 ends Jan 15" })).toBeVisible();
+        await expect(tl.getByRole("button", { name: "M3 ends Feb 26" })).toBeVisible();
+      }
+      await tl.getByRole("button", { name: /^M3 Open to all/ }).click();
+      await expect(page.getByTestId("milestone-part")).not.toContainText("No dates yet");
     });
   });
 }
