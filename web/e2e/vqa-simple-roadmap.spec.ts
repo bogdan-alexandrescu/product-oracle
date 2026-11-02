@@ -73,3 +73,28 @@ for (const width of [1440, 1512]) {
       .toBe(true);
   });
 }
+
+test("QR1 A: scrolled just past a month's start, that month keeps its label at the view's left", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page);
+  const scroll = page.getByTestId("timeline-scroll");
+  // Scroll so the second month in sight starts 12 px left of the view.
+  const target = await scroll.evaluate((sc) => {
+    const second = sc.querySelectorAll<HTMLElement>(
+      "[data-testid='timeline-month']",
+    )[1];
+    sc.scrollLeft = parseFloat(second.style.left) - 4 + 12;
+    return (second.textContent ?? "").slice(0, 3);
+  });
+  await expect
+    .poll(async () => (await labels(page))[0]?.text)
+    .toMatch(new RegExp(`^${target} \\d{4}$`));
+  const shown = await labels(page);
+  expect(shown[0].left).toBeGreaterThanOrEqual(shown[0].edge - 1);
+  expect(shown[0].left - shown[0].edge).toBeLessThan(20);
+  // The pinned label never runs into the next month's.
+  for (let i = 1; i < shown.length; i++)
+    expect(shown[i].left).toBeGreaterThan(shown[i - 1].right);
+});
