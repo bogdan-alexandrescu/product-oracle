@@ -526,25 +526,33 @@ def with_accepted(data: dict[str, Any] | None, accepted: list[Accepted]) -> dict
 async def accepted_dates(db: AsyncSession, document_id: uuid.UUID) -> list[Accepted]:
     """The dates the PRD's engineering lead accepted at a run's Engineering dates stop: its
     draft roadmap items' milestone dates a verified schedule basis supports."""
+    return (await accepted_dates_of(db, {document_id})).get(document_id, [])
+
+
+async def accepted_dates_of(
+    db: AsyncSession, prd_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, list[Accepted]]:
+    """:func:`accepted_dates` of many PRDs in two reads, whatever their number."""
     from oracle.roadmap.models import RoadmapItem, ScheduleBasis
     from oracle.simple.priorities import prd_code
 
-    bases = {
-        (b.reference, b.supports_date, b.item_key)
-        for b in await db.scalars(
-            select(ScheduleBasis).where(
-                ScheduleBasis.prd_document_id == document_id,
-                ScheduleBasis.status == "verified",
-                ScheduleBasis.withdrawn_at.is_(None),
-            )
+    if not prd_ids:
+        return {}
+    bases: dict[uuid.UUID, set[tuple[Any, Any, Any]]] = {}
+    for b in await db.scalars(
+        select(ScheduleBasis).where(
+            ScheduleBasis.prd_document_id.in_(prd_ids),
+            ScheduleBasis.status == "verified",
+            ScheduleBasis.withdrawn_at.is_(None),
         )
-    }
+    ):
+        bases.setdefault(b.prd_document_id, set()).add((b.reference, b.supports_date, b.item_key))
     if not bases:
-        return []
-    out = []
+        return {}
+    out: dict[uuid.UUID, list[Accepted]] = {}
     for i in await db.scalars(
         select(RoadmapItem).where(
-            RoadmapItem.prd_document_id == document_id,
+            RoadmapItem.prd_document_id.in_(set(bases)),
             RoadmapItem.draft_roadmap_id.is_not(None),
         )
     ):
@@ -552,10 +560,12 @@ async def accepted_dates(db: AsyncSession, document_id: uuid.UUID) -> list[Accep
         day = _iso(ms.get("date"))
         if not day or not any(
             r == ms.get("date_source") and d.isoformat() == day and k in (None, i.item_key)
-            for r, d, k in bases
+            for r, d, k in bases[i.prd_document_id]
         ):
             continue
-        out.append(Accepted(ms.get("name"), prd_code(i.prd_section_key), date.fromisoformat(day)))
+        out.setdefault(i.prd_document_id, []).append(
+            Accepted(ms.get("name"), prd_code(i.prd_section_key), date.fromisoformat(day))
+        )
     return out
 
 
@@ -1005,6 +1015,7 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
         .order_by(DocumentVersion.number)
     ):
         latest[v.document_id] = v
+    accepted = await accepted_dates_of(db, set(latest))
     out: dict[uuid.UUID, View] = {}
     for pid, v in latest.items():
         row = rows.get(pid)
@@ -1013,7 +1024,7 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
         else:
             data = _parsed(v)
         if data:
-            out[pid] = compute(with_accepted(data, await accepted_dates(db, pid)))
+            out[pid] = compute(with_accepted(data, accepted.get(pid, [])))
     return out
 
 
