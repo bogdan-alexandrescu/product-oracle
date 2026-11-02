@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -14,6 +15,7 @@ import { login } from "./helpers";
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 const NAME = "Shared shopping lists";
+const BLOCKER = "What could stop this from shipping at all?";
 const PROBLEM = "People who shop for a household keep separate lists, so they buy the same things twice and forget others.";
 
 const simple = (page: Page) => page.getByTestId("simple-page");
@@ -65,6 +67,8 @@ for (const [label, size] of [
       await openSimple(page, "/simple");
       await simple(page).getByRole("button", { name: "New PRD" }).click();
       await expect(sheet(page)).toBeVisible();
+      // The page behind the sheet does not scroll (html and body, as the mock-up).
+      expect(await page.evaluate(() => [getComputedStyle(document.documentElement).overflow, getComputedStyle(document.body).overflow])).toEqual(["hidden", "hidden"]);
       if (label === "phone") {
         // On a phone the sheet fills the screen.
         const box = (await sheet(page).boundingBox())!;
@@ -96,10 +100,17 @@ for (const [label, size] of [
       await expect(later.getByRole("button", { name: /Avery Stone/ })).toHaveCount(0);
       await later.getByRole("button", { name: /Priya Raman/ }).click();
       await expect(question(page).getByRole("button", { name: "Ask Priya Raman" })).toBeInViewport();
+      // Only Ask <name> and I don't know while someone is picked (np1-b-hard).
+      await expect(question(page).getByRole("button", { name: "Answer it myself" })).toHaveCount(0);
       await expect(sheet(page).getByTestId("np-tally")).toHaveText("3 answered · 1 not known · 2 left");
       await question(page).getByRole("button", { name: "Ask Priya Raman" }).click();
       await expect(sheet(page).getByText("Asked of Priya Raman. The draft starts without it.")).toBeVisible();
       await expect(question(page).getByText("Question 6 of 6")).toBeVisible();
+      // The last question reads as the others do (the NP1-b frames).
+      await question(page).getByRole("textbox").fill("A shared list.");
+      await expect(question(page).getByRole("button", { name: "Next question" })).toBeVisible();
+      await expect(question(page).getByRole("button", { name: "Save answer" })).toHaveCount(0);
+      await question(page).getByRole("textbox").fill("");
       // The question's buttons stay in view as the answered ones stack up.
       await expect(question(page).getByRole("button", { name: "I don't know" })).toBeInViewport();
       // Home lists a PRD once it drafts, not while its questions are asked.
@@ -170,4 +181,46 @@ test("A viewer has no New PRD in Simple", async ({ page }) => {
   await page.goto("/simple/one-pagers");
   await expect(simple(page).getByTestId("one-pager-row").first()).toBeVisible();
   await expect(simple(page).getByRole("button", { name: "New PRD" })).toHaveCount(0);
+});
+
+/*
+ * The draft gate (C5): a brief whose critical blocker is still open does not draft until it is
+ * answered or an owner accepts its risk. Only an owner may accept it (B4), so the sheet does
+ * that for an owner and tells anyone else, in plain words, which question holds it up.
+ */
+test.describe("a critical blocker still open", () => {
+  test.use({ viewport: DESKTOP });
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript((key) => localStorage.setItem(key, "draft-gate"), MOCK_SCENARIO_KEY);
+  });
+
+  test("an owner's Draft with what I gave accepts its risk and drafts", async ({ page }) => {
+    await openSimple(page, "/simple/one-pagers");
+    await simple(page).getByTestId("simple-one-pagers").getByRole("button", { name: "New PRD" }).click();
+    await fillAndGo(page);
+    await expect(sheet(page).getByText(BLOCKER)).toBeVisible();
+    await sheet(page).getByRole("button", { name: "Draft with what I gave" }).click();
+    await expect(sheet(page)).toBeHidden();
+    const row = simple(page).getByTestId("one-pager-started");
+    await expect(row).toContainText(NAME);
+    await expect(row).toContainText("Drafting");
+  });
+
+  test("an approver is told which question must be answered first, and nothing drafts", async ({ page }) => {
+    await login(page, "approver@example.com");
+    await page.goto("/simple/one-pagers");
+    await expect(simple(page)).toBeVisible();
+    await simple(page).getByTestId("simple-one-pagers").getByRole("button", { name: "New PRD" }).click();
+    await fillAndGo(page);
+    await sheet(page).getByRole("button", { name: "Draft with what I gave" }).click();
+    const held = sheet(page).getByTestId("np-held");
+    await expect(held).toContainText("This needs an answer before it can draft:");
+    await expect(held.getByRole("listitem")).toHaveText([BLOCKER]);
+    await expect(held).toContainText("Or ask an owner to draft it.");
+    // No raw API words, and the sheet stays open on the questions.
+    await expect(sheet(page)).not.toContainText(/owner can accept|needs an owner|403/);
+    await expect(question(page)).toBeVisible();
+    await sheet(page).getByRole("button", { name: "Close" }).click();
+    await expect(simple(page).getByTestId("one-pager-started").filter({ hasText: "Drafting" })).toHaveCount(0);
+  });
 });

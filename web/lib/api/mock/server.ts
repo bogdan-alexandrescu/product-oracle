@@ -522,6 +522,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * duplicate, both kept by one older call that answers the two;
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "draft-gate" as the default company where Oracle reads a critical blocker in every new
+ * brief, so drafting waits until it is answered or an owner accepts its risk (C5);
  * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
  * given now becomes a feedback item on the PRD (C5 late answers); its success-metric gap is a
  * finding shared in full;
@@ -785,6 +787,13 @@ function seedBeforeDraftingScenario(): Db {
   const db = seed();
   const approver = db.members.find((m) => m.email === "approver@example.com")!;
   seedBeforeDrafting(ensureV2(db), db.user_id, approver.id);
+  return db;
+}
+
+/** The default company where every new brief has a critical blocker (C5): see MOCK_SCENARIO_KEY. */
+function seedDraftGateScenario(): Db {
+  const db = seed();
+  ensureV2(db).blocker_briefs = true;
   return db;
 }
 
@@ -2863,6 +2872,8 @@ function load(): Db {
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "draft-gate"
+            ? seedDraftGateScenario
           : scenario === "late-answers"
             ? seedLateAnswersScenario
           : scenario === "brief-goal-rejected"
