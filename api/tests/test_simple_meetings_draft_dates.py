@@ -127,7 +127,11 @@ async def test_approve_these_dates_puts_them_on_the_roadmap(client):
     r = await client.post(url, headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
     out = r.json()
-    assert out["draft_roadmap"] is None
+    # build-runplan review: the step says the dates were approved here, after a reload too.
+    assert out["draft_roadmap"] == {"items": [], "approved": 3}
+    again = await client.get(f"{MEETINGS}/{m['id']}", headers=w.ctx.as_("viewer"))
+    assert again.status_code == 200, again.text
+    assert again.json()["draft_roadmap"] == {"items": [], "approved": 3}
     title = out["prd"]["title"]
     assert [d["title"] for d in out["meeting_decisions"]] == [
         f"{title} dates approved: 3 items on the roadmap"
