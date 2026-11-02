@@ -1,4 +1,4 @@
-import { login, signOut } from "./helpers";
+import { joinMeeting, login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -73,6 +73,9 @@ for (const phone of [false, true]) {
 
     test("qa4-simple-decide-2: Approve says it publishes, lists the edit and asks first", async ({ page }) => {
       await startReview(page);
+      // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
+      await joinMeeting(page, "approver@example.com");
+      await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
       await tap(page.getByRole("button", { name: "Edit “A setup checklist that shows" }));
       await page.getByLabel("New wording for").fill("A checklist that names the next step");
       await tap(page.getByRole("button", { name: "Save" }));
