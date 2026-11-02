@@ -59157,6 +59157,19 @@
             "type": "boolean",
             "title": "Can Undo",
             "default": false
+          },
+          "asks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asks",
+            "default": []
+          },
+          "asks_outside": {
+            "type": "boolean",
+            "title": "Asks Outside",
+            "default": false
           }
         },
         "type": "object",

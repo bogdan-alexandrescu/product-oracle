@@ -17862,6 +17862,16 @@ export interface components {
              * @default false
              */
             can_undo: boolean;
+            /**
+             * Asks
+             * @default []
+             */
+            asks: string[];
+            /**
+             * Asks Outside
+             * @default false
+             */
+            asks_outside: boolean;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
