@@ -6233,16 +6233,26 @@ async function route(db: Db, req: Request): Promise<Response> {
           prd: { id: doc.id, slug: doc.slug, title: doc.title },
           version: v.number,
           roadmap: row?.roadmap ?? null,
-          // The engineering lead's accepted date is the item's milestone date: an end only.
-          items: (row?.items ?? []).map((i) => ({
-            key: i.item_key,
-            title: i.title,
-            horizon: i.horizon,
-            outcome: i.outcome ?? null,
-            start: null,
-            end: typeof i.milestone?.date === "string" ? i.milestone.date : null,
-            source: "engineering" as const,
-          })),
+          // As the API's _dated: the end is the engineering lead's accepted date (the PRD's
+          // newest verified basis for the item), else the item's own; the start is its own.
+          items: (row?.items ?? []).map((i) => {
+            const ms = (i.milestone ?? {}) as { date?: unknown; start_date?: unknown };
+            const lead = (db.roadmap?.bases ?? [])
+              .filter((b) => b.prd_document_id === doc.id && b.item_key === i.item_key && b.status === "verified")
+              .sort((a, b) => (a.verified_at ?? "").localeCompare(b.verified_at ?? ""))
+              .at(-1);
+            const end = lead?.supports_date ?? (typeof ms.date === "string" ? ms.date : null);
+            const start = typeof ms.start_date === "string" && end && ms.start_date <= end ? ms.start_date : null;
+            return {
+              key: i.item_key,
+              title: i.title,
+              horizon: i.horizon,
+              outcome: i.outcome ?? null,
+              start,
+              end,
+              source: lead ? ("engineering" as const) : ("accepted" as const),
+            };
+          }),
           milestones: prdMilestones(v),
         },
         me.id,
