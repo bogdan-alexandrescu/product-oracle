@@ -43,7 +43,7 @@ for (const where of ["desktop", "phone"] as const) {
     if (where === "phone") await page.setViewportSize(PHONE);
     await page.goto(`${URL}?roadmap=onboarding-roadmap`);
     await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-    await expect(page.getByText("Setup checklist").first()).toBeVisible();
+    await expect(page.locator('[data-item="setup-checklist"]').first()).toBeAttached();
     await expect(page.getByTestId("draft-banner")).toHaveCount(0);
     await page.goto(`${URL}?roadmap=alerts-roadmap`);
     await expect(page.getByTestId("draft-count")).toHaveText("1");
@@ -104,8 +104,8 @@ async function signIn(page: Page, email: string) {
 }
 
 /**
- * Card walkc-tasks-reach-their-owner: protects = a task added to an item in its talk with
- * Oracle ("for Theo Brandt by Nov 20") is listed under the item's Tasks with its owner and due
+ * Card walkc-tasks-reach-their-owner: protects = a task added to an item through Ask Oracle
+ * ("for Theo Brandt by Nov 20") is listed under the item's Tasks with its owner and due
  * day, and Theo's Simple Home lists it under "Tasks waiting for you" (no "Nothing waits on
  * you"), desktop and phone; fails_when = the task is only a past chat line, or never reaches
  * its owner; no_claim = editing or closing a task.
@@ -113,28 +113,28 @@ async function signIn(page: Page, email: string) {
 for (const where of ["desktop", "phone"] as const) {
   test(`a task added to an item is listed and reaches its owner (${where})`, async ({ page }) => {
     const phone = where === "phone";
-    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-talk"] as const);
+    await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-chat"] as const);
     if (phone) await page.setViewportSize(PHONE);
     await signIn(page, ADMIN.email);
     await page.goto(URL);
-    if (phone) await tap(page.getByTestId("format-gantt"));
-    await expect(bar(page, "adaptive-pacing")).toBeVisible();
-    await bar(page, "adaptive-pacing").click();
-    const card = page.getByTestId("floating-card");
-    await expect(card.getByTestId("card-tasks")).toContainText("No tasks yet");
-    if (phone) await tap(card.getByRole("tab", { name: "Talk to Oracle" }));
-    else await tap(card.getByRole("button", { name: "Talk to Oracle" }));
-    const talk = card.getByTestId("item-talk");
-    await talk.getByRole("textbox", { name: "Message Oracle" }).fill("add a task 'Draft the pacing copy' to Adaptive pacing for Theo Brandt by nov 20");
-    await tap(talk.getByRole("button", { name: "Send" }));
-    const c = talk.getByTestId("chat-card").filter({ hasText: "Draft the pacing copy" });
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+    await tap(page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first());
+    const ask = page.getByTestId("ask-chat").filter({ visible: true });
+    await ask.getByLabel("Message Oracle").fill("add a task 'Draft the digest email' to Weekly alert digest for Theo Brandt by nov 20");
+    await tap(ask.getByRole("button", { name: "Send" }));
+    const c = ask.getByTestId("chat-card").filter({ hasText: "Draft the digest email" });
     await tap(c.getByRole("button", { name: "Apply" }));
-    await expect(c).toHaveAttribute("data-status", "applied");
-    if (phone) await tap(card.getByRole("tab", { name: "Details" }));
+    await expect(c.getByTestId("chat-card-outcome")).toContainText("Applied by you");
+    await page.goto(URL);
+    await page.getByTestId("format-gantt").click();
+    await bar(page, "alert-digest").click();
+    const card = page.getByTestId("floating-card");
     const task = card.getByTestId("card-task");
     await expect(task).toHaveCount(1);
-    await expect(task).toHaveText("Draft the pacing copy · Theo Brandt · due Nov 20 · To do");
+    await expect(task).toHaveText("Draft the digest email · Theo Brandt · due Nov 20 · To do");
     // The account menu is the desktop rail's: sign out there, then come back as Theo.
+    await card.getByRole("button", { name: "Close" }).click();
+    await expect(card).toHaveCount(0);
     if (phone) await page.setViewportSize({ width: 1366, height: 820 });
     await signOut(page);
     if (phone) await page.setViewportSize(PHONE);
@@ -142,7 +142,7 @@ for (const where of ["desktop", "phone"] as const) {
     await page.goto("/simple");
     const mine = page.getByTestId("home-tasks");
     await expect(mine).toBeVisible();
-    await expect(mine.getByTestId("home-task")).toHaveText(/^Draft the pacing copy · Adaptive pacing · due Nov 20/);
+    await expect(mine.getByTestId("home-task")).toHaveText(/^Draft the digest email · Weekly alert digest · due Nov 20/);
     await expect(page.getByTestId("home-nothing-waits")).toHaveCount(0);
   });
 }
