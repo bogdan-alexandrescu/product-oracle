@@ -20,8 +20,9 @@ async function signIn(page: Page, email: string, to: string) {
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(to);
-  // A phone's Timeline (timeline-overlap B3) draws thin lanes with no bars: a phone reads the bar's dates on the Gantt.
-  if (to === "/simple/roadmap" && (page.viewportSize()?.width ?? 1366) <= 640) await tap(page.getByTestId("format-gantt"));
+  // The bar's dates and the Preview's ghost are read on the Gantt: a phone's Timeline is a list by
+  // quarter, and build-roadmap's desktop Timeline is for reading (no preview ghost).
+  if (to === "/simple/roadmap") await tap(page.getByTestId("format-gantt"));
 }
 
 /** Opens Ask Oracle (the rail's button; the header's Ask on a phone) and answers its change-by-chat section. */
