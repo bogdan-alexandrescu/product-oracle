@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button, Chip, FilterChips, Page, PageHeader, Ring, SegmentedControl, Sheet, Split } from "@/components/ds";
+import { AgentQuestions } from "@/components/review/AgentQuestions";
 import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
 import { RunBackLink } from "@/components/review/parts";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
@@ -333,6 +334,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           {error}
         </p>
       )}
+      <AgentQuestions runId={run.id} cpId={cp.id} features={scope.features} />
       {fileProblems.length > 0 ? (
         <FileProblems runId={run.id} cpId={cp.id} problems={fileProblems} canDecide={mode === "approver"} onRaw={() => setRawOpen(true)} onDecided={() => router.push(`/runs/${run.id}`)} />
       ) : (
