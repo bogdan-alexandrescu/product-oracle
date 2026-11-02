@@ -448,3 +448,35 @@ async def test_create_answers_before_the_read_is_submitted(client):
     async with tenant_session(ctx.tenant_id) as s:
         segments = list(await s.scalars(select(RunSegment).where(RunSegment.run_id == run.id)))
     assert any(seg.swarm_workflow_id for seg in segments)
+
+
+# protects=binding-forgery-deflake: two followers of one refused read (the create request's
+# summary and the submission after it, each in its own session) both see it live; the one
+# that commits second answers from the first's fallback instead of failing on the stale
+# intake row (StaleDataError, a 500 on POST /v1/intakes); fails_when=the second follower
+# raises or queues a second job; no_claim=which follower wins.
+async def test_two_followers_of_a_refused_read_fall_back_once(client, monkeypatch):
+    class Refusing(FakeRuntime):
+        async def submit(self, spec):
+            raise RuntimeUnavailable("agent service unavailable", status=503)
+
+    ctx = await company()
+    set_runtime(Refusing())
+    monkeypatch.setattr(intake_read, "submit_later", lambda tenant_id, intake: None)
+    intake_id = uuid.UUID(await _new(client, ctx))
+    async with tenant_session(ctx.tenant_id) as s:
+        intake = await s.get(ProductIntake, intake_id)
+        await intake_read.submit(s, intake_read.current(intake))
+        await s.commit()
+    async with tenant_session(ctx.tenant_id) as first, tenant_session(ctx.tenant_id) as second:
+        mine = await first.get(ProductIntake, intake_id)
+        theirs = await second.get(ProductIntake, intake_id)
+        assert intake_read.current(theirs)["state"] in intake_read.LIVE
+        assert await intake_read.sync(first, mine) is True
+        await first.commit()
+        assert await intake_read.sync(second, theirs) is False
+        await second.commit()
+        read = intake_read.current(theirs)
+    [job] = await _jobs(ctx)
+    assert read["path"] == "job" and read["job_id"] == str(job.id)
+    assert read["fallback"]["code"] == "agent_unavailable"
