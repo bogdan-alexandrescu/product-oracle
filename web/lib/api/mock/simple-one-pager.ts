@@ -298,6 +298,58 @@ export function seedRunPrdOnePager(): OnePagerDb {
   return db;
 }
 
+/**
+ * The "one-pager-run-prd-walk" scenario (CLD's walk B, 2026-11-01): an approved PRD a run
+ * wrote, its one-pager written by Oracle's job. Its Success measures say how in their own
+ * words (no "counted as"), its users section has labels, a hypothesis note and a job story,
+ * a requirement says what F-01 does after a colon, the features are named by their own
+ * sections, a milestone counts its features above its scope, exit and date lines, and the
+ * job's target was cut mid-word ("3 hours a we"). Invented data.
+ */
+export function seedRunPrdWalkOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  db.doc = { ...db.doc, title: "Onboarding pace" };
+  db.cites = {
+    c1: { title: "Manager interviews", excerpt: null },
+    c2: { title: "Onboarding tracker export", excerpt: null },
+    c3: { title: "Time study", excerpt: null },
+  };
+  db.sections = [
+    { key: "problem", heading: "Problem", body: "New accounts take weeks to go live, and a late step is found only when the customer asks why [c:c1]." },
+    { key: "brief-items", heading: "Features by milestone", body: "| Milestone | Feature |\n|---|---|\n| M1 | [Pacing plan](#f-01) |\n| | [Late alerts](#f-02) |" },
+    { key: "requirements", heading: "Requirements", body: "- F-01: every newly connected account gets a pacing plan within a day.\n- F-02: a late step reaches its manager the same day." },
+    { key: "f-01", heading: "F-01 Pacing plan", body: "One plan of steps for each new account, with a date on every step." },
+    { key: "f-02", heading: "F-02 Late alerts", body: "A note to the manager when a step passes its date." },
+    { key: "audience", heading: "Who has it", body: "- **Primary:** Customer success managers who run onboarding for new accounts [c:c1].\n- **Secondary:** Account owners who watch onboarding across their book [c:c2].\n- **Not the target:** Self-serve customers with no assigned manager [c:c3].\n- The primary segment is a hypothesis until the pilot confirms it [c:c1].\n\n**Job story:** When a new customer's onboarding is running late, I want to know before they do, so I can step in [c:c1]." },
+    { key: "success", heading: "Success measures", body: "- **Onboarding on time:** share of new accounts live within 30 days, from 55% to 80% by Mar 31, 2027; recomputed daily from the onboarding tracker [c:c2].\n- **Hours saved per manager:** from 0 to 3 hours a week by the end of Q2, reported weekly per person [c:c3]." },
+    { key: "milestone-m1", heading: "M1 Pace", body: "M1 ships two features to the first ten accounts.\n\n- **Scope:** F-01 Pacing plan, F-02 Late alerts\n- **Exit:** ten accounts on a plan\n- **Date:** Dec 18" },
+    { key: "non-goals", heading: "Non-goals", body: "- Billing setup stays as it is." },
+    { key: "top-risks", heading: "Top risks", body: "- Managers may tune out alerts: a step sends one note, never a stream." },
+  ];
+  // As Oracle's one_pager job writes them: the target cut mid-word ("3 hours a we"), the date ISO.
+  db.blocks = [
+    { key: "problem", title: "Problem and who has it", rules: "At most 60 words", kind: "text", lines: [
+      { id: "problem-1", text: "New accounts take weeks to go live, and a late step is found only when the customer asks why.", keys: ["problem"] },
+    ] },
+    { key: "bets", title: "What we will build", rules: "3-5 bets", kind: "lines", lines: [
+      { id: "bets-1", text: "F-01 gives every new account a pace to follow.", keys: ["f-01", "requirements"] },
+      { id: "bets-2", text: "F-02 warns the manager when a step runs late.", keys: ["f-02", "requirements"] },
+    ] },
+    { key: "outcomes", title: "Outcomes and how we measure them", rules: "2-4 metrics, from → to", kind: "metrics", lines: [
+      { id: "outcomes-1", text: "Onboarding on time from 55% to 80% by 2027-03-31", keys: ["success"], metric: { name: "Onboarding on time", from: "55%", to: "80%" } },
+      { id: "outcomes-2", text: "Hours saved per manager from 0 to 3 hours a week", keys: ["success"], metric: { name: "Hours saved per manager", from: "0", to: "3 hours a we" } },
+    ] },
+    { key: "not_doing", title: "Not doing", rules: "At most 5 lines", kind: "lines", lines: [
+      { id: "not_doing-1", text: "Billing setup stays as it is.", keys: ["non-goals"] },
+    ] },
+    { key: "risks", title: "Risks and open decisions", rules: "At most 5", kind: "lines", lines: [
+      { id: "risks-1", text: "Managers may tune out alerts: a step sends one note, never a stream.", keys: ["top-risks"] },
+    ] },
+    { key: "timeline", title: "Timeline", rules: "The PRD's roadmap slice", kind: "timeline", lines: [] },
+  ];
+  return db;
+}
+
 export function seedWalkOnePager(): OnePagerDb {
   const db = seedOnePager();
   db.slice = NOTED_SLICE;
