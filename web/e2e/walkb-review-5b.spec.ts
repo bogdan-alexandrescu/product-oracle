@@ -14,9 +14,6 @@ async function kinds(page: Page): Promise<Record<string, string>> {
   return out;
 }
 
-const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
-  a.x < b.x + b.width - 1 && b.x < a.x + a.width - 1 && a.y < b.y + b.height - 1 && b.y < a.y + a.height - 1;
-
 for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
   test.describe(`${viewport.width}px`, () => {
     test.use({ viewport });
@@ -50,7 +47,9 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 
     // build-roadmap (47361c89, mk-qa4-roadmap QR3 A): the Gantt's broken links moved from a
     // callout beside each bar to the conflicts panel above the chart. Its promise holds there:
-    // each warning is listed, in full, and the panel covers no bar.
+    // each warning is listed, in full, and its bar is drawn and flagged as broken. That the
+    // panel covers no bar follows from the layout (it sits above the chart), so the test reads
+    // it as that: the panel ends above the chart's first bar.
     test("the Gantt's warning never covers its bar", async ({ page }) => {
       await login(page);
       await page.goto("/simple/roadmap?roadmap=alerts-roadmap");
@@ -64,14 +63,13 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         for (const c of await warnings.all()) {
           const key = (await c.getAttribute("data-item"))!;
           await expect(c).toContainText(/starts/);
-          await expect(bars(page).and(page.locator(`[data-item="${key}"]`))).toBeVisible();
+          const bar = bars(page).and(page.locator(`[data-item="${key}"]`));
+          await expect(bar).toBeVisible();
+          await expect(bar, `${key}: a listed warning's bar is flagged as broken`).not.toHaveAttribute("data-broken", "false");
         }
-        for (const b of await bars(page).all()) {
-          const body = b.locator("rect[data-body], rect[data-slice-body]").first();
-          if (!(await body.count())) continue;
-          const box = (await body.boundingBox())!;
-          expect(overlaps(box, warn), `${await b.getAttribute("data-item")}: the warnings sit above the chart, not on its bar`).toBe(false);
-        }
+        const tops: number[] = [];
+        for (const b of await bars(page).all()) tops.push((await b.boundingBox())!.y);
+        expect(warn.y + warn.height, "the warnings sit above the chart, not on a bar").toBeLessThanOrEqual(Math.min(...tops) + 1);
       };
       await clear();
       if (viewport.width < 600) return;

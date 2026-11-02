@@ -65,5 +65,26 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       expect(lanes.filter((l) => l.title.startsWith("Faster activation"))).toEqual([]);
       for (const item of ["setup-checklist", "setup-import"]) expect(activation!.items).toContain(item);
     });
+
+    // The phone's Timeline is a list by quarter with no lane headers: each row names its goal
+    // under its title ("Oct 5 – Nov 2 · Activation"), so the same promise reads off the rows.
+    if (viewport.width < 600)
+      test("a phone's Timeline names each PRD item's own goal", async ({ page }) => {
+        await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan-lanes"] as const);
+        await login(page);
+        await page.goto(URL);
+        await expect(page.getByTestId("timeline-list")).toBeVisible();
+        const rows = page.getByTestId("timeline-list").getByTestId("timeline-row");
+        await expect(rows.first()).toBeVisible();
+        for (const item of ["setup-checklist", "setup-import"]) {
+          const row = rows.and(page.locator(`[data-item="${item}"]`));
+          await expect(row.first(), `${item} names its PRD's goal`).toContainText(/ · Activation\b/);
+        }
+        await expect(rows.filter({ hasText: "Faster activation" })).toHaveCount(0);
+        // An item that started before this quarter is listed in both; count each item once.
+        const activation = new Set<string>();
+        for (const r of await rows.all()) if (/ · Activation\b/.test((await r.textContent()) ?? "")) activation.add((await r.getAttribute("data-item"))!);
+        expect(activation.size).toBe(5);
+      });
   });
 }
