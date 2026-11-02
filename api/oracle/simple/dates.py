@@ -163,9 +163,9 @@ def after_dependencies[K](
 ) -> dict[K, Resolved]:
     """walkb-roadmap: an item dated only by its end gets no made-up start before what it
     depends on: its estimated start is the day after the latest end of its dependencies
-    (the end itself when that is later). A fully estimated bar stays its window's estimate
-    (suggest() offers dates after its dependencies). Dependencies first; a cycle is cut
-    where it is met."""
+    (the end itself when that is later). A fully estimated bar (walkb-roadmap review)
+    moves to start the day after that latest end, keeping its length. Dependencies first;
+    a cycle is cut where it is met."""
     out: dict[K, Resolved] = {}
     seen: set[K] = set()
 
@@ -181,8 +181,15 @@ def after_dependencies[K](
             for dep in depends_on.get(key, [])
             if dep in resolved and dep != key
         ]
-        if r.start.estimated and not r.end.estimated and ends and max(ends) >= r.start.date:
-            r = Resolved(Dated(min(max(ends) + DAY, r.end.date), "estimated", True), r.end)
+        if r.start.estimated and ends and max(ends) >= r.start.date:
+            day = max(ends) + DAY
+            if r.end.estimated:
+                r = Resolved(
+                    Dated(day, "estimated", True),
+                    Dated(day + (r.end.date - r.start.date), "estimated", True),
+                )
+            else:
+                r = Resolved(Dated(min(day, r.end.date), "estimated", True), r.end)
         out[key] = r
 
     for key in resolved:
