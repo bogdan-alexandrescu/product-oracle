@@ -22,6 +22,11 @@ import { expect, test, type Page } from "./test";
  *   again queues Oracle's job, which answers "reading"), the last plan stays shown and says it
  *   is updating, then the plan Oracle read shows; fails_when=the plan vanishes while it reads,
  *   or nothing says it is reading; no_claim=the job's reading itself.
+ * - protects=(walkb-onepager review) when the API fails while Oracle reads the plan again
+ *   ("simple-plan-by-job-down"), the page stops asking and says so; when the read never ends
+ *   ("simple-plan-by-job-stuck"), after two minutes the page stops asking and says to come
+ *   back later; the last plan stays shown; fails_when=the page keeps saying it is reading,
+ *   with no word to the person; no_claim=the job itself.
  */
 const URL = "/simple/one-pagers/guided-setup";
 
@@ -75,6 +80,24 @@ for (const phone of [false, true]) {
       // Then the plan Oracle read, its milestones dated.
       await expect(page.getByTestId("plan-updating")).toHaveCount(0);
       await expect(page.getByTestId("timeline-no-dates")).toHaveCount(0);
+    });
+
+    test("Read the plan again says so when the plan cannot be read", async ({ page }) => {
+      await open(page, "simple-plan-by-job-down");
+      await page.getByTestId("timeline-no-dates").first().getByRole("button", { name: "Read the plan again" }).click();
+      await expect(page.getByText("Oracle could not check on the plan. Try Read the plan again.")).toBeVisible();
+      await expect(page.getByTestId("plan-updating")).toHaveCount(0);
+      await expect(page.getByTestId("timeline-no-dates").first()).toBeVisible();
+    });
+
+    test("Read the plan again stops asking and says so when the read never ends", async ({ page }) => {
+      await open(page, "simple-plan-by-job-stuck");
+      await page.getByTestId("timeline-no-dates").first().getByRole("button", { name: "Read the plan again" }).click();
+      await expect(page.getByTestId("plan-updating")).toBeVisible();
+      await page.clock.runFor(125_000);
+      await expect(page.getByTestId("plan-updating")).toHaveCount(0);
+      await expect(page.getByText("Oracle is still reading the plan. Come back in a few minutes to see it.")).toBeVisible();
+      await expect(page.getByTestId("timeline-no-dates").first()).toBeVisible();
     });
   });
 }

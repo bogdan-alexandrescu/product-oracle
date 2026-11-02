@@ -2909,6 +2909,14 @@ function load(): Db {
                     Object.assign(db.simple_roadmap!.plan!, { undated: true, by_job: true });
                     return db;
                   }
+              : scenario === "simple-plan-by-job-stuck" || scenario === "simple-plan-by-job-down"
+                ? () => {
+                    // walkb-onepager review: Oracle's job never answers, or the API fails while it reads.
+                    const db = seedSimplePlanScenario();
+                    const how = scenario === "simple-plan-by-job-stuck" ? { stuck: true } : { down: true };
+                    Object.assign(db.simple_roadmap!.plan!, { undated: true, by_job: true, ...how });
+                    return db;
+                  }
               : scenario === "simple-plan-partly-dated"
                 ? () => {
                     // fidelity prd (pick D, frame D3): only M1 has dates; M2 and M3 have none yet.

@@ -224,6 +224,10 @@ export interface PlanDb {
   by_job?: boolean;
   /** The prd_plan job is reading the plan (by_job, after Read the plan again). */
   reading?: boolean;
+  /** walkb-onepager review ("simple-plan-by-job-stuck"): the job never answers. */
+  stuck?: boolean;
+  /** walkb-onepager review ("simple-plan-by-job-down"): the API fails while the job reads. */
+  down?: boolean;
 }
 
 export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", version: 3 });
@@ -304,9 +308,10 @@ export function routeSimplePlan(
   if (!prd) return json(404, { detail: "No such PRD" });
   const mine = prd.slug === PLAN_PRD_SLUG ? plan : undefined;
   if (!p[5] && req.method === "GET") {
+    if (mine?.reading && mine.down) return json(500, { detail: "Internal Server Error" });
     const out = planOut(mine, prd, role);
     // by_job: the job answers by the next read, with the dates the PRD's text gives.
-    if (mine?.reading) Object.assign(mine, { reading: false, undated: false });
+    if (mine?.reading && !mine.stuck) Object.assign(mine, { reading: false, undated: false });
     return json(200, out);
   }
   if (p[5] === "read-again" && !p[6] && req.method === "POST") {
