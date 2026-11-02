@@ -127,7 +127,7 @@ test.describe("desktop", () => {
     await page.goto(UNPUBLISHED);
     await page.getByRole("button", { name: "Share a link", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Share roadmap" });
-    await expect(sheet.getByText("Add a date source for each date on Plan › Dates", { exact: false })).toBeVisible();
+    await expect(sheet.getByText("Pick where dates come from: 1 date has no source yet", { exact: false })).toBeVisible();
     await expect(sheet).not.toContainText("schedule basis");
   });
 

@@ -54,17 +54,15 @@ test.describe("desktop", () => {
     await sharing(page);
     await page.goto("/documents/usage-alerts-roadmap");
     const sheet = await openSheet(page);
-    await expect(sheet.getByTestId("share-not-published")).toContainText(
-      "v1 can't be published yet",
+    // build-review (QV4 a): everything left, each with its fix link.
+    await expect(sheet.getByTestId("share-not-published")).toHaveText(
+      "Before you can share v1, 2 things are left:",
     );
     await expect(sheet.getByTestId("share-blocks")).toContainText(
-      "Dec 15, 2026",
-    );
-    await expect(sheet.getByTestId("share-blocks")).not.toContainText(
-      "2026-12-15",
+      "Pick where dates come from: 1 date has no source yet",
     );
     await expect(
-      sheet.getByRole("link", { name: "Plan › Dates" }),
+      sheet.getByRole("link", { name: "Fix in Plan › Dates" }),
     ).toHaveAttribute("href", "/plan/dates");
   });
 

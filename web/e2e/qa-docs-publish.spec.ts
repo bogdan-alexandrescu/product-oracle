@@ -44,15 +44,17 @@ for (const viewport of [
       await expect(page.getByTestId("publish-ready")).toHaveCount(0);
     });
 
-    test("review: a published roadmap lists no blocks, though a date's basis was withdrawn since", async ({
+    test("review: an approved roadmap not yet shared lists the date whose source was withdrawn since", async ({
       page,
     }) => {
-      // "approved-plan": usage-alerts-roadmap v1 is published; its Dec 15, 2026 date has
-      // since lost its schedule basis.
+      // "approved-plan": usage-alerts-roadmap v1 is approved but not yet published for
+      // sharing; its Dec 15, 2026 date has since lost its date source. build-review (QV4 a):
+      // the one Publish step makes it ready to share, so the date blocks it.
       await open(page, "usage-alerts-roadmap", "owner", "approved-plan");
-      await expect(page.getByTestId("published-chip")).toHaveText("Published v1");
-      await expect(page.getByTestId("blocks-chip")).toHaveText("Not blocked");
-      await expect(page.getByTestId("block-row")).toHaveCount(0);
+      await expect(page.getByTestId("published-chip")).toHaveCount(0);
+      await expect(page.getByTestId("blocks-chip")).toHaveText("1 block");
+      await expect(page.getByTestId("block-row")).toContainText("Dec 15, 2026");
+      await expect(page.getByTestId("publish-button")).toBeDisabled();
     });
 
     test("qa-docs-3: the headline says what is still open, as the dialog does", async ({

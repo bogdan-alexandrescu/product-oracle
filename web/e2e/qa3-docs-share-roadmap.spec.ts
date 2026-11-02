@@ -33,21 +33,21 @@ test.describe("desktop", () => {
       await page.emulateMedia({ colorScheme: scheme });
       await page.goto(UNPUBLISHED);
       const sheet = await openSheet(page);
-      await expect(sheet.getByTestId("share-not-published")).toContainText(
-        "v1 can't be published yet",
+      // build-review (QV4 a): everything left, each with its fix link.
+      await expect(sheet.getByTestId("share-not-published")).toHaveText(
+        "Before you can share v1, 2 things are left:",
       );
-      const fix = sheet.getByRole("link", { name: "Go to Plan › Dates" });
+      const fix = sheet.getByRole("link", { name: "Fix in Plan › Dates" });
       await expect(fix).toHaveAttribute("href", "/plan/dates");
-      await expect(fix).toHaveAttribute("data-variant", "primary");
       await expect(
-        sheet.getByRole("link", { name: "See v1's items" }),
-      ).toHaveAttribute("href", "/documents/usage-alerts-roadmap/v/1/items");
+        sheet.getByRole("link", { name: "Fix on Publish page" }),
+      ).toHaveAttribute("href", "/documents/usage-alerts-roadmap/publish");
       // Nothing to create, so nothing to cancel: the footer closes (the X is the other Close).
       await expect(sheet.getByRole("button", { name: "Cancel" })).toHaveCount(0);
       await expect(
         sheet.getByRole("button", { name: "Close", exact: true }),
       ).toHaveCount(2);
-      // The fix button is readable on the warning box in either theme.
+      // The fix link is readable in either theme.
       const [fg, bg] = await fix.evaluate((el) => {
         const s = getComputedStyle(el);
         return [s.color, s.backgroundColor];

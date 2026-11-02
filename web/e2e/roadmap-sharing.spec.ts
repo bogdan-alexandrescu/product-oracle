@@ -66,10 +66,12 @@ test("share a Board link: the address and passcode are shown once; the holder ne
   await page.goto(`${DOC}?audience=board`);
   await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
-  // The sheet preselects the page's audience and 14 days, with downloads allowed.
+  // The sheet preselects the page's audience and 14 days; build-review (QV4 a): PDF download
+  // starts unticked.
   await expect(sheet.getByLabel("Audience")).toHaveValue("board");
   await expect(sheet.getByLabel("Expires")).toHaveValue("14d");
-  await expect(sheet.getByLabel("Allow PDF download")).toBeChecked();
+  await expect(sheet.getByLabel("Allow PDF download")).not.toBeChecked();
+  await sheet.getByLabel("Allow PDF download").check();
   await expect(sheet.getByText("A downloaded PDF can't be revoked")).toBeVisible();
   await sheet.getByLabel("Label").fill("Board, October meeting");
   await sheet.getByRole("button", { name: "Create link" }).click();
@@ -218,11 +220,10 @@ test("an unpublished roadmap asks to publish first", async ({ page }) => {
   await page.goto("/documents/usage-alerts-roadmap");
   await page.getByRole("button", { name: "Share a link", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
-  // qa-docs-2: v1's withdrawn date keeps it from being published; the sheet says so.
-  await expect(sheet.getByTestId("share-not-published")).toContainText("v1 can't be published yet");
-  await expect(sheet.getByTestId("share-blocks")).toContainText("Dec 15, 2026");
-  // qa-docs-16: the way to fix it is a button; the sheet only closes.
-  await expect(sheet.getByRole("link", { name: "Go to Plan › Dates" })).toHaveAttribute("href", "/plan/dates");
+  // build-review (QV4 a): the sheet lists everything left, each with its fix link; it only closes.
+  await expect(sheet.getByTestId("share-not-published")).toHaveText("Before you can share v1, 2 things are left:");
+  await expect(sheet.getByTestId("share-blocks")).toContainText("Pick where dates come from: 1 date has no source yet");
+  await expect(sheet.getByRole("link", { name: "Fix in Plan › Dates" })).toHaveAttribute("href", "/plan/dates");
   await expect(sheet.getByRole("button", { name: "Cancel" })).toHaveCount(0);
   await expect(sheet.getByRole("button", { name: "Create link" })).toHaveCount(0);
 });
