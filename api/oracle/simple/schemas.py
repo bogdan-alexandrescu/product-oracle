@@ -319,7 +319,9 @@ class SimpleRoadmapItem(BaseModel):
     )
 
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
-    decided_in: list[SimpleOpenDecision] = []
+    decided_in: list["SimpleDecidedRef"] = []
+    # walkc-roadmap-tasks: the work under the item (not dropped), in order.
+    tasks: list["SimpleItemTask"] = []
     # plan-model: one slice per milestone its feature spans in the PRD's plan, and those
     # milestones' codes.
     slices: list["SimpleSlice"] = []
@@ -532,6 +534,41 @@ class SimpleDecisionIn(BaseModel):
 class SimplePersonRef(BaseModel):
     id: uuid.UUID
     name: str
+
+
+class SimpleMeetingRef(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleDecidedRef(SimpleOpenDecision):
+    """A decided decision naming the item: who decided, when, and (decided in a meeting)
+    the meeting and its minutes' page."""
+
+    decided_by: SimplePersonRef | None = None
+    decided_at: dt.datetime | None = None
+    meeting: SimpleMeetingRef | None = None
+    minutes_url: str | None = None
+
+
+class SimpleItemTask(BaseModel):
+    """A task under a roadmap item (oracle.simple.models.RoadmapItemTask): who does it, by
+    when."""
+
+    id: uuid.UUID
+    title: str
+    status: Literal["todo", "doing", "done", "dropped"]
+    owner: SimplePersonRef | None = None
+    due_date: dt.date | None = None
+
+
+class SimpleTaskWaiting(SimpleItemTask):
+    """An open task waiting on the reader (Home's "Waiting for you"), with its item."""
+
+    item_id: uuid.UUID | None = None
+    item_title: str
+    roadmap_id: uuid.UUID
+    late: bool = False
 
 
 class SimpleChangeOut(BaseModel):
@@ -2056,6 +2093,9 @@ class SimpleDecisionsWaitingOut(BaseModel):
     # Other product decisions (not a PRD's question) waiting for this person.
     others: int = 0
     approvals_waiting: int = 0
+    # walkc-roadmap-tasks: the open item tasks this person owns (due first; not counted in
+    # ``count``, which is decisions only).
+    tasks: list[SimpleTaskWaiting] = []
 
 
 class InboxSimpleMinutes(BaseModel):

@@ -75,6 +75,7 @@ from oracle.simple.schemas import (
     SimpleActionItemOut,
     SimpleAttendee,
     SimpleDecidedFlow,
+    SimpleDecidedRef,
     SimpleDecisionRow,
     SimpleDecisionsOut,
     SimpleDelivery,
@@ -87,6 +88,7 @@ from oracle.simple.schemas import (
     SimpleMeetingGroup,
     SimpleMeetingIn,
     SimpleMeetingOut,
+    SimpleMeetingRef,
     SimpleMeetingRulesIn,
     SimpleMeetingsOut,
     SimpleMinutes,
@@ -1964,9 +1966,10 @@ async def titles_by_session(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
 
 async def decided_in(
     db: AsyncSession, subjects: list[dict]
-) -> dict[tuple[str, str, str | None], list[SimpleOpenDecision]]:
-    """The decided decisions naming each subject ``(kind, id, ref)``, newest first."""
-    out: dict[tuple[str, str, str | None], list[SimpleOpenDecision]] = {}
+) -> dict[tuple[str, str, str | None], list[SimpleDecidedRef]]:
+    """The decided decisions naming each subject ``(kind, id, ref)``, newest first, with
+    who decided, when and the meeting's minutes (decided_refs)."""
+    out: dict[tuple[str, str, str | None], list[Decision]] = {}
     if not subjects:
         return out
     wanted = {(s["kind"], s["id"], s.get("ref")) for s in subjects}
@@ -1985,7 +1988,41 @@ async def decided_in(
                 if key in wanted:
                     lst = out.setdefault(key, [])  # type: ignore[arg-type]
                     if all(x.id != d.id for x in lst):
-                        lst.append(SimpleOpenDecision(id=d.id, number=d.number, title=d.title))
+                        lst.append(d)  # type: ignore[arg-type]
+    decisions = {d.id: d for lst in out.values() for d in lst}  # type: ignore[union-attr]
+    refs = await decided_refs(db, list(decisions.values()))  # type: ignore[arg-type]
+    return {k: [refs[d.id] for d in lst] for k, lst in out.items()}
+
+
+async def decided_refs(db: AsyncSession, ds: list[Decision]) -> dict[uuid.UUID, SimpleDecidedRef]:
+    """walkc-roadmap-tasks: each decision with who decided it, when, and the meeting (and
+    its minutes' page, /simple/meetings/<id>) it was taken in, if any."""
+    if not ds:
+        return {}
+    links = {
+        row.decision_id: (row, m)
+        for row, m in (
+            await db.execute(
+                select(MeetingDecisionRow, SimpleMeeting)
+                .join(SimpleMeeting, SimpleMeeting.id == MeetingDecisionRow.meeting_id)
+                .where(MeetingDecisionRow.decision_id.in_([d.id for d in ds]))
+            )
+        ).all()
+    }
+    names = await _names(db, {i for d in ds if (i := d.decided_by or d.approver_id)})
+    out: dict[uuid.UUID, SimpleDecidedRef] = {}
+    for d in ds:
+        row, m = links.get(d.id, (None, None))
+        who = d.decided_by or d.approver_id
+        out[d.id] = SimpleDecidedRef(
+            id=d.id,
+            number=d.number,
+            title=d.title,
+            decided_by=_ref(who, names) if who else None,
+            decided_at=d.decided_at or (row.at if row else None),
+            meeting=SimpleMeetingRef(id=m.id, title=m.title) if m else None,
+            minutes_url=f"/simple/meetings/{m.id}" if m else None,
+        )
     return out
 
 

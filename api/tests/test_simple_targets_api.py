@@ -403,3 +403,43 @@ async def test_action_item_without_an_item(client):
         )
         assert row is not None and row.item_id is None
         assert (await s.get(User, row.owner_id)).role == "owner"
+
+
+async def test_item_tasks_are_listed_and_reach_their_owner(client):
+    """protects=an item's tasks come with the item on the Simple roadmap read (title, owner,
+    due day, status), and an open task owned by someone is in that person's
+    ``tasks`` of GET /v1/simple/decisions/waiting (Home's "Waiting for you"), with its
+    item; a done task and other people's tasks are not; fails_when=a task added to an
+    item is written but never listed, or never reaches its owner; no_claim=the web."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    commenter = str(ctx.users["commenter"].id)
+    r = await w.post(client, "owner", "add_item_task",
+                     after={"title": "Write the migration", "owner_id": commenter,
+                            "due_date": "2026-11-20"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    x = next(i for i in r.json()["items"] if i["key"] == "x")
+    tasks = {t["title"]: t for t in x["tasks"]}
+    assert set(tasks) == {"Spec", "Write the migration"}
+    t = tasks["Write the migration"]
+    assert (t["owner"]["id"], t["due_date"], t["status"]) == (commenter, "2026-11-20", "todo")
+    assert t["owner"]["name"]
+    r = await client.get("/v1/simple/decisions/waiting", headers=ctx.as_("commenter"))
+    assert r.status_code == 200, r.text
+    [mine] = r.json()["tasks"]
+    assert (mine["title"], mine["item_id"], mine["item_title"]) == (
+        "Write the migration",
+        w.ids["x"],
+        x["title"],
+    )
+    assert mine["due_date"] == "2026-11-20"
+    r = await client.get("/v1/simple/decisions/waiting", headers=ctx.as_("viewer"))
+    assert r.json()["tasks"] == []
+    r = await w.post(client, "owner", "set_item_task_status",
+                     target={"item_id": w.ids["x"], "task_id": t["id"]},
+                     before={"status": "todo"}, after={"status": "done"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await client.get("/v1/simple/decisions/waiting", headers=ctx.as_("commenter"))
+    assert r.json()["tasks"] == []

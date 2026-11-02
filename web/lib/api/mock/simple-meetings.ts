@@ -50,7 +50,7 @@ import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
-import { roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
@@ -206,6 +206,14 @@ const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === "owner
 const nameOf = (ctx: MeetingsCtx, id: string) => ctx.members.find((m) => m.id === id)?.name ?? "someone";
 const ref = (ctx: MeetingsCtx, id: string): Ref => ({ id, name: nameOf(ctx, id) });
 const docRef = (p: Prd) => ({ id: p.id, slug: p.slug, title: p.title });
+/** walkc-roadmap-tasks: a decided decision as an item reads it (meetings.decided_refs): who, when, the meeting's minutes. */
+function decidedRef(ctx: MeetingsCtx, db: MeetingsDb, d: Decision): Schemas["SimpleDecidedRef"] {
+  const m = d.meeting_id ? db.meetings.find((x) => x.id === d.meeting_id) : undefined;
+  return {
+    id: d.id, number: d.number, title: d.title, decided_by: d.approver_id ? ref(ctx, d.approver_id) : null, decided_at: d.at,
+    meeting: d.meeting_id ? { id: d.meeting_id, title: m?.title ?? "Review meeting" } : null, minutes_url: d.meeting_id ? `/simple/meetings/${d.meeting_id}` : null,
+  };
+}
 
 function items(ctx: MeetingsCtx) {
   return roadmapOut(ctx.roadmap, "owner", new URLSearchParams())?.items ?? [];
@@ -275,8 +283,8 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
     }],
     inbox_seen: {},
   };
-  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [{ id: db.decisions[0].id, number: 1, title: db.decisions[0].title }];
-  if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [{ id: db.decisions[3].id, number: 4, title: db.decisions[3].title }];
+  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [decidedRef(ctx, db, db.decisions[0])];
+  if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [decidedRef(ctx, db, db.decisions[3])];
   // The demo proposal a meeting decides is seeded when a meeting starts (seedMeetingProposal), not here: Home and the
   // rail read meetings on every page, and a proposal made by that read changed what the roadmap and Home showed.
   holder.simple_meetings = db;
@@ -646,7 +654,7 @@ function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, sub
   // The items and lines it names link to it (decided_in, a line's decisions), newest first.
   for (const s of subjects) {
     const row = { id: d.id, number: d.number, title: d.title };
-    if (s.kind === "roadmap_item") ((ctx.roadmap.decided_in ??= {})[s.id] ??= []).unshift(row);
+    if (s.kind === "roadmap_item") ((ctx.roadmap.decided_in ??= {})[s.id] ??= []).unshift(decidedRef(ctx, db, d));
     if (s.kind === "section" && s.ref?.startsWith("line:")) ((ctx.onePager.decisions ??= {})[s.ref.slice(5)] ??= []).unshift(row);
   }
   return d;
@@ -967,7 +975,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
 export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || (p[2] !== "meetings" && p[2] !== "decisions")) return null;
   const method = req.method;
-  if (p[2] === "decisions" && p[3] === "waiting") return method === "GET" ? json(200, waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0)) : null;
+  if (p[2] === "decisions" && p[3] === "waiting") return method === "GET" ? json(200, { ...waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0), tasks: tasksWaiting(ctx.roadmap, ctx.me) }) : null;
   if (p[2] === "decisions") return method === "GET" ? decisionsPage(ctx, db, q) : null;
   const ps = prds(ctx);
   const now = iso(mockNowMs());

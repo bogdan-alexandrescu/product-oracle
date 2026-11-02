@@ -8,6 +8,7 @@ import {
   addDays,
   barKind,
   barSpan,
+  placedSlices,
   broken,
   closedItem,
   daysBetween,
@@ -334,7 +335,7 @@ export interface ChartProps {
 const planned = (i: Item): boolean => i.slices.some((x) => x.start_date && x.end_date);
 /** The days a row's bar (or its slices) cover. */
 function drawnSpan(i: Item, span?: [string, string]): [string, string] {
-  const d = i.slices.filter((x) => x.start_date && x.end_date);
+  const d = placedSlices(i);
   if (d.length) return [d.map((x) => x.start_date!).reduce((a, b) => (a < b ? a : b)), d.map((x) => x.end_date!).reduce((a, b) => (a > b ? a : b))];
   return span ?? barSpan(i);
 }
@@ -1251,7 +1252,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
  * (F-05a, beside the bar when it is too short), PM-owned work as a dashed outline; the Timeline
  * colours them by milestone with code and name where the words fit, joined by a dotted line. */
 function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: number; h: number; sc: Scale; gantt: boolean; open: boolean; compact: boolean }) {
-  const dated = item.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : 1));
+  const dated = placedSlices(item);
   const feature = dated[0]?.feature_code ?? item.code ?? item.key;
   // finding 11: a slice is never a sub-24px blob, even a one-day slice at a zoomed-out scale.
   // fix2 review: widened only as far as the next slice starts (as the lanes' Pill), so two

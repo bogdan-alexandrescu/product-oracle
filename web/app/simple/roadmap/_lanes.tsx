@@ -30,6 +30,7 @@ import {
   type Lane,
   type Roadmap,
   type Scale,
+  placedSlices,
   type Slice,
   yearSpan,
 } from "./_lib";
@@ -135,7 +136,8 @@ type Unit = { item: Item; pieces: Piece[]; row: number };
 /** `line`: each row's top in the lane and `h` the rows' height, in px (a row with a callout takes a callout line more, under it). */
 export type LaneModel = { key: string; title: string; kind: "group" | "pm" | "below"; units: Unit[]; rows: number; count: number; h: number; line: number[]; callouts: Set<number> };
 
-const datedSlices = (i: Item): Slice[] => i.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : a.start_date! > b.start_date! ? 1 : 0));
+// Drawn where the item now is (placedSlices): a moved item's slices follow it.
+const datedSlices = (i: Item): Slice[] => placedSlices(i);
 const pmSlice = (x: Slice) => x.pm_owned || x.effort_weeks == null;
 /** Work the PM does with no engineering: every dated slice of the item is PM-owned. */
 export const pmItem = (i: Item) => {

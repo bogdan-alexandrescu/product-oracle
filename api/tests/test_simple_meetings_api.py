@@ -637,3 +637,26 @@ async def test_decisions_page_reads_comment_authors_once(client, monkeypatch):
 
     one, three = await name_reads(1), await name_reads(3)
     assert three == one, (one, three)
+
+
+async def test_decided_in_says_who_when_and_where_the_minutes_are(client):
+    """protects=a meeting decision about an item carries who decided, when and the link to
+    the meeting's minutes, on the Simple roadmap's item (``decided_in``) and on Detailed's
+    Plan item (``decisions``); fails_when=either read drops who, when or the minutes, or
+    the Plan item lists none; no_claim=decisions made outside a meeting (no minutes)."""
+    w = await world()
+    m = await start(client, w)
+    assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
+    view = await roadmap(client, w, "decider")
+    item = next(i for i in view["items"] if i["key"] == "edit_title-a")
+    [d] = [x for x in item["decided_in"] if x["title"].startswith("Renamed")]
+    assert d["decided_by"] == {"id": uid(w, "decider"), "name": "Dee Cider"}
+    assert d["decided_at"] and d["decided_at"].startswith(str(company_time.now().year))
+    assert d["minutes_url"] == f"/simple/meetings/{m['id']}"
+    assert d["meeting"]["title"] == "Payments review"
+    r = await client.get("/v1/plan", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    planned = next(i for i in r.json()["items"] if i["key"] == "edit_title-a")
+    [p] = [x for x in planned["decisions"] if x["title"].startswith("Renamed")]
+    assert (p["decided_by"]["name"], p["minutes_url"]) == ("Dee Cider", d["minutes_url"])
+    assert p["decided_at"] == d["decided_at"]

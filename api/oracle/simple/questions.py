@@ -33,6 +33,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document, DocumentVersion
+from oracle.members.names import display_name
 from oracle.simple import plan
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange
@@ -49,6 +50,7 @@ from oracle.simple.schemas import (
     SimpleQuestionOption,
     SimpleQuestionPending,
     SimpleQuestionSource,
+    SimpleTaskWaiting,
 )
 
 OPS: frozenset[str] = frozenset({"decide_question", "name_decider"})
@@ -538,7 +540,52 @@ async def waiting(db: AsyncSession, principal: Any) -> SimpleDecisionsWaitingOut
         questions=qs,
         others=others,
         approvals_waiting=len(await _approvals(db, principal)),
+        tasks=await tasks_waiting(db, me),
     )
+
+
+async def tasks_waiting(db: AsyncSession, me: uuid.UUID | None) -> list[SimpleTaskWaiting]:
+    """walkc-roadmap-tasks: the open item tasks ``me`` owns on roadmaps they may read (the
+    session's RLS hides the rest), due first, with each task's item."""
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple.models import RoadmapItemTask
+    from oracle.simple.service import task_out
+
+    if me is None:
+        return []
+    # The join keeps the roadmaps the session may read (RLS on documents).
+    rows = list(
+        await db.scalars(
+            select(RoadmapItemTask)
+            .join(Document, Document.id == RoadmapItemTask.roadmap_document_id)
+            .where(
+                Document.kind == "roadmap",
+                RoadmapItemTask.owner_id == me,
+                RoadmapItemTask.status.in_(("todo", "doing")),
+            )
+            .order_by(RoadmapItemTask.due_date.asc().nulls_last(), RoadmapItemTask.created_at)
+        )
+    )
+    if not rows:
+        return []
+    titles = {
+        i.id: i.title
+        for i in await db.scalars(
+            select(RoadmapItem).where(RoadmapItem.id.in_({t.item_id for t in rows if t.item_id}))
+        )
+    }
+    names = {u.id: display_name(u.email, u.name) for u in [await db.get(User, me)] if u}
+    today = await company_time.company_today(db)
+    return [
+        SimpleTaskWaiting(
+            **task_out(t, names).model_dump(),
+            item_id=t.item_id,
+            item_title=titles.get(t.item_id, t.item_key) if t.item_id else t.item_key,
+            roadmap_id=t.roadmap_document_id,
+            late=t.due_date is not None and t.due_date < today,
+        )
+        for t in rows
+    ]
 
 
 async def page_fields(

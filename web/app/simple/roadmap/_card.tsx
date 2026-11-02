@@ -10,6 +10,8 @@ import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
 import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
+import { DecidedWho } from "@/components/simple/DecidedWho";
+import { formatDay } from "@/lib/format";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -528,6 +530,8 @@ function FlowThumb({
 }
 
 /** One of the card's parts ("WHY", "FLOW"): the mock-up's small-capitals heading over its body. */
+const TASK_WORDS: Record<Item["tasks"][number]["status"], string> = { todo: "To do", doing: "Doing", done: "Done", dropped: "Dropped" };
+
 function Part({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
   return (
     <section className="mt-3" data-testid={testId}>
@@ -939,6 +943,23 @@ export function FloatingCard({
                     >
                       {d.title}
                     </Link>
+                    <DecidedWho d={d} />
+                  </li>
+                ))}
+              </ul>
+            </Part>
+          )}
+          {item.tasks.length > 0 && (
+            <Part title="Tasks" testId="card-tasks">
+              <ul className="mt-1 space-y-1">
+                {item.tasks.map((t) => (
+                  <li key={t.id} data-testid="card-task" className="[overflow-wrap:anywhere]">
+                    {t.title}
+                    <span className="text-text2">
+                      {" "}
+                      · {t.owner ? t.owner.name : "No owner"}
+                      {t.due_date ? ` · due ${formatDay(t.due_date)}` : ""} · {TASK_WORDS[t.status]}
+                    </span>
                   </li>
                 ))}
               </ul>

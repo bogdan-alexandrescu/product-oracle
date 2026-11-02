@@ -1202,6 +1202,8 @@ export interface PlanContext extends RoadmapContext {
   edits?: PlanEditsDb;
   /** H4 §5: each item's strategy drift (./strategy.ts planDrift). */
   drift?: (key: string, origin: PlanItem["origin"]) => Schemas["PlanDrift"][];
+  /** walkc-roadmap-tasks: the decided decisions about an item (by key, as Simple's item reads them). */
+  decided?: (key: string) => Schemas["SimpleDecidedRef"][];
 }
 
 /** One item of the mock plan: an approved row, its draft twin (when the roadmap draft changes it), or a new draft row. */
@@ -1604,6 +1606,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       state: origin === "draft" ? "proposed" : (s.state ?? "planned"),
       reasons: origin === "draft" ? [] : (s.reasons ?? []),
       drift: ctx.drift?.(s.key, origin) ?? [],
+      decisions: ctx.decided?.(s.key) ?? [],
       engineering: { records, date: s.date ?? null, ...dateStatus(db, prd.id, s), slip_days: s.slipDays ?? null, tracked: records.length > 0 },
       next,
     };

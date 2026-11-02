@@ -235,10 +235,13 @@ async def list_simple_changes(
 
 
 @router.get("/drafts", response_model=list[SimpleDraftOut], name="list_simple_drafts")
-async def list_simple_drafts(principal: Reader, db: TenantDB) -> list[SimpleDraftOut]:
+async def list_simple_drafts(
+    principal: Reader, db: TenantDB, roadmap: str | None = None
+) -> list[SimpleDraftOut]:
     """The open working and submitted drafts the caller may see: their participants, the
-    company's owners, the roadmap's decider, required reviewers and owners."""
-    return await _run(db, drafts.listing(db, principal))
+    company's owners, the roadmap's decider, required reviewers and owners. ``roadmap``
+    (an id or slug) keeps that roadmap's drafts only; 404 when there is no such roadmap."""
+    return await _run(db, drafts.listing(db, principal, roadmap))
 
 
 @router.get("/drafts/{draft_id}", response_model=SimpleDraftOut, name="get_simple_draft")

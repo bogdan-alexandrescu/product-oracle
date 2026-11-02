@@ -53,9 +53,11 @@ from oracle.simple.schemas import (
     SimpleGoalRef,
     SimpleGroup,
     SimpleItemMilestone,
+    SimpleItemTask,
     SimpleMilestone,
     SimpleOpenDecision,
     SimpleOwnerRef,
+    SimplePersonRef,
     SimplePhase,
     SimpleRoadmapItem,
     SimpleRoadmapOut,
@@ -813,14 +815,62 @@ def item_out(
     )
 
 
-async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
-    """S8: the decided decisions naming each item, in any version of its roadmap (an
-    approved draft is a new version: its rows are new, its keys are the same)."""
-    from oracle.simple import meetings
+async def _tasks(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list[SimpleItemTask]]:
+    """walkc-roadmap-tasks: each item's tasks (not dropped, in order), found by the item's
+    roadmap and key so a later version's item keeps them, with their owners' names."""
+    from oracle.simple.models import RoadmapItemTask
 
     if not shown:
         return {}
     keyed = {(e.row.roadmap_document_id, e.row.item_key): e.row.id for e in shown}
+    rows = list(
+        await db.scalars(
+            select(RoadmapItemTask)
+            .where(
+                RoadmapItemTask.roadmap_document_id.in_({d for d, _ in keyed}),
+                RoadmapItemTask.item_key.in_({k for _, k in keyed}),
+                RoadmapItemTask.status != "dropped",
+            )
+            .order_by(RoadmapItemTask.position, RoadmapItemTask.created_at, RoadmapItemTask.id)
+        )
+    )
+    people = {t.owner_id for t in rows if t.owner_id is not None}
+    names = {
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(people)))
+    }
+    out: dict[uuid.UUID, list[SimpleItemTask]] = defaultdict(list)
+    for t in rows:
+        item = keyed.get((t.roadmap_document_id, t.item_key))
+        if item is not None:
+            out[item].append(task_out(t, names))
+    return out
+
+
+def task_out(t: Any, names: dict[uuid.UUID, str]) -> SimpleItemTask:
+    owner = (
+        SimplePersonRef(id=t.owner_id, name=names[t.owner_id])
+        if t.owner_id is not None and t.owner_id in names
+        else None
+    )
+    return SimpleItemTask(id=t.id, title=t.title, status=t.status, owner=owner,
+                          due_date=t.due_date)  # fmt: skip
+
+
+async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
+    """S8: the decided decisions naming each item, in any version of its roadmap (an
+    approved draft is a new version: its rows are new, its keys are the same)."""
+
+    return await decided_of_rows(db, [e.row for e in shown])
+
+
+async def decided_of_rows(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, list]:
+    """_decided for roadmap item rows (Detailed's Plan items too), keyed by row id."""
+    from oracle.simple import meetings
+
+    if not rows:
+        return {}
+    keyed = {(r.roadmap_document_id, r.item_key): r.id for r in rows}
     alias: dict[uuid.UUID, uuid.UUID] = {}
     for rid, doc, key in (
         await db.execute(
@@ -955,6 +1005,7 @@ async def build(
     await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
     decided = await _decided(db, shown)
+    tasks = await _tasks(db, shown)
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
@@ -975,6 +1026,7 @@ async def build(
     for it in items:
         # A draft's own visual (S7) first, else its feature's (S10).
         it.flow = it.flow or flows.get(it.id)
+        it.tasks = tasks.get(it.id, [])
     # plan-model: each item's slices and milestones from its PRD's plan; the track
     # milestones dated by the plan of their track's PRD.
     from oracle.simple import plan as plans
@@ -1008,8 +1060,8 @@ async def build(
             for m in read.milestones
         ],
         span=span,
-        changes_in_review=seen.changes_in_review,
-        drafts=seen.visible,
+        changes_in_review=seen.of(chosen.id if chosen else None)[1],
+        drafts=seen.of(chosen.id if chosen else None)[0],
         key_dates=kds,
         key_date_roadmaps=kd_roadmaps,
         roadmaps=all_roadmaps,

@@ -115,7 +115,7 @@ interface SimpleDb {
   /** S10: the visuals (./simple-visuals.ts), shared with the one-pager's. */
   visuals?: VisualsDb;
   /** S8: decided decisions that changed each item (by item id), newest first. */
-  decided_in?: Record<string, { id: string; number: number; title: string }[]>;
+  decided_in?: Record<string, Schemas["SimpleDecidedRef"][]>;
   /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
   plan?: PlanDb;
 }
@@ -229,6 +229,28 @@ export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug
 export const ROADMAP_SLUGS = (): string[] => (newCompany() ? [] : Object.keys(ROADMAPS));
 /** Whether a commenter or viewer reads the roadmap (oracle.docs.visibility). */
 export const readsRoadmap = (slug: string, role: Role): boolean => !(role === "commenter" || role === "viewer") || ROADMAPS[slug]?.visibility === "company";
+type StoredTask = { id: string; title: string; status: Schemas["SimpleItemTask"]["status"]; owner_id: string | null; owner_name: string | null; due_date: string | null; item_id: string; at: string };
+const storedTasks = (db: SimpleDb): StoredTask[] =>
+  Object.entries(db.targets ?? {})
+    .filter(([, v]) => v.kind === "item_task")
+    .map(([id, v]) => ({ ...(v as Omit<StoredTask, "id">), id }))
+    .sort((a, b) => (a.at < b.at ? -1 : 1));
+const taskOut = (t: StoredTask): Schemas["SimpleItemTask"] => ({ id: t.id, title: t.title, status: t.status, owner: t.owner_id ? { id: t.owner_id, name: t.owner_name ?? "someone" } : null, due_date: t.due_date });
+/** walkc-roadmap-tasks: an item's tasks, not dropped, in the order they were added. */
+export const itemTasks = (db: SimpleDb, itemId: string): Schemas["SimpleItemTask"][] => storedTasks(db).filter((t) => t.item_id === itemId && t.status !== "dropped").map(taskOut);
+/** walkc-roadmap-tasks: the open tasks waiting on `me` (questions.tasks_waiting), due first. */
+export function tasksWaiting(db: SimpleDb, me: { id: string; role: Role }): Schemas["SimpleTaskWaiting"][] {
+  const today = companyToday();
+  return storedTasks(db)
+    .filter((t) => t.owner_id === me.id && (t.status === "todo" || t.status === "doing"))
+    .flatMap((t) => {
+      const key = Object.keys(db.ids).find((k) => db.ids[k] === t.item_id);
+      const s = key ? db.items.find((x) => x.key === key) : undefined;
+      if (!s || !readsRoadmap(s.roadmap, me.role)) return [];
+      return [{ ...taskOut(t), item_id: t.item_id, item_title: s.title, roadmap_id: roadmapId(s.roadmap), late: !!t.due_date && t.due_date < today }];
+    })
+    .sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+}
 /** The roadmap a slug or id names, when the role reads it. */
 export const readableRoadmap = (asked: string | null, role: Role): string | undefined =>
   asked ? ROADMAP_SLUGS().find((r) => (r === asked || roadmapId(r) === asked) && readsRoadmap(r, role)) : undefined;
@@ -701,7 +723,8 @@ export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: Sim
 }
 
 /** The roadmap as one reader reads it: hidden drafts' roadmaps at their published items. */
-function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleDb; hidden: number; visible: Schemas["SimpleDraftBrief"][] } {
+function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleDb; hidden: number; visible: Schemas["SimpleDraftBrief"][]; hiddenBy: Record<string, number> } {
+  const hiddenBy: Record<string, number> = {};
   let items = db.items;
   let own = db.own;
   let keyDates = db.key_dates ?? {};
@@ -713,14 +736,17 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
       continue;
     }
     hidden += draftChanges(db, d.out.id);
+    hiddenBy[d.out.document.id] = (hiddenBy[d.out.document.id] ?? 0) + draftChanges(db, d.out.id);
     const keys = new Set(items.filter((s) => s.roadmap === d.roadmap).map((s) => s.key));
     items = [...items.filter((s) => s.roadmap !== d.roadmap), ...d.published.items];
     keyDates = { ...keyDates, [d.roadmap]: d.published.key_dates ?? [] };
     own = { ...Object.fromEntries(Object.entries(own).filter(([k]) => !keys.has(k))), ...d.published.own };
   }
   const shownDocs = new Set(visible.map((v) => v.document_id));
-  hidden += (db.changes ?? []).filter((c) => c.status === "proposed" && me.role !== "owner" && c.document_id && !shownDocs.has(c.document_id)).length;
-  return { db: { ...db, items, own, key_dates: keyDates }, hidden, visible };
+  const proposed = (db.changes ?? []).filter((c) => c.status === "proposed" && me.role !== "owner" && c.document_id && !shownDocs.has(c.document_id));
+  hidden += proposed.length;
+  for (const c of proposed) hiddenBy[c.document_id!] = (hiddenBy[c.document_id!] ?? 0) + 1;
+  return { db: { ...db, items, own, key_dates: keyDates }, hidden, visible, hiddenBy };
 }
 
 /** fix4 qa-simple-roadmap-9: the items one reader reads (the API's drafts.overlays_for): a
@@ -736,7 +762,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const ids = deciderIds(db, s, me?.roles);
     return (ids.length ? ids : (me?.owners ?? [])).map((id) => me?.names?.[id]).filter((n): n is string => !!n);
   };
-  const reader = { ...(me ? readerView(db, me) : { db, hidden: 0, visible: [] }), full: db };
+  const reader = { ...(me ? readerView(db, me) : { db, hidden: 0, visible: [], hiddenBy: {} as Record<string, number> }), full: db };
   db = reader.db;
   const today = companyToday();
   const w = simpleWindows(today);
@@ -797,6 +823,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
       // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
+      // walkc-roadmap-tasks: the work under the item (service._tasks).
+      tasks: itemTasks(db, db.ids[s.key]),
     };
   });
   // qa-simple-home-1: what "Move the dependents" moves, as the change engine moves it (service.read).
@@ -859,8 +887,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ),
     ],
     span: db.plan ? planSpan() : null,
-    changes_in_review: reader.hidden,
-    drafts: reader.visible,
+    // A working draft belongs to one roadmap: a chosen roadmap's read carries its own only.
+    changes_in_review: chosen ? (reader.hiddenBy[roadmapId(chosen)] ?? 0) : reader.hidden,
+    drafts: chosen ? reader.visible.filter((d) => d.document_id === roadmapId(chosen)) : reader.visible,
     // One roadmap chosen: its key dates; all roadmaps: every readable one's (oracle.simple.service).
     ...keyDatesOut(db, reader.full, chosen ? [chosen] : readable, me ?? { id: "", role }),
     roadmaps: keyDatesOut(db, reader.full, readable, me ?? { id: "", role }).key_date_roadmaps,
