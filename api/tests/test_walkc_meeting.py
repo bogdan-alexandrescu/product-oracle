@@ -62,3 +62,35 @@ async def test_nobody_in_the_meeting_decides(client):
     assert card["asks_outside"] is True
     names = {"Owner", "Olive Second"}
     assert set(card["asks"]) == names
+
+
+async def test_approve_says_each_problem_in_plain_words(client, monkeypatch):
+    """walkc-meeting: protects=a meeting's Approve the importer refuses answers 422 with
+    each problem once, in plain words with what to do (a count when repeated), never the
+    raw "draft rejected: N problem(s)"; fails_when=the body is that raw line;
+    no_claim=the importer's own checks."""
+    from oracle.docs.parser import DraftError
+    from oracle.docs.schemas import ImportProblem
+    from oracle.simple import drafts
+
+    said = "the date Nov 20 (in What we will build) is not backed by a confirmed schedule"
+    problems = [ImportProblem(code="unverified_date", message=said)] * 2 + [
+        ImportProblem(code="invalid_citation", message="a source is cited twice; drop one")
+    ]
+
+    async def refuse(*_a, **_k):
+        raise DraftError(problems)
+
+    monkeypatch.setattr(drafts, "approve_in_meeting", refuse)
+    w = await world()
+    mid = (await start(client, w))["id"]
+    r = await client.post(f"/v1/simple/meetings/{mid}/approve", headers=w.ctx.as_("decider"))
+    assert r.status_code == 422, r.text
+    assert "draft rejected" not in r.text
+    detail = r.json()["detail"]
+    assert detail["code"] == "draft_problems"
+    assert detail["message"] == "Not approved: the draft has 3 problems to fix first."
+    assert detail["problems"] == [
+        {"what": said[0].upper() + said[1:] + ".", "where": None, "times": 2},
+        {"what": "A source is cited twice; drop one.", "where": None, "times": 1},
+    ]
