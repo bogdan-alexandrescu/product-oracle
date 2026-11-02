@@ -5,6 +5,7 @@ import { createContext, startTransition, useCallback, useContext, useEffect, use
 
 import { api, type Me, type Schemas } from "@/lib/api/client";
 import type { operations } from "@/lib/api/schema";
+import { streamed } from "@/lib/boundaries";
 import { DEFAULT_ZONE, setDisplayZone } from "@/lib/zone";
 
 export type Role = Me["role"];
@@ -51,25 +52,6 @@ type MeState = {
 
 const MeContext = createContext<MeState | null>(null);
 
-/** A streamed Suspense boundary whose content has not been put in place yet (React's "$?" and "$~"). */
-function streamPending(): boolean {
-  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT);
-  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-    const data = (n as Comment).data;
-    if (data === "$?" || data === "$~") return true;
-  }
-  return false;
-}
-
-/** Resolves once every streamed boundary of the page is in place (at most 5 s). */
-function streamed(): Promise<void> {
-  const start = performance.now();
-  return new Promise((resolve) => {
-    const check = () => (!streamPending() || performance.now() - start > 5000 ? resolve() : window.setTimeout(check, 20));
-    check();
-  });
-}
-
 /**
  * The Company time zone (#447). useQuery reads it, so a screen showing loaded data draws
  * its dates again when GET /v1/me answers with a zone other than the default.
@@ -83,18 +65,29 @@ export const CompanyZoneContext = createContext<string>(DEFAULT_ZONE);
 export function MeProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<{ me: Me | null; loading: boolean }>({ me: null, loading: true });
   const seq = useRef(0);
+  // True once the first answer is drawn: the server's page is hydrated by then.
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!state.loading) hydrated.current = true;
+  }, [state.loading]);
 
   const refresh = useCallback(async () => {
     const call = ++seq.current;
     const res = await api.GET("/v1/me").catch(() => undefined);
+    const next = { me: res?.response.ok ? (res.data ?? null) : null, loading: false };
+    if (hydrated.current) {
+      // Later pages are drawn on the client: the answer lands at once.
+      if (call === seq.current) setState(next);
+      return;
+    }
     // trainag-mock-fixes-3: a change of the member reaching a streamed boundary whose content
     // is not in place yet makes React draw it again on the client and leave the server's copy
-    // hidden under <body> (a second New PRD form; the shell drawn twice). Wait for the page's
-    // boundaries, then set it as a transition, so React hydrates them before it applies it.
+    // hidden under <body> (a second New PRD form; the shell drawn twice). On the first page,
+    // wait for its boundaries, then set it as a transition, so React hydrates them first.
     await streamed();
     if (call !== seq.current) return;
     // Only the latest call wins, so a slow answer never overwrites a newer one.
-    startTransition(() => setState({ me: res?.response.ok ? (res.data ?? null) : null, loading: false }));
+    startTransition(() => setState(next));
   }, []);
 
   const clear = useCallback(() => {
