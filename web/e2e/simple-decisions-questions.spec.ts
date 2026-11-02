@@ -220,7 +220,9 @@ for (const phone of [false, true]) {
         await expect(q5.getByRole("button", { name: "Another answer" })).toBeVisible();
         await expect(q5.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
         await q5.getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(page.getByText("Decided Q5: 9:00 in each person's zone")).toBeVisible();
+        // vqa-simple-runs (RD3 a, frame "done"): the row itself says it is decided, with Undo.
+        await expect(q5.getByTestId("question-decided")).toContainText("9:00 in each person's zone · ");
+        await expect(q5.getByRole("button", { name: "Undo" })).toBeVisible();
         await expect(count).toHaveText(String(n - 1));
         await expect(card.locator('[data-late="true"]')).toHaveCount(0);
         if (!phone) await expect(page.getByTestId("simple-nav-decisions-count")).toHaveText(String(n - 1));
