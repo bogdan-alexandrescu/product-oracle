@@ -389,6 +389,27 @@ async def test_a_decision_made_with_an_api_token_names_the_token(client, owner):
     assert delivery["decided_by_name"] == "release-bot", delivery
 
 
+async def test_a_decision_keeps_the_name_of_a_removed_token(client, owner):
+    """qa4-settings-39: an expired token removed from Settings > API tokens still names
+    what it decided."""
+    from tests.test_api_token_remove import expire, remove_url
+
+    tenant_id, auth = owner
+    swarm = on()
+    run = await _waiting(client, auth, tenant_id, swarm)
+    cp = pending(run)
+    async with tenant_session(tenant_id) as s:
+        token, raw = await create_api_token(s, "release-bot")
+        await s.commit()
+    swarm.fail_next_answer = httpx.Response(503, json=_UNAVAILABLE)
+    resp = await _decide_raw(client, {"Authorization": f"Bearer {raw}"}, run, "approved")
+    assert resp.status_code == 503 and "recorded" in resp.text, resp.text
+    await expire(tenant_id, token.id)
+    assert (await client.post(remove_url(token.id), headers=auth)).status_code == 204
+    delivery = _cp(await get(client, auth, run["id"]), cp["id"])["delivery"]
+    assert delivery["decided_by_name"] == "release-bot", delivery
+
+
 async def test_the_inbox_shows_an_undelivered_decision_to_its_approvers(client, owner):
     """``deliveries``: shown to the checkpoint's approver role and above, not counted in
     ``total`` (nothing to decide), and gone once the tick delivers the decision."""

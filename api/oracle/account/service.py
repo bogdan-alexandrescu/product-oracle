@@ -121,7 +121,11 @@ async def _end_credentials(
 
     api_tokens = list(
         await session.scalars(
-            select(ApiToken.id).where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
+            select(ApiToken.id).where(
+                ApiToken.user_id == user.id,
+                ApiToken.revoked_at.is_(None),
+                ApiToken.removed_at.is_(None),
+            )
         )
     )
     for token_id in api_tokens:

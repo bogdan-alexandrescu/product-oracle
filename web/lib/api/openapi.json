@@ -9265,6 +9265,58 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/api-tokens/{token_id}/remove": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Remove Api Token",
+        "description": "Remove an expired API token from the list (qa4-settings-39). Owners only, as\nRevoke; an active or revoked token is refused (409). It no longer works already;\nwhat was done with it (approvals, decisions) keeps its name.",
+        "operationId": "remove_api_token",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such API token, or already removed"
+          },
+          "409": {
+            "description": "The token is active or revoked, not expired"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
     "/v1/api-tokens/{token_id}/approvals": {
       "get": {
         "tags": [
