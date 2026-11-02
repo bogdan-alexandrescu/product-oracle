@@ -35,8 +35,8 @@ export function seedMeetingDraftDates(db: SimpleDb, prdId: string): void {
 /** The PRD's draft items, left in, in roadmap order. */
 const drafts = (db: SimpleDb, prdIds: string[]) => db.items.filter((s) => s.draft_roadmap && s.prd_doc && prdIds.includes(s.prd_doc.id) && s.status !== "cut");
 
-/** The ref on the PRD subject of a meeting's Approve these N dates decision (meeting_draft.APPROVED_REF). */
-export const APPROVED_REF = "draft-dates";
+/** The chosen option of a meeting's Approve these N dates decision, "draft-dates:N" (meeting_draft.APPROVED_KEY). */
+export const APPROVED_KEY = "draft-dates";
 
 /**
  * SimpleMeetingOut.draft_roadmap: null without one. With no draft left, `approved` is how many

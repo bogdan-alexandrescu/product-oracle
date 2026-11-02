@@ -23,7 +23,7 @@ import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type Bra
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
-import { decidePricing, decisionInbox, enlargeDecisions, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -5784,6 +5784,12 @@ async function route(db: Db, req: Request): Promise<Response> {
         Object.values(db.simple_chat?.threads ?? {})
           .filter((t) => t.meeting_id === id)
           .flatMap((t) => t.messages.filter((x) => x.author_kind === "person").map((x) => x.body)),
+    };
+    // runplan-r2: a meeting's decision is in the decision log too (one decisions row in the API).
+    meetingsCtx.logDecision = (d) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const ctx = decisionsContext(db, me);
+      logMeetingDecision(ctx, ensureDecisions(db, ctx), d);
     };
     // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
     meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
