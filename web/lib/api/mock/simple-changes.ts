@@ -238,7 +238,7 @@ function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c:
 }
 
 /** changes.cut_route: the deciders every item of a cut with its dependents shares, else the company's owners. */
-function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
+export function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
   let common: string[] | null = null;
   for (const id of itemIds) {
     const key = keyOf(db, id);

@@ -73,6 +73,9 @@ export type ChatCard = {
   /** walkc-meeting: who Propose asks (or a proposed card went to), by name; asks_outside: nobody in the meeting may decide. */
   asks?: string[];
   asks_outside?: boolean;
+  /** walkc-meeting review: who "Propose: cut it and its dependents" asks, by every item it cuts. */
+  asks_with_dependents?: string[];
+  asks_with_dependents_outside?: boolean;
 };
 
 export type ChangeWords = { before: string; after: string };

@@ -21,7 +21,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, stableUuid } from "./ids";
 import { changePhrase } from "./simple-change-words";
-import { CUT_ALL, cutDependents, markMeetingProposal, meetingRoute, proposalRoute, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
+import { CUT_ALL, cutDependents, cutRoute, markMeetingProposal, meetingRoute, proposalRoute, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
@@ -1384,7 +1384,20 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   } else if (c.status === "proposed" && c.change_id) {
     asks = db.changes?.find((x) => x.id === c.change_id)?.routed_to ?? [];
   }
-  const asksOut = { asks: asks.map((i) => ctx.names[i] ?? "someone"), asks_outside: !here };
+  // walkc-meeting review (chat.cards_out): who the cut with its dependents asks, by every item it cuts.
+  let asksAll: string[] = [];
+  let hereAll = true;
+  if (may_with_dependents === "propose" && c.item_id) {
+    const cut = [c.item_id, ...waiting.map((i) => i.id)];
+    const route = cutRoute(db, ctx, cut);
+    ({ ids: asksAll, here: hereAll } = m ? meetingRoute(db, m.attendee_ids, ctx, cut, route) : { ids: route, here: true });
+  }
+  const asksOut = {
+    asks: asks.map((i) => ctx.names[i] ?? "someone"),
+    asks_outside: !here,
+    asks_with_dependents: asksAll.map((i) => ctx.names[i] ?? "someone"),
+    asks_with_dependents_outside: !hereAll,
+  };
   return { change_words: null, correct: null, ...rest, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
 }
 

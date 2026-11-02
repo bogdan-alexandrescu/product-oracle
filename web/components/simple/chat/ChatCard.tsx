@@ -314,6 +314,14 @@ export function ChatCard({
             : `Propose asks ${listWords(card.asks ?? [])} to decide.`}
         </p>
       )}
+      {open && cutsDependents && card.may_with_dependents === "propose" && (card.asks_with_dependents ?? []).length > 0 && (
+        // walkc-meeting review: the cut with its dependents asks whoever decides every item it cuts.
+        <p className={`simple-small ${card.asks_with_dependents_outside ? "text-warn" : "text-text2"}`} data-testid="chat-card-asks-dependents">
+          {card.asks_with_dependents_outside
+            ? `Nobody in this meeting may decide the cut with its dependents. It asks ${listWords(card.asks_with_dependents ?? [])}, who ${(card.asks_with_dependents ?? []).length === 1 ? "is" : "are"} not here.`
+            : `Cutting it with its dependents asks ${listWords(card.asks_with_dependents ?? [])} to decide.`}
+        </p>
+      )}
       {open ? (
         // qa-simple-roadmap-45: on a phone this row can hold four buttons (Preview, Apply,
         // Discard, Correct); a plain wrap leaves the last one alone on its own row, so narrow
