@@ -423,6 +423,12 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             if dep is not None and dep is not e:
                 e.depends_on.append(dep.row.id)
                 dep.needed_by.append(e.row.id)
+    # walkb-roadmap: an estimated start never comes before what the item depends on.
+    moved = dates.after_dependencies(
+        {e.row.id: e.resolved for e in entries}, {e.row.id: e.depends_on for e in entries}
+    )
+    for e in entries:
+        e.resolved = moved[e.row.id]
     nodes = [
         constraints.Node(
             id=str(e.row.id),
