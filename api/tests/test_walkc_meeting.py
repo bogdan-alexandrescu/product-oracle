@@ -252,3 +252,22 @@ def test_approve_problems_group_a_sections_dates():
         "5 dates are not backed by a confirmed schedule: Nov 20, Dec 3, Jan 4, Feb 9 and Mar 2;"
     )
     assert "record a date basis" in only["what"]
+
+
+async def test_a_cut_with_dependents_names_who_it_asks(client):
+    """walkc-meeting review: protects=a cut card with dependents names who "Propose: cut it
+    and its dependents" asks, worked out from every item it cuts (as changes.create routes
+    it), not only from the card's own item; fails_when=the card names only the item's own
+    decider; no_claim=the web's words (web spec)."""
+    from oracle.roadmap.models import RoadmapItem
+
+    w = await world()
+    await _no_roadmap_decider(w)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, w.ids["cut-a"])).decider_id = w.ctx.users["approver"].id
+        await s.commit()
+    [card] = (await say(client, w, "commenter", "cut Cut A"))["cards"]
+    assert card["dependents"] == ["Cut B"]
+    assert card["may"] == "propose" and card["may_with_dependents"] == "propose"
+    assert card["asks"] == ["Approver"]
+    assert set(card["asks_with_dependents"]) == {"Owner", "Olive Second"}
