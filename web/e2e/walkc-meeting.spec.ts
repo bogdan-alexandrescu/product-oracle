@@ -55,7 +55,7 @@ async function flags(context: BrowserContext, value: string) {
 async function startWithAnEdit(page: Page) {
   await login(page);
   await page.goto("/simple/prds/guided-setup");
-  await page.getByRole("button", { name: "Start review" }).click();
+  await page.getByRole("button", { name: "Start a review meeting" }).click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
