@@ -38,6 +38,11 @@ Test cards (protects / fails_when / no_claim):
   undoing the add reopens it; the decider rejects with an optional reason; approvers,
   commenters and viewers neither accept nor reject (403);
   fails_when=a role does what it may not or a suggestion state is wrong; no_claim=the web.
+- test_rejected_goal_suggestion_reopens: protects=the decider (or an owner) reopens a
+  rejected suggestion (Undo of a decline): it is open again, its reason and decider gone;
+  approvers, commenters and viewers may not (403); an open one is 409; an unknown one 404;
+  fails_when=Undo of a decline cannot bring the suggestion back or a non-decider can;
+  no_claim=the web's Undo button.
 - test_empty_goal_suggests_once: protects=the tick queues Oracle's suggestions for a goal
   with no items exactly once, never again for that goal even when it empties again; the
   job stores 3-5 suggestions, never one titled like a rejected one; on demand "Suggest
@@ -421,6 +426,28 @@ async def test_goal_suggestions_accept_reject_per_role(client):
     assert r.json()["status"] == "rejected" and r.json()["reason"] == "Not this year"
     r = await client.post(f"{SUGGESTIONS}/{ids[3]}/reject", headers=w.as_("owner"), json={})
     assert r.status_code == 409
+
+
+async def test_rejected_goal_suggestion_reopens(client):
+    w = await World().build()
+    ids = await _seed_suggestions(w, 2)
+    r = await client.post(f"{SUGGESTIONS}/{ids[0]}/reject", headers=w.as_("decider"),
+                          json={"reason": "Same as Alert rules engine"})  # fmt: skip
+    assert r.status_code == 200, r.text
+    for who in ("viewer", "approver", "commenter"):
+        r = await client.post(f"{SUGGESTIONS}/{ids[0]}/reopen", headers=w.as_(who))
+        assert r.status_code == 403, (who, r.text)
+    r = await client.post(f"{SUGGESTIONS}/{ids[0]}/reopen", headers=w.as_("decider"))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "open" and body["reason"] is None
+    assert body["decided_by_name"] is None and body["decided_at"] is None
+    r = await client.get(SUGGESTIONS, headers=w.as_("owner"), params={"goal_id": w.goals["quiet"]})
+    assert ids[0] in [x["id"] for x in r.json()["suggestions"]]
+    r = await client.post(f"{SUGGESTIONS}/{ids[0]}/reopen", headers=w.as_("owner"))
+    assert r.status_code == 409 and r.json()["detail"] == "This suggestion is open already"
+    r = await client.post(f"{SUGGESTIONS}/{uuid.uuid4()}/reopen", headers=w.as_("owner"))
+    assert r.status_code == 404
 
 
 async def test_empty_goal_suggests_once(client):
