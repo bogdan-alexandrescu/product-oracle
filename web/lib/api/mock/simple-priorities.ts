@@ -214,14 +214,18 @@ const NOW_LINE: Line = { key: "now", kind: "now", label: "This quarter (Now)", d
 
 const lineDay = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-/** priorities.lines: Now, each key date and each dated milestone the reader sees. */
+/**
+ * priorities.lines: Now, each key date and each dated milestone the reader sees. The key dates
+ * are the roadmap read's own (roadmapOut's keyDatesOut, as key_dates.read_key_dates serves
+ * both pages): a PRD's milestones among them, each naming its PRD.
+ */
 function linesOf(read: Schemas["SimpleRoadmapOut"]): Line[] {
   const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
   // Key dates and milestones in date order, one list (Now first).
   return [
     NOW_LINE,
     ...[
-      ...(read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date })),
+      ...(read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date, prd: k.prd ?? null })),
       ...read.milestones.filter((m) => m.date && tracks.has(m.track_id) && m.status !== "dropped").map((m): Line => ({ key: `milestone:${m.id}`, kind: "milestone", label: `${m.name} · ${lineDay(m.date!)}`, date: m.date! })),
     ].sort((a, b) => (a.date! < b.date! ? -1 : a.date! > b.date! ? 1 : 0)),
   ];

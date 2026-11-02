@@ -464,13 +464,13 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; en
   [...all.keys()].forEach(visit);
 }
 
-/** A milestone no plan dates (the new SimpleMilestone fields, empty). */
 /** The PRD a seeded item was built from (its roadmap's). */
 function itemPrd(s: SeedItem): Schemas["SimpleDocRef"] {
   const prd = ROADMAPS[s.roadmap].prd;
   return { id: stableUuid(`simple-prd/${s.roadmap}`), slug: prd.toLowerCase().replace(/ /g, "-"), title: prd };
 }
 
+/** A milestone no plan dates (the new SimpleMilestone fields, empty). */
 const UNDATED = { start_date: null, end_date: null, effort_weeks: null, done_when: [] as string[], targets: [] as { goal: string; target: string }[] };
 
 const PHASES = [["discover", 0.15], ["build", 0.55], ["beta", 0.2], ["launch", 0.1]] as const;
