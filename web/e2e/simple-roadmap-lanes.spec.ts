@@ -233,8 +233,8 @@ for (const scheme of ["light", "dark"] as const) {
     /**
      * Card lanes-b3-phone: protects = a phone's Timeline (the list by quarter that replaced B3's
      * thin lanes): each quarter names itself and its count, today's quarter carries the Today
-     * pill; each item reads its name, its dates and its goal (Setup checklist, Nov 2 – Nov 20,
-     * Faster activation), in start order; tapping an item opens its card as a bottom sheet, its
+     * pill; each item reads its name, its dates and its goal, its PRD's as on the desktop's lanes
+     * (Setup checklist, Nov 2 – Nov 20, Activation), in start order; tapping an item opens its card as a bottom sheet, its
      * row marked open; the page never scrolls sideways; Group by is the Gantt's (Milestone: a
      * group per milestone, no PM-owned); fails_when = a quarter, a row, the dates, the sheet or
      * a grouping is missing or wrong; no_claim = pixels.
@@ -248,7 +248,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(quarters.nth(0).locator("h3")).toHaveText(/^Q4 2026\s*Oct – Dec 2026 · 12 items\s*Today \w{3} \d+$/);
       await expect(quarters.nth(1).locator("h3")).toHaveText(/^Q1 2027\s*Jan – Mar 2027 · 8 items$/);
       await expect(list.getByTestId("timeline-row")).toHaveCount(20);
-      await expect(row(page, "setup-checklist")).toHaveText(/^Setup checklist\s*Nov 2 – Nov 20 · Faster activation$/);
+      await expect(row(page, "setup-checklist")).toHaveText(/^Setup checklist\s*Nov 2 – Nov 20 · Activation$/);
       await expect(row(page, "plan-f-03")).toHaveText(/^Setup failure alerts\s*Nov 2 – Nov 13/);
       await expect(quarters.nth(1).getByTestId("timeline-row").first()).toHaveText(/^Public signup\s*Jan 4 – Jan 29, 2027/);
       await expect(page.getByTestId("group-milestone")).toHaveCount(0);

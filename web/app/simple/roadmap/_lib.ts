@@ -470,7 +470,7 @@ export function milestonePrd(data: Roadmap, m: Milestone): { slug: string; title
 }
 
 /** The goal a planned item's PRD gives it: the one most of its slices name (the first on a tie); null: none. */
-function planGoal(item: Item | undefined): string | null {
+export function planGoal(item: Item | undefined): string | null {
   const n = new Map<string, number>();
   for (const x of item?.slices ?? []) if (x.goal) n.set(x.goal, (n.get(x.goal) ?? 0) + 1);
   let best: string | null = null;
