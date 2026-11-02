@@ -747,6 +747,9 @@ async def outs(
     docs, numbers = await _refs(db, ds)
     n = await counts(db, ds)
     logs = await _logs(db, ds)
+    from oracle.simple import prd_roadmap
+
+    sources = {d.id: await prd_roadmap.sources_out(db, d) for d in ds}
     me = _me(principal)
     out = []
     for d in ds:
@@ -778,6 +781,7 @@ async def outs(
                 can_withdraw=d.status == "submitted"
                 and me is not None
                 and (me == d.created_by or _approver_of(principal, d, w)),
+                from_prds=sources.get(d.id, []),
             )
         )
     return out
@@ -873,7 +877,9 @@ async def submit(
     if d.status != "working":
         raise DraftError(409, f"This draft is {d.status} already")
     live = await _live_changes(db, d)
-    if not live:
+    from oracle.simple import prd_roadmap
+
+    if not live and not prd_roadmap.has_sources(d):
         raise DraftError(422, "Nothing to submit: the draft has no changes")
     d.added_reviewers = await _added_reviewers(
         db, list(reviewer_ids or []), w.reviewers.get(d.document_id, [])
@@ -922,6 +928,11 @@ async def submit(
             else titles.get(str(c.target.get("item_id")), "an item")
         )
         lines.append(f"- {OP_WORDS.get(c.op, c.op)} {what}")
+    for src in await prd_roadmap.sources_out(db, d):
+        lines.append(
+            f"- Added from {src.prd.title} (version {src.version}): {src.items} items, "
+            f"{src.key_dates} key dates"
+        )
     markdown = await changeset._markdown(db, base, "\n".join(lines))
     result = await docs_service.import_draft(
         db,

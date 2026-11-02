@@ -47,6 +47,7 @@ import {
   readsRoadmap,
   roadmapId,
   roadmapOut,
+  draftPrds,
   seesDraft,
   settleDrafting,
   simpleWindows,
@@ -363,7 +364,7 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
   const edits = canEditRoadmap(db, d.roadmap, ctx);
   const decider = db.deciders?.[d.roadmap];
   return {
-    ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id),
+    ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
     can_approve: d.out.status === "submitted" && edits,
@@ -383,7 +384,7 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   if (p[4] === "submit") {
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) submits" });
     if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status} already` });
-    if (!draftChanges(db, d.out.id)) return json(422, { detail: "Nothing to submit: the draft has no changes" });
+    if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
     Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id });
     return json(200, draftOut(db, ctx, d));
   }

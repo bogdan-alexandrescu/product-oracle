@@ -164,7 +164,7 @@ import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimple
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { approvedPrdToDraft, itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -6323,6 +6323,45 @@ async function route(db: Db, req: Request): Promise<Response> {
     doc.updated_at = v.approved_at;
     // D10: publishing the version approves its run review.
     followRunReview(db, doc, v, true, me.id);
+    // approved-prd-roadmap: its dated items and milestones go on its roadmap's working draft.
+    if (doc.kind === "prd") {
+      const row = draftDb(db).rows.find(
+        (r) =>
+          r.document_id === doc.id &&
+          r.version === v.number &&
+          r.status === "ready",
+      );
+      approvedPrdToDraft(
+        (db.simple_roadmap ??= seedSimpleRoadmap()),
+        {
+          prd: { id: doc.id, slug: doc.slug, title: doc.title },
+          version: v.number,
+          roadmap: row?.roadmap ?? null,
+          // As the API's _dated: the end is the engineering lead's accepted date (the PRD's
+          // newest verified basis for the item), else the item's own; the start is its own.
+          items: (row?.items ?? []).map((i) => {
+            const ms = (i.milestone ?? {}) as { date?: unknown; start_date?: unknown };
+            const lead = (db.roadmap?.bases ?? [])
+              .filter((b) => b.prd_document_id === doc.id && b.item_key === i.item_key && b.status === "verified")
+              .sort((a, b) => (a.verified_at ?? "").localeCompare(b.verified_at ?? ""))
+              .at(-1);
+            const end = lead?.supports_date ?? (typeof ms.date === "string" ? ms.date : null);
+            const start = typeof ms.start_date === "string" && end && ms.start_date <= end ? ms.start_date : null;
+            return {
+              key: i.item_key,
+              title: i.title,
+              horizon: i.horizon,
+              outcome: i.outcome ?? null,
+              start,
+              end,
+              source: lead ? ("engineering" as const) : ("accepted" as const),
+            };
+          }),
+          milestones: prdMilestones(v),
+        },
+        me.id,
+      );
+    }
     return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
   // O5: audience= renders a roadmap for Board, Team or Engineering (./audience.ts).
@@ -6330,6 +6369,52 @@ async function route(db: Db, req: Request): Promise<Response> {
   const refused = audienceRefusal(audience, doc.kind, me.role, sub === "export" ? (q.get("format") ?? "html") : "html");
   if (refused) return json(refused.status, refused.body);
   return exportRoute(db, doc, isAudience(audience) ? { ...v, sections: audienceSections(v.sections, audience, boardItems(db, v)) } : v, sub, q, audience);
+}
+
+/** approved-prd-roadmap: a PRD version's milestones table, as oracle.simple.plan.parse reads it
+ * (a Milestone column and no Feature or Goal column; the End day, else the Start day). */
+function prdMilestones(
+  v: VersionRow,
+): { code: string; name: string; date: string }[] {
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  for (const s of v.sections) {
+    const rows = (s.body_md ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("|") && !/^[|:\-\s]+$/.test(l))
+      .map((l) =>
+        l
+          .replace(/^\||\|$/g, "")
+          .split("|")
+          .map((c) => c.trim()),
+      );
+    if (rows.length < 2) continue;
+    const h = rows[0].map((c) => c.toLowerCase());
+    const col = (...w: string[]) =>
+      h.findIndex((c) => w.some((x) => c.startsWith(x)));
+    const code = col("milestone", "code");
+    if (code < 0 || col("feature") >= 0 || col("goal") >= 0) continue;
+    const [name, start, end] = [
+      col("name", "title"),
+      col("start", "from", "begin"),
+      col("end", "finish", "due"),
+    ];
+    const out = rows.slice(1).flatMap((r) => {
+      const m = /M\s*(\d+)/i.exec(r[code] ?? "");
+      const day = [r[end], r[start]].find((x) => DAY.test(x ?? ""));
+      return m && day
+        ? [
+            {
+              code: `M${Number(m[1])}`,
+              name: (name >= 0 && r[name]) || `M${Number(m[1])}`,
+              date: day,
+            },
+          ]
+        : [];
+    });
+    if (out.length) return out;
+  }
+  return [];
 }
 
 /**

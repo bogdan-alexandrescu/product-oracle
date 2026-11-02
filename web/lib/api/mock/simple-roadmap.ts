@@ -73,6 +73,10 @@ interface SeedItem {
   /** meet-chat-right-prd: on its PRD's draft roadmap (a run's items-only roadmap, the PRD not
    * approved yet), not on the roadmap: only a review meeting's chat on that PRD reads it. */
   draft_roadmap?: boolean;
+  /** approved-prd-roadmap: an item an approved PRD put in the draft names that PRD. */
+  from_prd?: { slug: string; title: string };
+  /** approved-prd-roadmap: its dates as the PRD has them (ISO days; no start: end-only). */
+  dates?: { start: string | null; end: string; source: "engineering" | "accepted" };
 }
 
 interface SimpleDb {
@@ -158,9 +162,11 @@ export interface Who {
 /** A working draft of one roadmap (oracle.simple.drafts): the items in `db.items` are the
  * draft's; `published` keeps the roadmap's published items for those who may not see it. */
 interface MockDraft {
-  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "change_log" | "can_withdraw">;
+  out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "change_log" | "can_withdraw" | "from_prds">;
   roadmap: string;
   published: { items: SeedItem[]; own: SimpleDb["own"]; key_dates?: MockKeyDate[] };
+  /** approved-prd-roadmap: what each approved PRD put in it (PRD slug -> item keys, key date ids). */
+  prds?: Record<string, { prd: Schemas["SimpleDocRef"]; version: number; keys: string[]; key_dates: string[] }>;
 }
 
 /** `draft`: the number of the PRD draft (version) the roadmap's items were imported from. */
@@ -390,6 +396,11 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   if (own) {
     const source = own.source ?? "accepted";
     return { start: { date: own.start, source, estimated: false }, end: { date: own.end, source, estimated: false } };
+  }
+  if (s.dates) {
+    const end: Dated = { date: s.dates.end, source: s.dates.source, estimated: false };
+    if (s.dates.start) return { start: { date: s.dates.start, source: s.dates.source, estimated: false }, end };
+    return { start: { date: end.date < w[0] ? addDays(end.date, -41) : w[0], source: "estimated", estimated: true }, end };
   }
   const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
   let start: Dated = { date: w[0], source: "estimated", estimated: true };
@@ -746,7 +757,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
-      prd: { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
+      prd: s.from_prd
+        ? { id: stableUuid(`simple-prd/${s.from_prd.slug}`), slug: s.from_prd.slug, title: s.from_prd.title }
+        : { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
       goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
@@ -968,3 +981,178 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
 }
 
 export type { MockDraft, SeedItem, SimpleDb };
+
+/** approved-prd-roadmap: what an approved PRD version brings (oracle.simple.prd_roadmap). */
+export interface PrdApproval {
+  prd: Schemas["SimpleDocRef"];
+  version: number;
+  /** The roadmap its derived items name (Simple roadmap slug), when no roadmap holds the PRD. */
+  roadmap?: string | null;
+  items: {
+    key: string;
+    title: string;
+    horizon: Horizon;
+    outcome?: string | null;
+    start: string | null;
+    end: string | null;
+    source: "engineering" | "accepted";
+  }[];
+  milestones: { code: string; name: string; date: string }[];
+}
+
+/**
+ * approved-prd-roadmap: approving a PRD version puts its dated items and its milestones (as key
+ * dates) in its roadmap's working draft, marked as from the PRD (oracle.simple.prd_roadmap.on_prd_approved).
+ * Approving again takes the PRD's earlier additions out first; an item already published only
+ * adds what changed; nothing while the roadmap's draft is in review.
+ */
+export function approvedPrdToDraft(
+  db: SimpleDb,
+  a: PrdApproval,
+  me: string,
+): void {
+  const rm =
+    Object.keys(ROADMAPS).find((k) => ROADMAPS[k].prd === a.prd.title) ??
+    (a.roadmap && ROADMAPS[a.roadmap] ? a.roadmap : null);
+  if (!rm) return;
+  const drafts = (db.drafts ??= []);
+  let d = drafts.find((x) => x.roadmap === rm && x.out.status === "working");
+  if (!d) {
+    if (drafts.some((x) => x.roadmap === rm && x.out.status === "submitted"))
+      return;
+    const items = db.items.filter((x) => x.roadmap === rm);
+    const keys = new Set(items.map((x) => x.key));
+    d = {
+      roadmap: rm,
+      published: structuredClone({
+        items,
+        own: Object.fromEntries(
+          Object.entries(db.own).filter(([k]) => keys.has(k)),
+        ),
+        key_dates: db.key_dates?.[rm] ?? [],
+      }),
+      out: {
+        id: crypto.randomUUID(),
+        document: {
+          id: stableUuid(`simple-doc/${rm}`),
+          slug: rm,
+          title: ROADMAPS[rm].title,
+        },
+        status: "working",
+        base_version: 1,
+        version: null,
+        created_by: me,
+        created_at: new Date(mockNowMs()).toISOString(),
+        participant_ids: [me],
+        submitted_at: null,
+        submitted_by: null,
+        decider_approved: false,
+        waiting_on: [],
+        approved_at: null,
+        blocked_by: [],
+      },
+    };
+    drafts.push(d);
+  }
+  if (!d.out.participant_ids.includes(me)) d.out.participant_ids.push(me);
+  const prds = (d.prds ??= {});
+  // The PRD's earlier additions leave the draft: added items go, changed published ones are as published.
+  const before = prds[a.prd.slug];
+  delete prds[a.prd.slug];
+  const kds = [...(db.key_dates?.[rm] ?? [])].filter(
+    (k) => !before?.key_dates.includes(k.id),
+  );
+  if (before) {
+    const published = new Map(d.published.items.map((x) => [x.key, x]));
+    db.items = db.items.flatMap((x) =>
+      x.roadmap === rm && before.keys.includes(x.key)
+        ? published.has(x.key)
+          ? [structuredClone(published.get(x.key)!)]
+          : []
+        : [x],
+    );
+  }
+  const w = simpleWindows(companyToday());
+  const keys: string[] = [];
+  for (const it of a.items) {
+    if (!it.end) continue;
+    const start = it.start && it.start <= it.end ? it.start : null;
+    const pub = db.items.find(
+      (x) =>
+        x.roadmap === rm &&
+        x.key === it.key &&
+        (x.from_prd?.slug ??
+          ROADMAPS[rm].prd.toLowerCase().replace(/ /g, "-")) === a.prd.slug,
+    );
+    if (pub) {
+      const r = resolve(db, pub, w[pub.horizon]);
+      if (
+        r.end.date === it.end &&
+        (start ? r.start.date === start : r.start.estimated) &&
+        pub.title === it.title
+      )
+        continue;
+      delete db.own[pub.key];
+      Object.assign(pub, {
+        title: it.title,
+        dates: { start, end: it.end, source: it.source },
+      });
+      keys.push(pub.key);
+      continue;
+    }
+    let key = it.key;
+    for (let n = 2; db.items.some((x) => x.key === key); n++)
+      key = `${it.key.slice(0, 21)}-${n}`;
+    db.ids[key] = stableUuid(`simple-prd-item/${rm}/${a.prd.slug}/${key}`);
+    db.items.push({
+      key,
+      title: it.title,
+      horizon: it.horizon,
+      roadmap: rm,
+      outcome: it.outcome ?? null,
+      position:
+        Math.max(
+          0,
+          ...db.items
+            .filter((x) => x.roadmap === rm)
+            .map((x) => x.position ?? 0),
+        ) + 1,
+      from_prd: { slug: a.prd.slug, title: a.prd.title },
+      dates: { start, end: it.end, source: it.source },
+    });
+    keys.push(key);
+  }
+  const kdIds: string[] = [];
+  for (const m of a.milestones) {
+    const value = {
+      id: stableUuid(`simple-prd-key-date/${rm}/${a.prd.slug}/${m.code}`),
+      name: m.name,
+      date: m.date,
+      note: `From ${a.prd.title}`,
+    };
+    const pub = d.published.key_dates?.find((k) => k.id === value.id);
+    if (pub && JSON.stringify(pub) === JSON.stringify(value)) continue;
+    kds.push(value);
+    kdIds.push(value.id);
+  }
+  (db.key_dates ??= {})[rm] = kds;
+  if (keys.length || kdIds.length)
+    prds[a.prd.slug] = {
+      prd: a.prd,
+      version: a.version,
+      keys,
+      key_dates: kdIds,
+    };
+}
+
+/** approved-prd-roadmap: how many items and key dates each approved PRD put in the draft. */
+export function draftPrds(d: MockDraft): Schemas["SimpleDraftPrd"][] {
+  return Object.values(d.prds ?? {})
+    .map((x) => ({
+      prd: x.prd,
+      version: x.version,
+      items: x.keys.length,
+      key_dates: x.key_dates.length,
+    }))
+    .sort((a, b) => a.prd.title.localeCompare(b.prd.title));
+}

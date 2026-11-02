@@ -301,8 +301,14 @@ function Select({ label, value, options, onChange, all = "All", testId }: { labe
   );
 }
 
+/** approved-prd-roadmap: "2 items and 2 key dates came from Visit reminders (version 1)". */
+function prdWords(p: { prd: { title: string }; version?: number | null; items: number; key_dates: number }): string {
+  const parts = [p.items ? `${p.items} ${p.items === 1 ? "item" : "items"}` : "", p.key_dates ? `${p.key_dates} ${p.key_dates === 1 ? "key date" : "key dates"}` : ""].filter(Boolean);
+  return `${parts.join(" and ")} came from ${p.prd.title}${p.version ? ` (version ${p.version})` : ""}`;
+}
+
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; titleOf: (id: string | null) => string | undefined }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
   const [open, setOpen] = useState(false);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
@@ -317,7 +323,9 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, titleOf }: { dr
   const since = working.map((d) => d.created_at).sort()[0];
   const log = working.flatMap((d) => d.change_log).sort((a, b) => (a.at < b.at ? -1 : 1));
   const last = [...log].reverse().find((c) => c.by === meId);
-  const submittable = working.filter((d) => d.status === "working" && d.can_submit && d.changes > 0);
+  const submittable = working.filter((d) => d.status === "working" && d.can_submit && (d.changes > 0 || !!d.from_prds?.length));
+  // approved-prd-roadmap: what each approved PRD put in the draft.
+  const fromPrds = working.flatMap((d) => d.from_prds ?? []);
   return (
     <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -335,6 +343,18 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, titleOf }: { dr
           Send for review
         </Button>
       </div>
+      {fromPrds.length > 0 && (
+        <ul className="mt-1.5 space-y-1 text-sm" data-testid="draft-from-prds">
+          {fromPrds.map((p) => (
+            <li key={p.prd.id} className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="draft-from-prd">
+              <span className="min-w-0">{prdWords(p)}</span>
+              <Button variant="ghost" aria-label={`Review the items from ${p.prd.title}`} onClick={() => onReview(p.prd.slug)}>
+                Review
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
       {open && (
         <ol className="mt-2 space-y-1 text-sm text-text" data-testid="draft-changes">
           {log.map((c) => (
@@ -1167,6 +1187,7 @@ export function SimpleRoadmap() {
     <DraftBanner
       drafts={drafts.data ?? []}
       titleOf={titleOf}
+      onReview={(slug) => pickFilter("prd", slug)}
       inReview={data.changes_in_review ?? 0}
       meId={me?.user_id ?? null}
       onUndo={(id) =>
