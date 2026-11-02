@@ -402,13 +402,14 @@ async def sync(db: AsyncSession, intake: ProductIntake) -> bool:
     the intake row changed under it. Its own changes are rolled back and it reads the
     winner's, so the read falls back once and no request fails on the stale row. The
     write is flushed here, on every path, so a stale row is found here and not at the
-    caller's commit."""
+    caller's commit. Only a savepoint is rolled back: what the caller added to the
+    session before stays."""
     try:
-        changed = await _follow(db, intake)
-        await db.flush()
+        async with db.begin_nested():
+            changed = await _follow(db, intake)
+            await db.flush()
         return changed
     except StaleDataError:
-        await db.rollback()
         await db.refresh(intake)
         return False
 
