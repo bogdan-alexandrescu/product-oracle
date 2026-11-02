@@ -400,9 +400,13 @@ async def sync(db: AsyncSession, intake: ProductIntake) -> bool:
     Two followers may race (the create request's summary and :func:`submit_later`'s
     session, two reads of the summary, the tick): the one whose write lands second finds
     the intake row changed under it. Its own changes are rolled back and it reads the
-    winner's, so the read falls back once and no request fails on the stale row."""
+    winner's, so the read falls back once and no request fails on the stale row. The
+    write is flushed here, on every path, so a stale row is found here and not at the
+    caller's commit."""
     try:
-        return await _follow(db, intake)
+        changed = await _follow(db, intake)
+        await db.flush()
+        return changed
     except StaleDataError:
         await db.rollback()
         await db.refresh(intake)
