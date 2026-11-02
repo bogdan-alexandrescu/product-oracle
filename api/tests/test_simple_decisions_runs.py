@@ -9,12 +9,16 @@ Test cards (protects / fails_when / no_claim):
   "Approved after a change", whose trail has both steps; a pending stop is not listed;
   fails_when=the field is missing, a stop is split in two, or names are left out;
   no_claim=the run pages (tests.test_runs_*).
+- test_runs_group_reads_do_not_grow_with_runs: protects=the Runs group reads every run's
+  stops at once; fails_when=the page reads once more per run (one list_decisions call per
+  run); no_claim=how long the page takes.
 """
 
 import datetime as dt
 
-from sqlalchemy import select
+from sqlalchemy import event, select
 
+from oracle.db import get_engine
 from oracle.docs.models import Document
 from oracle.runs.models import Checkpoint, Run
 from oracle.tenancy import tenant_session
@@ -71,3 +75,47 @@ async def test_runs_group_lists_each_stop(client):
         ("Sent back", "2026-10-21", "Needs a zone per workspace."),
         ("Approved", "2026-10-22", "Quiet hours follow the zone."),
     ]
+
+
+async def _runs_with_a_stop(w, n):
+    owner = w.ctx.users["owner"]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+        for i in range(n):
+            run = Run(flow="baseline_to_prd", document_id=prd.id, created_by=owner.id,
+                      status="running")  # fmt: skip
+            s.add(run)
+            await s.flush()
+            s.add(Checkpoint(
+                run_id=run.id, kind="feature_set", status="approved", approver_role="approver",
+                decided_by=owner.id, decided_at=AT + dt.timedelta(days=i),
+                payload={"segment_seq": 1, "decided": {"role": "owner", "by": str(owner.id)}},
+            ))  # fmt: skip
+        await s.commit()
+
+
+async def _reads(client, w):
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("owner"))
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    assert r.status_code == 200, r.text
+    return len(r.json()["runs"]), len([st for st in statements if "SAVEPOINT" not in st])
+
+
+async def test_runs_group_reads_do_not_grow_with_runs(client):
+    w = await world()
+    await _runs_with_a_stop(w, 1)
+    runs, one = await _reads(client, w)
+    assert runs == 1
+    await _runs_with_a_stop(w, 5)
+    runs, six = await _reads(client, w)
+    assert runs == 6
+    assert six <= one, (one, six)

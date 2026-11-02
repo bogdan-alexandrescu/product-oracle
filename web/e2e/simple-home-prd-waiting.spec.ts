@@ -14,6 +14,10 @@ import { expect, test, type Page } from "./test";
  * agenda lists all 15 open questions, the approver's included; fails_when = the card is missing,
  * lists someone else's question, or the agenda leaves out a question of a later milestone;
  * no_claim = the Decisions page's own lists (simple-decisions-questions.spec.ts).
+ *
+ * build-rundecide review: protects = with only a PRD's questions waiting (the approver decides
+ * their one other decision first), the Decisions tile still shows and takes the person to the
+ * PRD's card; fails_when = the tile links to the Decisions card that is not drawn.
  */
 
 const region = (page: Page, name: string) => page.getByRole("region", { name, exact: true });
@@ -47,6 +51,27 @@ for (const phone of [false, true]) {
       await expect(count).toHaveText(String(n - 1));
       await expect(card).toContainText("8 decisions you own · also on its review meeting's agenda");
       await expect(card).not.toContainText("Invite limit on the free plan");
+    });
+
+    test("the Decisions tile goes to the PRD's card when only its questions wait", async ({ page }) => {
+      await login(page, "approver@example.com");
+      await page.goto("/simple");
+      const card = region(page, "Waiting for you: Guided setup");
+      await expect(card).toBeVisible();
+      // Decide the approver's one other decision: the Decisions card goes, the PRD's card stays.
+      const other = page.getByTestId("home-decisions").getByTestId("home-decision");
+      await expect(other).toHaveCount(1);
+      await other.getByRole("button", { name: /^Decide: / }).click();
+      await expect(page.getByTestId("home-decisions")).toHaveCount(0);
+      await expect(card).toBeVisible();
+
+      const tile = page.getByTestId("home-summary-decisions");
+      await expect(tile).toBeVisible();
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await tile.click();
+      await expect(page).toHaveURL(/#waiting-guided-setup$/);
+      await expect(card).toBeInViewport();
+      await expect(card.getByRole("heading", { name: "Waiting for you: Guided setup" })).toBeInViewport();
     });
 
     test("the PRD's review meeting: every open question on the agenda, soonest first", async ({ page }) => {

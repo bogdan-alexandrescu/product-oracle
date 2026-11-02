@@ -57,7 +57,7 @@ for (const phone of [false, true]) {
 
       await step.getByRole("button", { name: "Approve the PRD" }).click();
       await expect(step).toContainText("You approved the PRD, version 2.");
-      await expect(step).toContainText("Second of two steps · Usage alerts plan goes on · Avery Stone ·");
+      await expect(step).toContainText("Second of two steps · Usage alerts plan goes on to its dates · Avery Stone ·");
       await expect(status).toHaveCount(0);
       await expect(page.getByTestId("one-pager-meta")).toContainText("Approved");
     });
