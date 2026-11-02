@@ -484,7 +484,21 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     });
   }
   if ((m = /^add a task ["'“‘](.+?)["'”’] to (.+?)(?: for (.+?))?(?: by ([a-z]+ \d{1,2}))?$/i.exec(t))) {
-    const [, title, x, who, by] = m;
+    const [, title, said, saidWho, by] = m;
+    // walkc-meeting (chat._task_item): an item's own name may hold " for ": the longest known name wins.
+    let x: string = said;
+    let who: string | undefined = saidWho;
+    if (saidWho) {
+      const parts = `${said} for ${saidWho}`.split(" for ");
+      const titles = new Set(items.map((i) => i.title.toLowerCase()));
+      for (let k = parts.length; k > 0; k--) {
+        if (titles.has(parts.slice(0, k).join(" for ").toLowerCase())) {
+          x = parts.slice(0, k).join(" for ");
+          who = parts.slice(k).join(" for ") || undefined;
+          break;
+        }
+      }
+    }
     return change(() => {
       const i = findItem(items, x);
       if (!isItem(i)) return i;

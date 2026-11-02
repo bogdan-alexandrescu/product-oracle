@@ -693,7 +693,23 @@ def _due(c: Ctx, a: dict[str, Any]) -> date | None | Reply:
     return due if due is not None else Reply("question", f"Which day is “{words}”?")
 
 
+def _task_item(c: Ctx, a: dict[str, Any]) -> dict[str, Any]:
+    """walkc-meeting: "add a task 'X' to Exports for teams for Theo": an item's own name
+    may hold " for ", so the longest name the roadmap knows takes the words before
+    "for <person>" (none known: as parsed)."""
+    owner = _arg(a, "owner")
+    if not owner:
+        return a
+    parts = f"{_unquote(_need(a, 'item'))} for {owner}".split(" for ")
+    titles = {e.row.title.lower() for e in c.entries()}
+    for k in range(len(parts), 0, -1):
+        if " for ".join(parts[:k]).lower() in titles:
+            return {**a, "item": " for ".join(parts[:k]), "owner": " for ".join(parts[k:]) or None}
+    return a
+
+
 def _b_task(c: Ctx, a: dict[str, Any]) -> Built:
+    a = _task_item(c, a)
     e = c.find(_need(a, "item"))
     if isinstance(e, Reply):
         return e

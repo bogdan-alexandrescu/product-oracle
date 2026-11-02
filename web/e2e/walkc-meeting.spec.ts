@@ -28,6 +28,11 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
  * Delivery step says the Decisions page shows the minutes already (Send marks them sent);
  * fails_when = End says nothing of the unapproved edit, or Delivery says Send posts to the
  * Decisions page; no_claim = what Approve publishes (simple-meetings-approve.spec.ts).
+ *
+ * Card task-for-in-name: protects = after the owner renames an item to "Setup for teams",
+ * "add a task 'Write the FAQ' to Setup for teams for Theo Brandt" gives a card on that
+ * item for Theo Brandt; fails_when = the line splits at the name's own " for " (no card,
+ * or "Which item?"); no_claim = other phrases.
  */
 
 async function flags(context: BrowserContext, value: string) {
@@ -106,6 +111,22 @@ for (const phone of [false, true]) {
       await ask.getByRole("button", { name: "End meeting" }).click();
       await expect(page.getByTestId("end-screen")).toBeVisible();
       await expect(page.getByRole("region", { name: "Delivery" })).toContainText("Decisions page · shows them already; Send marks them sent");
+    });
+
+    test(`a task line finds an item whose name holds "for" (${where})`, async ({ page, context }) => {
+      await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+      const owner = await attend(page, ADMIN.email, true);
+      const chat = owner.getByTestId("meeting-chat");
+      const say = async (text: string) => {
+        await chat.getByLabel("Message Oracle").fill(text);
+        await tap(chat.getByRole("button", { name: "Send" }));
+      };
+      await say("rename Setup checklist to Setup for teams");
+      const renamed = chat.getByTestId("chat-card").filter({ hasText: "Rename Setup checklist to “Setup for teams”" });
+      await tap(renamed.getByRole("button", { name: "Apply" }));
+      await expect(renamed.getByTestId("chat-card-outcome")).toContainText("Applied by you");
+      await say("add a task 'Write the FAQ' to Setup for teams for Theo Brandt");
+      await expect(chat.getByTestId("chat-card").filter({ hasText: "Add the task “Write the FAQ” to Setup for teams for Theo Brandt" })).toBeVisible();
     });
 
     test(`a meeting card says who Propose asks, before and after (${where})`, async ({ page, context }) => {
