@@ -26,10 +26,10 @@ export default function OnePagers() {
         testId="simple-one-pagers"
         action={ // MOCK-HOOK: New PRD beside "Newest first"
           <span className="flex flex-wrap items-center gap-3"> {/* MOCK-HOOK */}
-            {rows && rows.length > 1 ? <span className="simple-small" data-testid="one-pagers-order">Newest first</span> : null}
+            {rows && rows.length > 1 ? <span className="simple-small" data-testid="one-pagers-order">Newest first</span> : null} {/* MOCK-HOOK */}
             <NewPrdButton np={np} from="one-pagers" /> {/* MOCK-HOOK */}
           </span>
-        }
+        } // MOCK-HOOK: end
       >
         {q.error ? (
           <p className="simple-small">{q.error}</p>

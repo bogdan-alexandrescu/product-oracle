@@ -1,0 +1,179 @@
+{
+ "title": "Starting a PRD from Simple",
+ "subtitle": "Where a person starts a new PRD in Simple, and how Oracle's brief questions are asked and answered there. Mock app, invented data.",
+ "decisions": [
+  {
+   "code": "NP1",
+   "name": "Starting a PRD from Simple",
+   "question": "Where does a person start a new PRD in Simple, and how do they answer Oracle's questions before it drafts?",
+   "common": "Every proposal starts the same PRD (Shared shopping lists, for the goal Raise activation), Oracle asks the brief's questions before it drafts, an 'I don't know' answer lets the draft go on with that point marked as open, a question can go to someone else to answer later, and the new PRD then shows on One-pagers as Drafting. Detailed › PRDs › New PRD stays as it is for people who want the full form.",
+   "proposals": [
+    {
+     "letter": "a",
+     "name": "Button to Detailed",
+     "recommended": false,
+     "what": "Simple gets a New PRD button on Home and on One-pagers. It opens today's Detailed form (New PRD) and then the brief in Detailed, where Oracle's questions are answered as they are today. Once drafting, the PRD shows on Simple's One-pagers.",
+     "plus": "Almost nothing to build: one button in two places. One way to start a PRD for everyone, with every option the full form has (requests behind it, template, out of scope).",
+     "cost": "Adds one button to Home and One-pagers. Everything else stays in Detailed: the slow form, the brief, and its words (Critical, Defer, Research this, Gaps, Proposals). A Simple person leaves Simple for the whole start and has to find the way back.",
+     "frames": [
+      {
+       "file": "frames/np1-a-rest.html",
+       "caption": "At rest: Home has a New PRD button beside Walk me through it."
+      },
+      {
+       "file": "frames/np1-a-open.html",
+       "caption": "New PRD pressed: Detailed's New PRD form opens, out of Simple, with the Ask panel and the full form."
+      },
+      {
+       "file": "frames/np1-a-mid.html",
+       "caption": "Typing: the name and the problem filled in, Raise activation ticked."
+      },
+      {
+       "file": "frames/np1-a-brief.html",
+       "caption": "Continue pressed: the brief opens in Detailed, with Oracle's 5 questions and the Before drafting panel."
+      },
+      {
+       "file": "frames/np1-a-hard-1512.html",
+       "caption": "Hard case at 1512, started from One-pagers: answering a question in Detailed offers Send answer, I don't know, Defer, Ask someone and Research this."
+      },
+      {
+       "file": "frames/np1-a-result.html",
+       "caption": "Result, back in Simple: One-pagers shows Shared shopping lists as Drafting, with 3 questions still open in Detailed."
+      },
+      {
+       "file": "frames/np1-a-phone.html",
+       "caption": "Phone 390: the New PRD button on Home."
+      },
+      {
+       "file": "frames/np1-a-phone-form.html",
+       "caption": "Phone 390: the button opens Detailed's form, with Detailed's tab bar."
+      }
+     ]
+    },
+    {
+     "letter": "b",
+     "name": "Guided sheet",
+     "recommended": true,
+     "what": "A New PRD button on Home and One-pagers opens a sheet in Simple. First four short fields: name, the problem, who has it, and the goal it helps. Then Oracle asks its questions one at a time, each with why it asks, an answer box, I don't know and Ask someone later. Draft with what I gave starts the draft at any point. Home then shows a PRDs you started card, and One-pagers the new row.",
+     "why": "It keeps the whole start in Simple with Simple's words, one question at a time so a person is never faced with a long form, and the hard answers (I don't know, someone else knows) are plain buttons with a clear result. It reuses the sheet Simple already has for goal suggestions, so it is the least new to learn.",
+     "plus": "Starts from the two places people look for PRDs. One question at a time, with a progress bar. A question for someone else goes to them and the draft does not wait. Works the same on a phone, as a full-screen sheet.",
+     "cost": "Adds to Simple: the button, the sheet (two steps) and a PRDs you started card on Home. Stays in Detailed: templates, requests behind it, out of scope lists, gaps, proposals and findings.",
+     "frames": [
+      {
+       "file": "frames/np1-b-rest.html",
+       "caption": "At rest: Home has a New PRD button beside Walk me through it."
+      },
+      {
+       "file": "frames/np1-b-open.html",
+       "caption": "New PRD pressed: the New PRD sheet opens over Home with four empty fields."
+      },
+      {
+       "file": "frames/np1-b-mid.html",
+       "caption": "Typing: name and problem filled, who has it being typed, Raise activation picked."
+      },
+      {
+       "file": "frames/np1-b-ask.html",
+       "caption": "Next pressed: Oracle's questions, one at a time. Question 1 answered, question 2 being typed."
+      },
+      {
+       "file": "frames/np1-b-hard.html",
+       "caption": "Hard case: the date question was answered I don't know (marked as open); question 5 goes to Priya Raman to answer later."
+      },
+      {
+       "file": "frames/np1-b-hard-1512.html",
+       "caption": "Hard case at 1512, from One-pagers: the same question 5 with the person list open."
+      },
+      {
+       "file": "frames/np1-b-result.html",
+       "caption": "Result: Draft with what I gave pressed. Home shows PRDs you started: Drafting, with what is open and who it waits on."
+      },
+      {
+       "file": "frames/np1-b-result-list.html",
+       "caption": "Result on One-pagers: the new PRD heads the list as Drafting, 1 question waiting on Priya Raman."
+      },
+      {
+       "file": "frames/np1-b-phone.html",
+       "caption": "Phone 390: the sheet fills the screen; question 2 being typed."
+      },
+      {
+       "file": "frames/np1-b-phone-hard.html",
+       "caption": "Phone 390, hard case: asking Priya Raman to answer later."
+      }
+     ]
+    },
+    {
+     "letter": "c",
+     "name": "Start from a goal",
+     "recommended": false,
+     "what": "Each goal card on Home gets Start a PRD for this goal. It opens a New PRD page in Simple, already filled in from the goal (the goal and its numbers, a first guess at the problem and who has it), with all of Oracle's questions on the one page. Answer any, in any order; each has I don't know and Ask someone later. Start the draft is always at the bottom. The goal card then shows the PRD as Drafting.",
+     "plus": "Every PRD is tied to a goal from the start. Oracle's first guess saves typing. A person sees all questions at once and can skip around.",
+     "cost": "Adds to Simple: a link on each goal card and a whole new page. A PRD that serves no goal (or a goal not yet confirmed) has no way in. Six questions at once is a long page, longest on a phone. Stays in Detailed: templates, requests, gaps and proposals.",
+     "frames": [
+      {
+       "file": "frames/np1-c-rest.html",
+       "caption": "At rest: each goal card on Home has Start a PRD for this goal."
+      },
+      {
+       "file": "frames/np1-c-open.html",
+       "caption": "Start a PRD pressed on Raise activation: the New PRD page, filled in from the goal, questions empty."
+      },
+      {
+       "file": "frames/np1-c-mid.html",
+       "caption": "Typing: name and problem changed, question 1 answered, question 2 being typed."
+      },
+      {
+       "file": "frames/np1-c-hard.html",
+       "caption": "Hard case: question 4 marked I don't know, question 5 asked of Priya Raman; the bar says 4 of 6 answered."
+      },
+      {
+       "file": "frames/np1-c-hard-1512.html",
+       "caption": "Hard case at 1512: the same page wider; the questions keep one column."
+      },
+      {
+       "file": "frames/np1-c-result.html",
+       "caption": "Result: Start the draft pressed. The Raise activation card shows Shared shopping lists as Drafting."
+      },
+      {
+       "file": "frames/np1-c-phone.html",
+       "caption": "Phone 390: the page is long; the Start the draft bar sits over the tab bar."
+      }
+     ]
+    },
+    {
+     "letter": "d",
+     "name": "Ask Oracle to start",
+     "recommended": false,
+     "what": "No new button on the pages. A person asks Oracle in the Ask panel (or picks Start a PRD under an empty chat). Oracle reads the message, shows the name, problem, who and goal it took from it to confirm, then asks its questions one message at a time, with quick answers I don't know and Ask someone later. It ends with a card for the new PRD, drafting, linking to One-pagers.",
+     "plus": "Nothing new to find on the pages; a person can say it in their own words from anywhere in Simple. Feels like talking it through.",
+     "cost": "Adds to Simple: a starter in the empty chat and new chat turns. Hard to see how far along you are, or to change an earlier answer; the questions mix in with other chats; leaving the page ends the flow. Stays in Detailed: the form and the brief, for anything the chat does not cover.",
+     "frames": [
+      {
+       "file": "frames/np1-d-rest.html",
+       "caption": "At rest: Ask Oracle opened on Home; under Nothing yet, a Start a PRD starter."
+      },
+      {
+       "file": "frames/np1-d-open.html",
+       "caption": "Message sent: Oracle shows the name, problem, who and goal it took, with Looks right and Change it."
+      },
+      {
+       "file": "frames/np1-d-mid.html",
+       "caption": "Looks right pressed: Oracle asks question 1 of 6; the answer is being typed in the box."
+      },
+      {
+       "file": "frames/np1-d-hard-1512.html",
+       "caption": "Hard case at 1512: I don't know for the date, then Ask someone later; Oracle asks who should answer."
+      },
+      {
+       "file": "frames/np1-d-result.html",
+       "caption": "Result: all answered. Oracle's card says Shared shopping lists is Drafting, with Open in One-pagers."
+      },
+      {
+       "file": "frames/np1-d-phone.html",
+       "caption": "Phone 390: the chat fills the screen; question 1 with its quick answers."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -339,7 +339,7 @@ export function NewPrdPage({ np }: { np: NpState }) {
           })}
         </ol>
       </section>
-      <footer className="fixed right-0 bottom-0 left-0 z-30 border-t border-line bg-surface/95 px-6 py-3 min-[601px]:left-[232px] max-[600px]:bottom-[64px]">
+      <footer className="fixed right-0 bottom-0 left-0 z-30 border-t border-line bg-surface px-6 py-3 shadow-tip min-[601px]:left-[232px] max-[600px]:bottom-[64px]">
         <div className="mx-auto flex max-w-[944px] flex-wrap items-center gap-3">
           <span className="simple-small mr-auto tnum">
             {answered} of {q.length} answered{phase === "hard" ? " · 1 not known · 1 asked of Priya Raman" : ""}
