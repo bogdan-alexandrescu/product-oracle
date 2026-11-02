@@ -104,7 +104,7 @@ test.describe("desktop", () => {
     await page.getByTestId("decision-row").filter({ hasText: "Saved carts dates approved: 6 items on the roadmap" }).click();
     const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
     await expect(inspector).toContainText("Saved carts dates approved: 6 items on the roadmap");
-    await inspector.getByRole("link", { name: "Saved carts", exact: true }).click();
+    await inspector.getByRole("link", { name: "Saved carts PRD" }).click();
     await expect(page).toHaveURL(/\/documents\/saved-carts$/);
     await expect(page.getByRole("heading", { name: "Saved carts", level: 1 })).toBeVisible();
     await expect(page.getByText("Not found")).toHaveCount(0);
