@@ -738,6 +738,32 @@ async def built(
     return Built(document, v, specs, secs, row)
 
 
+async def bet_flows(db: AsyncSession, document: Document) -> list[tuple[str, list[str], Any]]:
+    """walkb-roadmap review: each bet of the PRD's published one-pager with the flow drawn for
+    it (its words, its source sections, its ``SimpleFlow`` or None), as the page reads them: by
+    the bet's line, else by its words (0092_bet_flow_line_key). Nothing is written or queued."""
+    from oracle.simple import visuals
+
+    try:
+        b = await built(db, document, queue=False, persist=False)
+    except ChangeError:
+        return []
+    bets = [
+        x
+        for blk in b.row.blocks or []
+        for x in blk.get("lines") or []
+        if str(x.get("id", "")).startswith("bets-")
+    ]
+    subjects = [visuals.line_subject(document.id, visuals.bet_key(x)) for x in bets]
+    flows = await visuals.flows_for(db, "one_pager_line", subjects)
+    by_words = [visuals.words_subject(document.id, str(x.get("text") or "")) for x in bets]
+    flows.update(await visuals.flows_for(db, "one_pager_line", by_words))
+    return [
+        (str(x.get("text") or ""), list(x.get("source_keys") or []), flows.get(a) or flows.get(w))
+        for x, a, w in zip(bets, subjects, by_words, strict=True)
+    ]
+
+
 def _problem_names_no_one(answer: Any, sections: list[Section]) -> str | None:
     """ad-onepager's check on a raw ``one_pager`` answer: the reason its problem names no one
     of the PRD's users, else None (oracle.simple.one_pager_checks.problem_check)."""

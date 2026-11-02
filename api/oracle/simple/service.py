@@ -689,6 +689,42 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
         e.code = e.code or _prd_code(e.row.prd_section_key)
 
 
+async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: list[Any]) -> None:
+    """walkb-roadmap review: an item built from a PRD section, with no flow of its own, shows
+    the flow its PRD's one-pager draws for its bet: the bet naming the item's code or title,
+    else the one bet drawn from the item's section alone. The flow names the bet (its
+    ``subject_kind`` ``one_pager_line``), so the card opens and comments on that drawing."""
+    from oracle.docs import visibility
+    from oracle.simple import one_pager
+
+    by_id = {it.id: it for it in items}
+    wanting = [
+        e
+        for e in shown
+        if e.prd is not None
+        and e.row.prd_section_key
+        and by_id[e.row.id].flow is None
+        and not by_id[e.row.id].draft
+        and visibility.can_see(principal, e.prd)
+        and not getattr(e.prd, "deleted_at", None)
+    ]
+    bets: dict[uuid.UUID, list[tuple[str, list[str], Any]]] = {}
+    for e in wanting:
+        if e.prd.id not in bets:
+            bets[e.prd.id] = await one_pager.bet_flows(db, e.prd)
+
+    def words(text: str) -> str:
+        return " " + " ".join(re.sub(r"[^\w]+", " ", text.casefold()).split()) + " "
+
+    for e in wanting:
+        it = by_id[e.row.id]
+        code = e.code or _prd_code(e.row.prd_section_key)
+        names = [words(n) for n in (code, e.row.title) if n and n.strip()]
+        named = [f for t, _, f in bets[e.prd.id] if any(n in words(t) for n in names)]
+        sourced = [f for _, keys, f in bets[e.prd.id] if e.row.prd_section_key in keys]
+        it.flow = named[0] if named else sourced[0] if len(sourced) == 1 else None
+
+
 def prd_section_label(section_key: str, heading: str | None, name: str = "") -> str:
     """How the card names the PRD section an item came from: the PRD's code and the
     section's heading ("F-06 Loop and blast-radius guards"); with no heading, the code and
@@ -981,6 +1017,7 @@ async def build(
     for it in items:
         # A draft's own visual (S7) first, else its feature's (S10).
         it.flow = it.flow or flows.get(it.id)
+    await _bet_flows(db, principal, shown, items)
     # plan-model: each item's slices and milestones from its PRD's plan; the track
     # milestones dated by the plan of their track's PRD.
     from oracle.simple import plan as plans
