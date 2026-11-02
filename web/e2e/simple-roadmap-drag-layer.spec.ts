@@ -133,9 +133,23 @@ test.describe("a dragged Timeline bar, desktop", () => {
     await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
     const chart = page.getByTestId("simple-chart");
     await expect(chart).toHaveAttribute("data-format", "timeline");
-    // A bar that moves (a grab cursor), in sight.
-    const bar = chart.locator('[data-testid="timeline-bar"].cursor-grab').first();
-    await expect(bar).toBeVisible({ timeout: 15_000 });
+    // All 3 years in sight, then a bar that moves (a grab cursor), wholly in the chart's window.
+    await page.getByTestId("zoom-all").click();
+    await expect(page.getByTestId("zoom-all")).toHaveAttribute("aria-pressed", "true");
+    const bars = chart.locator('[data-testid="timeline-bar"].cursor-grab');
+    await expect(bars.first()).toBeVisible({ timeout: 15_000 });
+    const n = await bars.evaluateAll((bs) => {
+      const inside = (b: Element) => {
+        const r = b.getBoundingClientRect();
+        let p = b.parentElement;
+        while (p && !(p.scrollWidth > p.clientWidth && getComputedStyle(p).overflowX !== "visible")) p = p.parentElement;
+        const w = p?.getBoundingClientRect() ?? { left: 0, right: innerWidth };
+        return r.width > 24 && r.left > w.left + 220 && r.right < w.right - 200 && r.top > 0 && r.bottom < innerHeight - 20;
+      };
+      return bs.findIndex(inside);
+    });
+    expect(n).toBeGreaterThanOrEqual(0);
+    const bar = bars.nth(n);
     const id = await bar.getAttribute("data-bar-id");
     const was = await bar.getAttribute("data-start");
     const box = (await bar.boundingBox())!;

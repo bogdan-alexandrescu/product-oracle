@@ -117,6 +117,7 @@ for (const width of [1440, 1024]) {
     test("a drag in progress shows its dates live", async ({ page }) => {
       await open(page);
       const b = bar(page, "alert-mobile");
+      await b.scrollIntoViewIfNeeded();
       const box = (await b.boundingBox())!;
       const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
       await page.mouse.move(x, y);
