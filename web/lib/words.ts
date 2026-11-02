@@ -81,17 +81,28 @@ export function fitWords(text: string, room: number, weight: number, size: numbe
     .join("");
 }
 
-/** True once the page's web fonts have loaded, so measured widths are the fonts' own. */
-export function useFontsReady(): boolean {
-  const [ready, setReady] = useState(false);
+/**
+ * Above 0 once the fonts the table measures in have loaded (Inter Tight, DM Mono), and higher
+ * after each later font load, so widths measured before are measured again in the fonts' own.
+ */
+export function useFontsReady(): number {
+  const [ready, setReady] = useState(0);
   useEffect(() => {
     let live = true;
-    const fonts: Promise<unknown> = typeof document !== "undefined" && document.fonts ? document.fonts.ready : Promise.resolve();
-    void fonts.then(() => {
-      if (live) setReady(true);
-    });
+    const bump = () => {
+      if (live) setReady((n) => n + 1);
+    };
+    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+    const sans = family("font-sans");
+    const mono = family("font-mono");
+    const loads: Promise<unknown>[] = fonts ? [fonts.ready] : [];
+    if (fonts && sans) loads.push(fonts.load(`500 15px ${sans}`), fonts.load(`400 13px ${sans}`));
+    if (fonts && mono) loads.push(fonts.load(`500 13px ${mono}`));
+    void Promise.all(loads).catch(() => undefined).then(bump);
+    fonts?.addEventListener("loadingdone", bump);
     return () => {
       live = false;
+      fonts?.removeEventListener("loadingdone", bump);
     };
   }, []);
   return ready;
