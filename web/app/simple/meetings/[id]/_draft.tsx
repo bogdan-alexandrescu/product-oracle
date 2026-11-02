@@ -178,7 +178,8 @@ export function DraftDates({
         <ul className="divide-y divide-line">
           {items.map((i) => (
             <li key={i.id} data-draft-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <span className="min-w-0 flex-1">
+              {/* As the phone frame: the buttons on their own line under the words. */}
+              <span className="min-w-0 flex-1 max-[600px]:basis-full">
                 <strong>{i.title}</strong> · {cap(i.horizon)} · <span className="whitespace-nowrap">{span(i)}</span> · <span className="text-accent-ink">Draft</span>
               </span>
               {m.can.change && editing !== i.id && (
