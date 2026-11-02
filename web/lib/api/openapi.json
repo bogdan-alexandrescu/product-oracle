@@ -111702,6 +111702,12 @@
             "type": "array",
             "title": "Words",
             "default": []
+          },
+          "stock_rationale": {
+            "type": "boolean",
+            "title": "Stock Rationale",
+            "description": "The rationale is the stock reason for a held rewrite, which the web says once.",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -111718,7 +111724,8 @@
           "lock_version",
           "created_at",
           "updated_at",
-          "latest_version"
+          "latest_version",
+          "stock_rationale"
         ],
         "title": "SectionPatchDetail",
         "description": "A patch with its word diff against the section's text in the latest version."
@@ -111878,6 +111885,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "stock_rationale": {
+            "type": "boolean",
+            "title": "Stock Rationale",
+            "description": "The rationale is the stock reason for a held rewrite, which the web says once.",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -111893,7 +111906,8 @@
           "status",
           "lock_version",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "stock_rationale"
         ],
         "title": "SectionPatchOut"
       },

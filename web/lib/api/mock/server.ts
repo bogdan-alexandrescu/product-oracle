@@ -3292,6 +3292,14 @@ function load(): Db {
       });
     }
   }
+  // vqa-detailed review: the API has reworded its stock reason for a held rewrite; the drawer's
+  // intro still says it once and a card does not repeat it.
+  if (scenario === "held-reworded") {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+    const first = db.review_v2.patches[0];
+    if (first) first.rationale = "An agent's draft changed this approved section, so its approved text was kept.";
+  }
   if (scenario === "named-codes") {
     addGoalCodes(db.baseline);
     addCodedPrd(db);

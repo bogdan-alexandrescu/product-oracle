@@ -370,3 +370,40 @@ async def test_severity_classifies_change_requests(client):
         f"/v1/feedback/{items[0]['id']}", json={"severity": "huge"}, headers=ctx.auth
     )
     assert resp.status_code == 422
+
+
+async def test_a_held_rewrite_flags_its_stock_reason(client):
+    """vqa-detailed review: a patch says when its reason is the stock one for a held rewrite
+    (the web's drawer says it once, in its intro), so the web need not copy its wording."""
+    from oracle.auth.deps import Principal
+    from oracle.docs import service as docs_service
+
+    ctx = await setup(client)
+    assert (await verdict(client, ctx.auth, 1, "problem")).status_code == 200
+    agent_draft = replace(DRAFT, "Teams miss shared deadlines.", "Agents rewrote the problem.")
+    async with tenant_session(ctx.tenant_id) as s:
+        owner = await person(ctx.tenant_id, "owner")
+        principal = Principal(
+            tenant_id=ctx.tenant_id, kind="user", role="owner", user_id=owner.user_id
+        )
+        await docs_service.import_draft(
+            s, DOC, agent_draft, principal, cause="run_draft", origin="run"
+        )
+    patches = (
+        await client.get(f"/v1/documents/{DOC}/section-patches?status=open", headers=ctx.auth)
+    ).json()
+    assert [(p["section_key"], p["stock_rationale"]) for p in patches] == [("problem", True)]
+    detail = (await client.get(f"/v1/section-patches/{patches[0]['id']}", headers=ctx.auth)).json()
+    assert detail["stock_rationale"] is True
+
+
+def test_a_patch_with_its_own_reason_is_not_stock():
+    from oracle.review.schemas import HELD_REMOVE_REASON, HELD_REWRITE_REASON, SectionPatchOut
+
+    def out(rationale):
+        return SectionPatchOut.model_construct(rationale=rationale).stock_rationale
+
+    assert out(HELD_REWRITE_REASON) is True
+    assert out(HELD_REMOVE_REASON) is False
+    assert out("The goal trace needs the new metric.") is False
+    assert out(None) is False

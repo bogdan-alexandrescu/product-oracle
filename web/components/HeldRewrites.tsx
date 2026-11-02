@@ -173,7 +173,9 @@ function HeldRewrite({
         {patch.action === "remove" && <Chip kind="crit">Removes the section</Chip>}
         {!isOpen && <Chip kind={patch.status === "accepted" ? "pass" : "na"}>{DECIDED[patch.status as keyof typeof DECIDED]}</Chip>}
       </div>
-      {patch.rationale && <p className="mt-1 text-sm text-text2">{patch.rationale}</p>}
+      {/* vqa-detailed (QD1 a): the drawer's intro says once why a rewrite is held; a card shows
+          only its own reason, so the API's stock one (stock_rationale) is not drawn on every card. */}
+      {patch.rationale && !patch.stock_rationale && <p className="mt-1 text-sm text-text2">{patch.rationale}</p>}
       {!isOpen && patch.decision_note && (
         <p className="mt-1 text-sm text-text">
           <span className="font-semibold">Reason:</span> {patch.decision_note}

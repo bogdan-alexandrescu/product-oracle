@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from oracle.docs.schemas import (
     DateMarkOut,
@@ -376,6 +376,19 @@ PatchStatus = Literal["open", "accepted", "rejected", "superseded"]
 PatchAction = Literal["replace", "remove"]
 
 
+# Why an agent draft's patch was held (oracle.review.patches.propose_held). The web's Held
+# rewrites drawer says the rewrite reason once, in its intro, so a patch flags it
+# (stock_rationale) and a card skips it, whatever its wording.
+HELD_REWRITE_REASON = (
+    "An agent draft rewrote this approved section; the approved text was kept. "
+    "Review the rewrite as a diff."
+)
+HELD_REMOVE_REASON = (
+    "An agent draft removed or renamed this approved section; the section was kept. "
+    "Accept to remove it."
+)
+
+
 class SectionPatchOut(ORM):
     id: uuid.UUID
     document_id: uuid.UUID
@@ -398,6 +411,12 @@ class SectionPatchOut(ORM):
     lock_version: int
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def stock_rationale(self) -> bool:
+        """The rationale is the stock reason for a held rewrite, which the web says once."""
+        return getattr(self, "rationale", None) == HELD_REWRITE_REASON
 
 
 class SectionPatchDetail(SectionPatchOut):
