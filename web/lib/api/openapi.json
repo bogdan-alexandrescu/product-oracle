@@ -114598,6 +114598,17 @@
             },
             "type": "array",
             "title": "Items"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
           }
         },
         "type": "object",

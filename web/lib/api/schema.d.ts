@@ -38047,6 +38047,8 @@ export interface components {
         SimpleDraftRoadmap: {
             /** Items */
             items: components["schemas"]["SimpleDraftRoadmapItem"][];
+            /** Approved */
+            approved?: number | null;
         };
         /**
          * SimpleDraftRoadmapItem

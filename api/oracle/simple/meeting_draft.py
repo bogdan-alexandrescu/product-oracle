@@ -54,10 +54,39 @@ async def _spans(db: AsyncSession, rows: list[RoadmapItem]) -> dict[uuid.UUID, t
     return out
 
 
-async def draft_out(db: AsyncSession, document: Document) -> SimpleDraftRoadmap | None:
+# The ref on the PRD subject of a meeting's Approve these N dates decision: "draft-dates:N".
+APPROVED_REF = "draft-dates"
+
+
+async def _approved_here(
+    db: AsyncSession, meeting_id: uuid.UUID, document_id: uuid.UUID
+) -> int | None:
+    """How many items this meeting's Approve these N dates put on the roadmap, or None."""
+    from oracle.decisions.models import Decision
+    from oracle.simple.models import SimpleMeetingDecision
+
+    rows = await db.scalars(
+        select(Decision.subjects)
+        .join(SimpleMeetingDecision, SimpleMeetingDecision.decision_id == Decision.id)
+        .where(SimpleMeetingDecision.meeting_id == meeting_id)
+        .order_by(SimpleMeetingDecision.at.desc())
+    )
+    for subjects in rows:
+        for s in subjects or []:
+            ref = str(s.get("ref") or "")
+            if s.get("id") == str(document_id) and ref.startswith(f"{APPROVED_REF}:"):
+                n = ref.partition(":")[2]
+                return int(n) if n.isdigit() else None
+    return None
+
+
+async def draft_out(
+    db: AsyncSession, document: Document, meeting_id: uuid.UUID | None = None
+) -> SimpleDraftRoadmap | None:
     rows = await _items(db, document.id)
     if not rows:
-        return None
+        n = await _approved_here(db, meeting_id, document.id) if meeting_id else None
+        return SimpleDraftRoadmap(items=[], approved=n) if n is not None else None
     spans = await _spans(db, rows)
     return SimpleDraftRoadmap(
         items=[
@@ -173,4 +202,5 @@ async def approve_dates(db: AsyncSession, principal: Any, meeting_id: uuid.UUID)
     await db.flush()
     n = len(rows)
     title = f"{document.title} dates approved: {n} item{'' if n == 1 else 's'} on the roadmap"
-    await record_meeting_decision(db, principal, meeting_id, title, [], [])
+    subject = {"kind": "document", "id": str(document.id), "ref": f"{APPROVED_REF}:{n}"}
+    await record_meeting_decision(db, principal, meeting_id, title, [subject], [])

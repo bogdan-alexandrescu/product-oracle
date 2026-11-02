@@ -1026,7 +1026,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         not_approved=not_approved or [],
         notes=await _notes_out(db, m),
         agenda=await _agenda_out(db, m),
-        draft_roadmap=await meeting_draft.draft_out(db, document),
+        draft_roadmap=await meeting_draft.draft_out(db, document, m.id),
     )
 
 

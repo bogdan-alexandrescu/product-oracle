@@ -1697,6 +1697,9 @@ class SimpleDraftRoadmap(BaseModel):
     dated items, shown hatched in the Roadmap step until the meeting approves the dates."""
 
     items: list[SimpleDraftRoadmapItem]
+    # Once this meeting approved the dates (no draft left): how many items it put on the
+    # roadmap, so the step says so after a reload too; null while the dates are draft.
+    approved: int | None = None
 
 
 class SimpleDraftDatesIn(BaseModel):
