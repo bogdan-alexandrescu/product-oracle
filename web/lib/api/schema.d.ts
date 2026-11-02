@@ -29872,6 +29872,11 @@ export interface components {
             decider_approved: boolean;
             /** Waiting On */
             waiting_on: components["schemas"]["SimplePersonRef"][];
+            /**
+             * Reviewers
+             * @default []
+             */
+            reviewers: components["schemas"]["SimplePersonRef"][];
             /** Can Submit */
             can_submit: boolean;
             /** Reminded At */

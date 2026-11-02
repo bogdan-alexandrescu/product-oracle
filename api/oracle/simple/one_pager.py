@@ -1230,8 +1230,15 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
     )
     ids = {c.by for c in live + shown} | ({w.decider} if w.decider else set()) | set(w.track_owners)
     ids |= {c.by for c in unseen + not_shown} | {i for c in not_shown for i in c.routed_to or []}
+    required: list[uuid.UUID] = []
     if d is not None:
         ids |= set(d.waiting_on or [])
+        if sees and d.status == "working":
+            # build-review: Send for approval names who approves before it is sent.
+            from oracle.review.state import effective_policy
+
+            required = list((await effective_policy(db, document)).mandatory_reviewer_ids)
+            ids |= set(required)
     owner_id = await document_owner(db, document, b.version, w)
     if owner_id:
         ids.add(owner_id)
@@ -1395,6 +1402,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
             waiting_on=[
                 SimplePersonRef(id=i, name=names.get(i, "someone")) for i in d.waiting_on or []
             ],
+            reviewers=[SimplePersonRef(id=i, name=names.get(i, "someone")) for i in required],
             can_submit=d.status == "working" and decides(principal, w),
             reminded_at=reminded_at(d),
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),

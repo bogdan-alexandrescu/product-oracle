@@ -1120,6 +1120,9 @@ class OnePagerDraft(BaseModel):
     # Approved in a meeting by the decider, waiting on required reviewers' approval.
     decider_approved: bool
     waiting_on: list[SimplePersonRef]
+    # A working draft: who approves it once sent (the PRD's required reviewers); the owner
+    # may add more when sending (build-review: Send for approval…).
+    reviewers: list[SimplePersonRef] = []
     can_submit: bool
     # Remind (owner, 2026-10-26): the last nudge to a waiting reviewer, and whether the
     # caller (the PRD's owners, its decider) may nudge one now (each at most once a day).

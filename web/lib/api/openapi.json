@@ -91501,6 +91501,14 @@
             "type": "array",
             "title": "Waiting On"
           },
+          "reviewers": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Reviewers",
+            "default": []
+          },
           "can_submit": {
             "type": "boolean",
             "title": "Can Submit"
