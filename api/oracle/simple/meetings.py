@@ -915,7 +915,10 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     if me is None or not (me == w.decider or has_role(principal.role, "owner")):
         raise MeetingError(403, "Only the PRD's decider (or an owner) approves in the meeting")
     session = await db.get(SimpleSession, m.session_id)
-    present = [i for i in m.attendee_ids if i not in m.absent_ids and i != me]
+    # walkc-meeting-r2 review: present is joined and not marked away; one invited who never
+    # pressed Join reads "invited, not joined yet" and is asked in the Inbox like an absent one.
+    joined = {m.presenter_id, *(m.joined_ids or [])}
+    present = [i for i in m.attendee_ids if i in joined and i not in m.absent_ids and i != me]
     # The PRD and every document the meeting drafted, read before the importer can roll
     # the session back: a refused problem names its section by these documents' headings.
     documents = {m.prd_document_id, *await db.scalars(
@@ -929,8 +932,10 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
         raise MeetingError(e.status, str(e)) from e
     except ImportRejected as e:
         # walkc-meeting: never the raw "draft rejected: 38 problem(s)": each problem in
-        # plain words, with what to do about it and where.
-        headings = await _headings(db, documents)
+        # plain words, with what to do about it and where; its section by the headings of
+        # the document whose draft was refused, when known (two may share a section key).
+        refused = getattr(e, "document_id", None)
+        headings = await _headings(db, {refused} if refused else documents)
         raise MeetingError(422, approve_problems(e.problems, headings=headings)) from e
     if not result.drafts:
         if result.not_approved:

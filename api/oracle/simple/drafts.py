@@ -61,6 +61,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.docs.parser import DraftError as ImportRejected
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple.models import (
@@ -1313,11 +1314,16 @@ async def approve_in_meeting(
                 )
             )
             continue
-        if d.status == "working":
-            await submit(db, dp, d.id)
-        other = await _approve(
-            db, session.tenant_id, d, w, dp, list(present_reviewer_ids), session.id
-        )
+        try:
+            if d.status == "working":
+                await submit(db, dp, d.id)
+            other = await _approve(
+                db, session.tenant_id, d, w, dp, list(present_reviewer_ids), session.id
+            )
+        except ImportRejected as e:
+            # The refused draft's document: its problems name sections by its own headings.
+            e.document_id = d.document_id  # type: ignore[attr-defined]
+            raise
         out.extend(await outs(db, dp, [d], other))
     return SimpleMeetingApproval(drafts=out, not_approved=skipped)
 

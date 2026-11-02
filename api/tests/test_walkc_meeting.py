@@ -552,7 +552,9 @@ async def test_a_refused_approve_names_the_section_by_its_own_documents_heading(
 
         prd = await s.scalar(select(Document.id).where(Document.slug == PRD))
         # The PRD's version is read after the roadmap's, so a merged lookup would take it.
-        top = await s.scalar(select(DocumentVersion.number).order_by(DocumentVersion.number.desc()).limit(1))  # fmt: skip
+        top = await s.scalar(
+            select(DocumentVersion.number).order_by(DocumentVersion.number.desc()).limit(1)
+        )
         for doc, heading in ((w.roadmap_id, "Plan sources"), (prd, "PRD sources")):
             version = await s.scalar(
                 select(DocumentVersion)

@@ -312,6 +312,9 @@ async def test_approve_absent_reviewer_then_publish(client):
     assert [a["present"] for a in r.json()["attendees"] if a["id"] == uid(w, "reviewer2")] == [
         False
     ]
+    # walkc-meeting-r2 review: the present reviewer has joined (an invited one is not present).
+    r = await client.post(f"{MEETINGS}/{m['id']}/join", headers=w.ctx.as_("approver"))
+    assert r.status_code == 200, r.text
     assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
     for who in ("approver", "commenter"):
         r = await client.post(f"{MEETINGS}/{m['id']}/approve", headers=w.ctx.as_(who))
