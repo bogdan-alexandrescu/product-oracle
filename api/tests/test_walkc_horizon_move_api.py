@@ -18,6 +18,11 @@ from tests.test_simple_changes_api import CHANGES, World, clock, make_people  # 
 URL = "/v1/simple/roadmap"
 
 
+async def read_items(client, ctx) -> dict:
+    body = (await client.get(URL, headers=ctx.as_("decider"))).json()
+    return {i["key"]: i for i in body["items"]}
+
+
 async def test_a_horizon_move_moves_an_items_own_dates(client):
     ctx = await make_people()
     w = await World(ctx).build(decider=True, ops=["change_horizon"])
@@ -32,7 +37,7 @@ async def test_a_horizon_move_moves_an_items_own_dates(client):
     assert a.horizon == "later"
     assert (a.start_date, a.end_date) == (date(2026, 10, 1) + shift, date(2026, 11, 15) + shift)
     assert a.date_source == "typed"
-    items = {i["key"]: i for i in (await client.get(URL, headers=ctx.as_("decider"))).json()["items"]}
+    items = await read_items(client, ctx)
     got = items["change_horizon-a"]
     assert (got["start"]["date"], got["end"]["date"]) == (
         (date(2026, 10, 1) + shift).isoformat(),
@@ -53,5 +58,5 @@ async def test_a_horizon_move_moves_an_items_own_dates(client):
     assert r.status_code == 201, r.text
     u = await w.item("change_horizon-u")
     assert (u.horizon, u.start_date, u.end_date) == ("later", None, None)
-    items = {i["key"]: i for i in (await client.get(URL, headers=ctx.as_("decider"))).json()["items"]}
+    items = await read_items(client, ctx)
     assert items["change_horizon-u"]["start"]["date"] == win["later"].isoformat()
