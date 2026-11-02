@@ -149,7 +149,7 @@ test.describe("ChatCard", () => {
 test.describe("GoalSuggestions", () => {
   test.use(DESKTOP);
 
-  test("qa-simple-roadmap-24/44: '+ Suggest a feature' and 'Ask Oracle in the chat' look like buttons; a goal with none points to the action", async ({ page, context }) => {
+  test("qa-simple-roadmap-24/44: '+ Suggest a feature' and 'Ask in the chat' look like buttons; a goal with none points to the action", async ({ page, context }) => {
     await context.addInitScript(([key]) => localStorage.setItem(key, "simple-home"), [MOCK_SCENARIO_KEY]);
     await login(page);
     await page.goto("/simple");

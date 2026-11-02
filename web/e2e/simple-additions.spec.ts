@@ -280,7 +280,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     /**
      * Card simple-additions-viewer: protects = a viewer sees no quick add, no drop targets'
-     * effect and no Accept, Reject, form or Ask Oracle for more, but reads the suggestions; fails_when
+     * effect and no Accept, Reject, form or Get more from Oracle, but reads the suggestions; fails_when
      * = any of them shows; no_claim = the API's 403s (its tests).
      */
     test("a viewer reads suggestions and cannot add or accept", async ({ page }) => {
@@ -299,7 +299,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     /**
      * Card simple-additions-priorities: protects = Priorities' goal buckets show a goal's
-     * one Suggestions button whose drawer has Ask Oracle for more and Accept; Merge on an unranked draft is a real
+     * one Suggestions button whose drawer has Get more from Oracle and Accept; Merge on an unranked draft is a real
      * merge (merge_item): the roadmap shows the draft "Merged into <code>"; fails_when = the
      * bucket lacks the suggestions, or Merge is a cut on the roadmap; no_claim = bucket shares.
      */

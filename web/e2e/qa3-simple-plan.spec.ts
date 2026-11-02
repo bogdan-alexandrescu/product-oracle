@@ -404,7 +404,7 @@ test.describe("QA pass 3: simple-plan, the suggestions drawer", () => {
     if (/· 0$/.test(p ?? "") && !/· 0$/.test(o ?? "")) await expect(oracle).toHaveAttribute("aria-selected", "true");
     // qa-simple-plan-35: one suggest control, a chat button that says where it goes.
     await expect(drawer.getByTestId("suggest-first-feature")).toHaveCount(0);
-    await expect(drawer.getByTestId("suggest-from-chat")).toHaveText("Ask Oracle in the chat");
+    await expect(drawer.getByTestId("suggest-from-chat")).toHaveText("Ask in the chat");
     await page.keyboard.press("Escape");
     await expect(drawer).toHaveCount(0);
     await expect(opener).toBeFocused();
@@ -414,7 +414,7 @@ test.describe("QA pass 3: simple-plan, the suggestions drawer", () => {
     await expect(opener).toBeFocused();
   });
 
-  /* qa-simple-plan-33, -34: the owner is not told someone else reviews; a look-alike links and offers a merge. */
+  /* qa-simple-plan-33, -34: the owner is not told someone else reviews; a look-alike links and has its own Duplicate button. */
   test("the owner reads they decide; look-alikes link and offer a merge", async ({ page }) => {
     await setUp(page, { scenario: "simple-plan" });
     await open(page, "?tab=buckets");
@@ -428,7 +428,7 @@ test.describe("QA pass 3: simple-plan, the suggestions drawer", () => {
     await expect(drawer.getByTestId("goal-suggestion").first()).toBeVisible({ timeout: 15_000 });
     if ((await looks.count()) > 0) {
       await expect(looks.first().getByTestId("looks-like-link")).toBeVisible();
-      await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Same as this: decline the suggestion");
+      await expect(looks.first().getByTestId("looks-like-duplicate")).toHaveText("Duplicate");
     }
     // qa-simple-plan-36: one scrollbar (the page behind does not scroll); an opened flow comes into view.
     expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe("hidden");
