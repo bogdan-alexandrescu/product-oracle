@@ -119,6 +119,11 @@ async function mouseDrag(page: Page, target: Locator, dx: number, dy = 0) {
   const box = (await target.boundingBox())!;
   const x = box.x + Math.min(box.width / 2, 20);
   const y = box.y + box.height / 2;
+  // A row scrolled into sight is painted (content-visibility) a frame or two later: until it is,
+  // a press there lands on the row, not its bar, so wait for the bar under the pointer.
+  await expect
+    .poll(() => target.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y]))
+    .toBe(true);
   await page.mouse.move(x, y);
   await page.mouse.down();
   await recordFrames(page);
