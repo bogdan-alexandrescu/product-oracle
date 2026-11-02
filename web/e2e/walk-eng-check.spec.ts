@@ -166,12 +166,15 @@ test("note focus: focusing Note to the agents keeps the list where it was and th
   expect(await page.evaluate(() => window.scrollY)).toBe(y);
   await expect(selected).toHaveAttribute("data-key", before!);
   // From the keyboard too: focus moves to the note (as Tab does) and the page stays put.
-  // (The agents' questions atop the review push the table down: clicking the title scrolls up to it.)
-  await page.getByRole("heading", { level: 1 }).first().click();
-  const atTitle = await page.evaluate(() => window.scrollY);
+  // (Focus leaves the note in place: a click on the title would scroll up to it, the agents'
+  // questions atop the review having pushed the table down, and hide a jump.)
+  await note.evaluate((el) => (el as HTMLElement).blur());
+  await expect(note).not.toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(y);
   await note.evaluate((el) => (el as HTMLElement).focus());
+  await expect(note).toBeFocused();
   await page.waitForTimeout(300);
-  expect(await page.evaluate(() => window.scrollY)).toBe(atTitle);
+  expect(await page.evaluate(() => window.scrollY)).toBe(y);
   await expect(selected).toHaveAttribute("data-key", before!);
   await note.fill("Keep the address book small.");
   await expect(selected).toHaveAttribute("data-key", before!);
