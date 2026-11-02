@@ -64,6 +64,13 @@ export function AgentQuestions({ runId, cpId, features }: { runId: string; cpId:
     setChanging((c) => [...c, x.id]);
     setOpened(x.id);
   };
+  // Cancel a Change: the answer stands as saved and the card goes back to Answered.
+  const cancel = (x: Question) => {
+    setPicked((m) => ({ ...m, [x.id]: "" }));
+    setNotes((m) => ({ ...m, [x.id]: "" }));
+    setChanging((c) => c.filter((id) => id !== x.id));
+    setOpened(null);
+  };
 
   return (
     <section className="mb-4 rounded-panel border border-line bg-surface2 p-3" aria-label="Questions from the agents" data-testid="agent-questions">
@@ -72,7 +79,9 @@ export function AgentQuestions({ runId, cpId, features }: { runId: string; cpId:
         <span className="tnum text-sm text-text2" data-testid="agent-questions-count">
           {open.length} open · {done.length} answered
         </span>
-        <span className="text-[13px] text-text2">Answer here before you decide; each answer goes to {next ?? "the next step"} with the decision.</span>
+        <span className="text-[13px] text-text2" data-testid="agent-questions-lede">
+          {data.can_answer ? "Answer here before you decide; each answer" : "Each answer"} goes to {next ?? "the next step"} with the decision.
+        </span>
       </div>
       {error && (
         <p className="mb-2 text-sm text-crit" role="alert">
@@ -96,6 +105,7 @@ export function AgentQuestions({ runId, cpId, features }: { runId: string; cpId:
               onNote={(t) => setNotes((m) => ({ ...m, [x.id]: t }))}
               onOpen={(on) => setOpened(on ? x.id : null)}
               onSave={() => void save(x)}
+              onCancel={x.answer ? () => cancel(x) : undefined}
             />
           ))}
         </div>
@@ -176,6 +186,7 @@ function OpenCard({
   onNote,
   onOpen,
   onSave,
+  onCancel,
 }: {
   q: Question;
   about: string;
@@ -189,6 +200,8 @@ function OpenCard({
   onNote: (text: string) => void;
   onOpen: (on: boolean) => void;
   onSave: () => void;
+  /** Set while an answered question is being changed: back to the saved answer. */
+  onCancel?: () => void;
 }) {
   const nextWord = next ?? "The next step";
   return (
@@ -243,6 +256,11 @@ function OpenCard({
             <Button variant="ghost" disabled={saving} onClick={() => onPick("")}>
               Clear
             </Button>
+            {onCancel && (
+              <Button variant="ghost" disabled={saving} onClick={onCancel}>
+                Cancel
+              </Button>
+            )}
             <span className="text-[13px] text-text2">Goes to {next ?? "the next step"} with this stop&apos;s decision.</span>
           </div>
         </div>
@@ -252,6 +270,14 @@ function OpenCard({
           <button type="button" className="font-semibold text-accent-ink underline" onClick={() => onOpen(!open)}>
             {open ? "Hide why" : "Why they ask"}
           </button>
+          {onCancel && (
+            <>
+              {" "}
+              <button type="button" className="font-semibold text-accent-ink underline" onClick={onCancel}>
+                Cancel
+              </button>
+            </>
+          )}
         </p>
       )}
     </div>
