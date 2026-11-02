@@ -64207,6 +64207,24 @@
             ],
             "title": "Where",
             "default": "body"
+          },
+          "days": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Days",
+            "default": []
+          },
+          "missing": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Missing",
+            "default": []
           }
         },
         "type": "object",

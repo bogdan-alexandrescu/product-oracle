@@ -19777,6 +19777,16 @@ export interface components {
              * @enum {string}
              */
             where: "title" | "heading" | "body";
+            /**
+             * Days
+             * @default []
+             */
+            days: string[];
+            /**
+             * Missing
+             * @default []
+             */
+            missing: string[];
         };
         /** DateRightsOut */
         DateRightsOut: {

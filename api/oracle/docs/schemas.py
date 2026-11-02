@@ -302,6 +302,10 @@ class DateMarkOut(BaseModel):
     # Where it is written: the front matter title (``section_key`` is ""), a section's
     # heading or its body.
     where: Literal["title", "heading", "body"] = "body"
+    # Every day it reads as (a numeric date such as 05/06/2026 reads two ways), and those
+    # no verified basis supports yet: each needs one before the date is verified (O4).
+    days: list[date] = []
+    missing: list[date] = []
 
 
 class VersionOut(VersionSummary):
