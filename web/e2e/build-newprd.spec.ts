@@ -95,6 +95,7 @@ for (const [label, size] of [
       // Not the person asking.
       await expect(later.getByRole("button", { name: /Avery Stone/ })).toHaveCount(0);
       await later.getByRole("button", { name: /Priya Raman/ }).click();
+      await expect(question(page).getByRole("button", { name: "Ask Priya Raman" })).toBeInViewport();
       await expect(sheet(page).getByTestId("np-tally")).toHaveText("3 answered · 1 not known · 2 left");
       await question(page).getByRole("button", { name: "Ask Priya Raman" }).click();
       await expect(sheet(page).getByText("Asked of Priya Raman. The draft starts without it.")).toBeVisible();

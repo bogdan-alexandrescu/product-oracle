@@ -163,7 +163,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
   useEffect(() => {
     if (!intake) return;
     panel.current?.querySelector('[data-testid="np-question"]')?.scrollIntoView({ block: "end" });
-  }, [intake, asked, asking]);
+  }, [intake, asked, asking, people]);
 
   const at = given.length; // the question on screen, from 0
   const current = intake ? questions[at] : undefined;
