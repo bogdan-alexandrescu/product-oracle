@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { fakeGoogle, FOLDER } from "./google-fake";
-import { login } from "./helpers";
+import { login, searchSources } from "./helpers";
 
 const PICKED = [
   { id: "1DocRoadmapExample", name: "Roadmap notes" },
@@ -162,8 +162,7 @@ test("sources › Google Docs: removing a folder and saving hides its docs at on
   await login(page);
   // A doc from the "Product specs" folder is in search.
   await page.goto("/sources");
-  await page.getByLabel("Search", { exact: true }).fill("guests");
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchSources(page, "guests");
   await expect(page.getByTestId("search-hit")).toHaveCount(1);
   await expect(page.getByTestId("search-hit")).toContainText("Checkout spec");
 
@@ -183,8 +182,7 @@ test("sources › Google Docs: removing a folder and saving hides its docs at on
 
   // Gone from search too, with no sync run.
   await page.goto("/sources");
-  await page.getByLabel("Search", { exact: true }).fill("guests");
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchSources(page, "guests");
   await expect(page.getByText("Nothing in your sources matches “guests”.")).toBeVisible();
   await expect(page.getByTestId("search-hit")).toHaveCount(0);
 });
