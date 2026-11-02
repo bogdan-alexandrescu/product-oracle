@@ -176,7 +176,8 @@ test.describe("desktop, dark", () => {
     await tap(page.getByRole("button", { name: "Sign in" }));
     await expect(page).not.toHaveURL(/\/login/);
     await page.goto("/simple/roadmap");
-    const bar = page.locator('[data-testid="bar"][data-item="alert-digest"]');
+    // The Timeline's bar for the item (build-roadmap's Timeline is rows of bars, not the old svg).
+    const bar = page.locator('[data-testid="timeline-row"][data-item="alert-digest"] [data-testid="timeline-bar"]');
     const start = await bar.getAttribute("data-start");
     expect(start).toBeTruthy();
     await page.goto(MEETING);

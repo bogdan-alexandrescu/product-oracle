@@ -26,21 +26,29 @@ async function lanes(page: Page) {
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
-  test("qa-plan-54: the legend and the milestone ends write days as 'Oct 31'", async ({ page }) => {
+  // Moved: the Timeline's key writes Today month first; the milestone ends are the Gantt's now.
+  test("qa-plan-54: the Timeline's key and the Gantt's milestone ends write days as 'Oct 31'", async ({ page }) => {
     await lanes(page);
-    const legend = page.getByTestId("simple-chart").getByTestId("legend");
-    const today = legend.getByTestId("legend-item").filter({ hasText: /^Today/ });
+    const key = page.getByTestId("timeline-key");
+    const today = key.locator('[data-key="today"]');
     await expect(today).toHaveCount(1);
     const words = (await today.innerText()).trim().replace(/^Today\s*/, "");
     expect(words).toMatch(DAY);
-    await expect(legend).not.toContainText(GB_DAY);
+    await expect(key).not.toContainText(GB_DAY);
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+    await expect(page.getByTestId("legend")).not.toContainText(GB_DAY);
+    await expect(page.getByTestId("milestone-end-label").first()).toBeVisible();
     for (const label of await page.getByTestId("milestone-end-label").allTextContents()) expect(label).not.toMatch(GB_DAY);
     await expect(page.getByTestId("milestone-end-label").first()).toHaveText("M1 ends Nov 27");
   });
 
-  test("qa-plan-55: a pill's label never runs past its pill or under its milestone mark", async ({ page }) => {
+  // Re-pointed: the pills with slices and milestone marks are the Gantt's now.
+  test("qa-plan-55: a Gantt pill's label never runs past its pill or under its milestone mark", async ({ page }) => {
     await lanes(page);
+    await page.getByTestId("format-gantt").click();
     const chart = page.getByTestId("simple-chart");
+    await expect(chart).toHaveAttribute("data-format", "gantt");
     await expect(chart.locator('g[data-testid="bar"]').first()).toBeVisible();
     const bad = await chart.locator('g[data-testid="bar"]').evaluateAll((bars) => {
       const out: string[] = [];
@@ -98,12 +106,12 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use(PHONE);
 
-  test("qa-plan-54: an open lane's rows write days as 'Nov 2 – Nov 13'", async ({ page }) => {
+  // Moved: a phone's Timeline is a list by quarter; its rows write days month first.
+  test("qa-plan-54: the phone Timeline's rows write days as 'Nov 2 – Nov 13'", async ({ page }) => {
     await lanes(page);
-    const lane = page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: /^Reliability$/ }) });
-    await expect(lane).toHaveAttribute("data-open", "true");
-    const list = page.getByTestId("lane-list");
-    await expect(list.getByTestId("lane-row").first()).toContainText("Nov 2 – Nov 13");
+    const list = page.getByTestId("timeline-list");
+    await expect(list).toBeVisible();
+    await expect(list.getByTestId("timeline-row").filter({ hasText: "Nov 2 – Nov 13" }).first()).toBeVisible();
     await expect(list).not.toContainText(GB_DAY);
   });
 });

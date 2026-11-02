@@ -125,7 +125,8 @@ test.describe("desktop, format", () => {
    */
   test("a span crossing into next year shows the year once, on the end that needs it", async ({ page }) => {
     await openBoard(page);
-    await page.getByTestId("format-timeline").click();
+    // Oracle's date suggestions are drawn on the Gantt (the Timeline shows none).
+    await page.getByTestId("format-gantt").click();
     await page.locator('[data-testid="suggestion-open"][data-item="alert-sso"]').click();
     const pop = page.getByTestId("suggestion-popover");
     await pop.getByRole("button", { name: "Accept" }).click();

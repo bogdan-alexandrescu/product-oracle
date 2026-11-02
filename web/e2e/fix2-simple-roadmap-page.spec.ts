@@ -16,7 +16,8 @@ const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
 const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
-const callout = (page: Page, key: string): Locator => page.locator(`[data-testid="broken-callout"][data-item="${key}"]`);
+// mk-qa4-roadmap QR3 A: a broken link reads in the panel above the chart, not in a callout over its bar.
+const conflict = (page: Page, key: string): Locator => page.getByTestId("conflicts").locator(`[data-testid="conflict"][data-item="${key}"]`);
 const depArrow = (page: Page, from: string, to: string): Locator =>
   page.locator(`[data-testid="dep-arrow"][data-from="${from}"][data-to="${to}"]`);
 
@@ -24,6 +25,12 @@ async function open(page: Page, email?: string) {
   await login(page, email);
   await page.goto(URL);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
+}
+
+/** The Gantt, which draws the dependency arrows and floats the item card. */
+async function gantt(page: Page) {
+  await page.getByTestId("format-gantt").click();
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
 }
 
 /** A box's edges, rounded so a sub-pixel layout difference does not fail the check. */
@@ -80,15 +87,16 @@ test.describe("desktop", () => {
   }
 
   /**
-   * #4: the red callout beside a broken bar (alert-digest depends on alert-rules) stays
-   * inside the chart it is drawn over, not past its right edge.
+   * #4: the broken link of alert-digest (it depends on alert-rules) reads in the Timeline's
+   * broken-links panel, inside the chart's box, not past its right edge.
    */
-  test("a broken-link callout stays inside the chart's visible box", async ({ page }) => {
+  test("a broken link reads inside the Timeline's broken-links panel", async ({ page }) => {
     await open(page);
-    await expect(depArrow(page, "alert-rules", "alert-digest")).toHaveAttribute("data-state", "red");
-    const c = callout(page, "alert-digest");
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "timeline");
+    const c = conflict(page, "alert-digest");
     await expect(c).toBeVisible();
-    const chart = edges((await page.getByTestId("chart-scroll").boundingBox())!);
+    await expect(c).toContainText("Weekly alert digest");
+    const chart = edges((await page.getByTestId("simple-chart").boundingBox())!);
     const box = edges((await c.boundingBox())!);
     expect(box.left).toBeGreaterThanOrEqual(chart.left - 1);
     expect(box.right).toBeLessThanOrEqual(chart.right + 1);
@@ -101,6 +109,7 @@ test.describe("desktop", () => {
    */
   test("Move the dependents fixes every sibling dependent, not only the one clicked", async ({ page }) => {
     await open(page);
+    await gantt(page);
     await expect(depArrow(page, "alert-rules", "alert-digest")).toHaveAttribute("data-state", "red");
     await expect(depArrow(page, "alert-rules", "alert-mobile")).toHaveAttribute("data-state", "red");
     await page.getByTestId("needs-decision").click();
@@ -184,11 +193,13 @@ test.describe("desktop", () => {
   });
 
   /**
-   * #47: the item card floats with a dimmed backdrop behind it on desktop; clicking the
-   * backdrop closes the card, the same as its own close button.
+   * #47: on the Gantt the item card floats with a dimmed backdrop behind it on desktop;
+   * clicking the backdrop closes the card, the same as its own close button. (The Timeline
+   * opens an item in a side panel that dims nothing.)
    */
-  test("the item card shows a backdrop and closes when it is clicked", async ({ page }) => {
+  test("the Gantt's item card shows a backdrop and closes when it is clicked", async ({ page }) => {
     await open(page);
+    await gantt(page);
     await bar(page, "alert-rules").click();
     const card = page.getByTestId("floating-card");
     await expect(card).toBeVisible();
@@ -204,7 +215,7 @@ test.describe("desktop", () => {
    */
   test("the draft toast sits in a corner, not mid-chart", async ({ page }) => {
     await open(page);
-    const chart = (await page.getByTestId("chart-scroll").boundingBox())!;
+    const chart = (await page.getByTestId("simple-chart").boundingBox())!;
     await page.getByLabel("Add an item").fill("A new idea from the test");
     const roadmap = page.getByTestId("quick-add-roadmap");
     if (await roadmap.count()) await roadmap.selectOption({ label: "Alerts roadmap" });
@@ -223,18 +234,19 @@ test.describe("phone", () => {
   test.use(PHONE);
 
   /**
-   * #5: on a phone's Waterfall, the broken callout for the estimated dependent (Mobile alert
-   * push) is not cut off on the chart's left edge.
+   * #5: on a phone's Waterfall, the broken link of the estimated dependent (Mobile alert
+   * push) reads in the panel above the chart, not cut off at either edge of the screen.
    */
-  test("a broken-link callout is not cut off on a phone Waterfall", async ({ page }) => {
+  test("a broken link is not cut off on a phone Waterfall", async ({ page }) => {
     await open(page);
     await page.getByTestId("format-waterfall").click();
-    const c = callout(page, "alert-mobile");
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+    const c = conflict(page, "alert-mobile");
     await expect(c).toBeVisible();
     await expect(c).toContainText("Mobile alert push");
-    const chart = edges((await page.getByTestId("chart-scroll").boundingBox())!);
     const box = edges((await c.boundingBox())!);
-    expect(box.left).toBeGreaterThanOrEqual(chart.left - 1);
+    expect(box.left).toBeGreaterThanOrEqual(-1);
+    expect(box.right).toBeLessThanOrEqual(PHONE.viewport.width + 1);
   });
 
   /**

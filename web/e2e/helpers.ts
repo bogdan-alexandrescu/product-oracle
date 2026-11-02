@@ -24,14 +24,11 @@ export async function login(page: Page, email: string = ADMIN.email) {
  * lane's list.
  */
 export async function openRoadmapItem(page: Page, key: string) {
-  if ((page.viewportSize()?.width ?? 1366) > 640) {
-    const bar = page.locator(`g[data-testid="bar"][data-item="${key}"]`);
-    await expect(bar).toBeVisible();
-    await bar.click();
-    return;
-  }
-  await page.locator(`[data-testid="phone-lane"][data-items~="${key}"]`).click();
-  await page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().click();
+  // The Timeline (mk-qa4-roadmap QR1 A): an item's bar on a desktop, its row in the quarter list on a phone.
+  const bar = page.locator(`[data-testid="timeline-row"][data-item="${key}"] [data-testid="timeline-bar"]`).first();
+  await bar.scrollIntoViewIfNeeded();
+  await expect(bar).toBeVisible();
+  await bar.click();
 }
 
 /**

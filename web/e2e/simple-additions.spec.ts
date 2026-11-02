@@ -27,9 +27,11 @@ async function openRoadmap(page: Page, email?: string) {
   await login(page, email);
   await page.goto(ROADMAP);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  // A phone's Timeline (timeline-overlap B3) draws thin lanes, not bars.
-  if (page.viewportSize()!.width > 640) await expect(bar(page, "alert-rules")).toBeVisible();
-  else await expect(page.getByTestId("phone-lane").first()).toBeVisible();
+  // The quarter drops and drawn bars are the Gantt's on a desktop; a phone's Timeline is a list by quarter.
+  if (page.viewportSize()!.width > 640) {
+    await page.getByTestId("format-gantt").click();
+    await expect(bar(page, "alert-rules")).toBeVisible();
+  } else await expect(page.getByTestId("timeline-list")).toBeVisible();
 }
 
 /** A lane's key on the Timeline (timeline-overlap B2), by its title. */
@@ -101,16 +103,21 @@ for (const scheme of ["light", "dark"] as const) {
      */
     test("an owner drags a quick add onto a quarter, sees Oracle draft it, and undoes it", async ({ page }) => {
       await openRoadmap(page);
+      // Quick add drops on the Timeline's quarters (mk-qa4-roadmap); the drawn bar is then read on the Gantt.
+      await page.getByTestId("format-timeline").click();
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
       await expect(toastWith(page, "Added Quiet hours setting as a draft")).toBeVisible();
+      // The draft's row on the Timeline says so (its Draft chip by the name).
+      await expect(page.locator('[data-testid="timeline-row"][data-item="quiet-hours-setting"]').getByTestId("draft-tag")).toHaveText("Draft");
+      await page.getByTestId("format-gantt").click();
       const b = bar(page, "quiet-hours-setting");
       await expect(b).toHaveAttribute("data-kind", "draft");
-      // B2: the draft's pill says so ("Draft · Quiet hours setting").
-      await expect(b.getByTestId("draft-tag")).toHaveText("Draft");
       await toastWith(page, "Added Quiet hours setting as a draft").getByRole("button", { name: "Undo" }).click();
       await expect(b).toHaveCount(0);
 
+      await page.getByTestId("format-timeline").click();
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
+      await page.getByTestId("format-gantt").click();
       await expect(b).toHaveAttribute("data-kind", "draft");
       await b.locator("rect[data-body]").click();
       const card = page.getByTestId("floating-card");
@@ -267,6 +274,7 @@ for (const scheme of ["light", "dark"] as const) {
       await panel.getByRole("button", { name: "Close" }).click();
 
       await switchTo(page, "admin@example.com");
+      await page.getByTestId("format-gantt").click();
       await expect(bar(page, "alert-rules")).toBeVisible();
       await page.getByTestId("needs-decision").click();
       const tray = page.getByTestId("decision-tray");
@@ -349,9 +357,8 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("quick-add")).toHaveCount(0);
       await sheetAdd(page, "Mute a rule for a week", "Next", "Add");
       await expect(toastWith(page, "Added Mute a rule for a week as a draft")).toBeVisible();
-      // B3: the draft is listed in its lane (No goal) with its Draft tag; its row opens the card.
-      await page.getByTestId("phone-lane").filter({ hasText: "No goal" }).click();
-      const row = page.locator('[data-testid="lane-row"][data-item="mute-a-rule-for-a-week"]');
+      // mk-qa4-roadmap QR1 A: the draft is listed in its quarter with its Draft tag; its row opens the card.
+      const row = page.locator('[data-testid="timeline-list"] [data-testid="timeline-row"][data-item="mute-a-rule-for-a-week"]');
       await expect(row.getByTestId("draft-tag")).toHaveText("Draft");
       await noSidewaysScroll(page);
       await row.click();

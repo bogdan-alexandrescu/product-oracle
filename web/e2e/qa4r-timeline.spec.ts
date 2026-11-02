@@ -4,8 +4,10 @@ import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
 /*
- * QA pass 4, the Simple roadmap's Timeline and Waterfall (qa4-simple-roadmap-16, 26, 27, 28, 31,
- * 47), driven as a person does against the mock's invented data (the default scenario).
+ * QA pass 4, the Simple roadmap's Timeline, Gantt and Waterfall (qa4-simple-roadmap-16, 26, 27,
+ * 28, 31, 47), driven as a person does against the mock's invented data (the default scenario).
+ * The Timeline is mk-qa4-roadmap's (_zoom.tsx); milestones, key dates and Oracle's date
+ * suggestions are checked on the Gantt, which draws them.
  */
 
 const DESKTOP = { viewport: { width: 1512, height: 900 } };
@@ -26,17 +28,23 @@ async function open(page: Page, opts: { scenario?: string; url?: string } = {}) 
 }
 
 const timeline = (page: Page) => page.locator('[data-testid="simple-chart"][data-format="timeline"]');
+const gantt = (page: Page) => page.locator('[data-testid="simple-chart"][data-format="gantt"]');
+const WORDS: Record<string, string> = { goal: "Goal", track: "Track", prd: "PRD", milestone: "Milestone" };
 
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
-  test("qa4-27: no milestone, key date or Today line runs through a label at the top of the Timeline", async ({ page }) => {
+  // mk-qa4-roadmap: the Timeline (QR1 A) draws no milestones or key dates over its chart; the
+  // Gantt does, in every Group by.
+  test("qa4-27: no milestone, key date or Today line runs through a label at the top of the Gantt", async ({ page }) => {
     await open(page);
-    const chart = timeline(page);
+    await page.getByTestId("format-gantt").click();
+    const chart = gantt(page);
+    await expect(chart).toBeVisible();
     // Each grouping draws its own marks (a milestone's end under Milestone, a track's under Track).
     for (const group of ["goal", "track", "prd", "milestone"]) {
       await page.getByTestId(`group-${group}`).click();
-      await expect(chart).toHaveAttribute("data-lanes", group);
+      await expect(chart.getByTestId("chart-labels").locator(":scope > div").first()).toHaveText(WORDS[group]);
       await expect(chart.locator('[data-testid="key-date-label"], [data-testid="milestone-end-label"], [data-testid="track-milestone"] text').first()).toBeVisible();
       const strikes = await chart.locator('svg[data-testid="chart-svg"]').evaluate((svg) => {
         const lines = [...svg.querySelectorAll<SVGLineElement>('[data-testid="today-line"], [data-testid="milestone-end-line"], [data-testid="key-date-marker"] line')];
@@ -63,9 +71,11 @@ test.describe("desktop", () => {
     }
   });
 
-  test("qa4-26: Oracle's dotted date suggestion for Welcome video fits inside the Timeline", async ({ page }) => {
+  // mk-qa4-roadmap: Oracle's date suggestions are drawn on the Gantt, not the Timeline.
+  test("qa4-26: Oracle's dotted date suggestion for Welcome video fits inside the Gantt", async ({ page }) => {
     await open(page);
-    const chart = timeline(page);
+    await page.getByTestId("format-gantt").click();
+    const chart = gantt(page);
     const outline = chart.locator('rect[data-testid="suggestion-outline"][data-item="setup-video"]');
     await expect(outline).toBeAttached();
     const svgW = Number(await chart.locator('svg[data-testid="chart-svg"]').getAttribute("width"));
@@ -74,68 +84,66 @@ test.describe("desktop", () => {
     expect(right).toBeLessThanOrEqual(svgW - 6);
   });
 
-  test("qa4-28: each Timeline lane is as tall as what it draws (Group by Goal)", async ({ page }) => {
+  test("qa4-28: each Timeline lane is as tall as what it draws: a row per item it counts, no empty rows", async ({ page }) => {
     await open(page);
     const chart = timeline(page);
-    await expect(chart.locator('g[data-testid="bar"]').first()).toBeVisible();
+    await expect(chart.getByTestId("timeline-bar").first()).toBeVisible();
     const gaps = await chart.evaluate((root) => {
-      const lanes = [...root.querySelectorAll<HTMLElement>('[data-testid="chart-labels"] [data-lane]')];
       const out: string[] = [];
-      for (const lane of lanes) {
-        const lb = lane.getBoundingClientRect();
-        const key = lane.dataset.lane;
-        const bottoms = [...root.querySelectorAll<SVGGElement>(`g[data-testid="bar"][data-lane="${key}"]`)].map((g) => g.getBoundingClientRect().bottom);
-        const items = [...root.querySelectorAll<SVGGElement>(`g[data-testid="bar"][data-lane="${key}"]`)].map((g) => g.dataset.item);
-        for (const c of root.querySelectorAll<HTMLElement>('[data-testid="broken-callout"]')) if (items.includes(c.dataset.item)) bottoms.push(c.getBoundingClientRect().bottom);
-        if (!bottoms.length) continue;
-        const empty = lb.bottom - Math.max(...bottoms);
-        // A lane's foot: its 8 px pad and the pill's 4 px inset; never a band of empty rows.
-        if (empty > 20) out.push(`${lane.textContent}: ${Math.round(empty)} px empty`);
+      const rows = [...root.querySelectorAll<HTMLElement>('[data-testid="timeline-lane"], [data-testid="timeline-row"]')];
+      let lane: { name: string; count: number; seen: number } | null = null;
+      const close = () => {
+        if (lane && lane.seen !== lane.count) out.push(`${lane.name}: says ${lane.count}, draws ${lane.seen}`);
+      };
+      for (const r of rows) {
+        if (r.dataset.testid === "timeline-lane") {
+          close();
+          const t = r.textContent ?? "";
+          lane = { name: t, count: Number(/· (\d+) items?/.exec(t)?.[1] ?? -1), seen: 0 };
+          continue;
+        }
+        if (lane) lane.seen++;
+        // A row is as tall as its bar and a little room; never a band of empty rows.
+        const h = r.getBoundingClientRect().height;
+        if (h > 40) out.push(`${r.dataset.item}: ${Math.round(h)} px tall`);
+        if (!r.querySelector('[data-testid="timeline-bar"]')) out.push(`${r.dataset.item}: an empty row`);
       }
+      close();
       return out;
     });
     expect(gaps).toEqual([]);
   });
 
-  test("qa4-47: the Timeline's bars come in reading order: lane by lane, row by row, left to right", async ({ page }) => {
+  test("qa4-47: the Timeline's rows come in reading order: lane by lane, each lane by start date", async ({ page }) => {
     await open(page);
     const chart = timeline(page);
-    // Every grouping reads lane by lane (the packing's date order once jumped across rows).
-    for (const group of ["track", "prd", "milestone", "goal"]) {
-      await page.getByTestId(`group-${group}`).click();
-      await expect(chart).toHaveAttribute("data-lanes", group);
-      await expect(chart.locator('g[data-testid="bar"]').first()).toBeVisible();
-      const seen = await chart.evaluate((root) => {
-        const lanes = [...root.querySelectorAll<HTMLElement>('[data-testid="chart-labels"] [data-lane]')].map((l) => l.dataset.lane);
-        return [...root.querySelectorAll<SVGGElement>('g[data-testid="bar"][tabindex="0"]')].map((g) => ({
-          item: g.dataset.item!,
-          lane: lanes.indexOf(g.dataset.lane),
-          row: Number(g.dataset.row),
-          x: Number(g.dataset.x0),
-        }));
-      });
-      const inOrder = [...seen].sort((a, b) => a.lane - b.lane || a.row - b.row || a.x - b.x);
-      expect(seen.map((o) => o.item), `Group by ${group}`).toEqual(inOrder.map((o) => o.item));
-    }
-    const order = await chart.evaluate((root) => {
-      const lanes = [...root.querySelectorAll<HTMLElement>('[data-testid="chart-labels"] [data-lane]')].map((l) => l.dataset.lane);
-      return [...root.querySelectorAll<SVGGElement>('g[data-testid="bar"][tabindex="0"]')].map((g) => ({
-        item: g.dataset.item!,
-        lane: lanes.indexOf(g.dataset.lane),
-        row: Number(g.dataset.row),
-        x: Number(g.dataset.x0),
-      }));
+    await expect(chart.getByTestId("timeline-bar").first()).toBeVisible();
+    const lanes = await chart.evaluate((root) => {
+      const out: { lane: string; items: { item: string; x: number }[] }[] = [];
+      for (const r of root.querySelectorAll<HTMLElement>('[data-testid="timeline-lane"], [data-testid="timeline-row"]')) {
+        if (r.dataset.testid === "timeline-lane") out.push({ lane: r.textContent ?? "", items: [] });
+        else out[out.length - 1]?.items.push({ item: r.dataset.item!, x: r.querySelector<HTMLElement>('[data-testid="timeline-bar"]')!.getBoundingClientRect().left });
+      }
+      return out;
     });
-    expect(order.length).toBeGreaterThan(3);
-    const sorted = [...order].sort((a, b) => a.lane - b.lane || a.row - b.row || a.x - b.x);
-    expect(order.map((o) => o.item)).toEqual(sorted.map((o) => o.item));
-    // And Tab walks them so: the first bar, then the next in reading order.
-    const first = chart.locator(`g[data-testid="bar"][data-item="${sorted[0].item}"]`);
-    await first.focus();
+    expect(lanes.flatMap((l) => l.items).length).toBeGreaterThan(3);
+    // (Below the line keeps the cut order, not dates.)
+    for (const l of lanes.filter((x) => !x.lane.startsWith("Below the line"))) {
+      const sorted = [...l.items].sort((a, b) => a.x - b.x);
+      expect(l.items.map((o) => o.item), l.lane).toEqual(sorted.map((o) => o.item));
+    }
+    // And Tab walks them so: a row's name, its bar, then the next row's name.
+    const rows = chart.getByTestId("timeline-row");
+    const [first, second] = [await rows.nth(0).getAttribute("data-item"), await rows.nth(1).getAttribute("data-item")];
+    await rows.nth(0).locator("button[title]").focus();
     await page.keyboard.press("Tab");
-    const next = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.closest('[data-testid="bar"], [data-testid="suggestion-open"]')?.getAttribute("data-item"));
-    // (A bar's own "?" for Oracle's dates may come right after it.)
-    expect([sorted[0].item, sorted[1].item]).toContain(next);
+    const at = () => page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return { item: el?.closest('[data-testid="timeline-row"]')?.getAttribute("data-item"), bar: el?.dataset.testid === "timeline-bar" };
+    });
+    expect(await at()).toEqual({ item: first, bar: true });
+    await page.keyboard.press("Tab");
+    expect(await at()).toEqual({ item: second, bar: false });
   });
 
   test("qa4-31: the Waterfall legend groups its phases under a label and Today with the marks", async ({ page }) => {
@@ -159,23 +167,26 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use(PHONE);
 
-  test("qa4-16: the phone Waterfall's warnings wrap and sit clear of the bars; goal names wrap", async ({ page }) => {
+  test("qa4-16: the phone Waterfall's warnings sit in the panel above it, whole; goal names wrap", async ({ page }) => {
     await open(page);
     await page.getByTestId("format-waterfall").click();
     const chart = page.locator('[data-testid="simple-chart"][data-format="waterfall"]');
     await expect(chart).toBeVisible();
-    const callouts = chart.getByTestId("broken-callout");
-    await expect(callouts.first()).toBeAttached();
+    // mk-qa4-roadmap QR3 A: the broken links sit in their own panel above the chart, never over a bar.
+    const panel = page.getByTestId("conflicts");
+    await expect(panel.getByTestId("conflict").first()).toBeVisible();
+    const pb = (await panel.boundingBox())!;
+    const cb = (await chart.boundingBox())!;
+    expect(pb.y + pb.height, "the warnings sit above the chart").toBeLessThanOrEqual(cb.y + 1);
+    const vw = page.viewportSize()!.width;
+    expect(pb.x + pb.width, "the panel fits the phone").toBeLessThanOrEqual(vw + 1);
+    for (const c of await panel.getByTestId("conflict").all()) {
+      const words = c.getByRole("button").first();
+      const cut = await words.evaluate((el) => getComputedStyle(el).textOverflow === "ellipsis" || el.scrollWidth > el.clientWidth + 1);
+      expect(cut, `${await c.getAttribute("data-item")}'s warning is whole`).toBe(false);
+    }
     const problems = await chart.evaluate((root) => {
       const out: string[] = [];
-      const bodies = [...root.querySelectorAll<SVGRectElement>('g[data-testid="bar"] rect[data-body]')].map((r) => ({ item: r.closest("g[data-testid=bar]")?.getAttribute("data-item"), b: r.getBoundingClientRect() }));
-      for (const c of root.querySelectorAll<HTMLElement>('[data-testid="broken-callout"]')) {
-        const cb = c.getBoundingClientRect();
-        for (const { item, b } of bodies)
-          if (cb.left < b.right - 1 && b.left < cb.right - 1 && cb.top < b.bottom - 1 && b.top < cb.bottom - 1) out.push(`${c.dataset.item}'s warning over ${item}`);
-        const words = c.querySelector<HTMLElement>("span");
-        if (words && (getComputedStyle(words).textOverflow === "ellipsis" || words.scrollWidth > words.clientWidth + 1)) out.push(`${c.dataset.item}'s warning is cut`);
-      }
       for (const g of root.querySelectorAll<HTMLElement>('[data-testid="chart-group"] span[title]')) {
         if (getComputedStyle(g).textOverflow === "ellipsis" || g.scrollWidth > g.clientWidth + 1) out.push(`"${g.title}" is cut`);
         // Nor painted past its row.

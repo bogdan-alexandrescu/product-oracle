@@ -22,7 +22,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * Review fixes: a person who decides the item but not every dependent proposes the cut with
  *   its dependents (its button says so) while the plain cut still applies ("roadmap-talk-own-
  *   decider": the approver is Alert rules engine's own decider, the owners decide the rest);
- *   on a phone the lane's rows show every item cut and back again; Home's words for such a
+ *   the Timeline's rows (a phone's list too) show every item cut and back again; Home's words for such a
  *   change name every item it cut.
  */
 
@@ -46,12 +46,9 @@ async function open(page: Page, email?: string, scenario = "roadmap-talk") {
 
 const phone = (page: Page) => (page.viewportSize()?.width ?? 1440) <= 640;
 
+/** The item's card from its Timeline bar: the side panel on a desktop, the sheet on a phone. */
 async function openTalk(page: Page, key: string): Promise<Locator> {
-  if (!phone(page)) {
-    const body = page.locator(`g[data-testid="bar"][data-item="${key}"]`).locator("rect[data-body], rect[data-slice-body]").first();
-    await expect(body).toBeVisible();
-    await body.click();
-  } else await openRoadmapItem(page, key);
+  await openRoadmapItem(page, key);
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
   if (phone(page)) {
@@ -70,22 +67,11 @@ async function say(box: Locator, text: string) {
   await box.getByRole("button", { name: "Send" }).click();
 }
 
-const kind = (page: Page, key: string) => page.locator(`g[data-testid="bar"][data-item="${key}"]`).first();
-
-/**
- * A phone's lane rows: the lane that holds the items, opened, and whether each row is struck
- * (cut). A cut item moves to "Below the line" and back on Undo: wait for it to get there before
- * reading whether its lane is open (read at once, it was still the goal lane, open, under load).
- */
+/** The Timeline's rows (a desktop's chart, a phone's list): whether each item's name is struck (cut). */
 async function struck(page: Page, keys: string[], cut: boolean) {
-  const lane = page.locator(`[data-testid="phone-lane"][data-items~="${keys[0]}"]`);
-  if (cut) await expect(lane).toHaveAttribute("data-lane", "below-the-line");
-  else await expect(lane).not.toHaveAttribute("data-lane", "below-the-line");
-  if ((await lane.getAttribute("data-open")) !== "true") await lane.click();
   for (const key of keys) {
-    const name = page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().locator("span.min-w-0");
-    if (cut) await expect(name).toHaveClass(/line-through/);
-    else await expect(name).not.toHaveClass(/line-through/);
+    const name = page.locator(`[data-testid="timeline-row"][data-item="${key}"]`).first().locator('[style*="line-through"]');
+    await expect(name).toHaveCount(cut ? 1 : 0);
   }
 }
 
@@ -117,14 +103,9 @@ for (const [where, use] of [
       await expect(cut.getByTestId("chat-card-summary")).toContainText("Mobile alert push");
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("floating-card")).toHaveCount(0);
-      // The chart's bars; a phone's lane rows, struck through.
-      if (!phone(page)) {
-        for (const key of ["alert-rules", "alert-digest", "alert-mobile"]) await expect(kind(page, key)).toHaveAttribute("data-kind", "cut");
-        await expect(kind(page, "alert-export")).not.toHaveAttribute("data-kind", "cut");
-      } else {
-        await struck(page, ["alert-rules", "alert-digest", "alert-mobile"], true);
-        await struck(page, ["alert-export"], false);
-      }
+      // The Timeline's rows, struck through (a desktop's chart and a phone's list alike).
+      await struck(page, ["alert-rules", "alert-digest", "alert-mobile"], true);
+      await struck(page, ["alert-export"], false);
 
       const banner = page.getByTestId("draft-banner");
       await expect(banner.getByTestId("draft-count")).toHaveText("1");
@@ -137,8 +118,7 @@ for (const [where, use] of [
 
       await banner.getByRole("button", { name: "Undo" }).click();
       await expect(page.getByTestId("draft-changes").getByText("Cut Alert rules engine and its dependents")).toHaveCount(0);
-      if (!phone(page)) for (const key of ["alert-rules", "alert-digest", "alert-mobile"]) await expect(kind(page, key)).not.toHaveAttribute("data-kind", "cut");
-      else await struck(page, ["alert-rules", "alert-digest", "alert-mobile"], false);
+      await struck(page, ["alert-rules", "alert-digest", "alert-mobile"], false);
     });
 
     test(`an item no one depends on has only its Apply (${where})`, async ({ page }) => {
@@ -159,9 +139,9 @@ for (const [where, use] of [
       await cut.getByRole("button", { name: `Propose: ${BOTH.toLowerCase()}` }).click();
       await expect(cut).toHaveAttribute("data-status", "proposed");
       await page.keyboard.press("Escape");
-      // A proposal writes nothing: no working draft, no cut bar.
+      // A proposal writes nothing: no working draft, no cut row.
       await expect(page.getByTestId("draft-banner")).toHaveCount(0);
-      if (!phone(page)) await expect(kind(page, "alert-digest")).not.toHaveAttribute("data-kind", "cut");
+      await struck(page, ["alert-digest"], false);
     });
 
     test(`deciding the item but not its dependents, the cut with them is a proposal (${where})`, async ({ page }) => {
@@ -176,8 +156,7 @@ for (const [where, use] of [
       await expect(cut).toHaveAttribute("data-status", "proposed");
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("draft-banner")).toHaveCount(0);
-      if (!phone(page)) await expect(kind(page, "alert-digest")).not.toHaveAttribute("data-kind", "cut");
-      else await struck(page, ["alert-rules", "alert-digest"], false);
+      await struck(page, ["alert-rules", "alert-digest"], false);
     });
   });
 }

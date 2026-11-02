@@ -29,12 +29,7 @@ async function open(page: Page, opts: { email?: string; scenario?: string; theme
 }
 
 async function openCard(page: Page, key: string): Promise<Locator> {
-  if ((page.viewportSize()?.width ?? 1440) > 640) {
-    // The bar's own body: the bar's group also spans its label, whose middle can sit over the empty chart.
-    const body = page.locator(`g[data-testid="bar"][data-item="${key}"]`).locator("rect[data-body], rect[data-slice-body]").first();
-    await expect(body).toBeVisible();
-    await body.click();
-  } else await openRoadmapItem(page, key);
+  await openRoadmapItem(page, key);
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
   return card;

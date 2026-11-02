@@ -1,5 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -25,9 +25,10 @@ async function open(page: Page, email?: string, gantt = false, scenario?: string
   await login(page, email);
   await page.goto(URL);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  if (gantt) await page.getByTestId("format-gantt").click();
+  // The Timeline (mk-qa4-roadmap QR1 A) draws no draggable bars: the Gantt carries them.
+  if (gantt || !isPhone(page)) await page.getByTestId("format-gantt").click();
   if (gantt || !isPhone(page)) await expect(bar(page, "alert-rules")).toBeVisible();
-  else await expect(page.getByTestId("phone-lane").first()).toBeVisible();
+  else await expect(page.getByTestId("timeline-list")).toBeVisible();
 }
 
 /** Signs out, from the rail's account menu or a phone's. */
@@ -73,8 +74,7 @@ async function openCard(page: Page, key: string): Promise<Locator> {
     await bar(page, key).focus();
     await page.keyboard.press("Enter");
   } else {
-    await page.locator(`[data-testid="phone-lane"][data-items~="${key}"]`).click();
-    await page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().click();
+    await openRoadmapItem(page, key);
   }
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
@@ -96,15 +96,11 @@ async function expectCut(page: Page, key: string, cut: boolean) {
     else await expect(bar(page, key)).not.toHaveAttribute("data-kind", "cut");
     return;
   }
-  // The lane that holds it, opened (a cut moves it to "Below the line"): its row in the lane's list.
-  // Checked together: the roadmap reloads after the change, so the row first read may still be
-  // the one in the lane it is leaving; once it has left, the lane that now holds it opens.
-  const name = page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().locator("span.min-w-0");
+  // The quarter list's row (mk-qa4-roadmap QR2 A: a cut item is struck through).
+  const name = page.locator(`[data-testid="timeline-row"][data-item="${key}"]`).first().locator("span.font-semibold").first();
   await expect(async () => {
-    if (!(await name.count())) await page.locator(`[data-testid="phone-lane"][data-items~="${key}"]`).click();
-    await expect(name).toBeVisible({ timeout: 1000 });
-    if (cut) await expect(name).toHaveClass(/line-through/, { timeout: 1000 });
-    else await expect(name).not.toHaveClass(/line-through/, { timeout: 1000 });
+    const line = await name.evaluate((el) => getComputedStyle(el).textDecorationLine);
+    expect(line.includes("line-through")).toBe(cut);
   }).toPass();
 }
 
@@ -329,6 +325,7 @@ test.describe("desktop, a commenter adds", () => {
   test.use(DESKTOP);
   test("a commenter drops a title on a quarter: a proposed addition", async ({ page }) => {
     await open(page, "commenter@example.com");
+    await page.getByTestId("format-timeline").click();
     await page.getByLabel("Add an item").fill("Quiet hours setting");
     await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
     const chip = page.getByTestId("quick-add-chip");
