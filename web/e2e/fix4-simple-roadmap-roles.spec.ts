@@ -14,7 +14,8 @@ import { expect, test, type Locator, type Page } from "./test";
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-const callout = (page: Page, key: string): Locator => page.locator(`[data-testid="broken-callout"][data-item="${key}"]`).first();
+/** A broken link in the panel above the chart (mk-qa4-roadmap QR3 A). */
+const conflict = (page: Page, key: string): Locator => page.locator(`[data-testid="conflict"][data-item="${key}"]`).first();
 
 async function theme(page: Page, scheme: "light" | "dark") {
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [THEME_KEY, scheme] as const);
@@ -32,10 +33,17 @@ async function tap(l: Locator) {
   await l.click();
 }
 
-/** An item's card. On a desktop its bar is focused and opened with Enter (as a keyboard user
- * does): the quarter columns' drop targets cover the bars for a pointer in the current build. */
+/** An item's card on the Timeline: its side panel on a desktop, its sheet on a phone. */
 async function openItem(page: Page, key: string) {
-  if ((page.viewportSize()?.width ?? 1440) <= 640) return openRoadmapItem(page, key);
+  await openRoadmapItem(page, key);
+  await expect(page.getByTestId("floating-card")).toBeVisible();
+}
+
+/** An item's floating card on the Gantt (the one with a backdrop): its bar is focused and
+ * opened with Enter, as a keyboard user does. */
+async function openGanttItem(page: Page, key: string) {
+  await page.getByTestId("format-gantt").click();
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
   const bar = page.locator(`g[data-testid="bar"][data-item="${key}"]`);
   await expect(bar).toBeVisible();
   await bar.focus();
@@ -58,16 +66,16 @@ test.describe("desktop", () => {
   test.use(DESKTOP);
 
   test("qa-simple-roadmap-9: a commenter's fix is checked against the roadmap they see, not the owner's draft", async ({ page }) => {
-    // The owner moves the digest in their working draft.
+    // The owner moves the digest in their working draft, from the panel of broken links.
     await openRoadmap(page);
-    await callout(page, "alert-digest").getByRole("button", { name: "Move the dependents" }).click();
+    await conflict(page, "alert-digest").getByRole("button", { name: "Move the dependents" }).click();
     await expect(page.getByText(/Moved what depends on .Alert rules engine. in your working draft/)).toBeVisible();
     await signOut(page);
 
     // The commenter still sees the published roadmap: the link is broken there, and its fix is
     // proposed against those dates, not refused as changed since they saw it.
     await openRoadmap(page, "commenter@example.com");
-    const fix = callout(page, "alert-digest").getByRole("button", { name: "Move the dependents" });
+    const fix = conflict(page, "alert-digest").getByRole("button", { name: "Move the dependents" });
     await expect(fix).toBeVisible();
     await fix.click();
     await expect(page.getByText(/Moved what depends on .Alert rules engine. proposed: it waits for /)).toBeVisible();
@@ -92,8 +100,9 @@ test.describe("desktop", () => {
       const bg = await rail.evaluate((el) => getComputedStyle(el).backgroundColor);
       await expect(under).toHaveCSS("background-color", bg);
 
-      // An item's card dims the rail with the page (its backdrop is over the rail).
-      await openItem(page, "alert-rules");
+      // An item's card dims the rail with the page (its backdrop is over the rail). Re-pointed:
+      // the Timeline's side panel dims nothing, so this is the Gantt's floating card.
+      await openGanttItem(page, "alert-rules");
       await expect(page.getByTestId("floating-card")).toBeVisible();
       await expect(page.getByTestId("floating-card-backdrop")).toBeVisible();
       const box = (await rail.boundingBox())!;

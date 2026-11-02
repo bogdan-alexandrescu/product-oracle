@@ -32,11 +32,8 @@ const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1512) <= 640;
 const column = (page: Page, key: string): Locator => page.locator(`[data-testid="board-column"][data-horizon-column="${key}"]`);
 
 async function openCard(page: Page, key: string): Promise<Locator> {
-  if (!isPhone(page)) {
-    const body = page.locator(`g[data-testid="bar"][data-item="${key}"]`).locator("rect[data-body], rect[data-slice-body]").first();
-    await expect(body).toBeVisible();
-    await body.click();
-  } else await openRoadmapItem(page, key);
+  // The Timeline (mk-qa4-roadmap): a desktop opens the item in the side panel, a phone in a sheet.
+  await openRoadmapItem(page, key);
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
   return card;
@@ -66,9 +63,12 @@ for (const [where, size] of [
 
     test(`qa4-1 / 10: Now / Next / Later groups by the same goal lanes as the Timeline; a card per goal (${where})`, async ({ page }) => {
       await open(page, { scenario: "simple-plan-lanes", url: "/simple/roadmap?roadmap=onboarding-roadmap" });
+      // A desktop's Timeline draws a lane per goal; a phone's Timeline is a list by quarter, so
+      // a phone reads the goal lanes on the Gantt.
+      if (isPhone(page)) await page.getByTestId("format-gantt").click();
       const laneTitles = isPhone(page)
-        ? await page.getByTestId("phone-lane-name").allTextContents()
-        : await page.getByTestId("chart-group").evaluateAll((gs) => gs.map((g) => g.querySelector("b")?.textContent ?? ""));
+        ? await page.getByTestId("chart-group").evaluateAll((gs) => gs.map((g) => g.querySelector("span[title]")?.getAttribute("title") ?? ""))
+        : await page.getByTestId("timeline-lane").evaluateAll((ls) => ls.map((l) => (l.textContent ?? "").replace(/\s*· \d+ items?$/, "").trim()));
       // PM-owned work has its own lane but is no goal.
       const goals = laneTitles.filter((t) => !["No goal", "Below the line", "PM-owned"].includes(t));
       expect(goals.length).toBeGreaterThan(1);
@@ -101,7 +101,7 @@ for (const [where, size] of [
       await open(page);
       await page.getByTestId("format-board").click();
       await expect(column(page, "now").getByTestId("column-window")).toHaveText("Oct 1 – Dec 31, 2026");
-      await expect(column(page, "later").getByTestId("column-count")).toHaveText("1 item, 1 cut");
+      await expect(column(page, "later").getByTestId("column-count")).toHaveText("13 items, 1 cut");
       const sugg = page.getByTestId("goal-suggestions-open").first();
       if (await sugg.count()) await expect(sugg).toHaveText(/^✦ \d+ suggested features?$/);
       for (const t of await page.getByTestId("board-looks-like").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);
@@ -182,8 +182,8 @@ test.describe("desktop only", () => {
 
   test("qa4-19 / 23: a span in another year says its years; the cut row says 1st to return", async ({ page }) => {
     await open(page);
-    const welcome = page.locator('g[data-testid="bar"][data-item="setup-video"]').first();
-    await expect(welcome).toHaveAttribute("aria-label", /Jul 1, 2027 to [A-Z][a-z]+ \d+, 2028/);
+    const welcome = page.locator('[data-testid="timeline-row"][data-item="setup-video"] [data-testid="timeline-bar"]').first();
+    await expect(welcome).toHaveAttribute("aria-label", /^Welcome video, Jul 1, 2027 – [A-Z][a-z]+ \d+, 2028$/);
     await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("return-place").first()).toHaveText("1st to return");
   });
@@ -214,11 +214,16 @@ test.describe("desktop only", () => {
 test.describe("phone only", () => {
   test.use(PHONE);
 
-  test("qa4-32 / 33 / 35: the phone lane list shows names only, a plain count and says what is below", async ({ page }) => {
+  test("qa4-32 / 33 / 35: the phone Timeline's list shows names only, a plain count, and each quarter says its months", async ({ page }) => {
     await open(page, { scenario: "simple-plan-lanes", url: "/simple/roadmap?roadmap=onboarding-roadmap" });
-    await expect(page.getByTestId("lane-open-chip")).toHaveText("Listed below");
-    const list = page.getByTestId("lane-list");
-    await expect(list.getByTestId("lane-list-count")).toHaveText(/^\d+ items?$/);
-    for (const t of await list.getByTestId("lane-row").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);
+    const list = page.getByTestId("timeline-list");
+    await expect(list).toBeVisible();
+    for (const q of await list.getByTestId("timeline-quarter").all()) {
+      // "Q1 2027 Jan – Mar 2027 · 4 items": a plain count, the months in words.
+      const head = q.locator("h3");
+      await expect(head).toHaveText(/^Q\d \d{4} (Jan|Apr|Jul|Oct) – (Mar|Jun|Sep|Dec) \d{4} · \d+ items/);
+      await expect(head).not.toContainText("at once");
+    }
+    for (const t of await list.getByTestId("timeline-row").allTextContents()) expect(t).not.toMatch(/\b[FD]-\d/);
   });
 });

@@ -63,14 +63,31 @@ test.describe("desktop", () => {
     await expect(tray.getByTestId("tray-flag").filter({ hasText: "Team invite nudges" })).toBeVisible();
   });
 
+  // Re-pointed: Group by is the Gantt's (the Timeline always groups by goal); the Gantt names
+  // its groups in its label column, each group's items in the rows under its heading.
   test("qa-11: Group by Milestone puts the digest under the track's Beta milestone", async ({ page }) => {
     await open(page);
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
     await page.getByTestId("group-milestone").click();
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", "milestone");
-    await expect(bar(page, "alert-digest")).toHaveAttribute("data-lane", /^track-milestone:/);
-    const beta = page.getByTestId("chart-group").filter({ has: page.locator("b", { hasText: /^Beta \(/ }) });
+    await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
+    const labels = page.getByTestId("chart-labels");
+    const beta = labels.getByTestId("chart-group").filter({ hasText: /^Beta \(/ });
     await expect(beta).toHaveCount(1);
-    expect(await beta.getAttribute("data-lane")).toBe(await bar(page, "alert-digest").getAttribute("data-lane"));
+    // The digest's row sits under the Beta heading, before the next group's.
+    await expect
+      .poll(() =>
+        labels.evaluate((el) => {
+          const rows = [...el.querySelectorAll('[data-testid="chart-group"], [data-testid="below-the-line"], [data-testid="label-title"]')];
+          let group = "";
+          for (const r of rows) {
+            if (r.getAttribute("data-testid") === "label-title") {
+              if (r.textContent?.trim() === "Weekly alert digest") return group;
+            } else group = (r.textContent ?? "").trim();
+          }
+          return null;
+        }),
+      )
+      .toMatch(/^Beta \(/);
   });
 
   test("qa-12: an inverted range swaps; an empty result says so and clears", async ({ page }) => {
@@ -138,6 +155,8 @@ test.describe("desktop", () => {
     // Someone else (the same person in another tab) moves the bar first.
     const other = await page.context().newPage();
     await other.goto(URL);
+    // The other tab opens on the Timeline too: its bars move on the Gantt.
+    await other.getByTestId("format-gantt").click();
     await expect(bar(other, "alert-export")).toBeVisible();
     await nudge(other, "alert-export");
     await expect(other.getByTestId("draft-count")).toHaveText("1");

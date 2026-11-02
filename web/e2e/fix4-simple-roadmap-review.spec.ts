@@ -7,8 +7,8 @@ import { expect, test, type Page } from "./test";
  * fix4-simple-roadmap review: the review's minors on the Simple roadmap, driven through the UI
  * on the mock's invented data. With an item's card open the rail still navigates (it does not
  * only close the card); a draft with no flow says why and where to confirm it; the phone
- * Timeline's bars name the items they carry; a phone's broken-link callouts keep their words
- * whole (Waterfall and Gantt).
+ * Timeline's bars name the items they carry; a phone's broken links keep their words whole in
+ * the panel above the chart (Waterfall and Gantt).
  */
 
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
@@ -42,10 +42,14 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(/\/simple\/priorities/);
   });
 
+  // Re-pointed: the Timeline's side panel dims nothing; the backdrop is the Gantt's card's.
   test("SimpleShell: a click on the backdrop away from the rail only closes the card", async ({ page }) => {
     await open(page);
-    await openRoadmapItem(page, "alert-rules");
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
+    await page.locator('g[data-testid="bar"][data-item="alert-rules"]').click();
     await expect(page.getByTestId("floating-card")).toBeVisible();
+    await expect(page.getByTestId("floating-card-backdrop")).toBeVisible();
     await page.mouse.click(1400, 880);
     await expect(page.getByTestId("floating-card")).toHaveCount(0);
     await expect(page).toHaveURL(/\/simple\/roadmap/);
@@ -66,33 +70,34 @@ test.describe("desktop", () => {
 test.describe("phone", () => {
   test.use(PHONE);
 
-  test("qa-simple-roadmap-2: each bar of the phone Timeline names the items it carries", async ({ page }) => {
+  // Moved: a phone's Timeline is a list by quarter; each bar is a row that names its item.
+  test("qa-simple-roadmap-2: each bar of the phone Timeline names the item it carries", async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "lanes-phone");
-    const lane = page.locator('[data-testid="phone-lane"][data-open="true"]');
-    const names = (await lane.getByTestId("lane-run").evaluateAll((els) => els.map((e) => e.querySelector("title")?.textContent ?? ""))).join(" | ");
-    const runs = await lane.getByTestId("lane-run").count();
-    expect(runs).toBeGreaterThan(0);
-    for (const t of await lane.getByTestId("lane-run").evaluateAll((els) => els.map((e) => e.querySelector("title")?.textContent ?? ""))) expect(t.trim(), "every bar has a name").not.toBe("");
-    // Every item the lane's list shows is named on one of its bars.
-    for (const row of await page.getByTestId("lane-row").all()) {
-      const title = (await row.locator("span").nth(1).evaluate((el) => el.firstChild?.textContent ?? "")).trim();
-      expect(names, `${title} is named on a bar`).toContain(title);
-    }
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
+    const bars = page.getByTestId("timeline-list").getByTestId("timeline-bar");
+    await expect(bars.first()).toBeVisible();
+    const names = await bars.evaluateAll((els) => els.map((e) => (e.querySelector("span.block")?.textContent ?? "").trim()));
+    expect(names.length).toBeGreaterThan(0);
+    for (const n of names) expect(n, "every bar has a name").not.toBe("");
+    expect(names.join(" | ")).toContain("Weekly alert digest");
   });
 
   for (const format of ["waterfall", "gantt"] as const) {
-    test(`qa-simple-roadmap-6: a phone ${format}'s broken-link callouts keep their words whole`, async ({ page }) => {
+    // Moved: the broken links sit in the panel above the chart (mk-qa4-roadmap QR3 A), not over the bars.
+    test(`qa-simple-roadmap-6: a phone ${format}'s broken links keep their words whole`, async ({ page }) => {
       await open(page);
       await page.getByTestId(`format-${format}`).click();
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
-      const callouts = page.getByTestId("broken-callout");
-      await expect(callouts.first()).toBeVisible();
-      for (const c of await callouts.all()) {
-        const words = c.locator("span[title]").first();
+      await expect(page.getByTestId("broken-callout")).toHaveCount(0);
+      const conflicts = page.getByTestId("conflicts").getByTestId("conflict");
+      await expect(conflicts.first()).toBeVisible();
+      await expect(page.locator('[data-testid="conflict"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
+      for (const c of await conflicts.all()) {
+        const words = c.getByRole("button").first();
         const cut = await words.evaluate((el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
-        expect(cut, `${await c.getAttribute("data-item")}'s callout words are whole`).toBe(false);
-        await expect(words).toHaveText(`⚠ ${await words.getAttribute("title")}`);
+        expect(cut, `${await c.getAttribute("data-item")}'s words are whole`).toBe(false);
+        const box = (await words.boundingBox())!;
+        expect(box.x + box.width, "its words stay on the screen").toBeLessThanOrEqual(390);
       }
     });
   }

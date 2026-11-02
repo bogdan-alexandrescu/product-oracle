@@ -72,7 +72,7 @@ for (const [where, use] of [
         await expect(legendItem(page, /^A broken link$/)).toHaveCount(1);
         // qa-simple-roadmap-32: the Later column's count includes the cut In-app tour.
         await expect(column(page, "later").getByTestId("board-below")).toContainText("In-app tour");
-        await expect(column(page, "later").getByTestId("column-count")).toHaveText("1 item, 1 cut");
+        await expect(column(page, "later").getByTestId("column-count")).toHaveText("13 items, 1 cut");
       });
     });
   }
@@ -174,13 +174,17 @@ for (const [where, use] of [
     test(`days are written month-first (${where})`, async ({ page }) => {
       await open(page);
       await format(page, "timeline");
+      // The Timeline's key names today, month first.
+      await expect(page.getByTestId("timeline-key").locator('[data-key="today"]')).toHaveText("Today Oct 22");
       if (where === "phone") {
-        await page.getByTestId("phone-lane").first().click();
-        const row = page.getByTestId("lane-row").first();
+        // A phone's Timeline is a list by quarter: each item's span reads month first.
+        const row = page.getByTestId("timeline-list").getByTestId("timeline-row").first();
         await expect(row).toContainText(/[A-Z][a-z]{2} \d{1,2}(, 20\d\d)? – [A-Z][a-z]{2} \d{1,2}/);
         await expect(row).not.toContainText("→");
       } else {
-        await expect(page.getByTestId("simple-chart").getByTestId("legend-item").filter({ hasText: /^Today / })).toHaveText("Today Oct 22");
+        // A desktop's bar names its span month first.
+        const label = await page.getByTestId("timeline-bar").first().getAttribute("aria-label");
+        expect(label).toMatch(/[A-Z][a-z]{2} \d{1,2}(, 20\d\d)? – [A-Z][a-z]{2} \d{1,2}/);
       }
     });
   });

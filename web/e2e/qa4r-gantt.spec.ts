@@ -34,36 +34,33 @@ async function gantt(page: Page) {
 test.describe("desktop", () => {
   test.use(DESKTOP);
 
-  test("qa4-24: a Gantt broken-link pill's whole sentence reads on hover and keyboard focus, inside the chart", async ({ page }) => {
+  // mk-qa4-roadmap QR3 A: the Gantt's broken links read in the panel above the chart, never in
+  // a pill over the bars: each sentence whole, inside the panel, reachable by keyboard.
+  test("qa4-24: a Gantt broken link's whole sentence reads in the panel above the chart", async ({ page }) => {
     await open(page);
     await gantt(page);
     await page.getByTestId("unit-week").click();
-    const callouts = page.getByTestId("broken-callout");
-    await expect(callouts.first()).toBeVisible();
+    await expect(page.getByTestId("broken-callout")).toHaveCount(0);
+    const panel = page.getByTestId("conflicts");
+    await expect(panel).toBeVisible();
     const chart = (await page.getByTestId("simple-chart").boundingBox())!;
-    for (const c of await callouts.all()) {
-      const key = await c.getAttribute("data-item");
-      const words = c.locator("span[title]").first();
-      const sentence = (await words.getAttribute("title"))!;
-      await expect(words).toHaveText(`⚠ ${sentence}`);
-      // A person can reach the words with the keyboard.
-      await expect(words).toHaveAttribute("tabindex", "0");
-      await words.scrollIntoViewIfNeeded();
-      await words.hover();
-      await expect
-        .poll(() => words.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1), { message: `${key}'s sentence is whole on hover` })
-        .toBe(true);
-      const box = (await c.boundingBox())!;
-      // The Week scale scrolls sideways: the pill stays within the chart's scrolled days, never cut at their end.
-      const end = await page.getByTestId("chart-scroll").evaluate((el) => el.getBoundingClientRect().left - el.scrollLeft + el.scrollWidth);
-      expect(box.x, `${key}'s pill starts inside the chart`).toBeGreaterThanOrEqual(chart.x - 1);
-      expect(box.x + box.width, `${key}'s pill ends inside the chart`).toBeLessThanOrEqual(end + 1);
-      await page.mouse.move(0, 0);
+    const box = (await panel.boundingBox())!;
+    // The panel sits above the chart, not over its bars.
+    expect(box.y + box.height).toBeLessThanOrEqual(chart.y + 1);
+    const rows = panel.getByTestId("conflict");
+    await expect(rows.filter({ hasText: "Weekly alert digest" })).toHaveCount(1);
+    for (const row of await rows.all()) {
+      const key = await row.getAttribute("data-item");
+      const words = row.getByRole("button").first();
+      await expect(words).not.toHaveText("");
+      await expect(words).not.toContainText("…");
+      expect(await words.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `${key}'s sentence is whole`).toBe(true);
+      const r = (await row.boundingBox())!;
+      expect(r.x, `${key}'s row starts inside the panel`).toBeGreaterThanOrEqual(box.x - 1);
+      expect(r.x + r.width, `${key}'s row ends inside the panel`).toBeLessThanOrEqual(box.x + box.width + 1);
+      // A person reaches it with the keyboard.
       await words.focus();
-      await expect
-        .poll(() => words.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1), { message: `${key}'s sentence is whole on focus` })
-        .toBe(true);
-      await words.blur();
+      await expect(words).toBeFocused();
     }
   });
 
