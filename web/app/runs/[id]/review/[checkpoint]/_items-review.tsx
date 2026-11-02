@@ -22,7 +22,6 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import {
   AGENT_KINDS,
   answersReason,
-  day,
   decidersText,
   describe,
   doneText,
@@ -105,7 +104,7 @@ function toRow(it: Item, prd: PrdRef | null): TableRow {
     title: it.title ?? it.key,
     outcome: it.outcome ?? null,
     horizon: (it.horizon ?? "") as Horizon,
-    milestone: m ? { name: m.name ?? null, date: m.date ? day(m.date) : null, refused_date: null, refused: null, verified: false, date_removed: dateRemoved(it) } : null,
+    milestone: m ? { name: m.name ?? null, date: m.date ?? null, refused_date: null, refused: null, verified: false, date_removed: dateRemoved(it) } : null,
     confidence: confidenceOf(it.confidence),
     depends_on: it.depends_on,
     prd: it.prd_section ? { label: sectionTitle(it.prd_section, prd, it.title), href: prd ? `/documents/${prd.slug}/v/${prd.version}#${it.prd_section}` : "#" } : null,
