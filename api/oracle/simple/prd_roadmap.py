@@ -14,18 +14,23 @@ draft, for the roadmap's owner to review and publish. No run, no cost.
   working draft (``simple_draft_id``, as S7's additions), with the PRD as its PRD;
 - an item already on the published roadmap (same PRD, same key) only adds what changed:
   its dates or title, as the draft's fields on the published item; unchanged, nothing;
-- its milestones (the plan, oracle.simple.plan) as key dates on their end (else start) day,
-  noted "From <PRD>", in ``overlay["key_dates"]``; one already published unchanged: nothing.
+- no key dates (ah-prd-milestones-once, the owner's pick: 'Read-only from the PRD'): its
+  milestones show as read-only key dates drawn from the PRD (oracle.simple.key_dates
+  .prd_key_dates), once each, and move when the PRD does. A draft made before this holds
+  them copied (``overlay["key_dates"]``, ids ``uuid5(roadmap, "<prd>:<code>")``): those
+  still as written are skipped when read or published (key_dates.copied) and leave when the
+  PRD is approved again (:func:`_take_out`).
 
 What came from which PRD is ``overlay["from_prds"]`` (PRD id -> {version, items,
-key_dates}: ids, and ``wrote``: the values written); the draft says how many are still in it
-(not cut, not removed: ``SimpleDraftOut.from_prds``).
+key_dates}: ids, and ``wrote``: the values written; ``key_dates`` is empty from now on);
+the draft says how many items are still in it (not cut, not removed:
+``SimpleDraftOut.from_prds``; its ``key_dates`` is always 0, kept for older clients).
 
 **The owner's changes win**: a published item the owner already changed in the draft is
 left as they have it. **Approving again** (a later version, or the same one): the PRD's
 earlier additions in the draft are taken out first, then written again, so the draft never
 holds them twice; what the owner changed since (an added item a change names, a published
-item's or a key date's fields no longer as written) stays as the owner has it.
+item's or an older copied key date's fields no longer as written) stays as the owner has it.
 
 **Whose draft**: a draft approval opens is the approver's when they change the roadmap, else
 the first of those who decide its additions (oracle.simple.additions).
@@ -138,10 +143,6 @@ async def _draft(db: AsyncSession, doc: uuid.UUID, principal: Any) -> SimpleDraf
     return d
 
 
-def _key_date_id(roadmap: uuid.UUID, prd: uuid.UUID, code: str) -> str:
-    return str(uuid.uuid5(roadmap, f"{prd}:{code}"))
-
-
 async def _touched(db: AsyncSession, d: SimpleDraft) -> set[str]:
     """The items a change in the draft names."""
     from oracle.simple import changes
@@ -202,8 +203,6 @@ async def on_prd_approved(
     db: AsyncSession, principal: Any, prd: Document, version: DocumentVersion
 ) -> None:
     from oracle.roadmap import draft_items, views
-    from oracle.simple import key_dates
-    from oracle.simple import plan as plans
 
     derived_row = await draft_items._row(db, version.id)
     derived = (
@@ -217,8 +216,6 @@ async def on_prd_approved(
     me = drafts._me(principal)
     if me is None:
         return
-    view = (await plans.views(db, {prd.id})).get(prd.id)
-    milestones = [m for m in (view.milestones if view else []) if m.end_date or m.start_date]
     accepted = await _accepted(db, prd.id)
     dated = [(r, got) for r in derived if (got := _dated(r, accepted)) is not None]
     d = await _draft(db, doc, principal)
@@ -226,8 +223,6 @@ async def on_prd_approved(
         log.info("approved-prd-roadmap: %s's draft is in review; nothing written", doc)
         return
     overlay, kept, kept_keys = await _take_out(db, d, str(prd.id))
-    # Key dates the owner changed since the PRD wrote them (or removed) stay theirs.
-    owned_kds = set(overlay.get(KEY_DATES) or {})
     base = await db.get(DocumentVersion, d.base_version_id) if d.base_version_id else None
     published = await views.version_items(db, base) if base is not None else []
     ours = {r.item_key: r for r in published if r.prd_document_id == prd.id}
@@ -293,33 +288,15 @@ async def on_prd_approved(
         db.add(added)
         await db.flush()
         items.append(str(added.id))
-    pub_kds = (await key_dates.published(db, {doc}))[doc]
-    kds = dict(overlay.get(KEY_DATES) or {})
-    kd_ids: list[str] = []
-    for m in milestones:
-        kd_id = _key_date_id(doc, prd.id, m.code)
-        value = {
-            "name": m.name,
-            "date": (m.end_date or m.start_date).isoformat(),  # type: ignore[union-attr]
-            "note": f"From {prd.title}",
-        }
-        if kd_id in owned_kds:
-            kd_ids.append(kd_id)
-            continue
-        if pub_kds.get(kd_id) == value:
-            continue
-        kds[kd_id] = wrote[kd_id] = value
-        kd_ids.append(kd_id)
-    if kds:
-        overlay[KEY_DATES] = kds
-    else:
+    # ah-prd-milestones-once: no key dates; its milestones are read-only from the PRD.
+    if not overlay.get(KEY_DATES):
         overlay.pop(KEY_DATES, None)
     sources = dict(overlay.get(KEY) or {})
-    if items or kd_ids:
+    if items:
         sources[str(prd.id)] = {
             "version": version.number,
             "items": items,
-            KEY_DATES: kd_ids,
+            KEY_DATES: [],
             "wrote": wrote,
         }
     if sources:
@@ -335,8 +312,9 @@ async def on_prd_approved(
 
 
 async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
-    """How many items and key dates in the draft came from each approved PRD: those still
-    in it (not cut, not removed)."""
+    """How many items in the draft came from each approved PRD: those still in it (not cut,
+    not removed). ``key_dates`` is always 0 (ah-prd-milestones-once: its milestones are
+    read-only from the PRD, never the draft's), kept so older clients keep working."""
     sources = (d.overlay or {}).get(KEY) or {}
     if not sources:
         return []
@@ -354,7 +332,6 @@ async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
             await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(ids))) if ids else []
         )
     }
-    kds = overlay.get(KEY_DATES) or {}
 
     def there(i: str) -> bool:
         row = rows.get(i)
@@ -375,7 +352,7 @@ async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
                 prd=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),
                 version=v.get("version"),
                 items=sum(1 for i in v.get("items") or [] if there(str(i))),
-                key_dates=sum(1 for i in v.get(KEY_DATES) or [] if kds.get(i) is not None),
+                key_dates=0,
             )
         )
     return sorted(out, key=lambda s: s.prd.title.casefold())

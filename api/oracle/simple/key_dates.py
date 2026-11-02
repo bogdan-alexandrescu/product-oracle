@@ -109,10 +109,28 @@ async def published(
     return out
 
 
+def copied(overlay: dict[str, Any] | None) -> set[str]:
+    """ah-prd-milestones-once: the key dates an approved PRD copied into a draft made before
+    its milestones were read-only from the PRD (oracle.simple.prd_roadmap, ``from_prds``),
+    still as it wrote them. They are skipped when read and when published, so each milestone
+    shows once, from the PRD; one the owner changed since is theirs and stays."""
+    ov = overlay or {}
+    kds = ov.get(KEY) or {}
+    return {
+        str(k)
+        for src in (ov.get("from_prds") or {}).values()
+        for k in src.get(KEY) or []
+        if k in kds and kds[k] is not None and kds[k] == (src.get("wrote") or {}).get(k)
+    }
+
+
 def patched(pub: dict[str, dict[str, Any]], overlay: dict[str, Any] | None) -> dict[str, Any]:
     """The key dates as a draft's overlay has them (id -> value)."""
     out = dict(pub)
+    skip = copied(overlay)
     for k, v in ((overlay or {}).get(KEY) or {}).items():
+        if k in skip:
+            continue
         if v is None:
             out.pop(k, None)
         else:
@@ -227,7 +245,9 @@ async def roadmap_key_dates(
         d = open_.get(doc_id)
         sees = d is not None and drafts.sees(principal, d, w)
         values = patched(pub[doc_id], d.overlay if sees else None)
-        changed = set(((d.overlay or {}).get(KEY) or {}) if sees and d else {})
+        changed = set(((d.overlay or {}).get(KEY) or {}) if sees and d else {}) - copied(
+            d.overlay if sees and d else None
+        )
         ref = SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title)
         for k, v in _sorted(values):
             out.append(
@@ -374,7 +394,10 @@ async def _apply(
 
 async def publish(db: AsyncSession, d: SimpleDraft) -> None:
     """The approved draft's key dates become the roadmap's published ones."""
+    skip = copied(d.overlay)
     for kd_id, v in ((d.overlay or {}).get(KEY) or {}).items():
+        if kd_id in skip:
+            continue
         row = await db.get(RoadmapKeyDate, uuid.UUID(kd_id))
         if v is None:
             if row is not None:

@@ -977,10 +977,7 @@ async def submit(
         )
         lines.append(f"- {OP_WORDS.get(c.op, c.op)} {what}")
     for src in await prd_roadmap.sources_out(db, d):
-        lines.append(
-            f"- Added from {src.prd.title} (version {src.version}): {src.items} items, "
-            f"{src.key_dates} key dates"
-        )
+        lines.append(f"- Added from {src.prd.title} (version {src.version}): {src.items} items")
     markdown = await changeset._markdown(db, base, "\n".join(lines))
     result = await docs_service.import_draft(
         db,
