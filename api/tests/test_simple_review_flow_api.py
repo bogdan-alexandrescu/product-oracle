@@ -190,3 +190,14 @@ async def test_working_draft_changes_wait_on_nobody(client):
     view = await get(client, ctx, "viewer")
     [row] = view["in_review"]
     assert row["kind"] == "change" and row["waiting_on"] == [] and row["by_name"] == "Olive Owner"
+
+
+async def test_working_draft_names_who_approves(client):
+    """Send for approval… names who approves before sending: the PRD's required reviewers on
+    the owner's working draft; nothing once it is sent (waiting_on says it then)."""
+    ctx = await world(client)
+    draft_id = await owner_edits(client, ctx, ("bets-2", "Invite suggestions from shared contacts"))
+    page = await get(client, ctx, "owner")
+    assert [p["name"] for p in page["draft"]["reviewers"]] == ["Abe Approver"]
+    assert (await submit(client, ctx, draft_id)).status_code == 200
+    assert (await get(client, ctx, "owner"))["draft"]["reviewers"] == []
