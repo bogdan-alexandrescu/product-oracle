@@ -1,4 +1,5 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -112,10 +113,21 @@ test.describe("the PRD's decider", () => {
   for (const phone of [false, true]) {
     const where = phone ? "phone" : "desktop";
     // card: dod-meet-decider-approve
-    test(`the decider's Approve in the meeting is the working draft's approval (${where})`, async ({ page }) => {
+    test(`the decider's Approve in the meeting is the working draft's approval (${where})`, async ({ page, context }) => {
+      // walkc-meeting-r2 review (bca0feb1): Approve counts only attendees who pressed Join, so the
+      // scenario's required reviewer (Priya Raman, invited, never joined) now holds the draft.
+      // The card's promise is for a PRD with no reviewer required: "no-reviewers" says so.
+      await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_MEETINGS_KEY, "no-reviewers"] as const);
       await login(page, "dana.decider@example.com");
       await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
-      await startReview(page);
+      // With no reviewer the sheet ticks nobody else; Start needs one more attendee (a commenter,
+      // who is no reviewer, so the draft does not wait on them).
+      await page.goto("/simple/prds/guided-setup");
+      await tap(page.getByRole("button", { name: "Start a review meeting" }));
+      const sheet = page.getByRole("dialog", { name: "Start a review" });
+      await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
+      await tap(sheet.getByRole("button", { name: "Start", exact: true }));
+      await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
       await editLine(page, "A setup checklist that shows", "A setup checklist with the next two steps");
       await tap(page.getByRole("button", { name: /^Approve and publish one-pager edits/ }));
       await tap(page.getByRole("alertdialog").getByRole("button", { name: "Approve and publish" }));

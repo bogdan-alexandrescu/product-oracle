@@ -31,7 +31,7 @@ test("the draft's author sees what synced since the draft and refreshes it", asy
   // no_claim=the API's counting rules (api/tests/test_draft_new_items.py).
   await start(page);
   await page.goto(LATEST);
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Usage alerts PRD/ })).toBeVisible();
   await expect(banner(page)).toHaveCount(0);
 
   await syncProductChat(page);
@@ -57,6 +57,8 @@ test("an earlier version and another member show no line", async ({ page }) => {
   await signOut(page);
   await login(page, "approver@example.com");
   await page.goto(LATEST);
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // The draft's own text has a level-1 heading too, so the page heading is named.
+  await expect(page.getByRole("heading", { level: 1, name: "Introduction" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /^Usage alerts PRD/ })).toBeVisible();
   await expect(banner(page)).toHaveCount(0);
 });
