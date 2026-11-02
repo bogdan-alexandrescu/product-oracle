@@ -55,10 +55,10 @@ Fidelity (option A "Imported as decisions", 2026-10-28):
   (those wait in "Waiting for you"); the foot names one run approval; fails_when=the source
   is missing, an open question shows outside meetings or the example is wrong;
   no_claim=the web's wording.
-- test_meeting_agenda_keeps_what_it_decided: protects=a review meeting's agenda is the open
-  questions blocking the milestone the soonest one blocks, and a question decided in the
-  meeting stays on it with Undo for who decided it (others see no Undo); Undo opens it again;
-  fails_when=another milestone's question is on the agenda, a decided one leaves it, or the
+- test_meeting_agenda_keeps_what_it_decided: protects=a review meeting's agenda is every open
+  question of its PRD, soonest first, whoever owns it (build-rundecide RD3 a), and a question
+  decided in the meeting stays on it with Undo for who decided it (others see no Undo); Undo
+  opens it again; fails_when=an open question is left off, a decided one leaves it, or the
   Undo is offered to someone else; no_claim=the minutes' words.
 - test_decided_label_company_zone (qa-simple-decide-7): protects=``decided_label`` reads a
   decision's day in the company's zone (America/Los_Angeles), so a decision decided at 7 PM
@@ -438,13 +438,18 @@ async def test_page_source_outside_meetings_and_approvals(client):
 async def test_meeting_agenda_keeps_what_it_decided(client):
     ctx = await make_ctx()
     await seed(ctx)
-    await page(client, ctx)
+    listed = (await page(client, ctx))["questions"]
     r = await client.post("/v1/simple/meetings", headers=ctx.as_("decider"),
                           json={"prd": "guided-setup", "title": "Decisions due"})  # fmt: skip
     assert r.status_code == 201, r.text
     m = r.json()
-    # Q2 (due Nov 6) and Q3..Q6 block M1; Q7.. block later milestones.
-    assert [q["code"] for q in m["decisions_due"]] == ["Q2", "Q3", "Q4", "Q5", "Q6"]
+    # build-rundecide RD3 a: every open question of the PRD is on its review meeting's agenda,
+    # soonest first, whoever owns it (Q7.. block later milestones and are there too).
+    open_ = sorted((q for q in listed if q["status"] == "proposed"),
+                   key=lambda q: (q["due_on"] or "9999", q["number"]))  # fmt: skip
+    every = [q["code"] for q in open_]
+    assert len(every) == 15 and {"Q7", "Q16"} <= set(every)
+    assert [q["code"] for q in m["decisions_due"]] == every
     # The agenda holds the PRD's questions; "Open decisions" never lists them again.
     assert not [d for d in m["open_decisions"] if d["title"].startswith("Question number")]
     q3 = next(q for q in m["decisions_due"] if q["code"] == "Q3")
@@ -457,7 +462,7 @@ async def test_meeting_agenda_keeps_what_it_decided(client):
     url = f"/v1/simple/meetings/{m['id']}"
     mine = {q["code"]: q for q in (await client.get(url, headers=ctx.as_("decider"))).json()[
         "decisions_due"]}  # fmt: skip
-    assert list(mine) == ["Q2", "Q3", "Q4", "Q5", "Q6"]
+    assert list(mine) == every
     assert mine["Q3"]["status"] == "decided" and mine["Q3"]["undo_id"] == change["id"]
     assert mine["Q3"]["chosen"] == "Option A for question 3"
     theirs = (await client.get(url, headers=ctx.as_("owner"))).json()["decisions_due"]
