@@ -80,7 +80,7 @@ def shoot(page, f):
         elif st[0] == "type":
             page.locator(st[1]).first.press_sequentially(st[2])
         elif st[0] == "scroll":
-            page.evaluate("([s, to]) => { const n = document.querySelector(s); n.scrollTop = to === 'end' ? n.scrollHeight : +to; }", [st[1], st[2]])
+            page.evaluate("([s, to]) => { const n = [...document.querySelectorAll(s.replace(':visible',''))].find(e => e.getClientRects().length); n.scrollTop = to === 'end' ? n.scrollHeight : +to; }", [st[1], st[2]])
         elif st[0] == "winscroll":
             page.evaluate("y => window.scrollTo(0, y)", st[1])
         elif st[0] == "into":

@@ -416,33 +416,47 @@ export function NewPrdChat({ np }: { np: NpState }) {
       </Bubble>,
     );
     const upto = phase === "ask" ? 1 : phase === "hard" ? 5 : 6;
+    const at = (i: number) => `2:${String(11 + i).padStart(2, "0")} PM`;
     for (let i = 0; i < upto; i++) {
       const x = q[i];
+      const last = i === upto - 1 && phase !== "done";
       lines.push(
-        <Bubble key={`q${i}`} at="2:11 PM">
+        <Bubble key={`q${i}`} at={at(i)}>
           <p>
             <span className="text-text2 tnum">{i + 1} of 6 · </span>
             {x.text}
           </p>
-          {i === upto - 1 && phase !== "done" && <Chips items={i === 4 ? ["I don't know", "Ask someone later", "Skip"] : ["I don't know", "Ask someone later"]} />}
+          {last && phase === "ask" && <Chips items={["I don't know", "Ask someone later"]} />}
         </Bubble>,
       );
-      if (i < upto - 1 || phase === "done")
+      if (last && phase === "hard") {
         lines.push(
-          <Bubble key={`a${i}`} me at="2:12 PM">
+          <Bubble key="later" me at={at(i)}>
+            <p>Ask someone later</p>
+          </Bubble>,
+          <Bubble key="who" at={at(i)}>
+            <p>Who should answer it? I keep drafting, and add the answer when it comes.</p>
+            <Chips items={NEWPRD.people.slice(0, 4)} />
+          </Bubble>,
+        );
+        continue;
+      }
+      if (!last)
+        lines.push(
+          <Bubble key={`a${i}`} me at={at(i)}>
             <p>{x.unknown ? "I don't know" : x.later ? `Ask ${x.later} later` : x.answer}</p>
           </Bubble>,
         );
-      if (x.unknown && i < upto - 1)
+      if (x.unknown && !last)
         lines.push(
-          <Bubble key={`n${i}`} at="2:12 PM">
+          <Bubble key={`n${i}`} at={at(i)}>
             <p>Fine. The draft marks the date as open, and I ask again when the plan has one.</p>
           </Bubble>,
         );
     }
     if (phase === "done")
       lines.push(
-        <Bubble key="done" at="2:14 PM">
+        <Bubble key="done" at="2:17 PM">
           <p>Thanks. I am drafting it now.</p>
           <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-3" data-testid="np-chat-made">
             <span className="flex flex-wrap items-center gap-2">

@@ -1,37 +1,478 @@
 [
- {"file":"np1-a-rest","url":"/simple?np1=a","w":1440,"h":900},
- {"file":"np1-a-open","url":"/simple?np1=a","w":1440,"h":900,"steps":[["click","[data-testid=np-new-prd]"],["waitfor","form textarea"],["wait",2500]]},
- {"file":"np1-a-mid","url":"/documents/new?kind=prd&from=simple","w":1440,"h":900,"settle":3000,"steps":[["label","Title","Shared shopping lists"],["fill","form textarea","People who shop for a household keep separate lists, so they buy the same things twice and forget others."],["click","text=Raise activation"]]},
- {"file":"np1-a-brief","url":"/documents/new?kind=prd&from=simple","w":1440,"h":900,"settle":3000,"steps":[["label","Title","Shared shopping lists"],["fill","form textarea","People who shop for a household keep separate lists, so they buy the same things twice and forget others."],["click","form button[type=submit]"],["wait",6000]]},
- {"file":"np1-a-hard-1512","url":"/simple/one-pagers?np1=a","w":1512,"h":900,"steps":[["click","[data-testid=np-new-prd]"],["waitfor","form textarea"],["wait",2000],["label","Title","Shared shopping lists"],["fill","form textarea","People who shop for a household keep separate lists, so they buy the same things twice and forget others."],["click","form button[type=submit]"],["wait",6000],["role","button","Answer"],["wait",1200]]},
- {"file":"np1-a-result","url":"/simple/one-pagers?np1=a&made=1","w":1440,"h":900},
-
- {"file":"np1-b-rest","url":"/simple?np1=b","w":1440,"h":900},
- {"file":"np1-b-open","url":"/simple?np1=b","w":1440,"h":900,"steps":[["click","[data-testid=np-new-prd]"],["waitfor","[data-testid=np-sheet]"]]},
- {"file":"np1-b-mid","url":"/simple?np1=b&open=1&phase=fill","w":1440,"h":900},
- {"file":"np1-b-ask","url":"/simple?np1=b&open=1&phase=fill","w":1440,"h":900,"steps":[["click","[data-testid=np-sheet] footer a"],["waitfor","#np-answer"]]},
- {"file":"np1-b-hard","url":"/simple?np1=b&open=1&phase=hard","w":1440,"h":900,"steps":[["scroll","[data-testid=np-sheet] > div","end"]]},
- {"file":"np1-b-hard-1512","url":"/simple/one-pagers?np1=b&open=1&phase=hard","w":1512,"h":900,"steps":[["scroll","[data-testid=np-sheet] > div","end"]]},
- {"file":"np1-b-result","url":"/simple?np1=b&open=1&phase=hard","w":1440,"h":900,"steps":[["click","[data-testid=np-sheet] footer a"],["waitfor","[data-testid=np-drafting]"],["into","[data-testid=np-drafting]"]]},
- {"file":"np1-b-result-list","url":"/simple/one-pagers?np1=b&made=1","w":1440,"h":900},
-
- {"file":"np1-c-rest","url":"/simple?np1=c","w":1440,"h":900},
- {"file":"np1-c-open","url":"/simple?np1=c","w":1440,"h":900,"steps":[["click","[data-testid=np-goal-start]"],["waitfor","[data-testid=np-page]"]]},
- {"file":"np1-c-mid","url":"/simple/new-prd?np1=c&phase=ask","w":1440,"h":900,"steps":[["winscroll",420]]},
- {"file":"np1-c-hard","url":"/simple/new-prd?np1=c&phase=hard","w":1440,"h":900,"steps":[["winscroll",1050]]},
- {"file":"np1-c-hard-1512","url":"/simple/new-prd?np1=c&phase=hard","w":1512,"h":900,"steps":[["winscroll",1000]]},
- {"file":"np1-c-result","url":"/simple/new-prd?np1=c&phase=hard","w":1440,"h":900,"steps":[["role","link","Start the draft"],["waitfor","[data-testid=np-goal-made]"]]},
-
- {"file":"np1-d-rest","url":"/simple?np1=d","w":1440,"h":900,"steps":[["click","[data-testid=simple-ask]"],["waitfor","[data-testid=np-chat-starter]"]]},
- {"file":"np1-d-open","url":"/simple?np1=d&open=1","w":1440,"h":900,"steps":[["click","[data-testid=simple-ask]"],["waitfor","[data-testid=np-chat]"]]},
- {"file":"np1-d-mid","url":"/simple?np1=d&open=1&phase=ask","w":1440,"h":900,"steps":[["click","[data-testid=simple-ask]"],["waitfor","[data-testid=np-chat]"],["scroll","[data-testid=ask-chat] > div > div","end"],["fill","[data-testid=ask-chat] textarea","Households where a second person already joined, about 4,200 of them."]]},
- {"file":"np1-d-hard-1512","url":"/simple?np1=d&open=1&phase=hard","w":1512,"h":900,"steps":[["click","[data-testid=simple-ask]"],["waitfor","[data-testid=np-chat]"],["scroll","[data-testid=ask-chat] > div > div","end"]]},
- {"file":"np1-d-result","url":"/simple?np1=d&open=1&phase=done","w":1440,"h":900,"steps":[["click","[data-testid=simple-ask]"],["waitfor","[data-testid=np-chat-made]"],["scroll","[data-testid=ask-chat] > div > div","end"]]},
-
- {"file":"np1-a-phone","url":"/simple?np1=a","w":390,"h":844},
- {"file":"np1-a-phone-form","url":"/documents/new?kind=prd&from=simple","w":390,"h":844,"settle":3000,"steps":[["label","Title","Shared shopping lists"]]},
- {"file":"np1-b-phone","url":"/simple?np1=b&open=1&phase=ask","w":390,"h":844},
- {"file":"np1-b-phone-hard","url":"/simple?np1=b&open=1&phase=hard","w":390,"h":844,"steps":[["scroll","[data-testid=np-sheet] > div","end"]]},
- {"file":"np1-c-phone","url":"/simple/new-prd?np1=c&phase=hard","w":390,"h":844,"steps":[["winscroll",1250]]},
- {"file":"np1-d-phone","url":"/simple?np1=d&open=1&phase=ask","w":390,"h":844,"steps":[["click","[data-testid=simple-ask]"],["waitfor","[data-testid=np-chat]"],["wait",800]]}
+ {
+  "file": "np1-a-rest",
+  "url": "/simple?np1=a",
+  "w": 1440,
+  "h": 900
+ },
+ {
+  "file": "np1-a-open",
+  "url": "/simple?np1=a",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=np-new-prd]"
+   ],
+   [
+    "waitfor",
+    "form textarea"
+   ],
+   [
+    "wait",
+    2500
+   ]
+  ]
+ },
+ {
+  "file": "np1-a-mid",
+  "url": "/documents/new?kind=prd&from=simple",
+  "w": 1440,
+  "h": 900,
+  "settle": 3000,
+  "steps": [
+   [
+    "label",
+    "Title",
+    "Shared shopping lists"
+   ],
+   [
+    "fill",
+    "form textarea",
+    "People who shop for a household keep separate lists, so they buy the same things twice and forget others."
+   ],
+   [
+    "click",
+    "text=Raise activation"
+   ]
+  ]
+ },
+ {
+  "file": "np1-a-brief",
+  "url": "/documents/new?kind=prd&from=simple",
+  "w": 1440,
+  "h": 900,
+  "settle": 3000,
+  "steps": [
+   [
+    "label",
+    "Title",
+    "Shared shopping lists"
+   ],
+   [
+    "fill",
+    "form textarea",
+    "People who shop for a household keep separate lists, so they buy the same things twice and forget others."
+   ],
+   [
+    "click",
+    "form button[type=submit]"
+   ],
+   [
+    "wait",
+    6000
+   ]
+  ]
+ },
+ {
+  "file": "np1-a-hard-1512",
+  "url": "/simple/one-pagers?np1=a",
+  "w": 1512,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=np-new-prd]"
+   ],
+   [
+    "waitfor",
+    "form textarea"
+   ],
+   [
+    "wait",
+    2000
+   ],
+   [
+    "label",
+    "Title",
+    "Shared shopping lists"
+   ],
+   [
+    "fill",
+    "form textarea",
+    "People who shop for a household keep separate lists, so they buy the same things twice and forget others."
+   ],
+   [
+    "click",
+    "form button[type=submit]"
+   ],
+   [
+    "wait",
+    6000
+   ],
+   [
+    "role",
+    "button",
+    "Answer"
+   ],
+   [
+    "wait",
+    1200
+   ]
+  ]
+ },
+ {
+  "file": "np1-a-result",
+  "url": "/simple/one-pagers?np1=a&made=1",
+  "w": 1440,
+  "h": 900
+ },
+ {
+  "file": "np1-b-rest",
+  "url": "/simple?np1=b",
+  "w": 1440,
+  "h": 900
+ },
+ {
+  "file": "np1-b-open",
+  "url": "/simple?np1=b",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=np-new-prd]"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-sheet]"
+   ]
+  ]
+ },
+ {
+  "file": "np1-b-mid",
+  "url": "/simple?np1=b&open=1&phase=fill",
+  "w": 1440,
+  "h": 900
+ },
+ {
+  "file": "np1-b-ask",
+  "url": "/simple?np1=b&open=1&phase=fill",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=np-sheet] footer a"
+   ],
+   [
+    "waitfor",
+    "#np-answer"
+   ]
+  ]
+ },
+ {
+  "file": "np1-b-hard",
+  "url": "/simple?np1=b&open=1&phase=hard",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "scroll",
+    "[data-testid=np-sheet] > div",
+    "end"
+   ]
+  ]
+ },
+ {
+  "file": "np1-b-hard-1512",
+  "url": "/simple/one-pagers?np1=b&open=1&phase=hard",
+  "w": 1512,
+  "h": 900,
+  "steps": [
+   [
+    "scroll",
+    "[data-testid=np-sheet] > div",
+    "end"
+   ]
+  ]
+ },
+ {
+  "file": "np1-b-result",
+  "url": "/simple?np1=b&open=1&phase=hard",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=np-sheet] footer a"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-drafting]"
+   ],
+   [
+    "into",
+    "[data-testid=np-drafting]"
+   ]
+  ]
+ },
+ {
+  "file": "np1-b-result-list",
+  "url": "/simple/one-pagers?np1=b&made=1",
+  "w": 1440,
+  "h": 900
+ },
+ {
+  "file": "np1-c-rest",
+  "url": "/simple?np1=c",
+  "w": 1440,
+  "h": 900
+ },
+ {
+  "file": "np1-c-open",
+  "url": "/simple?np1=c",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=np-goal-start]"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-page]"
+   ]
+  ]
+ },
+ {
+  "file": "np1-c-mid",
+  "url": "/simple/new-prd?np1=c&phase=ask",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "winscroll",
+    420
+   ]
+  ]
+ },
+ {
+  "file": "np1-c-hard",
+  "url": "/simple/new-prd?np1=c&phase=hard",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "winscroll",
+    1050
+   ]
+  ]
+ },
+ {
+  "file": "np1-c-hard-1512",
+  "url": "/simple/new-prd?np1=c&phase=hard",
+  "w": 1512,
+  "h": 900,
+  "steps": [
+   [
+    "winscroll",
+    1000
+   ]
+  ]
+ },
+ {
+  "file": "np1-c-result",
+  "url": "/simple/new-prd?np1=c&phase=hard",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "role",
+    "link",
+    "Start the draft"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-goal-made]"
+   ]
+  ]
+ },
+ {
+  "file": "np1-d-rest",
+  "url": "/simple?np1=d",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=simple-ask]"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-chat-starter]"
+   ]
+  ]
+ },
+ {
+  "file": "np1-d-open",
+  "url": "/simple?np1=d&open=1",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=simple-ask]"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-chat]"
+   ]
+  ]
+ },
+ {
+  "file": "np1-d-mid",
+  "url": "/simple?np1=d&open=1&phase=ask",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=simple-ask]"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-chat]"
+   ],
+   [
+    "scroll",
+    "[data-testid=ask-chat] > div > div",
+    "end"
+   ],
+   [
+    "fill",
+    "[data-testid=ask-chat] textarea",
+    "Households where a second person already joined, about 4,200 of them."
+   ]
+  ]
+ },
+ {
+  "file": "np1-d-hard-1512",
+  "url": "/simple?np1=d&open=1&phase=hard",
+  "w": 1512,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=simple-ask]"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-chat]"
+   ],
+   [
+    "scroll",
+    "[data-testid=ask-chat] > div > div",
+    "end"
+   ]
+  ]
+ },
+ {
+  "file": "np1-d-result",
+  "url": "/simple?np1=d&open=1&phase=done",
+  "w": 1440,
+  "h": 900,
+  "steps": [
+   [
+    "click",
+    "[data-testid=simple-ask]"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-chat-made]"
+   ],
+   [
+    "scroll",
+    "[data-testid=ask-chat] > div > div",
+    "end"
+   ]
+  ]
+ },
+ {
+  "file": "np1-a-phone",
+  "url": "/simple?np1=a",
+  "w": 390,
+  "h": 844
+ },
+ {
+  "file": "np1-a-phone-form",
+  "url": "/documents/new?kind=prd&from=simple",
+  "w": 390,
+  "h": 844,
+  "settle": 3000,
+  "steps": [
+   [
+    "label",
+    "Title",
+    "Shared shopping lists"
+   ]
+  ]
+ },
+ {
+  "file": "np1-b-phone",
+  "url": "/simple?np1=b&open=1&phase=ask",
+  "w": 390,
+  "h": 844
+ },
+ {
+  "file": "np1-b-phone-hard",
+  "url": "/simple?np1=b&open=1&phase=hard",
+  "w": 390,
+  "h": 844,
+  "steps": [
+   [
+    "scroll",
+    "[data-testid=np-sheet] > div",
+    "end"
+   ]
+  ]
+ },
+ {
+  "file": "np1-c-phone",
+  "url": "/simple/new-prd?np1=c&phase=hard",
+  "w": 390,
+  "h": 844,
+  "steps": [
+   [
+    "winscroll",
+    1250
+   ]
+  ]
+ },
+ {
+  "file": "np1-d-phone",
+  "url": "/simple?np1=d&open=1&phase=ask",
+  "w": 390,
+  "h": 844,
+  "steps": [
+   [
+    "click",
+    "header button:has-text('Ask'):visible"
+   ],
+   [
+    "waitfor",
+    "[data-testid=np-chat]:visible"
+   ],
+   [
+    "wait",
+    800
+   ],
+   [
+    "scroll",
+    "[data-testid=ask-chat]:visible > div > div",
+    "end"
+   ]
+  ]
+ }
 ]
