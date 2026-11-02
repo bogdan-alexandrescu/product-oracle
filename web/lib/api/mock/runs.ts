@@ -421,6 +421,16 @@ const monthDay = (iso: string) => companyDayInWords(iso);
  */
 export const NEW_RUN_PRD_SCENARIO = "new-run-prd";
 
+/**
+ * QD2: the "roadmap-over-limit" scenario prices a roadmap run from a track at four times the
+ * usual ($58.00, over the $50 approval limit), so Draft roadmap's dialog shows its owner step.
+ */
+export const ROADMAP_OVER_LIMIT_SCENARIO = "roadmap-over-limit";
+const overLimit = (r: { segments: { name: string }[] }) =>
+  typeof localStorage !== "undefined" &&
+  localStorage.getItem("po-mock-scenario") === ROADMAP_OVER_LIMIT_SCENARIO &&
+  r.segments.some((s) => s.name === "roadmap_items");
+
 function flowCatalog(): Schemas["FlowCatalog"] {
   const inDialog = typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === NEW_RUN_PRD_SCENARIO;
   if (!inDialog) return FLOW_CATALOG;
@@ -1962,7 +1972,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const items = itemsReuse(ctx, r);
     estimated(r).draft_items_reused = items;
     const free = (name: string) => (!!reused && name === "baseline") || (!!items && name === "roadmap_items");
-    for (const s of r.segments) s.estimate_usd = free(s.name) || skippedOff(s) ? 0 : segEstimate(s.roles, r.knobs.depth);
+    const times = overLimit(r) ? 4 : 1;
+    for (const s of r.segments) s.estimate_usd = free(s.name) || skippedOff(s) ? 0 : round2(segEstimate(s.roles, r.knobs.depth) * times);
     const total = round2(r.segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
     r.estimate_usd = total;
     r.needs_approval = total > THRESHOLD;
