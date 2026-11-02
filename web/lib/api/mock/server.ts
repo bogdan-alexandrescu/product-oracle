@@ -1507,6 +1507,17 @@ function seedFeatureSet(): Db {
   return db;
 }
 
+/** SW1 "simple-waits": the default seed plus runs waiting on the owner at a feature set, an engineering review and engineering dates. */
+function seedSimpleWaits(): Db {
+  const db = seed();
+  seeded("sw-feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
+  seeded("sw-eng-review", () => seedEngReviewRun(db.runs!, runsContext(db)));
+  seeded("sw-eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db)));
+  // Only these three wait on the owner: the default seed's run at its baseline does not.
+  db.runs!.runs = db.runs!.runs.filter((r) => !(r.status === "awaiting_checkpoint" && r.waiting_on === "baseline_confirm"));
+  return db;
+}
+
 /** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
 function seedScopeReview(kept = false, manyQuestions = false): Db {
   const db = seed();
@@ -2856,6 +2867,8 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
+          : scenario === "simple-waits"
+            ? seedSimpleWaits
           : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions"
             ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions")
           : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO

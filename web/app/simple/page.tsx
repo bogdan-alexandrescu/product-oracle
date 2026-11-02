@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
+import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { Icon } from "@/components/ds/Icon";
 import { setToastPlace, toast } from "@/components/ds/Toast";
@@ -243,6 +244,9 @@ export default function SimpleHome() {
   // A person with no name is greeted plainly, never by their email's local part.
   const firstName = (me?.name ?? "").trim().split(/\s/)[0];
   const decisionCount = waiting.data?.count ?? 0;
+  // SW1: the run stops that wait on me, a card each under the summary (their work is on the run's page).
+  const runStops = runStopsOf(inbox.data);
+  const stopCount = runStops?.length ?? 0;
   // Every broken link the tile counts: those I decide wait on me, the others I may propose fixes for.
   const brokenMine = broken.filter((b) => b.item.can_decide).length;
   const brokenOthers = broken.length - brokenMine;
@@ -250,18 +254,19 @@ export default function SimpleHome() {
     [decisionCount, "decision", "decisions"],
     [proposalRows === toDecide ? toDecide.length : 0, "proposal", "proposals"],
     [brokenMine, "broken link", "broken links"],
+    [stopCount, "run", "runs"],
   ]);
   const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
   const sentence = reads
     ? "Here is where the plan stands."
     : brokenOthers === 0
       ? waits
-      : brokenMine + decisionCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
+      : brokenMine + decisionCount + stopCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
         ? `You can propose fixes for ${brokenWords}.`
         : `${waits} You can also propose fixes for ${brokenWords}.`;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
-  const counted = [waiting, changes, roadmap, meeting].every((q) => q.data !== undefined || !!q.error);
-  const nothingToWalk = counted && decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
+  const counted = [waiting, changes, roadmap, meeting, inbox].every((q) => q.data !== undefined || !!q.error);
+  const nothingToWalk = counted && stopCount + decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
   // qa-simple-home-16: nothing waits on me (no decision, no proposal): one line, not two empty cards and two 0 tiles.
   // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
   // build-rundecide RD3 a: the PRDs' questions I own wait in a card per PRD; this card keeps the other judgement calls.
@@ -269,7 +274,7 @@ export default function SimpleHome() {
   const prdWaiting = waitingByPrd(waiting.data?.questions ?? []);
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
-  const quiet = decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0;
+  const quiet = decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0;
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
@@ -585,6 +590,8 @@ export default function SimpleHome() {
           ))}
         </section>
       )}
+
+      {runStops?.map((s) => <StopCard key={s.id} s={s} />)}
 
       {!reads && quiet && (
         <section aria-label="Waiting for you" data-testid="home-nothing-waits" className="simple-card">
