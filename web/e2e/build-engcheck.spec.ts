@@ -16,7 +16,7 @@ import { login } from "./helpers";
  *   arrows step through; fails_when=the old table and side panel, or a verdict that does not
  *   record; no_claim=other review pages (they keep their table).
  * - "hard case" (EC1 b): protects=15 features at 1512 wide: the list scrolls on its own and ends
- *   above the bar, the last feature's verdict click records; fails_when=the list runs under the
+ *   above the bar at rest and once the page scrolls, the last feature's verdict click records; fails_when=the list runs under the
  *   bar or the click misses.
  * - "short window" (walk-eng-check item 2): protects=at 1512x600 and 1366x540 the verdict
  *   buttons sit in the first screen above the bar and a click records; fails_when=a verdict
@@ -96,6 +96,9 @@ test("hard case: 15 features at 1512 wide, the list scrolls on its own above the
   await page.setViewportSize({ width: 1512, height: 945 });
   await openCheck(page, "eng-check-shop-15", 15);
   expect(await list(page).evaluate((el) => el.scrollHeight > el.clientHeight + 1), "the list scrolls on its own").toBe(true);
+  // At rest, before the page scrolls, the list already ends above the bar: no row sits under it.
+  const rest = await box(list(page));
+  expect(rest.y + rest.height, "the list ends above the bar at rest").toBeLessThanOrEqual((await box(bar(page))).y + 1);
   await row(page, "f.invoice-pdf").getByRole("button").click();
   await expect(pane(page).getByTestId("brief-position")).toContainText("Feature 15 of 15");
   await verdicts(page).getByRole("button", { name: "Feasible", exact: true }).click();
