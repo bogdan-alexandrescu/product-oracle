@@ -192,7 +192,6 @@ function featureText(features: RankedFeature[], key: string): string {
   return features.find((x) => x.key === key)?.title ?? key;
 }
 
-/** A feature key as its name only (beside other names, the code adds nothing). */
 /**
  * The Goal column (priorities-words): 124 px, wider when a goal's code and the longest word of
  * its name need it, up to GOAL_MAX; past that the name goes under its code. px-2 each side.
@@ -217,6 +216,7 @@ function goalWidth(features: RankedFeature[]): number {
   return Math.min(GOAL_MAX, Math.max(GOAL_MIN, Math.ceil(need) + 1));
 }
 
+/** A feature key as its name only (beside other names, the code adds nothing). */
 function featureName(features: RankedFeature[], key: string): string {
   return features.find((x) => x.key === key)?.title ?? key;
 }
