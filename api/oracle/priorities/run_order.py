@@ -55,6 +55,10 @@ FILE = "priority.yaml"
 MAX_STORED_BYTES = 1_000_000
 # The parse and check run on the parse pool, never in the event loop, at most this long.
 PARSE_SECONDS = safe_yaml.PARSE_SECONDS
+# The formula's inputs a run sets on a feature new in its PRD (not in the baseline yet), so
+# the order stop scores it on the same formula as the rest (decision RP1, 'Scored with the
+# rest'): the goal it serves, that goal's weight, its contribution, confidence and effort.
+NEW_INPUTS = ("goal", "weight", "contribution", "confidence", "effort")
 # A rank this far from the live one or nearer is not worth a flag.
 LIVE_SLACK = 2
 # The format, as the module docstring and the segment's task state it (oracle.runs.flows).
@@ -66,6 +70,13 @@ order:                                 # every feature the approved PRD scope in
     rank: <1..N, each once; a feature after every feature it depends on>
     score: <the score you computed>
     explanation: <every number of the score, and why it is ranked here>
+    # A feature new in this PRD (not in the baseline yet) also gives the formula's inputs,
+    # so it is scored on the same formula and ranked among the rest:
+    goal: <the goal key it serves>
+    weight: <that goal's weight>
+    contribution: <1..3>
+    confidence: <0..1, your estimate; it has no evidence yet>
+    effort: <person-weeks>
 """
 
 
@@ -219,14 +230,18 @@ def check_order(text: str, *, known: Known) -> OrderCheck:
             seen[key] += 1
             continue
         seen[key] = 1
-        rows.append(
-            {
-                "key": key,
-                "rank": rank,
-                "score": _number(entry.get("score")),
-                "explanation": _text(entry.get("explanation")),
-            }
-        )
+        row = {
+            "key": key,
+            "rank": rank,
+            "score": _number(entry.get("score")),
+            "explanation": _text(entry.get("explanation")),
+        }
+        # A feature new in this PRD carries the formula's inputs the run set (NEW_INPUTS).
+        for name in NEW_INPUTS:
+            value = _text(entry.get(name)) if name == "goal" else _number(entry.get(name))
+            if value is not None:
+                row[name] = value
+        rows.append(row)
     for key, times in seen.items():
         if times > 1:
             out.add("duplicate_key", f"feature {key} is ranked {times} times", key)
@@ -349,13 +364,19 @@ async def known_for_run(db: AsyncSession, run: Any) -> tuple[Known, uuid.UUID | 
 
 def ranking_of(check: OrderCheck, known: Known) -> list[dict[str, Any]]:
     """For each ranked key in the live ranking: its live ``RankedFeature`` of the file's
-    method, with ``rank`` the run's rank, ``live_rank`` and ``run_explanation``. A key the
-    live ranking lacks (a proposal of the run, an unknown key) stays in the check's order."""
-    live = {f["key"]: f for f in known.live.get(check.method or "", [])}
+    method, with ``rank`` the run's rank, ``live_rank`` and ``run_explanation``. A feature
+    new in this PRD (known, not in the live ranking) is scored on the same formula from the
+    inputs the run set (:func:`new_feature`), marked ``new``. An unknown key stays in the
+    check's order only."""
+    method = check.method or "goal_weighted"
+    live_rows = known.live.get(method, [])
+    live = {f["key"]: f for f in live_rows}
     rows = []
     for r in check.order:
         f = live.get(r["key"])
         if f is None:
+            if r["key"] in known.features:
+                rows.append(new_feature(r, known.features[r["key"]], method, live_rows))
             continue
         rows.append(
             {
@@ -366,6 +387,95 @@ def ranking_of(check: OrderCheck, known: Known) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def _goal_title(key: str | None, live_rows: list[dict[str, Any]]) -> str | None:
+    for f in live_rows:
+        for g in (f.get("explanation") or {}).get("goals") or []:
+            if g.get("goal") == key:
+                return g.get("title")
+    return key
+
+
+def _num(v: float) -> str:
+    return f"{v:g}"
+
+
+def new_feature(
+    r: dict[str, Any], title: str, method: str, live_rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """A feature new in this PRD as a ``RankedFeature``: goal weight × contribution ×
+    confidence ÷ effort from the inputs the run set; the file's score when one is missing.
+    Its confidence is the run's, with no evidence yet."""
+    from oracle.priorities.scoring import FORMULAS
+
+    goal, weight, contribution = r.get("goal"), r.get("weight"), r.get("contribution")
+    confidence, effort = r.get("confidence"), r.get("effort")
+    goals, steps, missing = [], [], []
+    score = r.get("score")
+    if goal is not None and weight is not None and contribution is not None:
+        value = weight * contribution
+        goal_title = _goal_title(goal, live_rows)
+        goals.append(
+            {
+                "goal": goal,
+                "title": goal_title,
+                "weight": weight,
+                "weight_assumed": False,
+                "contribution": int(contribution),
+                "contribution_assumed": False,
+                "link_status": "proposed",
+                "term": value,
+            }
+        )
+        steps.append(
+            f"Goal value = {_num(weight)}×{_num(contribution)} ({goal_title}) = {_num(value)}"
+        )
+        if confidence is not None and effort:
+            score = round(value * confidence / effort, 4)
+            pct = f"{round(confidence * 100):g}%"
+            steps.append(f"Score = {_num(value)} × {pct} ÷ {_num(effort)} = {score:.2f}")
+    else:
+        value = None
+        missing.append("goal")
+    if confidence is None:
+        missing.append("confidence")
+    if effort is None:
+        missing.append("effort")
+    return {
+        "rank": r["rank"],
+        "score_rank": r["rank"],
+        "entity_id": "",
+        "key": r["key"],
+        "title": title,
+        "status": "proposed",
+        "score": score,
+        "serves_goal": bool(goals),
+        "flags": [],
+        "depends_on": [],
+        "dependents": [],
+        "explanation": {
+            "method": method,
+            "formula": FORMULAS.get(method, ""),
+            "inputs": {
+                "effort": {"value": effort, "attr": "effort", "raw": effort},
+                "goal_value": {"value": value, "terms": goals},
+            },
+            "confidence": {
+                "value": confidence or 0,
+                "source": "attrs" if confidence is not None else "default",
+                "explain": "Set by the run: new in this PRD, no evidence yet",
+                "evidence": [],
+            },
+            "goals": goals,
+            "missing": missing,
+            "steps": steps,
+            "order": [],
+        },
+        "live_rank": None,
+        "run_explanation": r.get("explanation"),
+        "new": True,
+    }
 
 
 async def propose(
@@ -465,6 +575,29 @@ def approve(snapshot: PrioritySnapshot, by: uuid.UUID | None, document_id: uuid.
     snapshot.decided_at = datetime.now(UTC)
     if document_id is not None:
         snapshot.document_id = document_id
+
+
+async def accept_new(db: AsyncSession, snapshot: PrioritySnapshot, principal: Any) -> int:
+    """An approved order adds the features new in its PRD to the baseline as proposed: the
+    run's open proposals that create them are accepted (RP1). Returns how many."""
+    from oracle.baseline.models import Proposal
+    from oracle.baseline.service import decide_proposal
+
+    keys = {r["key"] for r in snapshot.ranking or [] if r.get("new")}
+    if not keys or snapshot.run_id is None:
+        return 0
+    open_ = await db.scalars(
+        select(Proposal).where(Proposal.run_id == snapshot.run_id, Proposal.status == "open")
+    )
+    done = 0
+    for p in list(open_):
+        fields = (p.payload or {}).get("fields") or {}
+        if (p.payload or {}).get("op") == "create" and fields.get("key") in keys:
+            # As proposed: an accepted create is confirmed unless its fields say otherwise.
+            p.payload = {**p.payload, "fields": {**fields, "status": "proposed"}}
+            await decide_proposal(db, p.id, principal, True, "Added by the approved order")
+            done += 1
+    return done
 
 
 def discard(snapshot: PrioritySnapshot, by: uuid.UUID | None) -> None:

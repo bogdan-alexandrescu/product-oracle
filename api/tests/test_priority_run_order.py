@@ -361,7 +361,8 @@ async def test_segment_end_stores_a_proposed_snapshot(client, owner, runtime):  
     assert [(r["key"], r["rank"], r["live_rank"]) for r in snap.ranking] == [
         ("address-lookup", 1, 1),
         ("saved-addresses", 2, 2),
-    ]  # bulk-edit is not in the live ranking: it stays in the check's order only
+        ("bulk-edit", 3, None),
+    ]  # bulk-edit is new in this PRD: ranked with the rest (RP1), not in the live ranking
     assert snap.ranking[1]["run_explanation"].startswith("Needs address-lookup first")
     assert snap.ranking[0]["explanation"]["method"] == "rice"
     assert [(r["key"], r["rank"], r["live_rank"]) for r in snap.check_result["order"]] == [
@@ -761,8 +762,6 @@ async def test_approving_the_order_adds_its_new_features_as_proposed(client, own
     assert snap.status == "saved"
     async with tenant_session(tenant_id) as s:
         entity = await s.scalar(select(Entity).where(Entity.key == "bulk-edit"))
-        proposal = await s.scalar(
-            select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"]))
-        )
+        proposal = await s.scalar(select(Proposal).where(Proposal.run_id == uuid.UUID(run["id"])))
     assert entity is not None and entity.status == "proposed" and entity.title == "Bulk edit"
     assert proposal.status == "accepted"

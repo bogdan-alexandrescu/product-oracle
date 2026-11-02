@@ -61829,6 +61829,11 @@
             },
             "type": "array",
             "title": "Problems"
+          },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "default": false
           }
         },
         "type": "object",
@@ -98867,6 +98872,11 @@
               }
             ],
             "title": "Run Explanation"
+          },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "default": false
           },
           "override": {
             "anyOf": [

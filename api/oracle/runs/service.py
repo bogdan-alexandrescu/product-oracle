@@ -9853,6 +9853,8 @@ async def _order_decided(
         return
     if cp.status == "approved":
         run_order.approve(snapshot, cp.decided_by, run.document_id)
+        if principal is not None:
+            await run_order.accept_new(db, snapshot, principal)
         await audit.record(
             db,
             principal if principal is not None else audit.ORACLE,

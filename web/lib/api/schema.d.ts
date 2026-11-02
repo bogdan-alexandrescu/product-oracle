@@ -18850,6 +18850,11 @@ export interface components {
             live_explanation: string | null;
             /** Problems */
             problems: components["schemas"]["PriorityProblem"][];
+            /**
+             * New
+             * @default false
+             */
+            new: boolean;
         };
         /** CompareRun */
         CompareRun: {
@@ -32486,6 +32491,11 @@ export interface components {
             live_rank?: number | null;
             /** Run Explanation */
             run_explanation?: string | null;
+            /**
+             * New
+             * @default false
+             */
+            new: boolean;
             override?: components["schemas"]["RowOverride"] | null;
             /** Held Below */
             held_below?: string | null;
