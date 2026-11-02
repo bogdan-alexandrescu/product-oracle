@@ -374,6 +374,10 @@ class SimpleKeyDate(BaseModel):
     note: str | None = None
     # Added or changed in the roadmap's working draft (not published yet).
     in_draft: bool = False
+    # roadmap-keydates (the owner, Nov 1): a milestone of a PRD on the roadmap, read from the
+    # PRD's plan (its latest approved version): read-only, changed in the PRD. None: the
+    # roadmap's own key date.
+    prd: "SimpleDocRef | None" = None
 
 
 class SimpleKeyDateRoadmap(BaseModel):

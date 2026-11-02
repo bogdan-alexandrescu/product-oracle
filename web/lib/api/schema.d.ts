@@ -38362,6 +38362,7 @@ export interface components {
              * @default false
              */
             in_draft: boolean;
+            prd?: components["schemas"]["SimpleDocRef"] | null;
         };
         /**
          * SimpleKeyDateRoadmap

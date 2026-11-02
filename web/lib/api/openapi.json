@@ -115430,6 +115430,16 @@
             "type": "boolean",
             "title": "In Draft",
             "default": false
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

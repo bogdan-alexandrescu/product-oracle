@@ -44,7 +44,7 @@ from oracle.roadmap.models import (
     TrackMilestone,
 )
 from oracle.simple import constraints, dates, plan_strip
-from oracle.simple.models import RoadmapDateSuggestion
+from oracle.simple.models import RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
     SimpleDate,
@@ -691,9 +691,11 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
 
 async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: list[Any]) -> None:
     """walkb-roadmap review: an item built from a PRD section, with no flow of its own, shows
-    the flow its PRD's one-pager draws for its bet: the bet naming the item's code or title,
-    else the one bet drawn from the item's section alone. The flow names the bet (its
-    ``subject_kind`` ``one_pager_line``), so the card opens and comments on that drawing."""
+    the flow its PRD's one-pager draws for its bet: its own bet, the one naming the item's
+    code, else the one bet drawn from the item's section alone, else the one bet its title
+    names (roadmap-keydates: a short title two bets mention names neither). The flow names the
+    bet (its ``subject_kind`` ``one_pager_line``), so the card opens and comments on that
+    drawing. Only a PRD with a drawn bet has its one-pager read, once per read."""
     from oracle.docs import visibility
     from oracle.simple import one_pager
 
@@ -708,21 +710,38 @@ async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: 
         and visibility.can_see(principal, e.prd)
         and not getattr(e.prd, "deleted_at", None)
     ]
+    drawn = set(
+        await db.scalars(
+            select(SimpleVisual.document_id)
+            .where(
+                SimpleVisual.subject_kind == "one_pager_line",
+                SimpleVisual.document_id.in_({e.prd.id for e in wanting}),
+            )
+            .distinct()
+        )
+    ) if wanting else set()  # fmt: skip
     bets: dict[uuid.UUID, list[tuple[str, list[str], Any]]] = {}
     for e in wanting:
-        if e.prd.id not in bets:
+        if e.prd.id in drawn and e.prd.id not in bets:
             bets[e.prd.id] = await one_pager.bet_flows(db, e.prd)
 
     def words(text: str) -> str:
         return " " + " ".join(re.sub(r"[^\w]+", " ", text.casefold()).split()) + " "
 
+    def one(found: list[Any]) -> list[Any]:
+        return found if len(found) == 1 else []
+
     for e in wanting:
-        it = by_id[e.row.id]
+        of = bets.get(e.prd.id)
+        if not of:
+            continue
         code = e.code or _prd_code(e.row.prd_section_key)
-        names = [words(n) for n in (code, e.row.title) if n and n.strip()]
-        named = [f for t, _, f in bets[e.prd.id] if any(n in words(t) for n in names)]
-        sourced = [f for _, keys, f in bets[e.prd.id] if e.row.prd_section_key in keys]
-        it.flow = named[0] if named else sourced[0] if len(sourced) == 1 else None
+        coded = one([f for t, _, f in of if code and code.strip() and words(code) in words(t)])
+        sourced = one([f for _, keys, f in of if e.row.prd_section_key in keys])
+        title = e.row.title.strip()
+        titled = one([f for t, _, f in of if title and words(title) in words(t)])
+        found = coded or sourced or titled
+        by_id[e.row.id].flow = found[0] if found else None
 
 
 def prd_section_label(section_key: str, heading: str | None, name: str = "") -> str:
@@ -1020,10 +1039,35 @@ async def build(
     await _bet_flows(db, principal, shown, items)
     # plan-model: each item's slices and milestones from its PRD's plan; the track
     # milestones dated by the plan of their track's PRD.
+    from oracle.docs import visibility
     from oracle.simple import plan as plans
 
     track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
-    views = await plans.views(db, {e.prd.id for e in shown if e.prd} | set(track_prd.values()))
+    # roadmap-keydates: the PRDs on the roadmaps whose key dates are read, by title.
+    kd_prds: dict[uuid.UUID, dict[uuid.UUID, Document]] = {}
+    for e in read.entries:
+        if (
+            e.roadmap.id in kd_docs
+            and e.prd is not None
+            and visibility.can_see(principal, e.prd)
+            and not getattr(e.prd, "deleted_at", None)
+        ):
+            kd_prds.setdefault(e.roadmap.id, {})[e.prd.id] = e.prd
+    views = await plans.views(
+        db,
+        {e.prd.id for e in shown if e.prd}
+        | set(track_prd.values())
+        | {p for of in kd_prds.values() for p in of},
+    )
+    kds = sorted(
+        kds
+        + key_dates.prd_key_dates(
+            kd_docs,
+            {r: sorted(of.values(), key=lambda d: d.title) for r, of in kd_prds.items()},
+            views,
+        ),
+        key=lambda k: (k.date, k.name),
+    )
     for it in items:
         view = views.get(it.prd.id) if it.prd else None
         if view is None:

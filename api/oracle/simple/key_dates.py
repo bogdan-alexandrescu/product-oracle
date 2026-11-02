@@ -253,6 +253,35 @@ async def roadmap_key_dates(
     return out, roadmaps
 
 
+def prd_key_dates(
+    docs: dict[uuid.UUID, Document],
+    prds: dict[uuid.UUID, list[Document]],
+    views: dict[uuid.UUID, Any],
+) -> list[SimpleKeyDate]:
+    """roadmap-keydates (the owner, Nov 1: "Read-only from the PRD"): each dated milestone of
+    the PRDs on these roadmaps, as their plans read them (oracle.simple.plan.views: the latest
+    approved version), named "M1 · Prove it" on its end day. Read-only: no row, no draft, so
+    the change engine never finds one to edit; they move when the PRD does."""
+    out: list[SimpleKeyDate] = []
+    for doc_id, doc in docs.items():
+        ref = SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title)
+        for prd in prds.get(doc_id, []):
+            view = views.get(prd.id)
+            for m in view.milestones if view is not None else []:
+                if m.end_date is None:
+                    continue
+                out.append(
+                    SimpleKeyDate(
+                        id=uuid.uuid5(prd.id, f"key-date:{doc_id}:{m.code}"),
+                        roadmap=ref,
+                        name=f"{m.code} · {m.name}" if m.name else m.code,
+                        date=m.end_date,
+                        prd=SimpleDocRef(id=prd.id, slug=prd.slug, title=prd.title),
+                    )  # fmt: skip
+                )
+    return out
+
+
 async def _current(
     db: AsyncSession, principal: Any, doc: uuid.UUID, kd_id: str
 ) -> dict[str, Any] | None:
