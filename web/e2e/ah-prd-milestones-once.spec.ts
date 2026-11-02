@@ -111,7 +111,10 @@ for (const [label, use] of [
       expect(png.suggestedFilename()).toBe("roadmap-timeline.png");
       const [drawn] = await page.evaluate(() => window.__poExports ?? []);
       expect(drawn.title).toBe("Roadmap · Timeline");
-      expect([...drawn.keyDates].sort()).toEqual(MILESTONES.map(([name]) => name));
+      for (const [name, plain] of MILESTONES) {
+        expect(drawn.keyDates.filter((k) => k === name)).toHaveLength(1);
+        expect(drawn.keyDates).not.toContain(plain);
+      }
     });
 
     test("copies of the milestones the roadmap already published show once", async ({ page }) => {

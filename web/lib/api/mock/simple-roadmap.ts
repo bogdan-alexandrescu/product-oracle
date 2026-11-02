@@ -1000,12 +1000,16 @@ function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: st
   const keyDates = slugs
     .flatMap((slug) => {
       const pub = draftOf(slug)?.published.key_dates ?? null;
-      const own = (db.key_dates?.[slug] ?? []).map((k) => {
+      const fromPrds = prdKeyDates(db, slug, ref(slug));
+      // ah-prd-milestones-once review (key_dates.published_copies): a copy of a PRD's milestone the
+      // roadmap published before they were read-only from the PRD (its name, "From <PRD>") is skipped.
+      const copies = new Set(fromPrds.map((k) => `${k.id}/${k.name.replace(/^\S+ · /, "")}/From ${k.prd!.title}`));
+      const own = (db.key_dates?.[slug] ?? []).filter((k) => !copies.has(`${k.id}/${k.name}/${k.note}`)).map((k) => {
         const was = pub?.find((x) => x.id === k.id);
         const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
         return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft, prd: null };
       });
-      return [...own, ...prdKeyDates(db, slug, ref(slug))];
+      return [...own, ...fromPrds];
     })
     .sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1));
   const may = me.role !== "viewer";
