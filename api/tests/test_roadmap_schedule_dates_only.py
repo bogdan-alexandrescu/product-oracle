@@ -60,3 +60,21 @@ def test_a_date_outside_any_item_passes_on_an_item_s_verified_basis():
     # Another item's section still needs its own basis.
     other = [_Section("now-export", "Export", "Ships Dec 15, 2026.", level=3)]
     assert _flagged(other, [_basis(date(2026, 12, 15), item_key="search")]) == ["Dec 15, 2026"]
+
+
+def test_a_date_outside_any_item_needs_a_basis_of_this_roadmap_s_items():
+    # walkb-roadmap review: a summary date is not backed by the verified basis of an item
+    # this roadmap does not have.
+    sections = [
+        _Section("summary", "Summary", "Search ships Dec 15, 2026."),
+        _Section("now-export", "Export", "Ships Dec 15, 2026.", level=3),
+    ]
+    assert (
+        _flagged(
+            sections,
+            [_basis(date(2026, 12, 15), item_key="search"), _basis(date(2026, 12, 15), "export")],
+        )
+        == []
+    )
+    sections = [_Section("summary", "Summary", "Search ships Dec 15, 2026.")]
+    assert _flagged(sections, [_basis(date(2026, 12, 15), item_key="search")]) == ["Dec 15, 2026"]
