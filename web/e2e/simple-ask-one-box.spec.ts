@@ -114,7 +114,8 @@ for (const [phone, dark] of [
       await expect(card).toBeVisible();
       const flags = card.getByTestId("chat-card-flag");
       await expect(flags.filter({ hasText: /^‘Weekly alert digest’ starts .+, but ‘Alert rules engine’, which it depends on, ends .+$/ })).toHaveCount(1);
-      await expect(flags.filter({ hasText: /^‘Mobile alert push’ starts .+, but ‘Alert rules engine’, which it depends on, ends .+$/ })).toHaveCount(1);
+      // walkb-roadmap: Mobile alert push has only an end; that end, not an invented start, breaks the link.
+      await expect(flags.filter({ hasText: /^‘Mobile alert push’ ends .+, but ‘Alert rules engine’, which it depends on, ends .+$/ })).toHaveCount(1);
       const fixes = card.getByTestId("chat-card-fix");
       await expect(fixes.filter({ hasText: "Propose: Start Weekly alert digest after Alert rules engine ends" })).toHaveCount(1);
       const box = (await card.boundingBox())!;

@@ -8,8 +8,8 @@ Test cards (protects / fails_when / no_claim):
   before the dependency's end still is, in words of its end; fails_when=the invented start
   raises the flag; no_claim=blockers.
 - test_estimated_starts_follow_dependencies: protects=an end-only item starts the day after
-  its dependency ends; a fully estimated bar moves after it, keeping its length; a typed
-  start stays; fails_when=either starts at its window's start; no_claim=cycles' order.
+  its dependency ends; a typed start and a fully estimated bar stay; fails_when=the
+  end-only item starts at its window's start; no_claim=cycles' order.
 """
 
 from datetime import date
@@ -48,5 +48,6 @@ def test_estimated_starts_follow_dependencies():
     )
     assert got["b"].start == Dated(date(2026, 11, 11), "estimated", True)
     assert got["b"].end == d(2026, 12, 15)
-    assert (got["c"].start.date, got["c"].end.date) == (date(2026, 11, 11), date(2026, 12, 11))
+    # A fully estimated bar stays its window's estimate (suggest() offers dates after "a").
+    assert (got["c"].start.date, got["c"].end.date) == (date(2026, 10, 1), date(2026, 10, 31))
     assert got["e"].start == d(2026, 10, 2)

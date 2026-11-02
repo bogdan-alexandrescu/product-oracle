@@ -122,7 +122,7 @@ test.describe("desktop", () => {
     // fix4 qa-simple-roadmap-8: Team invite nudges is a draft with no owner, not a broken link.
     await expect(tiles.filter({ hasText: "Faster activation" })).toContainText("3 items");
     await expect(tiles.filter({ hasText: "Faster activation" })).not.toContainText("broken");
-    await expect(tiles.filter({ hasText: "Grow retention" })).toContainText("4 items · 3 broken");
+    await expect(tiles.filter({ hasText: "Grow retention" })).toContainText("4 items · 1 broken"); // walkb-roadmap: end-only items no longer break on a made-up start
   });
 });
 

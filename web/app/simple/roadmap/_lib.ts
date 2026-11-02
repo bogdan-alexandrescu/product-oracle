@@ -201,7 +201,11 @@ export function liveBreaks(items: Map<string, Item>, id: string, start: string, 
   }
   for (const n of it.needed_by) {
     const next = items.get(n);
-    if (next && next.status !== "cut" && end >= next.start.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it starts ${shortDay(next.start.date)}`);
+    if (!next || next.status === "cut") continue;
+    // walkb-roadmap: a dependent's estimated start is no date to break; its real end is.
+    if (next.start.estimated) {
+      if (!next.end.estimated && end >= next.end.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it ends ${shortDay(next.end.date)}`);
+    } else if (end >= next.start.date) out.push(`Ends ${shortDay(end)}, after ‘${next.title}’ that depends on it starts ${shortDay(next.start.date)}`);
   }
   return out;
 }

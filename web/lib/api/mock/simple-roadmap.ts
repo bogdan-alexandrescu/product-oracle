@@ -398,6 +398,28 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   return { start, end };
 }
 
+/**
+ * oracle.simple.dates.after_dependencies (walkb-roadmap): an item dated only by its end starts
+ * the day after what it depends on ends (the end itself when that is later); a fully estimated
+ * bar stays its window's estimate. Dependencies first; changes `all` in place.
+ */
+function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>): void {
+  const done = new Set<string>();
+  const visit = (key: string) => {
+    const x = all.get(key);
+    if (!x || done.has(key)) return;
+    done.add(key);
+    const deps = (x.s.depends ?? []).filter((k) => k !== key && all.has(k));
+    deps.forEach(visit);
+    const ends = deps.map((k) => all.get(k)!.r.end.date).sort();
+    const latest = ends[ends.length - 1];
+    if (!x.r.start.estimated || x.r.end.estimated || !latest || latest < x.r.start.date) return;
+    const day = addDays(latest, 1);
+    x.r = { start: { date: day < x.r.end.date ? day : x.r.end.date, source: "estimated", estimated: true }, end: x.r.end };
+  };
+  [...all.keys()].forEach(visit);
+}
+
 /** A milestone no plan dates (the new SimpleMilestone fields, empty). */
 const UNDATED = { start_date: null, end_date: null, effort_weeks: null, done_when: [] as string[], targets: [] as { goal: string; target: string }[] };
 
@@ -438,10 +460,10 @@ function phases(start: string, end: string, s: SeedItem, w: [string, string]): S
 const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…`);
 
 /** A dependency_order line, naming the item and its dependency (constraints.check), with the years when they differ. */
-function dependencyLine(title: string, start: string, depTitle: string, end: string): string {
+function dependencyLine(title: string, start: string, depTitle: string, end: string, verb: "starts" | "ends" = "starts"): string {
   const years = start.slice(0, 4) !== end.slice(0, 4);
   const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ""}`;
-  return `‘${short(title)}’ starts ${day(start)}, but ‘${short(depTitle)}’, which it depends on, ends ${day(end)}`;
+  return `‘${short(title)}’ ${verb} ${day(start)}, but ‘${short(depTitle)}’, which it depends on, ends ${day(end)}`;
 }
 
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
@@ -453,6 +475,12 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   for (const key of s.depends ?? []) {
     const dep = all.get(key);
     if (!dep || closed(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
+    if (r.start.estimated) {
+      // walkb-roadmap, as constraints.check: an invented start breaks no link; a real end before the dependency's end does.
+      if (!r.end.estimated && dep.r.end.date >= r.end.date)
+        flag("dependency_order", dependencyLine(s.title, r.end.date, dep.s.title, dep.r.end.date, "ends"), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+      continue;
+    }
     if (dep.r.end.date >= r.start.date)
       flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
   }
@@ -600,6 +628,7 @@ export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undef
 function regenerate(db: SimpleDb, today: string): number {
   const w = simpleWindows(today);
   const resolved = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  afterDependencies(resolved);
   const durations = new Map<string, number[]>();
   for (const { s, r } of resolved.values()) {
     if (r.start.estimated || r.end.estimated) continue;
@@ -725,6 +754,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   if (!["goal", "track", "prd"].includes(group)) return null;
   const seeds = visibleItems(db, role);
   const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  afterDependencies(all);
   // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
   const slices = db.plan ? planSlices() : [];
   const slicesOf = (s: SeedItem, prdSlug: string) => {
