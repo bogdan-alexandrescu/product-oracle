@@ -16,6 +16,16 @@ const STOP_WORDS: Record<string, string> = {
 };
 const STEP_WORDS: Record<string, string> = { approved: "Approved", changes_requested: "Sent back", skipped: "Skipped" };
 
+/** As the API's eng_dates.changed_count: the dates an approval at the Dates stop changed. */
+const datesChanged = (c: RunOut["checkpoints"][number]) =>
+  c.kind === "eng_dates" && c.status === "approved" ? Object.values((c.payload.dates ?? {}) as Record<string, { decision?: string }>).filter((d) => d?.decision === "changed").length : 0;
+/** As the API's _approved_words: "Approved with one date changed". */
+const stepWords = (c: RunOut["checkpoints"][number]) => {
+  const n = datesChanged(c);
+  if (c.status !== "approved" || !n) return STEP_WORDS[c.status] ?? c.status;
+  return `Approved with ${n === 1 ? "one date" : `${n} dates`} changed`;
+};
+
 const words = (kind: string) => STOP_WORDS[kind] ?? kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 /**
@@ -49,12 +59,13 @@ export function runGroupsOut(runs: RunOut[], docs: { id: string; slug: string; t
           checkpoint_id: last.id,
           kind: last.kind,
           stop: words(last.kind),
-          outcome: last.status === "approved" && sentBack ? "Approved after a change" : STEP_WORDS[last.status] ?? last.status,
+          outcome: last.status === "approved" && sentBack ? "Approved after a change" : stepWords(last),
+          dates_changed: datesChanged(last),
           who: who(last),
           role: role ? role.replace(/_/g, " ") : null,
           day: last.decided_at ? companyDayIso(last.decided_at) : null,
           note: last.note ?? null,
-          trail: steps.length > 1 ? steps.map((c) => ({ what: STEP_WORDS[c.status] ?? c.status, who: who(c), day: c.decided_at ? companyDayIso(c.decided_at) : null, note: c.note ?? null })) : [],
+          trail: steps.length > 1 ? steps.map((c) => ({ what: stepWords(c), who: who(c), day: c.decided_at ? companyDayIso(c.decided_at) : null, note: c.note ?? null })) : [],
         };
       });
       if (!stops.length) return [];

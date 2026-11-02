@@ -129,7 +129,7 @@ async def test_runs_group_reads_do_not_grow_with_runs(client):
 
 def _dates(changed: int, accepted: int = 1) -> dict:
     """The dates an approval records (engineering.dates.on_approved): changed and accepted."""
-    est = {"kind": "team_estimate", "reference": "Example sizing", "supports_date": "2026-12-01"}
+    est = {"kind": "estimate", "reference": "Example sizing", "supports_date": "2026-12-01"}
     out = {f"R-{i}": {"decision": "changed", "estimate": est} for i in range(changed)}
     out |= {f"A-{i}": {"decision": "accepted", "estimate": est} for i in range(accepted)}
     return out

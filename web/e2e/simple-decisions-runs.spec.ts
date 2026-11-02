@@ -15,6 +15,11 @@ import { expect, test, type Page } from "./test";
  * happened" opens the sent-back step and "Hide what happened" folds it; four runs are four
  * blocks; fails_when = the card is missing, a stop is split in two or loses its name, note or
  * day; no_claim = the run's own page (run-decisions.spec.ts).
+ *
+ * Card run-dates-changed: protects = a Dates stop approved after the approver changed one date
+ * reads "Dates: approved with one date changed"; a Dates stop with no date changed still reads
+ * "Dates: approved"; fails_when = the dates the approval changed are not counted; no_claim = how
+ * the dates are changed at the stop (eng-dates.spec.ts).
  */
 
 async function open(page: Page, scenario: string) {
@@ -50,7 +55,7 @@ for (const phone of [false, true]) {
       await expect(rows.nth(2)).toContainText("Avery Stone (owner) · Thu Oct 22");
       await expect(rows.nth(3)).toContainText("PRD review: approved");
       await expect(rows.nth(3)).toContainText("Good to build from version 3. · Priya Raman (approver) · Mon Oct 26");
-      await expect(rows.nth(4)).toContainText("Dates: approved");
+      await expect(rows.nth(4)).toContainText("Dates: approved with one date changed");
       await expect(rows.nth(4)).toContainText("Weekly alert digest moved from Nov 20 to Dec 4. · Avery Stone (owner) · Tue Oct 27");
       await expect(runs).not.toContainText("approved by an owner");
 
@@ -68,6 +73,24 @@ for (const phone of [false, true]) {
       if (phone) {
         const box = await runs.boundingBox();
         expect(box!.width).toBeLessThanOrEqual(390);
+      }
+    });
+
+    test("a Dates stop approved after a date edit says how many dates changed", async ({ page }) => {
+      await open(page, "run-decisions-many");
+      const runs = page.getByRole("region", { name: "Runs" });
+      const usage = runs.getByTestId("decisions-run").filter({ hasText: "Usage alerts plan" });
+      const changed = usage.getByTestId("run-stop-row").filter({ hasText: "Dates:" });
+      await expect(changed.locator("b")).toHaveText("Dates: approved with one date changed");
+      await expect(changed).toContainText("Weekly alert digest moved from Nov 20 to Dec 4. · Avery Stone (owner) · Tue Oct 27");
+      // A Dates stop whose dates were taken as proposed reads as before.
+      const carts = runs.getByTestId("decisions-run").filter({ hasText: "Saved carts plan" });
+      await expect(carts.getByTestId("run-stop-row").filter({ hasText: "Dates:" }).locator("b")).toHaveText("Dates: approved");
+      // Only the dates stop counts date edits.
+      await expect(runs.getByText(/date changed|dates changed/)).toHaveCount(1);
+      if (phone) {
+        const box = await changed.boundingBox();
+        expect(box!.x + box!.width).toBeLessThanOrEqual(390);
       }
     });
 
