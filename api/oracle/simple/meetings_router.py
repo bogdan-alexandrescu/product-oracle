@@ -28,11 +28,12 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.simple import meetings
+from oracle.simple import meeting_draft, meetings
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
     SimpleDecisionsOut,
     SimpleDecisionsWaitingOut,
+    SimpleDraftDatesIn,
     SimpleMeetingCommentIn,
     SimpleMeetingIn,
     SimpleMeetingOut,
@@ -145,6 +146,49 @@ async def approve_in_simple_meeting(
     result = await _run(db, meetings.approve(db, principal, meeting_id))
     await db.commit()
     return await _out(db, principal, meeting_id, result.not_approved)
+
+
+@router.post("/meetings/{meeting_id}/draft-items/approve", response_model=SimpleMeetingOut,
+             name="approve_simple_meeting_draft_dates")  # fmt: skip
+async def approve_simple_meeting_draft_dates(
+    meeting_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleMeetingOut:
+    """Approve these N dates (RP2): the run's draft items go on the roadmap with their
+    dates; the meeting records the decision. The PRD still needs its own approval."""
+    await _run(db, meeting_draft.approve_dates(db, principal, meeting_id))
+    await db.commit()
+    return await _out(db, principal, meeting_id)
+
+
+@router.post("/meetings/{meeting_id}/draft-items/{item_id}/dates",
+             response_model=SimpleMeetingOut, name="change_simple_meeting_draft_dates")  # fmt: skip
+async def change_simple_meeting_draft_dates(
+    meeting_id: uuid.UUID,
+    item_id: uuid.UUID,
+    body: SimpleDraftDatesIn,
+    principal: Commenter,
+    db: TenantDB,
+) -> SimpleMeetingOut:
+    """Change dates on a draft item of the run's draft roadmap: it stays draft."""
+    await _run(
+        db, meeting_draft.change_dates(db, principal, meeting_id, item_id, body.start, body.end)
+    )
+    await db.commit()
+    return await _out(db, principal, meeting_id)
+
+
+@router.post(
+    "/meetings/{meeting_id}/draft-items/{item_id}/leave-out",
+    response_model=SimpleMeetingOut,
+    name="leave_out_simple_meeting_draft_item",
+)
+async def leave_out_simple_meeting_draft_item(
+    meeting_id: uuid.UUID, item_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleMeetingOut:
+    """Leave out a draft item: it never goes on the roadmap."""
+    await _run(db, meeting_draft.leave_out(db, principal, meeting_id, item_id))
+    await db.commit()
+    return await _out(db, principal, meeting_id)
 
 
 @router.post("/meetings/{meeting_id}/end", response_model=SimpleMeetingOut,

@@ -135,6 +135,6 @@ async def test_approve_these_dates_puts_them_on_the_roadmap(client):
     assert sorted(await on_roadmap(client, w)) == sorted(t for t, *_ in ITEMS)
     r = await client.get("/v1/simple/roadmap", params={"prd": PRD}, headers=w.ctx.as_("decider"))
     by_title = {i["title"]: i for i in r.json()["items"]}
-    assert by_title["Turn a cart into a quote"]["start"] == "2027-04-05"
-    assert by_title["Turn a cart into a quote"]["end"] == "2027-05-28"
+    assert by_title["Turn a cart into a quote"]["start"]["date"] == "2027-04-05"
+    assert by_title["Turn a cart into a quote"]["end"]["date"] == "2027-05-28"
     assert (await client.post(url, headers=w.ctx.as_("decider"))).status_code == 409

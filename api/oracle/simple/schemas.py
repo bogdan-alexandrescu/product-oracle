@@ -1681,6 +1681,37 @@ class SimpleAgenda(BaseModel):
     skipped: list[SimpleAgendaItem] = []
 
 
+class SimpleDraftRoadmapItem(BaseModel):
+    """An item of the run's draft roadmap with its dates: not on the roadmap yet."""
+
+    id: uuid.UUID
+    key: str
+    title: str
+    horizon: str
+    start: dt.date
+    end: dt.date
+
+
+class SimpleDraftRoadmap(BaseModel):
+    """The run's draft roadmap of the meeting's PRD (RP2, 'Meeting step as draft'): its
+    dated items, shown hatched in the Roadmap step until the meeting approves the dates."""
+
+    items: list[SimpleDraftRoadmapItem]
+
+
+class SimpleDraftDatesIn(BaseModel):
+    """Change dates on a draft item: it stays draft."""
+
+    start: dt.date
+    end: dt.date
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "SimpleDraftDatesIn":
+        if self.end < self.start:
+            raise ValueError("the end comes before the start")
+        return self
+
+
 class SimpleMeetingOut(SimpleMeetingBrief):
     session_id: uuid.UUID
     occurrence_id: uuid.UUID | None = None
@@ -1709,6 +1740,8 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     # chat-actions: the notes and open questions so far, and the agenda's changes.
     notes: list[SimpleMeetingNote] = []
     agenda: SimpleAgenda = SimpleAgenda()
+    # RP2: the run's draft roadmap of the PRD (dated, not approved); None without one.
+    draft_roadmap: SimpleDraftRoadmap | None = None
 
 
 class SimpleUpcomingMeeting(BaseModel):
