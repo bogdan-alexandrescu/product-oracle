@@ -13,7 +13,8 @@ import { login } from "./helpers";
  *   protects=the picked frames rp2-c-rest, rp2-c-mid, rp2-c-open and rp2-c-done at 1440;
  *   fails_when=the step says "No roadmap items for this PRD yet", a row lacks Draft, its dates
  *   or its buttons, the moved line is not said, the ask is missing, or the approval is not in
- *   All decisions with the items solid; no_claim=the real API (api/tests/test_simple_meetings_draft_dates.py).
+ *   All decisions with the items solid, or its PRD link in Company > Decisions does not open the
+ *   PRD; no_claim=the real API (api/tests/test_simple_meetings_draft_dates.py).
  * - "Leave out drops an item from the draft": protects=the item never goes on the roadmap and
  *   the button counts one fewer; fails_when=it stays or the count does not change.
  * - phone (390): protects=frame rp2-c-rest-390; fails_when=a row or the button is missing or
@@ -97,6 +98,16 @@ test.describe("desktop", () => {
     // The items are on the Simple roadmap now.
     await page.goto("/simple/roadmap?prd=saved-carts");
     await expect(page.getByRole("button", { name: /^Turn a cart into a quote: May 3 to Jun 25, 2027/ })).toBeVisible();
+
+    // runplan-r2: the decision is in Company > Decisions and its PRD link opens the PRD.
+    await page.goto("/company/decisions?state=all");
+    await page.getByTestId("decision-row").filter({ hasText: "Saved carts dates approved: 6 items on the roadmap" }).click();
+    const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
+    await expect(inspector).toContainText("Saved carts dates approved: 6 items on the roadmap");
+    await inspector.getByRole("link", { name: "Saved carts", exact: true }).click();
+    await expect(page).toHaveURL(/\/documents\/saved-carts$/);
+    await expect(page.getByRole("heading", { name: "Saved carts", level: 1 })).toBeVisible();
+    await expect(page.getByText("Not found")).toHaveCount(0);
   });
 
   test("Leave out drops an item from the draft", async ({ page }) => {
