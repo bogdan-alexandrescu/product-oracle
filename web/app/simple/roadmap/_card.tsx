@@ -949,8 +949,8 @@ export function FloatingCard({
               </ul>
             </Part>
           )}
-          <Part title="Tasks" testId="card-tasks">
-            {item.tasks.length ? (
+          {item.tasks.length > 0 && (
+            <Part title="Tasks" testId="card-tasks">
               <ul className="mt-1 space-y-1">
                 {item.tasks.map((t) => (
                   <li key={t.id} data-testid="card-task" className="[overflow-wrap:anywhere]">
@@ -963,10 +963,8 @@ export function FloatingCard({
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="text-text2">No tasks yet</p>
-            )}
-          </Part>
+            </Part>
+          )}
           {flowPart}
           <Part title="Proposals on it">
             {waiting.length > 0 && (
