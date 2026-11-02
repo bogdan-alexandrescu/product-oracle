@@ -570,9 +570,9 @@ async def due_for(
     meeting_id: uuid.UUID | None = None,
     session_id: uuid.UUID | None = None,
 ) -> list[SimpleQuestion]:
-    """A review meeting's agenda ("Decisions due"): its PRD's open questions that block the
-    milestone the soonest one blocks (all of them when none names one), and the questions
-    decided in this meeting, which stay on it; soonest first. With the live meeting's
+    """A review meeting's agenda ("Decisions due"): every open question of its PRD, whoever
+    owns it (build-rundecide RD3 a), and the questions decided in this meeting, which stay
+    on it; soonest first. With the live meeting's
     ``session_id``, a question I decided in it carries that change for its Undo."""
     from oracle.simple.models import SimpleMeetingDecision as MeetingDecisionRow
 
@@ -583,9 +583,7 @@ async def due_for(
         here = set(await db.scalars(select(MeetingDecisionRow.decision_id).where(
             MeetingDecisionRow.meeting_id == meeting_id)))  # fmt: skip
     done = [q for q in qs if q.status == "decided" and q.id in here]
-    first = next((q for q in open_ if q.blocks and q.blocks.milestone), None)
-    ms = first.blocks.milestone if first and first.blocks else None
-    agenda = [q for q in open_ if ms is None or (q.blocks and q.blocks.milestone == ms)]
+    agenda = open_
     me = getattr(principal, "user_id", None)
     if done and session_id is not None and me is not None:
         made = list(await db.scalars(select(SimpleChange).where(
