@@ -4712,7 +4712,6 @@ export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, peopl
       approve_label: "Approve", needs_agents: [],
     }));
     Object.assign(r, { status: "running", started_at: p.created_at });
-    db.runs.push(r);
     return r;
   });
 }
