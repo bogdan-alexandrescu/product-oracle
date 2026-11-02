@@ -2217,6 +2217,11 @@ async def _run_groups(
     runs = list(await db.scalars(
         select(Run).where(Run.document_id.in_(docs), Run.deleted_at.is_(None))
         .order_by(Run.created_at.desc()).limit(20)))  # fmt: skip
+    # The runs list_decisions reads (the docs are the readable PRDs; a run's call reads its
+    # own run only), with one read of the stops for all of them.
+    runs = [r for r in runs if not runs_service.creator_only_hidden(db, r)
+            and getattr(principal, "run_id", None) in (None, r.id)]  # fmt: skip
+    decisions = await runs_service.decisions_of_runs(db, runs)
     zone = await company_time.company_time_zone(db)
 
     def on(at: datetime | None) -> date | None:
@@ -2225,8 +2230,7 @@ async def _run_groups(
     out: list[SimpleRunGroup] = []
     for run in runs:
         # A stop turned off when the run started was not a person's decision.
-        decided = [d for d in await runs_service.list_decisions(db, run.id, principal)
-                   if d.status != "skipped"]  # fmt: skip
+        decided = [d for d in decisions[run.id] if d.status != "skipped"]
         stops: list[SimpleRunStopOut] = []
         by_kind: dict[tuple[int, str], list[Any]] = {}
         for d in decided:
