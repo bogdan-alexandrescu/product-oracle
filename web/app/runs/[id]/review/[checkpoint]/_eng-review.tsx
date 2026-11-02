@@ -13,6 +13,7 @@ import type { BriefsCheck, CheckpointOut, RunOut } from "../../../_lib";
 type Review = Schemas["CheckpointReview"];
 type Action = Review["items"][number]["actions"][number];
 type Feature = BriefsCheck["features"][number];
+type Reason = NonNullable<Review["gate"]>["left"][number];
 type ActIn = Omit<Schemas["ActionIn"], "answers">;
 type Verdict = "feasible" | "feasible_with_changes" | "not_feasible";
 
@@ -143,6 +144,7 @@ export function EngReview({
   }
 
   const left = review.gate?.left ?? [];
+  const reasonsOf = (key: string) => left.filter((x) => x.item === key);
   const decided = check.features.filter((f) => verdictOf(actionsOf(review, f.key).filter((a) => a.state === "staged"))).length;
   const blockingQuestions = left.filter((x) => x.code === "blocking_question").length;
   const notFeasible = new Set(
@@ -255,14 +257,8 @@ export function EngReview({
                           <span className="text-sm text-text2">Not decided</span>
                         )}
                       </span>
-                      <QuestionCount feature={f} acts={acts} />
-                      {confirm && (
-                        <span data-testid="brief-reasons">
-                          <Chip kind="warn" wrap>
-                            {confirm}
-                          </Chip>
-                        </span>
-                      )}
+                      <QuestionCount feature={f} acts={acts} reasons={reasonsOf(f.key)} />
+                      <Reasons reasons={reasonsOf(f.key)} confirm={confirm} />
                     </span>
                   </button>
                 </li>
@@ -346,17 +342,41 @@ export function EngReview({
   );
 }
 
-/** A list row's questions: the blocking ones still open, and how many are answered. */
-function QuestionCount({ feature: f, acts }: { feature: Feature; acts: Action[] }) {
+/** A list row's questions: the blocking ones the gate still holds Approve on, in its words, and how many are answered. */
+function QuestionCount({ feature: f, acts, reasons }: { feature: Feature; acts: Action[]; reasons: Reason[] }) {
   if (!f.questions.length) return null;
   const answered = f.questions.filter((q) => edit(acts, `answer:${q.id}`)).length;
-  const blocking = f.questions.filter((q) => q.blocking && !edit(acts, `answer:${q.id}`)).length;
+  const blocking = reasons.filter((x) => x.code === "blocking_question");
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5 text-sm" data-testid="brief-questions">
-      {blocking > 0 && <Chip kind="crit">{blocking} blocking</Chip>}
+      {blocking.length > 0 && (
+        <Chip kind="crit" title={blocking[0].label}>
+          {blocking.length} blocking
+        </Chip>
+      )}
       <span className="whitespace-nowrap text-text2">
         {answered} of {f.questions.length} answered
       </span>
+    </span>
+  );
+}
+
+/** The gate's other reasons for a row (Not decided and the blocking chip say the rest), and a warning to confirm. */
+function Reasons({ reasons, confirm }: { reasons: Reason[]; confirm: string | null }) {
+  const labels = [...new Set(reasons.filter((x) => x.code !== "no_verdict" && x.code !== "blocking_question").map((x) => x.label))];
+  if (!labels.length && !confirm) return null;
+  return (
+    <span className="inline-flex flex-wrap gap-1.5" data-testid="brief-reasons">
+      {labels.map((l) => (
+        <Chip key={l} kind="crit" wrap>
+          {l}
+        </Chip>
+      ))}
+      {confirm && (
+        <Chip kind="warn" wrap>
+          {confirm}
+        </Chip>
+      )}
     </span>
   );
 }
@@ -569,7 +589,7 @@ function BriefPane({
               const open = writes && (!answer || editing[q.id]);
               const done = !!answer && !open;
               return (
-                <li key={q.id} data-testid="brief-question" data-answered={answer ? "true" : "false"} className="rounded-md border border-line px-3 py-2.5">
+                <li key={q.id} data-testid="brief-question" data-answered={answer ? "true" : "false"} className={done ? "px-3 py-1" : "rounded-md border border-line px-3 py-2.5"}>
                   <p className="flex items-start gap-1.5">
                     {done ? (
                       <span className="mt-0.5 text-pass" aria-label="Answered">
