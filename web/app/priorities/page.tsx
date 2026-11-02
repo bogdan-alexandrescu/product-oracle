@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Suspense, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 
 import {
   Button,
@@ -28,6 +28,7 @@ import {
   type ChipKind,
   type Column,
 } from "@/components/ds";
+import { codeTagRoom } from "@/components/ds/CodeChip";
 import { usePhone } from "@/components/ds/page-info";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -37,6 +38,7 @@ import { useMe } from "@/lib/me";
 import { displayName } from "@/lib/names";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { fitWords, textWidth, useFontsReady, useWidth, wordsOf } from "@/lib/words";
 
 import {
   ChangesPanel,
@@ -191,6 +193,30 @@ function featureText(features: RankedFeature[], key: string): string {
 }
 
 /** A feature key as its name only (beside other names, the code adds nothing). */
+/**
+ * The Goal column (priorities-words): 124 px, wider when a goal's code and the longest word of
+ * its name need it, up to GOAL_MAX; past that the name goes under its code. px-2 each side.
+ */
+const GOAL_MIN = 124;
+const GOAL_MAX = 132;
+const CELL_PAD = 16;
+/** The Depends on column, and the room its 13 px text has. */
+const DEPS_WIDTH = 104;
+const DEPS_ROOM = DEPS_WIDTH - CELL_PAD;
+
+function goalWidth(features: RankedFeature[]): number {
+  let need = 0;
+  for (const f of features)
+    for (const g of f.explanation.goals) {
+      const n = named(g.title, g.goal);
+      const longest = Math.max(0, ...wordsOf(n.name).map((w) => textWidth(w, 500, 15) ?? 0));
+      const beside = CELL_PAD + codeTagRoom(n.code) + longest;
+      // A name that cannot sit beside its code even at GOAL_MAX goes under it.
+      need = Math.max(need, beside <= GOAL_MAX ? beside : CELL_PAD + longest);
+    }
+  return Math.min(GOAL_MAX, Math.max(GOAL_MIN, Math.ceil(need) + 1));
+}
+
 function featureName(features: RankedFeature[], key: string): string {
   return features.find((x) => x.key === key)?.title ?? key;
 }
@@ -1045,6 +1071,13 @@ function Priorities() {
     }
   }
 
+  const fonts = useFontsReady();
+  // Measured in the page's fonts once they load, so the widths are theirs (priorities-words).
+  const goalCol = useMemo(() => (fonts ? goalWidth(rows ?? []) : GOAL_MIN), [fonts, rows]);
+  // The Feature column takes the room left, so its text's room is read from its header; a
+  // phone's card is a whole line wide (its header is for screen readers only).
+  const [featureHead, featureHeadWidth] = useWidth();
+  const featureRoom = phone ? null : featureHeadWidth;
   const runColumns: Column<RankedFeature>[] = cmp
     ? [
         {
@@ -1111,7 +1144,11 @@ function Priorities() {
       : []),
     {
       key: "feature",
-      header: "Feature",
+      header: (
+        <span ref={featureHead} className="block">
+          Feature
+        </span>
+      ),
       phone: "title",
       // A long name wraps onto a second line, never cut (qa-plan-5).
       wrap: true,
@@ -1129,7 +1166,7 @@ function Priorities() {
             className="block max-w-full text-left font-medium break-words hover:underline"
             data-testid="feature-name"
           >
-            {f.title}
+            {fonts && featureRoom ? fitWords(f.title, featureRoom, 500, 15) : f.title}
             {f.new && (
               <span className="ml-2 inline-block align-middle">
                 <Chip kind="acc" title="Not in the baseline yet: proposed by this PRD's run">
@@ -1144,10 +1181,11 @@ function Priorities() {
     {
       key: "goal",
       header: "Goal",
-      // Wide enough that a goal's code and a word of its name share a line: a name wraps
-      // between words, never inside one ("Scalin g"); no wider, so the Feature column keeps its
-      // room beside the docked inspector and an approver's move column (qa-plan-5).
-      width: "124px",
+      // Wide enough that a goal's code and the longest word of its name share a line, measured
+      // from the names (priorities-words: "Conversi / on"): a name wraps between words, never
+      // inside one. At most GOAL_MAX, so the Feature column keeps its room beside the docked
+      // inspector and an approver's move column (qa-plan-5); a longer word goes under the code.
+      width: `${goalCol}px`,
       // Every goal whole (prod-4, qa-plan-42): one per line, a long name on as many lines as it
       // needs, wrapped between words and never cut (qa5-plan-at-risk).
       wrap: true,
@@ -1157,7 +1195,7 @@ function Priorities() {
         ) : (
           <span className="flex min-w-0 flex-col items-start gap-1 py-0.5 max-[600px]:flex-row max-[600px]:flex-wrap" data-testid="row-goals">
             {f.explanation.goals.map((g) => (
-              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole />
+              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole room={fonts ? goalCol - CELL_PAD : undefined} />
             ))}
           </span>
         ),
@@ -1206,7 +1244,7 @@ function Priorities() {
     {
       key: "deps",
       header: "Depends on",
-      width: "104px",
+      width: `${DEPS_WIDTH}px`,
       hideOnPhone: true,
       // qa4-plan-1: with the Oracle # column it gives way under 1000 px (the inspector shows
       // it), so the Feature column keeps room for whole words.
@@ -1224,10 +1262,12 @@ function Priorities() {
               : `${outside.map((k) => featureName(known, k)).join(", ")}: outside this PRD's scope`;
         return (
           <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={[text, note].filter(Boolean).join(". ") || undefined}>
-            {text || "—"}
+            {/* Between words; a word wider than the column hyphenated, never cut bare
+                ("instrumentatio / n", priorities-words). */}
+            {(fonts ? fitWords(text, DEPS_ROOM, 400, 13) : text) || "—"}
             {note && (
               <span data-testid="row-deps-outside" className="block text-[12px] leading-4 text-warn">
-                {note}
+                {fonts ? fitWords(note, DEPS_ROOM, 400, 12) : note}
               </span>
             )}
           </span>

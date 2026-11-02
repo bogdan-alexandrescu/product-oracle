@@ -49,7 +49,8 @@ function cutWords(page: Page) {
             const r = document.createRange();
             r.setStart(node, m.index + i);
             r.setEnd(node, m.index + i + 1);
-            const rect = [...r.getClientRects()].find((x) => x.width > 0);
+            // The last: a letter after a soft hyphen's break also reports the drawn hyphen's box.
+            const rect = [...r.getClientRects()].filter((x) => x.width > 0).at(-1);
             if (!rect) continue;
             if (top != null && rect.top > top + 4 && !/[-­]/.test(m[0][i - 1])) {
               cut.push(m[0].replace(/­/g, ""));
@@ -74,6 +75,8 @@ for (const width of [1280, 1440, 1512]) {
       const inspector = page.getByTestId("priority-inspector");
       await expect.poll(async () => (await inspector.boundingBox())?.width ?? 0).toBeGreaterThan(300);
       expect(await cutWords(page), "a word is cut with the feature panel open").toEqual([]);
+      // Depends on shows from 1440 px beside the panel: "(instrumentation)" is in it.
+      if (width >= 1440) await expect(page.getByTestId("priority-row-F-2").getByTestId("row-deps")).toContainText("instru");
       // Windows-style scrollbars take 15 px from the page.
       await page.addStyleTag({ content: SCROLLBAR });
       await expect.poll(() => page.evaluate(() => window.innerWidth - document.documentElement.clientWidth)).toBeGreaterThanOrEqual(15);
@@ -84,7 +87,6 @@ for (const width of [1280, 1440, 1512]) {
       expect(await cutWords(page), "a word is cut with another feature in the panel").toEqual([]);
       // The long words are there to be cut: a goal name beside its code, a dependency's name.
       await expect(page.getByTestId("priority-row-F-3").getByTestId("row-goals")).toContainText("Conversion");
-      await expect(page.getByTestId("priority-row-F-2").getByTestId("row-deps")).toBeVisible();
     });
   });
 }

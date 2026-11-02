@@ -8,6 +8,7 @@ import { splitCodes, type CodeEntry, type CodeIndex } from "@/lib/code-index";
 import { named, useCompanyCodes, useNames, type Named, type Names } from "@/lib/codes";
 import { treeCodes } from "@/lib/goal-tree";
 import { sectionHash } from "@/lib/section-link";
+import { fitWords, textWidth, wordsOf } from "@/lib/words";
 
 const OPEN_DELAY = 250;
 const CLOSE_DELAY = 150;
@@ -316,12 +317,19 @@ export function CodeChip({
   whole = false,
   codeOnly = false,
   testId = "code-chip",
+  room,
   ...p
 }: ChipProps & {
   /** The name wraps onto two lines instead of being cut on one. */
   wrap?: boolean;
   /** The name wraps onto as many lines as it needs, between words, never cut (qa5-plan-at-risk). */
   whole?: boolean;
+  /**
+   * With `whole`, the px the chip has (priorities-words): the name goes under the code when its
+   * longest word does not fit beside it, and a word wider than the whole room is hyphenated
+   * rather than cut ("Conversi / on").
+   */
+  room?: number;
   /** Only the code (none when there is no code): the caller draws the name beside it. */
   codeOnly?: boolean;
   testId?: string;
@@ -332,20 +340,21 @@ export function CodeChip({
   const n: Named = coded(named(p.title ?? "", p.entityKey), code);
   const label = n.name || (p.kind === "goal" ? "Goal" : "Feature");
   if (codeOnly && !n.code) return null;
+  const fit = whole && room != null ? fitName(label, n.code, room) : null;
   return (
     <HoverCard
       testId={testId}
       label={n.code ? `${n.code} ${label}` : label}
-      className={codeOnly ? "flex-none" : "max-w-full"}
+      className={`${codeOnly ? "flex-none" : "max-w-full"} ${fit?.under ? "flex-wrap gap-y-1" : ""}`}
       trigger={
         <>
           {n.code && <CodeTag code={n.code} proposed={p.proposed} />}
           {!codeOnly && (
             <span
               data-testid="code-name"
-              className={`min-w-0 font-medium ${whole ? "break-words" : wrap ? "line-clamp-2" : "truncate"} ${p.proposed && !n.code ? "text-warn" : ""}`}
+              className={`min-w-0 font-medium ${whole ? "break-words" : wrap ? "line-clamp-2" : "truncate"} ${fit?.under ? "basis-full" : ""} ${p.proposed && !n.code ? "text-warn" : ""}`}
             >
-              {label}
+              {fit?.text ?? label}
             </span>
           )}
         </>
@@ -354,6 +363,24 @@ export function CodeChip({
       <CodeCard {...p} code={code} />
     </HoverCard>
   );
+}
+
+/** A CodeTag's own width beside its name: 13 px DM Mono, 7 px each side, the chip's 6 px gap. */
+export const codeTagRoom = (code: string | null) => {
+  if (!code) return 0;
+  const w = textWidth(code, 500, 13, "font-mono");
+  return w == null ? 0 : w + 14 + 6;
+};
+
+/**
+ * A whole name in `room` px (priorities-words): beside its code when its longest word fits
+ * there, else under it; a word wider than the room it gets is hyphenated, never cut bare.
+ */
+function fitName(name: string, code: string | null, room: number): { text: string; under: boolean } {
+  const tag = codeTagRoom(code);
+  const longest = Math.max(0, ...wordsOf(name).map((w) => textWidth(w, 500, 15) ?? 0));
+  const under = tag > 0 && tag + longest > room;
+  return { text: fitWords(name, under ? room : room - tag, 500, 15), under };
 }
 
 /** The card's body: mounted when the card opens, so the lookup loads only then. */
