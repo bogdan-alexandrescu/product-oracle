@@ -505,3 +505,73 @@ async def test_a_refused_approve_names_sections_by_their_headings(client, monkey
     assert r.status_code == 422, r.text
     [problem] = r.json()["detail"]["problems"]
     assert problem["where"] == "Sources and data points"
+
+
+async def test_an_invited_attendee_who_never_joined_is_not_approved_for(client):
+    """walkc-meeting-r2 review: protects=the meeting's Approve approves only for the
+    required reviewers who joined it; one invited who never pressed Join (the screen reads
+    "invited, not joined yet") is asked in the Inbox like an absent one; fails_when=the
+    invited reviewer's approval is recorded in the meeting; no_claim=the web's roll call."""
+    from tests.test_simple_meetings_api import MEETINGS, edit_title, inbox
+
+    w = await world(reviewers=("approver", "reviewer2"))
+    m = await start(client, w, attendee_ids=[uid(w, "approver"), uid(w, "reviewer2")])
+    r = await client.post(f"{MEETINGS}/{m['id']}/join", headers=w.ctx.as_("reviewer2"))
+    assert r.status_code == 200, r.text
+    assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
+    r = await client.post(f"{MEETINGS}/{m['id']}/approve", headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    [d] = r.json()["drafts"]
+    assert d["status"] == "submitted" and d["waiting_on"] == [uid(w, "approver")], d
+    assert (await inbox(client, w, "reviewer2"))["simple_approvals"] == []
+    [row] = (await inbox(client, w, "approver"))["simple_approvals"]
+    assert row["draft_id"] == d["id"]
+
+
+async def test_a_refused_approve_names_the_section_by_its_own_documents_heading(
+    client, monkeypatch
+):
+    """walkc-meeting-r2 review: protects=when two documents the meeting worked on share a
+    section key, a refused Approve names the section by the heading in the document whose
+    draft was refused; fails_when="where" takes the other document's heading;
+    no_claim=a problem no draft is known for."""
+    from sqlalchemy import select
+
+    from oracle.docs.models import DocumentVersion, Section
+    from oracle.docs.parser import DraftError
+    from oracle.docs.schemas import ImportProblem
+    from oracle.simple import drafts
+    from tests.test_simple_meetings_api import edit_title
+
+    w = await world()
+    m = await start(client, w)
+    assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
+    async with tenant_session(w.ctx.tenant_id) as s:
+        from oracle.docs.models import Document
+        from tests.test_simple_meetings_api import PRD
+
+        prd = await s.scalar(select(Document.id).where(Document.slug == PRD))
+        # The PRD's version is read after the roadmap's, so a merged lookup would take it.
+        top = await s.scalar(select(DocumentVersion.number).order_by(DocumentVersion.number.desc()).limit(1))  # fmt: skip
+        for doc, heading in ((w.roadmap_id, "Plan sources"), (prd, "PRD sources")):
+            version = await s.scalar(
+                select(DocumentVersion)
+                .where(DocumentVersion.document_id == doc)
+                .order_by(DocumentVersion.number.desc())
+                .limit(1)
+            )
+            if doc == prd:
+                version.number = top + 1
+            s.add(Section(version_id=version.id, section_key="sources", ordinal=9, level=2,
+                          heading=heading, content_hash="x"))  # fmt: skip
+        await s.commit()
+
+    async def refuse(*_a, **_k):
+        raise DraftError([ImportProblem(code="unknown_citation", section_key="sources",
+                                        message="a source is not known")])  # fmt: skip
+
+    monkeypatch.setattr(drafts, "_approve", refuse)
+    r = await client.post(f"/v1/simple/meetings/{m['id']}/approve", headers=w.ctx.as_("decider"))
+    assert r.status_code == 422, r.text
+    [problem] = r.json()["detail"]["problems"]
+    assert problem["where"] == "Plan sources"
