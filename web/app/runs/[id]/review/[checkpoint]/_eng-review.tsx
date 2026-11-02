@@ -589,7 +589,7 @@ function BriefPane({
               const open = writes && (!answer || editing[q.id]);
               const done = !!answer && !open;
               return (
-                <li key={q.id} data-testid="brief-question" data-answered={answer ? "true" : "false"} className={done ? "px-3 py-1" : "rounded-md border border-line px-3 py-2.5"}>
+                <li key={q.id} data-testid="brief-question" data-answered={answer ? "true" : "false"} className="rounded-md border border-line px-3 py-2.5">
                   <p className="flex items-start gap-1.5">
                     {done ? (
                       <span className="mt-0.5 text-pass" aria-label="Answered">
