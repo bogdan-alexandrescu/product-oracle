@@ -58,3 +58,24 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     });
   });
 }
+
+// roadmap-keydates review: the onboarding track's milestone named without its code, "Prove
+// it", falls on the day the PRD's M1 · Prove it ends (Nov 27): the chart draws it once (the
+// track's), while Key dates still lists the PRD's M1. Invented data ("roadmap-keydates-uncoded").
+for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  test.describe(`${viewport.width}px, a milestone named without its code`, () => {
+    test.use({ viewport });
+
+    test("the chart draws a PRD milestone the track already has by name once", async ({ page }) => {
+      await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-keydates-uncoded"] as const);
+      await login(page);
+      await page.goto("/simple/roadmap?roadmap=onboarding-roadmap");
+      await expect(page.locator('[data-testid="track-milestone"]', { hasText: "Prove it" })).toHaveCount(1);
+      await expect(page.locator('[data-testid="key-date-marker"][data-name="M2 · Scale volume"]')).toHaveCount(1);
+      await expect(page.locator('[data-testid="key-date-marker"][data-name="M1 · Prove it"]')).toHaveCount(0);
+
+      await page.getByTestId("key-dates-open").click();
+      await expect(row(page, "M1 · Prove it").getByTestId("key-date-from-prd")).toHaveText("From the PRD");
+    });
+  });
+}

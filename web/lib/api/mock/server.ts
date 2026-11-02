@@ -1042,6 +1042,20 @@ function seedRoadmapKeyDatesScenario(): Db {
 }
 
 /**
+ * roadmap-keydates review, the "roadmap-keydates-uncoded" scenario: "roadmap-keydates" with no
+ * read plan, whose onboarding track holds a milestone named without its code, "Prove it", on
+ * the day the PRD's M1 · Prove it ends (Nov 27): the chart draws it once. Invented data.
+ */
+function seedRoadmapKeyDatesUncodedScenario(): Db {
+  const db = seedRoadmapKeyDatesScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = undefined;
+  rm.items.find((x) => x.key === "setup-checklist")!.record = "Prove it";
+  rm.record_dates = { "Prove it": KEYDATES_PRD_DAYS.m1 };
+  return db;
+}
+
+/**
  * timeline-overlap B2, the "simple-plan-lanes" scenario: "simple-plan" whose onboarding roadmap
  * holds only the plan's work, as the owner's picked frame draws it (every piece planned, nothing
  * broken or waiting): the cut tour, the welcome video and the draft nudges gone, the checklist's
@@ -2943,6 +2957,8 @@ function load(): Db {
                 ? () => seedSimplePlanScenario()
               : scenario === "roadmap-keydates"
                 ? seedRoadmapKeyDatesScenario
+              : scenario === "roadmap-keydates-uncoded"
+                ? seedRoadmapKeyDatesUncodedScenario
               : scenario === "simple-plan-lanes"
                 ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
