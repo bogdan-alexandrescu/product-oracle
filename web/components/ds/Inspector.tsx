@@ -30,6 +30,7 @@ export function Inspector({
   head,
   stats,
   statColumns,
+  fitStats = false,
   children,
   label,
   testId,
@@ -47,6 +48,11 @@ export function Inspector({
   stats?: InspectorStat[];
   /** Stats per row; more stats than this wrap onto a second row (default: all on one). */
   statColumns?: number;
+  /**
+   * Each stat as wide as its content, the row's spare room shared out; stats that do not fit
+   * move to a next row, so a label or figure never breaks inside a word ("Confidenc e").
+   */
+  fitStats?: boolean;
   children?: ReactNode;
   /** Accessible name of the region; defaults to the title when it is a string. */
   label?: string;
@@ -81,7 +87,27 @@ export function Inspector({
         {chips && <div className="flex flex-wrap gap-2">{chips}</div>}
         {head}
       </div>
-      {stats && stats.length > 0 && (
+      {stats && stats.length > 0 && fitStats && (
+        // Each tile's right and bottom edge; the last ones fall under the region's clip.
+        <div className="overflow-hidden border-b border-line">
+          <dl className="-mr-px -mb-px flex flex-wrap">
+            {stats.map((s) => (
+              <div
+                key={s.label}
+                data-testid={s.testId}
+                className="flex flex-auto flex-col-reverse justify-end border-r border-b border-line pt-3.5 pr-3 pb-3 pl-5 max-[600px]:pl-4"
+              >
+                <dt className="mt-0.5 flex items-center gap-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] whitespace-nowrap text-text2">
+                  <span>{s.label}</span>
+                  {s.extra}
+                </dt>
+                <dd className="whitespace-nowrap">{s.figure ?? <Numeral value={s.value} of={s.of} tone={s.tone} />}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+      {stats && stats.length > 0 && !fitStats && (
         <dl className="grid border-b border-line" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
           {stats.map((s, i) => (
             <div

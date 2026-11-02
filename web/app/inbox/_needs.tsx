@@ -27,7 +27,7 @@ import {
   type TrackAlertOut,
 } from "@/lib/api/track-alerts";
 
-import { calendarDay } from "@/lib/dates";
+import { calendarDay, datesInWords } from "@/lib/dates";
 
 import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {
@@ -1116,14 +1116,15 @@ function childNeeds(c: InboxCheckpointRow, summary: InboxSummary, busy: string |
         <span className="truncate" data-testid="child-title" title={child.title ?? child.item}>
           {child.title ?? child.item}
         </span>
-        <Chip kind={child.reason.severity === "blocking" ? "crit" : "warn"} title={child.reason.text}>
+        <Chip kind={child.reason.severity === "blocking" ? "crit" : "warn"} title={datesInWords(child.reason.text)}>
           {child.reason.label}
         </Chip>
       </>
     ),
+    // A reason's dates month first ("… supports Nov 13, 2026."), as the review page reads them.
     context: (
-      <span className="block truncate text-[14px] text-text2" title={child.reason.text}>
-        {child.reason.text}
+      <span className="block truncate text-[14px] text-text2" title={datesInWords(child.reason.text)} data-testid="child-reason">
+        {datesInWords(child.reason.text)}
       </span>
     ),
     action: <ChildActions key={`${child.item}-${child.staged?.id ?? ""}`} c={c} child={child} at={at} busy={busy} act={act} fixed={fixed} />,

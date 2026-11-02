@@ -12,6 +12,7 @@ import { RawFileSheet } from "@/components/review/RawFileSheet";
 import type { Horizon, ItemRow as TableRow } from "@/components/roadmap/item-row";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { datesInWords } from "@/lib/dates";
 import { formatCount } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
@@ -21,7 +22,6 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import {
   AGENT_KINDS,
   answersReason,
-  datesInWords,
   day,
   decidersText,
   describe,

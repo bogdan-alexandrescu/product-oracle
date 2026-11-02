@@ -1225,11 +1225,14 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
   return { method: spec.method, features: order.length, problems, order };
 }
 
-/** The PRD a run's order is for: its document, else the slug the run writes. */
+/**
+ * The PRD a run's order is for: its document (by id, else the one its slug names), else the
+ * slug the run writes with the brief's title, the title the import gives it.
+ */
 function orderDocument(ctx: Pick<RunsContext, "documents">, r: RunOut): SnapshotRow["document"] {
-  const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : undefined;
+  const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : ctx.documents.find((d) => d.slug === r.document_slug);
   if (doc) return { id: doc.id, slug: doc.slug, title: doc.title };
-  return r.document_slug ? { id: null, slug: r.document_slug, title: null } : null;
+  return r.document_slug ? { id: null, slug: r.document_slug, title: r.document_title ?? null } : null;
 }
 
 /**
@@ -1251,6 +1254,7 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
     note: null,
     feature_count: rows.length,
     top: rows.slice(0, 5).map((f) => f.key),
+    top_titles: rows.slice(0, 5).map((f) => f.title),
     status: "proposed",
     run_id: r.id,
     document: orderDocument(ctx, r),
@@ -2883,13 +2887,15 @@ const USAGE_ALERTS_ORDER: OrderSpec = {
 };
 
 /** A Baseline to PRD run for `document`, its baseline and feature set approved, waiting at the priority stop with `spec`. */
-function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec): RunOut {
+function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec, briefTitle?: string): RunOut {
   const { from, now } = seedClock();
   // Its own runs list, so the ticks below move this run only.
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
   const full = { ...ctx, db: own, now };
   const r = seedRun(ctx, own, "baseline_to_prd", document, {}, created_at);
   r.id = id;
+  // A PRD not imported yet: the brief's title, the one the import gives it (as the API's).
+  if (briefTitle) r.document_title = briefTitle;
   from(r.created_at);
   launch(full, r);
   for (const seq of [1, 2]) {
@@ -2922,7 +2928,8 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
  */
 export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   seedAtPriority(db, ctx, PRIORITY_RUN, "saved-addresses", "2026-10-18T09:00:00Z", SAVED_ADDRESSES_ORDER);
-  seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER);
+  // Its PRD is not imported yet (no document has the slug): the order names it by the brief's title.
+  seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts-pilot", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER, "Example Co · Usage alerts");
   const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
   const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
@@ -2935,6 +2942,11 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     decided_at: "2026-10-12T10:00:00Z",
     document: checkout ? { id: checkout.id, slug: checkout.slug, title: checkout.title } : null,
   });
+  // A feature dropped from the feature set since: in no ranking on screen, so its Top names
+  // it from the snapshot's own ranking (top_titles), as the API's (walk-docs-priorities 3).
+  const dropped = { ...snap.ranking[snap.ranking.length - 1], key: "F-41", title: "Gift wrap at checkout", rank: snap.ranking.length + 1 };
+  snap.ranking = [...snap.ranking, dropped];
+  Object.assign(snap, { feature_count: snap.ranking.length, top: snap.ranking.slice(0, 5).map((f) => f.key), top_titles: snap.ranking.slice(0, 5).map((f) => f.title) });
 }
 
 /**
