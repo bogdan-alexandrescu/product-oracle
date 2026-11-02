@@ -1,3 +1,5 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { QUESTIONS_NO_UNDO_SCENARIO } from "../lib/api/mock/simple-questions";
 import { login } from "./helpers";
 import { expect, test, type Page } from "./test";
 
@@ -18,9 +20,16 @@ import { expect, test, type Page } from "./test";
  * build-rundecide review: protects = with only a PRD's questions waiting (the approver decides
  * their one other decision first), the Decisions tile still shows and takes the person to the
  * PRD's card; fails_when = the tile links to the Decisions card that is not drawn.
+ *
+ * vqa-simple-runs review: protects = a question decided on the card is shown as decided only
+ * while Home is open: leaving through the nav and coming back reads the card again (the row is
+ * gone, the count one lower); and a decision the API says cannot be undone gets no decided row
+ * with an Undo, only the toast; fails_when = the decided row (with its Undo) comes back from
+ * before, or is drawn with an Undo that cannot work.
  */
 
 const region = (page: Page, name: string) => page.getByRole("region", { name, exact: true });
+const nav = (page: Page, name: string) => page.getByRole("navigation", { name: "Simple" }).getByRole("link", { name, exact: true }).filter({ visible: true });
 
 for (const phone of [false, true]) {
   test.describe(phone ? "phone" : "desktop", () => {
@@ -58,6 +67,41 @@ for (const phone of [false, true]) {
       await row.getByRole("button", { name: "Undo" }).click();
       await expect(row.getByRole("button", { name: "Another answer" })).toBeVisible();
       await expect(count).toHaveText(String(n));
+    });
+
+    test("a question decided on the card is not shown decided again after leaving Home and coming back", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple");
+      const card = region(page, "Waiting for you: Guided setup");
+      await expect(card).toContainText("9 decisions you own · also on its review meeting's agenda");
+      const row = card.getByTestId("home-question").filter({ hasText: "Invite limit on the free plan" });
+      await row.getByRole("button", { name: "Another answer" }).click();
+      await row.getByRole("group", { name: /^Answers for / }).getByRole("button", { name: "3 invites" }).click();
+      await expect(row.getByTestId("question-decided")).toBeVisible();
+
+      await nav(page, "Decisions").click();
+      await expect(page).toHaveURL(/\/simple\/decisions/);
+      await nav(page, "Home").click();
+      await expect(page).toHaveURL(/\/simple$/);
+      await expect(card).toContainText("8 decisions you own · also on its review meeting's agenda");
+      await expect(card).not.toContainText("Invite limit on the free plan");
+      await expect(card.getByTestId("question-decided")).toHaveCount(0);
+      await expect(card.getByRole("button", { name: "Undo" })).toHaveCount(0);
+    });
+
+    test("a decision that cannot be undone gets the toast, not a decided row with Undo", async ({ page }) => {
+      await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, QUESTIONS_NO_UNDO_SCENARIO] as const);
+      await login(page);
+      await page.goto("/simple");
+      const card = region(page, "Waiting for you: Guided setup");
+      const row = card.getByTestId("home-question").filter({ hasText: "Invite limit on the free plan" });
+      await row.getByRole("button", { name: "Another answer" }).click();
+      await row.getByRole("group", { name: /^Answers for / }).getByRole("button", { name: "3 invites" }).click();
+      await expect(page.getByText("Decided Q6: 3 invites")).toBeVisible();
+      await expect(card).toContainText("8 decisions you own · also on its review meeting's agenda");
+      await expect(card).not.toContainText("Invite limit on the free plan");
+      await expect(card.getByTestId("question-decided")).toHaveCount(0);
+      await expect(card.getByRole("button", { name: "Undo" })).toHaveCount(0);
     });
 
     test("the Decisions tile goes to the PRD's card when only its questions wait", async ({ page }) => {
