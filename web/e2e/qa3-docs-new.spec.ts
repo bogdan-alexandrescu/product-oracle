@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -38,6 +38,19 @@ async function newPrdFromHome(page: Page) {
 }
 
 const title = (page: Page) => page.getByRole("textbox", { name: "Title" });
+
+/** The button's fill once its colour transition has ended: read until two reads 100 ms apart agree. */
+async function settledFill(button: Locator) {
+  let last = "";
+  let fill = await button.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await expect
+    .poll(async () => {
+      [last, fill] = [fill, await button.evaluate((el) => getComputedStyle(el).backgroundColor)];
+      return fill === last;
+    }, { intervals: [100] })
+    .toBe(true);
+  return fill;
+}
 const leave = (page: Page) => page.getByRole("dialog", { name: "Discard your changes?" });
 
 for (const [name, viewport, home] of [
@@ -153,11 +166,12 @@ test.describe("desktop", () => {
     await expect(create).toBeEnabled();
     await expect(create).toHaveAttribute("data-variant", "primary");
     // Filled with the accent, as New PRD's Continue.
-    const fill = await create.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const fill = await settledFill(create);
     await page.goto("/documents/new?kind=prd");
     // walk-brief: Continue is disabled until the form is ready; compare the ready button.
-    await expect(page.getByRole("button", { name: "Continue" }).first()).toBeEnabled();
-    const cont = await page.getByRole("button", { name: "Continue" }).first().evaluate((el) => getComputedStyle(el).backgroundColor);
+    const continueButton = page.getByRole("button", { name: "Continue" }).first();
+    await expect(continueButton).toBeEnabled();
+    const cont = await settledFill(continueButton);
     expect(fill).toBe(cont);
 
     await page.goto("/documents/new?kind=roadmap");
