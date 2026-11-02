@@ -82,8 +82,10 @@ export function fitWords(text: string, room: number, weight: number, size: numbe
 }
 
 /**
- * Above 0 once the fonts the table measures in have loaded (Inter Tight, DM Mono), and higher
- * after each later font load, so widths measured before are measured again in the fonts' own.
+ * Above 0 once the page is in a browser, so widths are measured from its first paint there in
+ * the fonts it has (the fallbacks, while Inter Tight and DM Mono load: a word is never cut
+ * meanwhile), and higher once those fonts load and after each later font load, so widths
+ * measured before are measured again in the fonts' own.
  */
 export function useFontsReady(): number {
   const [ready, setReady] = useState(0);
@@ -92,6 +94,7 @@ export function useFontsReady(): number {
     const bump = () => {
       if (live) setReady((n) => n + 1);
     };
+    bump();
     const fonts = typeof document !== "undefined" ? document.fonts : undefined;
     const sans = family("font-sans");
     const mono = family("font-mono");

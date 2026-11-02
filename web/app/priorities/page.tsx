@@ -1072,7 +1072,7 @@ function Priorities() {
   }
 
   const fonts = useFontsReady();
-  // Measured in the page's fonts once they load, so the widths are theirs (priorities-words).
+  // Measured in the fonts the page has, and again in its own once they load (priorities-words).
   const goalCol = useMemo(() => (fonts ? goalWidth(rows ?? []) : GOAL_MIN), [fonts, rows]);
   // The Feature column takes the room left, so its text's room is read from its header; a
   // phone's card is a whole line wide (its header is for screen readers only).
