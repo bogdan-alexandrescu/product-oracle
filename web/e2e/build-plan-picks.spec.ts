@@ -62,6 +62,9 @@ for (const v of SIZES) {
         await lineSelect(page).selectOption({ label: label! });
         const heads = page.getByTestId("prio-part-head");
         await expect(heads).toHaveCount(2);
+        // Wait for the picked line's own parts: the last line's parts are still up a moment.
+        const name = label!.slice(start.indexOf(":") + 1).split(" · ")[0].trim();
+        await expect(heads.nth(0)).toContainText(name);
         await expect(heads.nth(0)).toContainText(/^Makes .+/);
         await expect(heads.nth(1)).toContainText(/^Misses .+/);
         await expect(heads.nth(0)).toContainText("in rank order");

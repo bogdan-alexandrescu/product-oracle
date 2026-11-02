@@ -402,10 +402,18 @@ function DayChart(props: TimelineProps) {
       .toISOString()
       .slice(0, 10);
   }
+  // A month that starts just left of the view keeps its label, whole, at the view's left
+  // edge while the next month's label is not in its way.
+  const cutAt = fit ? -1 : months.findIndex((m) => x(m.day) >= sl - 2) - 1;
+  const pinned =
+    cutAt >= 0 &&
+    (cutAt + 1 >= months.length || x(months[cutAt + 1].day) - sl > 80)
+      ? months[cutAt].day
+      : undefined;
   // The first month in sight carries its year.
   const firstSeen = fit
     ? months[0]?.day
-    : months.find((m) => x(m.day) >= sl - 2)?.day;
+    : (pinned ?? months.find((m) => x(m.day) >= sl - 2)?.day);
   // roadmap-r2: the Gantt's moves. A drag past DRAG_PX moves the bar by whole days (an end
   // grabbed near the bar's edge, grabAt, moves only that end); a shorter one is a click. A
   // finger picks a bar up with the Gantt's long press first. The arrow keys move a focused
@@ -413,9 +421,23 @@ function DayChart(props: TimelineProps) {
   // and a viewer's bars, do not move.
   const { canChange, moved, onMove, onKeyMove, onKeyEnd, onKeyCancel } = props;
   const fixed = (i: Item) => !canChange || closedItem(i) || planned(i);
-  const drag = useRef<{ item: Item; mode: "move" | "start" | "end"; x0: number; start: string; end: string; moved: boolean; pointer: number; armed: boolean; timer: number | null } | null>(null);
+  const drag = useRef<{
+    item: Item;
+    mode: "move" | "start" | "end";
+    x0: number;
+    start: string;
+    end: string;
+    moved: boolean;
+    pointer: number;
+    armed: boolean;
+    timer: number | null;
+  } | null>(null);
   const clicked = useRef(false);
-  const [live, setLive] = useState<{ id: string; start: string; end: string } | null>(null);
+  const [live, setLive] = useState<{
+    id: string;
+    start: string;
+    end: string;
+  } | null>(null);
   const spanOf = (i: Item): [string, string] =>
     live?.id === i.id ? [live.start, live.end] : (moved[i.id] ?? barSpan(i));
   const dragTo = (dx: number): [string, string] | null => {
@@ -431,7 +453,17 @@ function DayChart(props: TimelineProps) {
     const [start, end] = moved[i.id] ?? barSpan(i);
     const mode = grabAt(e.currentTarget.getBoundingClientRect(), e.clientX);
     const touch = e.pointerType === "touch";
-    const d = { item: i, mode, x0: e.clientX, start, end, moved: false, pointer: e.pointerId, armed: !touch, timer: null as number | null };
+    const d = {
+      item: i,
+      mode,
+      x0: e.clientX,
+      start,
+      end,
+      moved: false,
+      pointer: e.pointerId,
+      armed: !touch,
+      timer: null as number | null,
+    };
     drag.current = d;
     // A finger: a long press picks the bar up, as on the Gantt.
     if (touch)
@@ -488,7 +520,9 @@ function DayChart(props: TimelineProps) {
     onKeyMove(i, s1, addDays(en, daysBetween(s, s1)));
   };
   const liveItem = live ? data.items.find((i) => i.id === live.id) : undefined;
-  const liveWarn = live ? liveBreaks(props.byId, live.id, live.start, live.end) : [];
+  const liveWarn = live
+    ? liveBreaks(props.byId, live.id, live.start, live.end)
+    : [];
   const zooms: [Zoom, string][] = [
     ["6m", "6 months"],
     ["1y", "1 year"],
@@ -545,17 +579,25 @@ function DayChart(props: TimelineProps) {
         <div className="relative" style={{ width: labelW + trackW }}>
           <div className="sticky top-0 z-20 flex h-11 border-b border-line bg-surface">
             <div
+              data-testid="timeline-names-head"
               className="sticky left-0 z-20 flex-none border-r border-line bg-surface"
               style={{ width: labelW }}
             />
             <div className="relative" style={{ width: trackW }}>
               {months
-                .filter((m) => !fit || x(m.day) < trackW - 64)
+                // A month that starts left of the view would peek out from under the names
+                // column cut short; the picked frames show only months that start in sight.
+                .filter((m) =>
+                  fit
+                    ? x(m.day) < trackW - 64
+                    : x(m.day) >= sl - 2 || m.day === pinned,
+                )
                 .map((m) => (
                   <span
                     key={m.day}
+                    data-testid="timeline-month"
                     className="absolute top-1 text-xs whitespace-nowrap text-text2"
-                    style={{ left: x(m.day) + 4 }}
+                    style={{ left: (m.day === pinned ? sl : x(m.day)) + 4 }}
                   >
                     {m.day === firstSeen ? monthWord(m.day) : m.label}
                   </span>
@@ -588,7 +630,14 @@ function DayChart(props: TimelineProps) {
                 data-add-where={whereAttr("quarter", quarterValue(q.start))}
                 data-add-label={q.label}
                 className="absolute top-11 bottom-0"
-                style={{ left: labelW + Math.max(0, x(q.start)), width: Math.max(0, Math.min(trackW, x(addDays(q.end, 1))) - Math.max(0, x(q.start))) }}
+                style={{
+                  left: labelW + Math.max(0, x(q.start)),
+                  width: Math.max(
+                    0,
+                    Math.min(trackW, x(addDays(q.end, 1))) -
+                      Math.max(0, x(q.start)),
+                  ),
+                }}
               />
             ))}
           {months.map((m) => (
@@ -649,7 +698,10 @@ function DayChart(props: TimelineProps) {
                       {i.title}
                     </span>
                     {lk.chip && (
-                      <span data-testid="draft-tag" className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2">
+                      <span
+                        data-testid="draft-tag"
+                        className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2"
+                      >
                         {lk.chip}
                       </span>
                     )}
@@ -669,7 +721,13 @@ function DayChart(props: TimelineProps) {
                       data-testid="timeline-bar"
                       data-start={ds}
                       data-end={de}
-                      data-live={live?.id === i.id ? (liveWarn.length ? "broken" : "ok") : undefined}
+                      data-live={
+                        live?.id === i.id
+                          ? liveWarn.length
+                            ? "broken"
+                            : "ok"
+                          : undefined
+                      }
                       aria-label={`${i.title}, ${spanWords(ds, de, data.today)}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
                       onClick={() => {
                         if (clicked.current) clicked.current = false;
@@ -682,7 +740,11 @@ function DayChart(props: TimelineProps) {
                       onKeyDown={(e) => {
                         if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
                           e.preventDefault();
-                          keyMove(i, e.key === "ArrowRight" ? 1 : -1, e.shiftKey);
+                          keyMove(
+                            i,
+                            e.key === "ArrowRight" ? 1 : -1,
+                            e.shiftKey,
+                          );
                         } else if (e.key === "Escape") onKeyCancel(i);
                       }}
                       onBlur={() => onKeyEnd(i)}
@@ -722,7 +784,9 @@ function DayChart(props: TimelineProps) {
                         style={{ left: Math.max(0, bx) }}
                       >
                         {shortDay(live.start)} – {shortDay(live.end)}
-                        {liveWarn.length ? ` · ${liveWarn[0]}` : " · no broken links"}
+                        {liveWarn.length
+                          ? ` · ${liveWarn[0]}`
+                          : " · no broken links"}
                       </span>
                     )}
                   </div>
@@ -807,7 +871,10 @@ function QuarterList(props: TimelineProps) {
                         >
                           {i.title}
                           {lk.chip ? (
-                            <span data-testid="draft-tag" className="ml-2 rounded-full bg-surface2 px-1.5 text-[11px] font-normal text-text2">
+                            <span
+                              data-testid="draft-tag"
+                              className="ml-2 rounded-full bg-surface2 px-1.5 text-[11px] font-normal text-text2"
+                            >
                               {lk.chip}
                             </span>
                           ) : null}
