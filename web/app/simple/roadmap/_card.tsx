@@ -637,12 +637,15 @@ export function FloatingCard({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    ref.current?.focus();
+    // Opening an item never scrolls the page: the clicked row stays where it was.
+    ref.current?.focus({ preventScroll: true });
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  // The card's dates carry the year when it is not this one, as the Timeline's bar does.
+  const span = yearSpan(item.start.date, item.end.date);
   const dates = item.estimated
-    ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · Estimated by Oracle (the ${item.horizon} window)`
-    : `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · ${sourceWord(item.source)}`;
+    ? `${span} · Estimated by Oracle (the ${item.horizon} window)`
+    : `${span} · ${sourceWord(item.source)}`;
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside);
   // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
@@ -664,7 +667,8 @@ export function FloatingCard({
       ? "fixed z-40 flex w-[840px] flex-col rounded-xl border"
       : `absolute z-40 rounded-xl border p-4 ${wide ? "w-[760px]" : "w-[380px]"}`;
   const placeStyle: React.CSSProperties | undefined = phone
-    ? undefined
+    ? // A part-height sheet (the Timeline's) keeps the marked row in sight above it.
+      !wide && style.height ? { height: style.height } : undefined
     : beside
       ? { top: 16, bottom: 16, right: talkRight }
       : left == null
@@ -1072,7 +1076,8 @@ export function FloatingCard({
       {/* #47: the card floats over the chart with nothing to say it has the page's
        * attention; a dimmed backdrop on desktop (a phone's sheet already reads as modal),
        * clicking it closes the card like the close button. */}
-      {!phone && (
+      {/* The Timeline's side panel sits in the page's flow and dims nothing. */}
+      {!phone && style.position !== "relative" && (
         <div
           aria-hidden
           data-testid="floating-card-backdrop"

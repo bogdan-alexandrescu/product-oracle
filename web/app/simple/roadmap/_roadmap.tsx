@@ -18,7 +18,7 @@ import { useQuery } from "@/lib/use-query";
 import { QuickAdd } from "./_add";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
-import { Callout, changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
+import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
 import { Lanes, pmItem } from "./_lanes";
@@ -58,6 +58,7 @@ import {
   yearSpan,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
+import { ConflictPanel, ZoomTimeline } from "./_zoom";
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -900,9 +901,11 @@ export function SimpleRoadmap() {
 
   const doExport = async (kind: "png" | "pdf") => {
     if (!data) return;
-    const labels = wrap.current?.querySelector<HTMLElement>('[data-testid="chart-labels"]') ?? null;
-    if (format !== "board" && !svg.current) return;
     setExporting(true);
+    // The Timeline's picture is the goal lanes, laid out off screen once exporting is set.
+    if (format === "timeline") await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const labels = wrap.current?.querySelector<HTMLElement>('[data-testid="chart-labels"]') ?? null;
+    if (format !== "board" && !svg.current) return setExporting(false);
     try {
       const pic = format === "board" ? boardPicture(boardColumns(laned ?? data), data.today) : chartPicture(svg.current!, labels);
       const title = `Roadmap · ${FORMAT_WORDS[format]}${format === "gantt" ? ` (${unit})` : ""}`;
@@ -1302,46 +1305,52 @@ export function SimpleRoadmap() {
             onGoal={openGoal}
           />
         ) : format === "timeline" ? (
-          // timeline-overlap B: the Timeline is goal lanes (B2 on a desktop, B3 on a phone).
-          <Lanes
+          // mk-qa4-roadmap QR1 A..QR4 A: six months around today, the key and the broken links
+          // above, an open item in a panel at the right (a sheet on a phone).
+          <ZoomTimeline
             data={laned ?? data}
-            lane={f.group}
-            noWork={noWork}
-            compact={phone}
-            canDrag={canChange}
-            moved={moved}
-            open={card?.id ?? null}
-            chartRef={(el) => {
-              svg.current = el;
-            }}
-            dropTargets={canChange}
-            onOpen={(item) => {
+            phone={phone}
+            act={act}
+            canChange={canChange}
+            byId={byId}
+            openKey={cardItem?.key ?? null}
+            onOpen={(k) => {
+              const it = k ? data.items.find((x) => x.key === k) : undefined;
               setPop(null);
-              setCard({ id: item.id, ...anchorOf(item.id) });
+              setCard(it ? { id: it.id, left: 0, top: 0 } : null);
             }}
-            onMove={onMove}
-            onKeyMove={onKeyMove}
-            onKeyEnd={(item) => dates.flush(item.id)}
-            onKeyCancel={onKeyCancel(dates)}
-            onSuggestion={(item) => {
-              setCard(null);
-              setPop({ id: item.id, ...anchorOf(item.id) });
-            }}
-            overlay={(l, sc) =>
-              data.items.flatMap((i) => {
-                const y = l.y.get(i.id);
-                if (y == null || closedItem(i)) return [];
-                const f0 = broken(i).find((x) => x.kind === "dependency_order");
-                if (!f0) return [];
-                const [start, end] = moved[i.id] ?? [i.start.date, i.end.date];
-                // qa-simple-roadmap-4 ("Under the lane"): on the desktop's lanes the callout takes the line under its pill.
-                const under = l.under?.get(i.id);
-                if (under != null) return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(start)} y={under} h={l.rowH} compact={phone} maxX={sc.width} />];
-                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} before={sc.x(start) - 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
-              })
-            }
+            card={(it, style, sheet, onClose) => (
+              <FloatingCard
+                key={it.id}
+                item={it}
+                items={byId}
+                proposals={allProposals.filter((c) => c.target.item_id === it.id)}
+                phone={sheet}
+                style={style}
+                act={act}
+                canChange={canChange}
+                onDecide={(c, how) => void onDecide(c, how)}
+                onClose={onClose}
+                near={nearWords(it, data.key_dates ?? [])}
+              />
+            )}
           />
         ) : (
+          <>
+          {/* mk-qa4-roadmap QR3 A: the broken links sit in the panel above the chart, never over a bar. */}
+          <ConflictPanel
+            data={laned ?? data}
+            phone={phone}
+            act={act}
+            canChange={canChange}
+            byId={byId}
+            onShow={(k) => {
+              const it = data.items.find((x) => x.key === k);
+              if (!it) return;
+              setPop(null);
+              setCard({ id: it.id, ...anchorOf(it.id) });
+            }}
+          />
           <Chart
             data={laned ?? data}
             lane={f.group}
@@ -1370,22 +1379,34 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
-            overlay={(l, sc) =>
-              data.items.flatMap((i) => {
-                const y = l.y.get(i.id);
-                if (y == null || closedItem(i)) return [];
-                const f0 = broken(i).find((x) => x.kind === "dependency_order");
-                if (!f0) return [];
-                const [start, end] = moved[i.id] ?? [i.start.date, i.end.date];
-                // qa4-simple-roadmap-16: a phone's waterfall gives the warning a band under its bar.
-                const under = l.under?.get(i.id);
-                if (under != null) return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(start)} y={under} h={l.rowH} compact={phone} maxX={sc.width} />];
-                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} before={sc.x(start) - 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
-              })
-            }
           />
+          </>
         )}
-        {cardItem && card && (
+        {/* The Timeline's export draws its picture from the goal lanes, laid out off screen while it saves. */}
+        {format === "timeline" && exporting && (
+          <div aria-hidden className="pointer-events-none fixed top-0 left-[-20000px] w-[1400px]" style={{ visibility: "hidden" }}>
+            <Lanes
+              data={laned ?? data}
+              lane={f.group}
+              noWork={noWork}
+              compact={false}
+              canDrag={false}
+              moved={moved}
+              open={null}
+              chartRef={(el) => {
+                svg.current = el;
+              }}
+              dropTargets={false}
+              onOpen={() => undefined}
+              onMove={onMove}
+              onKeyMove={onKeyMove}
+              onKeyEnd={() => undefined}
+              onKeyCancel={onKeyCancel(dates)}
+              onSuggestion={() => undefined}
+            />
+          </div>
+        )}
+        {format !== "timeline" && cardItem && card && (
           <FloatingCard
             key={cardItem.id}
             item={cardItem}
