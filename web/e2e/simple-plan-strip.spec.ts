@@ -101,7 +101,8 @@ for (const phone of [false, true]) {
           await rows.first().click();
           await expect(page).toHaveURL(new RegExp(`${prd.replace("?", "\\?")}$`));
           if (phone) await page.getByTestId("filters-toggle").click();
-          await expect(page.getByLabel("PRD")).toHaveValue(prd.split("=")[1]);
+          // The PRD filter by its role: other things on the roadmap page are labelled with "PRD" too.
+          await expect(page.getByRole("combobox", { name: "PRD", exact: true })).toHaveValue(prd.split("=")[1]);
         });
       }
 
