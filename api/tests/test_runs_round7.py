@@ -251,6 +251,11 @@ WRITE_ROUTES = {
     ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage"): "approver",
     ("delete", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}"): "commenter",
     ("put", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note"): "approver",
+    # AQ1: answering an agent's question at the stop (the same gate as the note).
+    (
+        "put",
+        "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions/{question_id}/answer",
+    ): "approver",
     # Trash (#482): only an owner deletes a run or restores it.
     ("delete", "/v1/runs/{run_id}"): "owner",
     ("post", "/v1/runs/{run_id}/restore"): "owner",
@@ -315,6 +320,8 @@ async def test_a_caller_who_lost_standing_before_the_write_is_refused(
         body = {"item_key": "*", "kind": "accept"}
     elif template.endswith("/note"):
         body = {"note": "Caps first"}
+    elif template.endswith("/answer"):
+        body = {"option": "a", "note": None}
     elif template.endswith("/stage"):
         body = {}
     elif template.endswith("/cancel-again"):
@@ -323,7 +330,11 @@ async def test_a_caller_who_lost_standing_before_the_write_is_refused(
         body = {"knobs": {}}
     # An action that does not exist: the caller is refused before it is looked up.
     path = template.format(
-        run_id=run["id"], seq=1, checkpoint_id=checkpoint_id, action_id=uuid.uuid4()
+        run_id=run["id"],
+        seq=1,
+        checkpoint_id=checkpoint_id,
+        action_id=uuid.uuid4(),
+        question_id="q1",
     )
     if role == "commenter" and how == "demoted":
         fired = _viewer_on_first_gate(monkeypatch, ctx, caller.user_id)
@@ -399,6 +410,7 @@ NO_CALL = {
     ("post", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}/stage"),
     ("delete", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/actions/{action_id}"),
     ("put", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/note"),
+    ("put", "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions/{question_id}/answer"),
     ("delete", "/v1/runs/{run_id}"),
     ("post", "/v1/runs/{run_id}/restore"),
 }

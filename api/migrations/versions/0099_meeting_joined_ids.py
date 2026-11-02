@@ -5,8 +5,8 @@ Join. An invited attendee who has not joined reads "invited, not joined yet" on 
 meeting's screen, never "here". Existing meetings count every attendee as joined, as
 they read before.
 
-Revision ID: 0097_meeting_joined_ids
-Revises: 0096_api_token_removed_at
+Revision ID: 0099_meeting_joined_ids
+Revises: 0098_draft_added_reviewers
 """
 
 from collections.abc import Sequence
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0097_meeting_joined_ids"
-down_revision: str | None = "0096_api_token_removed_at"
+revision: str = "0099_meeting_joined_ids"
+down_revision: str | None = "0098_draft_added_reviewers"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

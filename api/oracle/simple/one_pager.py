@@ -995,8 +995,8 @@ async def document_owner(
 def span_words(start: date, end: date) -> str:
     """A span as people read it, month first: "Nov 2 – Dec 23, 2026", "Nov 2, 2026 – Feb 26,
     2027"; never ISO."""
-    first = f"{start:%b} {start.day}" + ("" if start.year == end.year else f", {start.year}")
-    return f"{first} – {end:%b} {end.day}, {end.year}"
+    first = company_time.calendar_day(start) + ("" if start.year == end.year else f", {start.year}")
+    return f"{first} – {company_time.calendar_day(end)}, {end.year}"
 
 
 def milestone_span(items: list[plan_strip.PlanItem]) -> tuple[date, date] | None:
