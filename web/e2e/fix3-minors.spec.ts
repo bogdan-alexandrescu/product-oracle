@@ -107,19 +107,22 @@ for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 84
 
     // fix3-minors review: the clamp holds for any dated plan, also one whose rows are already in
     // rank order (what makes the line has the first ranks), not only one the dates regroup.
-    test("in a dated plan whose line two far-apart rows make, the list splits at the line in rank order", async ({ page }) => {
+    test("in a dated plan whose line three far-apart rows make, the list splits at the line in rank order", async ({ page }) => {
       await open(page, width, height);
-      // A line on a picked day that only two rows make, far apart by rank.
+      // A line on a picked day that only three rows make, far apart by rank (ranks 4, 17 and 26:
+      // since walkc-roadmap-tasks a planned item ends with its plan slices, Setup checklist on Nov 20).
       await page.locator("#prio-line").selectOption("pick");
-      await page.getByLabel("The line's date").fill("2026-11-16");
+      await page.getByLabel("The line's date").fill("2026-11-20");
       await page.getByRole("button", { name: "Apply" }).click();
       // build-plan QP1: the parts' headings say what makes and misses the line.
-      await expect(page.getByTestId("prio-part-head").first()).toContainText("Makes Nov 16, 2026");
-      await expect(page.getByTestId("prio-part-count").first()).toHaveText("2 features, in rank order");
+      await expect(page.getByTestId("prio-part-head").first()).toContainText("Makes Nov 20, 2026");
+      await expect(page.getByTestId("prio-part-count").first()).toHaveText("3 features, in rank order");
       const list = await listed(page);
-      expect(list.filter((r) => r.above).length).toBe(2);
-      // QA pass 3 (qa-simple-plan-2): the list is split at the line, the two that make it first.
-      expect(list.map((r) => r.above).slice(0, 3)).toEqual([true, true, false]);
+      expect(list.filter((r) => r.above).length).toBe(3);
+      // QA pass 3 (qa-simple-plan-2): the list is split at the line, the three that make it first.
+      expect(list.map((r) => r.above).slice(0, 4)).toEqual([true, true, true, false]);
+      const makes = list.filter((r) => r.above).map((r) => r.rank);
+      expect(makes.at(-1)! - makes[0], "far apart by rank").toBeGreaterThan(10);
       // Each side keeps rank order; the drag past the line is the test above (a row needed by
       // another stays where it is, so this one does not drag here).
       const ranks = (above: boolean) => list.filter((r) => r.above === above).map((r) => r.rank);

@@ -162,9 +162,10 @@ for (const [name, viewport] of [
       await page.goto(`/runs/${PRIORITY_RUN}`);
       await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
       await expect(page).toHaveURL(/\/priorities\?snapshot=/);
+      // The run's own list (build-runplan RP1: its 5 baseline features and the 6 the PRD adds).
       const rows = page.locator('tr[data-testid^="priority-row-"]');
-      await expect(rows).toHaveCount(5);
-      await expect(page.getByText("5 in the run's order").filter({ visible: true })).toHaveCount(1);
+      await expect(rows).toHaveCount(11);
+      await expect(page.getByText("11 in the run's order").filter({ visible: true })).toHaveCount(1);
       // The header's count; each goal's "N ranked" (#1006, qa4-plan-17, a phone's words) is not it.
       await expect(page.getByText(/^\d+ ranked$/).and(page.locator(':not([data-testid="goal-ranked"])'))).toHaveCount(0);
 
