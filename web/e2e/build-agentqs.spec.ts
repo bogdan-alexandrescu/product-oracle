@@ -48,13 +48,13 @@ for (const [device, viewport] of [
       await openReview(page);
       await expect(block(page).getByRole("heading", { name: "Questions from the agents" })).toBeVisible();
       await expect(block(page).getByTestId("agent-questions-count")).toHaveText("3 open · 1 answered");
-      await expect(block(page).getByText("each answer goes to Engineering check with the decision")).toBeVisible();
+      await expect(block(page).getByText("each answer goes to Priority order with the decision")).toBeVisible();
       const send = card(page, SEND);
       await expect(send).toHaveAttribute("data-state", "unanswered");
       await expect(send.getByText("Architect asks · About Saved addresses")).toBeVisible();
       await expect(send.getByRole("radio", { name: /Reuse the order service path/ }).getByText("Agent's pick")).toBeVisible();
       await expect(send.getByRole("radio", { name: /Build a new send path/ }).getByText("Agent's pick")).toHaveCount(0);
-      await expect(send.getByText("Not answered by the time you decide: Engineering check goes with the agent's pick.")).toBeVisible();
+      await expect(send.getByText("Not answered by the time you decide: Priority order goes with the agent's pick.")).toBeVisible();
       await expect(card(page, "Who edits addresses in bulk").getByText("Analyst asks · About Bulk edit")).toBeVisible();
       // The one someone else answered: in the Answered row, with who and when, month first.
       const home = card(page, "outside the country");
@@ -93,7 +93,7 @@ for (const [device, viewport] of [
       await send.getByRole("radio", { name: /Build a new send path/ }).click();
       await expect(send.getByRole("radio", { name: /Build a new send path/ })).toHaveAttribute("aria-checked", "true");
       await send.getByLabel("Note for the next agent (optional)").fill("The checkout team owns it from Nov 16");
-      await expect(send.getByText("Goes to Engineering check with this stop's decision.")).toBeVisible();
+      await expect(send.getByText("Goes to Priority order with this stop's decision.")).toBeVisible();
       await send.getByRole("button", { name: "Save answer" }).click();
       await expect(block(page).getByTestId("agent-questions-count")).toHaveText("2 open · 2 answered");
       const saved = card(page, SEND);
@@ -102,7 +102,7 @@ for (const [device, viewport] of [
       await expect(saved.getByText("“The checkout team owns it from Nov 16”")).toBeVisible();
       await expect(saved.getByTestId("agent-question-who")).toHaveText("Answered by you · just now");
       await expect(saved.getByTestId("agent-question-reaches")).toHaveText(
-        "Goes to Engineering check, the next step, with this stop's decision. Its agent reads it as settled. You can change it until you decide the stop.",
+        "Goes to Priority order, the next step, with this stop's decision. Its agent reads it as settled. You can change it until you decide the stop.",
       );
       // Kept: the page read again shows the answer.
       await page.reload();

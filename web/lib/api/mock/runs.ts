@@ -3867,7 +3867,8 @@ async function routeAgentQuestions(ctx: RunsContext, r: RunOut, cp: CheckpointOu
   const stored = ctx.db.agent_questions?.[cp.id] ?? [];
   const me = ctx.member?.id ?? ctx.userId;
   const seq = cp.segment_seq;
-  const next = seq != null ? (r.segments.find((s) => s.seq === seq + 1)?.title ?? null) : null;
+  // The step after the stop's segment that runs (one whose stop is off is skipped).
+  const next = seq != null ? (r.segments.find((s) => s.seq > seq && s.status !== "skipped")?.title ?? null) : null;
   const may = mayStage(ctx, r, cp, role);
   const out = () => json(200, agentQuestionsOut(stored, me, next, cp.status === "pending" && may));
   if (rest.length === 1 && req.method === "GET") return out();

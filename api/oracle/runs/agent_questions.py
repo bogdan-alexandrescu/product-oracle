@@ -86,12 +86,21 @@ async def _asked(db: AsyncSession, run: Run, cp: Checkpoint) -> list[AgentQuesti
     return parse(text if isinstance(text, str) else None)
 
 
-def _next_step(run: Run, cp: Checkpoint) -> str | None:
+async def _next_step(db: AsyncSession, run: Run, cp: Checkpoint) -> str | None:
+    """The title of the step after the stop's segment that runs (one whose stop is off is
+    recorded skipped at launch); None after the last."""
     flow = flows.FLOWS.get(run.flow)
     seq = (cp.payload or {}).get("segment_seq")
-    if flow is None or not isinstance(seq, int) or not 0 < seq < len(flow.segments):
+    if flow is None or not isinstance(seq, int):
         return None
-    return flow.segments[seq].title
+    name = await db.scalar(
+        select(RunSegment.name)
+        .where(RunSegment.run_id == run.id, RunSegment.seq > seq, RunSegment.status != "skipped")
+        .order_by(RunSegment.seq)
+        .limit(1)
+    )
+    titles = {s.name: s.title for s in flow.segments}
+    return titles.get(name) if name else None
 
 
 async def _answered(
@@ -138,7 +147,7 @@ async def read(
     run, cp = await _stop(db, run_id, checkpoint_id)
     return AgentQuestionsOut(
         questions=await _answered(db, principal, run, cp),
-        next_step=_next_step(run, cp),
+        next_step=await _next_step(db, run, cp),
         can_answer=cp.status == "pending" and has_role(principal.role, cp.approver_role),  # type: ignore[arg-type]
     )
 

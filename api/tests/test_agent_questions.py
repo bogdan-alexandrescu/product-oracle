@@ -83,7 +83,7 @@ async def test_every_member_reads_the_stops_agent_questions(review):  # noqa: F8
     await asked(review)
     out = await qs(review)
     assert out["can_answer"] is False
-    assert out["next_step"]
+    assert out["next_step"] == "Roadmap draft"
     q1, q2 = out["questions"]
     assert q1["id"] == "q1" and q1["role"] == "architect" and q1["feature"] == "mobile-push"
     assert q1["recommended"] == "reuse" and q1["answer"] is None
