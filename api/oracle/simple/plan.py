@@ -477,6 +477,88 @@ def with_prd_features(data: dict[str, Any] | None, text: str) -> dict[str, Any] 
     return data
 
 
+@dataclass(frozen=True)
+class Accepted:
+    """A date the PRD's engineering lead accepted (or changed to) at a run's Engineering
+    dates stop (oracle.engineering.dates.on_approved): its roadmap item's milestone name and
+    feature code, and the day."""
+
+    milestone: str | None
+    feature: str | None
+    day: date
+
+
+def with_accepted(data: dict[str, Any] | None, accepted: list[Accepted]) -> dict[str, Any] | None:
+    """The plan with the dates the lead accepted (CLD's walk B, 2026-11-01): a milestone ends
+    on the last accepted day of its items (named by the milestone's code or name, else by a
+    feature it holds), the lead's day over the PRD's proposed one; one with no start starts
+    the day after the milestone before it ends. A milestone with none keeps its own."""
+    if not data or not accepted:
+        return data
+    ms = data["milestones"]
+    by_name = {str(m["name"]).strip().lower(): m["code"] for m in ms}
+    codes = {m["code"] for m in ms}
+    holds = {f["code"]: f["milestones"] for f in data.get("features") or []}
+    ends: dict[str, date] = {}
+    for a in accepted:
+        name = (a.milestone or "").strip()
+        hit = _MS.search(name)
+        code = f"M{int(hit[1])}" if hit else by_name.get(name.lower())
+        if code not in codes:
+            code = (holds.get(a.feature or "") or [None])[-1]
+        if code in codes:
+            ends[code] = max(ends.get(code, a.day), a.day)
+    if not ends:
+        return data
+    out = {**data, "milestones": [dict(m) for m in ms]}
+    prev: date | None = None
+    for m in out["milestones"]:
+        if m["code"] in ends:
+            m["end"] = ends[m["code"]].isoformat()
+            if not m.get("start") and prev is not None:
+                m["start"] = (prev + timedelta(days=1)).isoformat()
+            if m.get("start") and date.fromisoformat(m["start"]) > ends[m["code"]]:
+                m["start"] = None
+        prev = date.fromisoformat(m["end"]) if m.get("end") else None
+    return out
+
+
+async def accepted_dates(db: AsyncSession, document_id: uuid.UUID) -> list[Accepted]:
+    """The dates the PRD's engineering lead accepted at a run's Engineering dates stop: its
+    draft roadmap items' milestone dates a verified schedule basis supports."""
+    from oracle.roadmap.models import RoadmapItem, ScheduleBasis
+    from oracle.simple.priorities import prd_code
+
+    bases = {
+        (b.reference, b.supports_date, b.item_key)
+        for b in await db.scalars(
+            select(ScheduleBasis).where(
+                ScheduleBasis.prd_document_id == document_id,
+                ScheduleBasis.status == "verified",
+                ScheduleBasis.withdrawn_at.is_(None),
+            )
+        )
+    }
+    if not bases:
+        return []
+    out = []
+    for i in await db.scalars(
+        select(RoadmapItem).where(
+            RoadmapItem.prd_document_id == document_id,
+            RoadmapItem.draft_roadmap_id.is_not(None),
+        )
+    ):
+        ms = i.milestone or {}
+        day = _iso(ms.get("date"))
+        if not day or not any(
+            r == ms.get("date_source") and d.isoformat() == day and k in (None, i.item_key)
+            for r, d, k in bases
+        ):
+            continue
+        out.append(Accepted(ms.get("name"), prd_code(i.prd_section_key), date.fromisoformat(day)))
+    return out
+
+
 def _risk(v: Any) -> dict[str, Any] | None:
     """A risk as stored: a plan read before risks had fields holds the risk's words only."""
     if isinstance(v, dict):
@@ -931,7 +1013,7 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
         else:
             data = _parsed(v)
         if data:
-            out[pid] = compute(data)
+            out[pid] = compute(with_accepted(data, await accepted_dates(db, pid)))
     return out
 
 
@@ -952,7 +1034,8 @@ async def plan_out(
     if row.status != "ready":
         msg = {"reading": READING, "failed": FAILED}.get(row.status, NO_PLAN)
         return SimplePlanOut(status=row.status, message=msg, **base)  # type: ignore[arg-type]
-    view = await enrich(db, document.id, compute({**row.data, "source": row.source}))
+    data = with_accepted({**row.data, "source": row.source}, await accepted_dates(db, document.id))
+    view = await enrich(db, document.id, compute(data))
     return SimplePlanOut(
         status="ready", source=row.source, dated=view.dated, message=view.message,  # type: ignore[arg-type]
         milestones=view.milestones, slices=view.slices, goals=view.goals,
