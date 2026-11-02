@@ -5,8 +5,8 @@ in the order they were named, set by ``POST /v1/simple/drafts/{id}/submit`` with
 ``reviewer_ids``. The draft waits on each until they approve, after the PRD's own required
 reviewers; cleared when the draft returns to working.
 
-Revision ID: 0097_draft_added_reviewers
-Revises: 0096_api_token_removed_at
+Revision ID: 0098_draft_added_reviewers
+Revises: 0097_agent_answers
 """
 
 from collections.abc import Sequence
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision: str = "0097_draft_added_reviewers"
-down_revision: str | None = "0096_api_token_removed_at"
+revision: str = "0098_draft_added_reviewers"
+down_revision: str | None = "0097_agent_answers"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

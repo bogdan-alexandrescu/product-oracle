@@ -45236,6 +45236,195 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/meetings/{meeting_id}/draft-items/approve": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Approve Simple Meeting Draft Dates",
+        "description": "Approve these N dates (RP2): the run's draft items go on the roadmap with their\ndates; the meeting records the decision. The PRD still needs its own approval.",
+        "operationId": "approve_simple_meeting_draft_dates",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/dates": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Change Simple Meeting Draft Dates",
+        "description": "Change dates on a draft item of the run's draft roadmap: it stays draft.",
+        "operationId": "change_simple_meeting_draft_dates",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleDraftDatesIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/leave-out": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Leave Out Simple Meeting Draft Item",
+        "description": "Leave out a draft item: it never goes on the roadmap.",
+        "operationId": "leave_out_simple_meeting_draft_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/simple/meetings/{meeting_id}/end": {
       "post": {
         "tags": [
@@ -62279,6 +62468,11 @@
             },
             "type": "array",
             "title": "Problems"
+          },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "default": false
           }
         },
         "type": "object",
@@ -99406,6 +99600,11 @@
             ],
             "title": "Run Explanation"
           },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "default": false
+          },
           "override": {
             "anyOf": [
               {
@@ -114823,6 +115022,27 @@
         "title": "SimpleDraftChange",
         "description": "One change a draft holds (D-d): what an approval covers, by whom, when, and whether\nit was made in a meeting."
       },
+      "SimpleDraftDatesIn": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "SimpleDraftDatesIn",
+        "description": "Change dates on a draft item: it stays draft."
+      },
       "SimpleDraftOut": {
         "properties": {
           "id": {
@@ -115033,6 +115253,76 @@
         ],
         "title": "SimpleDraftPrd",
         "description": "approved-prd-roadmap: what an approved PRD put in the draft."
+      },
+      "SimpleDraftRoadmap": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDraftRoadmapItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SimpleDraftRoadmap",
+        "description": "The run's draft roadmap of the meeting's PRD (RP2, 'Meeting step as draft'): its\ndated items, shown hatched in the Roadmap step until the meeting approves the dates."
+      },
+      "SimpleDraftRoadmapItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "horizon",
+          "start",
+          "end"
+        ],
+        "title": "SimpleDraftRoadmapItem",
+        "description": "An item of the run's draft roadmap with its dates: not on the roadmap yet."
       },
       "SimpleEmailDelivery": {
         "properties": {
@@ -116957,6 +117247,16 @@
             "default": {
               "skipped": []
             }
+          },
+          "draft_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDraftRoadmap"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

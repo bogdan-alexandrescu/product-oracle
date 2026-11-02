@@ -188,7 +188,7 @@ def test_baseline_flow_check_up_down_up(scratch_db):
     cfg = _cfg()
     script = ScriptDirectory.from_config(cfg)
     previous = script.get_revision(BASELINE_FLOW).down_revision
-    assert script.get_heads() == ["0097_agent_answers"]
+    assert script.get_heads() == ["0098_draft_added_reviewers"]
 
     command.upgrade(cfg, previous)
     assert "'baseline'" not in _flow_check()
