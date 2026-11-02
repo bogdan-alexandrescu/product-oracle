@@ -147,10 +147,10 @@ function placed(m: Milestone, weeks: number | null, offset: number): { start: st
   return { start: start > m.end ? m.end : start, end: end > m.end ? m.end : end };
 }
 
-export const planSlices = (): Slice[] =>
+export const planSlices = (milestones: Milestone[] = MILESTONES): Slice[] =>
   FEATURES.flatMap(([code, name, goal, parts]) =>
     parts.map(([mc, weeks, offset, stated], k) => {
-      const m = MILESTONES.find((x) => x.code === mc)!;
+      const m = milestones.find((x) => x.code === mc)!;
       const at = placed(m, weeks, offset);
       return {
         code: parts.length > 1 ? `${code}${"abcdefgh"[k]}` : code,
@@ -177,15 +177,15 @@ export const planSlices = (): Slice[] =>
 
 /** "Nov 2 - Feb 12" (the plan's span, as the API labels it). */
 const dayMonth = (day: string) => new Date(ms(day)).toLocaleDateString("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
-export const planSpan = (): Schemas["SimplePlanSpan"] => {
-  const start = minOf(MILESTONES.map((m) => m.start));
-  const end = maxOf(MILESTONES.map((m) => m.end));
+export const planSpan = (milestones: Milestone[] = MILESTONES): Schemas["SimplePlanSpan"] => {
+  const start = minOf(milestones.map((m) => m.start));
+  const end = maxOf(milestones.map((m) => m.end));
   return { start, end, label: `${dayMonth(start)} - ${dayMonth(end)}` };
 };
 
 /** The roadmap's milestone fields for one plan milestone (SimpleMilestone's new ones). */
-export const planMilestones = () =>
-  MILESTONES.map((m) => ({
+export const planMilestones = (milestones: Milestone[] = MILESTONES) =>
+  milestones.map((m) => ({
     code: m.code,
     name: m.name,
     start_date: m.start,
@@ -236,6 +236,42 @@ export interface PlanDb {
   down?: boolean;
 }
 
+/**
+ * As plan.with_accepted: a milestone ends on the last day the lead accepted for its items (named
+ * by the milestone's code or name, else by the feature it holds), the lead's day over the PRD's;
+ * one with no start starts the day after the milestone before it ends. The milestones (the
+ * dated ones with their days) and the codes still without dates.
+ */
+function leadDated(plan: PlanDb): { milestones: Milestone[]; undated: string[] } {
+  const missing = plan.partly_dated ? ["M2", "M3"] : [];
+  const ends = new Map<string, string>();
+  for (const a of plan.accepted ?? []) {
+    const name = (a.milestone ?? "").trim().toLowerCase();
+    const named = MILESTONES.find((m) => m.code.toLowerCase() === name || m.name.toLowerCase() === name);
+    const code = named?.code ?? FEATURES.find(([c]) => c === a.feature)?.[3].at(-1)?.[0];
+    if (code) ends.set(code, maxOf([ends.get(code) ?? a.day, a.day]));
+  }
+  const undated: string[] = [];
+  let prev: string | null = null;
+  const milestones = MILESTONES.map((m) => {
+    let start: string | null = missing.includes(m.code) ? null : m.start;
+    let end: string | null = missing.includes(m.code) ? null : m.end;
+    const day = ends.get(m.code);
+    if (day) {
+      end = day;
+      if (!start && prev) start = addDays(prev, 1);
+      if (start && start > day) start = null;
+    }
+    prev = end;
+    if (!start || !end) {
+      undated.push(m.code);
+      return m;
+    }
+    return { ...m, start, end };
+  });
+  return { milestones, undated };
+}
+
 export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", version: 3 });
 
 export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], role: Role): PlanOut {
@@ -252,8 +288,8 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
     return { prd, version: plan.version, status: "ready", source: "prd", dated: false, message: "This PRD's milestones have no dates.", milestones: ms, slices: [], goals: GOALS.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })), measured: null, on_track: null })), goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: plan.read_at, summary: [...SUMMARY] };
   }
   // D3: M2 and M3 without dates: their slices have none either, and the plan has no span.
-  const undatedCodes = plan.partly_dated ? ["M2", "M3"] : [];
-  const slices = planSlices().map((s) => (undatedCodes.includes(s.milestone) ? { ...s, milestone_start: null, milestone_end: null, start_date: null, end_date: null } : s));
+  const { milestones: dated, undated: undatedCodes } = leadDated(plan);
+  const slices = planSlices(dated).map((s) => (undatedCodes.includes(s.milestone) ? { ...s, milestone_start: null, milestone_end: null, start_date: null, end_date: null } : s));
   if (plan.goalless) {
     const m = MILESTONES.find((x) => x.code === "M2")!;
     const at = placed(m, 1, 1);
@@ -276,7 +312,7 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
     source: "prd",
     dated: !undatedCodes.length,
     message: undatedCodes.length ? "This PRD's milestones have no dates." : null,
-    milestones: planMilestones().map((m) => ({
+    milestones: planMilestones(dated).map((m) => ({
       ...m,
       ...(undatedCodes.includes(m.code) ? { start_date: null, end_date: null } : {}),
       planned_weeks: slices.filter((s) => s.milestone === m.code).reduce((n, s) => n + (s.effort_weeks ?? 0), 0),
@@ -289,7 +325,7 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
       const w = weeks.get(`${g.name}|${m.code}`);
       return w ? [{ goal: g.name, milestone: m.code, weeks: w }] : [];
     })),
-    span: undatedCodes.length ? null : planSpan(),
+    span: undatedCodes.length ? null : planSpan(dated),
     holidays: HOLIDAYS.map((h) => ({ ...h })),
     can_read_again: can,
     read_at: plan.read_at,
