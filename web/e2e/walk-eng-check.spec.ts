@@ -9,10 +9,11 @@ import { login, signOut } from "./helpers";
  *
  * Test cards:
  * - "feasibility above the bar" (item 2): protects=at 1512 and 1366 wide the selected
- *   feature's panel, taller than the window, ends above the fixed decision bar (it scrolls on its own), so a verdict
- *   click records the verdict; fails_when=the panel runs under the bar; no_claim=the phone.
- * - "answered" (item 10): protects=the Questions column says Answered once every question of a
- *   feature has an answer; fails_when=it still counts them open; no_claim=suggested answers.
+ *   feature's verdict buttons sit at the top of the reading pane, above the fixed decision bar,
+ *   and the list ends above it (EC1 b), so a verdict click records the verdict; fails_when=a
+ *   verdict button or the list runs under the bar; no_claim=the phone.
+ * - "answered" (item 10): protects=the list row counts a feature's questions as answered once
+ *   each has an answer; fails_when=it still counts them open; no_claim=suggested answers.
  * - "who decides" (item 9): protects=the run page tells the lead the stop waits for them and an
  *   approver that they read it only; fails_when=the lead reads "you can't decide it".
  * - "title as is" (item 3): protects=the run names its PRD by its title, no "PRD" added;
@@ -49,28 +50,30 @@ async function openCheckAsLead(page: Page) {
   await expect(page.getByTestId("brief-row")).toHaveCount(3);
 }
 
-// Windows shorter than the panel with its note open: without its own scroll it runs under the bar.
+// Windows shorter than the pane with its note open. EC1 b (owner, Nov 1): the verdict and size sit
+// at the top of the reading pane and the list stops above the bar, scrolling on its own.
 for (const size of [
   { width: 1512, height: 600 },
   { width: 1366, height: 540 },
 ]) {
-  test(`feasibility above the bar: at ${size.width} px the panel ends above the decision bar and a verdict click records it`, async ({ page }) => {
+  test(`feasibility above the bar: at ${size.width} px the verdict buttons and the list end above the decision bar and a verdict click records it`, async ({ page }) => {
     await page.setViewportSize(size);
     await openCheckAsLead(page);
     await row(page, "f.guided-setup").getByRole("button").first().click();
-    // A tall panel: the note a verdict with changes asks for is open.
+    // A tall pane: the note a verdict with changes asks for is open.
     await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible with changes", exact: true }).click();
-    await expect(inspector(page).getByRole("textbox", { name: "Note: what changes" })).toBeVisible();
-    // Scroll the page as a person would, past the table's top: the panel sticks.
+    await expect(inspector(page).getByRole("textbox", { name: "What changes" })).toBeVisible();
+    const buttons = await inspector(page).getByRole("group", { name: "Verdict" }).boundingBox();
+    let barBox = await bar(page).boundingBox();
+    expect(buttons && barBox).toBeTruthy();
+    expect(buttons!.y + buttons!.height).toBeLessThanOrEqual(barBox!.y);
+    // Scroll the page as a person would: the list sticks and ends above the bar.
     await page.mouse.move(200, 300);
     await page.mouse.wheel(0, 400);
     await page.waitForTimeout(300);
-    const panel = await inspector(page).boundingBox();
-    const barBox = await bar(page).boundingBox();
-    expect(panel && barBox).toBeTruthy();
-    expect(panel!.y + panel!.height).toBeLessThanOrEqual(barBox!.y + 1);
-    // The panel is taller than the room above the bar, so it scrolls on its own.
-    expect(await inspector(page).evaluate((el) => el.scrollHeight > el.clientHeight + 1)).toBe(true);
+    const list = await page.getByRole("region", { name: "Features" }).boundingBox();
+    barBox = await bar(page).boundingBox();
+    expect(list!.y + list!.height).toBeLessThanOrEqual(barBox!.y + 1);
     // Every verdict button is clickable: the click lands on it, never on the bar.
     await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click({ timeout: 5_000 });
     await expect(row(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
@@ -78,19 +81,19 @@ for (const size of [
   });
 }
 
-test("answered: the Questions column says Answered once each question of a feature is answered", async ({ page }) => {
+test("answered: the list row counts the answered questions until each question of a feature is answered", async ({ page }) => {
   await openCheckAsLead(page);
   const questions = row(page, "f.guided-setup").getByTestId("brief-questions");
-  await expect(questions).toHaveText("2 open · 1 blocking");
+  await expect(questions).toHaveText("1 blocking0 of 2 answered");
   await row(page, "f.guided-setup").getByRole("button").first().click();
   const boxes = inspector(page).getByRole("textbox", { name: /^Answer: / });
   await boxes.first().fill("Yes, the sandbox takes test orders.");
   await inspector(page).getByRole("button", { name: "Answer", exact: true }).first().click();
-  await expect(questions).toHaveText("1 open");
+  await expect(questions).toHaveText("1 of 2 answered");
   await expect(boxes).toHaveCount(1);
   await boxes.first().fill("Three steps at most.");
   await inspector(page).getByRole("button", { name: "Answer", exact: true }).first().click();
-  await expect(questions).toHaveText("Answered");
+  await expect(questions).toHaveText("2 of 2 answered");
 });
 
 test("who decides: the run page tells the lead the check waits for them, an approver that they read it only", async ({ page }) => {

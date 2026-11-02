@@ -100,8 +100,7 @@ test("lead decides: Approve waits for every verdict and the blocking answer, the
   const approve = bar(page).getByRole("button", { name: "Approve" });
   await expect(approve).toBeDisabled();
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("0 of 3 decided · 1 blocking question");
-  await expect(row(page, "f.guided-setup").getByTestId("brief-questions")).toHaveText("2 open · 1 blocking");
-  await expect(row(page, "f.guided-setup").getByTestId("brief-reasons")).toContainText("Blocking question unanswered");
+  await expect(row(page, "f.guided-setup").getByTestId("brief-questions")).toHaveText("1 blocking0 of 2 answered");
 
   await verdict(page, "f.guided-setup", "Feasible");
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("1 of 3 decided · 1 blocking question");
@@ -113,7 +112,7 @@ test("lead decides: Approve waits for every verdict and the blocking answer, the
   await row(page, "f.guided-setup").getByRole("button").first().click();
   await inspector(page).getByRole("textbox", { name: /^Answer: Does the payment sandbox/ }).fill("Yes, the sandbox takes test orders.");
   await inspector(page).getByRole("button", { name: "Answer" }).first().click();
-  await expect(inspector(page).getByTestId("answer")).toContainText("Answered by");
+  await expect(inspector(page).getByTestId("answer")).toContainText("Yes, the sandbox takes test orders. · ");
   await expect(bar(page).getByTestId("eng-tally")).toHaveText("3 of 3 decided");
 
   await row(page, "f.saved-carts").getByRole("button").first().click();
@@ -205,10 +204,10 @@ test("inspector per feature: a note typed for one feature never saves against an
   await openCheckAsLead(page);
   await row(page, "f.sample-data").getByRole("button").first().click();
   await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible with changes", exact: true }).click();
-  await inspector(page).getByRole("textbox", { name: "Note: what changes" }).fill("Ship a smaller catalogue first");
+  await inspector(page).getByRole("textbox", { name: "What changes" }).fill("Ship a smaller catalogue first");
   await row(page, "f.saved-carts").getByRole("button").first().click();
   await expect(inspector(page)).toHaveAccessibleName("Brief: Saved carts");
-  await expect(inspector(page).getByRole("textbox", { name: "Note: what changes" })).toHaveCount(0);
+  await expect(inspector(page).getByRole("textbox", { name: "What changes" })).toHaveCount(0);
   await expect(inspector(page).getByRole("button", { name: "Save verdict" })).toHaveCount(0);
   await expect(row(page, "f.saved-carts").getByTestId("brief-verdict")).toHaveText("Not decided");
 });

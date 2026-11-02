@@ -122,8 +122,9 @@ for (const [name, size] of [
     // protects=qa4-work-53; fails_when=a feature key (f.guided-setup) shows under or beside its name.
     await page.setViewportSize(size);
     await openCheck(page);
-    await expect(briefRow(page, "f.guided-setup").getByRole("button").first()).toHaveText("Guided setup");
-    await expect(briefRow(page, "f.sample-data").getByRole("button").first()).toHaveText("Sample data");
+    // EC1 b (owner, Nov 1): the list shows the name; the key shows only in small type by the title in the pane.
+    await expect(briefRow(page, "f.guided-setup").getByRole("button").first()).toContainText("Guided setup");
+    await expect(briefRow(page, "f.sample-data").getByRole("button").first()).toContainText("Sample data");
     const table = page.getByRole("region", { name: "Features" });
     for (const key of ["f.guided-setup", "f.sample-data", "f.saved-carts"]) await expect(table).not.toContainText(key);
   });
@@ -134,7 +135,8 @@ test("check: no code map reads in plain words, the panel names what a feature de
   await page.setViewportSize(DESKTOP);
   await openCheck(page);
   const guess = "Oracle could not read the code, so this approach is a guess";
-  await expect(briefRow(page, "f.guided-setup").getByTestId("brief-reasons")).toContainText(guess);
+  // EC1 b (owner, Nov 1): said once, in the pane, not on every row of the list.
+  await expect(briefRow(page, "f.guided-setup")).not.toContainText(guess);
   await expect(page.getByRole("region", { name: "Features" })).not.toContainText("No code map");
   await briefRow(page, "f.saved-carts").getByRole("button").first().click();
   const panel = page.getByTestId("brief-inspector");

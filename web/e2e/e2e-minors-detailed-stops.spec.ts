@@ -12,11 +12,11 @@ import { login, openSection } from "./helpers";
  *   or an Approve that can never open; no_claim=the API's briefs check.
  * - "send back" (9): protects=Send back to architect is a secondary button; fails_when=it is the
  *   grey ghost that reads as disabled; no_claim=its decide call.
- * - "long key" (10): protects=a feature with a long key stays inside its own cell, the key never
- *   shown (qa4-work-53); fails_when=the key shows or the name runs into the Approach column;
- *   no_claim=other columns.
- * - "answered" (11): protects=an answered question shows the answer, who answered and Edit, no
- *   empty box; Edit reopens it filled; fails_when=the empty box and Answer stay under the answer.
+ * - "long key" (10): protects=a feature with a long key: the list shows its name only, the pane
+ *   shows the key by its title (EC1 b, owner Nov 1) inside the pane; fails_when=the key shows in
+ *   the list or runs out of the pane; no_claim=other review pages.
+ * - "answered" (11): protects=an answered question shows the answer, who answered and Change, no
+ *   empty box; Change reopens it filled; fails_when=the empty box and Answer stay under the answer.
  * - "not decided" (12): protects=a row with no verdict reads "Not decided" as text; fails_when=a
  *   "Decide" button that only selects the row.
  * - "answer draft" (13): protects=an answer being typed survives a verdict saved meanwhile and a
@@ -54,6 +54,9 @@ async function openCheck(page: Page, scenario: string) {
 }
 
 async function select(page: Page, key: string) {
+  // On a phone the open feature fills the screen (EC1 b): back to the list first, as a person does.
+  const back = inspector(page).getByRole("button", { name: "‹ All features" });
+  if (await back.isVisible()) await back.click();
   await briefRow(page, key).getByRole("button").first().click();
   await expect(page.locator(`[data-testid="brief-row"][data-feature="${key}"][aria-current="true"]`)).toHaveCount(1);
 }
@@ -96,15 +99,16 @@ for (const [name, viewport] of [
       await expect(sendBack).toHaveAttribute("data-variant", "secondary");
     });
 
-    test("long key: a feature with a long key stays inside its own cell, its key never shown", async ({ page }) => {
-      // qa4-work-53 (train AF): the row shows the feature's name only, so a long key cannot run out of it.
+    test("long key: the list shows a long-keyed feature by name only, its key stays inside the pane", async ({ page }) => {
+      // qa4-work-53 (train AF): the list shows the feature's name only; EC1 b (owner, Nov 1) shows the key by its title in the pane.
       await openCheck(page, "eng-check-long-key");
       const row = briefRow(page, "f.guided_setup_with_test_order_and_sample_catalogue");
       await expect(row).toBeVisible();
       await expect(row).not.toContainText("f.guided_setup_with_test_order_and_sample_catalogue");
-      const cell = await box(row.getByRole("button").first());
-      const approach = await box(row.getByText("Reuse the onboarding checklist and add the test-order step."));
-      if (viewport === DESKTOP) expect(cell.x + cell.width, "the name runs into Approach").toBeLessThanOrEqual(approach.x);
+      await row.getByRole("button").first().click();
+      const pane = await box(inspector(page));
+      const key = await box(inspector(page).getByText("f.guided_setup_with_test_order_and_sample_catalogue"));
+      expect(key.x + key.width, "the key runs out of the pane").toBeLessThanOrEqual(pane.x + pane.width);
       const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(sideways).toBeLessThanOrEqual(0);
     });
@@ -116,12 +120,12 @@ for (const [name, viewport] of [
       await inspector(page).getByRole("button", { name: "Answer", exact: true }).first().click();
       const answered = inspector(page).getByTestId("answer");
       await expect(answered).toContainText("Yes, the sandbox takes test orders.");
-      await expect(answered).toContainText("Answered by");
+      await expect(answered).toContainText("Yes, the sandbox takes test orders. · ");
       await expect(inspector(page).getByRole("textbox", { name: `Answer: ${SANDBOX}` })).toHaveCount(0);
       // The unanswered question keeps its box: one box, one Answer.
       await expect(inspector(page).getByRole("button", { name: "Answer", exact: true })).toHaveCount(1);
 
-      await answered.getByRole("button", { name: `Edit the answer: ${SANDBOX}` }).click();
+      await answered.getByRole("button", { name: `Change the answer: ${SANDBOX}` }).click();
       await expect(inspector(page).getByRole("textbox", { name: `Answer: ${SANDBOX}` })).toHaveValue("Yes, the sandbox takes test orders.");
     });
 

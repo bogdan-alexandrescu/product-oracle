@@ -4,6 +4,7 @@
  * overrun pause. Agents "finish" a segment on POST /v1/internal/tick, at 90% of its
  * estimate, as the API's FakeRuntime does.
  */
+import { SHOP_BRIEFS } from "./engcheck-shop";
 import type { Schemas } from "@/lib/api/client";
 import { mockName as displayName } from "./people";
 
@@ -3502,6 +3503,11 @@ const SEEDED_BRIEFS: Brief[] = [
 
 /** What a brief file says of the code maps: the ids each feature cites (with where: touches[i].ref or reuse) and the repositories it names. */
 type BriefsMaps = { cites: Record<string, [string, string][]>; repos: string[]; unmapped: string[] };
+/** The "eng-check-shop" scenarios' check: the first `n` invented shop features, a code map read. */
+export function shopBriefsCheck(n: number): BriefsCheck {
+  return { ...briefsCheckOf(SHOP_BRIEFS.slice(0, n)), code_map_used: true };
+}
+
 /** What the run's maps hold: their ids and repositories. */
 type RunMaps = { ids: string[]; repos: string[] };
 
