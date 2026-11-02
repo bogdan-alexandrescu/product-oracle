@@ -728,7 +728,7 @@ function DayChart(props: TimelineProps) {
                             : "ok"
                           : undefined
                       }
-                      aria-label={`${i.title}, ${spanWords(ds, de, data.today)}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
+                      aria-label={`${i.title}, ${spanWords(ds, de, data.today)}${canChange && planned(i) && !closedItem(i) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
                       onClick={() => {
                         if (clicked.current) clicked.current = false;
                         else onOpen(sel ? null : i.key);
