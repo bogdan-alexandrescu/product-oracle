@@ -12,7 +12,7 @@ import { login } from "./helpers";
  * Test cards (protects / fails_when / no_claim):
  * - "the new features are ranked among the rest and approving adds them": protects=the
  *   picked frames rp1-a-rest, rp1-a-open and rp1-a-done at 1440; fails_when=a new feature
- *   sits unranked at the bottom, lacks its chip, its score or steps, or the notes are not
+ *   sits unranked at the bottom, lacks its chip, its score, steps or Depends on, or the notes are not
  *   said; no_claim=the real API (api/tests/test_priority_run_order.py).
  * - "at 390 px each row card carries the chip": protects=frame rp1-a-rest-390;
  *   fails_when=the chip is missing on a phone or the page scrolls sideways.
@@ -50,6 +50,9 @@ test.describe("desktop", () => {
     await expect(first).toContainText("Address book per account");
     await expect(first).toContainText("4.20");
     await expect(first.getByTestId("live-rank")).toHaveText("—");
+    // What a new feature depends on, as the run's feature set says (frames rp1-a-rest, rp1-a-open).
+    for (const key of ["N-2", "N-3", "N-4"]) await expect(page.getByTestId(`priority-row-${key}`).getByTestId("row-deps")).toHaveText("Address book per account");
+    await expect(first.getByTestId("row-deps")).toHaveText("—");
 
     // Opened: Import addresses is #8 at 1.80, worked out on the formula; 60% set by the run.
     await page.getByTestId("priority-row-N-4").getByRole("button", { name: /Import addresses from a spreadsheet/ }).click();
