@@ -100,8 +100,11 @@ for (const phone of [false, true]) {
           expect(prd).toMatch(/^\/simple\/roadmap\?prd=[a-z-]+$/);
           await rows.first().click();
           await expect(page).toHaveURL(new RegExp(`${prd.replace("?", "\\?")}$`));
+          // Home's run-stop cards (build-simplewaits) are named "<stop>: <name> PRD": the
+          // filter's own label is matched exactly, once the roadmap has replaced Home.
+          await expect(page.getByTestId("simple-roadmap")).toBeVisible();
           if (phone) await page.getByTestId("filters-toggle").click();
-          await expect(page.getByLabel("PRD")).toHaveValue(prd.split("=")[1]);
+          await expect(page.getByLabel("PRD", { exact: true })).toHaveValue(prd.split("=")[1]);
         });
       }
 
