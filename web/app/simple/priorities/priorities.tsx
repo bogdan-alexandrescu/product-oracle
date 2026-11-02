@@ -394,9 +394,12 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
 }
 
 function YourList({ data, half = false, mayChange, onMove, changed, moved }: { data: Out; half?: boolean; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
-  // A Home goal card opens the list for its goal (?goal=<its name>).
-  const goal = useSearchParams().get("goal");
-  const rows = byLine(data).filter((r) => !goal || goalOfRow(data)(r) === goal);
+  // A Home goal card opens the list for its goal (?goal=<its key>&name=<its name>): a row's own goal
+  // by key, so two goals with one name keep apart; a row known only from the plan, by name.
+  const params = useSearchParams();
+  const goal = params.get("goal");
+  const goalName = params.get("name") ?? goal;
+  const rows = byLine(data).filter((r) => !goal || (r.goal ? r.goal.key === goal : goalOfRow(data)(r) === goalName));
   const setParams = useSetParams();
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
@@ -467,15 +470,15 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
     {goal && (
       <p className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-accent-ink" data-testid="prio-goal-filter">
         <span>
-          Showing <b>{goal}</b> only: {rows.length ? `${rows.length} of ${data.rows.length} features` : "nothing for this goal is planned yet"}
+          Showing <b>{goalName}</b> only: {rows.length ? `${rows.length} of ${data.rows.length} features` : "nothing for this goal is planned yet"}
         </span>
-        <button type="button" className="font-semibold underline" onClick={() => setParams({ goal: null })}>
+        <button type="button" className="font-semibold underline" onClick={() => setParams({ goal: null, name: null })}>
           Show all
         </button>
       </p>
     )}
-    {/* Split at a dated line, the two parts' headings say what the caption said; a goal's caption counts only its features. */}
-    {goal ? rows.length > 0 && !apart && <LineCaption data={{ ...data, rows }} /> : !apart && <LineCaption data={data} />}
+    {/* Split at a dated line, the two parts' headings say what the caption said; a goal's list keeps it (qp4=b), counting only its features. */}
+    {goal ? rows.length > 0 && <LineCaption data={{ ...data, rows }} /> : !apart && <LineCaption data={data} />}
     <p className="mb-2 text-[length:var(--simple-small)] text-text2" data-testid="prio-score-help">
       {SCORE_WORDS}
     </p>

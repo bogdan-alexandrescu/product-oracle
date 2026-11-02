@@ -168,7 +168,7 @@ for (const v of SIZES) {
 
       // A goal card opens Priorities showing only its goal.
       await page.getByTestId("home-goal-link").filter({ hasText: "Grow retention" }).click();
-      await expect(page).toHaveURL(/\/simple\/priorities\?goal=Grow(\+|%20)retention/);
+      await expect(page).toHaveURL(/\/simple\/priorities\?goal=grow-retention&name=Grow(\+|%20)retention/);
       const filter = page.getByTestId("prio-goal-filter");
       await expect(filter).toContainText(/^Showing Grow retention only: \d+ of \d+ features/);
       const goals = await page.getByTestId("prio-row").getByTestId("prio-goal").allTextContents();

@@ -26,6 +26,7 @@ import {
   greeting,
   NEW_FLOW_OPS,
   OP_WORDS,
+  opWords,
   planByMonth,
   planInputs,
   prdInPlay,
@@ -336,7 +337,7 @@ export default function SimpleHome() {
       key={c.id}
       testId="home-proposal"
       lead={<Avatar name={c.by_name} />}
-      title={`${OP_WORDS[c.op] ?? c.op}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
+      title={`${opWords(c.op)}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
       meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
       change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
       thumb={NEW_FLOW_OPS.has(c.op)}
@@ -463,7 +464,7 @@ export default function SimpleHome() {
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       {confirming && (
         <Dialog
-          title={`Accept: ${OP_WORDS[confirming.op] ?? confirming.op}`}
+          title={`Accept: ${opWords(confirming.op)}`}
           testId="accept-moves"
           onClose={() => setConfirming(null)}
           actions={
@@ -554,9 +555,9 @@ export default function SimpleHome() {
                         )}
                       </div>
                     )}
-                    {/* A goal card opens Priorities filtered to that goal; its code (qa-simple-home-13) only in the tooltip. */}
+                    {/* A goal card opens Priorities filtered to that goal (its key; the name only says which); its code (qa-simple-home-13) only in the tooltip. */}
                     <Link
-                      href={`/simple/priorities?goal=${encodeURIComponent(g.name)}`}
+                      href={`/simple/priorities?goal=${encodeURIComponent(g.key)}&name=${encodeURIComponent(g.name)}`}
                       data-testid="home-goal-link"
                       title={g.code ? `${g.code} · ${g.name}` : g.name}
                       className="font-semibold text-text hover:underline"
@@ -1175,7 +1176,7 @@ function BrokenRow({
       </span>
       {proposed && (
         <span data-testid="home-broken-proposed" className="block font-semibold text-text">
-          You proposed: {FIX_WORDS[proposed.op as FixOp] ?? OP_WORDS[proposed.op] ?? proposed.op} · waiting for {waitingFor}
+          You proposed: {FIX_WORDS[proposed.op as FixOp] ?? opWords(proposed.op)} · waiting for {waitingFor}
         </span>
       )}
       {showFixes && coveredBy && (

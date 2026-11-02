@@ -16,6 +16,8 @@ export type GoalStatus = "At risk" | "Not measured yet" | "Not counted yet" | "P
 
 export type GoalTile = {
   id: string;
+  /** The goal's own key (a Priorities row's goal.key): a card filters by it, never by the name two goals may share. */
+  key: string;
   code: string;
   name: string;
   weight: number | null;
@@ -94,6 +96,7 @@ export function goalTiles(goals: Entity[], roadmap: Roadmap | undefined, waiting
       const status: GoalStatus = why ? "At risk" : measured ? "Planned" : counted ? "Not counted yet" : a.metric || a.target != null ? "Not measured yet" : "Planned";
       return {
         id: v.id,
+        key: byId.get(v.id)?.key ?? v.id,
         code: v.code ?? v.tag,
         name: v.name,
         weight: num(a.weight),
@@ -352,7 +355,13 @@ export const OP_WORDS: Record<string, string> = {
   remove_key_date: "Remove a key date",
   set_milestone: "Set a milestone",
   add_feature_ask: "File a feature ask",
+  set_owner: "Change the owner",
+  set_decider: "Change the decider",
+  decide_question: "Decide a question",
+  name_decider: "Name who decides",
 };
+/** A change's words; one the list does not name yet reads "Change", never its code. */
+export const opWords = (op: string): string => OP_WORDS[op] ?? "Change";
 
 /** What happened, in plain words, before the item it happened to (Home's "Since your last visit"). */
 const DONE_WORDS: Record<string, string> = {
