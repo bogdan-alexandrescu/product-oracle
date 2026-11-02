@@ -23,9 +23,11 @@ import { login } from "./helpers";
  *   button is under the bar.
  * - "phone" (EC1 b): protects=at 390 the list comes first; a tapped feature fills the screen
  *   with All features to go back; no sideways scroll; fails_when=both show at once.
+ * - "list and pane" (review minor): protects=a row's blocking chip carries the gate's reason
+ *   ("Blocking question unanswered"); fails_when=the row drops the gate's per-feature reasons.
  * - "questions beside the verdict" (EC2 b): protects=the questions sit right under the verdict
  *   and size, above the approach; an answered one shrinks to a tick, the question, the answer,
- *   who gave it and Change, no box; the count moves in the pane and the row; fails_when=the
+ *   who gave it and Change, no box, shorter than it was open on desktop and phone; the count moves in the pane and the row; fails_when=the
  *   questions sit under the approach, or an answered one keeps its box.
  */
 
@@ -62,6 +64,8 @@ test("list and pane: the lead picks a feature from the list, decides it at the t
   await expect(pane(page).getByRole("heading", { level: 2 })).toHaveText("Guided setup");
   await expect(row(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Not decided");
   await expect(row(page, "f.guided-setup").getByTestId("brief-questions")).toHaveText("1 blocking0 of 2 answered");
+  // The row says why it holds Approve in the gate's own words.
+  await expect(row(page, "f.guided-setup").getByTitle("Blocking question unanswered")).toHaveText("1 blocking");
   const listBox = await box(list(page));
   const paneBox = await box(pane(page));
   expect(listBox.x + listBox.width, "the list sits left of the pane").toBeLessThanOrEqual(paneBox.x);
@@ -169,7 +173,8 @@ for (const [name, viewport] of [
     expect(approach.y).toBeGreaterThan(first.y + first.height);
     await expect(questions.first()).toBeInViewport();
 
-    const open = await box(questions.nth(2));
+    // The same question, open with its box, before it is answered.
+    const open = await box(questions.first());
     await pane(page).getByRole("textbox", { name: `Answer: ${REGIONS}` }).fill("Yes in 11 of our 14 regions; the other 3 fall back to the address slip.");
     await questions.first().getByRole("button", { name: "Answer", exact: true }).click();
     const answered = questions.first();
@@ -179,8 +184,8 @@ for (const [name, viewport] of [
     await expect(answered.getByTestId("answer")).toContainText("Yes in 11 of our 14 regions; the other 3 fall back to the address slip.");
     await expect(answered.getByRole("button", { name: `Change the answer: ${REGIONS}` })).toHaveText("Change");
     await expect(pane(page).getByText("Architect's questions · 1 of 3 answered")).toBeVisible();
-    // Two short lines: shorter than a question still open, with its box (on a phone the lines wrap).
-    if (viewport === DESKTOP) expect((await box(answered)).height).toBeLessThan(open.height);
+    // Shorter than it was open with its box, on a phone too.
+    expect((await box(answered)).height).toBeLessThan(open.height);
     await expect(row(page, RETURNS).getByTestId("brief-questions")).toHaveText("1 blocking1 of 3 answered");
     await expect(bar(page).getByTestId("eng-tally")).toContainText("3 blocking questions");
 
