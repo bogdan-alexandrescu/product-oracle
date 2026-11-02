@@ -268,7 +268,7 @@ async def test_reapproval_keeps_the_owners_edits_to_the_prds_items(client):
     d = await source(client, ctx, ids["roadmap"])
     assert [s["items"] for s in d["from_prds"]] == [2]
     r = await client.post(f"{CHANGES}/{edited['id']}/undo", headers=ctx.as_("owner"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     assert by_key(await read(client, ctx))["route-search"]["title"] == "Route search"
 
 

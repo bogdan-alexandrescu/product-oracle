@@ -18,10 +18,17 @@ draft, for the roadmap's owner to review and publish. No run, no cost.
   noted "From <PRD>", in ``overlay["key_dates"]``; one already published unchanged: nothing.
 
 What came from which PRD is ``overlay["from_prds"]`` (PRD id -> {version, items,
-key_dates}: ids); the draft says how many (``SimpleDraftOut.from_prds``).
+key_dates}: ids, and ``wrote``: the values written); the draft says how many are still in it
+(not cut, not removed: ``SimpleDraftOut.from_prds``).
 
-**Approving again** (a later version, or the same one): the PRD's earlier additions in the
-draft are taken out first, then written again, so the draft never holds them twice.
+**The owner's changes win**: a published item the owner already changed in the draft is
+left as they have it. **Approving again** (a later version, or the same one): the PRD's
+earlier additions in the draft are taken out first, then written again, so the draft never
+holds them twice; what the owner changed since (an added item a change names, a published
+item's or a key date's fields no longer as written) stays as the owner has it.
+
+**Whose draft**: a draft approval opens is the approver's when they change the roadmap, else
+the first of those who decide its additions (oracle.simple.additions).
 """
 
 import logging
@@ -29,13 +36,13 @@ import uuid
 from datetime import date
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap.models import RoadmapItem, ScheduleBasis
 from oracle.simple import drafts
-from oracle.simple.models import SimpleDraft
+from oracle.simple.models import SimpleChange, SimpleDraft
 from oracle.simple.schemas import SimpleDocRef, SimpleDraftPrd
 
 log = logging.getLogger(__name__)
@@ -94,10 +101,12 @@ def _dated(row: RoadmapItem, accepted: dict[str, date]) -> tuple[date | None, da
     return start, end, source
 
 
-async def _draft(db: AsyncSession, doc: uuid.UUID, me: uuid.UUID) -> SimpleDraft | None:
+async def _draft(db: AsyncSession, doc: uuid.UUID, principal: Any) -> SimpleDraft | None:
     """The roadmap's working draft, opened as S7's additions open it when it has none; None
-    while a draft of it is in review."""
-    from oracle.simple.additions import _shown_version
+    while a draft of it is in review. A new draft is the approver's when they change the
+    roadmap, else the first of the people who decide its additions (its decider, else its
+    deciding owners, else the company's owners)."""
+    from oracle.simple.additions import _route, _shown_version
 
     d = await db.scalar(
         select(SimpleDraft)
@@ -113,13 +122,16 @@ async def _draft(db: AsyncSession, doc: uuid.UUID, me: uuid.UUID) -> SimpleDraft
     )
     if waiting is not None:
         return None
+    me = drafts._me(principal)
+    w = await drafts.who(db, {doc})
+    author = me if drafts.can_edit(principal, doc, w) else next(iter(await _route(db, doc, w)), me)
     d = SimpleDraft(
         document_id=doc,
         base_version_id=await _shown_version(db, doc),
         status="working",
         overlay={},
-        created_by=me,
-        participant_ids=[me],
+        created_by=author,
+        participant_ids=[author],
     )
     db.add(d)
     await db.flush()
@@ -130,29 +142,60 @@ def _key_date_id(roadmap: uuid.UUID, prd: uuid.UUID, code: str) -> str:
     return str(uuid.uuid5(roadmap, f"{prd}:{code}"))
 
 
-async def _take_out(db: AsyncSession, d: SimpleDraft, prd_id: str) -> dict[str, Any]:
-    """The PRD's earlier additions leave the draft; the overlay without them."""
+async def _touched(db: AsyncSession, d: SimpleDraft) -> set[str]:
+    """The items a change in the draft names."""
+    from oracle.simple import changes
+
+    return {
+        i
+        for c in await db.scalars(
+            select(SimpleChange).where(SimpleChange.draft_ids.contains([d.id]))
+        )
+        for i in changes._touched(c)
+    }
+
+
+async def _take_out(
+    db: AsyncSession, d: SimpleDraft, prd_id: str
+) -> tuple[dict[str, Any], list[str], set[str]]:
+    """The PRD's earlier additions leave the draft, except what the owner changed since:
+    (the overlay without them, the ids kept, the kept added items' keys). An added item a
+    change names stays (its change still undoes); a published item's or a key date's
+    fields stay when they are no longer what the PRD wrote."""
     overlay = dict(d.overlay or {})
     sources = dict(overlay.get(KEY) or {})
     before = sources.pop(prd_id, None) or {}
-    ids = [str(i) for i in before.get("items") or []]
-    added = [uuid.UUID(i) for i in ids]
-    if added:
-        await db.execute(
-            delete(RoadmapItem).where(
-                RoadmapItem.id.in_(added),
-                RoadmapItem.simple_draft_id == d.id,
-                RoadmapItem.roadmap_version_id.is_(None),
+    wrote = before.get("wrote") or {}
+    touched = await _touched(db, d)
+    rows = {
+        str(r.id): r
+        for r in await db.scalars(
+            select(RoadmapItem).where(
+                RoadmapItem.id.in_([uuid.UUID(str(i)) for i in before.get("items") or []]),
             )
         )
-    for i in ids:
-        overlay.pop(i, None)
+    }
+    kept: list[str] = []
+    kept_keys: set[str] = set()
+    for i, row in rows.items():
+        if row.simple_draft_id == d.id and row.roadmap_version_id is None:
+            if i in touched or i in overlay:
+                kept.append(i)
+                kept_keys.add(row.item_key)
+            else:
+                await db.delete(row)
+        elif overlay.get(i) is not None and overlay.get(i) != wrote.get(i):
+            kept.append(i)
+        else:
+            overlay.pop(i, None)
+    await db.flush()
     kds = dict(overlay.get(KEY_DATES) or {})
     for k in before.get(KEY_DATES) or []:
-        kds.pop(k, None)
+        if k in kds and kds[k] == wrote.get(k):
+            kds.pop(k, None)
     overlay[KEY_DATES] = kds
     overlay[KEY] = sources
-    return overlay
+    return overlay, kept, kept_keys
 
 
 async def on_prd_approved(
@@ -178,11 +221,13 @@ async def on_prd_approved(
     milestones = [m for m in (view.milestones if view else []) if m.end_date or m.start_date]
     accepted = await _accepted(db, prd.id)
     dated = [(r, got) for r in derived if (got := _dated(r, accepted)) is not None]
-    d = await _draft(db, doc, me)
+    d = await _draft(db, doc, principal)
     if d is None:
         log.info("approved-prd-roadmap: %s's draft is in review; nothing written", doc)
         return
-    overlay = await _take_out(db, d, str(prd.id))
+    overlay, kept, kept_keys = await _take_out(db, d, str(prd.id))
+    # Key dates the owner changed since the PRD wrote them (or removed) stay theirs.
+    owned_kds = set(overlay.get(KEY_DATES) or {})
     base = await db.get(DocumentVersion, d.base_version_id) if d.base_version_id else None
     published = await views.version_items(db, base) if base is not None else []
     ours = {r.item_key: r for r in published if r.prd_document_id == prd.id}
@@ -204,17 +249,23 @@ async def on_prd_approved(
 
     track = await tracks.track_of_prd(db, prd.id)
     note = f"From {prd.title} (version {version.number})"
-    items: list[str] = []
+    items: list[str] = list(kept)
+    wrote: dict[str, Any] = {}
     for row, (start, end, source) in dated:
+        if row.item_key in kept_keys:
+            continue
         pub = ours.get(row.item_key)
         if pub is not None:
+            if str(pub.id) in overlay:
+                # The owner's own change to it in the draft wins.
+                continue
             cur = drafts.overlaid(pub, overlay.get(str(pub.id)))
             if (cur.start_date, cur.end_date, cur.title) == (start, end, row.title):
                 continue
             changed = drafts.overlaid(pub, drafts.snapshot(cur))
             changed.start_date, changed.end_date, changed.title = start, end, row.title
             changed.date_source = source
-            overlay[str(pub.id)] = drafts.snapshot(changed)
+            overlay[str(pub.id)] = wrote[str(pub.id)] = drafts.snapshot(changed)
             items.append(str(pub.id))
             continue
         key, n = row.item_key, 2
@@ -252,9 +303,12 @@ async def on_prd_approved(
             "date": (m.end_date or m.start_date).isoformat(),  # type: ignore[union-attr]
             "note": f"From {prd.title}",
         }
+        if kd_id in owned_kds:
+            kd_ids.append(kd_id)
+            continue
         if pub_kds.get(kd_id) == value:
             continue
-        kds[kd_id] = value
+        kds[kd_id] = wrote[kd_id] = value
         kd_ids.append(kd_id)
     if kds:
         overlay[KEY_DATES] = kds
@@ -262,19 +316,27 @@ async def on_prd_approved(
         overlay.pop(KEY_DATES, None)
     sources = dict(overlay.get(KEY) or {})
     if items or kd_ids:
-        sources[str(prd.id)] = {"version": version.number, "items": items, KEY_DATES: kd_ids}
+        sources[str(prd.id)] = {
+            "version": version.number,
+            "items": items,
+            KEY_DATES: kd_ids,
+            "wrote": wrote,
+        }
     if sources:
         overlay[KEY] = sources
     else:
         overlay.pop(KEY, None)
     d.overlay = overlay
-    if me not in (d.participant_ids or []):
+    if me not in (d.participant_ids or []) and drafts.can_edit(
+        principal, doc, await drafts.who(db, {doc})
+    ):
         d.participant_ids = [*(d.participant_ids or []), me]
     await db.flush()
 
 
 async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
-    """How many items and key dates in the draft came from each approved PRD."""
+    """How many items and key dates in the draft came from each approved PRD: those still
+    in it (not cut, not removed)."""
     sources = (d.overlay or {}).get(KEY) or {}
     if not sources:
         return []
@@ -284,6 +346,25 @@ async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
             select(Document).where(Document.id.in_([uuid.UUID(k) for k in sources]))
         )
     }
+    overlay = d.overlay or {}
+    ids = {uuid.UUID(str(i)) for v in sources.values() for i in v.get("items") or []}
+    rows = {
+        str(r.id): r
+        for r in (
+            await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(ids))) if ids else []
+        )
+    }
+    kds = overlay.get(KEY_DATES) or {}
+
+    def there(i: str) -> bool:
+        row = rows.get(i)
+        if row is None:
+            return False
+        added = row.simple_draft_id == d.id and row.roadmap_version_id is None
+        if not added and overlay.get(i) is None:
+            return False
+        return not drafts.overlaid(row, overlay.get(i)).cut
+
     out = []
     for k, v in sources.items():
         doc = docs.get(uuid.UUID(k))
@@ -293,8 +374,8 @@ async def sources_out(db: AsyncSession, d: SimpleDraft) -> list[SimpleDraftPrd]:
             SimpleDraftPrd(
                 prd=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),
                 version=v.get("version"),
-                items=len(v.get("items") or []),
-                key_dates=len(v.get(KEY_DATES) or []),
+                items=sum(1 for i in v.get("items") or [] if there(str(i))),
+                key_dates=sum(1 for i in v.get(KEY_DATES) or [] if kds.get(i) is not None),
             )
         )
     return sorted(out, key=lambda s: s.prd.title.casefold())
