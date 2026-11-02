@@ -105,34 +105,61 @@ export function mayReview(can: ReturnType<typeof useMe>["can"], gap: Gap): boole
 }
 
 /**
- * The brief's goals (C5): the goal_alignment gap's goals (those ticked at the New PRD door),
- * then the summary's goal links, each with its distance to go (Home's reading).
+ * The brief's goals (C5): the goals the owner ticked at the New PRD door (the intake's
+ * goal_ids, as the Draft sheet shows them), each with its distance to go (Home's reading).
+ * Goals Oracle found besides (the goal_alignment gap's matches, the summary's goal links)
+ * show apart as suggestions, each with why (walk-brief: they read as picked).
  */
 function IntakeGoals({ summary: s }: { summary: Summary }) {
   const confirmed = useQuery("intake-goals", () =>
     unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
   );
   const views = new Map(goalViews(confirmed.data ?? []).map((g) => [g.id, g]));
-  const ids = [...new Set([...s.gaps.filter((g) => g.category === "goal_alignment").flatMap((g) => g.entity_ids), ...s.goals.map((g) => g.entity_id)])];
-  const goals = ids
-    .map((id) => {
-      const view = views.get(id);
-      const link = s.goals.find((g) => g.entity_id === id);
-      const title = view?.title ?? link?.title;
-      return title ? { id, title, key: link?.key, progress: view ? assess(view) : null } : null;
-    })
-    .filter((g) => g !== null);
-  if (goals.length)
-    return goals.map((g) => (
-      <InspectorRow
-        key={g.id}
-        value={g.progress && (g.progress.state === "togo" || g.progress.state === "met") ? <span className="text-text2">{g.progress.text}</span> : undefined}
-      >
-        <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} />
-      </InspectorRow>
-    ));
-  if (confirmed.loading) return null;
-  return <p className="text-sm text-text2">{confirmed.data?.length ? "No goal chosen yet" : "No confirmed company goal yet"}</p>;
+  const picked = new Set(s.intake.goal_ids ?? []);
+  const found = [...new Set([...s.gaps.filter((g) => g.category === "goal_alignment").flatMap((g) => g.entity_ids), ...s.goals.map((g) => g.entity_id)])];
+  const goal = (id: string) => {
+    const view = views.get(id);
+    const link = s.goals.find((g) => g.entity_id === id);
+    const title = view?.title ?? link?.title;
+    const why = link?.matched_on === "feature" ? "A feature it touches serves it" : "The brief speaks to it";
+    return title ? { id, title, key: link?.key, why, progress: view ? assess(view) : null } : null;
+  };
+  const chosen = [...picked].map(goal).filter((g) => g !== null);
+  const suggested = found.filter((id) => !picked.has(id)).map(goal).filter((g) => g !== null);
+  const row = (g: NonNullable<ReturnType<typeof goal>>, note?: string) => (
+    <InspectorRow
+      key={g.id}
+      value={g.progress && (g.progress.state === "togo" || g.progress.state === "met") ? <span className="text-text2">{g.progress.text}</span> : undefined}
+    >
+      <CodeChip kind="goal" entityId={g.id} entityKey={g.key} title={g.title} />
+      {note && <span className="block text-[12px] text-text2">{note}</span>}
+    </InspectorRow>
+  );
+  if (!chosen.length && !suggested.length && confirmed.loading) return null;
+  return (
+    <>
+      {chosen.length ? (
+        <div data-testid="intake-goals-picked">{chosen.map((g) => row(g))}</div>
+      ) : (
+        <p className="text-sm text-text2">{confirmed.data?.length || suggested.length ? "No goal chosen yet" : "No confirmed company goal yet"}</p>
+      )}
+      {suggested.length > 0 && (
+        <div data-testid="intake-goals-suggested" className="mt-2">
+          <p className="text-[12px] font-medium text-text2">Oracle suggests</p>
+          {suggested.map((g) => row(g, g.why))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** The theme by its name ("Clean document"), never its key (walk-brief); nothing until the names load. */
+function ThemeName({ themeKey }: { themeKey: string | null | undefined }) {
+  const themes = useQuery("themes|prd", () => unwrap(api.GET("/v1/themes", { params: { query: { kind: "prd" } } })));
+  if (!themeKey) return null;
+  const name = themes.data?.find((t) => t.key === themeKey)?.name;
+  if (name) return <span data-testid="intake-theme">{name}</span>;
+  return themes.error ? <span data-testid="intake-theme">{themeKey.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase())}</span> : null;
 }
 
 /** Critical questions still open that hold nothing (none is a blocker): what the draft lacks. */
@@ -323,7 +350,7 @@ export function IntakeInspector({
       </InspectorSection>
       <IntakeRequests intakeId={s.intake.id} />
       <InspectorSection label="Template" testId="intake-template">
-        <InspectorRow value={s.template.theme ?? undefined}>{s.template.name}</InspectorRow>
+        <InspectorRow value={<ThemeName themeKey={s.template.theme} />}>{s.template.name}</InspectorRow>
       </InspectorSection>
       {converted && (
         <InspectorSection label="Drafting" testId="answers-since">

@@ -26,7 +26,7 @@ async function openFromInbox(page: Page) {
   await expect(page.getByTestId("inbox-needs")).toBeVisible();
   const row = page.locator("[role=tabpanel]").getByTestId("inbox-questions").locator("tr[data-row]").filter({ hasText: UNSURE });
   await expect(row).toContainText("Oracle asks");
-  await row.getByRole("link", { name: `Open Before drafting · ${SAVED}` }).click();
+  await row.getByRole("link", { name: "Open PRD in review · Checkout redesign PRD" }).click();
   await expect(page).toHaveURL(new RegExp(`/intakes/${V2_IDS.intake}$`));
   await expect(page.getByRole("heading", { level: 1, name: SAVED })).toBeAttached();
   await expect(page.getByTestId("intake-thread")).toBeVisible();

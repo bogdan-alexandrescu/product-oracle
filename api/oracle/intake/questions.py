@@ -263,6 +263,10 @@ async def _item_title(db: AsyncSession, document_id: uuid.UUID, key: str) -> str
     )
 
 
+# The Inbox's label for a brief's question once its PRD exists, by the PRD's status.
+PRD_STAGE = {"draft": "PRD drafted", "in_review": "PRD in review", "approved": "PRD approved"}
+
+
 async def subject_of(
     db: AsyncSession, q: StakeholderQuestion, readers: views.Readers
 ) -> InboxSubject:
@@ -291,11 +295,14 @@ async def subject_of(
         )  # fmt: skip
     intake = await readers.intake(q.intake_id)
     if intake is not None:
-        # Its Before drafting page (C5), with or without a PRD.
-        return InboxSubject(
-            kind="intake", title=f"Before drafting · {intake.title}",
-            href=f"/intakes/{intake.id}",
-        )  # fmt: skip
+        # Its Before drafting page (C5), with or without a PRD; once the PRD is drafted
+        # the label says the PRD's stage (walk-brief), not "Before drafting".
+        prd = await db.get(Document, intake.document_id) if intake.document_id else None
+        if prd is not None and prd.deleted_at is None:
+            title = f"{PRD_STAGE.get(prd.status, 'PRD drafted')} · {prd.title}"
+        else:
+            title = f"Before drafting · {intake.title}"
+        return InboxSubject(kind="intake", title=title, href=f"/intakes/{intake.id}")
     if doc is None:
         return InboxSubject(kind="document_section", title="A document", href=None)
     latest = await _latest(db, doc.id)

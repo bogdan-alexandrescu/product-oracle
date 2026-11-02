@@ -8,6 +8,8 @@ intake, and the intake says which path produced its read; Q4 analyst at quick, $
 ``ORACLE_INTAKE_READ_RUNTIME=job`` stays the rollback. Synthetic placeholders only.
 """
 
+import asyncio
+import time
 import uuid
 from decimal import Decimal
 
@@ -17,14 +19,15 @@ from sqlalchemy import select
 from oracle.config import get_settings
 from oracle.intake import read as intake_read
 from oracle.jobs.models import LlmJob
-from oracle.runs.models import Run
+from oracle.runs.models import Run, RunSegment
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.swarm.runtime import RuntimeUnavailable
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ProductIntake
 from tests.baseline_helpers import make_item
 from tests.claude_account_helpers import add_account, window
-from tests.intake_helpers import PAIN, company, create_intake, summary
+from tests.conftest import seed_company
+from tests.intake_helpers import BRIEF, PAIN, company, create_intake, summary
 from tests.test_intake_jobs import _answer, fake  # noqa: F401 - the fake Claude fixture
 
 ANALYSIS = """\
@@ -407,3 +410,41 @@ async def test_the_inbox_reads_intake_rows_only_for_a_reader_who_has_one(client)
     [row] = author.json()["intake_reads"]
     assert row["intake_id"] == intake_id and row["failures"] == 2
     assert len(intake_row_queries()) == 1
+
+
+class _SlowRuntime(FakeRuntime):
+    """SwarmCloud as the walk found it: each call it makes takes a while."""
+
+    async def features(self, *, refresh: bool = False):
+        await asyncio.sleep(0.8)
+        return await super().features(refresh=refresh)
+
+    async def find_by_label(self, label, since=None):
+        await asyncio.sleep(0.8)
+        return await super().find_by_label(label, since)
+
+    async def submit(self, spec):
+        await asyncio.sleep(2.5)
+        return await super().submit(spec)
+
+
+# protects=walk-brief item 1: Continue on New PRD answers without waiting on SwarmCloud;
+# the read's run is submitted after the response; fails_when=POST /v1/intakes awaits the
+# submission (25-28 s on production); no_claim=how long SwarmCloud itself takes.
+async def test_create_answers_before_the_read_is_submitted(client):
+    ctx = await company()
+    set_runtime(_SlowRuntime({"read": []}))
+    await make_item(ctx, "commenter", content=PAIN, title="#support thread")
+    await seed_company(ctx.tenant_id)
+    body = {"title": "Saved addresses", "brief": BRIEF, "ai_extraction": True}
+    started = time.monotonic()
+    resp = await client.post("/v1/intakes", json=body, headers=ctx.as_("commenter"))
+    assert time.monotonic() - started < 2.0
+    assert resp.status_code == 201, resp.text
+    out = resp.json()
+    assert out["ai_read"]["state"] in ("queued", "running")
+    await intake_read.drain()
+    [run] = await _runs(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        segments = list(await s.scalars(select(RunSegment).where(RunSegment.run_id == run.id)))
+    assert any(seg.swarm_workflow_id for seg in segments)

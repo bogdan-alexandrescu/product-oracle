@@ -1182,20 +1182,18 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
     </Link>
   );
 
-  // QA docs-10: a viewer is told up front, and gets no form to fill in for nothing.
-  if (!capsReady || !canWrite) {
+  // QA docs-10: a viewer is told up front, and gets no form to fill in for nothing. Until
+  // the role is known the form shows at once, its fields disabled (walk-brief: a blank
+  // "Loading…" for seconds, and what was typed meanwhile went nowhere).
+  if (capsReady && !canWrite) {
     return (
       <Page>
         <PageHeader back={back} title="New PRD" />
-        {!capsReady ? (
-          <Loading />
-        ) : (
-          <NotAllowed
-            testId="new-prd-not-allowed"
-            title="You can't start a PRD"
-            reason="Only commenters, approvers and owners can start a PRD. Ask one of them to start it; you can read every PRD."
-          />
-        )}
+        <NotAllowed
+          testId="new-prd-not-allowed"
+          title="You can't start a PRD"
+          reason="Only commenters, approvers and owners can start a PRD. Ask one of them to start it; you can read every PRD."
+        />
       </Page>
     );
   }
@@ -1216,14 +1214,20 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
           </InfoTip>
         }
         action={
-          <Button form={formId} type="submit" variant="primary" disabled={busy !== null}>
+          <Button form={formId} type="submit" variant="primary" disabled={busy !== null || !capsReady}>
             {busy === "continue" ? "Saving…" : "Continue"}
           </Button>
         }
       />
 
       <form id={formId} onSubmit={submit} noValidate className="min-w-0">
-        <Split inspector={inspector}>
+        <fieldset disabled={!capsReady} aria-busy={!capsReady} data-testid="new-prd-fields" className="min-w-0 disabled:opacity-60">
+          {!capsReady && (
+            <p role="status" data-testid="new-prd-getting-ready" className="mb-3 text-sm text-text2">
+              Getting the form ready…
+            </p>
+          )}
+          <Split inspector={inspector}>
           {error && <ErrorNote>{error}</ErrorNote>}
           {checked && !ready && (
             <ErrorNote>
@@ -1353,7 +1357,8 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
               {busy === "continue" ? "Saving…" : "Continue"}
             </Button>
           </div>
-        </Split>
+          </Split>
+        </fieldset>
       </form>
     </Page>
   );

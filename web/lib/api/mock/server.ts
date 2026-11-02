@@ -573,7 +573,7 @@ export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
 export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
-/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). */
+/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). A path ending in "*" slows every GET under it. */
 export const MOCK_SLOW_KEY = "po-mock-slow";
 export const MOCK_SLOW_MS = 1500;
 /** A test may hold the slow call longer (ms, in localStorage). */
@@ -5468,6 +5468,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         return {
           slug: doc.slug,
           title: doc.title,
+          status: doc.status,
           latest: latest.number,
           heading: (key) => latest.sections.find((x) => x.section_key === key)?.heading ?? null,
         };
@@ -5493,6 +5494,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
     };
     const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+    const goalKeys = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.key]));
     const lockedSections = (ref: string) => {
       const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
       const latest = doc && db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => b.number - a.number)[0];
@@ -5557,7 +5559,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(
       v2db,
-      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
+      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
       req,
       p,
       q,
@@ -6404,7 +6406,8 @@ export async function mockFetch(req: Request): Promise<Response> {
   });
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
-  if ((req.method === "GET" && url.pathname === slow) || slow === `${req.method} ${url.pathname}`) {
+  const prefix = slow?.endsWith("*") ? slow.slice(0, -1) : null;
+  if ((req.method === "GET" && (url.pathname === slow || (prefix?.startsWith("/") && url.pathname.startsWith(prefix)))) || slow === `${req.method} ${url.pathname}`) {
     const ms = Number(localStorage.getItem(MOCK_SLOW_MS_KEY)) || MOCK_SLOW_MS;
     return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), ms)));
   }
