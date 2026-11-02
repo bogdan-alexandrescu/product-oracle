@@ -187,3 +187,48 @@ for (const where of ["desktop", "phone"] as const) {
     await expect(page.getByRole("region", { name: "Minutes" })).toBeVisible();
   });
 }
+
+/**
+ * Card walkc-review-estimated-moved: protects = after a review meeting moves "Team invites"
+ * (F-05, no dates of its own: estimated, as the API reads an undated item) to Later, its
+ * Timeline and Gantt slice bars start where the Waterfall's bar does, in Later's window, not
+ * at the plan's dates; fails_when = an estimated item's slices stay at the plan's dates
+ * after a move; no_claim = how long the slices are drawn.
+ */
+for (const where of ["desktop", "phone"] as const) {
+  test(`an estimated item moved in a review is drawn in its new horizon (${where})`, async ({ page }) => {
+    await startReview(page);
+    await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
+    await tap(page.getByRole("button", { name: "Move Team invites to Later" }));
+    await expect(page.getByTestId("roadmap-said")).toHaveText("Moved Team invites to Later.");
+    if (where === "phone") await page.setViewportSize(PHONE);
+    await page.goto(`${URL}?roadmap=onboarding-roadmap`);
+    await expect(page.getByTestId("simple-chart")).toBeVisible();
+    await page.getByTestId("format-waterfall").click();
+    await expect(bar(page, "plan-f-05")).toHaveAttribute("data-kind", "estimated");
+    const now = (await bar(page, "plan-f-05").getAttribute("data-start"))!;
+    const formats = where === "phone" ? ["gantt"] : ["timeline", "gantt"];
+    for (const f of formats) {
+      await page.getByTestId(`format-${f}`).click();
+      await expect(page.locator('g[data-testid="slice-bar"][data-code^="F-05"]').first(), f).toHaveAttribute("data-start", now);
+    }
+  });
+}
+
+/**
+ * Card walkc-review-card-no-tasks: protects = an item with no tasks keeps the picked card
+ * design: no "Tasks" part and no "No tasks yet" line, and with the card open a click on the
+ * rail still goes to that page; fails_when = every card shows an empty Tasks part;
+ * no_claim = a card with tasks (the test above).
+ */
+test("an item with no tasks shows no Tasks part on its card", async ({ page }) => {
+  await login(page);
+  await page.goto(URL);
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+  await bar(page, "alert-rules").click();
+  const card = page.getByTestId("floating-card");
+  await expect(card).toBeVisible();
+  await expect(card.getByText("Proposals on it")).toBeVisible();
+  await expect(card.getByTestId("card-tasks")).toHaveCount(0);
+  await expect(card.getByText("No tasks yet")).toHaveCount(0);
+});
