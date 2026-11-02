@@ -20,9 +20,10 @@ async function open(page: Page, email?: string, gantt = false) {
   await login(page, email);
   await page.goto(URL);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  if (gantt) await page.getByTestId("format-gantt").click();
+  // The Timeline (mk-qa4-roadmap QR1 A) has no SVG bars: a desktop's bars are the Gantt's.
+  if (gantt || page.viewportSize()!.width > 640) await page.getByTestId("format-gantt").click();
   if (gantt || page.viewportSize()!.width > 640) await expect(bar(page, "alert-rules")).toBeVisible();
-  else await expect(page.getByTestId("phone-lane").first()).toBeVisible();
+  else await expect(page.getByTestId("timeline-list")).toBeVisible();
 }
 
 /** B3: a phone opens a lane, then a piece's row in its list (the card opens as a sheet). */
@@ -314,6 +315,7 @@ test("filters and grouping", async ({ page }) => {
  */
 test("export the view as PNG and PDF", async ({ page }) => {
   await open(page);
+  await page.getByTestId("format-timeline").click();
   const [png] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export PNG" }).click()]);
   expect(png.suggestedFilename()).toBe("roadmap-timeline.png");
   const pngBytes = await (await png.createReadStream()).toArray();
