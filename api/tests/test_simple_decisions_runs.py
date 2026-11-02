@@ -12,6 +12,12 @@ Test cards (protects / fails_when / no_claim):
 - test_runs_group_reads_do_not_grow_with_runs: protects=the Runs group reads every run's
   stops at once; fails_when=the page reads once more per run (one list_decisions call per
   run); no_claim=how long the page takes.
+- test_dates_stop_says_how_many_dates_changed: protects=a Dates stop (eng_dates) approved
+  after the approver changed dates reads "Approved with one date changed" or "Approved
+  with 2 dates changed" (dates_changed on the stop), an accepted one reads "Approved", and
+  a stop sent back first keeps "Approved after a change" with its last step naming the
+  count; fails_when=the date edits recorded at approval are not counted; no_claim=how the
+  dates are changed (tests.test_eng_dates_*).
 """
 
 import datetime as dt
@@ -119,3 +125,66 @@ async def test_runs_group_reads_do_not_grow_with_runs(client):
     runs, six = await _reads(client, w)
     assert runs == 6
     assert six <= one, (one, six)
+
+
+def _dates(changed: int, accepted: int = 1) -> dict:
+    """The dates an approval records (engineering.dates.on_approved): changed and accepted."""
+    est = {"kind": "team_estimate", "reference": "Example sizing", "supports_date": "2026-12-01"}
+    out = {f"R-{i}": {"decision": "changed", "estimate": est} for i in range(changed)}
+    out |= {f"A-{i}": {"decision": "accepted", "estimate": est} for i in range(accepted)}
+    return out
+
+
+async def test_dates_stop_says_how_many_dates_changed(client):
+    w = await world()
+    owner, lead = w.ctx.users["owner"], w.ctx.users["approver"]
+    runs = {}
+    async with tenant_session(w.ctx.tenant_id) as s:
+        prd = await s.scalar(select(Document).where(Document.slug == PRD))
+
+        def stop(run, kind, status, days, dates=None, attempt=1):
+            payload = {
+                "segment_seq": 1,
+                "attempt": attempt,
+                "decided": {"role": "approver", "by": str(lead.id)},
+            }
+            if dates is not None:
+                payload["dates"] = dates
+            return Checkpoint(run_id=run.id, kind=kind, status=status, approver_role="approver",
+                              decided_by=lead.id, decided_at=AT + dt.timedelta(days=days),
+                              payload=payload)  # fmt: skip
+
+        for name, days in (("one", 0), ("two", 1), ("none", 2), ("back", 3)):
+            run = Run(flow="baseline_to_prd", document_id=prd.id, created_by=owner.id,
+                      status="running", created_at=AT + dt.timedelta(days=days))  # fmt: skip
+            s.add(run)
+            await s.flush()
+            runs[name] = run.id
+        s.add_all([
+            stop(await s.get(Run, runs["one"]), "eng_dates", "approved", 0, _dates(1)),
+            stop(await s.get(Run, runs["two"]), "eng_dates", "approved", 1, _dates(2)),
+            stop(await s.get(Run, runs["none"]), "eng_dates", "approved", 2, _dates(0)),
+            # Only the dates stop counts date edits.
+            stop(await s.get(Run, runs["none"]), "feature_set", "approved", 2, _dates(1)),
+            stop(await s.get(Run, runs["back"]), "eng_dates", "changes_requested", 3),
+            stop(await s.get(Run, runs["back"]), "eng_dates", "approved", 4, _dates(1),
+                 attempt=2),
+        ])  # fmt: skip
+        await s.commit()
+    r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    by_run = {g["run_id"]: g["stops"] for g in r.json()["runs"]}
+    one, two, none, back = (by_run[str(runs[k])] for k in ("one", "two", "none", "back"))
+    assert [(x["stop"], x["outcome"], x["dates_changed"]) for x in one] == [
+        ("Dates", "Approved with one date changed", 1)
+    ]
+    assert [(x["outcome"], x["dates_changed"]) for x in two] == [
+        ("Approved with 2 dates changed", 2)
+    ]
+    assert sorted((x["stop"], x["outcome"], x["dates_changed"]) for x in none) == [
+        ("Dates", "Approved", 0),
+        ("Feature set", "Approved", 0),
+    ]
+    (stop_,) = back
+    assert (stop_["outcome"], stop_["dates_changed"]) == ("Approved after a change", 1)
+    assert [t["what"] for t in stop_["trail"]] == ["Sent back", "Approved with one date changed"]
