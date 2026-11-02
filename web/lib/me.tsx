@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { api, type Me, type Schemas } from "@/lib/api/client";
 import type { operations } from "@/lib/api/schema";
@@ -51,6 +51,25 @@ type MeState = {
 
 const MeContext = createContext<MeState | null>(null);
 
+/** A streamed Suspense boundary whose content has not been put in place yet (React's "$?" and "$~"). */
+function streamPending(): boolean {
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const data = (n as Comment).data;
+    if (data === "$?" || data === "$~") return true;
+  }
+  return false;
+}
+
+/** Resolves once every streamed boundary of the page is in place (at most 5 s). */
+function streamed(): Promise<void> {
+  const start = performance.now();
+  return new Promise((resolve) => {
+    const check = () => (!streamPending() || performance.now() - start > 5000 ? resolve() : window.setTimeout(check, 20));
+    check();
+  });
+}
+
 /**
  * The Company time zone (#447). useQuery reads it, so a screen showing loaded data draws
  * its dates again when GET /v1/me answers with a zone other than the default.
@@ -68,9 +87,14 @@ export function MeProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const call = ++seq.current;
     const res = await api.GET("/v1/me").catch(() => undefined);
-    // Only the latest call wins, so a slow answer never overwrites a newer one.
+    // trainag-mock-fixes-3: a change of the member reaching a streamed boundary whose content
+    // is not in place yet makes React draw it again on the client and leave the server's copy
+    // hidden under <body> (a second New PRD form; the shell drawn twice). Wait for the page's
+    // boundaries, then set it as a transition, so React hydrates them before it applies it.
+    await streamed();
     if (call !== seq.current) return;
-    setState({ me: res?.response.ok ? (res.data ?? null) : null, loading: false });
+    // Only the latest call wins, so a slow answer never overwrites a newer one.
+    startTransition(() => setState({ me: res?.response.ok ? (res.data ?? null) : null, loading: false }));
   }, []);
 
   const clear = useCallback(() => {
