@@ -410,12 +410,16 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
   const split = lineSplit(rows);
   const apart = split >= 0 && splitAtLine(data);
 
+  // walkb-priorities: the row under the pointer (the nearest one in a gap, past either end the
+  // first or last), not the last row whose middle the pointer passed.
   function targetIndex(y: number, from: number): number {
-    let to = 0;
+    let to = from;
+    let best = Infinity;
     refs.current.forEach((el, i) => {
       if (!el) return;
       const box = el.getBoundingClientRect();
-      if (y > box.top + box.height / 2) to = i;
+      const off = y < box.top ? box.top - y : y > box.bottom ? y - box.bottom : 0;
+      if (off < best) [best, to] = [off, i];
     });
     if (!apart) return to;
     return from < split ? Math.min(to, split - 1) : Math.max(to, split);
@@ -519,7 +523,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
               />
               <CodeChip r={r} />
               <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">{r.title}</span>
-              <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : "ml-auto"} flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
+              {/* walkb-priorities: no ml-auto, so details that wrap under the title start at the left on every row. */}
+              <span data-testid="prio-details" className={`${half ? "basis-full sm:pl-12" : ""} flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--simple-small)] text-text2`}>
                 {/* The chips stay together, wrapping as one group. */}
                 <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
                   {!r.above_line && <MissesTag data={data} row={r} />}
@@ -531,7 +536,8 @@ function YourList({ data, half = false, mayChange, onMove, changed, moved }: { d
                     </span>
                   )}
                 </span>
-                {r.milestone && <span className="whitespace-nowrap">Milestone {r.milestone}</span>}
+                {/* walkb-priorities: a long milestone name wraps inside the card (a phone scrolled sideways). */}
+                {r.milestone && <span data-testid="prio-milestone" className="min-w-0 max-w-full [overflow-wrap:anywhere]">Milestone {r.milestone}</span>}
                 {/* qa-simple-plan-3: the confidence the score is worked out with, beside the numbers. */}
                 {r.effort != null && (
                   <span data-testid="prio-confidence" className="whitespace-nowrap tabular-nums" title={SCORE_WORDS}>

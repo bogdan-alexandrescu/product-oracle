@@ -54,12 +54,12 @@ for (const phone of [false, true]) {
 
     test("a drop lands on the row under the pointer, near its top or its bottom, down or up", async ({ page }) => {
       await open(page, null);
-      // Down, the pointer just inside the top of the row two below.
+      // Setup checklist (nothing it needs ranks above it), down: the pointer just inside the top of the row two below.
       await moveTo(page, 0, 2, () => 6);
-      // Up, the pointer just inside the top of the first row.
-      await moveTo(page, 3, 0, () => 6);
-      // Down, the pointer just inside the bottom of the row three below.
-      await moveTo(page, 1, 4, (h) => h - 6);
+      // Up: the pointer just inside the top of the first row.
+      await moveTo(page, 2, 0, () => 6);
+      // Down: the pointer just inside the bottom of the row three below.
+      await moveTo(page, 0, 3, (h) => h - 6);
     });
   });
 }
