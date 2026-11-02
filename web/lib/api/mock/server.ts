@@ -6240,7 +6240,7 @@ async function route(db: Db, req: Request): Promise<Response> {
             horizon: i.horizon,
             outcome: i.outcome ?? null,
             start: null,
-            end: i.milestone?.date ?? null,
+            end: typeof i.milestone?.date === "string" ? i.milestone.date : null,
             source: "engineering" as const,
           })),
           milestones: prdMilestones(v),
