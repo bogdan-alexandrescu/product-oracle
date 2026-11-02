@@ -474,7 +474,11 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   return { start, end };
 }
 
-/** The dates the roadmap shows for an item (stored, typed or estimated), as its bar draws them. */
+/**
+ * An item's own dates (stored, typed or estimated), before afterDependencies: an end-only item
+ * that depends on another keeps its window's start here, not the start its bar takes after that
+ * work. Its one caller (simple-home-move) stores these as typed, so its bar draws them as given.
+ */
 export function shownDates(db: SimpleDb, key: string): { start: string; end: string } {
   const s = db.items.find((x) => x.key === key)!;
   const r = resolve(db, s, simpleWindows(companyToday())[s.horizon]);
