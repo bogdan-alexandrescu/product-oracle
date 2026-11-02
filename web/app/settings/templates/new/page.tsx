@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 
 import { Field, INPUT, SELECT_FIELD } from "@/app/settings/_components/fields";
 import { FormActions } from "@/app/settings/_components/FormActions";
+import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
 import { Button, Notice, PageHeader, Panel } from "@/components/ds";
 import { ProblemList, TemplateBodyEditor, useTemplateCheck } from "@/components/TemplateBodyEditor";
 import { ApiError, api, unwrap } from "@/lib/api/client";
@@ -256,9 +257,8 @@ export default function NewTemplatePage() {
             </select>
           </Field>
           <Field label="When to suggest it">
-            <textarea
-              className={`${INPUT} h-auto min-h-20 py-2`}
-              rows={3}
+            <GrowingTextarea
+              className="min-h-20"
               value={when}
               onChange={(e) => setWhen(e.target.value)}
               placeholder="e.g. A launch that needs sales and support ready on the day"
