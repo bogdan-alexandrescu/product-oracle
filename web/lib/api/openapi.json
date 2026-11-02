@@ -119902,6 +119902,11 @@
             "type": "string",
             "title": "Outcome"
           },
+          "dates_changed": {
+            "type": "integer",
+            "title": "Dates Changed",
+            "default": 0
+          },
           "who": {
             "anyOf": [
               {
@@ -119964,7 +119969,7 @@
           "outcome"
         ],
         "title": "SimpleRunStopOut",
-        "description": "build-rundecide RD1 a: one stop of a run as a decision row: \"Engineering check:\napproved after a change\", the person's name, their role, the note and the day. `trail`\nlists every step when the stop was sent back before it was approved."
+        "description": "build-rundecide RD1 a: one stop of a run as a decision row: \"Engineering check:\napproved after a change\", the person's name, their role, the note and the day. `trail`\nlists every step when the stop was sent back before it was approved. `dates_changed`:\nhow many dates the approver changed at a Dates stop (eng_dates) before approving it,\n\"Approved with one date changed\"; 0 for every other stop."
       },
       "SimpleSendIn": {
         "properties": {

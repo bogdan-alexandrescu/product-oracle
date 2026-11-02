@@ -378,6 +378,16 @@ def decisions(cp: Checkpoint, actions: Iterable[Action]) -> dict[str, dict[str, 
     return out
 
 
+def changed_count(payload: dict[str, Any] | None) -> int:
+    """How many dates an approval at the dates changed: the items it recorded as changed."""
+    recorded = (payload or {}).get("dates")
+    if not isinstance(recorded, dict):
+        return 0
+    return sum(
+        1 for c in recorded.values() if isinstance(c, dict) and c.get("decision") == "changed"
+    )
+
+
 async def _basis(
     db: AsyncSession, principal: Principal, prd: Document, key: str, est: dict[str, Any], run: Run
 ) -> ScheduleBasis | None:

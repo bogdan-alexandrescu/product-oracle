@@ -2424,6 +2424,13 @@ _STOP_WORDS = {
 _STEP_WORDS = {"approved": "Approved", "changes_requested": "Sent back", "skipped": "Skipped"}
 
 
+def _approved_words(changed: int) -> str:
+    """ "Approved with one date changed" for a Dates stop whose approval changed a date."""
+    if not changed:
+        return "Approved"
+    return f"Approved with {'one date' if changed == 1 else f'{changed} dates'} changed"
+
+
 def _run_name(doc: Document) -> str:
     """ "Usage alerts plan" for the Usage alerts PRD."""
     title = re.sub(r"\s+PRD$", "", doc.title.strip(), flags=re.I)
@@ -2435,8 +2442,9 @@ async def _run_groups(
 ) -> list[SimpleRunGroup]:
     """Each run on a readable PRD with a decided stop, newest first: its stops in order,
     one row per stop; a stop sent back and then approved is one row with its steps."""
+    from oracle.engineering import dates as eng_dates
     from oracle.runs import service as runs_service
-    from oracle.runs.models import Run
+    from oracle.runs.models import Checkpoint, Run
 
     if not docs:
         return []
@@ -2449,6 +2457,20 @@ async def _run_groups(
             and getattr(principal, "run_id", None) in (None, r.id)]  # fmt: skip
     decisions = await runs_service.decisions_of_runs(db, runs)
     zone = await company_time.company_time_zone(db)
+    # The dates each approval at a Dates stop changed, in one read.
+    dated = [d.checkpoint_id for ds in decisions.values() for d in ds
+             if d.kind == eng_dates.KIND and d.status == "approved"]  # fmt: skip
+    changed: dict[uuid.UUID, int] = {}
+    if dated:
+        rows = await db.execute(
+            select(Checkpoint.id, Checkpoint.payload).where(Checkpoint.id.in_(dated))
+        )
+        changed = {i: eng_dates.changed_count(p) for i, p in rows.all()}
+
+    def what(d: Any) -> str:
+        if d.status == "approved":
+            return _approved_words(changed.get(d.checkpoint_id, 0))
+        return _STEP_WORDS.get(d.status, d.status)
 
     def on(at: datetime | None) -> date | None:
         return company_time.day(at, zone) if at else None
@@ -2464,16 +2486,17 @@ async def _run_groups(
         for (_, kind), steps in by_kind.items():
             last = steps[-1]
             sent_back = any(s.status == "changes_requested" for s in steps[:-1])
-            outcome = _STEP_WORDS.get(last.status, last.status)
+            outcome = what(last)
             if last.status == "approved" and sent_back:
                 outcome = "Approved after a change"
             stops.append(SimpleRunStopOut(
                 checkpoint_id=last.checkpoint_id, kind=kind,
                 stop=_STOP_WORDS.get(kind, kind.replace("_", " ").capitalize()),
-                outcome=outcome, who=last.decided_by_name,
+                outcome=outcome, dates_changed=changed.get(last.checkpoint_id, 0),
+                who=last.decided_by_name,
                 role=(last.decided_by_role or "").replace("_", " ") or None,
                 day=on(last.decided_at), note=last.note,
-                trail=[SimpleRunStepOut(what=_STEP_WORDS.get(s.status, s.status),
+                trail=[SimpleRunStepOut(what=what(s),
                                         who=s.decided_by_name, day=on(s.decided_at), note=s.note)
                        for s in steps] if len(steps) > 1 else [],
             ))  # fmt: skip
