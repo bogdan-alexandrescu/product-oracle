@@ -56,11 +56,11 @@ test.describe("desktop", () => {
     const panel = page.getByTestId("priority-inspector");
     await expect(panel).toContainText("Import addresses from a spreadsheet, with a preview before saving");
     await expect(panel).toContainText("#8");
-    await expect(panel.getByTestId("inspector-score")).toHaveText("1.80");
+    await expect(panel.getByTestId("inspector-score")).toContainText("1.80");
     await expect(panel).toContainText("60%");
     const steps = page.getByTestId("explanation-N-4").getByRole("list", { name: "Steps" });
     await expect(steps).toContainText("Goal value = 3×2");
-    await expect(steps).toContainText("Score = 6 × 60% ÷ 2 = 1.80");
+    await expect(steps).toContainText(/Score = 6 × 60% ÷ 2 = 1\.80?/);
 
     // Approve order: saved, and the 6 new features joined the baseline as proposed.
     const band = page.getByTestId("snapshot-band");

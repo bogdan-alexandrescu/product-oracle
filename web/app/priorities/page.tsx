@@ -808,7 +808,8 @@ function NewFeaturesNote({ c }: { c: CompareOut }) {
       </Notice>
     );
   if (c.snapshot.status !== "proposed") return null;
-  const prd = c.snapshot.document?.title ?? "this PRD";
+  // As the frame words it: "the 6 features Saved addresses adds", the PRD named without its kind.
+  const prd = c.snapshot.document ? prdName(c.snapshot.document).replace(/ PRD$/, "") : "this PRD";
   return (
     <Notice tone="info" testId="new-features-note">
       {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest. Approving the order adds ${n === 1 ? "it" : "them"} to the baseline as proposed.`}
