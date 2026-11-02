@@ -1158,7 +1158,9 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
                 y={y + pad}
                 width={pw}
                 height={h - 2 * pad}
-                fill={p.estimated ? `url(#simple-hatch-${p.key})` : tone.ink}
+                // walkb-review-5b: hatched means the item's dates are estimated, as on the
+                // Timeline and the Gantt; a dated item's phases are solid, gate or not.
+                fill={kind === "estimated" ? `url(#simple-hatch-${p.key})` : tone.ink}
                 opacity={closedItem(item) ? 0.4 : 1}
               >
                 <title>{`${tone.label}: ${shortDay(p.start)} – ${shortDay(p.end)}${p.estimated ? ", estimated" : ""}`}</title>
