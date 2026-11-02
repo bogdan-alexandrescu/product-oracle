@@ -5311,6 +5311,7 @@ async def _advance(
         snapshot = await db.get(PrioritySnapshot, snapshot_id)
         if snapshot is not None:
             run_order.approve(snapshot, None, run.document_id)
+            await _accept_new(db, run, snapshot, None)
             await audit.record(
                 db,
                 audit.ORACLE,
@@ -9843,6 +9844,40 @@ async def _scope_reopened(db: AsyncSession, cp: Checkpoint) -> None:
     scope.lock_version += 1
 
 
+async def _accept_new(
+    db: AsyncSession,
+    run: Run,
+    snapshot: PrioritySnapshot,
+    principal: Principal | None,
+    decided_by: uuid.UUID | None = None,
+) -> None:
+    """RP1: an approved order adds its new features to the baseline as proposed, for
+    ``principal``; with none (a console answer, or Oracle saved the order), for the member
+    who decided, else for the run's creator. With no one to act for, the run's history says
+    the features were not added."""
+    if principal is None:
+        user = await db.get(User, decided_by) if decided_by else None
+        if user is None and run.created_by:
+            user = await db.get(User, run.created_by)
+        token = None if user or not run.created_by else await db.get(ApiToken, run.created_by)
+        try:
+            principal = _creator(current_tenant(db), user, token)
+        except LookupError:
+            principal = None
+    if principal is None:
+        if any(r.get("new") for r in snapshot.ranking or []):
+            await audit.record(
+                db,
+                audit.ORACLE,
+                "priority_snapshot.new_features_not_added",
+                "priority_snapshot",
+                snapshot.id,
+                {"run_id": str(run.id), "reason": "no active member to act for"},
+            )
+        return
+    await run_order.accept_new(db, snapshot, principal)
+
+
 async def _order_decided(
     db: AsyncSession, principal: Principal | None, run: Run, cp: Checkpoint
 ) -> None:
@@ -9853,8 +9888,7 @@ async def _order_decided(
         return
     if cp.status == "approved":
         run_order.approve(snapshot, cp.decided_by, run.document_id)
-        if principal is not None:
-            await run_order.accept_new(db, snapshot, principal)
+        await _accept_new(db, run, snapshot, principal, cp.decided_by)
         await audit.record(
             db,
             principal if principal is not None else audit.ORACLE,

@@ -588,7 +588,9 @@ def approve(snapshot: PrioritySnapshot, by: uuid.UUID | None, document_id: uuid.
 
 async def accept_new(db: AsyncSession, snapshot: PrioritySnapshot, principal: Any) -> int:
     """An approved order adds the features new in its PRD to the baseline as proposed: the
-    run's open proposals that create them are accepted (RP1). Returns how many."""
+    run's open proposals that create them are accepted (RP1), one per feature; another open
+    create of a feature already added is rejected as the same feature. Returns how many
+    were added."""
     from oracle.baseline.models import Proposal
     from oracle.baseline.service import decide_proposal
 
@@ -596,17 +598,28 @@ async def accept_new(db: AsyncSession, snapshot: PrioritySnapshot, principal: An
     if not keys or snapshot.run_id is None:
         return 0
     open_ = await db.scalars(
-        select(Proposal).where(Proposal.run_id == snapshot.run_id, Proposal.status == "open")
+        select(Proposal)
+        .where(Proposal.run_id == snapshot.run_id, Proposal.status == "open")
+        .order_by(Proposal.created_at, Proposal.id)
     )
-    done = 0
+    added: set[str] = set()
     for p in list(open_):
         fields = (p.payload or {}).get("fields") or {}
-        if (p.payload or {}).get("op") == "create" and fields.get("key") in keys:
-            # As proposed: an accepted create is confirmed unless its fields say otherwise.
-            p.payload = {**p.payload, "fields": {**fields, "status": "proposed"}}
-            await decide_proposal(db, p.id, principal, True, "Added by the approved order")
-            done += 1
-    return done
+        key = fields.get("key")
+        if (p.payload or {}).get("op") != "create" or key not in keys:
+            continue
+        if key in added:
+            await decide_proposal(db, p.id, principal, False, SAME_FEATURE)
+            continue
+        # As proposed: an accepted create is confirmed unless its fields say otherwise.
+        p.payload = {**p.payload, "fields": {**fields, "status": "proposed"}}
+        await decide_proposal(db, p.id, principal, True, "Added by the approved order")
+        added.add(key)
+    return len(added)
+
+
+# Why an approved order rejects a second open create of a feature it already added.
+SAME_FEATURE = "The same feature as one the approved order added"
 
 
 def discard(snapshot: PrioritySnapshot, by: uuid.UUID | None) -> None:
