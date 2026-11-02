@@ -23,6 +23,9 @@ test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
 
 async function showScrollbar(page: Page, desktop: boolean) {
   await page.addStyleTag({ content: SCROLLBAR });
+  // A Mac draws the styled scrollbar only on a page that scrolls (a short one, like Webhooks, keeps
+  // its overlay scrollbar and no room), so the page is made a little taller than the window.
+  if (desktop) await page.addStyleTag({ content: "html { min-height: calc(100vh + 200px); }" });
   // On a desktop the scrollbar's room is kept; a phone's takes none (no gutter under 640 px).
   // (The page's own box, not its clientWidth: a page too short to scroll still reports the whole window there.)
   if (desktop) await expect.poll(() => page.evaluate(() => window.innerWidth - document.documentElement.getBoundingClientRect().width)).toBeGreaterThanOrEqual(15);

@@ -605,14 +605,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
   const onVerdict = useCallback(
     async (key: string, verdict: Verdict, note: string) => {
+      const from = window.location.hash;
       await unwrap(
         api.PUT("/v1/documents/{doc}/versions/{n}/sections/{key}/review", {
           params: { path: { doc, n, key } },
           body: { verdict, note: note || null },
         }),
       );
-      // Stay on the section just reviewed (without a hash, the first unreviewed one opens).
-      setHash(`#${key}`);
+      // Stay on the section just reviewed (without a hash, the first unreviewed one opens),
+      // unless the reader opened another section while the verdict was saving.
+      if (window.location.hash === from) setHash(`#${key}`);
       await Promise.all([verQ.reload(), docQ.reload()]);
       bump();
     },

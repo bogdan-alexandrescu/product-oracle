@@ -155,6 +155,7 @@ test("expand: a feature row and a milestone show their detail in place; comments
   await bar.getByRole("button", { name: "Approve" }).click();
   await bar.getByTestId("verdict-submit").click();
   await expect(bar.getByTestId("verdict-state")).toContainText("Approved");
+  await expect(bar.getByTestId("verdict-pending")).toHaveCount(0); // saved, not only picked
   const roadmap = await openSection(page, "brief-roadmap");
   await roadmap.getByRole("button", { name: "Expand General release" }).click();
   await expect(section(page, "milestone-ga")).toContainText("opt-outs below 2%");
