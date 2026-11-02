@@ -255,3 +255,24 @@ class CheckpointAction(TenantScoped, Base):
     from_private: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )
+
+
+class AgentAnswer(TenantScoped, Base):
+    """AQ1: the answer to one question a run's agents asked at a stop (its id in the
+    segment's ``agent_questions.yaml``); answering again replaces it until the stop is
+    decided."""
+
+    __tablename__ = "agent_answers"
+    __table_args__ = (UniqueConstraint("checkpoint_id", "question_key"),)
+
+    checkpoint_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("checkpoints.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    question_key: Mapped[str] = mapped_column(Text, nullable=False)
+    option: Mapped[str] = mapped_column(Text, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    # A user id (no FK, as on Run.created_by).
+    answered_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    answered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

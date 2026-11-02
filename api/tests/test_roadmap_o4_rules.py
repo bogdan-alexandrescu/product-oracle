@@ -46,6 +46,27 @@ def test_an_ambiguous_numeric_date_needs_a_basis_for_both_readings():
     assert plain.status == "verified"
 
 
+def test_a_two_way_date_names_the_reading_that_still_needs_a_source():
+    """protects=build-review review (Walk 1): a roadmap date that reads two ways, with a
+    verified source for one reading, says which reading still has none, so "Add a date
+    source" records that one and the version can then be approved; fails_when=the mark
+    names only its first reading (already backed), so the person records it again and
+    Approve stays blocked."""
+    from oracle.docs.schemas import DateMarkOut
+
+    mar_4, apr_3 = date(2027, 3, 4), date(2027, 4, 3)
+    (half,) = _marks("GA by 03/04/2027.", [_basis(mar_4)])
+    out = DateMarkOut.model_validate(half.as_json())
+    assert out.status == "unverified"
+    assert out.days == [mar_4, apr_3]
+    assert out.missing == [apr_3]
+    (none,) = _marks("GA by 03/04/2027.", [])
+    assert DateMarkOut.model_validate(none.as_json()).missing == [mar_4, apr_3]
+    (whole,) = _marks("GA by 03/04/2027.", [_basis(mar_4), _basis(apr_3)])
+    out = DateMarkOut.model_validate(whole.as_json())
+    assert out.status == "verified" and out.missing == []
+
+
 def test_a_year_less_date_is_the_next_such_day_on_or_after_the_draft():
     ref = date(2026, 10, 20)
     (later,) = _marks("GA Dec 15.", [_basis(date(2026, 12, 15))], ref)

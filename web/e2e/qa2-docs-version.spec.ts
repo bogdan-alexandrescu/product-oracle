@@ -193,9 +193,10 @@ for (const scheme of ["light", "dark"] as const) {
           return Math.round(b.y - (n.y + n.height));
         })
         .toBeGreaterThanOrEqual(-1);
-      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await expect
         .poll(async () => {
+          // To the page's end on every try: a part above that lays out late moves the end down.
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
           const n = (await nav.boundingBox())!;
           const b = (await bar.boundingBox())!;
           return b.y - (n.y + n.height);

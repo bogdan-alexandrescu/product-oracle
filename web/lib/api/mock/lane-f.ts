@@ -6,6 +6,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { plainText } from "@/lib/markdown";
+import { LONG_WORDS_SCENARIO } from "./baseline";
 import { presenterNotes, resolveBrief } from "./brief";
 import { mockUuid, seeded } from "./ids";
 import { calibration } from "./quality";
@@ -67,7 +68,7 @@ const notFound = (what: string) => json(404, { detail: `${what} not found` });
 
 // ---------------------------------------------------------------- priorities
 
-const FORMULAS: Record<Method, string> = {
+export const FORMULAS: Record<Method, string> = {
   goal_weighted: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
   rice: "score = reach × impact × confidence ÷ effort",
   moscow: "rank = must (4) > should (3) > could (2) > won't (1); ties by goal value",
@@ -321,6 +322,7 @@ function scoreFeature(f: FeatureSeed, method: Method, cal: TrackRecord = null): 
   return {
     entity_id: `00000000-0000-4000-8000-${hash(f.key).padStart(12, "0")}`,
     key: f.key,
+    new: false,
     title: f.title,
     status: f.status,
     score: score == null ? null : round(method === "moscow" ? Math.floor(score) : score),
@@ -1957,6 +1959,8 @@ function compare(db: Db, snap: SnapshotRow): Schemas["CompareOut"] {
       run_explanation: o.explanation ?? null,
       live_explanation: f ? [f.explanation.formula, ...f.explanation.steps.slice(0, 3)].join(" ") : null,
       problems: problems.filter((p) => p.feature === o.key),
+      // New in this PRD when the run ranked it (RP1): still marked once the order adds it.
+      new: !!snap.ranking.find((x) => x.key === o.key)?.new,
     };
   });
   const run = snap.run_id ? db.runs?.runs.find((r) => r.id === snap.run_id) : undefined;
@@ -1986,11 +1990,19 @@ const isMethod = (m: string | null): m is Method => !!m && (METHODS as string[])
 const KEY_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
 
 /** Each goal term titled as the baseline titles the goal now, as the API reads it. */
-function goalTitles(db: Db, r: Schemas["PriorityRanking"]): Schemas["PriorityRanking"] {
+function goalTitles(db: Db, r: Schemas["PriorityRanking"], scenario?: string | null): Schemas["PriorityRanking"] {
   const titles = new Map((db.baseline.entities).filter((e) => e.type === "goal").map((e) => [e.key, e.title]));
   for (const f of r.features) for (const g of f.explanation.goals) g.title = titles.get(g.goal) ?? g.title;
+  if (scenario === LONG_WORDS_SCENARIO) for (const f of r.features) f.title = LONG_WORDS[f.key] ?? f.title;
   return r;
 }
+
+/** priorities-words: features whose names carry long single words (./baseline.ts LONG_WORDS_SCENARIO). */
+const LONG_WORDS: Record<string, string> = {
+  "F-3": "Shared projects for Conversion",
+  "F-5": "Address lookup (instrumentation)",
+  "F-8": "Internationalization of exports",
+};
 
 /**
  * Handles /v1/priorities, /v1/templates, /v1/themes and /v1/drafts; returns null for
@@ -2019,7 +2031,7 @@ export async function laneF(
       const people = q.get("overrides") !== "false";
       const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => [e.id, e.title]);
       const track = calibration(db.quality, Object.fromEntries(goals));
-      return json(200, goalTitles(db, applyOverrides(ranking(method, track), people ? overrideInputs(st.overrides ?? []) : [])));
+      return json(200, goalTitles(db, applyOverrides(ranking(method, track), people ? overrideInputs(st.overrides ?? []) : []), scenario));
     }
     if (p[2] === "overrides") return overridesRoute(st, db.session ?? "someone", req, p, m);
     if (p[2] === "snapshots") {

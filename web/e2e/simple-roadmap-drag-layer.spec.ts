@@ -66,7 +66,8 @@ for (const [where, use] of [
       await login(page);
     });
 
-    for (const view of phone ? ["gantt"] : ["timeline", "gantt", "waterfall"]) {
+    // The Timeline is no svg chart: its own case below reads its rows.
+    for (const view of phone ? ["gantt"] : ["gantt", "waterfall"]) {
       test(`${view}: a drag frame leaves the chart's other bars alone`, async ({ page }) => {
         // simple-roadmap-drag-layer (see the file's card).
         const bar = await open(page, view);
@@ -114,3 +115,110 @@ for (const [where, use] of [
     }
   });
 }
+
+/**
+ * roadmap-r2 review: the picked Timeline (build-roadmap) is rows of HTML bars, not the old svg
+ * chart, and its bars move by drag (roadmap-r2). A drag frame there changes the dragged item's
+ * own row only (its bar, its dates, the live words); no other row of the 500 is written.
+ */
+test.describe("a dragged Timeline bar, desktop", () => {
+  test.use(DESKTOP);
+  test.beforeEach(async ({ context, page }) => {
+    await context.addInitScript((key) => localStorage.setItem(key, "simple-500"), MOCK_SCENARIO_KEY);
+    await login(page);
+  });
+
+  test("timeline: a drag frame leaves the other rows alone", async ({ page }) => {
+    await page.goto(URL);
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
+    const chart = page.getByTestId("simple-chart");
+    await expect(chart).toHaveAttribute("data-format", "timeline");
+    // All 3 years in sight, then a bar that moves (a grab cursor), wholly in the chart's window.
+    await page.getByTestId("zoom-all").click();
+    await expect(page.getByTestId("zoom-all")).toHaveAttribute("aria-pressed", "true");
+    const bars = chart.locator('[data-testid="timeline-bar"].cursor-grab');
+    await expect(bars.first()).toBeVisible({ timeout: 15_000 });
+    const n = await bars.evaluateAll((bs) => {
+      const inside = (b: Element) => {
+        const r = b.getBoundingClientRect();
+        let p = b.parentElement;
+        while (p && !(p.scrollWidth > p.clientWidth && getComputedStyle(p).overflowX !== "visible")) p = p.parentElement;
+        const w = p?.getBoundingClientRect() ?? { left: 0, right: innerWidth };
+        return r.width > 24 && r.left > w.left + 220 && r.right < w.right - 200 && r.top > 0 && r.bottom < innerHeight - 20;
+      };
+      return bs.findIndex(inside);
+    });
+    expect(n).toBeGreaterThanOrEqual(0);
+    const bar = bars.nth(n);
+    const id = await bar.getAttribute("data-bar-id");
+    const was = await bar.getAttribute("data-start");
+    const box = (await bar.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    const dx = 160;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let n = 1; n <= 3; n++) await page.mouse.move(x + (dx * n) / 24, y);
+    await page.waitForTimeout(50);
+    await bar.evaluate((b) => {
+      const w = window as unknown as { __rowChanges: string[]; __rowWatch: MutationObserver };
+      const row = b.closest('[data-testid="timeline-row"]')!;
+      const root = b.closest('[data-testid="simple-chart"]')!;
+      w.__rowChanges = [];
+      w.__rowWatch = new MutationObserver((ms) => {
+        for (const m of ms) if (!row.contains(m.target)) w.__rowChanges.push(`${m.type} ${(m.target as Element).tagName ?? "#text"} ${m.attributeName ?? ""}`);
+      });
+      w.__rowWatch.observe(root, { subtree: true, attributes: true, childList: true, characterData: true });
+    });
+    for (let n = 4; n <= 24; n++) {
+      await page.mouse.move(x + (dx * n) / 24, y);
+      await page.waitForTimeout(20);
+    }
+    await expect(page.getByTestId("drag-live")).toContainText("–");
+    const changed = await page.evaluate(() => {
+      const w = window as unknown as { __rowChanges: string[]; __rowWatch: MutationObserver };
+      w.__rowWatch.disconnect();
+      return w.__rowChanges;
+    });
+    expect(changed).toEqual([]);
+    await page.mouse.up();
+    // Released: the bar lands on its new dates.
+    await expect(chart.locator(`[data-testid="timeline-bar"][data-bar-id="${id}"]`)).not.toHaveAttribute("data-start", was!);
+    await expect(page.getByTestId("drag-live")).toBeHidden();
+  });
+
+  // ah-timeline-timing review: the 500-item Timeline drag still missed frames, each one
+  // repainting all 500 rows. Counted, not timed: while a bar is dragged, the rows out of sight
+  // are not drawn (content-visibility skips them), the dragged bar and the rows in sight are.
+  test("timeline: a drag draws the rows in sight, not the 500", async ({ page }) => {
+    await page.goto(URL);
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
+    const rows = page.getByTestId("timeline-row");
+    await expect(rows).toHaveCount(500, { timeout: 15_000 });
+    const bar = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]').first();
+    await bar.scrollIntoViewIfNeeded();
+    const box = (await bar.boundingBox())!;
+    const [x, y] = [box.x + Math.min(box.width / 2, 20), box.y + box.height / 2];
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 80, y, { steps: 8 });
+    await expect(page.getByTestId("drag-live")).toBeVisible();
+    const drawn = (b: Element) => b.checkVisibility({ contentVisibilityAuto: true });
+    expect(await bar.evaluate(drawn)).toBe(true);
+    const inSight = await rows.evaluateAll((rs) =>
+      rs
+        .filter((r) => r.getBoundingClientRect().top >= 0 && r.getBoundingClientRect().bottom <= innerHeight)
+        .map((r) => r.querySelector("[data-testid=timeline-bar]")!.checkVisibility({ contentVisibilityAuto: true })),
+    );
+    expect(inSight.length).toBeGreaterThan(5);
+    expect(inSight.every(Boolean)).toBe(true);
+    const far = await rows.evaluateAll((rs) => rs.filter((r) => r.getBoundingClientRect().top > 4 * innerHeight).length);
+    expect(far).toBeGreaterThan(300);
+    const farDrawn = await rows.evaluateAll((rs) =>
+      rs.filter((r) => r.getBoundingClientRect().top > 4 * innerHeight && r.querySelector("[data-testid=timeline-bar]")!.checkVisibility({ contentVisibilityAuto: true })).length,
+    );
+    expect(farDrawn).toBe(0);
+    await page.mouse.up();
+    await expect(page.getByTestId("drag-live")).toBeHidden();
+  });
+});

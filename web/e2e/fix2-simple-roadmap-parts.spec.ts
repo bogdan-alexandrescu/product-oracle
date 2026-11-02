@@ -149,7 +149,7 @@ test.describe("ChatCard", () => {
 test.describe("GoalSuggestions", () => {
   test.use(DESKTOP);
 
-  test("qa-simple-roadmap-24/44: '+ Suggest a feature' and 'Ask Oracle in the chat' look like buttons; a goal with none points to the action", async ({ page, context }) => {
+  test("qa-simple-roadmap-24/44: '+ Suggest a feature' and 'Ask in the chat' look like buttons; a goal with none points to the action", async ({ page, context }) => {
     await context.addInitScript(([key]) => localStorage.setItem(key, "simple-home"), [MOCK_SCENARIO_KEY]);
     await login(page);
     await page.goto("/simple");
@@ -159,12 +159,14 @@ test.describe("GoalSuggestions", () => {
     await expect(drawer).toBeVisible();
 
     const openForm = drawer.getByRole("button", { name: "+ Suggest a feature" });
-    const chat = drawer.getByRole("button", { name: "Ask Oracle in the chat" });
+    const chat = drawer.getByRole("button", { name: "Ask in the chat" });
     await expect(openForm).toBeVisible();
     await expect(chat).toBeVisible();
-    // Before the fix these read as bare bold/underlined text (no border at all: 0px).
+    // Before the fix this read as bare bold/underlined text (no border at all: 0px). build-plan
+    // QP3 "Labelled row, confirm": the row's third action is a plain link, unlike its two buttons.
     await expect(openForm).toHaveCSS("border-width", "1px");
-    await expect(chat).toHaveCSS("border-width", "1px");
+    await expect(drawer.getByRole("button", { name: "✦ Get more from Oracle" })).toHaveCSS("border-width", "1px");
+    await expect(chat).toHaveCSS("border-width", "0px");
 
     // Keep alerts quiet starts with no person-suggested feature (only Oracle's own, "auto").
     await expect(drawer.getByRole("tab", { name: "People · 0" })).toBeVisible();

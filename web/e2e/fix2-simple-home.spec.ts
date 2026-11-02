@@ -37,7 +37,8 @@ async function brokenTile(page: Page): Promise<number> {
 }
 
 const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
-const mobilePush = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Mobile alert push: / });
+// walkb-roadmap: Mobile alert push (end-only) no longer breaks on a made-up start; the digest still breaks.
+const brokenRow = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: / }).first();
 
 test("qa-simple-home-3: Home's sentence and its list count every broken link the tile counts", async ({ page }) => {
   // fails_when: the sentence counts only the links I decide, or the list stops at three
@@ -100,7 +101,7 @@ test("qa-simple-home-10: a goal's weight reads as its share of the score", async
 test("qa-simple-home-13: Accept as risk shows pressed, asks for a reason, and saves a risk note", async ({ page }) => {
   // fails_when: the field's submit is "Accept the risk" beside the unpressed opener, with no hint
   await signIn(page, EMAILS.owner);
-  const row = mobilePush(page);
+  const row = brokenRow(page);
   // qa-simple-home-10 (fix4): open, the reason line takes the opener's place, its submit in the same words.
   const opener = row.getByRole("button", { name: "Accept as risk" });
   await expect(opener).toHaveAttribute("aria-expanded", "false");
@@ -118,7 +119,7 @@ test("qa-simple-home-13: Accept as risk shows pressed, asks for a reason, and sa
 
 test("qa-simple-home-13: a commenter's risk note is a proposal", async ({ page }) => {
   await signIn(page, EMAILS.commenter);
-  const row = mobilePush(page);
+  const row = brokenRow(page);
   await row.getByRole("button", { name: "Propose: accept as risk" }).click();
   await expect(row.getByRole("button", { name: "Propose: accept as risk" })).toBeDisabled();
 });
@@ -216,7 +217,10 @@ test("qa-simple-home-26: Decided lately is newest first and each row opens its d
 test("qa-simple-home-27: each card's All link is named for its card and big enough to tap", async ({ page }) => {
   // fails_when: four links are all named "All ->", or smaller than 24 px
   await signIn(page, EMAILS.owner);
-  for (const name of ["All decisions", "All proposals", "All meetings", "All of the roadmap"]) {
+  // build-rundecide RD3 a: with only PRD questions waiting, they show in each PRD's own card, not under Decisions.
+  await expect(page.getByTestId("home-prd-waiting").first()).toBeVisible();
+  const decisionsCard = (await page.getByTestId("home-decisions").count()) > 0;
+  for (const name of [...(decisionsCard ? ["All decisions"] : []), "All proposals", "All meetings", "All of the roadmap"]) {
     const link = page.getByRole("link", { name, exact: true });
     await expect(link).toBeVisible();
     expect((await link.boundingBox())!.height, name).toBeGreaterThanOrEqual(24);

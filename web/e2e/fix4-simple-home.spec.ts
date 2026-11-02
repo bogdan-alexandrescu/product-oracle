@@ -76,7 +76,7 @@ test.describe("desktop", () => {
   test("qa-simple-home-10: Accept as risk is one wording with one reason line, for the owner and the commenter", async ({ page }) => {
     // fails_when: the submit says "Save risk note" / "Propose risk note"
     await signIn(page, COMMENTER, "simple-home");
-    const row = home(page).getByTestId("home-broken").filter({ hasText: "Mobile alert push" }).first();
+    const row = home(page).getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).first(); // walkb-roadmap: Mobile alert push no longer breaks
     await row.getByRole("button", { name: "Propose: accept as risk" }).click();
     await expect(row.getByLabel("Why the risk is acceptable")).toBeVisible();
     await expect(row.getByRole("button", { name: "Propose: accept as risk" })).toHaveCount(1);
@@ -119,7 +119,7 @@ test.describe("desktop", () => {
     await expect(home(page).getByTestId("home-goal").locator(".simple-code")).toHaveCount(0);
     await expect(home(page).getByTestId("home-question").first()).toBeVisible();
     await expect(home(page).getByTestId("home-question").locator(".simple-code")).toHaveCount(0);
-    await expect(home(page).getByTestId("home-decisions")).not.toContainText(/Blocks M\d|\b[A-Z]{1,3}-\d+\s/);
+    await expect(home(page).getByTestId("home-prd-waiting").first()).not.toContainText(/Blocks M\d|\b[A-Z]{1,3}-\d+\s/);
     await expect(home(page).getByTestId("home-since")).not.toContainText(/\b[A-Z]{1,3}-\d+\s/);
     await expect(home(page).getByTestId("home-decisions-count")).toHaveCount(0);
     await expect(home(page).getByTestId("home-proposals-count")).toHaveCount(0);
@@ -149,7 +149,7 @@ test.describe("desktop", () => {
 
   test("qa-simple-home-30: Home's toast sits over the rail, clear of the decisions' buttons", async ({ page }) => {
     await signIn(page, ADMIN.email, "simple-home");
-    const row = home(page).getByTestId("home-broken").filter({ hasText: "Mobile alert push" }).first();
+    const row = home(page).getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).first(); // walkb-roadmap: Mobile alert push no longer breaks
     await row.getByRole("button", { name: "Accept as risk" }).click();
     await row.getByLabel("Why the risk is acceptable").fill("Push ships behind a flag");
     await row.getByRole("button", { name: "Accept as risk" }).click();

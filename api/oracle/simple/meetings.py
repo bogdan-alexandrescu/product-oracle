@@ -52,11 +52,12 @@ from typing import Any, Literal
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, company_time
+from oracle import audit, company_time, wording
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
-from oracle.docs.models import Document
+from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.docs.parser import DraftError as ImportRejected
 from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import change_words, drafts, minutes
@@ -75,6 +76,7 @@ from oracle.simple.schemas import (
     SimpleActionItemOut,
     SimpleAttendee,
     SimpleDecidedFlow,
+    SimpleDecidedRef,
     SimpleDecisionRow,
     SimpleDecisionsOut,
     SimpleDelivery,
@@ -87,12 +89,16 @@ from oracle.simple.schemas import (
     SimpleMeetingGroup,
     SimpleMeetingIn,
     SimpleMeetingOut,
+    SimpleMeetingRef,
     SimpleMeetingRulesIn,
     SimpleMeetingsOut,
     SimpleMinutes,
     SimpleMinutesIn,
     SimpleOpenDecision,
     SimplePersonRef,
+    SimpleRunGroup,
+    SimpleRunStepOut,
+    SimpleRunStopOut,
     SimpleSendIn,
     SimpleSlackState,
     SimpleStartMember,
@@ -109,6 +115,9 @@ INBOX_DAYS = 30
 UPCOMING_MAX = 20
 # A minutes job still drafting after this long: "still drafting", send what is written.
 MINUTES_SLOW = timedelta(minutes=2)
+# walkc-meeting: past this a queued or running minutes job is taken as failed (its call
+# times out at 180 s; the walk waited 13-15 minutes).
+MINUTES_STUCK = timedelta(minutes=6)
 SUMMARY_MAX = 4000
 MAX_QUESTIONS = 5
 MAX_ACTIONS = 8
@@ -207,10 +216,11 @@ async def record_meeting_decision(
     title: str,
     subjects: list[dict],
     change_ids: list[uuid.UUID],
+    chosen: str = "decided",
 ) -> uuid.UUID:
     """One meeting decision: a ``decisions`` row (origin ``meeting``, decided, approver
-    the caller), linked to the meeting and the changes it made. 404 for no such meeting,
-    409 once it ended. The caller commits."""
+    the caller), linked to the meeting and the changes it made; ``chosen`` is its one
+    option's key. 404 for no such meeting, 409 once it ended. The caller commits."""
     from oracle.decisions import capture
 
     me = _me(principal)
@@ -234,8 +244,8 @@ async def record_meeting_decision(
         source_kind=SOURCE_KIND,
         source_id=uuid.uuid4(),
         title=title,
-        options=[{"key": "decided", "label": title}],
-        chosen_option="decided",
+        options=[{"key": chosen, "label": title}],
+        chosen_option=chosen,
         rationale=f"Decided in {m.title}",
         approver_id=me,
         context=f"Decided in the review meeting {m.title}",
@@ -457,6 +467,7 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
         presenter_id=me,
         attendee_ids=attendees,
         absent_ids=[],
+        joined_ids=[me],
         change_mode=body.change_mode,
         change_people=people,
         length_min=body.length_min,
@@ -588,6 +599,8 @@ async def join(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Simpl
         m.attendee_ids = [*m.attendee_ids, me]
     if me in m.absent_ids:
         m.absent_ids = [i for i in m.absent_ids if i != me]
+    if me not in (m.joined_ids or []):
+        m.joined_ids = [*(m.joined_ids or []), me]
     await db.flush()
     await audit.record(db, principal, "simple_meeting.joined", "simple_meeting", m.id)
     return m
@@ -625,8 +638,37 @@ async def set_rules(
 # --------------------------------------------------------------------------- deciding
 
 
-async def describe(db: AsyncSession, c: SimpleChange) -> tuple[str, list[dict]]:
-    """A change in words, and the subjects it names (its item, its PRD's line)."""
+# walkc-meeting r2: what a proposal asked for, for one that did not happen ("Declined
+# Ada's proposal: move Sample to Later"), never in the past tense of a change made.
+PROPOSAL_WORDS = {
+    "move_dates": "new dates for",
+    "accept_date_suggestion": "accept Oracle's dates for",
+    "change_horizon": "move",
+    "reorder": "reorder",
+    "cut": "cut",
+    "restore": "restore",
+    "edit_title": "rename",
+    "edit_outcome": "new outcome for",
+    "accept_risk": "accept a risk on",
+    "shift_dependents": "move the dependents of",
+    "move_dependency": "move the dependency of",
+    "confirm_item": "confirm",
+    "edit_line": "new wording for",
+    "add_key_date": "add the key date",
+    "edit_key_date": "change the key date",
+    "remove_key_date": "remove the key date",
+    "add_item": "add",
+    "merge_item": "merge",
+    "keep_both": "keep beside its look-alikes:",
+    "cut_with_dependents": "cut with its dependents:",
+}
+
+
+async def describe(
+    db: AsyncSession, c: SimpleChange, proposal: bool = False
+) -> tuple[str, list[dict]]:
+    """A change in words, and the subjects it names (its item, its PRD's line). With
+    ``proposal``, what it asked for ("move Sample to Later"), for one not made."""
     t = c.target or {}
     subjects: list[dict] = []
     name = ""
@@ -663,6 +705,12 @@ async def describe(db: AsyncSession, c: SimpleChange) -> tuple[str, list[dict]]:
                 subjects.append({"kind": "roadmap_item", "id": str(row.id), "ref": row.item_key})
     elif not name:
         name = str((c.after or {}).get("title") or t.get("title") or "")
+    if proposal:
+        words = PROPOSAL_WORDS.get(c.op) or c.op.replace("_", " ")
+        h = change_words.HORIZON_WORDS.get(str((c.after or {}).get("horizon")))
+        if c.op == "change_horizon" and name and h:
+            return f"move {name} to {h}", subjects
+        return f"{words} {name}".strip(), subjects
     words = drafts.OP_WORDS.get(c.op) or c.op.replace("_", " ").capitalize()
     if c.op == "change_horizon" and name:
         # qa4-simple-decide-12: a move says where to ("Moved Sample data import to Later").
@@ -688,7 +736,7 @@ async def after_change(
     c = await db.get(SimpleChange, change_id)
     if c is None:
         return None
-    title, subjects = await describe(db, c)
+    title, subjects = await describe(db, c, proposal=verb == "Declined")
     if verb in ("Accepted", "Declined") and c.by is not None:
         # qa4-simple-decide-12: an accepted or declined proposal says whose it was.
         who = (await _names(db, {c.by})).get(c.by)
@@ -764,6 +812,103 @@ def published_words(d: Any, names: dict[uuid.UUID, str]) -> str:
     return "not yet published: " + (" · ".join(why) or "its review is not complete")
 
 
+def _sentence(text: str) -> str:
+    text = text.strip()
+    if not text:
+        return text
+    text = text[0].upper() + text[1:]
+    return text if text.endswith((".", "?", "!")) else text + "."
+
+
+def _section(key: str | None, headings: dict[str, str] | None = None) -> str | None:
+    """A section's name: its own heading (walkc-meeting-r2: "Sources and data points" for
+    "sources"), else made from its id ("what-we-build" -> "What we build")."""
+    if not key:
+        return None
+    if headings and headings.get(key):
+        return headings[key]
+    return key.replace("-", " ").replace("_", " ").strip().capitalize() or None
+
+
+_RAW = [
+    (re.compile(r"\[c:[^\]]*\]"), lambda m, h: "a citation"),
+    (re.compile(r"\s*\(\{#[^}]*\}\)"), lambda m, h: ""),
+    (re.compile(r"\{#[^}]*\}"), lambda m, h: "a section label"),
+    (re.compile(r"section id '([^']*)'"), lambda m, h: f"the section name “{_section(m[1], h)}”"),
+    (re.compile(r"section '([^']*)'"), lambda m, h: f"the section “{_section(m[1], h)}”"),
+]
+
+
+def _plain_words(message: str, headings: dict[str, str] | None = None) -> str:
+    """An importer message without its raw tokens ([c:key], {#sources}, section ids)."""
+    for pattern, put in _RAW:
+        message = pattern.sub(lambda m, put=put: put(m, headings), message)
+    return _sentence(message)
+
+
+def _days(days: list[str]) -> str:
+    return days[0] if len(days) == 1 else ", ".join(days[:-1]) + " and " + days[-1]
+
+
+def _shown_date(p: Any) -> str:
+    """walkc-meeting-r2: a date problem's date as people read it (doc_dates.problem_refs'
+    ``shown``), never as the document wrote it ("2026-11-30")."""
+    return p.refs.get("shown") or p.refs["date"]
+
+
+def approve_problems(problems: list[Any], headings: dict[str, str] | None = None) -> dict[str, Any]:
+    """walkc-meeting: why the meeting's Approve could not publish, as a short list a person
+    reads: each problem said once, in plain words (what to do is in its message), where it
+    is (the section's name), and how many times it came up; a section's dates without a
+    confirmed schedule in one line that lists them. No codes, ids or raw lines."""
+    seen: dict[tuple[str, str | None], dict[str, Any]] = {}
+    dates: dict[str | None, list[Any]] = {}
+    for p in problems:
+        where = _section(getattr(p, "section_key", None), headings)
+        refs = getattr(p, "refs", None) or {}
+        if getattr(p, "code", None) == "unverified_date" and isinstance(refs.get("date"), str):
+            dates.setdefault(where, []).append(p)
+            continue
+        what = _plain_words(str(getattr(p, "message", "") or ""), headings)
+        key = (what, where)
+        if key in seen:
+            seen[key]["times"] += 1
+        else:
+            seen[key] = {"what": what, "where": where, "times": 1}
+    out = list(seen.values())
+    for where, group in dates.items():
+        days = list(dict.fromkeys(_shown_date(p) for p in group))
+        if len(days) == 1:
+            what = _plain_words(str(group[0].message), headings)
+        else:
+            what = (
+                f"{len(days)} dates are not backed by a confirmed schedule: {_days(days)}; "
+                f"{wording.RECORD_DATE_BASIS} or drop them."
+            )
+        out.insert(0, {"what": what, "where": where, "times": len(group)})
+    n = len(problems)
+    message = (
+        "Not approved: the draft has 1 problem to fix first."
+        if n == 1
+        else f"Not approved: the draft has {n} problems to fix first."
+    )
+    return {"code": "draft_problems", "message": message, "problems": out}
+
+
+async def _headings(db: AsyncSession, document_ids: set[uuid.UUID]) -> dict[str, str]:
+    """Each section's heading by its key, in the documents' latest versions."""
+    if not document_ids:
+        return {}
+    await db.rollback()
+    rows = await db.execute(
+        select(Section.section_key, Section.heading)
+        .join(DocumentVersion, DocumentVersion.id == Section.version_id)
+        .where(DocumentVersion.document_id.in_(document_ids))
+        .order_by(DocumentVersion.number)
+    )
+    return {key: heading for key, heading in rows.tuples() if heading}
+
+
 async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     """The decider's Approve: every draft the meeting worked on, with the required
     reviewers present approving too (oracle.simple.drafts.approve_in_meeting); the
@@ -776,11 +921,28 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     if me is None or not (me == w.decider or has_role(principal.role, "owner")):
         raise MeetingError(403, "Only the PRD's decider (or an owner) approves in the meeting")
     session = await db.get(SimpleSession, m.session_id)
-    present = [i for i in m.attendee_ids if i not in m.absent_ids and i != me]
+    # walkc-meeting-r2 review: present is joined and not marked away; one invited who never
+    # pressed Join reads "invited, not joined yet" and is asked in the Inbox like an absent one.
+    joined = {m.presenter_id, *(m.joined_ids or [])}
+    present = [i for i in m.attendee_ids if i in joined and i not in m.absent_ids and i != me]
+    # The PRD and every document the meeting drafted, read before the importer can roll
+    # the session back: a refused problem names its section by these documents' headings.
+    documents = {m.prd_document_id, *await db.scalars(
+        select(SimpleDraft.document_id)
+        .join(SimpleSessionDraft, SimpleSessionDraft.draft_id == SimpleDraft.id)
+        .where(SimpleSessionDraft.session_id == m.session_id)
+    )} - {None}  # fmt: skip
     try:
         result = await drafts.approve_in_meeting(db, session, me, present)
     except drafts.DraftError as e:
         raise MeetingError(e.status, str(e)) from e
+    except ImportRejected as e:
+        # walkc-meeting: never the raw "draft rejected: 38 problem(s)": each problem in
+        # plain words, with what to do about it and where; its section by the headings of
+        # the document whose draft was refused, when known (two may share a section key).
+        refused = getattr(e, "document_id", None)
+        headings = await _headings(db, {refused} if refused else documents)
+        raise MeetingError(422, approve_problems(e.problems, headings=headings)) from e
     if not result.drafts:
         if result.not_approved:
             return result
@@ -830,7 +992,8 @@ def _attendees(m: SimpleMeeting, w: PrdWho, names: dict) -> list[SimpleAttendee]
         if i in w.owners:
             roles.append("owner")
         out.append(SimpleAttendee(id=i, name=names.get(i, "someone"), roles=roles,  # type: ignore[arg-type]
-                                  present=i not in m.absent_ids))  # fmt: skip
+                                  present=i not in m.absent_ids,
+                                  joined=i in [m.presenter_id, *(m.joined_ids or [])]))  # fmt: skip
     return out
 
 
@@ -938,7 +1101,7 @@ async def _prd_items(db: AsyncSession, document: Document) -> tuple[set, set]:
 
 async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
               not_approved: list | None = None) -> SimpleMeetingOut:  # fmt: skip
-    from oracle.simple import changes, questions
+    from oracle.simple import changes, meeting_draft, questions
 
     m, document = await _get(db, principal, meeting_id)
     w = await prd_who(db, document)
@@ -1026,6 +1189,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         not_approved=not_approved or [],
         notes=await _notes_out(db, m),
         agenda=await _agenda_out(db, m),
+        draft_roadmap=await meeting_draft.draft_out(db, document, m.id),
     )
 
 
@@ -1154,11 +1318,18 @@ async def _minutes_job(db: AsyncSession, m: SimpleMeeting) -> str | None:
     job = await db.get(LlmJob, m.minutes_job_id) if m.minutes_job_id else None
     if job is None or job.status in ("failed", "cancelled"):
         return "failed"
-    if job.status == "succeeded":
-        return "drafting"  # its answer lands with the next read of the job's commit
     # Queued, started or requeued (Draft again) last: each touches updated_at, on the job
     # runner's clock (the wall clock).
-    return "slow" if jobs._now() - job.updated_at > MINUTES_SLOW else "drafting"
+    waited = jobs._now() - job.updated_at
+    if job.status == "succeeded":
+        # Its answer lands with the next read of the job's commit; a job that succeeded
+        # long ago without writing them never will (walkc-meeting: never "drafting" on).
+        return "failed" if waited > MINUTES_SLOW else "drafting"
+    # walkc-meeting: a job still queued or running past MINUTES_STUCK is not coming (a
+    # stalled queue, a lost worker): said as failed, so Draft again is offered.
+    if waited > MINUTES_STUCK:
+        return "failed"
+    return "slow" if waited > MINUTES_SLOW else "drafting"
 
 
 async def _sees_change(db: AsyncSession, principal: Any, c: SimpleChange) -> bool:
@@ -1316,23 +1487,31 @@ async def _waits(db: AsyncSession, m: SimpleMeeting) -> list[dict]:
             )
         )
     )
+    # walkc-meeting r2 (5j): a working draft waits on whoever approves the meeting's drafts
+    # (the PRD's decider, else the company's owners), and a proposal routed to nobody on them too.
+    approvers: list[uuid.UUID] = []
+    if any(d.status == "working" for d in ds) or any(not c.routed_to for c in proposals):
+        prd = await db.get(Document, m.prd_document_id)
+        decider = (await prd_who(db, prd)).decider if prd is not None else None
+        approvers = [decider] if decider else await _company_owners(db)
     names = await _names(
         db, {i for d in ds for i in d.waiting_on or []}
-        | {i for c in proposals for i in c.routed_to or []},
+        | {i for c in proposals for i in c.routed_to or []} | set(approvers),
     )  # fmt: skip
+
+    def on(ids: list[uuid.UUID]) -> list[dict]:
+        return [{"id": str(i), "name": names.get(i, "someone")} for i in ids]
+
     for d in ds:
         title = docs[d.document_id].title if d.document_id in docs else "a document"
         if d.status == "submitted" and d.waiting_on:
-            out.append({"what": f"Publishing {title}: their approval",
-                        "on": [{"id": str(i), "name": names.get(i, "someone")}
-                               for i in d.waiting_on]})  # fmt: skip
+            out.append({"what": f"Publishing {title}: their approval", "on": on(d.waiting_on)})
         elif d.status == "working":
-            out.append({"what": f"{title}: the working draft is not approved yet", "on": []})
+            out.append({"what": f"{title}: the working draft is not approved yet",
+                        "on": on(approvers)})  # fmt: skip
     for c in proposals:
         title, _ = await describe(db, c)
-        out.append({"what": f"Proposal: {title}",
-                    "on": [{"id": str(i), "name": names.get(i, "someone")}
-                           for i in c.routed_to or []]})  # fmt: skip
+        out.append({"what": f"Proposal: {title}", "on": on(list(c.routed_to or []) or approvers)})
     return out
 
 
@@ -1451,7 +1630,9 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
         meeting_id = uuid.UUID(str((job.input or {}).get("meeting_id")))
     except ValueError as e:
         raise JobInputError("the job names no meeting") from e
-    m = await s.get(SimpleMeeting, meeting_id, with_for_update=True)
+    # walkc-meeting: the meeting's row is not held across the model's call (up to 180 s):
+    # Save, Send and Draft again lock it; it is locked again to write the answer.
+    m = await s.get(SimpleMeeting, meeting_id)
     if m is None:
         raise JobInputError("the meeting no longer exists")
     document = await s.get(Document, m.prd_document_id)
@@ -1489,6 +1670,11 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
         "waits": [{"what": w["what"], "on": [p["name"] for p in w["on"]]} for w in waits],
     }
     answer = await ask("meeting_minutes", payload)
+    m = await s.get(SimpleMeeting, meeting_id, with_for_update=True, populate_existing=True)
+    if m is None:
+        raise JobInputError("the meeting no longer exists")
+    if m.minutes_job_id not in (None, job.id):
+        return {"written": False, "reason": "Draft again queued a newer job"}
     if (m.minutes or {}).get("written_by") == "edited" or m.minutes_state == "sent":
         return {"written": False, "reason": "a person edited or sent the minutes first"}
     summary = " ".join(str(answer.get("summary") or "").split())[:SUMMARY_MAX]
@@ -1528,6 +1714,12 @@ async def redraft(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Si
     if await _minutes_job(db, m) != "failed":
         raise MeetingError(409, "Oracle is not failing to draft these minutes")
     job = await db.get(LlmJob, m.minutes_job_id) if m.minutes_job_id else None
+    if job is not None and job.status not in ("failed", "cancelled"):
+        # walkc-meeting: a stuck job (queued or running past MINUTES_STUCK) is cancelled and
+        # a new one queued, so the stalled one can never write over it.
+        job.status = "cancelled"
+        job.error = "Stalled: Draft again queued a new one"
+        job = None
     try:
         if job is not None:
             job = await jobs.retry(db, principal, job.id)
@@ -1647,15 +1839,17 @@ async def send(
     return m
 
 
-def _plain(m: SimpleMeeting, minutes: dict, names: dict) -> str:
-    lines = [f"Minutes: {m.title}", "", minutes.get("summary") or ""]
+def _plain(m: SimpleMeeting, minutes: dict, names: dict, zone: str) -> str:
+    # walkc-meeting r2 (5j): when the meeting was, month first with its time and zone.
+    lines = [f"Minutes: {m.title}", f"Held {company_time.stamp(m.started_at, zone)}", "",
+             minutes.get("summary") or ""]  # fmt: skip
     if minutes.get("open_questions"):
         lines += ["", "Open questions:", *[f"- {q}" for q in minutes["open_questions"]]]
     if minutes.get("action_items"):
         lines += ["", "Action items:"]
         for a in minutes["action_items"]:
             who = names.get(uuid.UUID(a["owner_id"]), "someone") if a.get("owner_id") else "someone"
-            due = f" by {a['due_date']}" if a.get("due_date") else ""
+            due = f" by {company_time.calendar_day(a['due_date'])}" if a.get("due_date") else ""
             lines.append(f"- {a['title']} ({who}{due})")
     if minutes.get("waits"):
         lines += ["", "Waiting:"]
@@ -1757,7 +1951,7 @@ async def deliver(db: AsyncSession, meeting_id: uuid.UUID) -> int:
     # mid-send tries it again then), then send with the meeting unlocked.
     names = {u.id: u.name or u.email for u in users.values()} if due else await _names(
         db, set(m.attendee_ids))  # fmt: skip
-    text = _plain(m, m.minutes or {}, names)
+    text = _plain(m, m.minutes or {}, names, await company_time.company_time_zone(db))
     subject = f"Minutes: {m.title}"
     lease = (now + timedelta(minutes=RETRY_AFTER_MINUTES[0])).isoformat()
     tried = {k: dict(d["email_to"][k]) for k in due}
@@ -1959,9 +2153,10 @@ async def titles_by_session(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.
 
 async def decided_in(
     db: AsyncSession, subjects: list[dict]
-) -> dict[tuple[str, str, str | None], list[SimpleOpenDecision]]:
-    """The decided decisions naming each subject ``(kind, id, ref)``, newest first."""
-    out: dict[tuple[str, str, str | None], list[SimpleOpenDecision]] = {}
+) -> dict[tuple[str, str, str | None], list[SimpleDecidedRef]]:
+    """The decided decisions naming each subject ``(kind, id, ref)``, newest first, with
+    who decided, when and the meeting's minutes (decided_refs)."""
+    out: dict[tuple[str, str, str | None], list[Decision]] = {}
     if not subjects:
         return out
     wanted = {(s["kind"], s["id"], s.get("ref")) for s in subjects}
@@ -1980,7 +2175,41 @@ async def decided_in(
                 if key in wanted:
                     lst = out.setdefault(key, [])  # type: ignore[arg-type]
                     if all(x.id != d.id for x in lst):
-                        lst.append(SimpleOpenDecision(id=d.id, number=d.number, title=d.title))
+                        lst.append(d)  # type: ignore[arg-type]
+    decisions = {d.id: d for lst in out.values() for d in lst}  # type: ignore[union-attr]
+    refs = await decided_refs(db, list(decisions.values()))  # type: ignore[arg-type]
+    return {k: [refs[d.id] for d in lst] for k, lst in out.items()}
+
+
+async def decided_refs(db: AsyncSession, ds: list[Decision]) -> dict[uuid.UUID, SimpleDecidedRef]:
+    """walkc-roadmap-tasks: each decision with who decided it, when, and the meeting (and
+    its minutes' page, /simple/meetings/<id>) it was taken in, if any."""
+    if not ds:
+        return {}
+    links = {
+        row.decision_id: (row, m)
+        for row, m in (
+            await db.execute(
+                select(MeetingDecisionRow, SimpleMeeting)
+                .join(SimpleMeeting, SimpleMeeting.id == MeetingDecisionRow.meeting_id)
+                .where(MeetingDecisionRow.decision_id.in_([d.id for d in ds]))
+            )
+        ).all()
+    }
+    names = await _names(db, {i for d in ds if (i := d.decided_by or d.approver_id)})
+    out: dict[uuid.UUID, SimpleDecidedRef] = {}
+    for d in ds:
+        row, m = links.get(d.id, (None, None))
+        who = d.decided_by or d.approver_id
+        out[d.id] = SimpleDecidedRef(
+            id=d.id,
+            number=d.number,
+            title=d.title,
+            decided_by=_ref(who, names) if who else None,
+            decided_at=d.decided_at or (row.at if row else None),
+            meeting=SimpleMeetingRef(id=m.id, title=m.title) if m else None,
+            minutes_url=f"/simple/meetings/{m.id}" if m else None,
+        )
     return out
 
 
@@ -2162,6 +2391,11 @@ async def decisions_page(
             if e.prd is not None and e.goal is not None and e.goal.id == goal_ent.id
         }
     only = {d.id for _, d in links.get(meeting, [])} if meeting is not None else None
+    run_groups = (
+        []
+        if meeting is not None or goal_ent is not None
+        else await _run_groups(db, principal, {i: docs[i] for i in qdocs})
+    )
     return SimpleDecisionsOut(
         **await questions.page_fields(db, principal, qdocs, only),
         meetings=groups,
@@ -2172,7 +2406,107 @@ async def decisions_page(
                for g in sorted(goals.values(), key=lambda g: g.key)],
         meeting_options=[SimpleFilterOption(id=str(m.id), title=_meeting_option_title(m))
                          for m in ms],  # fmt: skip
+        runs=run_groups,
     )  # fmt: skip
+
+
+# build-rundecide RD1 a: a run's stops as people name them in Simple.
+_STOP_WORDS = {
+    "baseline_confirm": "Baseline",
+    "feature_set": "Feature set",
+    "eng_review": "Engineering check",
+    "priority_order": "Order",
+    "prd_review": "PRD review",
+    "eng_dates": "Dates",
+    "roadmap_items": "Roadmap items",
+    "roadmap_review": "Roadmap review",
+}
+_STEP_WORDS = {"approved": "Approved", "changes_requested": "Sent back", "skipped": "Skipped"}
+
+
+def _approved_words(changed: int) -> str:
+    """ "Approved with one date changed" for a Dates stop whose approval changed a date."""
+    if not changed:
+        return "Approved"
+    return f"Approved with {'one date' if changed == 1 else f'{changed} dates'} changed"
+
+
+def _run_name(doc: Document) -> str:
+    """ "Usage alerts plan" for the Usage alerts PRD."""
+    title = re.sub(r"\s+PRD$", "", doc.title.strip(), flags=re.I)
+    return f"{title} plan"
+
+
+async def _run_groups(
+    db: AsyncSession, principal: Any, docs: dict[uuid.UUID, Document]
+) -> list[SimpleRunGroup]:
+    """Each run on a readable PRD with a decided stop, newest first: its stops in order,
+    one row per stop; a stop sent back and then approved is one row with its steps."""
+    from oracle.engineering import dates as eng_dates
+    from oracle.runs import service as runs_service
+    from oracle.runs.models import Checkpoint, Run
+
+    if not docs:
+        return []
+    runs = list(await db.scalars(
+        select(Run).where(Run.document_id.in_(docs), Run.deleted_at.is_(None))
+        .order_by(Run.created_at.desc()).limit(20)))  # fmt: skip
+    # The runs list_decisions reads (the docs are the readable PRDs; a run's call reads its
+    # own run only), with one read of the stops for all of them.
+    runs = [r for r in runs if not runs_service.creator_only_hidden(db, r)
+            and getattr(principal, "run_id", None) in (None, r.id)]  # fmt: skip
+    decisions = await runs_service.decisions_of_runs(db, runs)
+    zone = await company_time.company_time_zone(db)
+    # The dates each approval at a Dates stop changed, in one read.
+    dated = [d.checkpoint_id for ds in decisions.values() for d in ds
+             if d.kind == eng_dates.KIND and d.status == "approved"]  # fmt: skip
+    changed: dict[uuid.UUID, int] = {}
+    if dated:
+        rows = await db.execute(
+            select(Checkpoint.id, Checkpoint.payload).where(Checkpoint.id.in_(dated))
+        )
+        changed = {i: eng_dates.changed_count(p) for i, p in rows.all()}
+
+    def what(d: Any) -> str:
+        if d.status == "approved":
+            return _approved_words(changed.get(d.checkpoint_id, 0))
+        return _STEP_WORDS.get(d.status, d.status)
+
+    def on(at: datetime | None) -> date | None:
+        return company_time.day(at, zone) if at else None
+
+    out: list[SimpleRunGroup] = []
+    for run in runs:
+        # A stop turned off when the run started was not a person's decision.
+        decided = [d for d in decisions[run.id] if d.status != "skipped"]
+        stops: list[SimpleRunStopOut] = []
+        by_kind: dict[tuple[int, str], list[Any]] = {}
+        for d in decided:
+            by_kind.setdefault((d.segment_seq or 0, d.kind), []).append(d)
+        for (_, kind), steps in by_kind.items():
+            last = steps[-1]
+            sent_back = any(s.status == "changes_requested" for s in steps[:-1])
+            outcome = what(last)
+            if last.status == "approved" and sent_back:
+                outcome = "Approved after a change"
+            stops.append(SimpleRunStopOut(
+                checkpoint_id=last.checkpoint_id, kind=kind,
+                stop=_STOP_WORDS.get(kind, kind.replace("_", " ").capitalize()),
+                outcome=outcome, dates_changed=changed.get(last.checkpoint_id, 0),
+                who=last.decided_by_name,
+                role=(last.decided_by_role or "").replace("_", " ") or None,
+                day=on(last.decided_at), note=last.note,
+                trail=[SimpleRunStepOut(what=what(s),
+                                        who=s.decided_by_name, day=on(s.decided_at), note=s.note)
+                       for s in steps] if len(steps) > 1 else [],
+            ))  # fmt: skip
+        if not stops:
+            continue
+        doc = docs[run.document_id]  # type: ignore[index]
+        out.append(SimpleRunGroup(
+            run_id=run.id, name=_run_name(doc),
+            prd=SimpleFilterOption(id=doc.slug, title=doc.title), stops=stops))  # fmt: skip
+    return out
 
 
 async def _named(db: AsyncSession, minutes: SimpleMinutes) -> SimpleMinutes:

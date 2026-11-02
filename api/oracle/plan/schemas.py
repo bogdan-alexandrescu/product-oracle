@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from oracle.roadmap.schemas import EntityRef, Horizon, TrackerRecordRef, TrackHealth, TrackStatus
+from oracle.simple.schemas import SimpleDecidedRef
 
 PlanScope = Literal["all", "approved"]
 Stage = Literal[
@@ -177,6 +178,9 @@ class PlanItem(BaseModel):
     state: ItemState
     reasons: list[PlanReason]
     drift: list[PlanDrift] = []
+    # walkc-roadmap-tasks: the decided decisions about the item (newest first): who decided,
+    # when and the meeting's minutes (oracle.simple.meetings.decided_refs).
+    decisions: list[SimpleDecidedRef] = []
     engineering: PlanEngineering
     next: PlanNext
 

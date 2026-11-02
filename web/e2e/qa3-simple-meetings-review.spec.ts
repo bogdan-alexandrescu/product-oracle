@@ -80,8 +80,10 @@ for (const phone of [false, true]) {
           // It starts at the top of the page itself (not a fixed layer of its own).
           expect(await screen.evaluate((el) => el.getBoundingClientRect().top + window.scrollY)).toBe(0);
           expect(await screen.evaluate((el) => getComputedStyle(el).position)).not.toBe("fixed");
+          // The one-pager loads after the meeting: until it shows, the page may fit the screen.
+          await expect(page.getByRole("button", { name: "Edit “A setup checklist that shows" })).toBeVisible();
           await page.getByRole("region", { name: "Decisions in this meeting" }).scrollIntoViewIfNeeded();
-          expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
           expect(await screen.evaluate((el) => el.scrollTop)).toBe(0);
         });
 

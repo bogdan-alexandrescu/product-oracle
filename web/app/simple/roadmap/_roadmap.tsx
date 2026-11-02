@@ -18,7 +18,7 @@ import { useQuery } from "@/lib/use-query";
 import { QuickAdd } from "./_add";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, MARK_WORDS, PM_LANE, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
-import { Callout, changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
+import { changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
 import { Lanes, pmItem } from "./_lanes";
@@ -56,8 +56,10 @@ import {
   type Where,
   setRoadmapToday,
   yearSpan,
+  drawnKeyDates,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
+import { ConflictPanel, ZoomTimeline } from "./_zoom";
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
@@ -103,7 +105,7 @@ const time = (at: string) => plainClock(at, displayZone());
 
 /** fix4 qa-simple-roadmap-35: a key date's two marks: filled, and hollow while it is only in the draft. */
 function keyDateEntries(data: Roadmap): LegendEntry[] {
-  const kds = data.key_dates ?? [];
+  const kds = drawnKeyDates(data);
   const out: LegendEntry[] = [];
   if (kds.some((k) => !k.in_draft)) out.push({ key: "key", swatch: <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, words: "Key date" });
   if (kds.some((k) => k.in_draft))
@@ -301,8 +303,14 @@ function Select({ label, value, options, onChange, all = "All", testId }: { labe
   );
 }
 
+/** approved-prd-roadmap: "2 items and 2 key dates came from Visit reminders (version 1)". */
+function prdWords(p: { prd: { title: string }; version?: number | null; items: number; key_dates: number }): string {
+  const parts = [p.items ? `${p.items} ${p.items === 1 ? "item" : "items"}` : "", p.key_dates ? `${p.key_dates} ${p.key_dates === 1 ? "key date" : "key dates"}` : ""].filter(Boolean);
+  return `${parts.join(" and ")} came from ${p.prd.title}${p.version ? ` (version ${p.version})` : ""}`;
+}
+
 /** The working-draft banner (D18 as amended: one shared draft per roadmap). */
-function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; titleOf: (id: string | null) => string | undefined }) {
+function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, onReview, titleOf }: { drafts: Draft[]; inReview: number; meId: string | null; onUndo: (id: string) => void; onSubmit: (d: Draft[]) => void; onReview: (prdSlug: string) => void; titleOf: (id: string | null) => string | undefined }) {
   const [open, setOpen] = useState(false);
   const working = drafts.filter((d) => d.status === "working" || d.status === "submitted");
   if (!working.length) {
@@ -317,13 +325,17 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, titleOf }: { dr
   const since = working.map((d) => d.created_at).sort()[0];
   const log = working.flatMap((d) => d.change_log).sort((a, b) => (a.at < b.at ? -1 : 1));
   const last = [...log].reverse().find((c) => c.by === meId);
-  const submittable = working.filter((d) => d.status === "working" && d.can_submit && d.changes > 0);
+  const submittable = working.filter((d) => d.status === "working" && d.can_submit && (d.changes > 0 || !!d.from_prds?.length));
+  // approved-prd-roadmap: what each approved PRD put in the draft.
+  const fromPrds = working.flatMap((d) => d.from_prds ?? []);
+  // walkb-roadmap review 5a: a roadmap built from a PRD and not approved yet has no approved roadmap to keep published.
+  const published = working.every((d) => d.published);
   return (
     <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
         <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
-          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · the approved roadmap stays published until review passes
+          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · {published ? "the approved roadmap stays published until review passes" : "no approved version yet: it is published once review passes"}
         </p>
         <Button variant="ghost" disabled={!last} onClick={() => last && onUndo(last.id)}>
           Undo
@@ -335,6 +347,18 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, titleOf }: { dr
           Send for review
         </Button>
       </div>
+      {fromPrds.length > 0 && (
+        <ul className="mt-1.5 space-y-1 text-sm" data-testid="draft-from-prds">
+          {fromPrds.map((p) => (
+            <li key={p.prd.id} className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="draft-from-prd">
+              <span className="min-w-0">{prdWords(p)}</span>
+              <Button variant="ghost" aria-label={`Review the items from ${p.prd.title}`} onClick={() => onReview(p.prd.slug)}>
+                Review
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
       {open && (
         <ol className="mt-2 space-y-1 text-sm text-text" data-testid="draft-changes">
           {log.map((c) => (
@@ -662,7 +686,10 @@ export function SimpleRoadmap() {
     { keepPrevious: true },
   );
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
-  const drafts = useQuery("simple-drafts", () => unwrap(api.GET("/v1/simple/drafts")));
+  // A working draft belongs to one roadmap: a chosen roadmap's page lists its own drafts only.
+  const drafts = useQuery(`simple-drafts:${f.roadmap ?? ""}`, () =>
+    unwrap(api.GET("/v1/simple/drafts", { params: { query: f.roadmap ? { roadmap: f.roadmap } : {} } })),
+  );
   // Who may start a review is the start sheet's own per-PRD answer (meetings.may_start: an owner,
   // or a PRD's decider), not who decides this roadmap's items; the same read the sheet makes.
   const startOptions = useQuery("simple-meeting-options||", () =>
@@ -732,6 +759,8 @@ export function SimpleRoadmap() {
   const data = roadmap.data;
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
   const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
+  // The Timeline always draws goal lanes, the same groups the goal cards count.
+  const goalLaned = useMemo(() => (data ? oneLane(lanes(data, "goal"), "goal") : null), [data]);
   const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
   // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
   const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, async () =>
@@ -900,9 +929,11 @@ export function SimpleRoadmap() {
 
   const doExport = async (kind: "png" | "pdf") => {
     if (!data) return;
-    const labels = wrap.current?.querySelector<HTMLElement>('[data-testid="chart-labels"]') ?? null;
-    if (format !== "board" && !svg.current) return;
     setExporting(true);
+    // The Timeline's picture is the goal lanes, laid out off screen once exporting is set.
+    if (format === "timeline") await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const labels = wrap.current?.querySelector<HTMLElement>('[data-testid="chart-labels"]') ?? null;
+    if (format !== "board" && !svg.current) return setExporting(false);
     try {
       const pic = format === "board" ? boardPicture(boardColumns(laned ?? data), data.today) : chartPicture(svg.current!, labels);
       const title = `Roadmap · ${FORMAT_WORDS[format]}${format === "gantt" ? ` (${unit})` : ""}`;
@@ -1126,6 +1157,8 @@ export function SimpleRoadmap() {
           {pickers}
         </div>
       )}
+      {/* The Timeline always draws its rows under their goal (rowsOf), so it offers no Group by. */}
+      {format !== "timeline" && (
       <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
         Group by
         <SegmentedControl<Lane>
@@ -1141,16 +1174,11 @@ export function SimpleRoadmap() {
           ]}
         />
       </span>
+      )}
       {format === "gantt" && !phone && (
         <span className="flex items-center gap-1.5 text-sm text-text2">
           Scale
           {scaleSwitch}
-        </span>
-      )}
-      {/* timeline-overlap B2: the Group by's line says how the lanes stack. */}
-      {format === "timeline" && !phone && (
-        <span className="ml-auto text-[15px] text-text-faint" data-testid="lanes-hint">
-          Pieces stack inside a lane when they run at once
         </span>
       )}
     </div>
@@ -1167,6 +1195,7 @@ export function SimpleRoadmap() {
     <DraftBanner
       drafts={drafts.data ?? []}
       titleOf={titleOf}
+      onReview={(slug) => pickFilter("prd", slug)}
       inReview={data.changes_in_review ?? 0}
       meId={me?.user_id ?? null}
       onUndo={(id) =>
@@ -1183,7 +1212,7 @@ export function SimpleRoadmap() {
           const r = await api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: d.id } } });
           if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
         }
-        toast({ message: "Sent for review: the approved roadmap stays published until it passes" });
+        toast({ message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
         await reload();
       }}
     />
@@ -1196,7 +1225,9 @@ export function SimpleRoadmap() {
         {/* A phone's header bar names the page (D3): the H1 is for screen readers there. */}
         <h1 className={phone ? "sr-only" : "text-2xl font-semibold"}>Roadmap</h1>
         {data.roadmap ? (
-          <span data-testid="roadmap-scope" className="rounded-full bg-accent-soft px-3 py-0.5 text-[15px] font-semibold whitespace-nowrap text-accent-ink">
+          // walkb-roadmap review 5f: a long name (a PRD's) wraps inside the page, never cut off; a
+          // one-line chip stays a pill (its radius is over half its height).
+          <span data-testid="roadmap-scope" className="max-w-full rounded-2xl bg-accent-soft px-3 py-0.5 text-[15px] font-semibold break-words text-accent-ink">
             {data.roadmap.title}
           </span>
         ) : (
@@ -1302,46 +1333,57 @@ export function SimpleRoadmap() {
             onGoal={openGoal}
           />
         ) : format === "timeline" ? (
-          // timeline-overlap B: the Timeline is goal lanes (B2 on a desktop, B3 on a phone).
-          <Lanes
-            data={laned ?? data}
-            lane={f.group}
-            noWork={noWork}
-            compact={phone}
-            canDrag={canChange}
+          // mk-qa4-roadmap QR1 A..QR4 A: six months around today, the key and the broken links
+          // above, an open item in a panel at the right (a sheet on a phone).
+          <ZoomTimeline
+            data={goalLaned ?? data}
+            phone={phone}
+            act={act}
+            canChange={canChange}
+            byId={byId}
             moved={moved}
-            open={card?.id ?? null}
-            chartRef={(el) => {
-              svg.current = el;
-            }}
-            dropTargets={canChange}
-            onOpen={(item) => {
-              setPop(null);
-              setCard({ id: item.id, ...anchorOf(item.id) });
-            }}
             onMove={onMove}
             onKeyMove={onKeyMove}
             onKeyEnd={(item) => dates.flush(item.id)}
             onKeyCancel={onKeyCancel(dates)}
-            onSuggestion={(item) => {
-              setCard(null);
-              setPop({ id: item.id, ...anchorOf(item.id) });
+            openKey={cardItem?.key ?? null}
+            onOpen={(k) => {
+              const it = k ? data.items.find((x) => x.key === k) : undefined;
+              setPop(null);
+              setCard(it ? { id: it.id, left: 0, top: 0 } : null);
             }}
-            overlay={(l, sc) =>
-              data.items.flatMap((i) => {
-                const y = l.y.get(i.id);
-                if (y == null || closedItem(i)) return [];
-                const f0 = broken(i).find((x) => x.kind === "dependency_order");
-                if (!f0) return [];
-                const [start, end] = moved[i.id] ?? [i.start.date, i.end.date];
-                // qa-simple-roadmap-4 ("Under the lane"): on the desktop's lanes the callout takes the line under its pill.
-                const under = l.under?.get(i.id);
-                if (under != null) return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(start)} y={under} h={l.rowH} compact={phone} maxX={sc.width} />];
-                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} before={sc.x(start) - 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
-              })
-            }
+            card={(it, style, sheet, onClose) => (
+              <FloatingCard
+                key={it.id}
+                item={it}
+                items={byId}
+                proposals={allProposals.filter((c) => c.target.item_id === it.id)}
+                phone={sheet}
+                style={style}
+                act={act}
+                canChange={canChange}
+                onDecide={(c, how) => void onDecide(c, how)}
+                onClose={onClose}
+                near={nearWords(it, data.key_dates ?? [])}
+              />
+            )}
           />
         ) : (
+          <>
+          {/* mk-qa4-roadmap QR3 A: the broken links sit in the panel above the chart, never over a bar. */}
+          <ConflictPanel
+            data={laned ?? data}
+            phone={phone}
+            act={act}
+            canChange={canChange}
+            byId={byId}
+            onShow={(k) => {
+              const it = data.items.find((x) => x.key === k);
+              if (!it) return;
+              setPop(null);
+              setCard({ id: it.id, ...anchorOf(it.id) });
+            }}
+          />
           <Chart
             data={laned ?? data}
             lane={f.group}
@@ -1370,22 +1412,34 @@ export function SimpleRoadmap() {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });
             }}
-            overlay={(l, sc) =>
-              data.items.flatMap((i) => {
-                const y = l.y.get(i.id);
-                if (y == null || closedItem(i)) return [];
-                const f0 = broken(i).find((x) => x.kind === "dependency_order");
-                if (!f0) return [];
-                const [start, end] = moved[i.id] ?? [i.start.date, i.end.date];
-                // qa4-simple-roadmap-16: a phone's waterfall gives the warning a band under its bar.
-                const under = l.under?.get(i.id);
-                if (under != null) return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(start)} y={under} h={l.rowH} compact={phone} maxX={sc.width} />];
-                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} before={sc.x(start) - 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
-              })
-            }
           />
+          </>
         )}
-        {cardItem && card && (
+        {/* The Timeline's export draws its picture from the goal lanes, laid out off screen while it saves. */}
+        {format === "timeline" && exporting && (
+          <div aria-hidden className="pointer-events-none fixed top-0 left-[-20000px] w-[1400px]" style={{ visibility: "hidden" }}>
+            <Lanes
+              data={laned ?? data}
+              lane={f.group}
+              noWork={noWork}
+              compact={false}
+              canDrag={false}
+              moved={moved}
+              open={null}
+              chartRef={(el) => {
+                svg.current = el;
+              }}
+              dropTargets={false}
+              onOpen={() => undefined}
+              onMove={onMove}
+              onKeyMove={onKeyMove}
+              onKeyEnd={() => undefined}
+              onKeyCancel={onKeyCancel(dates)}
+              onSuggestion={() => undefined}
+            />
+          </div>
+        )}
+        {format !== "timeline" && cardItem && card && (
           <FloatingCard
             key={cardItem.id}
             item={cardItem}
@@ -1435,7 +1489,7 @@ export function SimpleRoadmap() {
               ),
               words: p.key === "beta" ? "Beta phase" : p.label,
             }))),
-            { key: "solid", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "var(--accent)", borderColor: "var(--accent)" }} />, words: "Dated by a milestone or gate" },
+            { key: "solid", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "var(--accent)", borderColor: "var(--accent)" }} />, words: "Dated" },
             {
               key: "hatched",
               swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "repeating-linear-gradient(45deg, var(--accent-soft) 0 2.6px, var(--accent) 2.6px 5.6px)", borderColor: "var(--accent)" }} />,

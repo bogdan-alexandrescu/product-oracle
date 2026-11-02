@@ -8,6 +8,7 @@ import {
   addDays,
   barKind,
   barSpan,
+  placedSlices,
   broken,
   closedItem,
   daysBetween,
@@ -37,6 +38,7 @@ import {
   type Scale,
   whereAttr,
   yearSpan,
+  drawnKeyDates,
 } from "./_lib";
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
@@ -60,7 +62,15 @@ const TICK_H = 36;
 const MARK_ROW = 16;
 const headerHeight = (markRows: number) => TICK_H + Math.max(1, markRows) * MARK_ROW + 8;
 const AXIS_H = headerHeight(1);
-const LONG_PRESS_MS = 450;
+export const LONG_PRESS_MS = 450;
+/** A drag starts past this many px; a shorter one is a click. */
+export const DRAG_PX = 4;
+/** Which part of a bar a press at `x` takes: an end within 10 px of the bar's edge (a quarter of
+ * a short bar), else the whole bar. The Gantt's and the Timeline's drags read it. */
+export function grabAt(r: { left: number; right: number; width: number }, x: number): "start" | "end" | "move" {
+  const edge = Math.min(10, r.width / 4);
+  return x - r.left < edge ? "start" : r.right - x < edge ? "end" : "move";
+}
 /** A bar's narrowest width, however short its span or far the scale is zoomed out: it stays a
  * visible, clickable shape beside its label rather than a blob a few pixels wide (finding 11). */
 const MIN_BAR_W = 24;
@@ -331,10 +341,10 @@ export interface ChartProps {
 }
 
 /** An item the plan dates by its slices: drawn one bar per slice, its dates the plan's (not dragged). */
-const planned = (i: Item): boolean => i.slices.some((x) => x.start_date && x.end_date);
+export const planned = (i: Item): boolean => i.slices.some((x) => x.start_date && x.end_date);
 /** The days a row's bar (or its slices) cover. */
 function drawnSpan(i: Item, span?: [string, string]): [string, string] {
-  const d = i.slices.filter((x) => x.start_date && x.end_date);
+  const d = placedSlices(i);
   if (d.length) return [d.map((x) => x.start_date!).reduce((a, b) => (a < b ? a : b)), d.map((x) => x.end_date!).reduce((a, b) => (a > b ? a : b))];
   return span ?? barSpan(i);
 }
@@ -411,7 +421,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       list.push({ key: `end-${m.id}`, kind: "end", x: sc.x(m.end_date!) + sc.px, words: compact ? `${code} ends` : `${code} ends ${shortDay(m.end_date!)}`, side: "before" });
     }
     for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: m.name, side: "after" });
-    for (const k of data.key_dates ?? []) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
+    for (const k of drawnKeyDates(data)) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
     // finding 18: pack rows in date order left to right, so a later mark never takes a lower
     // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
     // dates, not by date).
@@ -524,9 +534,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     if (e.button !== 0) return;
     const [start, end] = moved[item.id] ?? barSpan(item);
     const r = (e.currentTarget.querySelector("rect[data-body]") as SVGRectElement).getBoundingClientRect();
-    const edge = Math.min(10, r.width / 4);
     // The waterfall moves the whole item (its phases follow); the timeline and Gantt also stretch an end.
-    const mode = !canDrag || closedItem(item) || planned(item) || format === "waterfall" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
+    const mode = !canDrag || closedItem(item) || planned(item) || format === "waterfall" ? "move" : grabAt(r, e.clientX);
     const touch = e.pointerType === "touch";
     // React clears currentTarget once the handler returns: keep the bar for the timeout.
     const target = e.currentTarget;
@@ -555,7 +564,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     }
     const it0 = items.get(d.id);
     if (!canDrag || (it0 && (closedItem(it0) || planned(it0)))) return;
-    if (!d.moved && Math.abs(dx) < 4) return;
+    if (!d.moved && Math.abs(dx) < DRAG_PX) return;
     e.preventDefault();
     if (!d.moved) {
       d.moved = true;
@@ -869,7 +878,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   </g>
                 );
               })}
-            {(data.key_dates ?? []).map((k) => {
+            {drawnKeyDates(data).map((k) => {
               const mk = marks.find((x) => x.key === `key-${k.id}`);
               if (!mk) return null;
               const kx = mk.x;
@@ -1158,7 +1167,9 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
                 y={y + pad}
                 width={pw}
                 height={h - 2 * pad}
-                fill={p.estimated ? `url(#simple-hatch-${p.key})` : tone.ink}
+                // walkb-review-5b: hatched means the item's dates are estimated, as on the
+                // Timeline and the Gantt; a dated item's phases are solid, gate or not.
+                fill={kind === "estimated" ? `url(#simple-hatch-${p.key})` : tone.ink}
                 opacity={closedItem(item) ? 0.4 : 1}
               >
                 <title>{`${tone.label}: ${shortDay(p.start)} – ${shortDay(p.end)}${p.estimated ? ", estimated" : ""}`}</title>
@@ -1251,7 +1262,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
  * (F-05a, beside the bar when it is too short), PM-owned work as a dashed outline; the Timeline
  * colours them by milestone with code and name where the words fit, joined by a dotted line. */
 function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: number; h: number; sc: Scale; gantt: boolean; open: boolean; compact: boolean }) {
-  const dated = item.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : 1));
+  const dated = placedSlices(item);
   const feature = dated[0]?.feature_code ?? item.code ?? item.key;
   // finding 11: a slice is never a sub-24px blob, even a one-day slice at a zoomed-out scale.
   // fix2 review: widened only as far as the next slice starts (as the lanes' Pill), so two

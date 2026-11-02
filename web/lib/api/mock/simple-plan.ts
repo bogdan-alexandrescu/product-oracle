@@ -147,10 +147,10 @@ function placed(m: Milestone, weeks: number | null, offset: number): { start: st
   return { start: start > m.end ? m.end : start, end: end > m.end ? m.end : end };
 }
 
-export const planSlices = (): Slice[] =>
+export const planSlices = (milestones: Milestone[] = MILESTONES): Slice[] =>
   FEATURES.flatMap(([code, name, goal, parts]) =>
     parts.map(([mc, weeks, offset, stated], k) => {
-      const m = MILESTONES.find((x) => x.code === mc)!;
+      const m = milestones.find((x) => x.code === mc)!;
       const at = placed(m, weeks, offset);
       return {
         code: parts.length > 1 ? `${code}${"abcdefgh"[k]}` : code,
@@ -177,15 +177,15 @@ export const planSlices = (): Slice[] =>
 
 /** "Nov 2 - Feb 12" (the plan's span, as the API labels it). */
 const dayMonth = (day: string) => new Date(ms(day)).toLocaleDateString("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
-export const planSpan = (): Schemas["SimplePlanSpan"] => {
-  const start = minOf(MILESTONES.map((m) => m.start));
-  const end = maxOf(MILESTONES.map((m) => m.end));
+export const planSpan = (milestones: Milestone[] = MILESTONES): Schemas["SimplePlanSpan"] => {
+  const start = minOf(milestones.map((m) => m.start));
+  const end = maxOf(milestones.map((m) => m.end));
   return { start, end, label: `${dayMonth(start)} - ${dayMonth(end)}` };
 };
 
 /** The roadmap's milestone fields for one plan milestone (SimpleMilestone's new ones). */
-export const planMilestones = () =>
-  MILESTONES.map((m) => ({
+export const planMilestones = (milestones: Milestone[] = MILESTONES) =>
+  milestones.map((m) => ({
     code: m.code,
     name: m.name,
     start_date: m.start,
@@ -216,6 +216,60 @@ export interface PlanDb {
   goalless?: boolean;
   /** fidelity prd ("simple-plan-partly-dated", frame D3): only M1 has dates. */
   partly_dated?: boolean;
+  /**
+   * walkb-onepager ("simple-plan-by-job"): a run's PRD with no milestones table, so reading it
+   * again queues Oracle's prd_plan job (plan.ensure): the answer is "reading" with no
+   * milestones, and the next read finds the job done (its milestones now dated).
+   */
+  by_job?: boolean;
+  /** The prd_plan job is reading the plan (by_job, after Read the plan again). */
+  reading?: boolean;
+  /**
+   * walkb-onepager review ("simple-plan-lead-dated"): the dates the PRD's engineering lead
+   * accepted at a run's Engineering dates stop (plan.accepted_dates): a milestone by its code
+   * or name, else the feature it holds, and the day.
+   */
+  accepted?: { milestone: string | null; feature: string | null; day: string }[];
+  /** walkb-onepager review ("simple-plan-by-job-stuck"): the job never answers. */
+  stuck?: boolean;
+  /** walkb-onepager review ("simple-plan-by-job-down"): the API fails while the job reads. */
+  down?: boolean;
+}
+
+/**
+ * As plan.with_accepted: a milestone ends on the last day the lead accepted for its items (named
+ * by the milestone's code or name, else by the feature it holds), the lead's day over the PRD's;
+ * one with no start starts the day after the milestone before it ends. The milestones (the
+ * dated ones with their days) and the codes still without dates.
+ */
+function leadDated(plan: PlanDb): { milestones: Milestone[]; undated: string[] } {
+  const missing = plan.partly_dated ? ["M2", "M3"] : [];
+  const ends = new Map<string, string>();
+  for (const a of plan.accepted ?? []) {
+    const name = (a.milestone ?? "").trim().toLowerCase();
+    const named = MILESTONES.find((m) => m.code.toLowerCase() === name || m.name.toLowerCase() === name);
+    const code = named?.code ?? FEATURES.find(([c]) => c === a.feature)?.[3].at(-1)?.[0];
+    if (code) ends.set(code, maxOf([ends.get(code) ?? a.day, a.day]));
+  }
+  const undated: string[] = [];
+  let prev: string | null = null;
+  const milestones = MILESTONES.map((m) => {
+    let start: string | null = missing.includes(m.code) ? null : m.start;
+    let end: string | null = missing.includes(m.code) ? null : m.end;
+    const day = ends.get(m.code);
+    if (day) {
+      end = day;
+      if (!start && prev) start = addDays(prev, 1);
+      if (start && start > day) start = null;
+    }
+    prev = end;
+    if (!start || !end) {
+      undated.push(m.code);
+      return m;
+    }
+    return { ...m, start, end };
+  });
+  return { milestones, undated };
 }
 
 export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", version: 3 });
@@ -225,13 +279,17 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
   if (!plan) {
     return { prd, version: null, status: "none", source: null, dated: false, message: "This PRD has no approved version yet.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: null, summary: [] };
   }
+  if (plan.reading) {
+    // As plan.plan_out of a row still "reading": no milestones yet.
+    return { prd, version: plan.version, status: "reading", source: null, dated: false, message: "Oracle is reading the plan from this PRD.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: plan.read_at, summary: [] };
+  }
   if (plan.undated) {
     const ms = planMilestones().map((m) => ({ ...m, start_date: null, end_date: null, planned_weeks: 0, feature_codes: [], source: "prd" as const }));
     return { prd, version: plan.version, status: "ready", source: "prd", dated: false, message: "This PRD's milestones have no dates.", milestones: ms, slices: [], goals: GOALS.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })), measured: null, on_track: null })), goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: plan.read_at, summary: [...SUMMARY] };
   }
   // D3: M2 and M3 without dates: their slices have none either, and the plan has no span.
-  const undatedCodes = plan.partly_dated ? ["M2", "M3"] : [];
-  const slices = planSlices().map((s) => (undatedCodes.includes(s.milestone) ? { ...s, milestone_start: null, milestone_end: null, start_date: null, end_date: null } : s));
+  const { milestones: dated, undated: undatedCodes } = leadDated(plan);
+  const slices = planSlices(dated).map((s) => (undatedCodes.includes(s.milestone) ? { ...s, milestone_start: null, milestone_end: null, start_date: null, end_date: null } : s));
   if (plan.goalless) {
     const m = MILESTONES.find((x) => x.code === "M2")!;
     const at = placed(m, 1, 1);
@@ -254,7 +312,7 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
     source: "prd",
     dated: !undatedCodes.length,
     message: undatedCodes.length ? "This PRD's milestones have no dates." : null,
-    milestones: planMilestones().map((m) => ({
+    milestones: planMilestones(dated).map((m) => ({
       ...m,
       ...(undatedCodes.includes(m.code) ? { start_date: null, end_date: null } : {}),
       planned_weeks: slices.filter((s) => s.milestone === m.code).reduce((n, s) => n + (s.effort_weeks ?? 0), 0),
@@ -267,7 +325,7 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
       const w = weeks.get(`${g.name}|${m.code}`);
       return w ? [{ goal: g.name, milestone: m.code, weeks: w }] : [];
     })),
-    span: undatedCodes.length ? null : planSpan(),
+    span: undatedCodes.length ? null : planSpan(dated),
     holidays: HOLIDAYS.map((h) => ({ ...h })),
     can_read_again: can,
     read_at: plan.read_at,
@@ -291,10 +349,17 @@ export function routeSimplePlan(
   const prd = prdOf(p[3]);
   if (!prd) return json(404, { detail: "No such PRD" });
   const mine = prd.slug === PLAN_PRD_SLUG ? plan : undefined;
-  if (!p[5] && req.method === "GET") return json(200, planOut(mine, prd, role));
+  if (!p[5] && req.method === "GET") {
+    if (mine?.reading && mine.down) return json(500, { detail: "Internal Server Error" });
+    const out = planOut(mine, prd, role);
+    // by_job: the job answers by the next read, with the dates the PRD's text gives.
+    if (mine?.reading && !mine.stuck) Object.assign(mine, { reading: false, undated: false });
+    return json(200, out);
+  }
   if (p[5] === "read-again" && !p[6] && req.method === "POST") {
     if (role !== "owner") return json(403, { detail: "Only an owner reads the plan again" });
     if (mine) mine.read_at = new Date().toISOString();
+    if (mine?.by_job) mine.reading = true;
     return json(200, planOut(mine, prd, role));
   }
   return null;

@@ -196,9 +196,10 @@ test.describe("a commenter", () => {
     await tap(propose("Weekly alert digest"));
     await expect(page.getByText(/^Proposed: /)).toBeVisible();
     await expect(home(page).getByTestId("home-broken-proposed")).toHaveCount(1);
-    // Mobile alert push, which the proposal moves too, says so and offers no second one.
-    await expect(brokenItem(page, "Mobile alert push").getByTestId("home-broken-covered")).toContainText("Your proposal to move the dependents of Weekly alert digest moves this one too");
+    // Mobile alert push, which the proposal moves too, offers no second one (walkb-roadmap: with
+    // no made-up start it breaks no link of its own, so it is not listed at all).
     await expect(propose("Mobile alert push")).toHaveCount(0);
+    await expect(home(page).getByTestId("home-broken").getByRole("button", { name: "Propose: move the dependents" })).toHaveCount(0);
   });
 });
 

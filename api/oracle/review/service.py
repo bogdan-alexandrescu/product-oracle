@@ -1215,6 +1215,10 @@ async def approve_version(
         from oracle.simple import plan as simple_plan
 
         await simple_plan.on_version_approved(session, document)
+        # approved-prd-roadmap: its dated items and milestones go on its roadmap's draft.
+        from oracle.simple import prd_roadmap
+
+        await prd_roadmap.on_prd_approved(session, principal, document, version)
     elif document.kind == "roadmap":
         # H6: approving a roadmap version plans a launch per item in Now, owned by the
         # approver (none for items that already have one).

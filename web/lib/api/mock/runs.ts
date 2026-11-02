@@ -4,14 +4,16 @@
  * overrun pause. Agents "finish" a segment on POST /v1/internal/tick, at 90% of its
  * estimate, as the API's FakeRuntime does.
  */
+import { SHOP_BRIEFS } from "./engcheck-shop";
 import type { Schemas } from "@/lib/api/client";
 import { mockName as displayName } from "./people";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { companyDayInWords, companyDayIso, companyStamp } from "./connections";
-import { ranking } from "./lane-f";
+import { FORMULAS, ranking } from "./lane-f";
 import type { RowTally } from "./from-run";
 import { fileItems } from "./checkpoint-review";
+import { agentQuestionsOut, seedAgentQuestions, type StoredAgentQuestion } from "./agent-questions";
 import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
 import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, scopeSendBack, type StoredScope } from "./scope";
@@ -66,6 +68,8 @@ export interface RunsDb {
   priority_snapshots?: SnapshotRow[];
   /** D8: checkpoint id -> its shared draft (absent until someone writes it). */
   drafts?: Record<string, DraftRow>;
+  /** AQ1: checkpoint id -> the questions its run's agents asked there, with their answers. */
+  agent_questions?: Record<string, StoredAgentQuestion[]>;
 }
 
 /** B2: what the baseline says of a run at Confirm the baseline (./from-run.ts, over the baseline mock). */
@@ -420,6 +424,16 @@ const monthDay = (iso: string) => companyDayInWords(iso);
  * before C4 did: the dialog's PRD document field (#257) stays reachable for its spec.
  */
 export const NEW_RUN_PRD_SCENARIO = "new-run-prd";
+
+/**
+ * QD2: the "roadmap-over-limit" scenario prices a roadmap run from a track at four times the
+ * usual ($58.00, over the $50 approval limit), so Draft roadmap's dialog shows its owner step.
+ */
+export const ROADMAP_OVER_LIMIT_SCENARIO = "roadmap-over-limit";
+const overLimit = (r: { segments: { name: string }[] }) =>
+  typeof localStorage !== "undefined" &&
+  localStorage.getItem("po-mock-scenario") === ROADMAP_OVER_LIMIT_SCENARIO &&
+  r.segments.some((s) => s.name === "roadmap_items");
 
 function flowCatalog(): Schemas["FlowCatalog"] {
   const inDialog = typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === NEW_RUN_PRD_SCENARIO;
@@ -1158,8 +1172,27 @@ function decideScope(ctx: Pick<RunsContext, "db" | "now">, r: RunOut, decision: 
 /** A priority order as priority.yaml lists it (C8, oracle.priorities.run_order): ranks follow the list. */
 interface OrderSpec {
   method: Method;
-  order: { key: string; score: number; explanation: string }[];
+  order: OrderEntry[];
 }
+
+/**
+ * One row of priority.yaml. A feature new in this PRD (a proposal of the run, not in the
+ * baseline yet: `title` set here) also gives the formula's inputs (run_order.NEW_INPUTS).
+ */
+interface OrderEntry {
+  key: string;
+  score: number;
+  explanation: string;
+  title?: string;
+  depends_on?: string[];
+  goal?: string;
+  weight?: number;
+  contribution?: number;
+  confidence?: number;
+  effort?: number;
+}
+
+const NEW_INPUTS = ["goal", "weight", "contribution", "confidence", "effort"] as const;
 
 /** The local runtime's order of its feature set: clean. */
 const LOCAL_ORDER: OrderSpec = {
@@ -1174,7 +1207,10 @@ const LOCAL_ORDER: OrderSpec = {
 /** priority.yaml (version 1) for an order. */
 function priorityYaml(spec: OrderSpec, segment: string, attempt: number): string {
   const lines = [`# ${segment} (attempt ${attempt})`, "version: 1", `method: ${spec.method}`, "order:"];
-  spec.order.forEach((o, i) => lines.push(`  - key: ${o.key}`, `    rank: ${i + 1}`, `    score: ${o.score}`, `    explanation: ${JSON.stringify(o.explanation)}`));
+  spec.order.forEach((o, i) => {
+    lines.push(`  - key: ${o.key}`, `    rank: ${i + 1}`, `    score: ${o.score}`, `    explanation: ${JSON.stringify(o.explanation)}`);
+    for (const n of NEW_INPUTS) if (o[n] != null) lines.push(`    ${n}: ${o[n]}`);
+  });
   return `${lines.join("\n")}\n`;
 }
 
@@ -1197,11 +1233,14 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
   const rank = Object.fromEntries(keys.map((k, i) => [k, i + 1]));
   const deps: Record<string, string[]> = Object.fromEntries(live.map((f) => [f.key, [...f.depends_on]]));
   for (const f of scope ?? []) deps[f.key] = [...(deps[f.key] ?? []), ...f.depends_on];
+  // The run's own proposals (new in this PRD) are known, as the scope's are in the API.
+  const proposed = new Set(spec.order.filter((o) => o.title).map((o) => o.key));
+  for (const o of spec.order) if (o.title) deps[o.key] = [...(o.depends_on ?? [])];
   const problems: PriorityCheck["problems"] = [];
   const add = (code: string, feature: string, message: string, blocking = true) => problems.push({ code, blocking, feature, message });
   const inScope = new Set((scope ?? []).map((f) => f.key));
   for (const k of keys) {
-    if (!live.some((f) => f.key === k) && !inScope.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
+    if (!live.some((f) => f.key === k) && !inScope.has(k) && !proposed.has(k)) add("unknown_feature", k, `${k} is not a feature of the baseline or the scope`);
     else if (scope && !inScope.has(k)) add("not_in_scope", k, `${k} is not included in the approved PRD scope`);
   }
   for (const f of scope ?? []) if (!(f.key in rank)) add("missing_feature", f.key, `${f.key} is in the approved PRD scope and not ranked`);
@@ -1212,7 +1251,8 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
   }
   const order = spec.order.map((o, i) => {
     const at = restricted.indexOf(o.key);
-    return { key: o.key, rank: i + 1, score: o.score, explanation: o.explanation, live_rank: at < 0 ? null : at + 1 };
+    const inputs = Object.fromEntries(NEW_INPUTS.filter((n) => o[n] != null).map((n) => [n, o[n]]));
+    return { key: o.key, rank: i + 1, score: o.score, explanation: o.explanation, live_rank: at < 0 ? null : at + 1, ...inputs };
   });
   for (const o of order) {
     if (o.live_rank != null && Math.abs(o.live_rank - o.rank) > 2) {
@@ -1245,7 +1285,11 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
   const same = all.find((x) => x.run_id === r.id && x.status === "proposed" && x.params.segment_seq === seq && x.params.attempt === attempt);
   for (const x of all) if (x !== same && x.run_id === r.id && x.status === "proposed") Object.assign(x, { status: "discarded", decided_at: ctx.now() });
   const live = Object.fromEntries(ranking(spec.method).features.map((f) => [f.key, f]));
-  const rows = check.order!.filter((o) => live[o.key]).map((o) => ({ ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation }));
+  const titles = Object.fromEntries(spec.order.filter((o) => o.title).map((o) => [o.key, o]));
+  const liveRows = Object.values(live);
+  const rows = check.order!.filter((o) => live[o.key] || titles[o.key]).map((o) =>
+    live[o.key] ? { ...live[o.key], rank: o.rank, live_rank: o.live_rank, run_explanation: o.explanation } : newFeature(titles[o.key], o.rank, spec.method, liveRows, spec.order),
+  );
   const snap: SnapshotRow = {
     id: same?.id ?? ctx.uuid(),
     method: spec.method,
@@ -1269,6 +1313,61 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
   if (same) Object.assign(same, snap);
   else all.push(snap);
   return same ?? snap;
+}
+
+const num = (v: number) => String(Number(v.toFixed(4)));
+
+/**
+ * As oracle.priorities.run_order.new_feature: a feature new in this PRD scored on the same
+ * formula (goal weight × contribution × confidence ÷ effort) from the inputs the run set,
+ * marked `new`; its confidence is the run's, with no evidence yet. What it depends on, and
+ * what waits on it, are the edges the run's feature set gives (`depends_on`).
+ */
+function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotRow["ranking"], order: OrderEntry[]): SnapshotRow["ranking"][number] {
+  const goalTitle = live.flatMap((f) => f.explanation.goals).find((g) => g.goal === o.goal)?.title ?? o.goal ?? "";
+  const goals: SnapshotRow["ranking"][number]["explanation"]["goals"] = [];
+  const steps: string[] = [];
+  const missing: string[] = [];
+  let score: number | null = o.score;
+  let value: number | null = null;
+  if (o.goal != null && o.weight != null && o.contribution != null) {
+    value = o.weight * o.contribution;
+    goals.push({ goal: o.goal, title: goalTitle, weight: o.weight, weight_assumed: false, contribution: o.contribution, contribution_assumed: false, link_status: "proposed", term: value });
+    // In the scorer's words, so the page shows them as every row's (confidence as a percent, two decimals).
+    steps.push(`goal value = ${num(o.weight)}×${num(o.contribution)} (${goalTitle}) = ${num(value)}`);
+    if (o.confidence != null && o.effort) {
+      score = Math.round((value * o.confidence * 10000) / o.effort) / 10000;
+      steps.push(`score = ${num(value)} × ${num(o.confidence)} ÷ ${num(o.effort)} = ${num(score)}`);
+    }
+  } else missing.push("goal");
+  if (o.confidence == null) missing.push("confidence");
+  if (o.effort == null) missing.push("effort");
+  return {
+    rank,
+    score_rank: rank,
+    entity_id: "",
+    key: o.key,
+    title: o.title!,
+    status: "proposed",
+    score,
+    serves_goal: goals.length > 0,
+    flags: [],
+    depends_on: [...new Set(o.depends_on ?? [])].filter((k) => k !== o.key).sort(),
+    dependents: order.filter((x) => x.key !== o.key && x.depends_on?.includes(o.key)).map((x) => x.key).sort(),
+    explanation: {
+      method,
+      formula: FORMULAS[method],
+      inputs: { effort: { value: o.effort ?? null, attr: "effort", raw: o.effort ?? null }, goal_value: { value, terms: goals } },
+      confidence: { value: o.confidence ?? 0, source: o.confidence != null ? "attrs" : "default", explain: "Set by the run: new in this PRD, no evidence yet", evidence: [] },
+      goals,
+      missing,
+      steps,
+      order: [],
+    },
+    live_rank: null,
+    run_explanation: o.explanation,
+    new: true,
+  };
 }
 
 /** As the API (rules 3-5): approving saves the order for the PRD (`by` null: Oracle, the stop was off); requesting changes discards it. */
@@ -1962,7 +2061,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const items = itemsReuse(ctx, r);
     estimated(r).draft_items_reused = items;
     const free = (name: string) => (!!reused && name === "baseline") || (!!items && name === "roadmap_items");
-    for (const s of r.segments) s.estimate_usd = free(s.name) || skippedOff(s) ? 0 : segEstimate(s.roles, r.knobs.depth);
+    const times = overLimit(r) ? 4 : 1;
+    for (const s of r.segments) s.estimate_usd = free(s.name) || skippedOff(s) ? 0 : round2(segEstimate(s.roles, r.knobs.depth) * times);
     const total = round2(r.segments.reduce((sum, s) => sum + (s.estimate_usd ?? 0), 0));
     r.estimate_usd = total;
     r.needs_approval = total > THRESHOLD;
@@ -2864,15 +2964,25 @@ export function fromRunCheckpoint(ctx: RunsContext, runId: string): { run: Schem
 export const PRIORITY_RUN = "7a11c0de-0000-4000-8000-0000000000c8";
 export const PRIORITY_BLOCKED_RUN = "7a11c0de-0000-4000-8000-0000000000c9";
 
-/** Saved addresses: one feature ranked well above the live ranking (differs_from_live, advisory). */
+/**
+ * Saved addresses: one feature ranked well above the live ranking (differs_from_live,
+ * advisory), and the 6 features the PRD adds (new, not in the baseline yet) scored on the
+ * same formula and ranked among the rest (RP1, invented).
+ */
 const SAVED_ADDRESSES_ORDER: OrderSpec = {
   method: "goal_weighted",
   order: [
     { key: "F-5", score: 1.8, explanation: "Saved addresses read the lookup first; G1 weight 3 x contribution 1 x 0.6 / 3" },
     { key: "F-4", score: 0.6, explanation: "Alerts keep teams active; ranked early on purpose: G2 weight 2 x contribution 1 x 0.3 / 1" },
     { key: "F-2", score: 8.1, explanation: "Needs F-5 first; G1 weight 3 x contribution 3 x 0.9 / 1" },
+    { key: "N-1", title: "Address book per account", goal: "g.activation", weight: 3, contribution: 2, confidence: 0.7, effort: 1, score: 4.2, explanation: "New in this PRD. Every other address feature needs the book first." },
+    { key: "N-2", title: "Default delivery address", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 3, confidence: 0.6, effort: 2, score: 2.7, explanation: "New in this PRD. Asked for in 14 interviews." },
+    { key: "N-3", title: "Address check at checkout", depends_on: ["N-1"], goal: "g.paid-conversion", weight: 2, contribution: 2, confidence: 0.6, effort: 1, score: 2.4, explanation: "New in this PRD. Wrong addresses are the top reason a paid order fails." },
     { key: "F-1", score: 2.25, explanation: "G1 weight 3 x contribution 2 x 0.75 / 2" },
+    { key: "N-4", title: "Import addresses from a spreadsheet, with a preview before saving", depends_on: ["N-1"], goal: "g.activation", weight: 3, contribution: 2, confidence: 0.6, effort: 2, score: 1.8, explanation: "New in this PRD. Large customers keep addresses in sheets." },
+    { key: "N-5", title: "Shared team addresses", goal: "g.paid-conversion", weight: 2, contribution: 1, confidence: 0.6, effort: 1, score: 1.2, explanation: "New in this PRD. Teams re-type the same office address." },
     { key: "F-7", score: 1, explanation: "G2 weight 2 x contribution 2 x 0.5 / 2" },
+    { key: "N-6", title: "Address labels and notes", goal: "g.paid-conversion", weight: 2, contribution: 3, confidence: 0.3, effort: 4, score: 0.45, explanation: "New in this PRD. A guess: no evidence yet." },
   ],
 };
 
@@ -3502,6 +3612,11 @@ const SEEDED_BRIEFS: Brief[] = [
 
 /** What a brief file says of the code maps: the ids each feature cites (with where: touches[i].ref or reuse) and the repositories it names. */
 type BriefsMaps = { cites: Record<string, [string, string][]>; repos: string[]; unmapped: string[] };
+/** The "eng-check-shop" scenarios' check: the first `n` invented shop features, a code map read. */
+export function shopBriefsCheck(n: number): BriefsCheck {
+  return { ...briefsCheckOf(SHOP_BRIEFS.slice(0, n)), code_map_used: true };
+}
+
 /** What the run's maps hold: their ids and repositories. */
 type RunMaps = { ids: string[]; repos: string[] };
 
@@ -3694,7 +3809,7 @@ function datesInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null 
   return "edit takes the field estimate or no_date";
 }
 
-type DateDecision = { decision: "accepted" | "changed"; estimate: DateBasis } | { decision: "no_date"; reason: string };
+type DateDecision = { decision: "accepted" | "changed"; estimate: DateBasis } | { decision: "no_date"; reason: string; removed?: true };
 
 /**
  * As oracle.engineering.dates.decisions, on Approve: each item's last staged choice (a
@@ -3711,7 +3826,7 @@ function approveEngDates(cp: CheckpointOut, staged: DraftActionRow[]) {
       if (i.no_date_reason) dates[i.key] = { decision: "no_date", reason: i.no_date_reason };
     } else if (a.kind === "accept" && i.proposed) dates[i.key] = { decision: "accepted", estimate: i.proposed };
     else if (a.field === "estimate") dates[i.key] = { decision: "changed", estimate: a.value as DateBasis };
-    else if (a.field === "no_date") dates[i.key] = { decision: "no_date", reason: (a.value as { reason: string }).reason };
+    else if (a.field === "no_date") dates[i.key] = { decision: "no_date", reason: (a.value as { reason: string }).reason, ...(i.proposed ? { removed: true as const } : {}) };
   }
   cp.payload = { ...cp.payload, dates };
 }
@@ -3856,11 +3971,37 @@ function waitOf(payload: CheckpointOut["payload"]): Schemas["WaitInfo"] {
 
 const KINDS = ["accept", "edit", "drop", "restore", "split", "merge", "question", "waive", "look_again", "add"];
 
+/**
+ * AQ1, as oracle.runs.agent_questions: GET …/agent-questions (any member) and PUT
+ * …/agent-questions/{id}/answer (the stop's approver role or above, while it is pending).
+ */
+async function routeAgentQuestions(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: Request, rest: string[], role: Schemas["Me"]["role"] | null): Promise<Response> {
+  const stored = ctx.db.agent_questions?.[cp.id] ?? [];
+  const me = ctx.member?.id ?? ctx.userId;
+  const seq = cp.segment_seq;
+  // The step after the stop's segment that runs (one whose stop is off is skipped).
+  const next = seq != null ? (r.segments.find((s) => s.seq > seq && s.status !== "skipped")?.title ?? null) : null;
+  const may = mayStage(ctx, r, cp, role);
+  const out = () => json(200, agentQuestionsOut(stored, me, next, cp.status === "pending" && may));
+  if (rest.length === 1 && req.method === "GET") return out();
+  if (rest.length !== 3 || rest[2] !== "answer" || req.method !== "PUT") return fail(404, "Not Found");
+  if (!may) return fail(403, `Requires the ${cp.approver_role} role`);
+  if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
+  const q = stored.find((x) => x.id === decodeURIComponent(rest[1]));
+  if (!q) return fail(404, `question ${rest[1]} not found`);
+  const body = JSON.parse((await req.text()) || "{}") as Schemas["AgentAnswerIn"];
+  if (!q.options.some((o) => o.key === body.option)) return fail(422, `${body.option} is not an option of this question`);
+  const name = displayName(ctx.member?.email ?? ctx.userName ?? "admin@example.com");
+  q.answer = { option: body.option, note: body.note?.trim() || null, by: { id: me, name, role }, at: new Date(mockNowMs()).toISOString() };
+  return out();
+}
+
 /** GET .../review and the four writes (oracle.runs.actions), over the stored items check. */
 async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: Request, rest: string[]): Promise<Response> {
   const m = req.method;
   const me = ctx.member ?? null;
   const role = me?.role ?? ctx.userRole ?? null;
+  if (rest[0] === "agent-questions") return routeAgentQuestions(ctx, r, cp, req, rest, role);
   const draft = draftOf(ctx, cp.id);
   const out = () => json(200, reviewOut(ctx, r, cp, draft, role));
   if (rest[0] === "review" && rest.length === 1 && m === "GET") return out();
@@ -3914,13 +4055,13 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
         if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
       }
     }
-    // As the API: an owner's waiver of Stopped in the strategy is its own action; a feature set's Keep of one reason is that reason's own.
+    // As the API: an owner's waiver of Stopped in the strategy is its own action; a feature set's Keep (or a roadmap item's Accept) of one reason is that reason's own.
     const field =
       a.kind === "waive" && cp.kind === "roadmap_items"
         ? (a.answers ?? []).some((c) => OWNER_WAIVES.includes(c))
           ? "owner"
           : null
-        : a.kind === "accept" && cp.kind === "feature_set" && (a.answers ?? []).length === 1
+        : a.kind === "accept" && (cp.kind === "feature_set" || cp.kind === "roadmap_items") && (a.answers ?? []).length === 1
           ? a.answers![0]
           : (a.field ?? null);
     const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (field ?? ""));
@@ -4568,9 +4709,11 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
  * blocking row is open, so the approval is held). With `kept`, that row is also new and a likely
  * duplicate, both kept by one call staged before each reason had its own.
  */
-export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false) {
+export function seedScopeReviewRuns(db: RunsDb, ctx: Omit<RunsContext, "db">, kept = false, manyQuestions = false) {
   // Pick address in one step is new as well as low in confidence: one feature, two calls.
   const first = seedScopeRun(db, ctx, SCOPE_REVIEW_RUN, "saved-addresses", "2026-10-17T09:00:00Z", SCOPE_REVIEW_SET, 1, { "pick-address": ["new_feature"] });
+  // AQ1: the analyst's and architect's questions at this stop; the hard case asks eleven.
+  (db.agent_questions ??= {})[first.cp.id] = seedAgentQuestions(manyQuestions);
   const commenter = (ctx.members ?? []).find((x) => x.email === "commenter@example.com");
   if (commenter) {
     db.drafts![first.cp.id] = {
@@ -4653,4 +4796,72 @@ export function seedFinishedBaselineBuild(ctx: Omit<RunsContext, "db">, db: Runs
   Object.assign(run, { document_id: null, document_slug: null, status: "succeeded", started_at: created_at, finished_at: created_at, spent_usd: run.estimate_usd ?? 0 });
   for (const s of run.segments) Object.assign(s, { status: "succeeded", cost_usd: s.estimate_usd ?? 0 });
   return run;
+}
+
+/** build-rundecide "run-decisions" scenario: one finished stop of a seeded run, as a person decided it. */
+type DecidedStop = { kind: CheckpointOut["kind"]; seq: number; status: "approved" | "changes_requested"; by: string; role: "owner" | "approver"; at: string; note?: string; attempt?: number; dates?: Record<string, DateDecision> };
+
+/**
+ * build-rundecide RD1 a, the "run-decisions" scenarios: Baseline to PRD runs on PRDs whose
+ * stops people decided (one sent back, then approved), for Simple › Decisions' Runs card.
+ * `many`: three more runs on other PRDs. `people`: the owner's and an approver's member ids.
+ */
+export function seedRunDecisions(db: RunsDb, ctx: Omit<RunsContext, "db">, people: { owner: string; approver: string }, many = false): RunOut[] {
+  const { owner, approver } = people;
+  const o = (kind: DecidedStop["kind"], seq: number, at: string, note?: string): DecidedStop => ({ kind, seq, status: "approved", by: owner, role: "owner", at, note });
+  const a = (kind: DecidedStop["kind"], seq: number, at: string, note?: string, status: DecidedStop["status"] = "approved", attempt = 1): DecidedStop => ({ kind, seq, status, by: approver, role: "approver", at, note, attempt });
+  const plans: { doc: string; created_at: string; stops: DecidedStop[] }[] = [
+    {
+      doc: "usage-alerts",
+      created_at: "2026-10-19T16:00:00Z",
+      stops: [
+        o("feature_set", 2, "2026-10-20T17:00:00Z", "Keep the weekly digest; leave text messages for later."),
+        a("eng_review", 3, "2026-10-21T17:00:00Z", "Quiet hours need a time zone per workspace, not one for the company.", "changes_requested"),
+        a("eng_review", 3, "2026-10-22T17:00:00Z", "Quiet hours now follow each workspace's time zone.", "approved", 2),
+        o("priority_order", 4, "2026-10-22T19:00:00Z"),
+        a("prd_review", 5, "2026-10-26T17:00:00Z", "Good to build from version 3."),
+        // The approver changed one date at the stop and accepted the other (approveEngDates).
+        {
+          ...o("eng_dates", 6, "2026-10-27T17:00:00Z", "Weekly alert digest moved from Nov 20 to Dec 4."),
+          dates: {
+            "R-1": { decision: "changed", estimate: { kind: "estimate", reference: "Digest sizing", supports_date: "2026-12-04" } },
+            "R-2": { decision: "accepted", estimate: { kind: "estimate", reference: "Alert rules sizing", supports_date: "2026-11-13" } },
+          },
+        },
+      ],
+    },
+  ];
+  if (many)
+    plans.push(
+      {
+        doc: "saved-carts",
+        created_at: "2026-10-11T16:00:00Z",
+        stops: [o("feature_set", 2, "2026-10-12T17:00:00Z", "Checklist first, sample project second."), a("eng_review", 3, "2026-10-13T17:00:00Z"), o("priority_order", 4, "2026-10-14T17:00:00Z"), a("prd_review", 5, "2026-10-16T17:00:00Z"), o("eng_dates", 6, "2026-10-17T17:00:00Z")],
+      },
+      {
+        doc: "team-workspaces",
+        created_at: "2026-10-23T16:00:00Z",
+        stops: [
+          o("feature_set", 2, "2026-10-24T17:00:00Z", "Seats only; no usage pricing this quarter."),
+          a("eng_review", 3, "2026-10-25T17:00:00Z", "Proration needs the new invoice service first.", "changes_requested"),
+          a("eng_review", 3, "2026-10-28T17:00:00Z", undefined, "approved", 2),
+          o("priority_order", 4, "2026-10-29T17:00:00Z"),
+        ],
+      },
+      {
+        doc: "checkout-redesign",
+        created_at: "2026-10-26T16:00:00Z",
+        stops: [o("feature_set", 2, "2026-10-27T17:00:00Z"), a("eng_review", 3, "2026-10-28T17:00:00Z", "Host it ourselves, behind the same sign-in."), o("priority_order", 4, "2026-10-29T17:00:00Z"), a("prd_review", 5, "2026-10-30T17:00:00Z")],
+      },
+    );
+  return plans.map((p) => {
+    const r = seedRun(ctx, db, "baseline_to_prd", p.doc, { checkpoints: { eng_review: true, eng_dates: true } }, p.created_at);
+    r.checkpoints = p.stops.map((s) => ({
+      id: ctx.uuid(), run_id: r.id, kind: s.kind, status: s.status, approver_role: "approver", segment_seq: s.seq,
+      decided_by: s.by, decided_at: s.at, note: s.note ?? null, payload: { segment_seq: s.seq, attempt: s.attempt ?? 1, decided: { role: s.role, by: s.by, via: "oracle" }, ...(s.dates ? { dates: s.dates } : {}) }, created_at: s.at, can_decide: false, lead_stop: false, cannot_approve: null,
+      approve_label: "Approve", needs_agents: [],
+    }));
+    Object.assign(r, { status: "running", started_at: p.created_at });
+    return r;
+  });
 }

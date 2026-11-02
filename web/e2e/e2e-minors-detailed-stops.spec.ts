@@ -12,15 +12,16 @@ import { login, openSection } from "./helpers";
  *   or an Approve that can never open; no_claim=the API's briefs check.
  * - "send back" (9): protects=Send back to architect is a secondary button; fails_when=it is the
  *   grey ghost that reads as disabled; no_claim=its decide call.
- * - "long key" (10): protects=a feature with a long key stays inside its own cell, the key never
- *   shown (qa4-work-53); fails_when=the key shows or the name runs into the Approach column;
- *   no_claim=other columns.
- * - "answered" (11): protects=an answered question shows the answer, who answered and Edit, no
- *   empty box; Edit reopens it filled; fails_when=the empty box and Answer stay under the answer.
+ * - "long key" (10): protects=a feature with a long key: the list shows its name only, the pane
+ *   shows the key by its title (EC1 b, owner Nov 1) inside the pane; fails_when=the key shows in
+ *   the list or runs out of the pane; no_claim=other review pages.
+ * - "answered" (11): protects=an answered question shows the answer, who answered and Change, no
+ *   empty box; Change reopens it filled; fails_when=the empty box and Answer stay under the answer.
  * - "not decided" (12): protects=a row with no verdict reads "Not decided" as text; fails_when=a
  *   "Decide" button that only selects the row.
  * - "answer draft" (13): protects=an answer being typed survives a verdict saved meanwhile and a
- *   visit to another feature; fails_when=the box is emptied.
+ *   visit to another feature, every letter at the caret, even through a slow save; fails_when=the
+ *   box is emptied, or a letter lands away from the caret (a box re-set from the saved draft).
  * - "priority order" (14): protects=goal chips wrap between words only, the header counts the
  *   run's own list; fails_when=a word breaks across lines or the header counts the live ranking.
  * - "dates change" (15): protects=Change is a centred dialog on a desktop, a bottom sheet on a
@@ -53,7 +54,22 @@ async function openCheck(page: Page, scenario: string) {
   await expect(bar(page)).toBeVisible();
 }
 
+/**
+ * Taps a box past its text, as a person does to add to what they typed: the caret lands after
+ * the last letter. Not End: on a Mac, End scrolls the page and leaves the caret where the tap
+ * put it, inside the text on a phone-wide box.
+ */
+async function tapAtEnd(input: Locator) {
+  const b = await box(input);
+  await input.click({ position: { x: b.width - 8, y: b.height / 2 } });
+  const [start, end, length] = await input.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd, el.value.length]);
+  expect([start, end], "the caret after the last letter").toEqual([length, length]);
+}
+
 async function select(page: Page, key: string) {
+  // On a phone the open feature fills the screen (EC1 b): back to the list first, as a person does.
+  const back = inspector(page).getByRole("button", { name: "‹ All features" });
+  if (await back.isVisible()) await back.click();
   await briefRow(page, key).getByRole("button").first().click();
   await expect(page.locator(`[data-testid="brief-row"][data-feature="${key}"][aria-current="true"]`)).toHaveCount(1);
 }
@@ -96,15 +112,16 @@ for (const [name, viewport] of [
       await expect(sendBack).toHaveAttribute("data-variant", "secondary");
     });
 
-    test("long key: a feature with a long key stays inside its own cell, its key never shown", async ({ page }) => {
-      // qa4-work-53 (train AF): the row shows the feature's name only, so a long key cannot run out of it.
+    test("long key: the list shows a long-keyed feature by name only, its key stays inside the pane", async ({ page }) => {
+      // qa4-work-53 (train AF): the list shows the feature's name only; EC1 b (owner, Nov 1) shows the key by its title in the pane.
       await openCheck(page, "eng-check-long-key");
       const row = briefRow(page, "f.guided_setup_with_test_order_and_sample_catalogue");
       await expect(row).toBeVisible();
       await expect(row).not.toContainText("f.guided_setup_with_test_order_and_sample_catalogue");
-      const cell = await box(row.getByRole("button").first());
-      const approach = await box(row.getByText("Reuse the onboarding checklist and add the test-order step."));
-      if (viewport === DESKTOP) expect(cell.x + cell.width, "the name runs into Approach").toBeLessThanOrEqual(approach.x);
+      await row.getByRole("button").first().click();
+      const pane = await box(inspector(page));
+      const key = await box(inspector(page).getByText("f.guided_setup_with_test_order_and_sample_catalogue"));
+      expect(key.x + key.width, "the key runs out of the pane").toBeLessThanOrEqual(pane.x + pane.width);
       const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(sideways).toBeLessThanOrEqual(0);
     });
@@ -116,12 +133,12 @@ for (const [name, viewport] of [
       await inspector(page).getByRole("button", { name: "Answer", exact: true }).first().click();
       const answered = inspector(page).getByTestId("answer");
       await expect(answered).toContainText("Yes, the sandbox takes test orders.");
-      await expect(answered).toContainText("Answered by");
+      await expect(answered).toContainText("Yes, the sandbox takes test orders. · ");
       await expect(inspector(page).getByRole("textbox", { name: `Answer: ${SANDBOX}` })).toHaveCount(0);
       // The unanswered question keeps its box: one box, one Answer.
       await expect(inspector(page).getByRole("button", { name: "Answer", exact: true })).toHaveCount(1);
 
-      await answered.getByRole("button", { name: `Edit the answer: ${SANDBOX}` }).click();
+      await answered.getByRole("button", { name: `Change the answer: ${SANDBOX}` }).click();
       await expect(inspector(page).getByRole("textbox", { name: `Answer: ${SANDBOX}` })).toHaveValue("Yes, the sandbox takes test orders.");
     });
 
@@ -140,8 +157,7 @@ for (const [name, viewport] of [
       await answer.fill("Yes, the checklist");
       await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
       // Back in the box, as a person does, and on typing while the verdict saves.
-      await answer.click();
-      await answer.press("End");
+      await tapAtEnd(answer);
       await answer.pressSequentially(" shows on phones too.");
       await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
       await expect(answer).toHaveValue("Yes, the checklist shows on phones too.");
@@ -152,15 +168,45 @@ for (const [name, viewport] of [
       await expect(inspector(page).getByRole("textbox", { name: `Answer: ${PHONES}` })).toHaveValue("Yes, the checklist shows on phones too.");
     });
 
+    test("answer draft: letters typed during a slow verdict save all land at the caret, in order", async ({ page }) => {
+      await openCheck(page, "eng-check");
+      await select(page, "f.guided-setup");
+      // The verdict's save answers late (the mock's slow knob), so the letters below are typed while it runs.
+      const checkpoint = new URL(page.url()).pathname.split("/").pop();
+      await page.evaluate(
+        ([path]) => {
+          localStorage.setItem("po-mock-slow", path);
+          localStorage.setItem("po-mock-slow-ms", "2500");
+        },
+        [`POST /v1/runs/${ENG_CHECK_RUN}/checkpoints/${checkpoint}/actions`],
+      );
+      const answer = inspector(page).getByRole("textbox", { name: `Answer: ${PHONES}` });
+      await answer.fill("Yes, the checklist");
+      await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
+      await tapAtEnd(answer);
+      await answer.pressSequentially(" shows");
+      // Still saving: the row has no verdict yet.
+      await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Not decided");
+      await answer.pressSequentially(" on phones", { delay: 250 });
+      await answer.pressSequentially(" too, every letter", { delay: 100 });
+      await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
+      await answer.pressSequentially(".");
+      const typed = "Yes, the checklist shows on phones too, every letter.";
+      await expect(answer).toHaveValue(typed);
+      await expect(answer).toBeFocused();
+      expect(await answer.evaluate((el: HTMLInputElement) => el.selectionStart)).toBe(typed.length);
+    });
+
     test("priority order: goal chips never break inside a word; the header counts the run's list", async ({ page }) => {
       await withScenario(page, "priority-order");
       await login(page, "approver@example.com");
       await page.goto(`/runs/${PRIORITY_RUN}`);
       await page.getByTestId("checkpoint-priority_order").getByRole("link", { name: "Review the order" }).click();
       await expect(page).toHaveURL(/\/priorities\?snapshot=/);
+      // The run's own list (build-runplan RP1: its 5 baseline features and the 6 the PRD adds).
       const rows = page.locator('tr[data-testid^="priority-row-"]');
-      await expect(rows).toHaveCount(5);
-      await expect(page.getByText("5 in the run's order").filter({ visible: true })).toHaveCount(1);
+      await expect(rows).toHaveCount(11);
+      await expect(page.getByText("11 in the run's order").filter({ visible: true })).toHaveCount(1);
       // The header's count; each goal's "N ranked" (#1006, qa4-plan-17, a phone's words) is not it.
       await expect(page.getByText(/^\d+ ranked$/).and(page.locator(':not([data-testid="goal-ranked"])'))).toHaveCount(0);
 

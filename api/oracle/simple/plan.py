@@ -203,20 +203,35 @@ def _milestones(header: list[str], rows: list[list[str]], ref: date) -> list[dic
     return out
 
 
-def _features(header: list[str], rows: list[list[str]], known: set[str]) -> list[dict[str, Any]]:
+def _features(
+    header: list[str],
+    rows: list[list[str]],
+    known: set[str],
+    names: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
     c_code, c_name = _col(header, "feature", "code", "id"), _col(header, "name", "title")
     c_ms = _col(header, "milestone")
     c_eff = _col(header, "effort", "engineer", contains="week")
     c_goal, c_order = _col(header, "goal"), _col(header, "when", "order", "placement", "timing")
     c_owner = _col(header, "owner")
     c_kind, c_what = _col(header, "kind", "type"), _col(header, "what")
+    names = names or {}
     out = []
+    # A Goal-traced PRD names a milestone on the first row of its group only (CLD's walk B,
+    # 2026-11-01): a row with an empty milestone cell is the milestone's above it.
+    last = ""
     for r in rows:
-        head = _cell(r, c_code)
+        ms_cell = _cell(r, c_ms).strip() or last
+        last = ms_cell
+        # A cell's link reads as its words ("[F-02 Late alerts](#f-02)").
+        head = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", _cell(r, c_code))
         m = _CODE.search(head)
         if not m:
             continue
-        mss = [f"M{int(x)}" for x in _MS.findall(_cell(r, c_ms))]
+        mss = [f"M{int(x)}" for x in _MS.findall(ms_cell)]
+        # A milestone named by its name ("[Rollout](#rollout)").
+        named = names.get(re.sub(r"\]\([^)]*\)|[\[\]*_`]", "", ms_cell).strip().lower())
+        mss = mss or ([named] if named else [])
         mss = [x for i, x in enumerate(mss) if x in known and x not in mss[:i]]
         if not mss:
             continue
@@ -342,13 +357,14 @@ def parse(text: str, ref: date) -> dict[str, Any] | None:
         return None
     known = {m["code"] for m in milestones}
     by_code = {m["code"]: m for m in milestones}
+    names = {str(m["name"]).strip().lower(): m["code"] for m in milestones}
     features: list[dict[str, Any]] = []
     goals: list[str] = []
     for h, rows in found:
         if _part_col(h) is not None and _col(h, "milestone") is not None:
             _part(h, rows, by_code, ref)
         elif _col(h, "feature") is not None and _col(h, "milestone") is not None:
-            features += _features(h, rows, known)
+            features += _features(h, rows, known, names)
         elif h and h[0].startswith("goal"):
             cols = {i: f"M{int(m[1])}" for i, x in enumerate(h) if (m := _MS.fullmatch(x))}
             for r in rows:
@@ -436,6 +452,121 @@ def clean(answer: Any) -> dict[str, Any] | None:
     summary = [str(x)[:300] for x in answer.get("summary") or [] if str(x).strip()][:3]
     return {"milestones": milestones, "features": features, "goals": goals, "holidays": holidays,
             "summary": summary}  # fmt: skip
+
+
+def with_prd_features(data: dict[str, Any] | None, text: str) -> dict[str, Any] | None:
+    """The job's plan with every feature the PRD's own features table places in one of its
+    milestones (CLD's walk B, 2026-11-01: an answer that left a PRD's new features out read
+    "nothing planned yet"); the answer's own reading of a feature stays."""
+    if not data:
+        return data
+    known = {m["code"] for m in data["milestones"]}
+    names = {str(m["name"]).strip().lower(): m["code"] for m in data["milestones"]}
+    have = {f["code"] for f in data["features"]}
+    for h, rows in tables(text or ""):
+        if (
+            _part_col(h) is None
+            and _col(h, "feature") is not None
+            and _col(h, "milestone") is not None
+        ):
+            for f in _features(h, rows, known, names):
+                if f["code"] not in have:
+                    have.add(f["code"])
+                    data["features"].append(f)
+                    data["goals"] += [g for g in f["goals"] if g not in data["goals"]]
+    return data
+
+
+@dataclass(frozen=True)
+class Accepted:
+    """A date the PRD's engineering lead accepted (or changed to) at a run's Engineering
+    dates stop (oracle.engineering.dates.on_approved): its roadmap item's milestone name and
+    feature code, and the day."""
+
+    milestone: str | None
+    feature: str | None
+    day: date
+
+
+def with_accepted(data: dict[str, Any] | None, accepted: list[Accepted]) -> dict[str, Any] | None:
+    """The plan with the dates the lead accepted (CLD's walk B, 2026-11-01): a milestone ends
+    on the last accepted day of its items (named by the milestone's code or name, else by a
+    feature it holds), the lead's day over the PRD's proposed one; one with no start starts
+    the day after the milestone before it ends. A milestone with none keeps its own."""
+    if not data or not accepted:
+        return data
+    ms = data["milestones"]
+    by_name = {str(m["name"]).strip().lower(): m["code"] for m in ms}
+    codes = {m["code"] for m in ms}
+    holds = {f["code"]: f["milestones"] for f in data.get("features") or []}
+    ends: dict[str, date] = {}
+    for a in accepted:
+        name = (a.milestone or "").strip()
+        hit = _MS.search(name)
+        code = f"M{int(hit[1])}" if hit else by_name.get(name.lower())
+        if code not in codes:
+            code = (holds.get(a.feature or "") or [None])[-1]
+        if code in codes:
+            ends[code] = max(ends.get(code, a.day), a.day)
+    if not ends:
+        return data
+    out = {**data, "milestones": [dict(m) for m in ms]}
+    prev: date | None = None
+    for m in out["milestones"]:
+        if m["code"] in ends:
+            m["end"] = ends[m["code"]].isoformat()
+            if not m.get("start") and prev is not None:
+                m["start"] = (prev + timedelta(days=1)).isoformat()
+            if m.get("start") and date.fromisoformat(m["start"]) > ends[m["code"]]:
+                m["start"] = None
+        prev = date.fromisoformat(m["end"]) if m.get("end") else None
+    return out
+
+
+async def accepted_dates(db: AsyncSession, document_id: uuid.UUID) -> list[Accepted]:
+    """The dates the PRD's engineering lead accepted at a run's Engineering dates stop: its
+    draft roadmap items' milestone dates a verified schedule basis supports."""
+    return (await accepted_dates_of(db, {document_id})).get(document_id, [])
+
+
+async def accepted_dates_of(
+    db: AsyncSession, prd_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, list[Accepted]]:
+    """:func:`accepted_dates` of many PRDs in two reads, whatever their number."""
+    from oracle.roadmap.models import RoadmapItem, ScheduleBasis
+    from oracle.simple.priorities import prd_code
+
+    if not prd_ids:
+        return {}
+    bases: dict[uuid.UUID, set[tuple[Any, Any, Any]]] = {}
+    for b in await db.scalars(
+        select(ScheduleBasis).where(
+            ScheduleBasis.prd_document_id.in_(prd_ids),
+            ScheduleBasis.status == "verified",
+            ScheduleBasis.withdrawn_at.is_(None),
+        )
+    ):
+        bases.setdefault(b.prd_document_id, set()).add((b.reference, b.supports_date, b.item_key))
+    if not bases:
+        return {}
+    out: dict[uuid.UUID, list[Accepted]] = {}
+    for i in await db.scalars(
+        select(RoadmapItem).where(
+            RoadmapItem.prd_document_id.in_(set(bases)),
+            RoadmapItem.draft_roadmap_id.is_not(None),
+        )
+    ):
+        ms = i.milestone or {}
+        day = _iso(ms.get("date"))
+        if not day or not any(
+            r == ms.get("date_source") and d.isoformat() == day and k in (None, i.item_key)
+            for r, d, k in bases[i.prd_document_id]
+        ):
+            continue
+        out.setdefault(i.prd_document_id, []).append(
+            Accepted(ms.get("name"), prd_code(i.prd_section_key), date.fromisoformat(day))
+        )
+    return out
 
 
 def _risk(v: Any) -> dict[str, Any] | None:
@@ -884,6 +1015,7 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
         .order_by(DocumentVersion.number)
     ):
         latest[v.document_id] = v
+    accepted = await accepted_dates_of(db, set(latest))
     out: dict[uuid.UUID, View] = {}
     for pid, v in latest.items():
         row = rows.get(pid)
@@ -892,7 +1024,7 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
         else:
             data = _parsed(v)
         if data:
-            out[pid] = compute(data)
+            out[pid] = compute(with_accepted(data, accepted.get(pid, [])))
     return out
 
 
@@ -913,7 +1045,8 @@ async def plan_out(
     if row.status != "ready":
         msg = {"reading": READING, "failed": FAILED}.get(row.status, NO_PLAN)
         return SimplePlanOut(status=row.status, message=msg, **base)  # type: ignore[arg-type]
-    view = await enrich(db, document.id, compute({**row.data, "source": row.source}))
+    data = with_accepted({**row.data, "source": row.source}, await accepted_dates(db, document.id))
+    view = await enrich(db, document.id, compute(data))
     return SimplePlanOut(
         status="ready", source=row.source, dated=view.dated, message=view.message,  # type: ignore[arg-type]
         milestones=view.milestones, slices=view.slices, goals=view.goals,
@@ -940,7 +1073,7 @@ async def run_job(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
         "approved_on": (v.approved_at or company_time.now()).date().isoformat(),
         "text": (v.markdown or "")[:MAX_TEXT],
     }
-    data = clean(await ask("prd_plan", payload))
+    data = with_prd_features(clean(await ask("prd_plan", payload)), v.markdown or "")
     row = await s.scalar(select(SimplePrdPlan).where(SimplePrdPlan.document_id == document.id))
     if row is None or row.version_id != v.id:
         return {"read": False, "reason": "a newer version's plan is read already"}

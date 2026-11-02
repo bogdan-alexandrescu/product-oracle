@@ -25,7 +25,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
@@ -44,7 +44,7 @@ from oracle.roadmap.models import (
     TrackMilestone,
 )
 from oracle.simple import constraints, dates, plan_strip
-from oracle.simple.models import RoadmapDateSuggestion
+from oracle.simple.models import RoadmapDateSuggestion, SimpleVisual
 from oracle.simple.schemas import (
     DateSuggestionOut,
     SimpleDate,
@@ -53,9 +53,11 @@ from oracle.simple.schemas import (
     SimpleGoalRef,
     SimpleGroup,
     SimpleItemMilestone,
+    SimpleItemTask,
     SimpleMilestone,
     SimpleOpenDecision,
     SimpleOwnerRef,
+    SimplePersonRef,
     SimplePhase,
     SimpleRoadmapItem,
     SimpleRoadmapOut,
@@ -423,6 +425,12 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
             if dep is not None and dep is not e:
                 e.depends_on.append(dep.row.id)
                 dep.needed_by.append(e.row.id)
+    # walkb-roadmap: an estimated start never comes before what the item depends on.
+    moved = dates.after_dependencies(
+        {e.row.id: e.resolved for e in entries}, {e.row.id: e.depends_on for e in entries}
+    )
+    for e in entries:
+        e.resolved = moved[e.row.id]
     nodes = [
         constraints.Node(
             id=str(e.row.id),
@@ -683,6 +691,66 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
         e.code = e.code or _prd_code(e.row.prd_section_key)
 
 
+async def _bet_flows(db: AsyncSession, principal: Any, shown: list[Any], items: list[Any]) -> None:
+    """walkb-roadmap review: an item built from a PRD section, with no flow of its own, shows
+    the flow its PRD's one-pager draws for its bet: its own bet, the one naming the item's
+    code, else the one bet drawn from the item's section alone, else the one bet its title
+    names (roadmap-keydates: a short title two bets mention names neither). The flow names the
+    bet (its ``subject_kind`` ``one_pager_line``), so the card opens and comments on that
+    drawing. Only a PRD with a drawn bet has its one-pager read, once per read."""
+    from oracle.docs import visibility
+    from oracle.simple import one_pager
+
+    by_id = {it.id: it for it in items}
+    wanting = [
+        e
+        for e in shown
+        if e.prd is not None
+        and e.row.prd_section_key
+        and by_id[e.row.id].flow is None
+        and not by_id[e.row.id].draft
+        and visibility.can_see(principal, e.prd)
+        and not getattr(e.prd, "deleted_at", None)
+    ]
+    # A bet's visual stored with no PRD (``document_id`` null) names no PRD: then every
+    # PRD's one-pager is read, as before the gate.
+    drawn: set[uuid.UUID | None] = set(
+        await db.scalars(
+            select(SimpleVisual.document_id)
+            .where(
+                SimpleVisual.subject_kind == "one_pager_line",
+                or_(
+                    SimpleVisual.document_id.in_({e.prd.id for e in wanting}),
+                    SimpleVisual.document_id.is_(None),
+                ),
+            )
+            .distinct()
+        )
+    ) if wanting else set()  # fmt: skip
+    bets: dict[uuid.UUID, list[tuple[str, list[str], Any]]] = {}
+    for e in wanting:
+        if (e.prd.id in drawn or None in drawn) and e.prd.id not in bets:
+            bets[e.prd.id] = await one_pager.bet_flows(db, e.prd)
+
+    def words(text: str) -> str:
+        return " " + " ".join(re.sub(r"[^\w]+", " ", text.casefold()).split()) + " "
+
+    def one(found: list[Any]) -> list[Any]:
+        return found if len(found) == 1 else []
+
+    for e in wanting:
+        of = bets.get(e.prd.id)
+        if not of:
+            continue
+        code = e.code or _prd_code(e.row.prd_section_key)
+        coded = one([f for t, _, f in of if code and code.strip() and words(code) in words(t)])
+        sourced = one([f for _, keys, f in of if e.row.prd_section_key in keys])
+        title = e.row.title.strip()
+        titled = one([f for t, _, f in of if title and words(title) in words(t)])
+        found = coded or sourced or titled
+        by_id[e.row.id].flow = found[0] if found else None
+
+
 def prd_section_label(section_key: str, heading: str | None, name: str = "") -> str:
     """How the card names the PRD section an item came from: the PRD's code and the
     section's heading ("F-06 Loop and blast-radius guards"); with no heading, the code and
@@ -813,14 +881,62 @@ def item_out(
     )
 
 
-async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
-    """S8: the decided decisions naming each item, in any version of its roadmap (an
-    approved draft is a new version: its rows are new, its keys are the same)."""
-    from oracle.simple import meetings
+async def _tasks(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list[SimpleItemTask]]:
+    """walkc-roadmap-tasks: each item's tasks (not dropped, in order), found by the item's
+    roadmap and key so a later version's item keeps them, with their owners' names."""
+    from oracle.simple.models import RoadmapItemTask
 
     if not shown:
         return {}
     keyed = {(e.row.roadmap_document_id, e.row.item_key): e.row.id for e in shown}
+    rows = list(
+        await db.scalars(
+            select(RoadmapItemTask)
+            .where(
+                RoadmapItemTask.roadmap_document_id.in_({d for d, _ in keyed}),
+                RoadmapItemTask.item_key.in_({k for _, k in keyed}),
+                RoadmapItemTask.status != "dropped",
+            )
+            .order_by(RoadmapItemTask.position, RoadmapItemTask.created_at, RoadmapItemTask.id)
+        )
+    )
+    people = {t.owner_id for t in rows if t.owner_id is not None}
+    names = {
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(people)))
+    }
+    out: dict[uuid.UUID, list[SimpleItemTask]] = defaultdict(list)
+    for t in rows:
+        item = keyed.get((t.roadmap_document_id, t.item_key))
+        if item is not None:
+            out[item].append(task_out(t, names))
+    return out
+
+
+def task_out(t: Any, names: dict[uuid.UUID, str]) -> SimpleItemTask:
+    owner = (
+        SimplePersonRef(id=t.owner_id, name=names[t.owner_id])
+        if t.owner_id is not None and t.owner_id in names
+        else None
+    )
+    return SimpleItemTask(id=t.id, title=t.title, status=t.status, owner=owner,
+                          due_date=t.due_date)  # fmt: skip
+
+
+async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
+    """S8: the decided decisions naming each item, in any version of its roadmap (an
+    approved draft is a new version: its rows are new, its keys are the same)."""
+
+    return await decided_of_rows(db, [e.row for e in shown])
+
+
+async def decided_of_rows(db: AsyncSession, rows: list[Any]) -> dict[uuid.UUID, list]:
+    """_decided for roadmap item rows (Detailed's Plan items too), keyed by row id."""
+    from oracle.simple import meetings
+
+    if not rows:
+        return {}
+    keyed = {(r.roadmap_document_id, r.item_key): r.id for r in rows}
     alias: dict[uuid.UUID, uuid.UUID] = {}
     for rid, doc, key in (
         await db.execute(
@@ -955,16 +1071,13 @@ async def build(
     await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
     decided = await _decided(db, shown)
+    tasks = await _tasks(db, shown)
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
     # One roadmap chosen: its key dates; all roadmaps: every readable roadmap's, even when
     # the other filters hide its items (the Key dates editor lists and targets them all).
     kd_docs = {chosen.id: chosen} if chosen is not None else readable
-    kds, kd_roadmaps = await key_dates.roadmap_key_dates(db, principal, kd_docs)
-    all_roadmaps = kd_roadmaps
-    if chosen is not None:
-        _, all_roadmaps = await key_dates.roadmap_key_dates(db, principal, readable)
     from oracle.simple import visuals
 
     flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])
@@ -975,12 +1088,25 @@ async def build(
     for it in items:
         # A draft's own visual (S7) first, else its feature's (S10).
         it.flow = it.flow or flows.get(it.id)
+        it.tasks = tasks.get(it.id, [])
+    await _bet_flows(db, principal, shown, items)
     # plan-model: each item's slices and milestones from its PRD's plan; the track
     # milestones dated by the plan of their track's PRD.
     from oracle.simple import plan as plans
 
     track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
-    views = await plans.views(db, {e.prd.id for e in shown if e.prd} | set(track_prd.values()))
+    # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
+    kd_prds = key_dates.key_date_prds(principal, kd_docs, read.entries)
+    views = await plans.views(
+        db,
+        {e.prd.id for e in shown if e.prd}
+        | set(track_prd.values())
+        | {p.id for of in kd_prds.values() for p in of},
+    )
+    kds, kd_roadmaps = await key_dates.read_key_dates(db, principal, kd_docs, read.entries, views)
+    all_roadmaps = kd_roadmaps
+    if chosen is not None:
+        _, all_roadmaps = await key_dates.roadmap_key_dates(db, principal, readable)
     for it in items:
         view = views.get(it.prd.id) if it.prd else None
         if view is None:
@@ -1008,8 +1134,8 @@ async def build(
             for m in read.milestones
         ],
         span=span,
-        changes_in_review=seen.changes_in_review,
-        drafts=seen.visible,
+        changes_in_review=seen.of(chosen.id if chosen else None)[1],
+        drafts=seen.of(chosen.id if chosen else None)[0],
         key_dates=kds,
         key_date_roadmaps=kd_roadmaps,
         roadmaps=all_roadmaps,

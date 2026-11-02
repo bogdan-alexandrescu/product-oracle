@@ -31,11 +31,9 @@ async function open(page: Page, opts: { scenario?: string; theme?: "light" | "da
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1512) <= 640;
 
 async function openCard(page: Page, key: string): Promise<Locator> {
-  if (!isPhone(page)) {
-    const body = page.locator(`g[data-testid="bar"][data-item="${key}"]`).locator("rect[data-body], rect[data-slice-body]").first();
-    await expect(body).toBeVisible();
-    await body.click();
-  } else await openRoadmapItem(page, key);
+  // The Timeline (mk-qa4-roadmap QR4 A): a desktop opens the item in the side panel, a phone in a sheet.
+  await openRoadmapItem(page, key);
+  if (!isPhone(page)) await expect(page.getByTestId("item-panel")).toBeVisible();
   const card = page.getByTestId("floating-card");
   await expect(card).toBeVisible();
   return card;

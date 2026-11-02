@@ -39,6 +39,7 @@ from typing import Any
 
 from sqlalchemy import ColumnElement, Integer, exists, false, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 
 from oracle import audit, company_time, safe_yaml
 from oracle.auth.deps import Principal
@@ -394,7 +395,26 @@ async def _unstarted(db: AsyncSession, run: Run) -> str | None:
 async def sync(db: AsyncSession, intake: ProductIntake) -> bool:
     """Bring the intake's read up to date with its run or job: a run that could not start
     or failed falls back to the job (Q3); a job that failed ends the read failed. True
-    when something changed (the caller commits)."""
+    when something changed (the caller commits).
+
+    Two followers may race (the create request's summary and :func:`submit_later`'s
+    session, two reads of the summary, the tick): the one whose write lands second finds
+    the intake row changed under it. Its own changes are rolled back and it reads the
+    winner's, so the read falls back once and no request fails on the stale row. The
+    write is flushed here, on every path, so a stale row is found here and not at the
+    caller's commit. Only a savepoint is rolled back: what the caller added to the
+    session before stays."""
+    try:
+        async with db.begin_nested():
+            changed = await _follow(db, intake)
+            await db.flush()
+        return changed
+    except StaleDataError:
+        await db.refresh(intake)
+        return False
+
+
+async def _follow(db: AsyncSession, intake: ProductIntake) -> bool:
     from oracle.runs import service as runs_service
 
     read = current(intake)

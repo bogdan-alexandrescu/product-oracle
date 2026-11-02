@@ -63,6 +63,9 @@ const TITLES: [string, string][] = [
   ["/plan/documents", "Roadmap documents · Plan · Product Oracle"],
 ];
 
+/** The Inbox's first list drawn: its "Needs you" heading. */
+const inboxLoaded = (page: Page) => page.locator("main").getByRole("heading", { level: 2, name: "Needs you" });
+
 async function checkTitles(page: Page) {
   for (const [path, title] of TITLES) {
     await page.goto(path);
@@ -90,6 +93,8 @@ test.describe("phone", () => {
     await page.goto("/inbox");
     await expect(page.getByTestId("tab-bar")).toBeVisible();
     await expect(page.getByTestId("phone-header")).toBeVisible();
+    // The Inbox's own controls drawn: before they are, the page has nothing to Tab to.
+    await expect(inboxLoaded(page)).toBeVisible();
 
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
@@ -105,6 +110,7 @@ test.describe("phone", () => {
     // Skip to content: the next Tab is the page's first control, not the top bar's.
     await page.goto("/inbox");
     await expect(page.getByTestId("tab-bar")).toBeVisible();
+    await expect(inboxLoaded(page)).toBeVisible();
     await page.keyboard.press("Tab");
     await page.keyboard.press("Enter");
     await expect(page.locator("main#main")).toBeFocused();

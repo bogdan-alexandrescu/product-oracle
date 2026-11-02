@@ -11,6 +11,11 @@ Test cards (protects / fails_when / no_claim):
   of the items under dated milestones to the latest milestone date (page and PDF), never
   out to undated items' estimated windows; fails_when=the span ends on an item's estimated
   end (a year out) or on an item with no milestone; no_claim=the plan strip (its tests).
+- test_span_follows_the_dated_plan (walkb-onepager review): protects=a PRD whose plan is
+  dated (its milestones table, or the dates its lead accepted) has the plan's span in the
+  header, the one its timeline draws (Nov 2, 2026 - Feb 26, 2027), not the roadmap items'
+  milestone dates; fails_when=the header and the timeline read different spans;
+  no_claim=which dates the plan takes (test_simple_plan_walkb).
 - test_no_dated_milestone_no_span: protects=a PRD whose items carry no dated milestone has
   no span (null; the PDF prints none); fails_when=the estimated windows' year shows;
   no_claim=the timeline items.
@@ -115,8 +120,45 @@ async def test_span_from_dated_milestones(client):
     view = await get(client, ctx, "viewer")
     assert (view["span_start"], view["span_end"]) == ("2026-10-05", "2027-01-29")
     html = await _pdf(ctx)
-    assert "2026-10-05 – 2027-01-29" in html
+    assert "Oct 5, 2026 – Jan 29, 2027" in html
     assert "2027-03-31" not in html.split("<body", 1)[-1].split("class='plan'", 1)[0]
+
+
+PLAN_TABLES = """
+## Features by milestone {#brief-items}
+
+| Milestone | Feature | Goal | Outcome |
+|---|---|---|---|
+| [M1 Pilot](#milestone-m1) | [F-01 Setup checklist](#f-01) | Faster setup | Next step shown |
+| [M2 Rollout](#milestone-m2) | [F-02 Progress meter](#f-02) | Faster setup | Progress shown |
+
+## Milestones {#milestones}
+
+| Milestone | Name | Start | End |
+|---|---|---|---|
+| M1 | Pilot | Nov 2, 2026 | Dec 18, 2026 |
+| M2 | Rollout | Jan 4, 2027 | Feb 26, 2027 |
+"""
+
+
+async def test_span_follows_the_dated_plan(client):
+    import hashlib
+
+    from oracle.simple import plan
+
+    ctx = await world(client)
+    await seed_slice(ctx)  # the items' milestones: Nov 20 and Jan 29
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        v = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == doc.id))
+        v.markdown = (v.markdown or "") + PLAN_TABLES
+        v.content_hash = hashlib.sha256(v.markdown.encode()).hexdigest()
+        await s.commit()
+        span = (await plan.views(s, {doc.id}))[doc.id].span
+    assert (span.start.isoformat(), span.end.isoformat()) == ("2026-11-02", "2027-02-26")
+    view = await get(client, ctx, "viewer")
+    assert (view["span_start"], view["span_end"]) == ("2026-11-02", "2027-02-26")
+    assert "Nov 2, 2026 – Feb 26, 2027" in await _pdf(ctx)
 
 
 async def test_no_dated_milestone_no_span(client):

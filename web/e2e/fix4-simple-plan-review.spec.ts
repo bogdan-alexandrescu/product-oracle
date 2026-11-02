@@ -49,7 +49,8 @@ test.describe("fix4-simple-plan review: Priorities", () => {
       await expect(rows.first()).toBeVisible();
       for (const r of await rows.all()) {
         const conf = Number(/^confidence ([\d.]+)$/.exec((await r.getByTestId("prio-confidence").textContent()) ?? "")?.[1]);
-        const m = /^value ([\d.]+) · ([\d.]+) wk · score ([\d.]+)$/.exec((await r.getByTestId("prio-numbers").textContent()) ?? "");
+        // build-plan QP2: value · confidence · weeks · score, no bar.
+        const m = /^·value ([\d.]+)·confidence [\d.]+·([\d.]+) wk·score ([\d.]+)$/.exec((await r.getByTestId("prio-numbers").textContent()) ?? "");
         expect(m, (await r.textContent()) ?? "").not.toBeNull();
         const [, value, effort, score] = m!.map(Number);
         expect(conf).toBeGreaterThan(0);
@@ -105,7 +106,8 @@ test.describe("fix4-simple-plan review: Priorities", () => {
     const drawer = page.getByTestId("goal-panel");
     const looks = drawer.getByTestId("suggestion-looks-like");
     await expect(looks.first()).toBeVisible({ timeout: 15_000 });
-    await expect(looks.first().getByTestId("looks-like-merge")).toHaveText("Same as this: decline the suggestion");
+    // build-plan QP3: each look-alike has its own Duplicate button.
+    await expect(looks.first().getByTestId("looks-like-duplicate")).toHaveText("Duplicate");
     const link = looks.first().getByTestId("looks-like-link");
     const title = ((await link.textContent()) ?? "").trim();
     await link.click();

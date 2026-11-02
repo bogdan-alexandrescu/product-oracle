@@ -496,6 +496,28 @@ function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
 }
 
 /**
+ * runplan-r2: a decision taken in a Simple review meeting, as meetings.record_meeting_decision's
+ * decisions row (origin meeting, decided by the caller, one option): Company > Decisions lists it.
+ */
+export function logMeetingDecision(
+  ctx: DecisionsContext,
+  db: DecisionsDb,
+  d: { id: string; title: string; at: string; approver_id: string; subjects: Row["subjects"]; chosen: string; meeting_title: string },
+): void {
+  if (db.decisions.some((x) => x.id === d.id)) return;
+  db.decisions.push({
+    ...blank(ctx, db, {
+      title: d.title, origin: "meeting", approver_id: d.approver_id, status: "decided",
+      options: [option(d.chosen, d.title)], chosen_option: d.chosen,
+      rationale: `Decided in ${d.meeting_title}`, context: `Decided in the review meeting ${d.meeting_title}`,
+      decided_by: d.approver_id, decided_actor: "user", decided_at: d.at, created_by: d.approver_id, created_at: d.at,
+      source: { kind: "simple_meeting_decision", id: ctx.uuid() } as Row["source"], subjects: d.subjects,
+    }),
+    id: d.id,
+  });
+}
+
+/**
  * H9 Decide (oracle.pricing.decide): the approved memo version's proposed decision, origin
  * pricing, the pricing owner its approver; the same one again on a repeat.
  */

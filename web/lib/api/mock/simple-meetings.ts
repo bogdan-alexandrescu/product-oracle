@@ -25,7 +25,9 @@
  * "minutes-failed" (the job fails: "failed", Draft again requeues it, which then answers) or
  * "minutes-slow" (still drafting past 2 minutes: "slow"), "minutes-later" (drafting, then
  * Oracle's minutes MINUTES_LATER_MS after End on the mock clock) or "minutes-later-failed"
- * (drafting, then failed); Send works in every state.
+ * (drafting, then failed), or "minutes-stuck" (queued and never answering: "drafting", "slow"
+ * past MINUTES_SLOW_MS, and past MINUTES_STUCK_MS on the mock clock "failed" with Draft again,
+ * as meetings._minutes_job takes a stalled job); Send works in every state.
  *
  * "no-reviewers": Guided setup has no required reviewer (a PRD started from an empty skeleton).
  * Approve publishes only when nothing holds it: an absent required reviewer, or (with
@@ -49,12 +51,17 @@ import { companyDateInWords } from "./connections";
 import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
-import { roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { APPROVED_KEY, draftAct, draftRoadmapOut } from "./meeting-draft";
+import { roadmapOut, tasksWaiting, type SimpleDb } from "./simple-roadmap";
 import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
 export const MINUTES_LATER_MS = 20_000;
+/** meetings.MINUTES_SLOW: past this a minutes job still drafting reads "slow". */
+export const MINUTES_SLOW_MS = 2 * 60_000;
+/** meetings.MINUTES_STUCK: past this a queued or running minutes job reads "failed" (Draft again). */
+export const MINUTES_STUCK_MS = 6 * 60_000;
 
 type Role = Schemas["Me"]["role"];
 type Ref = Schemas["SimplePersonRef"];
@@ -79,6 +86,10 @@ export interface MeetingsCtx {
   othersWaiting?: () => number;
   /** qa4-simple-prd-1: every PRD document (as the API's start options list each readable PRD by its own title). */
   documents?: () => { id: string; slug: string; title: string }[];
+  /** build-rundecide RD1 a: the runs' decided stops on the PRDs shown (./simple-runs.ts), for the Runs card. */
+  runs?: (prd: string | null) => Schemas["SimpleRunGroup"][];
+  /** runplan-r2: a meeting decision is a row of the decision log too (Company > Decisions), as the API's one decisions row. */
+  logDecision?: (d: { id: string; title: string; at: string; approver_id: string; subjects: { kind: string; id: string; ref?: string }[]; chosen: string; meeting_title: string }) => void;
 }
 
 interface Meeting {
@@ -91,6 +102,8 @@ interface Meeting {
   presenter_id: string;
   attendee_ids: string[];
   absent_ids: string[];
+  /** walkc-meeting r2 (5a): the presenter, then whoever pressed Join (stored meetings without it: everyone). */
+  joined_ids?: string[];
   change_mode: "everyone" | "presenter" | "named";
   change_people: string[];
   length_min: number;
@@ -106,6 +119,8 @@ interface Meeting {
   minutes_state: "drafting" | "ready" | "sent" | null;
   /** The minutes job while drafting (meetings._minutes_job). */
   minutes_job?: "drafting" | "slow" | "failed" | null;
+  /** When (mock clock, ms) the minutes job was queued (meetings._minutes_job's wait). */
+  minutes_job_at?: number | null;
   /** "minutes-later": when (mock clock, ms) the job ends, and how. */
   minutes_due?: { at: number; outcome: "succeeded" | "failed" } | null;
   delivery: Delivery | null;
@@ -127,6 +142,8 @@ interface Decision {
   subjects: { kind: string; id: string; ref?: string }[];
   meeting_id: string | null;
   change_ids: string[];
+  /** Its one option's key, as the API's chosen_option: "decided", or "draft-dates:N" for Approve these N dates. */
+  chosen?: string;
   /** The roadmap items its changes touched (meetings.decided_flows reads them). */
   item_ids?: string[];
   /** A PRD's question decided in the meeting: its code, title and answer (the Decisions page's row, as the API's). */
@@ -196,9 +213,19 @@ function prds(ctx: MeetingsCtx): Prd[] {
 }
 
 const owners = (ctx: MeetingsCtx) => ctx.members.filter((m) => m.role === "owner").map((m) => m.id);
+/** walkc-meeting r2 (5j, meetings._waits): who approves a meeting's drafts: the PRD's decider, else the company's owners. */
+const approversOf = (ctx: MeetingsCtx, p: Prd) => (p.decider ? [p.decider] : owners(ctx));
 const nameOf = (ctx: MeetingsCtx, id: string) => ctx.members.find((m) => m.id === id)?.name ?? "someone";
 const ref = (ctx: MeetingsCtx, id: string): Ref => ({ id, name: nameOf(ctx, id) });
 const docRef = (p: Prd) => ({ id: p.id, slug: p.slug, title: p.title });
+/** walkc-roadmap-tasks: a decided decision as an item reads it (meetings.decided_refs): who, when, the meeting's minutes. */
+function decidedRef(ctx: MeetingsCtx, db: MeetingsDb, d: Decision): Schemas["SimpleDecidedRef"] {
+  const m = d.meeting_id ? db.meetings.find((x) => x.id === d.meeting_id) : undefined;
+  return {
+    id: d.id, number: d.number, title: d.title, decided_by: d.approver_id ? ref(ctx, d.approver_id) : null, decided_at: d.at,
+    meeting: d.meeting_id ? { id: d.meeting_id, title: m?.title ?? "Review meeting" } : null, minutes_url: d.meeting_id ? `/simple/meetings/${d.meeting_id}` : null,
+  };
+}
 
 function items(ctx: MeetingsCtx) {
   return roadmapOut(ctx.roadmap, "owner", new URLSearchParams())?.items ?? [];
@@ -251,7 +278,7 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
     ],
     meetings: [{
       id: past, title: "Review: Usage alerts", prd: "usage-alerts", origin: "one_pager", occurrence_id: null, session_id: stableUuid("simple-meeting-session/past"),
-      presenter_id: owner, attendee_ids: people, absent_ids: [], change_mode: "everyone", change_people: [], length_min: 60, status: "ended",
+      presenter_id: owner, attendee_ids: people, absent_ids: [], joined_ids: people, change_mode: "everyone", change_people: [], length_min: 60, status: "ended",
       started_at: startedAt, ended_at: iso(Date.parse(startedAt) + 50 * 60_000), ended_by: owner,
       // qa-simple-decide-1: the comment made in this meeting is a note, not a decision.
       notes: [{ id: stableUuid("simple-meeting-note/past-comment"), kind: "comment", text: "keep quiet hours on by default", by_name: nameOf(ctx, approver ?? owner), at: iso(Date.parse(startedAt) + 35 * 60_000), card_id: null }],
@@ -260,7 +287,8 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
         summary: "1 decision taken.",
         open_questions: ["D-3: Should muted teams still get the weekly digest?"],
         action_items: commenter ? [{ title: "Draft the quiet hours copy", owner_id: commenter.id, owner_name: nameOf(ctx, commenter.id), due_date: iso(now + 7 * day).slice(0, 10) }] : [],
-        waits: [{ what: "Usage alerts: the working draft is not approved yet", on: [] }],
+        // walkc-meeting r2 (5j): as meetings._waits, the wait names whom it is on.
+        waits: [{ what: "Usage alerts: the working draft is not approved yet", on: approversOf(ctx, alerts).map((i) => ref(ctx, i)) }],
         written_by: "oracle",
       },
       minutes_state: "sent", delivery: seededDelivery(people, approver),
@@ -268,8 +296,8 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
     }],
     inbox_seen: {},
   };
-  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [{ id: db.decisions[0].id, number: 1, title: db.decisions[0].title }];
-  if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [{ id: db.decisions[3].id, number: 4, title: db.decisions[3].title }];
+  if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [decidedRef(ctx, db, db.decisions[0])];
+  if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [decidedRef(ctx, db, db.decisions[3])];
   // The demo proposal a meeting decides is seeded when a meeting starts (seedMeetingProposal), not here: Home and the
   // rail read meetings on every page, and a proposal made by that read changed what the roadmap and Home showed.
   holder.simple_meetings = db;
@@ -373,7 +401,7 @@ function attendees(ctx: MeetingsCtx, m: Meeting, p: Prd): Schemas["SimpleAttende
     if (i === m.presenter_id) roles.push("presenter");
     if (i === p.decider) roles.push("decider");
     if (p.reviewers.includes(i)) roles.push("reviewer");
-    return { id: i, name: nameOf(ctx, i), roles, present: !m.absent_ids.includes(i) };
+    return { id: i, name: nameOf(ctx, i), roles, present: !m.absent_ids.includes(i), joined: i === m.presenter_id || (m.joined_ids ?? m.attendee_ids).includes(i) };
   });
 }
 
@@ -429,11 +457,11 @@ function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Sc
   if (!made.length) return [];
   return [{
     id: stableUuid(`simple-meeting-draft/${m.id}`), document: docRef(p), status: m.approved ? (held(m) ? "submitted" : "approved") : "working",
-    base_version: p.slug === ctx.onePager.doc.slug ? ctx.onePager.version : 1, version: null, created_by: m.presenter_id, created_at: made[made.length - 1].at,
+    base_version: p.slug === ctx.onePager.doc.slug ? ctx.onePager.version : 1, version: null, from_prds: [], created_by: m.presenter_id, created_at: made[made.length - 1].at,
     participant_ids: [...new Set(made.map((d) => d.approver_id).filter((x): x is string => !!x))], changes: made.length,
     submitted_at: m.approved?.at ?? null, submitted_by: m.approved ? m.presenter_id : null, decider_approved: !!m.approved,
     waiting_on: m.approved?.waiting_on ?? [], approved_at: m.approved && !held(m) ? m.approved.at : null, blocked_by: m.approved?.blocked_by ?? [],
-    can_submit: false, can_resume: false, can_approve: false, change_log: [], can_withdraw: false,
+    can_submit: false, can_resume: false, can_approve: false, change_log: [], can_withdraw: false, published: true,
   }];
 }
 
@@ -469,6 +497,17 @@ function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
     m.minutes_job = null;
   }
   m.minutes_due = null;
+}
+
+/** walkc-meeting (meetings._minutes_job): a job still queued or running past MINUTES_STUCK_MS is
+ * not coming (a stalled queue, a lost worker): it reads "failed", so Draft again is offered;
+ * past MINUTES_SLOW_MS it reads "slow". */
+function settleStuck(m: Meeting) {
+  if (m.status !== "ended" || m.minutes_state !== "drafting" || m.minutes_job_at == null) return;
+  if (m.minutes_job !== "drafting" && m.minutes_job !== "slow") return;
+  const waited = mockNowMs() - m.minutes_job_at;
+  if (waited > MINUTES_STUCK_MS) m.minutes_job = "failed";
+  else if (waited > MINUTES_SLOW_MS) m.minutes_job = "slow";
 }
 
 function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] & { notes: MeetingNote[]; agenda: MeetingAgenda } {
@@ -511,6 +550,8 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     not_approved: [],
     notes: m.notes ?? [],
     agenda: m.agenda_state ?? { next: null, skipped: [] },
+    // build-runplan RP2: the run's draft roadmap of the PRD (meeting_draft.draft_out).
+    draft_roadmap: draftRoadmapOut(ctx.roadmap, p.ids, approvedHere(db, m, p.ids)),
   };
 }
 
@@ -620,17 +661,24 @@ function decidedFlow(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecidedFlow"
   return { kind: "draft_item", id: item.id, title: item.title, flow };
 }
 
-function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = []): Decision {
+/** How many items this meeting's Approve these N dates put on the roadmap, or null: its newest such decision on the PRD, by its chosen option (meeting_draft._approved_here). */
+function approvedHere(db: MeetingsDb, m: Meeting, prdIds: string[]): number | null {
+  const d = db.decisions.filter((x) => x.meeting_id === m.id && x.chosen?.startsWith(`${APPROVED_KEY}:`) && x.subjects.some((s) => prdIds.includes(s.id))).sort(newestFirst)[0];
+  return d ? Number(d.chosen!.slice(APPROVED_KEY.length + 1)) : null;
+}
+
+function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = [], chosen = "decided"): Decision {
   const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
   const d: Decision = {
     id: crypto.randomUUID(), number, title, origin: "meeting", status: "decided", approver_id: ctx.me.id, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
-    subjects, meeting_id: m.id, change_ids: changeIds, item_ids: itemIds,
+    subjects, meeting_id: m.id, change_ids: changeIds, item_ids: itemIds, chosen,
   };
   db.decisions.push(d);
+  ctx.logDecision?.({ id: d.id, title, at: d.at, approver_id: ctx.me.id, subjects, chosen, meeting_title: m.title });
   // The items and lines it names link to it (decided_in, a line's decisions), newest first.
   for (const s of subjects) {
     const row = { id: d.id, number: d.number, title: d.title };
-    if (s.kind === "roadmap_item") ((ctx.roadmap.decided_in ??= {})[s.id] ??= []).unshift(row);
+    if (s.kind === "roadmap_item") ((ctx.roadmap.decided_in ??= {})[s.id] ??= []).unshift(decidedRef(ctx, db, d));
     if (s.kind === "section" && s.ref?.startsWith("line:")) ((ctx.onePager.decisions ??= {})[s.ref.slice(5)] ??= []).unshift(row);
   }
   return d;
@@ -645,7 +693,16 @@ const OP_WORDS: Record<string, string> = {
 /** A change in words and the subjects it names (as meetings.describe). */
 const HORIZON_TO: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
 
-function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
+/** walkc-meeting r2 (meetings.PROPOSAL_WORDS): what a proposal asked for. */
+const PROPOSAL_WORDS: Record<string, string> = {
+  move_dates: "new dates for", accept_date_suggestion: "accept Oracle's dates for", change_horizon: "move", reorder: "reorder", cut: "cut",
+  restore: "restore", edit_title: "rename", edit_outcome: "new outcome for", accept_risk: "accept a risk on", shift_dependents: "move the dependents of",
+  move_dependency: "move the dependency of", confirm_item: "confirm", edit_line: "new wording for", add_key_date: "add the key date",
+  edit_key_date: "change the key date", remove_key_date: "remove the key date", add_item: "add", merge_item: "merge",
+  keep_both: "keep beside its look-alikes:", cut_with_dependents: "cut with its dependents:",
+};
+
+function describe(ctx: MeetingsCtx, c: Change, proposal = false): [string, Decision["subjects"]] {
   const subjects: Decision["subjects"] = [];
   let name = "";
   const item = items(ctx).find((i) => i.id === c.target.item_id);
@@ -665,9 +722,14 @@ function describe(ctx: MeetingsCtx, c: Change): [string, Decision["subjects"]] {
       if (other) subjects.push({ kind: "roadmap_item", id: other.id, ref: other.key });
     }
   } else if (!name) name = String(c.after.title ?? c.target.title ?? "");
+  const h = HORIZON_TO[String(c.after.horizon)];
+  if (proposal) {
+    // walkc-meeting r2 (meetings.describe): what a declined proposal asked for, never "Moved".
+    if (c.op === "change_horizon" && name && h) return [`move ${name} to ${h}`, subjects];
+    return [`${PROPOSAL_WORDS[c.op] ?? c.op.replace(/_/g, " ")} ${name}`.trim(), subjects];
+  }
   const words = OP_WORDS[c.op] ?? c.op.replace(/_/g, " ");
   // qa4-simple-decide-12 (meetings.describe): a move says where to.
-  const h = HORIZON_TO[String(c.after.horizon)];
   if (c.op === "change_horizon" && name && h) return [`Moved ${name} to ${h}`, subjects];
   return [`${words} ${name}`.trim(), subjects];
 }
@@ -713,7 +775,7 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   const out = (await res.clone().json()) as Schemas["SimpleChangeResult"];
   const c = out.change;
   m.last_change_at = iso(mockNowMs());
-  const [words, subjects] = describe(ctx, c);
+  const [words, subjects] = describe(ctx, c, verb === "Declined");
   // qa4-simple-decide-12 (meetings.after_change): an accepted or declined proposal says whose.
   const whose = verb && c.by_name ? `${verb} ${c.by_name}'s proposal: ` : verb ? `${verb}: ` : null;
   const title = whose ? `${whose}${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
@@ -840,7 +902,7 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const waits: Schemas["SimpleWait"][] = [];
   for (const d of meetingDrafts(ctx, db, m, p)) {
     if (d.status === "submitted" && d.waiting_on.length) waits.push({ what: `Publishing ${d.document.title}: their approval`, on: d.waiting_on.map((i) => ref(ctx, i)) });
-    else if (d.status === "working") waits.push({ what: `${d.document.title}: the working draft is not approved yet`, on: [] });
+    else if (d.status === "working") waits.push({ what: `${d.document.title}: the working draft is not approved yet`, on: approversOf(ctx, p).map((i) => ref(ctx, i)) });
   }
   const made = new Set(db.decisions.filter((d) => d.meeting_id === m.id).flatMap((d) => d.change_ids));
   // qa4-simple-decide-3 (as meetings._waits: every proposal of the meeting's session still
@@ -850,7 +912,7 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const ran = (c: Change) => Date.parse(c.at) >= Date.parse(m.started_at) && (!m.ended_at || Date.parse(c.at) <= Date.parse(m.ended_at));
   const ofPrd = (c: Change) => ids.has(String(c.target.item_id)) || (p.slug === ctx.onePager.doc.slug && ctx.onePager.changes.some((x) => x.id === c.id));
   for (const c of [...(ctx.roadmap.changes ?? []), ...ctx.onePager.changes]) {
-    if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
+    if (c.status === "proposed" && (made.has(c.id) || (ran(c) && ofPrd(c)))) waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: (c.routed_to.length ? c.routed_to : approversOf(ctx, p)).map((i) => ref(ctx, i)) });
   }
   return {
     summary: summary.slice(0, 4000),
@@ -941,6 +1003,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     questions: qs,
     ...(({ waiting_count, late_count, approvals_waiting, approvals_example }) => ({ waiting_count, late_count, approvals_waiting, approvals_example }))(questionsCounts(ctx, qd, qs)),
     view: ctx.view?.() ?? "list",
+    // build-rundecide RD1 a (as decisions_page): the runs' stops, unless a goal or a meeting is picked.
+    runs: meetingQ || goal ? [] : (ctx.runs?.(prd?.slug ?? null) ?? []),
   };
   return json(200, out);
 }
@@ -949,7 +1013,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
 export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || (p[2] !== "meetings" && p[2] !== "decisions")) return null;
   const method = req.method;
-  if (p[2] === "decisions" && p[3] === "waiting") return method === "GET" ? json(200, waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0)) : null;
+  if (p[2] === "decisions" && p[3] === "waiting") return method === "GET" ? json(200, { ...waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0), tasks: tasksWaiting(ctx.roadmap, ctx.me) }) : null;
   if (p[2] === "decisions") return method === "GET" ? decisionsPage(ctx, db, q) : null;
   const ps = prds(ctx);
   const now = iso(mockNowMs());
@@ -996,7 +1060,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const title = (b.title ?? "").trim() || (occ ? `${occ.ritual_title}: ${prd.title}` : `Review: ${prd.title}`);
     const m: Meeting = {
       id: crypto.randomUUID(), title: title.slice(0, 200), prd: prd.slug, origin: occ ? "ritual" : (b.origin ?? "one_pager"), occurrence_id: occ?.id ?? null,
-      session_id: crypto.randomUUID(), presenter_id: ctx.me.id, attendee_ids: att, absent_ids: [], change_mode: mode, change_people: people,
+      session_id: crypto.randomUUID(), presenter_id: ctx.me.id, attendee_ids: att, absent_ids: [], joined_ids: [ctx.me.id], change_mode: mode, change_people: people,
       length_min: length, status: "live", started_at: now, ended_at: null, ended_by: null, minutes: null, minutes_state: null, delivery: null, sent_at: null, approved: null,
     };
     db.meetings.push(m);
@@ -1029,11 +1093,13 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   const ok = () => json(200, one(ctx, db, m));
   endIdle(ctx, db, m);
   settleLater(ctx, db, m);
+  settleStuck(m);
   if (!p[4] && method === "GET") return ok();
   if (p[4] === "join" && method === "POST") {
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
     if (!m.attendee_ids.includes(ctx.me.id)) m.attendee_ids.push(ctx.me.id);
     m.absent_ids = m.absent_ids.filter((i) => i !== ctx.me.id);
+    if (!(m.joined_ids ?? m.attendee_ids).includes(ctx.me.id)) m.joined_ids = [...(m.joined_ids ?? m.attendee_ids), ctx.me.id];
     return ok();
   }
   if (p[4] === "rules" && method === "PATCH") {
@@ -1065,11 +1131,37 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     (m.notes ??= []).push(note);
     return json(201, one(ctx, db, m));
   }
+  // build-runplan RP2 (meeting_draft): Change dates, Leave out and Approve these N dates on the run's draft.
+  if (p[4] === "draft-items" && method === "POST") {
+    if (m.status !== "live") return json(409, { detail: "The meeting has ended" });
+    if (!mayChange(m, ctx.me.id)) return json(403, { detail: "You cannot change things in this meeting" });
+    const b = (await body(req)) as { start?: string; end?: string };
+    const act = p[5] === "approve" ? ({ kind: "approve" } as const) : p[6] === "dates" ? ({ kind: "dates", id: p[5]!, start: b.start ?? "", end: b.end ?? "" } as const) : p[6] === "leave-out" ? ({ kind: "leave", id: p[5]! } as const) : null;
+    if (!act) return null;
+    const r = draftAct(ctx.roadmap, prd.ids, act);
+    if ("status" in r) return json(r.status, { detail: r.detail });
+    if (act.kind === "approve") {
+      // The PRD by its slug (Company > Decisions links to it); the count in the chosen option, so the step says so after a reload (meeting_draft.approve_dates).
+      const subject = { kind: "document", id: prd.ids[0]!, ref: prd.slug };
+      record(db, ctx, m, `${prd.title} dates approved: ${r.n} item${r.n === 1 ? "" : "s"} on the roadmap`, [subject], [], [], `${APPROVED_KEY}:${r.n}`);
+    }
+    return ok();
+  }
   if (p[4] === "approve" && method === "POST") {
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
     if (!(ctx.me.id === prd.decider || ctx.me.role === "owner")) return json(403, { detail: "Only the PRD's decider (or an owner) approves in the meeting" });
     if (!db.decisions.some((d) => d.meeting_id === m.id && d.change_ids.length)) return json(422, { detail: "Nothing to approve: no change was made in this meeting" });
-    const present = m.attendee_ids.filter((i) => !m.absent_ids.includes(i));
+    // walkc-meeting "approve-problems": the importer refuses the draft (meetings.approve_problems):
+    // each problem once, in plain words with what to do and where, never "draft rejected: N problem(s)".
+    if (flags().includes("approve-problems")) {
+      const date = (d: string) => ({ what: `The date ${d} (in What we will build) is not backed by a confirmed schedule: no verified estimate, capacity or commitment for this item; record its basis on the roadmap or drop the date.`, where: null, times: 1 });
+      const problems = [...["Nov 20", "Dec 4", "Dec 18", "Jan 8", "Jan 22", "Feb 5", "Feb 19"].map(date), { what: "A source is cited twice in Why now; drop one.", where: null, times: 1 }];
+      return json(422, { detail: { code: "draft_problems", message: `Not approved: the draft has ${problems.length} problems to fix first.`, problems } });
+    }
+    // walkc-meeting-r2 review: as meetings.approve, present is joined and not marked away; one
+    // invited who never pressed Join ("invited, not joined yet") is waited on like an absent one.
+    const joined = [m.presenter_id, ...(m.joined_ids ?? m.attendee_ids)];
+    const present = m.attendee_ids.filter((i) => joined.includes(i) && !m.absent_ids.includes(i));
     const waiting = prd.reviewers.filter((i) => i !== ctx.me.id && !present.includes(i));
     // "section-reviewer": Guided setup's required section "What we will build" names the
     // commenter as its reviewer; absent, it is not approved over their head and the draft
@@ -1096,8 +1188,10 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.minutes = extract(ctx, db, m);
     const job = flags().includes("minutes-failed") ? "failed" : flags().includes("minutes-slow") ? "slow" : null;
     const later = flags().includes("minutes-later-failed") ? "failed" : flags().includes("minutes-later") ? "succeeded" : null;
-    m.minutes_state = job || later ? "drafting" : "ready";
-    m.minutes_job = later ? "drafting" : job;
+    const stuck = !job && !later && flags().includes("minutes-stuck");
+    m.minutes_state = job || later || stuck ? "drafting" : "ready";
+    m.minutes_job = later || stuck ? "drafting" : job;
+    m.minutes_job_at = m.minutes_state === "drafting" ? mockNowMs() : null;
     m.minutes_due = later ? { at: mockNowMs() + MINUTES_LATER_MS, outcome: later } : null;
     return ok();
   }

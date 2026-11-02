@@ -40,6 +40,7 @@ export function Dialog({
   size = "md",
   phoneSheet = false,
   scrollBody = false,
+  fullHeight = false,
   closeButton = true,
   children,
 }: {
@@ -67,6 +68,11 @@ export function Dialog({
    * scrolling body clips popovers opened inside it.
    */
   scrollBody?: boolean;
+  /**
+   * walkb-review 5g: with `scrollBody`, the dialog is the window's height from the start, so
+   * content that loads in after it opens never moves the footer under the pointer.
+   */
+  fullHeight?: boolean;
   /** false: no close X in the head row; Cancel, Escape and the backdrop close it (qa-company-24). */
   closeButton?: boolean;
   children: ReactNode;
@@ -74,6 +80,9 @@ export function Dialog({
   const id = useId();
   const panel = useRef<HTMLDivElement>(null);
   const [asking, setAsking] = useState(false);
+  // vqa-detailed: a dialog opened from an open Sheet (Re-plan… in a plan item's sheet on a
+  // phone) sits above that sheet, not under it.
+  const [overSheet] = useState(() => typeof document !== "undefined" && !!document.querySelector("[data-sheet]"));
   /** Where focus was when the question opened: Keep editing puts it back. */
   const before = useRef<HTMLElement | null>(null);
 
@@ -146,7 +155,7 @@ export function Dialog({
     <div
       data-testid="dialog-backdrop"
       data-backdrop=""
-      className={`fixed inset-0 z-[45] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 ${phoneSheet ? "max-[600px]:p-0" : "max-[600px]:px-2 max-[600px]:py-4"}`}
+      className={`fixed inset-0 ${overSheet ? "z-[55]" : "z-[45]"} flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 ${phoneSheet ? "max-[600px]:p-0" : "max-[600px]:px-2 max-[600px]:py-4"}`}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.key !== "Escape" && e.key !== "Tab" && e.stopPropagation()}
       onMouseDown={(e) => {
@@ -162,6 +171,8 @@ export function Dialog({
         data-testid={testId}
         className={`w-full ${SIZE[size]} min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none ${phoneSheet ? "max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0" : ""} ${
           scrollBody ? `flex max-h-[calc(100dvh-5rem)] flex-col ${phoneSheet ? "max-[600px]:max-h-dvh" : "max-[600px]:max-h-[calc(100dvh-2rem)]"}` : ""
+        } ${
+          scrollBody && fullHeight ? `h-[calc(100dvh-5rem)] ${phoneSheet ? "max-[600px]:h-dvh" : "max-[600px]:h-[calc(100dvh-2rem)]"}` : ""
         }`}
       >
         <div className="flex min-h-14 flex-none items-start gap-3 border-b border-line py-3 pr-3 pl-5 max-[600px]:pl-4">

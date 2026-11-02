@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useState } from "react";
 
+import { NewPrdButton, NewPrdSheet, StartedRows, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { dmy } from "@/components/simple/PrdTimeline";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
@@ -14,6 +16,11 @@ import { useQuery } from "@/lib/use-query";
 export default function OnePagers() {
   const q = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const zone = useCompanyZone();
+  const canStartPrd = useCanStartPrd();
+  const [newPrd, setNewPrd] = useState(false);
+  const closeNewPrd = useCallback(() => setNewPrd(false), []);
+  const started = useStartedPrds(canStartPrd);
+  const mine = started.data ?? [];
   // qa-simple-prd-p3-30: newest first, by when each last changed (and the list says so).
   const rows = q.data ? [...q.data].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)) : null;
   return (
@@ -22,13 +29,19 @@ export default function OnePagers() {
       <SimpleSection
         title="PRDs"
         testId="simple-one-pagers"
-        action={rows && rows.length > 1 ? <span className="simple-small" data-testid="one-pagers-order">Newest first</span> : undefined}
+        action={
+          // NP1: New PRD beside "Newest first", opening the guided sheet.
+          <span className="flex flex-wrap items-center gap-3">
+            {rows && rows.length + mine.length > 1 ? <span className="simple-small" data-testid="one-pagers-order">Newest first</span> : null}
+            {canStartPrd && <NewPrdButton primary onOpen={() => setNewPrd(true)} />}
+          </span>
+        }
       >
         {q.error ? (
           <p className="simple-small">{q.error}</p>
         ) : !rows ? (
           <Loading />
-        ) : rows.length === 0 ? (
+        ) : rows.length === 0 && mine.length === 0 ? (
           // qa-simple-prd-41: what a one-pager comes from, and where to start one.
           <SimpleEmpty testId="simple-one-pagers-empty">
             No PRDs yet. A one-pager is made from a PRD: start one in{" "}
@@ -39,6 +52,7 @@ export default function OnePagers() {
           // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
           // link stretches over the row (one link still, its name the title).
           <ul className="flex flex-col">
+            <StartedRows started={mine} />
             {rows.map((d) => (
               <li key={d.id} data-testid="one-pager-row" className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-3 last:border-b-0 hover:bg-bg/50">
                 <Link href={`/simple/one-pagers/${d.slug}`} className="min-w-0 font-semibold break-words after:absolute after:inset-0 after:content-[''] hover:underline">
@@ -51,6 +65,7 @@ export default function OnePagers() {
           </ul>
         )}
       </SimpleSection>
+      {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
     </SimplePage>
   );
 }

@@ -682,6 +682,10 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     Object.assign(intake, fields);
     if (requestIds.length) ctx.requests?.link(intake.id, requestIds);
     applyBriefFields(db, ctx, intake);
+    if (db.blocker_briefs) {
+      db.gaps.find((g) => g.intake_id === intake.id && g.category === "blockers")!.importance = "critical";
+      syncQuestions(db, intake);
+    }
     // qa-onboarding-22: with no confirmed company goal, Oracle does not ask which one it
     // serves (as the API's sharing.question_prompt).
     if (ctx.confirmedGoals && ctx.confirmedGoals().size === 0) {
@@ -979,11 +983,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     const offset = Math.max(0, Number(q.get("offset") ?? 0));
     // decides: only those whose role may decide a PRD's question (approvers and owners).
     const decides = q.get("decides") === "true";
+    // q matches the email or the name, as the API does.
     // ids: the named people, a disabled one too (it keeps its name); q and limit do not apply.
     const ids = new Set(q.getAll("ids"));
     if (ids.size > 100) return fail(422, "At most 100 ids");
     const people: Schemas["PersonOut"][] = (ctx.people ?? [])
-      .filter((x) => (ids.size ? ids.has(x.id) : x.status !== "disabled" && x.email.includes(needle) && (!decides || atLeast(x.role, "approver"))))
+      .filter((x) => (ids.size ? ids.has(x.id) : x.status !== "disabled" && (x.email.toLowerCase().includes(needle) || (x.name ?? "").toLowerCase().includes(needle)) && (!decides || atLeast(x.role, "approver"))))
       .sort((a, b) => a.email.localeCompare(b.email))
       .slice(ids.size ? 0 : offset, ids.size ? undefined : offset + limit)
       .map((x) => ({

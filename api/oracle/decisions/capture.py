@@ -445,6 +445,10 @@ async def checkpoint(
     review_file = payload.get("review_file")
     if isinstance(review_file, str) and review_file:
         context.append(f"Review file: {review_file}")
+    # AQ1: the answers to the agents' questions go to the next step with the decision.
+    from oracle.runs import agent_questions
+
+    context += await agent_questions.decision_lines(db, run, cp)
     subjects: list[dict[str, Any]] = [
         {
             "kind": "run",

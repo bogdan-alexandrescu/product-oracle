@@ -110,6 +110,8 @@ class RankedFeature(BaseModel):
     # features the run ranks, and the run's own explanation (priority.yaml).
     live_rank: int | None = None
     run_explanation: str | None = None
+    # A feature new in the run's PRD, not in the baseline yet, scored by the run (RP1).
+    new: bool = False
     # The move or pin that placed it, if any.
     override: RowOverride | None = None
     # A prerequisite an override could not pass: the row sits just below it.
@@ -216,6 +218,8 @@ class CompareRow(BaseModel):
     run_explanation: str | None
     live_explanation: str | None
     problems: list[PriorityProblem]
+    # A feature new in the run's PRD (not in the baseline yet): scored with the rest.
+    new: bool = False
 
 
 class CompareRun(BaseModel):

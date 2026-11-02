@@ -78,6 +78,9 @@ READER_JOB = "chat_reader"
 DEAD = ("failed", "cancelled")
 KINDS = frozenset(get_args(ChatKind))
 FLOW_OPS = ("add_feature_ask", "add_item_task")
+# walkc-meeting r2 (5g): cards that add work and move no date; they carry no constraint
+# check (the item's own red flags are not theirs) and no Preview.
+UNCHECKED_OPS = (*FLOW_OPS, "add_launch_task", "add_action_item")
 CARD_OPS_ON_ITEMS = ("move_dates", "change_horizon", "set_milestone", "edit_title", "cut")
 VIEWER_NOTE = "Viewers ask questions here; ask the presenter to make a change."
 EXAMPLES = (
@@ -94,6 +97,8 @@ MONTHS = {
     )
 }
 HERE = "Here is the change. Preview it, then apply or discard it."
+# walkc-meeting r2 (5g): a card with no Preview is not asked to be previewed.
+HERE_PLAIN = "Here is the change. Apply or discard it."
 NEITHER: dict[str, Any] = {"label": "Neither", "op": None, "args": {}}
 READING = "Reading that…"
 COULD_NOT_READ = "I couldn't read that just now."
@@ -503,11 +508,21 @@ def _kw(summary: str, op: str, e: service.Entry | None, target: dict, before: di
 
 def _card(summary: str, op: str, e: service.Entry | None, target: dict, before: dict,
           after: dict, preview: dict | None = None) -> Reply:  # fmt: skip
-    return Reply("cards", HERE, [_kw(summary, op, e, target, before, after, preview)])
+    return Reply("cards", HERE if preview else HERE_PLAIN,
+                 [_kw(summary, op, e, target, before, after, preview)])  # fmt: skip
 
 
 def _dates(e: service.Entry) -> dict[str, Any]:
     return changes.read(e.row, changes.DATES, {})
+
+
+def _current(e: service.Entry) -> dict[str, Any]:
+    """walkc-meeting r2 (5b): the dates the item shows now and their source (``typed``,
+    ``engineering``, ``estimated``, ...), for a move card's Before: an item dated by its
+    engineering lead has no dates of its own, yet it is not Oracle's estimate."""
+    r = e.resolved
+    return {"start_date": r.start.date.isoformat(), "end_date": r.end.date.isoformat(),
+            "source": r.source}  # fmt: skip
 
 
 def _owner_words(c: Ctx, e: service.Entry) -> str:
@@ -632,7 +647,7 @@ def _b_move(c: Ctx, a: dict[str, Any]) -> Built:
                "move_dates", e, {"item_id": str(e.row.id)}, _dates(e),
                {"start_date": s, "end_date": en},
                {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
-                "end_date": en})  # fmt: skip
+                "end_date": en, "current": _current(e)})  # fmt: skip
     if by is not None:
         # A move by a span: offered again on newer dates, it moves from those (rebase).
         card["preview"]["shift"] = list(by)
@@ -693,7 +708,23 @@ def _due(c: Ctx, a: dict[str, Any]) -> date | None | Reply:
     return due if due is not None else Reply("question", f"Which day is “{words}”?")
 
 
+def _task_item(c: Ctx, a: dict[str, Any]) -> dict[str, Any]:
+    """walkc-meeting: "add a task 'X' to Exports for teams for Theo": an item's own name
+    may hold " for ", so the longest name the roadmap knows takes the words before
+    "for <person>" (none known: as parsed)."""
+    owner = _arg(a, "owner")
+    if not owner:
+        return a
+    parts = f"{_unquote(_need(a, 'item'))} for {owner}".split(" for ")
+    titles = {e.row.title.lower() for e in c.entries()}
+    for k in range(len(parts), 0, -1):
+        if " for ".join(parts[:k]).lower() in titles:
+            return {**a, "item": " for ".join(parts[:k]), "owner": " for ".join(parts[k:]) or None}
+    return a
+
+
 def _b_task(c: Ctx, a: dict[str, Any]) -> Built:
+    a = _task_item(c, a)
     e = c.find(_need(a, "item"))
     if isinstance(e, Reply):
         return e
@@ -828,7 +859,7 @@ def build(c: Ctx, op: str, args: dict[str, Any], body: str | None = None) -> Rep
                 out.choices = [{"label": n, "op": op, "args": {**args, key: n}}
                                for n in out.people] + [NEITHER]  # fmt: skip
         return out
-    return Reply("cards", body or HERE, [out])
+    return Reply("cards", body or (HERE if out.get("preview") else HERE_PLAIN), [out])
 
 
 def parse(c: Ctx, text: str) -> Reply:
@@ -1956,16 +1987,36 @@ def _fixes(e: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> list[Chat
             for x in _flag_fixes(e, f, by_id)]  # fmt: skip
 
 
+async def _proposals(db: AsyncSession, cards: list[SimpleChatCard]) -> dict[uuid.UUID, Any]:
+    """Each proposed card's change: who it went to (walkc-meeting: "Proposed to ...") and
+    whether it was declined since (walkc-meeting r2: the card then says so)."""
+    ids = {c.change_id for c in cards if c.status == "proposed" and c.change_id}
+    if not ids:
+        return {}
+    rows = await db.scalars(select(SimpleChange).where(SimpleChange.id.in_(ids)))
+    return {r.id: r for r in rows}
+
+
 async def cards_out(
     db: AsyncSession, principal: Any, cards: list[SimpleChatCard], rules: Any = None
 ) -> list[ChatCardOut]:
     if not cards:
         return []
     overlays = await drafts.overlays_for(db, principal)
+    # walkc-meeting: a meeting's cards are checked on the meeting's working state (the
+    # changes applied in it), not only on the drafts the reader sees.
+    if getattr(rules, "session_id", None) is not None:
+        overlays = {**overlays, **await drafts.session_overlays(db, rules.session_id)}
     read_ = await service.load(db, overlays)
     # A meeting's cards may be on its PRD's draft-roadmap items (meet-chat-right-prd).
     await meeting_prd(db, read_, rules)
-    names = await _names(db, {c.decided_by for c in cards if c.decided_by})
+    proposals = await _proposals(db, cards)
+    routes = {i: list(r.routed_to or []) for i, r in proposals.items()}
+    declined = {i: r for i, r in proposals.items() if r.status == "declined"}
+    names = await _names(db, {c.decided_by for c in cards if c.decided_by}
+                          | {i for ids in routes.values() for i in ids}
+                          | {r.decided_by for r in declined.values() if r.decided_by})  # fmt: skip
+    owners: list[uuid.UUID] | None = None
     outs: list[ChatCardOut] = []
     for c in cards:
         e = read_.by_id().get(c.item_id) if c.item_id else None
@@ -1978,7 +2029,7 @@ async def cards_out(
             if c.status == "open" and c.op == "cut" and e is not None
             else []
         )
-        if c.status == "open" and e is not None:
+        if c.status == "open" and e is not None and c.op not in UNCHECKED_OPS:
             after = (
                 read_
                 if c.op not in CARD_OPS_ON_ITEMS
@@ -2020,18 +2071,54 @@ async def cards_out(
                         if changes.decides_all(principal, cut, read_.deciders)
                         else "propose"
                     )
+        asks: list[uuid.UUID] = []
+        here = True
+        if may == "propose" and e is not None and c.op != "add_item":
+            # walkc-meeting: who Propose asks, said before Propose; in a meeting its
+            # deciders, and when nobody in it may decide, who outside it would be asked.
+            asks = service.decider_ids(e, read_.deciders)
+            if not asks:
+                owners = owners if owners is not None else await changes._company_owners(db)
+                asks = owners
+            if rules is not None:
+                asks, here = await changes.meeting_route(db, rules, [e], read_.deciders, asks)
+            names.update(await _names(db, {i for i in asks if i not in names}))
+        elif c.status == "proposed":
+            asks = routes.get(c.change_id, []) if c.change_id else []
+        asks_all: list[uuid.UUID] = []
+        here_all = True
+        if may_all == "propose" and e is not None:
+            # walkc-meeting review: the cut with its dependents goes to whoever decides every
+            # item it cuts (changes.create's cut_route), so the card names them for it.
+            cut = [e, *waiting]
+            asks_all = changes.cut_route(cut, read_.deciders)
+            if not asks_all:
+                owners = owners if owners is not None else await changes._company_owners(db)
+                asks_all = owners
+            if rules is not None:
+                asks_all, here_all = await changes.meeting_route(
+                    db, rules, cut, read_.deciders, asks_all
+                )
+            names.update(await _names(db, {i for i in asks_all if i not in names}))
+        # walkc-meeting r2: a proposal declined since reads as declined, by whom and when.
+        no = declined.get(c.change_id) if c.status == "proposed" and c.change_id else None
+        by, at = (no.decided_by, no.decided_at) if no is not None else (c.decided_by, c.decided_at)
         outs.append(ChatCardOut(
             id=c.id, message_id=c.message_id, op=c.op, target=c.target,  # type: ignore[arg-type]
             before=c.before, after=c.after, summary=c.summary, item_id=c.item_id,
-            item_title=e.row.title if e is not None else None, status=c.status,  # type: ignore[arg-type]
+            item_title=e.row.title if e is not None else None,
+            status="declined" if no is not None else c.status,  # type: ignore[arg-type]
             may=may, why_not=bar, flags=flags, fixes=fixes, preview=c.preview,  # type: ignore[arg-type]
             flow=await _flow(db, c), change_id=c.change_id,
-            decided_by_name=names.get(c.decided_by) if c.decided_by else None,  # type: ignore[arg-type]
-            decided_at=c.decided_at, decision_id=c.decision_id, change_words=card_words,
+            decided_by_name=names.get(by) if by else None,  # type: ignore[arg-type]
+            decided_at=at, decision_id=c.decision_id, change_words=card_words,
             correct=correct if c.status == "open" else None,
             dependents=[x.row.title for x in waiting], dependent_ids=[x.row.id for x in waiting],
             may_with_dependents=may_all,  # type: ignore[arg-type]
             can_undo=c.status == "applied" and _undo_bar(principal, c, rules, read_) is None,
+            asks=[names[i] for i in asks if i in names], asks_outside=not here,
+            asks_with_dependents=[names[i] for i in asks_all if i in names],
+            asks_with_dependents_outside=not here_all,
         ))  # fmt: skip
     return outs
 

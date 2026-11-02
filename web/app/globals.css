@@ -42,6 +42,8 @@
   --warn-bg: #fdf3dc;
   --crit: #b42318;
   --crit-bg: #fdecea;
+  /* The roadmap Timeline's Today line: its own purple, never a broken link's red. */
+  --today: #7c3aed;
   --na: #5b6878;
   --na-bg: #eef1f5;
   --tip: #0d1724;
@@ -95,6 +97,7 @@
     --warn-bg: #3a2a0c;
     --crit: #ff8a80;
     --crit-bg: #3a1512;
+    --today: #b69cff;
     --na: #9aa8b8;
     --na-bg: #16263b;
     --tip: #eef4fa;
@@ -132,6 +135,7 @@
   --warn-bg: #3a2a0c;
   --crit: #ff8a80;
   --crit-bg: #3a1512;
+  --today: #b69cff;
   --na: #9aa8b8;
   --na-bg: #16263b;
   --tip: #eef4fa;

@@ -44,6 +44,13 @@ function rows(body: string, cites = false): { bullets: string[]; cells: string[]
   return { bullets, cells, prose };
 }
 
+/** one_pager_checks._header: a table's header cells, lower-case. */
+function header(body: string): string[] {
+  const lines = (body ?? "").split("\n");
+  const at = lines.findIndex((l, i) => i > 0 && TABLE_SEP.test(l) && l.includes("-") && lines[i - 1].trim().startsWith("|"));
+  return at > 0 ? lines[at - 1].trim().replace(/^\||\|$/g, "").split("|").map((c) => plain(c).toLowerCase()) : [];
+}
+
 const terms = (t: string) => new Set((t.match(/[A-Za-z][A-Za-z'-]{3,}/g) ?? []).filter((w) => !STOP.has(w.toLowerCase())).map((w) => w.toLowerCase().replace(/s+$/, "")));
 const overlap = (a: Set<string>, b: Set<string>) => [...a].filter((x) => b.has(x)).length;
 
@@ -59,10 +66,38 @@ const WHO_NOT = /\b(?:stor(?:y|ies)|flows?|quotes?|journeys?|scenarios?|problems
 /**
  * A users section of labelled lines (a run's PRD: "Primary: …", "Job story: …", "Owner: …",
  * "Not the target: …"): the label says what the line is, its words who. The primary people
- * first, a story only when no line names people, the excluded never.
+ * first, the excluded never, a job story never (it names no one).
  */
 const LABEL = /^(?:(primary|main|core|target)(?:\s+(?:users?|personas?|segments?|audiences?))?|(not\b.*|non[- ]target.*|anti[- ]personas?|out of scope|excluded)|((?:job\s+)?stor(?:y|ies)|jobs?(?:\s+to\s+be\s+done)?|jtbd|scenarios?|quotes?)|(secondary|tertiary|also|other|owners?|buyers?|segments?|personas?|users?|audiences?|customers?|who(?:\s+has\s+it)?)(?:\s+(?:users?|personas?|segments?))?)$/i;
-const firstSentence = (t: string) => sentences(t.trim())[0]?.replace(/\.$/, "").split(/\s+/).filter(Boolean).slice(0, 30).join(" ") ?? "";
+
+// A job story ("When ..., I want ...") or a note on the people ("The primary segment is a
+// hypothesis ...") says what they do or how sure we are, never who they are (CLD's walk B, 2026-11-01).
+const STORY = /^\s*(?:when\b.*\bI\b|as an?\b.*,\s*I\b|I\s+want\b)/i;
+const NOTE_LINE = /\bhypothes|\bassum|\bto be (?:confirmed|validated|tested)\b/i;
+const WHO_WORDS = 30;
+const saidNotWho = (t: string) => STORY.test(t) || NOTE_LINE.test(t);
+const wordCount = (t: string) => t.split(/\s+/).filter(Boolean).length;
+
+/** one_pager_checks._whole: a sentence whole, never cut mid-way; over 30 words its first clause, "" when even that is too long. */
+function whole(text: string, words = WHO_WORDS): string {
+  const t = text.split(/\s+/).filter(Boolean).join(" ").replace(/\.+$/, "");
+  if (wordCount(t) <= words) return t;
+  const clause = t.split(/\s*(?:[,;]|—|–| - )\s*/)[0];
+  return wordCount(clause) <= words ? clause : "";
+}
+
+/** A labelled line's words as who has it: its first sentence, whole. */
+const sentence = (t: string) => whole(t.trim().split(/(?<=[.!?])\s+/)[0] ?? "");
+
+/** one_pager_checks._joined: names joined with "; ", as many whole ones as fit in 30 words. */
+function joined(names: string[]): string {
+  const out: string[] = [];
+  for (const n of names) {
+    if (out.length && wordCount([...out, n].join(" ")) > WHO_WORDS) break;
+    out.push(n);
+  }
+  return out.join("; ");
+}
 
 /** Who has it from labelled lines ("" when no line names people), null when no line is labelled. */
 function labelled(pairs: [string, string][]): string | null {
@@ -70,37 +105,49 @@ function labelled(pairs: [string, string][]): string | null {
   if (!pairs.some(([label]) => LABEL.test(label.trim()))) return null;
   for (const [label, words] of pairs) {
     const m = LABEL.exec(label.trim());
-    // A lead among labelled lines ("New admins: ...") names its people.
+    // A lead among labelled lines ("New admins: ...") names its people; a long lead is a sentence.
     if (!m) {
-      kinds.people.push(label.split(/\s+/).filter(Boolean).slice(0, 12).join(" "));
+      if (wordCount(label) <= 8 && !saidNotWho(label)) kinds.people.push(label.trim());
       continue;
     }
-    const w = firstSentence(words);
+    const w = sentence(words);
     // The groups in LABEL's order: primary, out, story, people.
     if (w) kinds[["primary", "out", "story", "people"][[m[1], m[2], m[3], m[4]].findIndex((v) => v !== undefined)]].push(w);
   }
-  const named = kinds.primary.length ? kinds.primary : kinds.people.length ? kinds.people : kinds.story;
-  return named.join("; ").split(/\s+/).filter(Boolean).slice(0, 30).join(" ");
+  // A job story names no one ("When ..., I want ..."): never who has it.
+  return joined(kinds.primary.length ? kinds.primary : kinds.people);
 }
 
+/**
+ * one_pager_checks.who_has_it: one plain line, labelled lines by the primary people's words,
+ * else each bullet's lead, else a sentence naming people, whole. Never a label, a job story
+ * or a note on the people.
+ */
 export function whoHasIt(secs: Sec[]): string | null {
   const heads = secs.filter((s) => WHO_HEAD.test(s.heading) && !WHO_NOT.test(s.heading));
   heads.sort((a, b) => Number(!WHO_BEST.test(a.heading)) - Number(!WHO_BEST.test(b.heading)));
+  const split = (b: string) => { const m = /^(.*?)\s*(?::|—|–| - )\s*([\s\S]*)$/.exec(b); return m ? [m[1], m[2]] as [string, string] : null; };
   for (const s of heads) {
-    const { bullets, cells, prose } = rows(guidanceless(s.body));
-    const split = bullets.map((b) => /^(.*?)\s*(?::|—|–| - )\s*([\s\S]*)$/.exec(b)).map((m) => (m ? [m[1], m[2]] as [string, string] : null));
-    const pairs = [...split.filter((p): p is [string, string] => !!p), ...cells.filter((r) => r.length > 1 && r[0]).map((r) => [r[0], r.slice(1).join(" ")] as [string, string])];
-    if (pairs.length && pairs.length === bullets.length + cells.filter((r) => r[0]).length) {
+    const r = rows(guidanceless(s.body));
+    // A bold lead in prose ("**Job story:** When ...") is a labelled line too.
+    const lines = [...r.bullets, ...r.prose.filter((p) => /^[A-Z][\w ]{0,30}:\s/.test(p))];
+    const prose = r.prose.filter((p) => !lines.includes(p));
+    const pairs = [...lines.map(split).filter((p): p is [string, string] => !!p), ...r.cells.filter((c) => c.length > 1 && c[0]).map((c) => [c[0], c.slice(1).join(" ")] as [string, string])];
+    if (pairs.some(([label]) => LABEL.test(label.trim()))) {
       const who = labelled(pairs);
-      if (who !== null) {
-        if (who) return who;
-        continue;
-      }
+      if (who) return who;
+      continue;
     }
-    let named = [...bullets.map((b) => b.split(/\s*(?::|—|–| - )\s*/)[0]), ...cells.map((r) => r[0]).filter(Boolean)];
-    if (!named.length && prose.length) named = [sentences(prose.join(" "))[0].replace(/\.$/, "")];
-    named = named.filter((n) => n.trim()).map((n) => n.split(/\s+/).slice(0, 12).join(" "));
-    if (named.length) return named.join("; ").split(/\s+/).slice(0, 30).join(" ");
+    let named: string[] = [];
+    for (const b of lines) {
+      const p = split(b);
+      if (p && wordCount(p[0]) <= 8) named.push(p[0]);
+      else if (!saidNotWho(b)) named.push(sentence(b));
+    }
+    named.push(...r.cells.map((c) => c[0]).filter(Boolean));
+    if (!named.length) named = prose.join(" ").split(/(?<=[.!?])\s+/).filter((x) => x && !saidNotWho(x)).map(sentence).slice(0, 1);
+    named = named.filter((n) => n.trim());
+    if (named.length) return joined(named);
   }
   return null;
 }
@@ -147,17 +194,45 @@ function cited(raw: string, cites: Cites): Measure | null {
   return m;
 }
 
+// A success measures section (CLD's walk B, 2026-11-01): its lines say how each outcome is
+// measured in their own words ("from 55% to 80% by Mar 31, recomputed daily"), with no
+// "counted as". A clause that is the target, the baseline or the time frame is not how.
+const SUCCESS_HEAD = /\b(?:success|outcomes?|measures?|metrics?|kpis?)\b/i;
+const TARGET_CLAUSE = /(?:→|->|\bfrom\b[^,;]*\d[^,;]*\bto\b|^\s*(?:by|before|target|baseline|goal|today|now|up|down|at least|at most|no more|no less|within)\b|^[\s~<>≥≤$€£]*\d[\d.,%]*\s*\S{0,8}\s*$)/i;
+const TARGET = /\s(?:from\s+)?[~<>]?[$€£]?\d[\d.,]*\s?\S*\s*(?:→|->|\bto\b)\s*[~<>]?[$€£]?\d/i;
+const LEAD = /^([^:—–]{2,80}?)\s*(?::|—|–| - )\s*(.+)$/;
+const trimS = (t: string) => t.replace(/^[\s:,;·\-—–.]+|[\s:,;·\-—–.]+$/g, "");
+
+/** one_pager_checks._stated: how a success line measures its outcome in its own words, less its name, target and time frame. */
+function stated(raw: string): Measure | null {
+  const text = plain(raw).replace(/(?<=\d),(?=\d{3}\b)/g, "").replace(/\.+$/, "");
+  const lead = LEAD.exec(text);
+  let [name, rest] = lead ? [lead[1], lead[2]] : ["", text];
+  if (!lead) {
+    const at = TARGET.exec(text);
+    if (!at) return null;
+    [name, rest] = [text.slice(0, at.index), text.slice(at.index)];
+  }
+  // "from 55% to 80% by Mar 31": the target, its time frame with it.
+  rest = rest.replace(/\bfrom\b[^,;(]*?\d[^,;(]*?(?:\bto\b|→|->)[^,;(]*/gi, ";");
+  const s = SOURCE.exec(rest);
+  const source = s ? trimS(s[1]) : null;
+  if (s) rest = rest.slice(0, s.index);
+  const kept = rest.split(/[,;·]|\s—\s|\s–\s|\(|\)/).map(trimS).filter((c) => /[A-Za-z]{3}/.test(c) && !TARGET_CLAUSE.test(c));
+  if (!kept.length || !name.trim()) return null;
+  return { name: trimS(name), measure: kept.join(", "), source: source || null };
+}
+
 function measures(secs: Sec[], cites: Cites): Measure[] {
   const out: Measure[] = [];
   for (const s of secs) {
     const { bullets, cells, prose } = rows(s.body, true);
+    const success = SUCCESS_HEAD.test(s.heading);
     for (const t of [...bullets, ...sentences(prose.join(" "))]) {
-      const m = cited(t, cites);
+      const m = cited(t, cites) ?? (success && !MEASURE.test(t) ? stated(t) : null);
       if (m) out.push(m);
     }
-    const lines = s.body.split("\n");
-    const at = lines.findIndex((l, i) => i > 0 && TABLE_SEP.test(l) && l.includes("-") && lines[i - 1].trim().startsWith("|"));
-    const head = at > 0 ? lines[at - 1].trim().replace(/^\||\|$/g, "").split("|").map((c) => plain(c).toLowerCase()) : [];
+    const head = header(s.body);
     const mcol = head.findIndex((h, i) => i > 0 && /defin|measure|counted|how/.test(h));
     const scol = head.findIndex((h, i) => i > 0 && /source|data|where/.test(h));
     for (const r of cells) {
@@ -168,7 +243,7 @@ function measures(secs: Sec[], cites: Cites): Measure[] {
         const src = plain(said) || (keys.map((k) => cites[k].title).find(Boolean) ?? null);
         if (measure) out.push({ name: plain(r[0]), measure: plain(measure), source: src || null });
       } else {
-        const m = cited(r.join(" · "), cites);
+        const m = cited(r.join(" · "), cites) ?? (success && r[0] ? stated(`${r[0]}: ${r.slice(1).join("; ")}`) : null);
         if (m) out.push(m);
       }
     }
@@ -192,7 +267,9 @@ function measureFor(text: string, name: string | null, found: Measure[]): Measur
 // A standard's name (ISO-8601, RFC-3339) is not a feature or ticket code.
 const CODE = /\b(?!(?:ISO|RFC|UTF|IEC|SHA|CVE|EN|IEEE)-)(?:[A-Z]{1,3}-\d{1,4}|P[0-3])\b/g;
 const PRIORITY: Record<string, string> = { P0: "top priority", P1: "high priority", P2: "medium priority", P3: "low priority" };
-const NAMED = /^\s*(?:[:=—–]|\s-\s|\()\s*([A-Za-z][^.;,()|:\n]*)/;
+// A name starts with a capital: "F-01: every newly connected account gets a plan" says what
+// F-01 does, never its name (CLD's walk B, 2026-11-01).
+const NAMED = /^\s*(?:[:=—–]|\s-\s|\()\s*([A-Z][^.;,()|:\n]*)/;
 const CAPITAL = /^\s+([A-Z][^.;,()|:\n]*)/;
 const nameOf = (t: string) => t.split(/\s+/).filter(Boolean).slice(0, 5).join(" ").replace(/^[\s\-—–]+|[\s\-—–]+$/g, "");
 const isCode = (t: string) => new RegExp(`^${CODE.source}$`).test(t);
@@ -216,6 +293,13 @@ function glossary(secs: Sec[]): Record<string, string> {
       }
     }
   };
+  // A feature's own section names it best: "### F-01 Pacing plan {#f-01}".
+  for (const s of secs) {
+    const head = plain(s.heading.replace(/^[#\s]+/, ""));
+    const c = new RegExp(`^${CODE.source}`).exec(head);
+    const n = c ? CAPITAL.exec(head.slice(c[0].length)) ?? NAMED.exec(head.slice(c[0].length)) : null;
+    if (c && n) put(c[0], nameOf(n[1]));
+  }
   for (const s of secs) {
     for (const raw of [s.heading, ...s.body.split("\n")]) {
       if (raw.trim().startsWith("|")) {
@@ -240,7 +324,11 @@ function withNames(text: string, names: Record<string, string>): [string, string
       return code;
     }
     const after = text.slice(at + code.length).replace(/^[\s:—–\-(]+/, "");
-    return after.toLowerCase().startsWith(name.toLowerCase()) ? code : `${code} ${name}`;
+    if (after.toLowerCase().startsWith(name.toLowerCase())) return code;
+    // Already named where it stands: "Pacing plan (F-01)", "F-01 Pace gives ...".
+    const before = text.slice(0, at).replace(/[\s(—–\-:]+$/, "").toLowerCase();
+    const here = !(code in PRIORITY) && AFTER.exec(text.slice(at + code.length));
+    return before.endsWith(name.toLowerCase()) || (here && /^[A-Z]/.test(here[1])) ? code : `${code} ${name}`;
   });
   return [out, missing];
 }
@@ -277,6 +365,7 @@ const NUM = `(?:\\d[\\d,]*(?:\\.\\d+)?|${WORDS.join("|")})`;
 const num = (t: string) => { const w = WORDS.indexOf(t.toLowerCase()); if (w >= 0) return w; const n = Number(t.replace(/,/g, "")); return Number.isNaN(n) ? null : n; };
 const COUNT = new RegExp(`\\b(${NUM})\\s+(?:(?:more|other|new|open|big|small|planned)\\s+)?(features|items|bets|ideas|requests|tickets|stories|epics|projects|risks)\\b((?:\\s+[a-z]+){0,3})`, "gi");
 const PER = new RegExp(`\\b(?:each|every|per)\\s+([a-z]+?)s?\\s+(?:[a-z]+\\s+){0,2}?(${NUM})\\s+([a-z]+(?:\\s+[a-z]+)?)`, "gi");
+const FIELD = /^[A-Z][\w ]{0,24}:\s/;
 const TOTAL = /company[- ]wide|across the company|company target|whole company|in total|overall/i;
 
 function said(s: Sec): string[] {
@@ -295,10 +384,17 @@ function numbers(secs: Sec[]): Look[] {
     if (shown !== null && listed && shown !== listed) looks.push({ kind: "numbers", text: `“${head}” says ${shown} items, but it lists ${listed}.`, where: [head], source_keys: [s.key] });
     const target = shown ?? listed;
     if (!target) continue;
+    // A count disagrees only with a list of the same things (CLD's walk B, 2026-11-01):
+    // "M1 ships two features" above its scope, exit and date lines ("Scope: ...") is no
+    // list of features. Such a list counts only when its heading or header names them.
+    const listing = `${head} ${header(s.body).join(" ")}`.toLowerCase();
+    const fields = bullets.length > 0 && !cells.length && bullets.every((b) => FIELD.test(b));
     for (const t of [head, ...sentences(prose.join(" "))]) {
       for (const m of t.matchAll(COUNT)) {
         const n = num(m[1]);
         if (n === null || n === target) continue;
+        const noun = m[2].toLowerCase().replace(/s$/, "").replace(/ie$/, "");
+        if (hm === null && fields && !listing.includes(noun)) continue;
         looks.push({ kind: "numbers", text: `“${`${m[1]} ${m[2]}${m[3]}`.trim()}” says ${n}, but “${head}” shows ${target} items.`, where: [head], source_keys: [s.key] });
       }
     }
@@ -334,12 +430,33 @@ function numbers(secs: Sec[]): Look[] {
   return looks;
 }
 
+const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+const ISO = /\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?:T[\d:.]+Z?)?\b/g;
+// An internal pointer: a link's or heading's anchor ("(#feature-pacing-plan)", "{#f-01}").
+const POINTER = /\(\s*#[\w-]+\s*\)|\{#[^}]*\}/g;
+
+/** one_pager_checks.month_first: an ISO date month first ("2027-03-31" -> "Mar 31, 2027"), no anchor or pointer left. */
+export function monthFirst(text: string): string {
+  if (!text) return text;
+  const t = text.replace(ISO, (_m, y: string, mo: string, d: string) => `${MONTHS[Number(mo) - 1]} ${Number(d)}, ${y}`).replace(/\[([^\]]*)\]\(#[^)]*\)/g, "$1");
+  return t.replace(POINTER, "").split(/\s+/).filter(Boolean).join(" ");
+}
+
+/** one_pager_checks.whole_word: a target an older build cut mid-word ("80% of acc") whole again from its line's words. */
+export function wholeWord(cut: string, said: string): string {
+  const c = (cut ?? "").replace(/…+$/, "").trim();
+  if (!c) return c;
+  const esc = c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = new RegExp(esc + "[^\\s,;.)]*").exec(said ?? "");
+  return m ? m[0] : c;
+}
+
 /** one_pager_checks.annotate: fills the blocks' clear-reading fields in place; the "Needs a look" items. */
 export function annotate(blocks: Block[], secs: Sec[], cites: Cites = {}): Look[] {
   const names = glossary(secs), notes = footnoteNotes(secs), found = measures(secs, cites), who = whoHasIt(secs);
   const unnamed = new Map<string, string[]>();
   for (const b of blocks) {
-    if (b.key === "problem") b.who = who;
+    if (b.key === "problem") b.who = who ? monthFirst(who) : who;
     for (const x of b.lines ?? []) {
       const said = x.full ?? x.text;
       let missing: string[];
@@ -348,13 +465,15 @@ export function annotate(blocks: Block[], secs: Sec[], cites: Cites = {}): Look[
       for (const c of missing) unnamed.set(c, [...(unnamed.get(c) ?? []), ...x.source_keys]);
       [x.text, x.footnotes] = marked(x.text, notes);
       if (x.full) x.full = marked(x.full, notes)[0];
-      if (x.metric) x.metric = { ...x.metric, name: marked(withNames(x.metric.name, names)[0], notes)[0], to: marked(x.metric.to, notes)[0] };
+      x.text = monthFirst(x.text);
+      if (x.full) x.full = monthFirst(x.full);
+      if (x.metric) x.metric = { ...x.metric, name: monthFirst(marked(withNames(x.metric.name, names)[0], notes)[0]), to: monthFirst(marked(wholeWord(x.metric.to, plain(said)), notes)[0]) };
       // The Edit box starts from the PRD's words, not the names and marks put in.
       x.words = (x.full ?? x.text) !== said ? said : null;
       if (b.kind === "metrics") {
         const m = measureFor(x.full ?? x.text, x.metric?.name ?? null, found);
-        x.measure = m?.measure ?? null;
-        x.measure_source = m?.source ?? null;
+        x.measure = m ? monthFirst(withNames(m.measure, names)[0]) : null;
+        x.measure_source = m?.source ? monthFirst(m.source) : null;
       }
     }
   }

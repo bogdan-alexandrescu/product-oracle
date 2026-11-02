@@ -1,5 +1,5 @@
 import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
-import { login, signOut } from "./helpers";
+import { joinMeeting, login, signOut } from "./helpers";
 import { expect, test, type BrowserContext, type Page } from "./test";
 
 /**
@@ -193,9 +193,12 @@ for (const phone of [false, true]) {
       test("Approve and Undo in a meeting: the one-pager reads its new version, no stale draft bar", async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("button", { name: "Start a review meeting" }).click();
         const sheet = page.getByRole("dialog", { name: "Start a review" });
         await sheet.getByRole("button", { name: "Start", exact: true }).click();
+        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
+        await joinMeeting(page, "approver@example.com");
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         const onePager = page.getByTestId("meeting-screen").getByTestId("one-pager");
         await expect(onePager).toContainText("Version 3");
@@ -222,8 +225,11 @@ for (const phone of [false, true]) {
       test("A second screen on the meeting reads the new version after Approve, without a reload", async ({ page, context }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("button", { name: "Start a review meeting" }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
+        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        // walkc-meeting-r2 review: the PRD's invited reviewer joins, so Approve publishes.
+        await joinMeeting(page, "approver@example.com");
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
         await page.getByLabel("New wording for").fill("A checklist that names the next step");

@@ -79,7 +79,7 @@ import uuid
 from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any, Literal, Protocol
 
@@ -113,6 +113,10 @@ _RANK = {"withdrawn": 0, "unverified": 1, "verified": 2}
 
 SOURCES_KEY = layers.SOURCES_SECTION_ID
 LAYOUT_KEY = "layout"
+# walkb-roadmap: not schedule dates. "Changes since last version" records what moved and
+# when; the line under the title says which day the roadmap is as of.
+CHANGES_KEY = "changes"
+AS_OF = re.compile(r"\bas of\s*$", re.IGNORECASE)
 TITLE_KEY = ""  # the section_key of a date in the front matter title
 
 _md = MarkdownIt("commonmark", {"html": False}).enable("table")
@@ -701,6 +705,7 @@ class Found:
     owner: str | None  # the item that owns the date (its section, row or line)
     block: str  # the rendered block it is in (a tracker key named there counts)
     in_code: bool = False  # in a code block: a marker goes right after it, as text
+    items: frozenset[str] = frozenset()  # the roadmap's own item keys, lowercased
 
     @property
     def day(self) -> date:
@@ -756,6 +761,8 @@ def _found_in(
         # Past closing emphasis right after the date (``**Nov 30, 2026**``).
         while not in_code and insert < len(source) and source[insert] in "*_~":
             insert += 1
+        if AS_OF.search(rendered.text[max(0, a - 12) : a]):
+            continue
         line = _line_of(starts, start)
         owner = section_item
         block_text = rendered.text
@@ -797,6 +804,16 @@ def find(
             title, section_key=TITLE_KEY, where="title", section_item=None, ref=ref, plain=True
         )
     sc = scope(sections)
+    keys = [s.section_key for s in sections]
+    changes = (
+        set(
+            layers.subtree(
+                [layers.SectionRef(s.section_key, s.level) for s in sections], CHANGES_KEY
+            )
+        )
+        if CHANGES_KEY in keys
+        else set()
+    )
     # The item a section belongs to: its own anchor, else its parent item section's.
     stack: list[tuple[int, str | None]] = []
     for s in sections:
@@ -804,7 +821,7 @@ def find(
             stack.pop()
         item = _item_of_anchor(s.section_key) or (stack[-1][1] if stack else None)
         stack.append((s.level, item))
-        if s.section_key in sc.exempt:
+        if s.section_key in sc.exempt or s.section_key in changes:
             continue
         out += _found_in(
             s.heading or "", section_key=s.section_key, where="heading", section_item=item, ref=ref
@@ -817,7 +834,8 @@ def find(
             ref=ref,
             skip_yaml=s.section_key == LAYOUT_KEY,
         )
-    return out
+    items = frozenset(k.lower() for k in map(_item_of_anchor, keys) if k)
+    return [replace(f, items=items) for f in out]
 
 
 def covering(found: Found, bases: Iterable[schedule.Basis]) -> list[schedule.Basis]:
@@ -833,9 +851,24 @@ def covering(found: Found, bases: Iterable[schedule.Basis]) -> list[schedule.Bas
     return out
 
 
+def unbacked(found: Found, bases: Iterable[schedule.Basis]) -> tuple[date, ...]:
+    """The days this date reads as that no basis in scope supports (all of them backed:
+    none)."""
+    bases = list(bases)
+    return tuple(
+        day
+        for day in found.days
+        if not any(b.supports_date == day and _in_scope(b, found) for b in bases)
+    )
+
+
 def _in_scope(b: schedule.Basis, found: Found) -> bool:
     owner = (found.owner or "").lower()
     if b.item_key:
+        # walkb-roadmap: a date outside every item (a summary, a brief table) is backed by
+        # the verified basis for that day of one of this roadmap's own items.
+        if not owner:
+            return b.item_key.lower() in found.items
         return owner == b.item_key.lower()
     if b.tracker_key:
         if schedule._names(b.tracker_key, found.block):
@@ -1339,6 +1372,8 @@ class Mark:
     end: int = 0
     insert_at: int = 0
     in_code: bool = False
+    # The readings no verified basis supports yet (a date that reads two ways needs both).
+    missing: tuple[date, ...] = ()
 
     @property
     def label(self) -> str | None:
@@ -1353,6 +1388,8 @@ class Mark:
             "label": self.label,
             "bases": self.bases,
             "where": self.where,
+            "days": list(self.days or (self.day,)),
+            "missing": list(self.missing),
         }
         return out
 
@@ -1490,6 +1527,7 @@ def check_found(
                 f.end,
                 f.insert_at,
                 f.in_code,
+                () if support else unbacked(f, verified),
             )
         )
     return out
@@ -1581,8 +1619,14 @@ def problem_message(
 
 
 def problem_refs(mark: Mark, prd_slug: str | None) -> dict[str, str]:
-    """The ids an agent needs about a marked date (the message names none of them)."""
-    return {"date": mark.text, **({"prd": prd_slug} if prd_slug else {})}
+    """The ids an agent needs about a marked date (the message names none of them), and
+    the date as people read it (``shown``: "Nov 30, 2026", never "2026-11-30"; as written,
+    with the days it reads as, when it reads as more than one day)."""
+    return {
+        "date": mark.text,
+        "shown": shown(mark) + _reads_as(mark),
+        **({"prd": prd_slug} if prd_slug else {}),
+    }
 
 
 SOURCES_NOT_LAST = (

@@ -11,7 +11,7 @@ import { expect, test, type Page } from "./test";
  * - qa-shell-21: Simple writes a day as Detailed does, month first ("Nov 27", "Oct 17, 2026").
  * - qa-shell-24: the quick add's placeholder fits its box; a phone's pickers sit behind one
  *   Filters button.
- * - qa-shell-25: a phone's goal lanes are named ("Faster activation, 4 items").
+ * - qa-shell-25: the Timeline's goal lanes are named ("Faster activation, 4 items").
  * - review minor: a phone's Filters panel closes on Escape (focus back on Filters) and on a
  *   tap outside it, as the sheets beside it do; a pick inside it keeps it open.
  * no_claim: the API's company day (api/oracle/company_time.py, its own pytest).
@@ -31,19 +31,33 @@ async function open(page: Page) {
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1366, height: 820 } });
 
-  test("qa-shell-6: on a Pacific evening the legend's Today is the company's day", async ({ page }) => {
+  // Moved: the Timeline's own key (above the chart) carries Today's day now.
+  test("qa-shell-6: on a Pacific evening the Timeline key's Today is the company's day", async ({ page }) => {
     await page.clock.setFixedTime(new Date("2026-10-30T02:00:00Z"));
     await open(page);
-    const today = page.getByTestId("legend").getByTestId("legend-item").filter({ hasText: /^Today / });
+    const today = page.getByTestId("timeline-key").locator('[data-key="today"]');
     await expect(today).toHaveText("Today Oct 29");
   });
 
   test("qa-shell-21: the roadmap writes its days month first, as Detailed does", async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("legend").getByTestId("legend-item").filter({ hasText: /^Today / })).toHaveText("Today Oct 22");
+    await expect(page.getByTestId("timeline-key").locator('[data-key="today"]')).toHaveText("Today Oct 22");
+    // The milestone ends and the holidays' key are the Gantt's.
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
     await expect(page.getByTestId("milestone-end-label").first()).toHaveText("M1 ends Nov 27");
-    await expect(page.getByTestId("legend")).toContainText("Holidays Dec 28 – Jan 1");
+    await expect(page.getByTestId("legend")).toContainText("Holidays year-end break");
     await expect(page.getByTestId("legend")).not.toContainText(/\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/);
+  });
+
+  // Moved: the desktop Timeline groups by goal; each goal's heading names it and its count.
+  test("qa-shell-25: each goal lane is named by its goal and its count", async ({ page }) => {
+    await open(page);
+    const lanes = page.getByTestId("timeline-lane");
+    await expect(lanes.first()).toBeVisible();
+    const n = await lanes.count();
+    expect(n).toBeGreaterThan(1);
+    for (let i = 0; i < n; i++) await expect(lanes.nth(i)).toHaveText(/^\S.* · \d+ items?$/);
   });
 
   test("qa-shell-21: the PRDs list says when each changed month first", async ({ page }) => {
@@ -83,7 +97,9 @@ test.describe("phone", () => {
     await expect(toggle).toHaveText("Filters · 1");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("combobox", { name: "To", exact: true })).toHaveCount(0);
-    // Group by stays at hand beside the button.
+    // The Timeline always groups by goal, so it has no Group by; on the Gantt Group by stays at hand beside the button.
+    await expect(page.getByTestId("filters").getByRole("group", { name: "Group by" })).toHaveCount(0);
+    await page.getByTestId("format-gantt").click();
     await expect(page.getByTestId("filters").getByRole("group", { name: "Group by" })).toBeVisible();
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -96,27 +112,10 @@ test.describe("phone", () => {
     await expect(pickers).toHaveCount(0);
   });
 
-  test("qa-shell-25: each goal lane is named by its goal and its count", async ({ page }) => {
+  // Moved: a phone's Timeline is a list by quarter.
+  test("qa-shell-21: the phone Timeline's list writes its days month first", async ({ page }) => {
     await open(page);
-    const lanes = page.locator('g[data-testid="phone-lane"]');
-    await expect(lanes.first()).toBeVisible();
-    const n = await lanes.count();
-    expect(n).toBeGreaterThan(1);
-    for (let i = 0; i < n; i++) {
-      const lane = lanes.nth(i);
-      const name = (await lane.getByTestId("phone-lane-name").textContent())!.trim();
-      const count = (await lane.getByTestId("lane-count").textContent())!.trim();
-      expect(count).toMatch(/^\d+ items?$/);
-      await expect(lane).toHaveAccessibleName(`${name}, ${count}`);
-    }
-    await lanes.first().focus();
-    await expect(page.getByRole("button", { name: /, \d+ items?$/ }).first()).toBeFocused();
-  });
-
-  test("qa-shell-21: a lane's list writes its days month first", async ({ page }) => {
-    await open(page);
-    await page.locator('g[data-testid="phone-lane"]').first().click();
-    await expect(page.getByTestId("lane-row").first()).toContainText(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} – (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}/);
+    await expect(page.getByTestId("timeline-list").getByTestId("timeline-row").first()).toContainText(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} – (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}/);
   });
 
   test("review: the Filters panel closes on Escape and on a tap outside it", async ({ page }) => {

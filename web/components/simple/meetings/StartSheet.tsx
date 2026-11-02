@@ -68,7 +68,7 @@ export function StartSheet({
   // the backdrop, so the page behind was dimmed unevenly; the app's Dialog backdrop colour, dark
   // in both themes (qa-simple-decide-5).
   return createPortal(
-    <div data-backdrop="" data-testid="start-backdrop" className="fixed inset-0 z-50 flex items-end justify-center bg-hero/50 sm:items-center" onClick={onClose}>
+    <div data-backdrop="" data-sheet="" data-testid="start-backdrop" className="fixed inset-0 z-50 flex items-end justify-center bg-hero/50 sm:items-center" onClick={onClose}>
       <div
         ref={ref}
         tabIndex={-1}
@@ -113,7 +113,8 @@ function Body({ prd, occurrence, ritual, origin, prefer, from, onClose }: { prd?
 function Form({ options, fixed, occurrence, ritual, origin, prefer, from, live, onClose }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; prefer?: string; from?: string; live: Schemas["SimpleMeetingBrief"][]; onClose: () => void }) {
   const router = useRouter();
   const zone = useCompanyZone();
-  const [slug, setSlug] = useState((options.prds.find((p) => p.document.slug === prefer && p.can_start) ?? options.prds[0])?.document.slug ?? "");
+  // The sheet opens on a PRD the person may start (the asked-for one first), never on one that turns them away.
+  const [slug, setSlug] = useState((options.prds.find((p) => p.document.slug === prefer && p.can_start) ?? options.prds.find((p) => p.can_start) ?? options.prds[0])?.document.slug ?? "");
   const chosen = options.prds.find((p) => p.document.slug === slug);
   const occ = options.occurrence ?? ritual ?? null;
   const defaults = (p = chosen) => [...new Set([...(p?.default_attendee_ids ?? []), ...(occ?.attendees.map((a) => a.id) ?? [])])];

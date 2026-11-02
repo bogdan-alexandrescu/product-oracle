@@ -228,6 +228,12 @@ class SimpleDraft(TenantScoped, Base):
     # Remind (owner, 2026-10-26): when each waiting reviewer was last nudged,
     # ``{user_id: iso time}``; at most once a day each. Cleared on submit.
     reminders: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Send for approval (build-review): the people the sender added as reviewers, after the
+    # required ones, ``[{"id": user id, "approved_at": iso time | null}]`` in their order.
+    # The draft waits on each until they approve. Cleared when it returns to working.
+    added_reviewers: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
 
 
 class SimpleSessionDraft(TenantScoped, Base):
@@ -619,6 +625,11 @@ class SimpleMeeting(TenantScoped, Base):
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
     absent_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    # walkc-meeting r2 (5a): the presenter, then whoever pressed Join; the other attendees
+    # are invited and have not joined yet.
+    joined_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
     change_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="everyone")

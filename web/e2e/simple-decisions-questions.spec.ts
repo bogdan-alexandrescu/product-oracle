@@ -200,7 +200,8 @@ for (const phone of [false, true]) {
       test("Home: the count, the late row first, the rail; Decide as recommended from Home", async ({ page }) => {
         await login(page);
         await page.goto("/simple");
-        const card = page.getByTestId("home-decisions");
+        // build-rundecide RD3 a: the questions I own wait in their PRD's own card.
+        const card = region(page, "Waiting for you: Guided setup");
         // fix4 (qa-simple-home-15): the count is the summary tile's alone, not repeated in the header.
         await expect(card.getByTestId("home-decisions-count")).toHaveCount(0);
         const count = page.getByTestId("home-summary-decisions").locator(".simple-number");
@@ -219,7 +220,9 @@ for (const phone of [false, true]) {
         await expect(q5.getByRole("button", { name: "Another answer" })).toBeVisible();
         await expect(q5.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
         await q5.getByRole("button", { name: "Decide as recommended" }).click();
-        await expect(page.getByText("Decided Q5: 9:00 in each person's zone")).toBeVisible();
+        // vqa-simple-runs (RD3 a, frame "done"): the row itself says it is decided, with Undo.
+        await expect(q5.getByTestId("question-decided")).toContainText("9:00 in each person's zone · ");
+        await expect(q5.getByRole("button", { name: "Undo" })).toBeVisible();
         await expect(count).toHaveText(String(n - 1));
         await expect(card.locator('[data-late="true"]')).toHaveCount(0);
         if (!phone) await expect(page.getByTestId("simple-nav-decisions-count")).toHaveText(String(n - 1));
@@ -236,7 +239,7 @@ for (const phone of [false, true]) {
       test("a review meeting's Decisions due, decided in the meeting", async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("button", { name: "Start a review meeting" }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "3 Decisions" }).click();
@@ -302,23 +305,24 @@ for (const phone of [false, true]) {
         await expect(note.getByRole("link", { name: "Open the Inbox" })).toBeVisible();
 
         await page.goto("/simple");
-        const card = page.getByTestId("home-decisions");
+        const card = region(page, "Waiting for you: Guided setup");
         await expect(card.getByTestId("home-question")).toHaveCount(phone ? 2 : 3);
         await expect(card.getByTestId("home-more")).toHaveText(/^\d+ more ->$/);
-        await expect(card.getByRole("link", { name: "All decisions", exact: true })).toHaveText("All ->");
+        await expect(card.getByTestId("home-more")).toHaveAttribute("href", "/simple/decisions?prd=guided-setup");
 
         await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("button", { name: "Start a review meeting" }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "3 Decisions" }).click();
         const due = region(page, "On the agenda");
         await expect(due.getByRole("heading", { name: "On the agenda" })).toBeVisible();
-        await expect(due.getByTestId("decisions-due-summary")).toHaveText("Due by Tue Nov 3 · 5 decisions · from Guided setup draft 3");
+        // build-rundecide RD3 a: every open question of the PRD is on the agenda, soonest first.
+        await expect(due.getByTestId("decisions-due-summary")).toHaveText(/^Due by \w{3} \w{3} \d{1,2} · 15 decisions · from Guided setup draft 3$/);
         await expect(due.getByTestId("question-row")).toHaveCount(4);
-        await due.getByRole("button", { name: "1 more: Q9" }).click();
-        await expect(due.getByTestId("question-row")).toHaveCount(5);
-        await expect(due.getByTestId("question-row").last()).toContainText("Q9 Onboarding checklist length");
+        await due.getByRole("button", { name: /^11 more: Q/ }).click();
+        await expect(due.getByTestId("question-row")).toHaveCount(15);
+        await expect(due.getByTestId("question-row").last()).toContainText("Q16 Self-serve plan cancel");
       });
     });
   }

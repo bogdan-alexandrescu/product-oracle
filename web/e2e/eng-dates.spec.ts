@@ -111,6 +111,19 @@ test("approve: Approve waits for every dated Now row, then the run succeeds", as
   await expect(page.getByTestId("segment-eng_dates").getByTestId("segment-state")).toHaveText("Succeeded");
 });
 
+test("approve with a No date: the Decisions page counts the proposed date taken away as a changed date", async ({ page }) => {
+  // protects=run-dates-changed review: a proposed date made No date at the stop is a date the approval changed; fails_when=the Dates row reads "Dates: approved" after the lead took a proposed date away; no_claim=the words for more than one date (simple-decisions-runs.spec.ts).
+  await openDatesAsLead(page);
+  await accept(page, "shipping-step");
+  await noDate(page, "price-early", "Waits on the pricing service rewrite");
+  await accept(page, "saved-addresses");
+  await bar(page).getByRole("button", { name: "Approve" }).click();
+  await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Succeeded");
+  await page.goto("/simple/decisions");
+  const run = page.getByRole("region", { name: "Runs" }).getByTestId("decisions-run").filter({ hasText: "Usage alerts plan" });
+  await expect(run.getByTestId("run-stop-row").filter({ hasText: "Dates:" }).locator("b")).toHaveText("Dates: approved with one date changed");
+});
+
 test("next and later: only in the collapsed read-only group, with no date actions", async ({ page }) => {
   // protects=Next and Later items carry no dates (O4) and no actions; fails_when=they show as rows, the group is open on arrival, or it offers Accept, Change or No date; no_claim=the Roadmap shape rules themselves.
   await openDatesAsLead(page);

@@ -47,6 +47,8 @@ import {
   readsRoadmap,
   roadmapId,
   roadmapOut,
+  draftPrds,
+  readableRoadmap,
   seesDraft,
   settleDrafting,
   simpleWindows,
@@ -183,9 +185,49 @@ function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op"
   return decides(db, ctx, c.target.item_id);
 }
 
+/** walkc-meeting: mark a proposal as made in a meeting (its session a meeting's). Kept in the
+ * company's own stored db (`meeting_proposals`), so it survives a reload, is the same in every
+ * tab, and goes with the company when the scenario changes or the mock data is reset. */
+export function markMeetingProposal(db: SimpleDb, id: string): void {
+  const ids = (db.meeting_proposals ??= []);
+  if (!ids.includes(id)) ids.push(id);
+}
+
+/** walkc-meeting (changes.routed_to): who a proposal on this item would go to now. */
+export function proposalRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemId: string): string[] {
+  const key = keyOf(db, itemId);
+  if (!key) return ctx.owners;
+  const ids = deciderIds(db, seed(db, key), ctx.roles);
+  return ids.length ? ids : ctx.owners;
+}
+
+/** walkc-meeting (changes.meeting_deciders): the attendees who may decide every one of these
+ * items (service.can_decide: an owner, the item's or roadmap's decider, else its track owner
+ * while an approver), in the meeting's order; no known item: nobody. */
+function meetingDeciders(db: SimpleDb, attendees: string[], ctx: Pick<SimpleChangesCtx, "roles">, itemIds: string[]): string[] {
+  const keys = itemIds.map((id) => keyOf(db, id)).filter((k): k is string => !!k);
+  if (!keys.length) return [];
+  return attendees.filter((i, n) => {
+    const role = ctx.roles?.[i];
+    return attendees.indexOf(i) === n && !!role && keys.every((k) => canDecideItem(db, seed(db, k), { id: i, role }));
+  });
+}
+
+/** walkc-meeting (changes.meeting_route): in a meeting a proposal on these items goes to its
+ * deciders (those of `route` in it, else every attendee who may decide them all); only when
+ * nobody in it may, to `route`. */
+export function meetingRoute(db: SimpleDb, attendees: string[], ctx: Pick<SimpleChangesCtx, "roles">, itemIds: string[], route: string[]): { ids: string[]; here: boolean } {
+  const inside = meetingDeciders(db, attendees, ctx, itemIds);
+  const here = route.filter((i) => inside.includes(i));
+  const ids = here.length ? here : inside;
+  return ids.length ? { ids, here: true } : { ids: route, here: false };
+}
+
 /** changes.current_route: who decides an open proposal now; else its stored route. */
 function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c: Change): string[] {
   if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op)) return c.routed_to;
+  // walkc-meeting: a proposal made in a meeting stays with the meeting's deciders.
+  if (db.meeting_proposals?.includes(c.id) && c.routed_to.length) return c.routed_to;
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) {
     const decider = db.deciders?.[slugOf(c.target.roadmap_id) ?? ""];
     return decider ? [decider] : ctx.owners;
@@ -198,7 +240,7 @@ function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c:
 }
 
 /** changes.cut_route: the deciders every item of a cut with its dependents shares, else the company's owners. */
-function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
+export function cutRoute(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, itemIds: string[]): string[] {
   let common: string[] | null = null;
   for (const id of itemIds) {
     const key = keyOf(db, id);
@@ -363,18 +405,23 @@ function draftOut(db: SimpleDb, ctx: SimpleChangesCtx, d: MockDraft): Schemas["S
   const edits = canEditRoadmap(db, d.roadmap, ctx);
   const decider = db.deciders?.[d.roadmap];
   return {
-    ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id),
+    ...d.out, changes: draftChanges(db, d.out.id), change_log: changeLog(db, d.out.id), from_prds: draftPrds(d),
     can_submit: d.out.status === "working" && edits,
     can_resume: d.out.status === "working" && (d.out.created_by === ctx.id || decider === ctx.id),
     can_approve: d.out.status === "submitted" && edits,
     can_withdraw: d.out.status === "submitted" && (d.out.created_by === ctx.id || edits),
+    published: !(db.unapproved ?? []).includes(d.roadmap),
   };
 }
 
 /** /v1/simple/drafts (drafts.listing, submit, approve, resume). */
-function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]): Response | null {
+function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[], q: URLSearchParams): Response | null {
   const now = iso(mockNowMs());
-  const open = (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status));
+  // ?roadmap= (an id or slug): that roadmap's drafts only (a working draft belongs to one roadmap).
+  const asked = q.get("roadmap");
+  const rm = asked ? readableRoadmap(asked, ctx.role) : undefined;
+  if (asked && !rm && !p[3]) return json(404, { detail: "No such roadmap" });
+  const open = (db.drafts ?? []).filter((d) => ["working", "submitted"].includes(d.out.status) && (!rm || d.roadmap === rm));
   if (!p[3] && m === "GET") return json(200, open.filter((d) => seesDraft(d, ctx, db)).map((d) => draftOut(db, ctx, d)));
   const d = (db.drafts ?? []).find((x) => x.out.id === p[3] && seesDraft(x, ctx, db));
   if (!d) return json(404, { detail: "No such draft" });
@@ -383,7 +430,7 @@ function routeDrafts(db: SimpleDb, ctx: SimpleChangesCtx, m: string, p: string[]
   if (p[4] === "submit") {
     if (!canEditRoadmap(db, d.roadmap, ctx)) return json(403, { detail: "Only an owner or the roadmap's decider (with none, its owner) submits" });
     if (d.out.status !== "working") return json(409, { detail: `This draft is ${d.out.status} already` });
-    if (!draftChanges(db, d.out.id)) return json(422, { detail: "Nothing to submit: the draft has no changes" });
+    if (!draftChanges(db, d.out.id) && !draftPrds(d).length) return json(422, { detail: "Nothing to submit: the draft has no changes" });
     Object.assign(d.out, { status: "submitted", version: (d.out.base_version ?? 1) + 1, submitted_at: now, submitted_by: ctx.id });
     return json(200, draftOut(db, ctx, d));
   }
@@ -425,6 +472,14 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const ranking = body.op === "override_priority" || body.op === "estimate_feature";
   const after = ranking ? priorityAfter(body.op, body.after ?? {}) : { ...body.after };
   if (typeof after === "string") return json(422, { detail: after });
+  // walkc-roadmap-tasks: a task's owner is a person (targets.py stores owner_id); the chat's
+  // "for <name>" names them.
+  if (body.op === "add_item_task" && !after.owner_id && typeof after.owner_name === "string") {
+    const asked = after.owner_name.trim().toLowerCase();
+    const hit = Object.entries(ctx.names).find(([, n]) => n.toLowerCase() === asked) ?? Object.entries(ctx.names).find(([, n]) => n.toLowerCase().split(" ")[0] === asked);
+    if (hit) Object.assign(after, { owner_id: hit[0], owner_name: hit[1] });
+  }
+  if (body.op === "add_item_task" && after.owner_id && !after.owner_name) after.owner_name = ctx.names[String(after.owner_id)] ?? null;
   const before: Values = ranking
     ? priorityBefore(db, keyOf(db, target.item_id)!, body.op, id)
     : (body.op as string) === "set_owner"
@@ -454,6 +509,8 @@ function writeTarget(db: SimpleDb, c: Change, values: Values, undo = false): voi
   const id = String(c.target[spec.id]);
   const targets = (db.targets ??= {});
   if (spec.adds && undo) delete targets[id];
+  // walkc-roadmap-tasks: a task is stored under its item, open, as RoadmapItemTask is.
+  else if (c.op === "add_item_task") targets[id] = { status: "todo", owner_id: null, due_date: null, ...values, kind: "item_task", item_id: c.target.item_id, at: c.at };
   else targets[id] = { ...(targets[id] ?? {}), ...values };
 }
 
@@ -737,7 +794,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     } as Schemas["SimpleChangeIn"]);
     return res.status === 201 ? new Response(res.body, { status: 200, headers: res.headers }) : res;
   }
-  if (p[2] === "drafts") return routeDrafts(db, ctx, m, p);
+  if (p[2] === "drafts") return routeDrafts(db, ctx, m, p, q);
   if (p[2] === "sessions") {
     if (!p[3] && m === "POST") {
       const body = (await req.json().catch(() => ({}))) as { kind?: Session["kind"] };

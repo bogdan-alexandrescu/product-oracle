@@ -23,7 +23,7 @@ import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type Bra
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
-import { decidePricing, decisionInbox, enlargeDecisions, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
+import { decidePricing, decisionInbox, enlargeDecisions, logMeetingDecision, proposePricing, requestDecisions, routeDecisions, seedDecisions, type DecisionsContext, type DecisionsDb } from "./decisions";
 import { routeStaging } from "./staging";
 import { afterAccept, goalInterviewReply, proposeVersion, routeGoalInterview, type GoalInterviewContext } from "./goal-interview";
 import { goalCheck } from "./goals";
@@ -74,6 +74,8 @@ import {
   scopeStop,
   seedEngCheckRun,
   seedEngCheckUnmappedRun,
+  shopBriefsCheck,
+  seedRunDecisions,
   seedEngDatesRuns,
   seedBaselineReviewRun,
   seedEngReviewRun,
@@ -135,7 +137,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -156,12 +158,15 @@ import {
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
-import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { runGroupsOut } from "./simple-runs";
+import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedRunPrdWalkOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { SAVED_CARTS, seedMeetingDraftDates } from "./meeting-draft";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { approvedPrdToDraft, itemSubjectName, knowManyPlans, planPrdMilestones, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type PrdMilestone, type SimpleDb } from "./simple-roadmap";
+import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -520,8 +525,12 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * with three rows that need a person, attempt 2, and a held console approval);
  * "scope-review-kept" as "scope-review" with the held run's Bulk edit also new and a likely
  * duplicate, both kept by one older call that answers the two;
+ * "scope-review-questions" as "scope-review" with the agents asking eleven questions at the
+ * first run's feature set (AQ1's hard case, ./agent-questions.ts);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "draft-gate" as the default company where Oracle reads a critical blocker in every new
+ * brief, so drafting waits until it is answered or an owner accepts its risk (C5);
  * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
  * given now becomes a feedback item on the PRD (C5 late answers); its success-metric gap is a
  * finding shared in full;
@@ -550,6 +559,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
+ * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
+ * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
  * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
@@ -558,6 +569,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * meeting's chat (meet-chat-kind).
  * "meet-chat-right-prd" as "simple-chat" with the meeting reviewing Guided setup, whose features
  * are only on its draft roadmap (Setup checklist, Setup reminders).
+ * "simple-unapproved-roadmap" as the default company with Simple's Alerts roadmap built from its
+ * PRD and not approved yet (walkb-roadmap review 5a).
  */
 export { MOCK_SCENARIO_KEY };
 /**
@@ -788,6 +801,13 @@ function seedBeforeDraftingScenario(): Db {
   return db;
 }
 
+/** The default company where every new brief has a critical blocker (C5): see MOCK_SCENARIO_KEY. */
+function seedDraftGateScenario(): Db {
+  const db = seed();
+  ensureV2(db).blocker_briefs = true;
+  return db;
+}
+
 /**
  * C5 late answers: the "before-drafting" brief, drafting since 22 Oct into the Checkout
  * redesign PRD; the answers given by then are the draft run's, the questions still asked
@@ -897,6 +917,23 @@ function seedSimpleHomeMilestonesScenario(): Db {
 }
 
 /**
+ * walkb-priorities: the default company whose milestones carry long names, as a production
+ * walk found them (Simple › Priorities on a phone kept each row's milestone on one line).
+ */
+function seedSimplePrioritiesLongMilestonesScenario(): Db {
+  const db = seed();
+  const rm = (db.simple_roadmap = seedSimpleRoadmap());
+  const names = [
+    "M1 · Guided setup ready for the first paying teams on the new plan (F-30a Team invites); F-30b Billing page follows in the same release",
+    "M2 · Alert rules, digests and the mobile push all reach every workspace (F-31a Alert rules); F-31b Daily digest and F-31c Mobile push follow",
+  ];
+  rm.items.forEach((i, n) => {
+    if (i.horizon === "now") i.milestone = { name: names[n % names.length], day: i.end ?? 60 };
+  });
+  return db;
+}
+
+/**
  * One PRD in play (#723 polish review): "simple-home" with every item but the onboarding
  * roadmap's (Guided setup) moved half a year out, so Home's plan needs no ranking.
  */
@@ -976,13 +1013,15 @@ function seedSimplePlanScenario(datedAll = false): Db {
   for (const [code, of] of byFeature) {
     const section = code.toLowerCase();
     const key = existing[code];
-    if (key) {
-      const s = rm.items.find((x) => x.key === key);
-      if (s) s.section = section;
-      continue;
-    }
     const start = of.map((x) => x.start_date!).sort()[0];
     const end = of.map((x) => x.end_date!).sort().at(-1)!;
+    if (key) {
+      const s = rm.items.find((x) => x.key === key);
+      // Planned: its dates are its slices' (as the API's accepted slice suggestions), so the
+      // Timeline draws it on the plan until it is moved (walkc-roadmap-tasks 2).
+      if (s) Object.assign(s, { section }, s.start != null ? { start: days(w[s.horizon][0], start), end: days(w[s.horizon][0], end) } : {});
+      continue;
+    }
     const horizon = start <= w.now[1] ? "now" : "next";
     const from = w[horizon][0];
     const k = `plan-${section}`;
@@ -1002,6 +1041,85 @@ function seedSimplePlanScenario(datedAll = false): Db {
     id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "approved", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
+  return db;
+}
+
+/**
+ * roadmap-keydates, the "roadmap-keydates" scenario: "simple-plan" whose PRD (Guided setup)
+ * states two milestones in its approved version 3 (M1 Prove it ends Nov 27, M2 Scale volume
+ * Dec 25), and whose version 4, waiting to be published, moves M2 to Jan 8: the onboarding
+ * roadmap's Key dates read both from the PRD, beside its own Board meeting. Invented data.
+ */
+export const KEYDATES_PRD_DAYS = { m1: "2026-11-27", m2: "2026-12-25", m2_moved: "2027-01-08" };
+
+function seedRoadmapKeyDatesScenario(): Db {
+  const db = seedSimplePlanScenario();
+  const doc = db.documents.find((d) => d.slug === PLAN_PRD_SLUG)!;
+  doc.status = "in_review";
+  const body = (m2: string) => ({
+    number: 0,
+    created_at: "",
+    citations: [],
+    sections: [
+      { key: "title", level: 1, heading: "Guided setup", body: "Help new admins finish setup on their first day." },
+      { key: "problem", level: 2, heading: "Problem", body: "New workspace admins stall during setup and do not know which step comes next." },
+      {
+        key: "milestones",
+        level: 2,
+        heading: "Milestones",
+        body: `| Milestone | Name | Start | End |\n| --- | --- | --- | --- |\n| M1 | Prove it | 2026-11-02 | ${KEYDATES_PRD_DAYS.m1} |\n| M2 | Scale volume | 2026-11-30 | ${m2} |`,
+      },
+    ],
+  });
+  const v3 = buildVersion(doc, { ...body(KEYDATES_PRD_DAYS.m2), number: 3, created_at: "2026-10-20T15:00:00Z" });
+  v3.approved_at = "2026-10-20T15:05:00Z";
+  const v4 = buildVersion(doc, { ...body(KEYDATES_PRD_DAYS.m2_moved), number: 4, created_at: "2026-10-27T10:00:00Z" });
+  db.versions.push(v3, v4);
+  return db;
+}
+
+/**
+ * roadmap-keydates review, the "roadmap-keydates-uncoded" scenario: "roadmap-keydates" with no
+ * read plan, whose onboarding track holds a milestone named without its code, "Prove it", on
+ * the day the PRD's M1 · Prove it ends (Nov 27): the chart draws it once. Invented data.
+ */
+function seedRoadmapKeyDatesUncodedScenario(): Db {
+  const db = seedRoadmapKeyDatesScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = undefined;
+  rm.items.find((x) => x.key === "setup-checklist")!.record = "Prove it";
+  rm.record_dates = { "Prove it": KEYDATES_PRD_DAYS.m1 };
+  return db;
+}
+
+/**
+ * roadmap-keydates review, the "roadmap-keydates-two-prds" scenario: "roadmap-keydates" plus a
+ * second approved PRD, Team templates (M1 First templates ends Dec 11), and one onboarding item
+ * built from it, Starter templates: the roadmap's Key dates read both PRDs' milestones, each
+ * naming its own PRD, as the API reads each item's own PRD. Invented data.
+ */
+function seedRoadmapKeyDatesTwoPrdsScenario(): Db {
+  const db = seedRoadmapKeyDatesScenario();
+  const at = "2026-10-21T10:00:00Z";
+  const doc: DocumentRow = {
+    id: stableUuid("simple-prd/team-templates"), slug: "team-templates", title: "Team templates", status: "approved", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  };
+  db.documents.push(doc);
+  const v1 = buildVersion(doc, {
+    number: 1,
+    created_at: at,
+    citations: [],
+    sections: [
+      { key: "title", level: 1, heading: "Team templates", body: "Give new teams a ready set of templates." },
+      { key: "milestones", level: 2, heading: "Milestones", body: "| Milestone | Name | Start | End |\n| --- | --- | --- | --- |\n| M1 | First templates | 2026-11-16 | 2026-12-11 |" },
+    ],
+  });
+  v1.approved_at = "2026-10-21T10:05:00Z";
+  db.versions.push(v1);
+  const rm = db.simple_roadmap!;
+  rm.items.push({ key: "starter-templates", title: "Starter templates", horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", from_prd: { slug: doc.slug, title: doc.title } });
+  rm.ids["starter-templates"] = stableUuid("simple-item/starter-templates");
   return db;
 }
 
@@ -1067,6 +1185,47 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * "simple-home-move": "simple-home" plus a commenter's "Move the dependents" proposal on Weekly
+ * alert digest (keyed by item id, as the engine keys it), so Home's Accept lists what it moves
+ * with old and new dates (build-plan, Home's "Confirm, filtered list"). Invented data.
+ */
+function seedSimpleHomeMoveScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  // Mobile alert push keeps the dates its bar shows, stored, so the proposal's before is what the engine reads.
+  const sr = db.simple_roadmap!;
+  const day = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const rulesEnd = storedDates(sr, "alert-rules").end ?? "2026-11-10";
+  const digest = storedDates(sr, "alert-digest");
+  const mobile = shownDates(sr, "alert-mobile");
+  sr.own["alert-mobile"] = { start: mobile.start, end: mobile.end, source: "typed" };
+  const len = digest.start && digest.end ? Math.round((Date.parse(digest.end) - Date.parse(digest.start)) / 86_400_000) : 40;
+  seedSimpleProposal(sr, who, "shift_dependents", "alert-digest", { [sr.ids["alert-digest"]]: { start_date: digest.start, end_date: digest.end }, [sr.ids["alert-mobile"]]: { start_date: mobile.start, end_date: mobile.end } }, { [sr.ids["alert-digest"]]: { start_date: day(rulesEnd, 1), end_date: day(rulesEnd, 1 + len) }, [sr.ids["alert-mobile"]]: { start_date: day(rulesEnd, 1), end_date: day(rulesEnd, 51) } }, "2026-10-27T09:30:00Z", "Both start before Alert rules engine ends");
+  return db;
+}
+
+/**
+ * "simple-home-same-name": "simple-home" plus a second confirmed goal also named Grow retention
+ * (G-T, no items yet) and a commenter's proposal to change Alert rules engine's owner, so Home's
+ * goal cards filter Priorities by the goal itself, not its name, and every proposal row reads in
+ * words (build-plan review). Invented data.
+ */
+function seedSimpleHomeSameNameScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const template = db.baseline.entities.find((e) => e.key === "grow-retention")!;
+  db.baseline.entities.push({ ...template, id: stableUuid("simple-goal/grow-retention-teams"), key: "grow-retention-teams", title: "G-T Grow retention", attrs: { ...template.attrs, weight: 1 } });
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  seedSimpleProposal(db.simple_roadmap!, who, "set_owner", "alert-rules", { owner_id: null }, { owner_id: commenter.id }, "2026-10-27T10:00:00Z", "I can run it");
   return db;
 }
 
@@ -1337,6 +1496,17 @@ function withAuthorName<T extends { author_id?: string | null }>(db: Db, f: T): 
  * A3 "eng-review" scenario: the default company with commenter@example.com named engineering
  * lead, and a run waiting at an Engineering review stop (./runs.ts).
  */
+/**
+ * build-rundecide "run-decisions" scenario: the default company with a Usage alerts run whose
+ * five stops people decided (its Engineering check sent back once); "-many": three more runs.
+ */
+function seedRunDecisionsScenario(many: boolean): Db {
+  const db = seed();
+  const id = (email: string) => db.members.find((x) => x.email === email)!.id;
+  seeded("run-decisions", () => seedRunDecisions(db.runs!, runsContext(db), { owner: id("admin@example.com"), approver: id("approver@example.com") }, many));
+  return db;
+}
+
 function seedEngReview(): Db {
   const db = seed();
   db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
@@ -1415,6 +1585,15 @@ const seedEngCheckLongKey = () =>
     check.features[0].key = "f.guided_setup_with_test_order_and_sample_catalogue";
   });
 
+/**
+ * "eng-check-shop" / "eng-check-shop-15" scenarios: the "eng-check" run with nine (or fifteen)
+ * invented shop features whose approaches run long, as the list and reading pane is read.
+ */
+const seedEngCheckShop = (n: number) =>
+  seedEngCheckWith(n === 9 ? "eng-check-shop" : `eng-check-shop-${n}`, (check) => {
+    Object.assign(check, shopBriefsCheck(n));
+  });
+
 /** F4 "eng-check-no-lead" scenario: the "eng-check" run with no engineering lead named (approvers decide). */
 function seedEngCheckNoLead(): Db {
   const db = seed();
@@ -1482,10 +1661,21 @@ function seedFeatureSet(): Db {
   return db;
 }
 
-/** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
-function seedScopeReview(kept = false): Db {
+/** SW1 "simple-waits": the default seed plus runs waiting on the owner at a feature set, an engineering review and engineering dates. */
+function seedSimpleWaits(): Db {
   const db = seed();
-  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept));
+  seeded("sw-feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
+  seeded("sw-eng-review", () => seedEngReviewRun(db.runs!, runsContext(db)));
+  seeded("sw-eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db)));
+  // Only these three wait on the owner: the default seed's run at its baseline does not.
+  db.runs!.runs = db.runs!.runs.filter((r) => !(r.status === "awaiting_checkpoint" && r.waiting_on === "baseline_confirm"));
+  return db;
+}
+
+/** C7 "scope-review": the default seed plus three runs at their feature set (./runs.ts seedScopeReviewRuns). */
+function seedScopeReview(kept = false, manyQuestions = false): Db {
+  const db = seed();
+  seeded("scope-review", () => seedScopeReviewRuns(db.runs!, runsContext(db), kept, manyQuestions));
   return db;
 }
 
@@ -1540,6 +1730,19 @@ function seedPriorityOrder(): Db {
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   seeded("priority-order", () => seedPriorityRuns(db.runs!, runsContext(db)));
+  return db;
+}
+
+/**
+ * build-runplan RP2 "meeting-draft-dates" scenario: the Simple home's data, the Saved carts PRD a
+ * draft whose run dated six items on its draft roadmap (./meeting-draft.ts).
+ */
+function seedMeetingDraftDatesScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  // The fixtures' Saved carts PRD, named as the review shows it.
+  const doc = db.documents.find((d) => d.slug === SAVED_CARTS.slug)!;
+  doc.title = SAVED_CARTS.title;
+  if (db.simple_roadmap) seedMeetingDraftDates(db.simple_roadmap, doc.id);
   return db;
 }
 
@@ -2831,12 +3034,16 @@ function load(): Db {
             ? seedFeatureSet
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
-          : scenario === "scope-review" || scenario === "scope-review-kept"
-            ? () => seedScopeReview(scenario === "scope-review-kept")
-          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
+          : scenario === "simple-waits"
+            ? seedSimpleWaits
+          : scenario === "scope-review" || scenario === "scope-review-kept" || scenario === "scope-review-questions"
+            ? () => seedScopeReview(scenario === "scope-review-kept", scenario === "scope-review-questions")
+          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"
             ? seedEngCheck
+          : scenario === "run-decisions" || scenario === "run-decisions-many"
+            ? () => seedRunDecisionsScenario(scenario === "run-decisions-many")
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
           : scenario === "eng-check-unmapped"
@@ -2847,6 +3054,10 @@ function load(): Db {
             ? seedEngCheckUnreadable
           : scenario === "eng-check-long-key"
             ? seedEngCheckLongKey
+          : scenario === "eng-check-shop"
+            ? () => seedEngCheckShop(9)
+          : scenario === "eng-check-shop-15"
+            ? () => seedEngCheckShop(15)
           : scenario === "eng-dates"
             ? seedEngDates
           : scenario === "roadmap-items-console-held"
@@ -2859,10 +3070,14 @@ function load(): Db {
             ? seedRunReviewDecider
           : scenario === "priority-order"
             ? seedPriorityOrder
+          : scenario === "meeting-draft-dates"
+            ? seedMeetingDraftDatesScenario
           : scenario === "next-draft" || scenario === "next-draft-costly"
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "draft-gate"
+            ? seedDraftGateScenario
           : scenario === "late-answers"
             ? seedLateAnswersScenario
           : scenario === "brief-goal-rejected"
@@ -2877,6 +3092,10 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
+              : scenario === "simple-home-move"
+                ? seedSimpleHomeMoveScenario
+              : scenario === "simple-home-same-name"
+                ? seedSimpleHomeSameNameScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
               : scenario === "simple-suggest-deciders"
@@ -2885,12 +3104,34 @@ function load(): Db {
                 ? seedSimpleSuggestNeedsLookScenario
               : scenario === "simple-home-milestones"
                 ? seedSimpleHomeMilestonesScenario
+              : scenario === "simple-priorities-long-milestones"
+                ? seedSimplePrioritiesLongMilestonesScenario
               : scenario === "simple-home-one-prd"
                 ? seedSimpleHomeOnePrdScenario
               : scenario === "simple-walk"
                 ? seedSimpleWalkScenario
+              : scenario === "simple-walk-long-name"
+                ? () => {
+                    // walkb-roadmap review 5f: a roadmap built from a PRD with a long title.
+                    const db = seedSimpleWalkScenario();
+                    db.simple_roadmap!.titles = { "onboarding-roadmap": "Guided setup for new workspace admins and their first teams roadmap" };
+                    return db;
+                  }
+              : scenario === "simple-unapproved-roadmap"
+                ? () => {
+                    // walkb-roadmap review 5a: the Alerts roadmap was built from its PRD and has no approved version yet.
+                    const db = seed();
+                    (db.simple_roadmap = seedSimpleRoadmap()).unapproved = ["alerts-roadmap"];
+                    return db;
+                  }
               : scenario === "simple-plan"
                 ? () => seedSimplePlanScenario()
+              : scenario === "roadmap-keydates"
+                ? seedRoadmapKeyDatesScenario
+              : scenario === "roadmap-keydates-uncoded"
+                ? seedRoadmapKeyDatesUncodedScenario
+              : scenario === "roadmap-keydates-two-prds"
+                ? seedRoadmapKeyDatesTwoPrdsScenario
               : scenario === "simple-plan-lanes"
                 ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
@@ -2900,6 +3141,35 @@ function load(): Db {
                     // prd-timeline: Guided setup's plan whose milestones have no dates.
                     const db = seedSimplePlanScenario();
                     db.simple_roadmap!.plan!.undated = true;
+                    return db;
+                  }
+              : scenario === "simple-plan-by-job"
+                ? () => {
+                    // walkb-onepager: a run's PRD with no milestones table: Oracle's job reads it.
+                    const db = seedSimplePlanScenario();
+                    Object.assign(db.simple_roadmap!.plan!, { undated: true, by_job: true });
+                    return db;
+                  }
+              : scenario === "simple-plan-by-job-stuck" || scenario === "simple-plan-by-job-down"
+                ? () => {
+                    // walkb-onepager review: Oracle's job never answers, or the API fails while it reads.
+                    const db = seedSimplePlanScenario();
+                    const how = scenario === "simple-plan-by-job-stuck" ? { stuck: true } : { down: true };
+                    Object.assign(db.simple_roadmap!.plan!, { undated: true, by_job: true, ...how });
+                    return db;
+                  }
+              : scenario === "simple-plan-lead-dated"
+                ? () => {
+                    // walkb-onepager review: only M1 has dates in the PRD; the lead accepted
+                    // M2's end and F-13's (in M3) at the run's Engineering dates stop.
+                    const db = seedSimplePlanScenario();
+                    Object.assign(db.simple_roadmap!.plan!, {
+                      partly_dated: true,
+                      accepted: [
+                        { milestone: "M2", feature: "F-07", day: "2027-01-15" },
+                        { milestone: null, feature: "F-13", day: "2027-02-26" },
+                      ],
+                    });
                     return db;
                   }
               : scenario === "simple-plan-partly-dated"
@@ -2976,6 +3246,12 @@ function load(): Db {
       roadmap.status = "approved";
     }
   }
+  // "two-way-dates": v1 stays in review, its GA date written as one that reads two ways.
+  if (scenario === TWO_WAY_DATES_SCENARIO) {
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    for (const v of db.versions.filter((x) => x.document_id === roadmap?.id && x.number === 1))
+      for (const x of v.sections) x.body_md = x.body_md.replace("GA by 2026-12-15", `GA by ${TWO_WAY_GA.written}`);
+  }
   // H9 Pricing input: a second owner, two pricing memos and made-up deals in the "pricing" scenario.
   if (scenario === "pricing") seedPricingScenario(db);
   // Outcomes (H3): synthetic predictions, one due for its check, in the "outcomes" scenario.
@@ -3048,6 +3324,14 @@ function load(): Db {
         base_hash: hash("launch-checklist"), body_md: "Tell support a day before the cart change ships.",
       });
     }
+  }
+  // vqa-detailed review: the API has reworded its stock reason for a held rewrite; the drawer's
+  // intro still says it once and a card does not repeat it.
+  if (scenario === "held-reworded") {
+    const prd = db.documents.find((d) => d.kind === "prd");
+    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+    const first = db.review_v2.patches[0];
+    if (first) first.rationale = "An agent's draft changed this approved section, so its approved text was kept.";
   }
   if (scenario === "named-codes") {
     addGoalCodes(db.baseline);
@@ -3401,6 +3685,37 @@ function findDocument(db: Db, ref: string) {
 
 function findVersion(db: Db, doc: DocumentRow, n: number) {
   return db.versions.find((v) => v.document_id === doc.id && v.number === n);
+}
+
+/**
+ * roadmap-keydates: each PRD's dated milestones as its latest approved version states them (a
+ * milestones table: "| M1 | Prove it | 2 Nov 2026 | 27 Nov 2026 |", the end day its last day),
+ * as oracle.simple.plan.views reads them; a plan PRD whose versions state none keeps the
+ * plan mock's (./simple-plan.ts).
+ */
+function prdMilestonesOf(db: Db): Record<string, PrdMilestone[]> {
+  const out = planPrdMilestones(db.simple_roadmap?.plan);
+  const day = (cell: string): string | null => {
+    const t = cell.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const ms = /^\d{1,2} [A-Z][a-z]{2,8} \d{4}$/.test(t) ? Date.parse(`${t} 00:00 UTC`) : NaN;
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString().slice(0, 10);
+  };
+  for (const doc of db.documents) {
+    if (doc.kind !== "prd") continue;
+    const v = docVersions(db, doc).filter((x) => x.approved_at).at(-1);
+    if (!v) continue;
+    const rows = v.sections.flatMap((sec) =>
+      sec.body_md.split("\n").flatMap((line) => {
+        const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        if (!/^M\d+$/.test(cells[0] ?? "")) return [];
+        const date = cells.slice(2).map(day).filter((d): d is string => !!d).at(-1);
+        return date ? [{ code: cells[0], name: cells[1] ?? "", date }] : [];
+      }),
+    );
+    if (rows.length) out[doc.slug] = rows;
+  }
+  return out;
 }
 
 function docVersions(db: Db, doc: DocumentRow) {
@@ -5669,8 +5984,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // "one-pager-not-in-prd": Oracle marked a block the PRD lacks "Not in the PRD yet".
   // "one-pager-run-prd": a run's Goal-traced PRD, its lines cited, while Oracle writes the page.
   // "one-pager-quick-read": the same PRD, its one_pager job failed: the quick read stays.
+  // "one-pager-run-prd-walk": a run's approved PRD as Oracle's job wrote its page (CLD's walk B).
   db.simple_one_pager ??= localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd"
     ? seedRunPrdOnePager()
+    : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-run-prd-walk"
+    ? seedRunPrdWalkOnePager()
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-quick-read"
     ? { ...seedRunPrdOnePager(), writing: false, quickRead: true }
     : localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-needs-look"
@@ -5702,6 +6020,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (visualsRes) return visualsRes;
   db.simple_roadmap.visuals = db.simple_visuals;
+  // walkb-roadmap review: the one-pager whose bets' flows an item built from its PRD shows.
+  db.simple_roadmap.onePager = db.simple_one_pager;
+  // roadmap-keydates: each PRD's milestones as its latest approved version has them (its key dates on the roadmap).
+  db.simple_roadmap.prd_milestones = prdMilestonesOf(db);
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
@@ -5716,6 +6038,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         role: me.role,
         owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
         names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+        roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
         // The PRD's required reviewer: the seeded approver.
         reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
         // Its decider and track owners, as the meetings mock's Guided setup (simple-meetings prds).
@@ -5769,8 +6092,19 @@ async function route(db: Db, req: Request): Promise<Response> {
           .filter((t) => t.meeting_id === id)
           .flatMap((t) => t.messages.filter((x) => x.author_kind === "person").map((x) => x.body)),
     };
+    // runplan-r2: a meeting's decision is in the decision log too (one decisions row in the API).
+    meetingsCtx.logDecision = (d) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const ctx = decisionsContext(db, me);
+      logMeetingDecision(ctx, ensureDecisions(db, ctx), d);
+    };
     // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
     meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
+    meetingsCtx.runs = (prd) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const docs = db.documents.filter((d) => d.kind === "prd");
+      return runGroupsOut(db.runs.runs, docs, meetingsCtx.members, prd);
+    };
     meetingsCtx.othersWaiting = () => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
       const ctx = decisionsContext(db, me);
@@ -5828,7 +6162,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
-  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift }, db.roadmap, req, p, q);
+  // walkc-roadmap-tasks: an item's decisions as Simple's item sheet reads them (the same keys).
+  const decidedOf = (key: string) => [...(db.simple_roadmap?.decided_in?.[stableUuid(`simple-item/${key}`)] ?? [])];
+  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift, decided: decidedOf }, db.roadmap, req, p, q);
   if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
     if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
@@ -6219,6 +6555,44 @@ async function route(db: Db, req: Request): Promise<Response> {
     doc.updated_at = v.approved_at;
     // D10: publishing the version approves its run review.
     followRunReview(db, doc, v, true, me.id);
+    // approved-prd-roadmap: its dated items and milestones go on its roadmap's working draft.
+    if (doc.kind === "prd") {
+      const row = draftDb(db).rows.find(
+        (r) =>
+          r.document_id === doc.id &&
+          r.version === v.number &&
+          r.status === "ready",
+      );
+      approvedPrdToDraft(
+        (db.simple_roadmap ??= seedSimpleRoadmap()),
+        {
+          prd: { id: doc.id, slug: doc.slug, title: doc.title },
+          version: v.number,
+          roadmap: row?.roadmap ?? null,
+          // As the API's _dated: the end is the engineering lead's accepted date (the PRD's
+          // newest verified basis for the item), else the item's own; the start is its own.
+          items: (row?.items ?? []).map((i) => {
+            const ms = (i.milestone ?? {}) as { date?: unknown; start_date?: unknown };
+            const lead = (db.roadmap?.bases ?? [])
+              .filter((b) => b.prd_document_id === doc.id && b.item_key === i.item_key && b.status === "verified")
+              .sort((a, b) => (a.verified_at ?? "").localeCompare(b.verified_at ?? ""))
+              .at(-1);
+            const end = lead?.supports_date ?? (typeof ms.date === "string" ? ms.date : null);
+            const start = typeof ms.start_date === "string" && end && ms.start_date <= end ? ms.start_date : null;
+            return {
+              key: i.item_key,
+              title: i.title,
+              horizon: i.horizon,
+              outcome: i.outcome ?? null,
+              start,
+              end,
+              source: lead ? ("engineering" as const) : ("accepted" as const),
+            };
+          }),
+        },
+        me.id,
+      );
+    }
     return json(200, { document_id: doc.id, document_status: doc.status, version: summary(v) });
   }
   // O5: audience= renders a roadmap for Board, Team or Engineering (./audience.ts).

@@ -45,6 +45,7 @@ export function Sheet({
   id,
   bare = false,
   side = false,
+  tall = false,
   dialog = false,
 }: {
   open: boolean;
@@ -66,6 +67,8 @@ export function Sheet({
   bare?: boolean;
   /** qa-docs-28: wider than a phone, a panel at the right edge (full height, no handle); a bottom sheet on a phone. */
   side?: boolean;
+  /** On a phone the bottom sheet rises almost to the top (85dvh), however short its content (QD1 a, Held rewrites). */
+  tall?: boolean;
   /** A form: a bottom sheet on a phone, a centred dialog of readable width (640 px) from 640 px up (qa-settings-33). */
   dialog?: boolean;
 }) {
@@ -161,6 +164,7 @@ export function Sheet({
         side ? "min-[601px]:flex-row" : ""
       } ${dialog ? "sm:items-center sm:justify-center sm:p-6" : ""}`}
       data-testid={testId}
+      data-sheet=""
     >
       <div data-backdrop="" data-testid="sheet-scrim" aria-hidden className="absolute inset-0 bg-hero/50" onClick={onClose} />
       <div
@@ -177,7 +181,7 @@ export function Sheet({
         className={
           bare
             ? "relative flex h-dvh max-h-dvh min-h-0 flex-col bg-surface pt-[env(safe-area-inset-top)] text-text outline-none"
-            : `relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none ${
+            : `relative flex ${full ? "h-dvh max-h-dvh" : tall ? "h-[85dvh] max-h-[85dvh]" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none ${
                 side ? SIDE : ""
               }`
         }

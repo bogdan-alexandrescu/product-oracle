@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -60,11 +60,11 @@ test.describe("desktop", () => {
       for (const c of await cards.all()) goals.push([(await c.locator("p").first().textContent())!.trim(), num(await c.locator("b.tnum").first().textContent())]);
       expect(goals.length).toBeGreaterThan(0);
 
-      // The Timeline's lanes.
+      // The Timeline's lanes ("Faster activation · 3 items"), each a row per item it counts.
       for (const [goal, n] of goals) {
-        const lane = page.getByTestId("chart-group").filter({ has: page.locator("b", { hasText: new RegExp(`^${goal}$`) }) });
+        const lane = page.getByTestId("timeline-lane").filter({ hasText: new RegExp(`^${escaped(goal).source} · \\d+ items?$`) });
         await expect(lane, `${goal}'s Timeline lane`).toHaveCount(1);
-        expect(num(await lane.getByTestId("lane-count").textContent()), `${goal}: Timeline vs its card`).toBe(n);
+        expect(Number(/· (\d+) items?$/.exec((await lane.textContent())!)?.[1]), `${goal}: Timeline vs its card`).toBe(n);
       }
       // The Waterfall's lanes.
       await format(page, "waterfall");
@@ -82,10 +82,14 @@ test.describe("desktop", () => {
     });
   }
 
+  // mk-qa4-roadmap QR2 A: the Timeline has its own key above the chart (the owner's picked
+  // design), not a legend under it; the legends below are the Gantt's, the board's and the Waterfall's.
   test("qa4-29: a mark has one wording in every view's legend", async ({ page }) => {
     await open(page);
+    await expect(page.getByTestId("timeline-key")).toBeVisible();
+    await expect(page.getByTestId("legend")).toHaveCount(0);
     const seen: Record<string, string[]> = {};
-    for (const f of ["timeline", "gantt", "board", "waterfall"] as const) {
+    for (const f of ["gantt", "board", "waterfall"] as const) {
       await format(page, f);
       seen[f] = await legendWords(page);
     }
@@ -94,9 +98,8 @@ test.describe("desktop", () => {
     const estimated = all.filter((t) => /estimated/i.test(t));
     expect(estimated.length).toBeGreaterThan(1);
     for (const t of estimated) expect(t).toBe("Estimated dates");
-    // Oracle's dates: the Timeline and the Gantt say the same words.
+    // Oracle's dates: the Gantt, which draws them, says them in these words.
     const suggestion = "Dates Oracle suggests (? opens them)";
-    expect(seen.timeline).toContain(suggestion);
     expect(seen.gantt).toContain(suggestion);
     for (const t of all.filter((x) => /suggest/i.test(x))) expect(t).toBe(suggestion);
     expect(all.join(" | ")).not.toContain("horizon’s window");
@@ -108,13 +111,13 @@ test.describe("desktop", () => {
     const card = boardCard(page, "alert-digest");
     await expect(card.getByTestId("board-flag")).toContainText("after its milestone");
     const warnings = [(await card.getByTestId("board-flag").textContent())!.trim(), (await card.getByTestId("board-broken").textContent())!.trim()];
+    // The Timeline (mk-qa4-roadmap): the broken link in the panel above the chart, and both in
+    // the item's side panel.
     await format(page, "timeline");
-    const pill = bar(page, "alert-digest");
-    for (const w of warnings) {
-      await expect(pill).toHaveAttribute("aria-label", escaped(w));
-      // On hover too, for whoever reads the chart by eye.
-      await expect(pill.locator("title", { hasText: w })).not.toHaveCount(0);
-    }
+    await expect(page.getByTestId("conflicts").locator('[data-testid="conflict"][data-item="alert-digest"]')).toContainText(warnings[1]);
+    await openRoadmapItem(page, "alert-digest");
+    const flags = page.getByTestId("item-panel").getByTestId("card-flags");
+    for (const w of warnings) await expect(flags).toContainText(w);
     await format(page, "gantt");
     for (const w of warnings) await expect(bar(page, "alert-digest")).toHaveAttribute("aria-label", escaped(w));
   });

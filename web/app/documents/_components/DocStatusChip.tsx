@@ -14,7 +14,7 @@ export function DocStatusChip({
   status: DocumentOut["status"];
   hero?: boolean;
   dot?: boolean;
-  /** Another word for the status where the page uses one (Publish: "Published"). */
+  /** Another word for the status where a page uses one. */
   label?: string;
 }) {
   return (

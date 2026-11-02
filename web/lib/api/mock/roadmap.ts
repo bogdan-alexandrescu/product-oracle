@@ -107,6 +107,16 @@ const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
 export const ITEMS_SCENARIO = "roadmap-items";
 /** F3 Date bases: commenter@example.com is the engineering lead, a basis waits for them. */
 export const DATE_BASES_SCENARIO = "date-bases";
+/**
+ * build-review review (Walk 1): "date-bases" with usage-alerts-roadmap v1 not yet approved
+ * and its GA date written 03/04/2027, which reads as Mar 4 or Apr 3, 2027: ENG-413 backs
+ * Mar 4 only, so the date waits for a source for Apr 3.
+ */
+export const TWO_WAY_DATES_SCENARIO = "two-way-dates";
+/** The GA date as the "two-way-dates" scenario writes it, and the reading ENG-413 backs. */
+export const TWO_WAY_GA = { written: "03/04/2027", backed: "2027-03-04" } as const;
+/** walkb-roadmap review 5e: a verified basis on the Simple roadmap's "alert-rules" item, as an engineering dates run records one for a roadmap built from a PRD. */
+export const SIMPLE_ITEM_BASIS_SCENARIO = "simple-item-basis";
 /** #396: the default company, GA's date with no basis, and usage-alerts-roadmap v1 carrying the API's date and citation warnings. */
 export const VERSION_WARNINGS_SCENARIO = "version-warnings";
 /** The mock scenario whose usage-alerts-roadmap v2 moved, added and dropped one item each since the approved v1 (E3). */
@@ -208,9 +218,11 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
 export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts: { plan?: boolean } = {}): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;
   const withDiff = scenario === DIFF_SCENARIO;
-  const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO;
+  const twoWay = scenario === TWO_WAY_DATES_SCENARIO;
+  const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO || twoWay;
   const planStale = scenario === PLAN_STALE_SCENARIO;
-  const key = withItems || withDiff || noGaBasis || planStale ? `roadmap:${scenario}` : "roadmap";
+  const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
+  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
@@ -235,7 +247,9 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     // ENG-420 waits for the engineering lead.
     const ga = scenario === "plan-decider" ? "verified" : "withdrawn";
     const seeds =
-      noGaBasis
+      twoWay
+        ? ([["ENG-412", "2026-11-30", "verified"], ["ENG-413", TWO_WAY_GA.backed, "verified"]] as const)
+        : noGaBasis
         ? ([["ENG-412", "2026-11-30", "verified"], ["ENG-420", "2027-01-15", "proposed"]] as const)
         : ([["ENG-412", "2026-11-30", "verified"], ["ENG-413", "2026-12-15", ga]] as const);
     // qa4-plan-31: the Plan's "Threshold alerts on spend" reads Nov 20 verified from ENG-402, so
@@ -243,6 +257,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     const all: (readonly [reference: string, day: string, status: "verified" | "proposed" | "withdrawn", itemKey?: string])[] = [
       ...seeds,
       ...(track.plan ? ([["ENG-402", "2026-11-20", "verified", "threshold-alerts"]] as const) : []),
+      ...(simpleItemBasis ? ([["ENG-450", "2026-12-04", "verified", "alert-rules"]] as const) : []),
     ];
     for (const [reference, day, status, itemKey] of all) {
       const proposed = status === "proposed";
@@ -1099,14 +1114,36 @@ export function trackRunBody(ctx: RoadmapContext, db: RoadmapDb, trackId: string
 // --- O4 'document dates' ---------------------------------------------------------------
 
 const ISO_DATE = /(?<![0-9])(\d{4})-(\d{2})-(\d{2})(?![0-9])/g;
+// A numeric day/month date (oracle.roadmap.doc_dates "dmy", slashes only here): 03/04/2027.
+const NUMERIC_DATE = /(?<![0-9./-])(\d{1,2})\/(\d{1,2})\/(\d{4})(?![0-9])/g;
+
+/** Each date written in `text`, where, and the day(s) it reads as, sorted (a numeric one may read two ways). */
+function datesIn(text: string): [number, string, string[]][] {
+  const out: [number, string, string[]][] = [...text.matchAll(ISO_DATE)].map((m) => [m.index, m[0], [m[0]]]);
+  const day = (y: string, m: number, d: number) => {
+    const at = new Date(Date.UTC(Number(y), m - 1, d));
+    return at.getUTCMonth() === m - 1 && at.getUTCDate() === d ? at.toISOString().slice(0, 10) : null;
+  };
+  for (const m of text.matchAll(NUMERIC_DATE)) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    const days = [...new Set([day(m[3], b, a), day(m[3], a, b)].filter((d): d is string => !!d))].sort();
+    if (days.length) out.push([m.index, m[0], days]);
+  }
+  return out.sort((x, y) => x[0] - y[0]);
+}
 const MARK_RANK = { withdrawn: 0, unverified: 1, verified: 2 } as const;
 const ITEM_ANCHOR = /^(?:now|next|later)-(.+)$/;
+/** walkb-roadmap, as doc_dates: not schedule dates (the "As of" line, Changes since last version). */
+const AS_OF = /\bas of\s*$/i;
+/** The roadmap's own sections, which no item owns: an item's verified basis backs a date there. */
+const NOT_ITEMS = new Set(["title", "roadmap", "summary", "goals", "problems", "brief-items", "brief-roadmap", "not-doing", "top-risks", "decisions", "full", "layout", "now", "next", "later", "risks"]);
 
 /**
  * The dates a roadmap version's text writes, each checked against its PRD's schedule
  * bases now (oracle.roadmap.doc_dates, simplified: ISO dates in headings and bodies; a
- * basis with an item key counts in that item's own section). One mark per date and
- * section, worst status; Sources and data points (and its sub-sections) are not read.
+ * basis with an item key counts in that item's own section and, when the item is one of
+ * this roadmap's, in the roadmap's own sections). One mark per date and section, worst status; Sources and data points and
+ * Changes since last version (and their sub-sections), and an "As of" date, are not read.
  */
 export function dateMarks(
   db: RoadmapDb,
@@ -1114,9 +1151,11 @@ export function dateMarks(
   sections: { section_key: string; level: number; heading: string; body_md: string }[],
 ): Schemas["DateMarkOut"][] {
   const out = new Map<string, Schemas["DateMarkOut"]>();
+  // walkb-roadmap review: this roadmap's own items; only their bases back a date outside every item.
+  const own = new Set(sections.map((s) => ITEM_ANCHOR.exec(s.section_key)?.[1] ?? s.section_key).filter((k) => !NOT_ITEMS.has(k)));
   let sourcesLevel: number | null = null;
   for (const s of sections) {
-    if (s.section_key === "sources") {
+    if (s.section_key === "sources" || s.section_key === "changes") {
       sourcesLevel = s.level;
       continue;
     }
@@ -1129,22 +1168,30 @@ export function dateMarks(
       ["body", s.body_md.replace(/\]\([^)\s]*\)/g, "]()")],
     ];
     for (const [where, text] of places) {
-      for (const m of text.matchAll(ISO_DATE)) {
-        const day = m[0];
-        const covers = (b: Basis) => b.prd_document_id === prdId && b.supports_date === day && (!b.item_key || b.item_key === owner);
-        const verified = db.bases.filter((b) => b.status === "verified" && covers(b));
-        const withdrawn = db.bases.filter((b) => b.status === "withdrawn" && covers(b));
+      for (const [at, written, days] of datesIn(text)) {
+        if (AS_OF.test(text.slice(Math.max(0, at - 12), at))) continue;
+        const day = days[0];
+        const covers = (b: Basis, d: string) => b.prd_document_id === prdId && b.supports_date === d && (!b.item_key || b.item_key === owner || (NOT_ITEMS.has(s.section_key) && own.has(b.item_key)));
+        // O4: a date that reads two ways (03/04/2027) is backed only when each reading is.
+        const backedBy = (status: Basis["status"]) => {
+          const per = days.map((d) => db.bases.filter((b) => b.status === status && covers(b, d)));
+          return per.every((x) => x.length) ? per.flat() : [];
+        };
+        const verified = backedBy("verified");
+        const withdrawn = verified.length ? [] : backedBy("withdrawn");
         const status = verified.length ? "verified" : withdrawn.length ? "withdrawn" : "unverified";
         const mark: Schemas["DateMarkOut"] = {
           section_key: s.section_key,
-          text: day,
+          text: written,
           date: day,
           status,
           label: status === "verified" ? null : status === "withdrawn" ? "date withdrawn" : "unverified",
-          bases: (verified.length ? verified : withdrawn).map((b) => b.reference),
+          bases: [...new Set((verified.length ? verified : withdrawn).map((b) => b.reference))],
           where,
+          days,
+          missing: verified.length ? [] : days.filter((d) => !db.bases.some((b) => b.status === "verified" && covers(b, d))),
         };
-        const key = `${s.section_key}|${day}`;
+        const key = `${s.section_key}|${written}`;
         const had = out.get(key);
         if (!had || MARK_RANK[status] < MARK_RANK[had.status]) out.set(key, mark);
       }
@@ -1167,6 +1214,8 @@ export interface PlanContext extends RoadmapContext {
   edits?: PlanEditsDb;
   /** H4 §5: each item's strategy drift (./strategy.ts planDrift). */
   drift?: (key: string, origin: PlanItem["origin"]) => Schemas["PlanDrift"][];
+  /** walkc-roadmap-tasks: the decided decisions about an item (by key, as Simple's item reads them). */
+  decided?: (key: string) => Schemas["SimpleDecidedRef"][];
 }
 
 /** One item of the mock plan: an approved row, its draft twin (when the roadmap draft changes it), or a new draft row. */
@@ -1569,6 +1618,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       state: origin === "draft" ? "proposed" : (s.state ?? "planned"),
       reasons: origin === "draft" ? [] : (s.reasons ?? []),
       drift: ctx.drift?.(s.key, origin) ?? [],
+      decisions: ctx.decided?.(s.key) ?? [],
       engineering: { records, date: s.date ?? null, ...dateStatus(db, prd.id, s), slip_days: s.slipDays ?? null, tracked: records.length > 0 },
       next,
     };

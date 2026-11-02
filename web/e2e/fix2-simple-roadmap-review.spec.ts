@@ -113,16 +113,22 @@ test.describe("desktop", () => {
 
   /**
    * cld-1, #1, #2: each goal tile counts the live items its lane draws and how many of them
-   * are broken (the review counted 3 items · 1 broken and 4 items · 3 broken in the mock).
+   * are broken. The Waterfall names each goal lane's count, so the tile is checked against it
+   * (the Timeline's lanes carry the cut items below the line too).
    */
   test("the goal tiles count what their lanes draw", async ({ page }) => {
     await open(page);
     const tiles = page.getByTestId("goal-counter");
     await expect(tiles.first()).toBeVisible();
+    await page.getByTestId("format-waterfall").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+    for (const goal of ["Faster activation", "Grow retention"]) {
+      const drawn = (await page.getByTestId("chart-group").filter({ hasText: goal }).getByTestId("lane-count").textContent())!.trim();
+      expect(drawn).toMatch(/^\d+ items?$/);
+      await expect(tiles.filter({ hasText: goal })).toContainText(new RegExp(`(^|\\D)${drawn}`));
+    }
     // fix4 qa-simple-roadmap-8: Team invite nudges is a draft with no owner, not a broken link.
-    await expect(tiles.filter({ hasText: "Faster activation" })).toContainText("3 items");
     await expect(tiles.filter({ hasText: "Faster activation" })).not.toContainText("broken");
-    await expect(tiles.filter({ hasText: "Grow retention" })).toContainText("4 items · 3 broken");
+    await expect(tiles.filter({ hasText: "Grow retention" })).toContainText("· 1 broken"); // walkb-roadmap: end-only items no longer break on a made-up start
   });
 });
-

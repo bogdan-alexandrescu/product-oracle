@@ -43,14 +43,18 @@ export function StateChip({ freshness }: { freshness: ItemRow["freshness"] }) {
   return null;
 }
 
+/** Whether a row's milestone cell wraps: a refused or unconfirmed date's chip, or a name with a date. */
+const milestoneWraps = (r: ItemRow) => Boolean(r.unbacked?.length || r.milestone?.refused_date || (r.milestone?.name && r.milestone?.date));
+
 export function MilestoneCell({ row }: { row: ItemRow }) {
   const m = row.milestone;
   const unbacked = row.unbacked ?? [];
   if ((!m || (!m.name && !m.date && !m.refused_date)) && unbacked.length === 0) return <span className="text-text2">—</span>;
   // qa4-docs-3: dates month first; a refused date's chip wraps under it, whole, never cut.
   return (
-    <span className={`inline-flex min-w-0 max-w-full items-center gap-x-1.5 gap-y-1 ${unbacked.length || m?.refused_date ? "flex-wrap" : ""}`}>
-      {m?.name && <span className="truncate">{m.name}</span>}
+    <span className={`inline-flex min-w-0 max-w-full items-center gap-x-1.5 gap-y-1 ${milestoneWraps(row) ? "flex-wrap" : ""}`}>
+      {/* walkb-roadmap: in a narrow column the name keeps its line and the date goes under it, never a name cut to a letter. */}
+      {m?.name && <span className="max-w-full flex-none break-words">{m.name}</span>}
       {m?.date &&
         (m.date_removed ? (
           <s className="tnum flex-none text-text2" title="Date removed">
@@ -168,7 +172,7 @@ export function ItemsTable({
     },
     { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => (r.horizon ? <HorizonChip horizon={r.horizon} plain={plainHorizons} /> : <span className="text-text2">—</span>) },
     // qa-docs-66: on a phone a row's "—" says what it is.
-    { key: "milestone", header: "Milestone", width: "172px", phone: "meta", phoneLabel: "Milestone", wrap: rows.some((r) => r.unbacked?.length || r.milestone?.refused_date), cell: (r) => <MilestoneCell row={r} /> },
+    { key: "milestone", header: "Milestone", width: "172px", phone: "meta", phoneLabel: "Milestone", wrap: rows.some(milestoneWraps), cell: (r) => <MilestoneCell row={r} /> },
     { key: "confidence", header: "Confidence", width: "104px", phone: "meta", phoneLabel: "Confidence", cell: (r) => <Confidence value={r.confidence} /> },
     {
       key: "depends_on",

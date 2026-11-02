@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
+import { runStopsOf, StopCard } from "@/app/simple/_home/run-stops";
 import { SimpleWelcome } from "@/app/simple/_home/welcome";
 import { Icon } from "@/components/ds/Icon";
+import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
+import { meetingMoment } from "@/components/simple/FlowVisual";
+import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
@@ -25,6 +29,7 @@ import {
   greeting,
   NEW_FLOW_OPS,
   OP_WORDS,
+  opWords,
   planByMonth,
   planInputs,
   prdInPlay,
@@ -115,6 +120,9 @@ const STATUS_TONE: Record<GoalTile["status"], string> = {
  * decider apply with Undo, others propose, viewers read). Roles only through can() and the
  * rows' own can_* fields.
  */
+/** An item's dates in a change's before or after. */
+type Dates = { start_date?: string | null; end_date?: string | null };
+
 export default function SimpleHome() {
   const { me, can, capsReady } = useMe();
   const zone = useCompanyZone();
@@ -124,6 +132,10 @@ export default function SimpleHome() {
   // qa4-simple-home-10: Done gives the focus back to "Walk me through it".
   const walkButton = useRef<HTMLButtonElement>(null);
   const backToWalk = useRef(false);
+  const canStartPrd = useCanStartPrd();
+  const [newPrd, setNewPrd] = useState(false);
+  const closeNewPrd = useCallback(() => setNewPrd(false), []);
+  const started = useStartedPrds(canStartPrd);
   useEffect(() => {
     if (walking || !backToWalk.current) return;
     walkButton.current?.focus();
@@ -139,6 +151,29 @@ export default function SimpleHome() {
   };
 
   const inbox = useQuery(k("inbox"), loadInbox, { keepPrevious: true });
+  // vqa-simple-runs: Back to Home shows the page as it was left (cacheComponents keeps its
+  // state): read everything again, and draw no run stop until the Inbox is read, so a stop just
+  // approved on the run's page never shows again. Before paint, so nothing stale flashes.
+  // vqa-simple-runs (RD3 a, frame "done"): a question decided on its PRD's card stays in its row,
+  // with the answer, who and when, and Undo there (no toast), until Home is left: coming
+  // back reads the questions again, so a row decided before shows as the API now has it.
+  const [decidedHere, setDecidedHere] = useState<Question[]>([]);
+  const shownBefore = useRef(false);
+  const [revisit, setRevisit] = useState(false);
+  useLayoutEffect(() => {
+    if (shownBefore.current) {
+      invalidateWaiting();
+      setDecidedHere([]);
+      setRevisit(true);
+      setStamp((s) => s + 1);
+    }
+    shownBefore.current = true;
+  }, []);
+  useEffect(() => {
+    // Once the Inbox is read again: a later reload (a decision on Home) keeps the cards it has.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (revisit && !inbox.loading) setRevisit(false);
+  }, [revisit, inbox.loading]);
   const roadmap = useQuery(k("roadmap"), () => unwrap(api.GET("/v1/simple/roadmap")), { keepPrevious: true });
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
   const changes = useQuery(k("changes"), () => unwrap(api.GET("/v1/simple/changes")), { keepPrevious: true });
@@ -157,6 +192,22 @@ export default function SimpleHome() {
     { keepPrevious: true },
   );
   const questionActions = useQuestionActions(reloadAll);
+  const prdActions: typeof questionActions = {
+    ...questionActions,
+    decide: async (q, a) => {
+      const r = await questionActions.decide(q, a, true);
+      // Only when it can be undone: otherwise the toast says it and the row goes as on any list.
+      if (r && r.change.status !== "proposed" && r.change.can_undo) {
+        const label = [r.words, me?.name, meetingMoment(new Date().toISOString(), zone)].filter(Boolean).join(" · ");
+        setDecidedHere((d) => [...d.filter((x) => x.id !== q.id), { ...q, column: "decided", chosen: r.words, decided_label: label, undo_id: r.change.id }]);
+      }
+      return r;
+    },
+    undo: async (id) => {
+      await questionActions.undo(id);
+      setDecidedHere((d) => d.filter((x) => x.undo_id !== id));
+    },
+  };
   // A4: a phone's Home shows the soonest two decisions, a desktop's three.
   const phone = usePhone();
   // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
@@ -196,6 +247,8 @@ export default function SimpleHome() {
   // S7: Oracle's suggested features under each goal of the band (an accept reloads Home).
   const suggestions = useGoalSuggestions(reloadAll);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  // A proposal that moves dates: its Accept first lists what moves (old and new dates).
+  const [confirming, setConfirming] = useState<Change | null>(null);
   const proposes = can("create_simple_change");
   const decidesAll = can("accept_simple_change");
   const reads = !proposes;
@@ -243,6 +296,11 @@ export default function SimpleHome() {
   // A person with no name is greeted plainly, never by their email's local part.
   const firstName = (me?.name ?? "").trim().split(/\s/)[0];
   const decisionCount = waiting.data?.count ?? 0;
+  // SW1: the run stops that wait on me, a card each under the summary (their work is on the run's page).
+  const runStops = revisit && inbox.loading ? undefined : runStopsOf(inbox.data);
+  const stopCount = runStops?.length ?? 0;
+  // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
+  const myTasks = waiting.data?.tasks ?? [];
   // Every broken link the tile counts: those I decide wait on me, the others I may propose fixes for.
   const brokenMine = broken.filter((b) => b.item.can_decide).length;
   const brokenOthers = broken.length - brokenMine;
@@ -250,24 +308,28 @@ export default function SimpleHome() {
     [decisionCount, "decision", "decisions"],
     [proposalRows === toDecide ? toDecide.length : 0, "proposal", "proposals"],
     [brokenMine, "broken link", "broken links"],
+    [stopCount, "run", "runs"],
+    [myTasks.length, "task", "tasks"],
   ]);
   const brokenWords = brokenOthers === 1 ? "a broken link" : "broken links";
   const sentence = reads
     ? "Here is where the plan stands."
     : brokenOthers === 0
       ? waits
-      : brokenMine + decisionCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
+      : brokenMine + decisionCount + stopCount + myTasks.length + (proposalRows === toDecide ? toDecide.length : 0) === 0
         ? `You can propose fixes for ${brokenWords}.`
         : `${waits} You can also propose fixes for ${brokenWords}.`;
   // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
-  const counted = [waiting, changes, roadmap, meeting].every((q) => q.data !== undefined || !!q.error);
-  const nothingToWalk = counted && decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
+  const counted = [waiting, changes, roadmap, meeting, inbox].every((q) => q.data !== undefined || !!q.error);
+  const nothingToWalk = counted && stopCount + decisionCount + toDecide.length + mine.length + broken.length + myTasks.length === 0 && !meeting.data?.next;
   // qa-simple-home-16: nothing waits on me (no decision, no proposal): one line, not two empty cards and two 0 tiles.
   // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
-  const decisionRows = waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined;
+  // build-rundecide RD3 a: the PRDs' questions I own wait in a card per PRD; this card keeps the other judgement calls.
+  const decisionRows = waiting.data && decisions.data ? homeDecisionRows([], decisions.data) : undefined;
+  const prdWaiting = waitingByPrd([...(waiting.data?.questions ?? []).filter((q) => !decidedHere.some((d) => d.id === q.id)), ...decidedHere]);
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
-  const quiet = decisionsEmpty && proposalsEmpty && mineApart.length === 0;
+  const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0;
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
@@ -281,14 +343,11 @@ export default function SimpleHome() {
       ],
       ["broken-links", roadmap.data ? broken.length : null, broken.length === 1 ? "broken link" : "broken links", broken.length === 1 ? "broken link" : "broken links"],
     ] as const
-  ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty : !proposalsEmpty));
+  ).filter(([id]) => (id === "broken-links" ? (roadmap.data?.items.length ?? 1) > 0 : id === "decisions" ? !decisionsEmpty || prdWaiting.length > 0 : !proposalsEmpty));
+  // build-rundecide review: with no other judgement call the Decisions card is not drawn; its tile goes to the first PRD's card.
+  const tileAnchor = (id: string) => (id === "decisions" && decisionsEmpty && prdWaiting[0] ? `waiting-${prdWaiting[0].prd.slug}` : id);
   // The goal band's weights as their share of the score ("50% of the score").
   const weightSum = (tiles ?? []).reduce((n, g) => n + (g.weight != null && g.weight > 0 ? g.weight : 0), 0);
-  /** A goal's features on the roadmap (filtered to it), or Priorities when none is planned yet. */
-  const goalHref = (id: string) => {
-    const key = roadmap.data?.items.find((i) => i.goal?.id === id)?.goal?.key;
-    return key ? `/simple/roadmap?goal=${encodeURIComponent(key)}` : "/simple/priorities";
-  };
   const share = (w: number | null) => (w != null && w > 0 && weightSum > 0 ? Math.round((w / weightSum) * 100) : null);
   // The broken-links list's heading names the roadmaps they are on.
   const brokenRoadmaps = [...new Set(broken.map((b) => b.item.roadmap.title))];
@@ -315,12 +374,27 @@ export default function SimpleHome() {
     mine.find((c) => c.op === "shift_dependents" && c.target.item_id !== b.item.id && (b.flag.moves ?? []).includes(String(c.target.item_id)) && b.flag.fixes.includes("shift_dependents"));
   const brokenDeciders = [...new Set(broken.filter((b) => !b.item.can_decide).flatMap((b) => (b.item.deciders.length ? b.item.deciders : ["the decider"])))];
 
+  /** What a keyed change moves, item by item: its dates before and after. */
+  const moves = (c: Change) =>
+    Object.entries(c.after as Record<string, unknown>)
+      .filter(([, v]) => !!v && typeof v === "object" && "start_date" in (v as object))
+      .map(([id, v]) => {
+        const a = v as Dates;
+        const b = ((c.before as Record<string, unknown>)[id] ?? {}) as Dates;
+        const span = (x: Dates) => (!x.start_date && !x.end_date ? "not dated yet" : `${x.start_date ? calendarDay(x.start_date) : "undated"} – ${x.end_date ? calendarDay(x.end_date) : "undated"}`);
+        return { id, title: itemTitle(id), before: span(b), after: span(a) };
+      });
+  const accepted = (c: Change) => {
+    const m = moves(c);
+    return m.length ? `Accepted: ${m.map((x) => `${x.title} now ${x.after}`).join("; ")}` : "Accepted";
+  };
+  const accept = (c: Change) => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), accepted(c));
   const proposalRow = (c: Change) => (
     <HomeRow
       key={c.id}
       testId="home-proposal"
       lead={<Avatar name={c.by_name} />}
-      title={`${OP_WORDS[c.op] ?? c.op}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
+      title={`${opWords(c.op)}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
       meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
       change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
       thumb={NEW_FLOW_OPS.has(c.op)}
@@ -331,7 +405,7 @@ export default function SimpleHome() {
             <button
               type="button"
               className="simple-button simple-button-primary"
-              onClick={() => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted")}
+              onClick={() => (moves(c).length > 0 ? setConfirming(c) : accept(c))}
             >
               Accept
             </button>
@@ -444,22 +518,61 @@ export default function SimpleHome() {
 
   return (
     <SimplePage title="Home">
+      {newPrd && <NewPrdSheet onClose={closeNewPrd} onStarted={() => void started.reload()} />}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
+      {confirming && (
+        <Dialog
+          title={`Accept: ${opWords(confirming.op)}`}
+          testId="accept-moves"
+          onClose={() => setConfirming(null)}
+          actions={
+            <button
+              type="button"
+              className="simple-button simple-button-primary"
+              onClick={() => {
+                const c = confirming;
+                setConfirming(null);
+                accept(c);
+              }}
+            >
+              {`Accept and move ${moves(confirming).length} ${moves(confirming).length === 1 ? "item" : "items"}`}
+            </button>
+          }
+        >
+          <p className="simple-small">
+            {confirming.by_name} proposed this{confirming.reason ? `: “${confirming.reason}”` : "."} These dates change:
+          </p>
+          <ul className="simple-small mt-1 flex flex-col gap-1" data-testid="accept-moves-list">
+            {moves(confirming).map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="font-medium text-text">{m.title}</span>
+                <del className="rounded bg-crit-bg px-1.5 text-crit">{m.before}</del>
+                <span aria-hidden>→</span>
+                <ins className="rounded bg-pass-bg px-1.5 text-pass no-underline">{m.after}</ins>
+              </li>
+            ))}
+          </ul>
+        </Dialog>
+      )}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
         <p className="simple-lead max-[600px]:min-h-[2lh]">
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
-        {!walking && capsReady && !reads && counted && !nothingToWalk && (
-          <div>
-            <button type="button" ref={walkButton} className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
-              Walk me through it
-            </button>
+        {/* NP1: New PRD beside the walk, opening the guided sheet. */}
+        {!walking && capsReady && ((!reads && counted && !nothingToWalk) || canStartPrd) && (
+          <div className="flex flex-wrap gap-2">
+            {!reads && counted && !nothingToWalk && (
+              <button type="button" ref={walkButton} className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
+                Walk me through it
+              </button>
+            )}
+            {canStartPrd && <NewPrdButton onOpen={() => setNewPrd(true)} />}
           </div>
         )}
         {/* While the role or what waits is unknown the walk's slot keeps its height; a reader known has no walk and no gap. */}
-        {!walking && (!capsReady || (!reads && !counted)) && (
+        {!walking && (!capsReady || (!reads && !counted && !canStartPrd)) && (
           <div aria-hidden data-testid="home-walk-slot" className="invisible">
             <span className="simple-button">Walk me through it</span>
           </div>
@@ -478,6 +591,7 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
+      <StartedCard started={started.data ?? []} />
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
       {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
@@ -504,9 +618,9 @@ export default function SimpleHome() {
                         )}
                       </div>
                     )}
-                    {/* qa-simple-home-26: the goal opens its features on the roadmap; its code (qa-simple-home-13) only in the tooltip. */}
+                    {/* A goal card opens Priorities filtered to that goal (its key; the name only says which); its code (qa-simple-home-13) only in the tooltip. */}
                     <Link
-                      href={goalHref(g.id)}
+                      href={`/simple/priorities?goal=${encodeURIComponent(g.key)}&name=${encodeURIComponent(g.name)}`}
                       data-testid="home-goal-link"
                       title={g.code ? `${g.code} · ${g.name}` : g.name}
                       className="font-semibold text-text hover:underline"
@@ -551,7 +665,7 @@ export default function SimpleHome() {
             {tilesShown.map(([id, n, label, short]) => (
               <li key={id}>
                 <a
-                  href={`#${id}`}
+                  href={`#${tileAnchor(id)}`}
                   data-testid={`home-summary-${id}`}
                   className="flex h-full flex-col rounded-xl bg-surface2 px-4 py-3 hover:bg-accent-soft max-[600px]:px-2.5 max-[600px]:py-2"
                 >
@@ -582,6 +696,8 @@ export default function SimpleHome() {
         </section>
       )}
 
+      {runStops?.map((s) => <StopCard key={s.id} s={s} />)}
+
       {!reads && quiet && (
         <section aria-label="Waiting for you" data-testid="home-nothing-waits" className="simple-card">
           <p className="simple-small">
@@ -606,6 +722,22 @@ export default function SimpleHome() {
         </section>
       )}
 
+      {!reads &&
+        prdWaiting.map(({ prd, questions }) => (
+          <section key={prd.slug} id={`waiting-${prd.slug}`} className="simple-card scroll-mt-6" aria-label={`Waiting for you: ${prd.title}`} data-testid="home-prd-waiting">
+            <header className="flex flex-wrap items-baseline gap-x-3">
+              <h2 className="simple-h2 flex-1">Waiting for you: {prd.title}</h2>
+              <span className="simple-meta">
+                {questions.length} {questions.length === 1 ? "decision" : "decisions"} you own · also on its review meeting&apos;s agenda
+              </span>
+            </header>
+            <div className="mt-3">
+              <Top rows={questions} max={phone ? 2 : 3} more={`/simple/decisions?prd=${encodeURIComponent(prd.slug)}`} what={`of ${prd.title}'s decisions`}>
+                {(q) => <QuestionRow key={q.id} q={q} mode={decidedHere.includes(q) ? "here" : "list"} testId="home-question" actions={prdActions} plain />}
+              </Top>
+            </div>
+          </section>
+        ))}
       {!reads && !decisionsEmpty && (
         <HomeCard
           id="decisions"
@@ -651,6 +783,23 @@ export default function SimpleHome() {
               )
             }
           </Block>
+        </HomeCard>
+      )}
+
+      {!reads && myTasks.length > 0 && (
+        <HomeCard id="tasks" icon="check" title="Tasks waiting for you" count={myTasks.length} all="/simple/roadmap" allLabel="Open the roadmap">
+          <ul className="space-y-2" data-testid="home-task-list">
+            {myTasks.map((t) => (
+              <li key={t.id} data-testid="home-task" className="simple-small [overflow-wrap:anywhere]">
+                <Link href={`/simple/roadmap?roadmap=${t.roadmap_id}`} className="simple-link">
+                  {t.title}
+                </Link>{" "}
+                · {t.item_title}
+                {t.due_date ? ` · due ${calendarDay(t.due_date)}` : ""}
+                {t.late ? " · late" : ""}
+              </li>
+            ))}
+          </ul>
         </HomeCard>
       )}
 
@@ -1018,6 +1167,19 @@ function stored(i: Schemas["SimpleRoadmapItem"]) {
   return { start_date: own(i.start), end_date: own(i.end) };
 }
 
+/** build-rundecide RD3 a: the questions I own, one group per PRD, the PRD with the soonest due first; each soonest first. */
+function waitingByPrd(questions: Question[]): { prd: Question["prd"]; questions: Question[] }[] {
+  const by = new Map<string, { prd: Question["prd"]; questions: Question[] }>();
+  for (const q of questions) {
+    const g = by.get(q.prd.slug) ?? { prd: q.prd, questions: [] };
+    g.questions.push(q);
+    by.set(q.prd.slug, g);
+  }
+  const due = (q: Question) => q.due_on ?? "9999";
+  const groups = [...by.values()].map((g) => ({ ...g, questions: [...g.questions].sort((a, b) => due(a).localeCompare(due(b)) || a.number - b.number) }));
+  return groups.sort((a, b) => due(a.questions[0]!).localeCompare(due(b.questions[0]!)));
+}
+
 /** Home's decision rows: the late questions first, then the other judgement calls, then the rest of the questions (soonest first). */
 function homeDecisionRows(questions: Question[], others: Decision[]): (Question | Decision)[] {
   return [...questions.filter((q) => q.late), ...others, ...questions.filter((q) => !q.late)];
@@ -1125,7 +1287,7 @@ function BrokenRow({
       </span>
       {proposed && (
         <span data-testid="home-broken-proposed" className="block font-semibold text-text">
-          You proposed: {FIX_WORDS[proposed.op as FixOp] ?? OP_WORDS[proposed.op] ?? proposed.op} · waiting for {waitingFor}
+          You proposed: {FIX_WORDS[proposed.op as FixOp] ?? opWords(proposed.op)} · waiting for {waitingFor}
         </span>
       )}
       {showFixes && coveredBy && (

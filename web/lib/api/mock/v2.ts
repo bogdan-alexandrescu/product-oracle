@@ -35,6 +35,9 @@ export interface V2Db {
   /** Gaps hidden from everyone but their intake's author (S6): the mock's only private
    * findings (the "private-finding" scenario); absent elsewhere. */
   private_gap_ids?: string[];
+  /** Oracle reads a critical blocker in every new brief (the "draft-gate" scenario): its
+   * Blockers gap is critical, so the draft gate (C5) answers 409 until it is decided. */
+  blocker_briefs?: boolean;
   /** Each intake's findings from its author's own sources (S6) and their sharing levels,
    * by intake id; absent for intakes without any. */
   intake_findings?: Record<string, Schemas["FindingOut"][]>;

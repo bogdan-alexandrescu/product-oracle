@@ -25,9 +25,11 @@ from oracle.connections.router import ProviderHttp
 from oracle.discussions import replies as discussion_replies
 from oracle.discussions import research as discussion_research
 from oracle.jobs.worker import run_pending as run_llm_jobs
-from oracle.runs import actions, service
+from oracle.runs import actions, agent_questions, service
 from oracle.runs.schemas import (
     ActionIn,
+    AgentAnswerIn,
+    AgentQuestionsOut,
     CancelAgain,
     CheckpointDecision,
     CheckpointReview,
@@ -421,6 +423,44 @@ async def set_checkpoint_note(
     decision without a note of its own sends it."""
     await _call(actions.set_note(db, principal, run_id, checkpoint_id, body.note))
     return await _call(actions.read(db, principal, run_id, checkpoint_id))
+
+
+@router.get(
+    "/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions",
+    response_model=AgentQuestionsOut,
+    operation_id="get_agent_questions",
+)
+async def get_agent_questions(
+    run_id: uuid.UUID, checkpoint_id: uuid.UUID, principal: CurrentPrincipal, db: TenantDB
+) -> AgentQuestionsOut:
+    """AQ1: the questions the run's agents asked at this stop (``agent_questions.yaml`` of
+    the segment it reviews), any member: each with its options, the agent's pick and the
+    answer given, who and when; the step the answers go to; whether I may answer."""
+    return await _call(agent_questions.read(db, principal, run_id, checkpoint_id))
+
+
+@router.put(
+    "/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions/{question_id}/answer",
+    response_model=AgentQuestionsOut,
+    operation_id="answer_agent_question",
+)
+async def answer_agent_question(
+    run_id: uuid.UUID,
+    checkpoint_id: uuid.UUID,
+    question_id: str,
+    body: AgentAnswerIn,
+    principal: CurrentPrincipal,
+    db: TenantDB,
+) -> AgentQuestionsOut:
+    """Answer one agent question (the stop's approver role or above): answering again
+    replaces it. The answers go to the next step with the stop's decision. 422 for an
+    option the question does not offer; 409 once the stop is decided."""
+    await _call(
+        agent_questions.answer(
+            db, principal, run_id, checkpoint_id, question_id, body.option, body.note
+        )
+    )
+    return await _call(agent_questions.read(db, principal, run_id, checkpoint_id))
 
 
 @router.get(

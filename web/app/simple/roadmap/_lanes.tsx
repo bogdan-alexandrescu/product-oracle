@@ -30,8 +30,10 @@ import {
   type Lane,
   type Roadmap,
   type Scale,
+  placedSlices,
   type Slice,
   yearSpan,
+  drawnKeyDates,
 } from "./_lib";
 import { CALL_H, RH } from "./_pitch";
 import { ellipsize, monthTick, ordinal, PreviewGhost, previewSpan, useAppliedFlash, usePreview, type Layout } from "./_timeline";
@@ -135,7 +137,8 @@ type Unit = { item: Item; pieces: Piece[]; row: number };
 /** `line`: each row's top in the lane and `h` the rows' height, in px (a row with a callout takes a callout line more, under it). */
 export type LaneModel = { key: string; title: string; kind: "group" | "pm" | "below"; units: Unit[]; rows: number; count: number; h: number; line: number[]; callouts: Set<number> };
 
-const datedSlices = (i: Item): Slice[] => i.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : a.start_date! > b.start_date! ? 1 : 0));
+// Drawn where the item now is (placedSlices): a moved item's slices follow it.
+const datedSlices = (i: Item): Slice[] => placedSlices(i);
 const pmSlice = (x: Slice) => x.pm_owned || x.effort_weeks == null;
 /** Work the PM does with no engineering: every dated slice of the item is PM-owned. */
 export const pmItem = (i: Item) => {
@@ -290,7 +293,7 @@ function spanOf(data: Roadmap, units: { item: Item; pieces: Piece[] }[], extra: 
   }
   for (const m of planMilestones(data)) days.push(m.start_date!, m.end_date!);
   for (const m of data.milestones) if (m.date) days.push(m.date);
-  for (const k of data.key_dates ?? []) days.push(k.date);
+  for (const k of drawnKeyDates(data)) days.push(k.date);
   const lo = days.reduce((a, b) => (b < a ? b : a));
   const hi = days.reduce((a, b) => (b > a ? b : a));
   return { t0: addDays(lo, -before), t1: addDays(hi, 2) };
@@ -499,7 +502,7 @@ function useMarks(data: Roadmap, sc: Scale, width: number, compact: boolean, fon
       list.push({ key: `end-${m.id}`, kind: "end", x: sc.x(m.end_date!) + sc.px, words: compact ? code : `${code} ends ${dm(m.end_date!)}`, side: "before" });
     }
     for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!) + sc.px / 2, words: m.name, side: "after" });
-    for (const k of data.key_dates ?? []) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
+    for (const k of drawnKeyDates(data)) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
     // QA2 finding 18: milestone ends, tracks and key dates are built in that fixed order above,
     // not by date; placeMarks fills rows in list order, so sort by x first (its rows, and so its
     // labels, then read left to right, earliest date first, instead of by category).
@@ -558,7 +561,7 @@ function Marks({ data, marks, sc, rowY, size, height, poleTop, width }: { data: 
             </g>
           );
         })}
-      {(data.key_dates ?? []).map((k) => {
+      {drawnKeyDates(data).map((k) => {
         const mk = marks.find((x) => x.key === `key-${k.id}`);
         if (!mk) return null;
         const cy = rowY(mk.row);
@@ -1406,7 +1409,7 @@ function LanesLegend({ data, lanes, noWork }: { data: Roadmap; lanes: LaneModel[
       {sliced && item("slices", <i aria-hidden className="inline-block w-[18px] flex-none border-t-2 border-dotted border-line-strong" />, "One bar per part of a feature")}
       {data.items.some((i) => i.suggestion && !closedItem(i)) &&
         item("suggestion", <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-[5px] border-[1.5px] border-dotted border-accent-ink" />, "Dates Oracle suggests (? opens them)")}
-      {(data.key_dates?.length ?? 0) > 0 && item("key", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, "Key date")}
+      {drawnKeyDates(data).length > 0 && item("key", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, "Key date")}
       {data.milestones.some((m) => m.date && !(m.start_date && m.end_date)) && item("track", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-warn" />, "A track’s milestone")}
       {data.items.some((i) => broken(i).length && !closedItem(i)) && item("broken", <i aria-hidden className={sw} style={{ borderColor: "var(--crit)", borderWidth: 2 }} />, "A broken link")}
       {/* QA2 finding 40: the amber dependency arrow (accepted as a risk) had no legend entry of its own. */}

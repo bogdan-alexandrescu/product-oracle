@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
-import { Button, Dialog } from "@/components/ds";
+import { Button, Dialog, SegmentedControl } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -14,6 +14,13 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { CHANNEL_LABEL, STATE } from "./RequestList";
 
 type Request = Schemas["RequestOut"];
+type Found = Schemas["CandidateOut"];
+type Kind = Schemas["RequestCreate"]["requester_kind"];
+const KINDS: { value: Kind; label: string }[] = [
+  { value: "customer", label: "Customer" },
+  { value: "team", label: "Team" },
+  { value: "unknown", label: "Unknown" },
+];
 
 /**
  * New request (#329): the button on the Requests header (qa-shell-10: the only one). #370: a role
@@ -89,12 +96,19 @@ function filedAgo(at: string): string {
 /**
  * qa-work-37: before filing, a request already in the queue under the same title (not merged
  * away) is shown, with Open it (to merge or add to it there) or File anyway.
+ *
+ * One form, two doors (QD3 a): New request opens it blank; File as request on a found item
+ * opens it filled in from the item (`from`), says what filing shares, and files it through the
+ * item's own route with the same fields.
  */
-function NewRequestDialog({
+export function NewRequestDialog({
+  from,
   onClose,
   onFiled,
   onOpenExisting,
 }: {
+  /** The found item it is filed from, if any. */
+  from?: Found;
   onClose: () => void;
   onFiled: (request: Request) => void;
   /** Opens a request already filed under this title, instead of filing a second. */
@@ -110,11 +124,15 @@ function NewRequestDialog({
   const offered = (goals.data ?? []).filter((g) => g.status !== "rejected");
   const myName = me?.email ? displayName(me.email, me.name) : "";
   const owner = can("create_request");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [title, setTitle] = useState(from?.title ?? "");
+  // A found item's own words, or its excerpt, say what they asked.
+  const [body, setBody] = useState(from?.body ?? from?.source.excerpt ?? "");
+  const [startBody] = useState(body);
   const [goalIds, setGoalIds] = useState<string[]>([]);
-  const [requester, setRequester] = useState(myName);
-  const [channel, setChannel] = useState<Request["channel"]>("in_app");
+  const [requester, setRequester] = useState(from ? (from.requester_name ?? "") : myName);
+  const [channel, setChannel] = useState<Request["channel"]>(from?.channel ?? "in_app");
+  const [startChannel] = useState(channel);
+  const [kind, setKind] = useState<Kind>("unknown");
   // In the app the requester is the signed-in member unless an owner names someone; another
   // channel's requester is whoever asked there.
   const named = owner || channel !== "in_app";
@@ -124,7 +142,9 @@ function NewRequestDialog({
   const [missing, setMissing] = useState<"title" | "body" | null>(null);
   // qa-onboarding-1: typed words ask "Discard your changes?" before Escape, the X or Cancel throws them away.
   const [renamed, setRenamed] = useState(false);
-  const dirty = !!title.trim() || !!body.trim() || goalIds.length > 0 || channel !== "in_app" || renamed;
+  const dirty = from
+    ? title !== from.title || body !== startBody || channel !== startChannel || goalIds.length > 0 || kind !== "unknown" || renamed
+    : !!title.trim() || !!body.trim() || goalIds.length > 0 || channel !== "in_app" || renamed || kind !== "unknown";
   /** The request already filed under this title, once asked; the title it was found for. */
   const [twin, setTwin] = useState<{ request: Request; title: string } | null>(null);
 
@@ -152,18 +172,32 @@ function NewRequestDialog({
           return;
         }
       }
-      const request = await unwrap(
-        api.POST("/v1/requests", {
-          body: {
-            title: title.trim(),
-            body: body.trim(),
-            channel,
-            goal_ids: goalIds,
-            requester_name: named ? requester.trim() || null : null,
-            requester_kind: "unknown",
-          },
-        }),
-      );
+      const request = from
+        ? await unwrap(
+            api.POST("/v1/request-candidates/{candidate_id}/file", {
+              params: { path: { candidate_id: from.id } },
+              body: {
+                title: title.trim(),
+                body: body.trim(),
+                channel,
+                goal_ids: goalIds,
+                requester_name: requester.trim() || null,
+                requester_kind: kind,
+              },
+            }),
+          )
+        : await unwrap(
+            api.POST("/v1/requests", {
+              body: {
+                title: title.trim(),
+                body: body.trim(),
+                channel,
+                goal_ids: goalIds,
+                requester_name: named ? requester.trim() || null : null,
+                requester_kind: kind,
+              },
+            }),
+          );
       onFiled(request);
     } catch (err) {
       setError(errorMessage(err));
@@ -282,6 +316,23 @@ function NewRequestDialog({
             </select>
           </label>
         </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-text2">Customer or team</span>
+          <SegmentedControl label="Customer or team" size="sm" items={KINDS} value={kind} onChange={setKind} />
+        </div>
+        {from && (
+          <div data-testid="filing-from" className="flex flex-col gap-2 rounded-lg border border-line bg-surface2 p-3">
+            <p data-testid="filing-shares" className="text-sm font-semibold">
+              Found in {from.source.title ?? "your sources"}. Filing shares this item: everyone who can see Requests reads its title, link and this
+              excerpt.
+            </p>
+            {from.source.excerpt && (
+              <blockquote data-testid="filing-excerpt" className="border-l-2 border-line-strong pl-3 text-sm break-words text-text2">
+                {from.source.excerpt}
+              </blockquote>
+            )}
+          </div>
+        )}
         {twin && sameTitle(twin.title, title) && (
           <div role="alert" data-testid="new-request-duplicate" className="flex flex-col gap-2 rounded-panel border border-warn bg-warn-bg px-3 py-2.5 text-sm text-text">
             <span>

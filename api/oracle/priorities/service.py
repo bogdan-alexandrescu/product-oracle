@@ -513,6 +513,8 @@ async def compare(db: AsyncSession, snapshot_id: uuid.UUID, principal: Principal
                 run_explanation=r.get("explanation"),
                 live_explanation=_live_explanation(f) if f else None,
                 problems=[p for p in problems if p["feature"] == key],
+                # New when the run ranked it: still marked after the order adds it.
+                new=bool((stored.get(key) or {}).get("new")),
             )
         )
     run, checkpoint = await _deciding(db, s, principal)

@@ -22282,6 +22282,152 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Agent Questions",
+        "description": "AQ1: the questions the run's agents asked at this stop (``agent_questions.yaml`` of\nthe segment it reviews), any member: each with its options, the agent's pick and the\nanswer given, who and when; the step the answers go to; whether I may answer.",
+        "operationId": "get_agent_questions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentQuestionsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions/{question_id}/answer": {
+      "put": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Answer Agent Question",
+        "description": "Answer one agent question (the stop's approver role or above): answering again\nreplaces it. The answers go to the next step with the stop's decision. 422 for an\noption the question does not offer; 409 once the stop is decided.",
+        "operationId": "answer_agent_question",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          },
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentAnswerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentQuestionsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
+      }
+    },
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
       "get": {
         "tags": [
@@ -42944,24 +43090,8 @@
           "simple"
         ],
         "summary": "List Simple Drafts",
-        "description": "The open working and submitted drafts the caller may see: their participants, the\ncompany's owners, the roadmap's decider, required reviewers and owners.",
+        "description": "The open working and submitted drafts the caller may see: their participants, the\ncompany's owners, the roadmap's decider, required reviewers and owners. ``roadmap``\n(an id or slug) keeps that roadmap's drafts only; 404 when there is no such roadmap.",
         "operationId": "list_simple_drafts",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SimpleDraftOut"
-                  },
-                  "type": "array",
-                  "title": "Response List Simple Drafts"
-                }
-              }
-            }
-          }
-        },
         "security": [
           {
             "HTTPBearer": []
@@ -42970,6 +43100,50 @@
             "APIKeyCookie": []
           }
         ],
+        "parameters": [
+          {
+            "name": "roadmap",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Roadmap"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SimpleDraftOut"
+                  },
+                  "title": "Response List Simple Drafts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
         "x-min-role": "viewer"
       }
     },
@@ -43032,7 +43206,7 @@
           "simple"
         ],
         "summary": "Submit Simple Draft",
-        "description": "Submit the draft: it is imported as the roadmap's next version and goes through the\ndocument's review policy; readers keep the published version until it is approved.",
+        "description": "Submit the draft: it is imported as the roadmap's next version and goes through the\ndocument's review policy; readers keep the published version until it is approved.\nAn optional body names people to add as reviewers: the draft waits on them too, after\nthe required reviewers (422 for anyone who is not an active member who may approve).",
         "operationId": "submit_simple_draft",
         "security": [
           {
@@ -43054,6 +43228,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SimpleSubmitIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -43708,6 +43899,60 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalSuggestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/goal-suggestions/{suggestion_id}/reopen": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Reopen Goal Suggestion",
+        "description": "Undo of a reject: the suggestion is open again.",
+        "operationId": "reopen_goal_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -44991,6 +45236,198 @@
         },
         "x-min-role": "commenter",
         "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/draft-items/approve": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Approve Simple Meeting Draft Dates",
+        "description": "Approve these N dates (RP2): the run's draft items go on the roadmap with their\ndates; the meeting records the decision. The PRD still needs its own approval.",
+        "operationId": "approve_simple_meeting_draft_dates",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/dates": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Change Simple Meeting Draft Dates",
+        "description": "Change dates on a draft item of the run's draft roadmap: it stays draft.",
+        "operationId": "change_simple_meeting_draft_dates",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleDraftDatesIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/leave-out": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Leave Out Simple Meeting Draft Item",
+        "description": "Leave out a draft item: it never goes on the roadmap.",
+        "operationId": "leave_out_simple_meeting_draft_item",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/end": {
@@ -50808,6 +51245,78 @@
         "title": "AdvisoryIn",
         "description": "An advisory signal for a conditional module (AI analysis or a priority score)."
       },
+      "AgentAnswerIn": {
+        "properties": {
+          "option": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Option"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "option"
+        ],
+        "title": "AgentAnswerIn"
+      },
+      "AgentAnswerOut": {
+        "properties": {
+          "option": {
+            "type": "string",
+            "title": "Option"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "mine": {
+            "type": "boolean",
+            "title": "Mine",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "option",
+          "at"
+        ],
+        "title": "AgentAnswerOut"
+      },
       "AgentItem": {
         "properties": {
           "feedback_id": {
@@ -50861,6 +51370,141 @@
         ],
         "title": "AgentItem",
         "description": "D12: a feedback item an approver staged for the agents (no section text to accept)."
+      },
+      "AgentOptionOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "AgentOptionOut"
+      },
+      "AgentQuestionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/AgentOptionOut"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "recommended": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentAnswerOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "question",
+          "options"
+        ],
+        "title": "AgentQuestionOut"
+      },
+      "AgentQuestionsOut": {
+        "properties": {
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/AgentQuestionOut"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
+          },
+          "can_answer": {
+            "type": "boolean",
+            "title": "Can Answer",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "questions"
+        ],
+        "title": "AgentQuestionsOut"
       },
       "AgentRoleOut": {
         "properties": {
@@ -58974,6 +59618,7 @@
               "open",
               "applied",
               "proposed",
+              "declined",
               "discarded",
               "undone"
             ],
@@ -59156,6 +59801,32 @@
           "can_undo": {
             "type": "boolean",
             "title": "Can Undo",
+            "default": false
+          },
+          "asks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asks",
+            "default": []
+          },
+          "asks_outside": {
+            "type": "boolean",
+            "title": "Asks Outside",
+            "default": false
+          },
+          "asks_with_dependents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asks With Dependents",
+            "default": []
+          },
+          "asks_with_dependents_outside": {
+            "type": "boolean",
+            "title": "Asks With Dependents Outside",
             "default": false
           }
         },
@@ -61829,6 +62500,11 @@
             },
             "type": "array",
             "title": "Problems"
+          },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "default": false
           }
         },
         "type": "object",
@@ -64190,6 +64866,24 @@
             ],
             "title": "Where",
             "default": "body"
+          },
+          "days": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Days",
+            "default": []
+          },
+          "missing": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Missing",
+            "default": []
           }
         },
         "type": "object",
@@ -91484,6 +92178,14 @@
             "type": "array",
             "title": "Waiting On"
           },
+          "reviewers": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Reviewers",
+            "default": []
+          },
           "can_submit": {
             "type": "boolean",
             "title": "Can Submit"
@@ -91603,6 +92305,52 @@
         ],
         "title": "OnePagerFlow",
         "description": "A design bundle's flow (S10's), as the API returns it; none yet: null."
+      },
+      "OnePagerInReview": {
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "title": "Line Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "change",
+              "proposal"
+            ],
+            "title": "Kind"
+          },
+          "before": {
+            "type": "string",
+            "title": "Before"
+          },
+          "after": {
+            "type": "string",
+            "title": "After"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "waiting_on": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Waiting On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_id",
+          "kind",
+          "before",
+          "after",
+          "by_name",
+          "waiting_on"
+        ],
+        "title": "OnePagerInReview",
+        "description": "One change in review a reader may not see in full (build-review): a line change in\nthe PRD's draft or someone's proposal, in the same words its margin note would use."
       },
       "OnePagerItem": {
         "properties": {
@@ -92082,6 +92830,14 @@
           "changes_in_review": {
             "type": "integer",
             "title": "Changes In Review"
+          },
+          "in_review": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerInReview"
+            },
+            "type": "array",
+            "title": "In Review",
+            "default": []
           },
           "can_edit": {
             "type": "boolean",
@@ -93963,6 +94719,14 @@
             },
             "type": "array",
             "title": "Drift",
+            "default": []
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDecidedRef"
+            },
+            "type": "array",
+            "title": "Decisions",
             "default": []
           },
           "engineering": {
@@ -98867,6 +99631,11 @@
               }
             ],
             "title": "Run Explanation"
+          },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "default": false
           },
           "override": {
             "anyOf": [
@@ -110938,6 +111707,12 @@
             "type": "array",
             "title": "Words",
             "default": []
+          },
+          "stock_rationale": {
+            "type": "boolean",
+            "title": "Stock Rationale",
+            "description": "The rationale is the stock reason for a held rewrite, which the web says once.",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -110954,7 +111729,8 @@
           "lock_version",
           "created_at",
           "updated_at",
-          "latest_version"
+          "latest_version",
+          "stock_rationale"
         ],
         "title": "SectionPatchDetail",
         "description": "A patch with its word diff against the section's text in the latest version."
@@ -111114,6 +111890,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "stock_rationale": {
+            "type": "boolean",
+            "title": "Stock Rationale",
+            "description": "The rationale is the stock reason for a held rewrite, which the web says once.",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -111129,7 +111911,8 @@
           "status",
           "lock_version",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "stock_rationale"
         ],
         "title": "SectionPatchOut"
       },
@@ -113257,6 +114040,11 @@
             "type": "boolean",
             "title": "Present",
             "default": true
+          },
+          "joined": {
+            "type": "boolean",
+            "title": "Joined",
+            "default": true
           }
         },
         "type": "object",
@@ -113725,6 +114513,74 @@
         "title": "SimpleDecidedFlow",
         "description": "The new flow or feature a meeting decision decided (a draft item) and its flow\n(oracle.simple.visuals, S10); ``flow`` is None until one is drawn (\"No flow yet\")."
       },
+      "SimpleDecidedRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "meeting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMeetingRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minutes_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title"
+        ],
+        "title": "SimpleDecidedRef",
+        "description": "A decided decision naming the item: who decided, when, and (decided in a meeting)\nthe meeting and its minutes' page."
+      },
       "SimpleDecisionIn": {
         "properties": {
           "reason": {
@@ -113940,6 +114796,14 @@
             ],
             "title": "View",
             "default": "list"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRunGroup"
+            },
+            "type": "array",
+            "title": "Runs",
+            "default": []
           }
         },
         "type": "object",
@@ -113980,6 +114844,14 @@
             "type": "integer",
             "title": "Approvals Waiting",
             "default": 0
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleTaskWaiting"
+            },
+            "type": "array",
+            "title": "Tasks",
+            "default": []
           }
         },
         "type": "object",
@@ -114201,6 +115073,27 @@
         "title": "SimpleDraftChange",
         "description": "One change a draft holds (D-d): what an approval covers, by whom, when, and whether\nit was made in a meeting."
       },
+      "SimpleDraftDatesIn": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "SimpleDraftDatesIn",
+        "description": "Change dates on a draft item: it stays draft."
+      },
       "SimpleDraftOut": {
         "properties": {
           "id": {
@@ -114341,10 +115234,23 @@
             "title": "Change Log",
             "default": []
           },
+          "published": {
+            "type": "boolean",
+            "title": "Published",
+            "default": true
+          },
           "can_withdraw": {
             "type": "boolean",
             "title": "Can Withdraw",
             "default": false
+          },
+          "from_prds": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDraftPrd"
+            },
+            "type": "array",
+            "title": "From Prds",
+            "default": []
           }
         },
         "type": "object",
@@ -114369,6 +115275,110 @@
         ],
         "title": "SimpleDraftOut",
         "description": "A working draft of one roadmap (S3b): its changes until submitted, then the version\nin review and who it waits on."
+      },
+      "SimpleDraftPrd": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "key_dates": {
+            "type": "integer",
+            "title": "Key Dates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "items",
+          "key_dates"
+        ],
+        "title": "SimpleDraftPrd",
+        "description": "approved-prd-roadmap: what an approved PRD put in the draft."
+      },
+      "SimpleDraftRoadmap": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDraftRoadmapItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "approved": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SimpleDraftRoadmap",
+        "description": "The run's draft roadmap of the meeting's PRD (RP2, 'Meeting step as draft'): its\ndated items, shown hatched in the Roadmap step until the meeting approves the dates."
+      },
+      "SimpleDraftRoadmapItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "title": "Horizon"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "horizon",
+          "start",
+          "end"
+        ],
+        "title": "SimpleDraftRoadmapItem",
+        "description": "An item of the run's draft roadmap with its dates: not on the roadmap yet."
       },
       "SimpleEmailDelivery": {
         "properties": {
@@ -115391,6 +116401,59 @@
         ],
         "title": "SimpleItemMilestone"
       },
+      "SimpleItemTask": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "doing",
+              "done",
+              "dropped"
+            ],
+            "title": "Status"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "title": "SimpleItemTask",
+        "description": "A task under a roadmap item (oracle.simple.models.RoadmapItemTask): who does it, by\nwhen."
+      },
       "SimpleKeyDate": {
         "properties": {
           "id": {
@@ -115425,6 +116488,16 @@
             "type": "boolean",
             "title": "In Draft",
             "default": false
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -115491,6 +116564,16 @@
               }
             ],
             "title": "Date"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -116240,6 +117323,16 @@
             "default": {
               "skipped": []
             }
+          },
+          "draft_roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDraftRoadmap"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -116262,6 +117355,25 @@
           "can"
         ],
         "title": "SimpleMeetingOut"
+      },
+      "SimpleMeetingRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleMeetingRef"
       },
       "SimpleMeetingRulesIn": {
         "properties": {
@@ -118531,10 +119643,18 @@
           },
           "decided_in": {
             "items": {
-              "$ref": "#/components/schemas/SimpleOpenDecision"
+              "$ref": "#/components/schemas/SimpleDecidedRef"
             },
             "type": "array",
             "title": "Decided In",
+            "default": []
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleItemTask"
+            },
+            "type": "array",
+            "title": "Tasks",
             "default": []
           },
           "slices": {
@@ -118681,6 +119801,180 @@
           "milestones"
         ],
         "title": "SimpleRoadmapOut"
+      },
+      "SimpleRunGroup": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFilterOption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRunStopOut"
+            },
+            "type": "array",
+            "title": "Stops"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "name",
+          "stops"
+        ],
+        "title": "SimpleRunGroup",
+        "description": "build-rundecide RD1 a: one run's decided stops, in order, under its name and PRD\n(\"Usage alerts plan \u00b7 Usage alerts PRD \u00b7 5 decisions\")."
+      },
+      "SimpleRunStepOut": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "title": "What"
+          },
+          "who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Who"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "what"
+        ],
+        "title": "SimpleRunStepOut",
+        "description": "One decision at a run's stop: what was done (\"Sent back\", \"Approved\"), by whom, the\nday (the company's) and the note given."
+      },
+      "SimpleRunStopOut": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checkpoint Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "stop": {
+            "type": "string",
+            "title": "Stop"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "dates_changed": {
+            "type": "integer",
+            "title": "Dates Changed",
+            "default": 0
+          },
+          "who": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Who"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "trail": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRunStepOut"
+            },
+            "type": "array",
+            "title": "Trail",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "kind",
+          "stop",
+          "outcome"
+        ],
+        "title": "SimpleRunStopOut",
+        "description": "build-rundecide RD1 a: one stop of a run as a decision row: \"Engineering check:\napproved after a change\", the person's name, their role, the note and the day. `trail`\nlists every step when the stop was sent back before it was approved. `dates_changed`:\nhow many dates the approver changed at a Dates stop (eng_dates) before approving it,\n\"Approved with one date changed\"; 0 for every other stop."
       },
       "SimpleSendIn": {
         "properties": {
@@ -119050,6 +120344,22 @@
         ],
         "title": "SimpleStartPrd"
       },
+      "SimpleSubmitIn": {
+        "properties": {
+          "reviewer_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Reviewer Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "SimpleSubmitIn",
+        "description": "Send for approval's optional body (build-review): people the sender adds as\nreviewers. The draft waits on them too, after the document's required reviewers; each\nmust be an active member who may approve (commenter and up)."
+      },
       "SimpleSuggestJobOut": {
         "properties": {
           "goal_id": {
@@ -119122,6 +120432,87 @@
         "additionalProperties": false,
         "type": "object",
         "title": "SimpleSuggestionRejectIn"
+      },
+      "SimpleTaskWaiting": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "doing",
+              "done",
+              "dropped"
+            ],
+            "title": "Status"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "item_title": {
+            "type": "string",
+            "title": "Item Title"
+          },
+          "roadmap_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roadmap Id"
+          },
+          "late": {
+            "type": "boolean",
+            "title": "Late",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "item_title",
+          "roadmap_id"
+        ],
+        "title": "SimpleTaskWaiting",
+        "description": "An open task waiting on the reader (Home's \"Waiting for you\"), with its item."
       },
       "SimpleTrackRef": {
         "properties": {

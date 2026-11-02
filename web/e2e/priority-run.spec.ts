@@ -51,13 +51,20 @@ test("review and approve the run's order", async ({ page }) => {
   await expect(table.getByRole("columnheader", { name: "Live #" })).toBeVisible();
   await expect(table.getByRole("columnheader", { name: "Δ" })).toBeVisible();
   const rows = page.locator('tr[data-testid^="priority-row-"]');
-  await expect(rows).toHaveCount(5);
+  // The PRD's 6 new features are ranked among the baseline's (RP1, build-runplan.spec.ts).
+  await expect(rows).toHaveCount(11);
   expect(await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")!.replace("priority-row-", "")))).toEqual([
     "F-5",
     "F-4",
     "F-2",
+    "N-1",
+    "N-2",
+    "N-3",
     "F-1",
+    "N-4",
+    "N-5",
     "F-7",
+    "N-6",
   ]);
   const moved = page.getByTestId("priority-row-F-4");
   await expect(moved.getByTestId("live-rank")).toHaveText("5");

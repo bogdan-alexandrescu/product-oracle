@@ -27,9 +27,11 @@ async function openRoadmap(page: Page, email?: string) {
   await login(page, email);
   await page.goto(ROADMAP);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  // A phone's Timeline (timeline-overlap B3) draws thin lanes, not bars.
-  if (page.viewportSize()!.width > 640) await expect(bar(page, "alert-rules")).toBeVisible();
-  else await expect(page.getByTestId("phone-lane").first()).toBeVisible();
+  // The quarter drops and drawn bars are the Gantt's on a desktop; a phone's Timeline is a list by quarter.
+  if (page.viewportSize()!.width > 640) {
+    await page.getByTestId("format-gantt").click();
+    await expect(bar(page, "alert-rules")).toBeVisible();
+  } else await expect(page.getByTestId("timeline-list")).toBeVisible();
 }
 
 /** A lane's key on the Timeline (timeline-overlap B2), by its title. */
@@ -101,16 +103,21 @@ for (const scheme of ["light", "dark"] as const) {
      */
     test("an owner drags a quick add onto a quarter, sees Oracle draft it, and undoes it", async ({ page }) => {
       await openRoadmap(page);
+      // Quick add drops on the Timeline's quarters (mk-qa4-roadmap); the drawn bar is then read on the Gantt.
+      await page.getByTestId("format-timeline").click();
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
       await expect(toastWith(page, "Added Quiet hours setting as a draft")).toBeVisible();
+      // The draft's row on the Timeline says so (its Draft chip by the name).
+      await expect(page.locator('[data-testid="timeline-row"][data-item="quiet-hours-setting"]').getByTestId("draft-tag")).toHaveText("Draft");
+      await page.getByTestId("format-gantt").click();
       const b = bar(page, "quiet-hours-setting");
       await expect(b).toHaveAttribute("data-kind", "draft");
-      // B2: the draft's pill says so ("Draft · Quiet hours setting").
-      await expect(b.getByTestId("draft-tag")).toHaveText("Draft");
       await toastWith(page, "Added Quiet hours setting as a draft").getByRole("button", { name: "Undo" }).click();
       await expect(b).toHaveCount(0);
 
+      await page.getByTestId("format-timeline").click();
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
+      await page.getByTestId("format-gantt").click();
       await expect(b).toHaveAttribute("data-kind", "draft");
       await b.locator("rect[data-body]").click();
       const card = page.getByTestId("floating-card");
@@ -223,7 +230,7 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     /**
-     * Card simple-additions-suggest: protects = "✦ Ask Oracle for more" in a goal's panel
+     * Card simple-additions-suggest: protects = "✦ Get more from Oracle" in a goal's panel
      * (opened from the goal's card over the chart: roadmap-milestones D draws no button on the
      * chart's goal row) asks Oracle, the panel says "Oracle is suggesting features…" while the
      * job runs, then shows 3 new suggestions; fails_when = no job, the pending line never shows
@@ -237,7 +244,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(panel).toBeVisible();
       await panel.getByRole("tab", { name: "✦ Oracle · 0" }).click();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(0);
-      await panel.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
+      await panel.getByRole("button", { name: "✦ Get more from Oracle" }).click();
       await expect(panel.getByTestId("suggest-pending")).toHaveText("Oracle is suggesting features…");
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(3, { timeout: 10_000 });
       await expect(panel.getByTestId("suggest-pending")).toHaveCount(0);
@@ -267,6 +274,7 @@ for (const scheme of ["light", "dark"] as const) {
       await panel.getByRole("button", { name: "Close" }).click();
 
       await switchTo(page, "admin@example.com");
+      await page.getByTestId("format-gantt").click();
       await expect(bar(page, "alert-rules")).toBeVisible();
       await page.getByTestId("needs-decision").click();
       const tray = page.getByTestId("decision-tray");
@@ -280,7 +288,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     /**
      * Card simple-additions-viewer: protects = a viewer sees no quick add, no drop targets'
-     * effect and no Accept, Reject, form or Ask Oracle for more, but reads the suggestions; fails_when
+     * effect and no Accept, Reject, form or Get more from Oracle, but reads the suggestions; fails_when
      * = any of them shows; no_claim = the API's 403s (its tests).
      */
     test("a viewer reads suggestions and cannot add or accept", async ({ page }) => {
@@ -294,12 +302,12 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(2);
       await expect(panel.getByRole("button", { name: "Accept" })).toHaveCount(0);
       await expect(panel.getByRole("button", { name: "Reject" })).toHaveCount(0);
-      await expect(panel.getByRole("button", { name: "✦ Ask Oracle for more" })).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: "✦ Get more from Oracle" })).toHaveCount(0);
     });
 
     /**
      * Card simple-additions-priorities: protects = Priorities' goal buckets show a goal's
-     * one Suggestions button whose drawer has Ask Oracle for more and Accept; Merge on an unranked draft is a real
+     * one Suggestions button whose drawer has Get more from Oracle and Accept; Merge on an unranked draft is a real
      * merge (merge_item): the roadmap shows the draft "Merged into <code>"; fails_when = the
      * bucket lacks the suggestions, or Merge is a cut on the roadmap; no_claim = bucket shares.
      */
@@ -312,7 +320,7 @@ for (const scheme of ["light", "dark"] as const) {
       await drawer.getByRole("tab", { name: "✦ Oracle · 1" }).click();
       const s = drawer.locator('[data-testid="goal-suggestion"][data-title="Alert templates for new teams"]');
       await expect(s).toBeVisible();
-      await expect(drawer.getByRole("button", { name: "✦ Ask Oracle for more" })).toBeVisible();
+      await expect(drawer.getByRole("button", { name: "✦ Get more from Oracle" })).toBeVisible();
       await s.getByRole("button", { name: "Accept" }).click();
       await expect(toastWith(page, "Added Alert templates for new teams as a draft")).toBeVisible();
       await expect(s).toHaveCount(0);
@@ -349,9 +357,8 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("quick-add")).toHaveCount(0);
       await sheetAdd(page, "Mute a rule for a week", "Next", "Add");
       await expect(toastWith(page, "Added Mute a rule for a week as a draft")).toBeVisible();
-      // B3: the draft is listed in its lane (No goal) with its Draft tag; its row opens the card.
-      await page.getByTestId("phone-lane").filter({ hasText: "No goal" }).click();
-      const row = page.locator('[data-testid="lane-row"][data-item="mute-a-rule-for-a-week"]');
+      // mk-qa4-roadmap QR1 A: the draft is listed in its quarter with its Draft tag; its row opens the card.
+      const row = page.locator('[data-testid="timeline-list"] [data-testid="timeline-row"][data-item="mute-a-rule-for-a-week"]');
       await expect(row.getByTestId("draft-tag")).toHaveText("Draft");
       await noSidewaysScroll(page);
       await row.click();
@@ -409,7 +416,7 @@ for (const scheme of ["light", "dark"] as const) {
       await panel.locator('[data-testid="goal-suggestion"][data-title="Quiet hours for alerts"]').getByRole("button", { name: "Accept" }).click();
       await expect(toastWith(page, "Added Quiet hours for alerts as a draft")).toBeVisible();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(1);
-      await panel.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
+      await panel.getByRole("button", { name: "✦ Get more from Oracle" }).click();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(4, { timeout: 10_000 });
       await noSidewaysScroll(page);
     });

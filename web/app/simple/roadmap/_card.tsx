@@ -10,6 +10,8 @@ import { Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
 import { flagKey } from "@/components/simple/chat/ChatCard";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { askThread, itemTalkPage, type ChatCard } from "@/lib/api/simple-chat";
+import { DecidedWho } from "@/components/simple/DecidedWho";
+import { formatDay } from "@/lib/format";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -171,6 +173,9 @@ export function FlagLine({ flag }: { flag: Flag }) {
   );
 }
 
+/** The least room beside a bar a callout takes, cut, rather than sit on the bar. */
+const MIN_CALLOUT_W = 160;
+
 /** The red callout by a broken bar, inside its own row: its one-line reason and its
  * one-click fixes (on a phone, the reason; the fixes are on the item's sheet). */
 export function Callout({
@@ -204,24 +209,40 @@ export function Callout({
   const ref = useRef<HTMLDivElement>(null);
   const words = useRef<HTMLSpanElement>(null);
   const [left, setLeft] = useState(Math.max(4, x));
+  /** walkb-review-5b: the callout's width when the room beside its bar is too short for it whole. */
+  const [cap, setCap] = useState<number | null>(null);
+  const natural = useRef(0);
   useLayoutEffect(() => {
     // qa4-simple-roadmap-24: the callout's whole width, its words uncut (a cut reason's
     // overflow added back), so a callout too wide for the room right of its bar flips left of
     // it whole rather than staying right with its sentence cut at the chart's edge.
     const span = words.current;
-    const w = Math.min((ref.current?.offsetWidth ?? 0) + (span ? Math.max(0, span.scrollWidth - span.clientWidth) : 0), Math.max(160, maxX - 8));
-    // Right of the bar when it fits; else left of the bar; else slid inside, never past either edge.
+    // A capped (wrapped) callout keeps the whole width it last measured uncapped.
+    const whole = Math.max(ref.current?.offsetWidth ?? 0, ref.current?.scrollWidth ?? 0) + (span ? Math.max(0, span.scrollWidth - span.clientWidth) : 0);
+    if (cap == null) natural.current = whole;
+    const w = Math.min(natural.current || whole, Math.max(160, maxX - 8));
+    // Right of the bar when it fits; else left of the bar; else (walkb-review-5b) on the side
+    // with more room, its reason cut to that room, so the bar stays in sight; only with no
+    // room on either side is it slid inside, never past either edge.
+    // A callout on its own line under its bar (no `before`) never covers it: it slides as before.
+    const right = maxX - 4 - x;
+    const lefty = before != null ? before - 4 : 0;
+    const room = Math.max(right, lefty);
+    const wide = before != null && x + w + 4 > maxX && before - w < 4 && room >= MIN_CALLOUT_W;
+    setCap(wide ? room : null);
     if (x + w + 4 <= maxX) setLeft(Math.max(4, x));
     else if (before != null && before - w >= 4) setLeft(before - w);
+    else if (wide) setLeft(right >= lefty ? x : 4);
     else setLeft(Math.max(4, Math.min(x, maxX - w - 4)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cap is this effect's own output
   }, [x, before, maxX, flag.reason, compact]);
   return (
     <div
       ref={ref}
       data-testid="broken-callout"
       data-item={item.key}
-      style={{ left, top: y + 3, minHeight: h - 6, maxWidth: Math.max(160, maxX - 8) }}
-      className="pointer-events-none absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 focus-within:z-20 hover:z-20 [&_button]:pointer-events-auto"
+      style={{ left, top: y + 3, minHeight: h - 6, maxWidth: cap ?? Math.max(160, maxX - 8) }}
+      className={`pointer-events-none absolute z-10 flex ${cap != null ? "flex-wrap" : "flex-nowrap"} items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 focus-within:z-20 hover:z-20 [&_button]:pointer-events-auto`}
     >
       {/* fix4 review (qa-simple-roadmap-6): a phone has no hover for a cut reason's full
        * words, so there the reason wraps inside the callout instead. qa4-simple-roadmap-24: on
@@ -528,6 +549,8 @@ function FlowThumb({
 }
 
 /** One of the card's parts ("WHY", "FLOW"): the mock-up's small-capitals heading over its body. */
+const TASK_WORDS: Record<Item["tasks"][number]["status"], string> = { todo: "To do", doing: "Doing", done: "Done", dropped: "Dropped" };
+
 function Part({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
   return (
     <section className="mt-3" data-testid={testId}>
@@ -637,12 +660,15 @@ export function FloatingCard({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    ref.current?.focus();
+    // Opening an item never scrolls the page: the clicked row stays where it was.
+    ref.current?.focus({ preventScroll: true });
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  // The card's dates carry the year when it is not this one, as the Timeline's bar does.
+  const span = yearSpan(item.start.date, item.end.date);
   const dates = item.estimated
-    ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · Estimated by Oracle (the ${item.horizon} window)`
-    : `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · ${sourceWord(item.source)}`;
+    ? `${span} · Estimated by Oracle (the ${item.horizon} window)`
+    : `${span} · ${sourceWord(item.source)}`;
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside);
   // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
@@ -664,7 +690,8 @@ export function FloatingCard({
       ? "fixed z-40 flex w-[840px] flex-col rounded-xl border"
       : `absolute z-40 rounded-xl border p-4 ${wide ? "w-[760px]" : "w-[380px]"}`;
   const placeStyle: React.CSSProperties | undefined = phone
-    ? undefined
+    ? // A part-height sheet (the Timeline's) keeps the marked row in sight above it.
+      !wide && style.height ? { height: style.height } : undefined
     : beside
       ? { top: 16, bottom: 16, right: talkRight }
       : left == null
@@ -745,10 +772,17 @@ export function FloatingCard({
     <Part title="Flow" testId="card-flow">
       {/* fix4 qa-simple-roadmap-39: the same row (its thumbnail, or "Ask Oracle to draw it") on
        * a desktop, a phone and the card widened beside its talk; qa-simple-roadmap-3: no code. */}
+      {/* walkb-roadmap review: an item built from a PRD with no flow of its own shows the flow
+       * its one-pager draws for the item's bet (the API's item.flow names that bet). */}
       <FlowPanel
         key={`row-${item.id}`}
         row
-        subject={{ kind: "feature", id: item.id }}
+        subject={
+          item.flow?.subject_kind === "one_pager_line" && item.flow.subject_id
+            ? { kind: "one_pager_line", id: item.flow.subject_id }
+            : { kind: "feature", id: item.id }
+        }
+        documentId={item.flow?.subject_kind === "one_pager_line" ? item.prd?.id : undefined}
         openLabel="Open the item's flow"
         code={null}
         name={item.title}
@@ -939,6 +973,23 @@ export function FloatingCard({
                     >
                       {d.title}
                     </Link>
+                    <DecidedWho d={d} />
+                  </li>
+                ))}
+              </ul>
+            </Part>
+          )}
+          {item.tasks.length > 0 && (
+            <Part title="Tasks" testId="card-tasks">
+              <ul className="mt-1 space-y-1">
+                {item.tasks.map((t) => (
+                  <li key={t.id} data-testid="card-task" className="[overflow-wrap:anywhere]">
+                    {t.title}
+                    <span className="text-text2">
+                      {" "}
+                      · {t.owner ? t.owner.name : "No owner"}
+                      {t.due_date ? ` · due ${formatDay(t.due_date)}` : ""} · {TASK_WORDS[t.status]}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -1072,7 +1123,8 @@ export function FloatingCard({
       {/* #47: the card floats over the chart with nothing to say it has the page's
        * attention; a dimmed backdrop on desktop (a phone's sheet already reads as modal),
        * clicking it closes the card like the close button. */}
-      {!phone && (
+      {/* The Timeline's side panel sits in the page's flow and dims nothing. */}
+      {!phone && style.position !== "relative" && (
         <div
           aria-hidden
           data-testid="floating-card-backdrop"

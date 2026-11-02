@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Suspense, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 
 import {
   Button,
@@ -28,6 +28,7 @@ import {
   type ChipKind,
   type Column,
 } from "@/components/ds";
+import { codeTagRoom } from "@/components/ds/CodeChip";
 import { usePhone } from "@/components/ds/page-info";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -37,6 +38,7 @@ import { useMe } from "@/lib/me";
 import { displayName } from "@/lib/names";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { fitWords, textWidth, useFontsReady, useWidth, wordsOf } from "@/lib/words";
 
 import {
   ChangesPanel,
@@ -188,6 +190,30 @@ const goalText = (key: string, title: string) => namedText(named(title, key));
 /** A feature key as words: the ranked feature's name only, never its code (qa-plan-17). */
 function featureText(features: RankedFeature[], key: string): string {
   return features.find((x) => x.key === key)?.title ?? key;
+}
+
+/**
+ * The Goal column (priorities-words): 124 px, wider when a goal's code and the longest word of
+ * its name need it, up to GOAL_MAX; past that the name goes under its code. px-2 each side.
+ */
+const GOAL_MIN = 124;
+const GOAL_MAX = 144;
+const CELL_PAD = 16;
+/** The Depends on column, and the room its 13 px text has. */
+const DEPS_WIDTH = 104;
+const DEPS_ROOM = DEPS_WIDTH - CELL_PAD;
+
+function goalWidth(features: RankedFeature[]): number {
+  let need = 0;
+  for (const f of features)
+    for (const g of f.explanation.goals) {
+      const n = named(g.title, g.goal);
+      const longest = Math.max(0, ...wordsOf(n.name).map((w) => textWidth(w, 500, 15) ?? 0));
+      const beside = CELL_PAD + codeTagRoom(n.code) + longest;
+      // A name that cannot sit beside its code even at GOAL_MAX goes under it.
+      need = Math.max(need, beside <= GOAL_MAX ? beside : CELL_PAD + longest);
+    }
+  return Math.min(GOAL_MAX, Math.max(GOAL_MIN, Math.ceil(need) + 1));
 }
 
 /** A feature key as its name only (beside other names, the code adds nothing). */
@@ -461,7 +487,10 @@ function FeatureInspector({
   // The steps name each goal by its code and name, not its key (#304).
   const words = (s: string) => e.goals.reduce((t, g) => t.split(`(${g.goal})`).join(`(${goalText(g.goal, g.title)})`), s);
   // A feature the run ranks that Oracle's live ranking lacks (a proposal of the run): its own line only.
-  const live = !run || run.live_rank != null || f.entity_id !== "";
+  // A feature new in the run's PRD is scored on the same formula (RP1): its steps show.
+  const live = !run || run.live_rank != null || f.entity_id !== "" || !!f.new;
+  // Its run row as the order shows it; a new feature reads as any scored row, no Live tile.
+  const runRow = f.new ? undefined : run;
   const given = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
   // Confidence is an input of every formula that multiplies by it: its row reads as the steps do.
   const inputs: [string, Record<string, unknown> | null][] =
@@ -475,6 +504,8 @@ function FeatureInspector({
         title={f.title}
         label={`Feature ${f.title}`}
         testId="priority-inspector"
+        // Four tiles two by two, so no score or label breaks across lines at 1440 or 1512.
+        statColumns={runRow ? 2 : undefined}
         // On the theme's card surface like every other card, not a dark hero (qa-plan-33).
         tone="card"
         chips={
@@ -490,13 +521,13 @@ function FeatureInspector({
             label: "Rank",
             value: f.formula_rank != null && f.formula_rank !== f.rank ? `#${f.rank} · Oracle #${f.formula_rank}` : `#${f.rank}`,
           },
-          ...(run ? [{ label: "Live", value: run.live_rank == null ? "—" : `#${run.live_rank}` }] : []),
+          ...(runRow ? [{ label: "Live", value: runRow.live_rank == null ? "—" : `#${runRow.live_rank}` }] : []),
           { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} text={confidencePercent(e.confidence.value)} size={46} /> },
           // The score always fits its tile (qa-plan-6): a long one ("5,400", "83.33") in smaller figures.
           { label: "Score", testId: "inspector-score", figure: <TileFigure text={scoreText(f.score, e.method)} /> },
         ]}
       >
-        {run && (
+        {run && runRow && (
           <InspectorSection label={`Why rank ${run.run_rank}`} testId="run-explanation">
             <p className="text-sm break-words">{run.run_explanation ?? "The run gave no explanation."}</p>
             <p className="tnum mt-1.5 text-sm text-text2">
@@ -763,6 +794,7 @@ function placeholder(c: CompareRow, method: Method): RankedFeature {
     rank: c.run_rank,
     score_rank: c.run_rank,
     entity_id: "",
+    new: c.new,
     key: c.key,
     title: c.title,
     status: "proposed",
@@ -786,6 +818,30 @@ function placeholder(c: CompareRow, method: Method): RankedFeature {
 }
 
 const STATUS_TEXT = { saved: "Saved", proposed: "Proposed", discarded: "Discarded" } as const;
+
+/**
+ * The features new in the run's PRD (RP1, 'Scored with the rest'): ranked here among the
+ * rest; approving the order adds them to the baseline as proposed.
+ */
+function NewFeaturesNote({ c }: { c: CompareOut }) {
+  const n = c.rows.filter((r) => r.new).length;
+  if (n === 0) return null;
+  const features = n === 1 ? "1 feature" : `${n} features`;
+  if (c.snapshot.status === "saved")
+    return (
+      <Notice tone="pass" testId="new-features-note">
+        {`Order approved. The ${n === 1 ? "new feature" : `${n} new features`} joined the baseline as proposed, at the ${n === 1 ? "rank" : "ranks"} you approved.`}
+      </Notice>
+    );
+  if (c.snapshot.status !== "proposed") return null;
+  // As the frame words it: "the 6 features Saved addresses adds", the PRD named without its kind.
+  const prd = c.snapshot.document ? prdName(c.snapshot.document).replace(/ PRD$/, "") : "this PRD";
+  return (
+    <Notice tone="info" testId="new-features-note">
+      {`This order ranks the ${features} ${prd} adds, scored on the same formula and goals as the rest. Approving the order adds ${n === 1 ? "it" : "them"} to the baseline as proposed.`}
+    </Notice>
+  );
+}
 
 /**
  * Run mode's band (C8): whose order this is and where it stands, and the priority stop's
@@ -1015,6 +1071,13 @@ function Priorities() {
     }
   }
 
+  const fonts = useFontsReady();
+  // Measured in the fonts the page has, and again in its own once they load (priorities-words).
+  const goalCol = useMemo(() => (fonts ? goalWidth(rows ?? []) : GOAL_MIN), [fonts, rows]);
+  // The Feature column takes the room left, so its text's room is read from its header; a
+  // phone's card is a whole line wide (its header is for screen readers only).
+  const [featureHead, featureHeadWidth] = useWidth();
+  const featureRoom = phone ? null : featureHeadWidth;
   const runColumns: Column<RankedFeature>[] = cmp
     ? [
         {
@@ -1081,7 +1144,11 @@ function Priorities() {
       : []),
     {
       key: "feature",
-      header: "Feature",
+      header: (
+        <span ref={featureHead} className="block">
+          Feature
+        </span>
+      ),
       phone: "title",
       // A long name wraps onto a second line, never cut (qa-plan-5).
       wrap: true,
@@ -1099,7 +1166,14 @@ function Priorities() {
             className="block max-w-full text-left font-medium break-words hover:underline"
             data-testid="feature-name"
           >
-            {f.title}
+            {fonts && featureRoom ? fitWords(f.title, featureRoom, 500, 15) : f.title}
+            {f.new && (
+              <span className="ml-2 inline-block align-middle">
+                <Chip kind="acc" title="Not in the baseline yet: proposed by this PRD's run">
+                  New in this PRD
+                </Chip>
+              </span>
+            )}
           </button>
         );
       },
@@ -1107,10 +1181,11 @@ function Priorities() {
     {
       key: "goal",
       header: "Goal",
-      // Wide enough that a goal's code and a word of its name share a line: a name wraps
-      // between words, never inside one ("Scalin g"); no wider, so the Feature column keeps its
-      // room beside the docked inspector and an approver's move column (qa-plan-5).
-      width: "124px",
+      // Wide enough that a goal's code and the longest word of its name share a line, measured
+      // from the names (priorities-words: "Conversi / on"): a name wraps between words, never
+      // inside one. At most GOAL_MAX, so the Feature column keeps its room beside the docked
+      // inspector and an approver's move column (qa-plan-5); a longer word goes under the code.
+      width: `${goalCol}px`,
       // Every goal whole (prod-4, qa-plan-42): one per line, a long name on as many lines as it
       // needs, wrapped between words and never cut (qa5-plan-at-risk).
       wrap: true,
@@ -1120,7 +1195,7 @@ function Priorities() {
         ) : (
           <span className="flex min-w-0 flex-col items-start gap-1 py-0.5 max-[600px]:flex-row max-[600px]:flex-wrap" data-testid="row-goals">
             {f.explanation.goals.map((g) => (
-              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole />
+              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole room={fonts ? goalCol - CELL_PAD : undefined} />
             ))}
           </span>
         ),
@@ -1169,7 +1244,7 @@ function Priorities() {
     {
       key: "deps",
       header: "Depends on",
-      width: "104px",
+      width: `${DEPS_WIDTH}px`,
       hideOnPhone: true,
       // qa4-plan-1: with the Oracle # column it gives way under 1000 px (the inspector shows
       // it), so the Feature column keeps room for whole words.
@@ -1187,10 +1262,12 @@ function Priorities() {
               : `${outside.map((k) => featureName(known, k)).join(", ")}: outside this PRD's scope`;
         return (
           <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={[text, note].filter(Boolean).join(". ") || undefined}>
-            {text || "—"}
+            {/* Between words; a word wider than the column hyphenated, never cut bare
+                ("instrumentatio / n", priorities-words). */}
+            {(fonts ? fitWords(text, DEPS_ROOM, 400, 13) : text) || "—"}
             {note && (
               <span data-testid="row-deps-outside" className="block text-[12px] leading-4 text-warn">
-                {note}
+                {fonts ? fitWords(note, DEPS_ROOM, 400, 12) : note}
               </span>
             )}
           </span>
@@ -1354,6 +1431,7 @@ function Priorities() {
             }}
           />
         )}
+        {cmp && <NewFeaturesNote c={cmp} />}
 
         <Split inspector={!phone && inspector}>
           <Panel>

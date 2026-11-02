@@ -1,110 +1,71 @@
 import { THEME_KEY } from "../lib/theme";
-import { CALL_H, RH } from "../app/simple/roadmap/_pitch";
 import { login } from "./helpers";
-import { expect, test, type Locator, type Page } from "./test";
+import { expect, test, type Page } from "./test";
 
 /*
- * fix3, qa-simple-roadmap-4 ("Under the lane", the owner's pick, 2026-10-29): on the desktop's
- * goal lanes (B2) a broken link's callout no longer covers the other pills in its lane; the lane
- * grows one line per row with a callout, and the callout sits under its broken pill in the
- * existing callout's look and words. Group by Track, PRD and Milestone lanes do the same.
- * Driven against the mock's default scenario (Weekly alert digest starts before Alert rules
- * engine, which it depends on, ends).
+ * fix3, qa-simple-roadmap-4, moved onto mk-qa4-roadmap QR3 A: a broken link no longer draws a
+ * callout over the chart; it sits in the "conflicts" panel above the Timeline, in the existing
+ * callout's words and with its fixes, and every bar takes its own clicks. Driven against the
+ * mock's default scenario (Weekly alert digest starts before Alert rules engine, which it
+ * depends on, ends).
  */
 
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
-/** A narrow desktop: the digest's callout is wider than the room right of its pill's start. */
+/** A narrow desktop: the panel's words and fixes still fit inside it. */
 const NARROW = { viewport: { width: 1024, height: 820 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
-const callout = (page: Page, key: string): Locator => page.locator(`[data-testid="broken-callout"][data-item="${key}"]`);
 
 async function open(page: Page, scheme: "light" | "dark") {
   await page.context().addInitScript(([themeKey, theme]) => localStorage.setItem(themeKey, theme), [THEME_KEY, scheme] as const);
   await page.emulateMedia({ colorScheme: scheme });
   await login(page);
   await page.goto("/simple/roadmap");
-  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "lanes");
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
 }
 
-type Box = { x: number; y: number; width: number; height: number };
-const overlaps = (a: Box, b: Box) => a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
-
-/** Every callout clear of every pill; each under its own pill, inside its lane; each lane one line taller per row with a callout. */
-async function checkUnder(page: Page) {
-  const callouts = page.getByTestId("broken-callout");
-  await expect(callouts.first()).toBeVisible();
-  await expect(callout(page, "alert-digest")).toBeVisible();
-  const pills = page.locator('g[data-testid="bar"] rect[data-body], g[data-testid="slice-bar"] rect[data-slice-body]');
-  const pillBoxes = (await Promise.all((await pills.all()).map((p) => p.boundingBox()))).filter((b): b is Box => !!b);
-  expect(pillBoxes.length).toBeGreaterThan(1);
-  const perLane = new Map<string, Set<number>>();
-  // fix4 qa-simple-roadmap-1: a callout's line is as tall as the callout (its words wrap whole), CALL_H at least.
-  const lineH = new Map<string, number>();
-  for (const c of await callouts.all()) {
-    const key = (await c.getAttribute("data-item"))!;
-    const cb = (await c.boundingBox())!;
-    for (const p of pillBoxes) expect(overlaps(cb, p), `${key}'s callout covers a pill`).toBe(false);
-    const b = bar(page, key);
-    const bb = (await b.locator("rect[data-body], rect[data-slice-body]").first().boundingBox())!;
-    expect(cb.y, `${key}'s callout sits under its pill`).toBeGreaterThanOrEqual(bb.y + bb.height - 1);
-    expect(cb.y - (bb.y + bb.height), `${key}'s callout sits right under its pill`).toBeLessThan(6);
-    const laneKey = (await b.getAttribute("data-lane"))!;
-    const row = Number(await b.getAttribute("data-row"));
-    (perLane.get(laneKey) ?? perLane.set(laneKey, new Set()).get(laneKey)!).add(row);
-    lineH.set(laneKey, (lineH.get(laneKey) ?? 0) + Math.max(CALL_H, Math.ceil(await c.evaluate((el) => (el as HTMLElement).offsetHeight)) + 4));
-    const lane = (await page.locator(`[data-testid="chart-group"][data-lane="${laneKey}"]`).boundingBox())!;
-    expect(cb.y + cb.height, `${key}'s callout stays in its lane`).toBeLessThanOrEqual(lane.y + lane.height + 0.5);
-  }
-  for (const [laneKey, calloutRows] of perLane) {
-    const rows = new Set(await page.locator(`g[data-testid="bar"][data-lane="${laneKey}"]`).evaluateAll((els) => els.map((e) => e.getAttribute("data-row"))));
-    const lane = (await page.locator(`[data-testid="chart-group"][data-lane="${laneKey}"]`).boundingBox())!;
-    expect(Math.round(lane.height), `lane ${laneKey}: ${rows.size} rows and ${calloutRows.size} callout lines`).toBe(rows.size * RH + lineH.get(laneKey)! + 8);
-  }
-}
+const conflict = (page: Page, key: string) => page.locator(`[data-testid="conflict"][data-item="${key}"]`);
 
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`desktop, ${scheme}`, () => {
     test.use({ ...DESKTOP, colorScheme: scheme });
 
-    test(`a broken link's callout sits under its pill and covers none (goal lanes, ${scheme})`, async ({ page }) => {
+    test(`a broken link sits in the panel above the Timeline and covers no bar (${scheme})`, async ({ page }) => {
       await open(page, scheme);
-      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", "goal");
-      await checkUnder(page);
-      // The callout names both items, in the existing callout's words.
-      const c = callout(page, "alert-digest");
+      const c = conflict(page, "alert-digest");
+      await expect(c).toBeVisible();
+      // The panel names both items, in the existing callout's words.
       await expect(c).toContainText("Weekly alert digest");
       await expect(c).toContainText("Alert rules engine");
       await expect(c).toContainText("which it depends on, ends");
-      // Every pill takes its own clicks (nothing drawn over its middle).
-      const hit = await page.locator('g[data-testid="bar"]').evaluateAll((els) =>
+      // No callout is drawn on the chart any more.
+      await expect(page.getByTestId("broken-callout")).toHaveCount(0);
+      // The broken item's row is marked.
+      await expect(page.locator('[data-testid="timeline-row"][data-item="alert-digest"]').getByLabel("Broken link")).toBeVisible();
+      // Every bar in sight takes its own clicks (nothing drawn over its middle).
+      const hit = await page.getByTestId("timeline-bar").evaluateAll((els) =>
         els
-          .map((g) => ({ g, r: (g.querySelector("rect[data-body], rect[data-slice-body]") ?? g).getBoundingClientRect() }))
-          .filter(({ r }) => r.width > 0 && r.y >= 0 && r.y + r.height <= innerHeight)
-          .map(({ g, r }) => {
-            const at = document.elementFromPoint(r.x + Math.min(r.width / 2, 12), r.y + r.height / 2);
-            return { key: g.getAttribute("data-item"), ok: !!at && g.contains(at) };
+          .map((b) => {
+            // A bar that starts before the chart's scroll runs under the names fixed on the left
+            // (mk-qa4-roadmap QR1 A): its part in sight starts at the names' right edge.
+            const names = b.closest('[data-testid="timeline-row"]')?.querySelector("button")?.getBoundingClientRect().right ?? 0;
+            const r = b.getBoundingClientRect();
+            const x0 = Math.max(r.x, names);
+            return { b, r, x0, w: r.x + r.width - x0 };
+          })
+          .filter(({ r, w }) => w > 24 && r.x + r.width <= innerWidth && r.y >= 0 && r.y + r.height <= innerHeight)
+          .map(({ b, r, x0, w }) => {
+            const at = document.elementFromPoint(x0 + Math.min(w / 2, 12), r.y + r.height / 2);
+            return { key: b.closest("[data-item]")?.getAttribute("data-item"), ok: !!at && b.contains(at) };
           }),
       );
       expect(hit.filter((h) => !h.ok)).toEqual([]);
-      // A pill next to the broken one still opens its card.
-      await bar(page, "alert-mobile").click();
-      await expect(bar(page, "alert-mobile")).toHaveAttribute("data-open", "true");
-      await page.keyboard.press("Escape");
-      // The callout still opens its fixes.
+      // Another item still opens in the side panel.
+      await page.locator('[data-testid="timeline-row"][data-item="alert-mobile"]').getByRole("button").first().click();
+      await expect(page.locator('[data-testid="timeline-row"][data-item="alert-mobile"]')).toHaveAttribute("data-open", "true");
+      await expect(page.getByTestId("item-panel")).toBeVisible();
+      // The panel still opens its fixes.
       await c.getByRole("button", { name: "Accept as risk" }).click();
       await expect(page.getByLabel("Why it is an accepted risk")).toBeVisible();
-    });
-
-    test(`Group by Track, PRD and Milestone lanes put the callout under its pill too (${scheme})`, async ({ page }) => {
-      await open(page, scheme);
-      for (const group of ["track", "prd", "milestone"] as const) {
-        await page.getByTestId(`group-${group}`).click();
-        await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", group);
-        await expect.poll(async () => bar(page, "alert-digest").getAttribute("data-lane")).not.toBe(null);
-        await expect(async () => checkUnder(page)).toPass({ timeout: 10_000 });
-      }
     });
   });
 }
@@ -114,22 +75,16 @@ for (const scheme of ["light", "dark"] as const) {
   test.describe(`narrow desktop, ${scheme}`, () => {
     test.use({ ...NARROW, colorScheme: scheme });
 
-    // A pill near the chart's right edge: its callout, on its own line, slides left to stay in the chart, still under its pill.
-    test(`a callout with no room to its right slides left, inside the chart and still under its pill (${scheme})`, async ({ page }) => {
+    test(`on a narrow desktop the broken link's fixes stay whole inside its panel (${scheme})`, async ({ page }) => {
       await open(page, scheme);
-      await checkUnder(page);
-      const c = callout(page, "alert-digest");
-      const cb = (await c.boundingBox())!;
-      const pb = (await bar(page, "alert-digest").locator("rect[data-body]").first().boundingBox())!;
-      const chart = (await page.getByTestId("simple-chart").boundingBox())!;
-      expect(cb.x + cb.width, "the callout ends inside the chart").toBeLessThanOrEqual(chart.x + chart.width);
-      expect(cb.x, "the callout starts inside the chart").toBeGreaterThanOrEqual(chart.x);
-      expect(cb.x, "the callout slid left of its pill's start").toBeLessThan(pb.x);
-      expect(cb.x + cb.width, "the callout still spans its pill").toBeGreaterThanOrEqual(pb.x + pb.width);
-      // Its fixes are whole and still work.
+      const panel = page.getByTestId("conflicts");
+      const c = conflict(page, "alert-digest");
+      await expect(c).toBeVisible();
+      const pb = (await panel.boundingBox())!;
       const accept = c.getByRole("button", { name: "Accept as risk" });
       const ab = (await accept.boundingBox())!;
-      expect(ab.x + ab.width).toBeLessThanOrEqual(chart.x + chart.width);
+      expect(ab.x, "the fix starts inside the panel").toBeGreaterThanOrEqual(pb.x);
+      expect(ab.x + ab.width, "the fix ends inside the panel").toBeLessThanOrEqual(pb.x + pb.width);
       await accept.click();
       await expect(page.getByLabel("Why it is an accepted risk")).toBeVisible();
     });
@@ -139,18 +94,16 @@ for (const scheme of ["light", "dark"] as const) {
 test.describe("phone", () => {
   test.use(PHONE);
 
-  // The phone's lanes are unchanged: no callout over the chart; the broken item reads red in its lane's list.
-  test("the phone's goal lanes draw no callout; the broken item is marked in its lane's list", async ({ page }) => {
+  // A phone's Timeline is a list: no callout; the broken item is marked in its row, its link in the panel.
+  test("the phone's Timeline draws no callout; the broken item is marked in the list", async ({ page }) => {
     await login(page);
     await page.goto("/simple/roadmap");
-    const chart = page.getByTestId("simple-chart");
-    await expect(chart).toHaveAttribute("data-view", "lanes-phone");
-    await expect(chart).toHaveAttribute("data-lanes", "goal");
-    await page.locator('[data-testid="phone-lane"][data-items~="alert-digest"]').click();
-    const row = page.locator('[data-testid="lane-row"][data-item="alert-digest"]');
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "zoom");
+    await expect(page.getByTestId("timeline-list")).toBeVisible();
+    const row = page.locator('[data-testid="timeline-row"][data-item="alert-digest"]');
     await expect(row).toBeVisible();
-    await expect(row).toContainText("⚠");
-    await expect(row.locator("[title]").last()).toHaveAttribute("title", /which it depends on, ends/);
+    await expect(row).toContainText("⚠ Broken link");
+    await expect(conflict(page, "alert-digest")).toContainText("which it depends on, ends");
     await expect(page.getByTestId("broken-callout")).toHaveCount(0);
   });
 });

@@ -19,6 +19,7 @@ import { DecidedItem, LINK, momentWords } from "../meetings/_flow";
 
 type Row = Schemas["SimpleDecisionRow"];
 type Group = Schemas["SimpleMeetingGroup"];
+type RunGroup = Schemas["SimpleRunGroup"];
 type View = "list" | "board" | "meetings";
 
 /** qa-simple-decide-35: the lead follows the view. */
@@ -114,7 +115,7 @@ export function SimpleDecisions() {
       {d && view === "board" && <Board questions={questions} actions={actions} />}
       {d && view !== "board" && (
         <>
-          {d.meetings.length === 0 && other.length === 0 && (
+          {d.meetings.length === 0 && other.length === 0 && !d.runs?.length && (
             <SimpleEmpty testId="decisions-empty">
               {/* qa-shell-9: "matches" only when a filter is set; with none, what comes next. */}
               {filtered ? (
@@ -135,6 +136,7 @@ export function SimpleDecisions() {
           {d.meetings.map((g) => (
             <MeetingGroup key={g.meeting.id} g={g} reload={() => q.reload()} filtered={!!(prd || goal)} rowNumbers={new Set([...d.meetings.flatMap((x) => x.decisions), ...other].map((r) => r.number))} />
           ))}
+          {!!d.runs?.length && <RunsGroup runs={d.runs} />}
           {other.length > 0 && (
             <section className="simple-card" aria-label="Outside meetings">
               <h2 className="simple-h2">Outside meetings</h2>
@@ -344,7 +346,8 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
         {/* qa4-simple-decide-21: the PRD's name only when the title does not already say it, with or
             without the kind word its document's title may carry ("Usage alerts PRD", qa4-simple-prd-28). */}
         <span className="simple-meta" data-testid="meeting-group-when">
-          {[momentWords(m.started_at, zone, true), m.status === "live" ? "live" : null, m.title.includes(m.prd.title.replace(/\s+PRD$/, "")) ? null : m.prd.title].filter(Boolean).join(" · ")}
+          {/* walkc-meeting r2 (5j): the meeting's day and time ("Fri Oct 30, 2:49 PM"); the zone is in the lead. */}
+          {[momentWords(m.started_at, zone), m.status === "live" ? "live" : null, m.title.includes(m.prd.title.replace(/\s+PRD$/, "")) ? null : m.prd.title].filter(Boolean).join(" · ")}
         </span>
       </div>
       {minutes?.summary && <p>{minutes.summary}</p>}
@@ -415,7 +418,90 @@ function MeetingGroup({ g, filtered, rowNumbers, reload }: { g: Group; filtered:
 /** qa-simple-decide-19: a decision's state in plain words. */
 const STATUS_WORDS: Record<string, string> = { proposed: "waiting for a decider", superseded: "replaced", rejected: "declined", withdrawn: "withdrawn" };
 
-/** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day. */
+/** "Tue Oct 20": a run stop's day. */
+function stopDay(day: string) {
+  return calendarDay(day, { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+}
+
+/** build-rundecide RD1 a: the runs' stops, after the meetings, one block per run. */
+function RunsGroup({ runs }: { runs: RunGroup[] }) {
+  return (
+    <section className="simple-card" aria-label="Runs" data-testid="decisions-runs">
+      <header className="flex flex-wrap items-baseline gap-x-3">
+        <h2 className="simple-h2 flex-1">Runs</h2>
+        <span className="simple-meta">Stops people approved while Oracle drafted a plan</span>
+      </header>
+      {runs.map((r) => (
+        <div key={r.run_id} className="mt-4 border-t border-line pt-4 first-of-type:border-t-0" data-testid="decisions-run">
+          <h3 className="text-[18px] leading-[26px] font-[650]">
+            {r.name}{" "}
+            <span className="simple-meta font-normal">
+              · {r.prd ? `${r.prd.title} · ` : ""}
+              {r.stops.length} {r.stops.length === 1 ? "decision" : "decisions"}
+            </span>
+          </h3>
+          <ul className="mt-2">
+            {r.stops.map((s) => (
+              <StopRow key={s.checkpoint_id} run={r} s={s} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** One stop of a run: "Engineering check: approved after a change", its note, who (role) and day; a stop sent back first opens to its steps. */
+function StopRow({ run, s }: { run: RunGroup; s: RunGroup["stops"][number] }) {
+  const [shown, setShown] = useState(false);
+  const trail = s.trail ?? [];
+  const sentBack = trail.filter((t) => t.what === "Sent back").length;
+  const who = s.who ? (s.role ? `${s.who} (${s.role})` : s.who) : null;
+  return (
+    <li className="flex !items-start gap-[14px] border-t border-line py-[14px] first:border-t-0 first:pt-0 last:pb-0" data-testid="run-stop-row">
+      <span aria-hidden className="simple-ico simple-ico-done">
+        <Icon name="check" size={20} stroke={1.7} />
+      </span>
+      <span className="simple-rb flex-1">
+        <span className="break-words">
+          <b className="font-[650]">
+            {s.stop}: {s.outcome.toLowerCase()}
+          </b>
+        </span>
+        <span className="simple-meta">{[s.note, who, s.day ? stopDay(s.day) : null].filter(Boolean).join(" · ")}</span>
+        {trail.length > 1 && !shown && (
+          <button type="button" className="simple-more !mt-1 !text-left" onClick={() => setShown(true)} aria-expanded={false}>
+            {sentBack === 1 ? "Sent back once" : `Sent back ${sentBack} times`}, then {s.outcome.toLowerCase().startsWith("approved") ? "approved" : s.outcome.toLowerCase()}. Show what happened
+          </button>
+        )}
+        {trail.length > 1 && shown && (
+          <ol className="mt-2 space-y-1.5 border-l-2 border-line pl-3" aria-label="What happened">
+            {trail.map((t, i) => (
+              <li key={i} className="simple-small">
+                <b className="font-[650]">{t.what}</b>
+                {t.who ? ` by ${t.who}` : ""}
+                {t.day ? ` · ${stopDay(t.day)}` : ""}
+                {t.note && <span className="block text-text2">“{t.note}”</span>}
+              </li>
+            ))}
+            <li className="flex flex-wrap gap-x-4">
+              {run.prd && (
+                <Link href={`/simple/one-pagers/${run.prd.id}`} className="simple-link">
+                  Open {run.prd.title}
+                </Link>
+              )}
+              <button type="button" className="simple-more !mt-0" onClick={() => setShown(false)} aria-expanded>
+                Hide what happened
+              </button>
+            </li>
+          </ol>
+        )}
+      </span>
+    </li>
+  );
+}
+
+/** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day and time. */
 function Rows({ rows }: { rows: Row[] }) {
   const zone = useCompanyZone();
   return (
@@ -442,7 +528,7 @@ function Rows({ rows }: { rows: Row[] }) {
                 <span className="simple-code">{code}</span> <b className="font-[650]">{title}</b>
               </span>
               <span className="simple-meta">
-                {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone, true), done ? null : STATUS_WORDS[r.status] ?? "open"]
+                {[chosen, r.approver?.name ?? "No approver", momentWords(r.decided_at ?? r.created_at, zone), done ? null : STATUS_WORDS[r.status] ?? "open"]
                   .filter(Boolean)
                   .join(" · ")}
               </span>

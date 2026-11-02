@@ -30,6 +30,7 @@ EVERY_MEMBER = frozenset(
         "create_personal_token",
         "create_snapshot",
         "delete_connection",
+        "get_agent_questions",
         "get_checkpoint_review_file",
         "get_company_source_coverage",
         "get_draft_defaults",
@@ -112,6 +113,7 @@ DECIDED_PER_ITEM = frozenset(
     {
         "accept_scope_enhancement",
         "add_scope_requirement",
+        "answer_agent_question",
         "create_checkpoint_action",
         "decide_checkpoint",
         "delete_checkpoint_action",
@@ -170,6 +172,7 @@ PER_ITEM: dict[str, Role | None] = {
     "accept_track_alert_date": "owner",
     "add_discussion_participants": "commenter",
     "add_scope_requirement": "approver",
+    "answer_agent_question": "owner",
     "answer_question": "owner",
     "answer_with_discussion_change": "approver",
     "apply_all_simple_chat_cards": None,
@@ -180,6 +183,7 @@ PER_ITEM: dict[str, Role | None] = {
     # Simple S3b: an owner, else the roadmap's decider (with none, its owner); required
     # reviewers approve too; the author or the decider resumes (oracle.simple.drafts).
     "approve_simple_draft": "owner",
+    "approve_simple_meeting_draft_dates": None,
     "approve_version": "owner",
     "ask_discussion_change": "commenter",
     "ask_next_question_batch": "approver",
@@ -187,6 +191,7 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
     # S8: attendees, or whom the meeting's change mode lets change (oracle.simple.meetings).
+    "change_simple_meeting_draft_dates": None,
     "choose_simple_chat_choice": None,
     "comment_in_simple_meeting": None,
     "comment_simple_visual": "commenter",
@@ -243,6 +248,7 @@ PER_ITEM: dict[str, Role | None] = {
     # #618 review: a track alert's audience keeps and reopens it (oracle.roadmap.alerts
     # in_audience): the track's owner, else every owner, and the leads for slips.
     "keep_track_alert": None,
+    "leave_out_simple_meeting_draft_item": None,
     "list_simple_changes": "owner",
     "make_new_interview_link": "approver",
     "mark_metric_variance_unknown": "approver",
@@ -266,6 +272,7 @@ PER_ITEM: dict[str, Role | None] = {
     "reject_goal_suggestion": "owner",
     "remind_simple_one_pager_reviewers": "owner",
     "remove_evidence": "approver",
+    "reopen_goal_suggestion": "owner",
     "reopen_track_alert": None,
     "request_simple_visual": "owner",
     "research_discussion_message": "approver",

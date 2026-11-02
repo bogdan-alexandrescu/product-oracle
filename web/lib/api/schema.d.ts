@@ -6508,6 +6508,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Questions
+         * @description AQ1: the questions the run's agents asked at this stop (``agent_questions.yaml`` of
+         *     the segment it reviews), any member: each with its options, the agent's pick and the
+         *     answer given, who and when; the step the answers go to; whether I may answer.
+         */
+        get: operations["get_agent_questions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions/{question_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Answer Agent Question
+         * @description Answer one agent question (the stop's approver role or above): answering again
+         *     replaces it. The answers go to the next step with the stop's decision. 422 for an
+         *     option the question does not offer; 409 once the stop is decided.
+         */
+        put: operations["answer_agent_question"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
         parameters: {
             query?: never;
@@ -12409,7 +12453,8 @@ export interface paths {
         /**
          * List Simple Drafts
          * @description The open working and submitted drafts the caller may see: their participants, the
-         *     company's owners, the roadmap's decider, required reviewers and owners.
+         *     company's owners, the roadmap's decider, required reviewers and owners. ``roadmap``
+         *     (an id or slug) keeps that roadmap's drafts only; 404 when there is no such roadmap.
          */
         get: operations["list_simple_drafts"];
         put?: never;
@@ -12453,6 +12498,8 @@ export interface paths {
          * Submit Simple Draft
          * @description Submit the draft: it is imported as the roadmap's next version and goes through the
          *     document's review policy; readers keep the published version until it is approved.
+         *     An optional body names people to add as reviewers: the draft waits on them too, after
+         *     the required reviewers (422 for anyone who is not an active member who may approve).
          */
         post: operations["submit_simple_draft"];
         delete?: never;
@@ -12686,6 +12733,26 @@ export interface paths {
          * @description S7: reject a goal suggestion with an optional reason.
          */
         post: operations["reject_goal_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-suggestions/{suggestion_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Goal Suggestion
+         * @description Undo of a reject: the suggestion is open again.
+         */
+        post: operations["reopen_goal_suggestion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13120,6 +13187,67 @@ export interface paths {
          *     ones get an Inbox request and the draft publishes when they approve.
          */
         post: operations["approve_in_simple_meeting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/draft-items/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Simple Meeting Draft Dates
+         * @description Approve these N dates (RP2): the run's draft items go on the roadmap with their
+         *     dates; the meeting records the decision. The PRD still needs its own approval.
+         */
+        post: operations["approve_simple_meeting_draft_dates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Simple Meeting Draft Dates
+         * @description Change dates on a draft item of the run's draft roadmap: it stays draft.
+         */
+        post: operations["change_simple_meeting_draft_dates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/draft-items/{item_id}/leave-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave Out Simple Meeting Draft Item
+         * @description Leave out a draft item: it never goes on the roadmap.
+         */
+        post: operations["leave_out_simple_meeting_draft_item"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15034,6 +15162,31 @@ export interface components {
             /** Rationale */
             rationale: string;
         };
+        /** AgentAnswerIn */
+        AgentAnswerIn: {
+            /** Option */
+            option: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** AgentAnswerOut */
+        AgentAnswerOut: {
+            /** Option */
+            option: string;
+            /** Note */
+            note?: string | null;
+            by?: components["schemas"]["ReviewPerson"] | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Mine
+             * @default false
+             */
+            mine: boolean;
+        };
         /**
          * AgentItem
          * @description D12: a feedback item an approver staged for the agents (no section text to accept).
@@ -15052,6 +15205,45 @@ export interface components {
             staged_by_name?: string | null;
             /** Staged At */
             staged_at?: string | null;
+        };
+        /** AgentOptionOut */
+        AgentOptionOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Detail */
+            detail?: string | null;
+        };
+        /** AgentQuestionOut */
+        AgentQuestionOut: {
+            /** Id */
+            id: string;
+            /** Role */
+            role: string;
+            /** Feature */
+            feature?: string | null;
+            /** Question */
+            question: string;
+            /** Why */
+            why?: string | null;
+            /** Options */
+            options: components["schemas"]["AgentOptionOut"][];
+            /** Recommended */
+            recommended?: string | null;
+            answer?: components["schemas"]["AgentAnswerOut"] | null;
+        };
+        /** AgentQuestionsOut */
+        AgentQuestionsOut: {
+            /** Questions */
+            questions: components["schemas"]["AgentQuestionOut"][];
+            /** Next Step */
+            next_step?: string | null;
+            /**
+             * Can Answer
+             * @default false
+             */
+            can_answer: boolean;
         };
         /** AgentRoleOut */
         AgentRoleOut: {
@@ -17815,7 +18007,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "open" | "applied" | "proposed" | "discarded" | "undone";
+            status: "open" | "applied" | "proposed" | "declined" | "discarded" | "undone";
             /** May */
             may: ("apply" | "propose") | null;
             /** Why Not */
@@ -17862,6 +18054,26 @@ export interface components {
              * @default false
              */
             can_undo: boolean;
+            /**
+             * Asks
+             * @default []
+             */
+            asks: string[];
+            /**
+             * Asks Outside
+             * @default false
+             */
+            asks_outside: boolean;
+            /**
+             * Asks With Dependents
+             * @default []
+             */
+            asks_with_dependents: string[];
+            /**
+             * Asks With Dependents Outside
+             * @default false
+             */
+            asks_with_dependents_outside: boolean;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
@@ -18850,6 +19062,11 @@ export interface components {
             live_explanation: string | null;
             /** Problems */
             problems: components["schemas"]["PriorityProblem"][];
+            /**
+             * New
+             * @default false
+             */
+            new: boolean;
         };
         /** CompareRun */
         CompareRun: {
@@ -19775,6 +19992,16 @@ export interface components {
              * @enum {string}
              */
             where: "title" | "heading" | "body";
+            /**
+             * Days
+             * @default []
+             */
+            days: string[];
+            /**
+             * Missing
+             * @default []
+             */
+            missing: string[];
         };
         /** DateRightsOut */
         DateRightsOut: {
@@ -29870,6 +30097,11 @@ export interface components {
             decider_approved: boolean;
             /** Waiting On */
             waiting_on: components["schemas"]["SimplePersonRef"][];
+            /**
+             * Reviewers
+             * @default []
+             */
+            reviewers: components["schemas"]["SimplePersonRef"][];
             /** Can Submit */
             can_submit: boolean;
             /** Reminded At */
@@ -29907,6 +30139,28 @@ export interface components {
             subject_id?: string | null;
             /** Version */
             version?: number | null;
+        };
+        /**
+         * OnePagerInReview
+         * @description One change in review a reader may not see in full (build-review): a line change in
+         *     the PRD's draft or someone's proposal, in the same words its margin note would use.
+         */
+        OnePagerInReview: {
+            /** Line Id */
+            line_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "change" | "proposal";
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
+            /** By Name */
+            by_name: string;
+            /** Waiting On */
+            waiting_on: components["schemas"]["SimplePersonRef"][];
         };
         /**
          * OnePagerItem
@@ -30103,6 +30357,11 @@ export interface components {
             draft: components["schemas"]["OnePagerDraft"] | null;
             /** Changes In Review */
             changes_in_review: number;
+            /**
+             * In Review
+             * @default []
+             */
+            in_review: components["schemas"]["OnePagerInReview"][];
             /** Can Edit */
             can_edit: boolean;
             /** Can Propose */
@@ -30741,6 +31000,11 @@ export interface components {
              * @default []
              */
             drift: components["schemas"]["PlanDrift"][];
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["SimpleDecidedRef"][];
             engineering: components["schemas"]["PlanEngineering"];
             next: components["schemas"]["PlanNext"];
         };
@@ -32486,6 +32750,11 @@ export interface components {
             live_rank?: number | null;
             /** Run Explanation */
             run_explanation?: string | null;
+            /**
+             * New
+             * @default false
+             */
+            new: boolean;
             override?: components["schemas"]["RowOverride"] | null;
             /** Held Below */
             held_below?: string | null;
@@ -36692,6 +36961,11 @@ export interface components {
              * @default []
              */
             words: components["schemas"]["WordOp"][];
+            /**
+             * Stock Rationale
+             * @description The rationale is the stock reason for a held rewrite, which the web says once.
+             */
+            readonly stock_rationale: boolean;
         };
         /** SectionPatchOut */
         SectionPatchOut: {
@@ -36757,6 +37031,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Stock Rationale
+             * @description The rationale is the stock reason for a held rewrite, which the web says once.
+             */
+            readonly stock_rationale: boolean;
         };
         /** SectionPatchReject */
         SectionPatchReject: {
@@ -37501,6 +37780,11 @@ export interface components {
              * @default true
              */
             present: boolean;
+            /**
+             * Joined
+             * @default true
+             */
+            joined: boolean;
         };
         /**
          * SimpleChangeConflict
@@ -37660,6 +37944,28 @@ export interface components {
             title: string;
             flow?: components["schemas"]["SimpleFlow"] | null;
         };
+        /**
+         * SimpleDecidedRef
+         * @description A decided decision naming the item: who decided, when, and (decided in a meeting)
+         *     the meeting and its minutes' page.
+         */
+        SimpleDecidedRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            decided_by?: components["schemas"]["SimplePersonRef"] | null;
+            /** Decided At */
+            decided_at?: string | null;
+            meeting?: components["schemas"]["SimpleMeetingRef"] | null;
+            /** Minutes Url */
+            minutes_url?: string | null;
+        };
         /** SimpleDecisionIn */
         SimpleDecisionIn: {
             /** Reason */
@@ -37749,6 +38055,11 @@ export interface components {
              * @enum {string}
              */
             view: "list" | "board" | "meetings";
+            /**
+             * Runs
+             * @default []
+             */
+            runs: components["schemas"]["SimpleRunGroup"][];
         };
         /**
          * SimpleDecisionsWaitingOut
@@ -37776,6 +38087,11 @@ export interface components {
              * @default 0
              */
             approvals_waiting: number;
+            /**
+             * Tasks
+             * @default []
+             */
+            tasks: components["schemas"]["SimpleTaskWaiting"][];
         };
         /** SimpleDelivery */
         SimpleDelivery: {
@@ -37886,6 +38202,22 @@ export interface components {
             titles: string[];
         };
         /**
+         * SimpleDraftDatesIn
+         * @description Change dates on a draft item: it stays draft.
+         */
+        SimpleDraftDatesIn: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+        };
+        /**
          * SimpleDraftOut
          * @description A working draft of one roadmap (S3b): its changes until submitted, then the version
          *     in review and who it waits on.
@@ -37947,10 +38279,71 @@ export interface components {
              */
             change_log: components["schemas"]["SimpleDraftChange"][];
             /**
+             * Published
+             * @default true
+             */
+            published: boolean;
+            /**
              * Can Withdraw
              * @default false
              */
             can_withdraw: boolean;
+            /**
+             * From Prds
+             * @default []
+             */
+            from_prds: components["schemas"]["SimpleDraftPrd"][];
+        };
+        /**
+         * SimpleDraftPrd
+         * @description approved-prd-roadmap: what an approved PRD put in the draft.
+         */
+        SimpleDraftPrd: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version?: number | null;
+            /** Items */
+            items: number;
+            /** Key Dates */
+            key_dates: number;
+        };
+        /**
+         * SimpleDraftRoadmap
+         * @description The run's draft roadmap of the meeting's PRD (RP2, 'Meeting step as draft'): its
+         *     dated items, shown hatched in the Roadmap step until the meeting approves the dates.
+         */
+        SimpleDraftRoadmap: {
+            /** Items */
+            items: components["schemas"]["SimpleDraftRoadmapItem"][];
+            /** Approved */
+            approved?: number | null;
+        };
+        /**
+         * SimpleDraftRoadmapItem
+         * @description An item of the run's draft roadmap with its dates: not on the roadmap yet.
+         */
+        SimpleDraftRoadmapItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Horizon */
+            horizon: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
         };
         /**
          * SimpleEmailDelivery
@@ -38332,6 +38725,28 @@ export interface components {
             start_date?: string | null;
         };
         /**
+         * SimpleItemTask
+         * @description A task under a roadmap item (oracle.simple.models.RoadmapItemTask): who does it, by
+         *     when.
+         */
+        SimpleItemTask: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "todo" | "doing" | "done" | "dropped";
+            owner?: components["schemas"]["SimplePersonRef"] | null;
+            /** Due Date */
+            due_date?: string | null;
+        };
+        /**
          * SimpleKeyDate
          * @description Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
          *     meeting), as the reader reads it (the working draft's when they see it).
@@ -38357,6 +38772,7 @@ export interface components {
              * @default false
              */
             in_draft: boolean;
+            prd?: components["schemas"]["SimpleDocRef"] | null;
         };
         /**
          * SimpleKeyDateRoadmap
@@ -38394,6 +38810,7 @@ export interface components {
             label: string;
             /** Date */
             date?: string | null;
+            prd?: components["schemas"]["SimpleDocRef"] | null;
         };
         /** SimpleMatch */
         SimpleMatch: {
@@ -38701,6 +39118,17 @@ export interface components {
              *     }
              */
             agenda: components["schemas"]["SimpleAgenda"];
+            draft_roadmap?: components["schemas"]["SimpleDraftRoadmap"] | null;
+        };
+        /** SimpleMeetingRef */
+        SimpleMeetingRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
         };
         /** SimpleMeetingRulesIn */
         SimpleMeetingRulesIn: {
@@ -39636,7 +40064,12 @@ export interface components {
              * Decided In
              * @default []
              */
-            decided_in: components["schemas"]["SimpleOpenDecision"][];
+            decided_in: components["schemas"]["SimpleDecidedRef"][];
+            /**
+             * Tasks
+             * @default []
+             */
+            tasks: components["schemas"]["SimpleItemTask"][];
             /**
              * Slices
              * @default []
@@ -39694,6 +40127,77 @@ export interface components {
             roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
             roadmap?: components["schemas"]["SimpleDocRef"] | null;
             span?: components["schemas"]["SimplePlanSpan"] | null;
+        };
+        /**
+         * SimpleRunGroup
+         * @description build-rundecide RD1 a: one run's decided stops, in order, under its name and PRD
+         *     ("Usage alerts plan · Usage alerts PRD · 5 decisions").
+         */
+        SimpleRunGroup: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Name */
+            name: string;
+            prd?: components["schemas"]["SimpleFilterOption"] | null;
+            /** Stops */
+            stops: components["schemas"]["SimpleRunStopOut"][];
+        };
+        /**
+         * SimpleRunStepOut
+         * @description One decision at a run's stop: what was done ("Sent back", "Approved"), by whom, the
+         *     day (the company's) and the note given.
+         */
+        SimpleRunStepOut: {
+            /** What */
+            what: string;
+            /** Who */
+            who?: string | null;
+            /** Day */
+            day?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * SimpleRunStopOut
+         * @description build-rundecide RD1 a: one stop of a run as a decision row: "Engineering check:
+         *     approved after a change", the person's name, their role, the note and the day. `trail`
+         *     lists every step when the stop was sent back before it was approved. `dates_changed`:
+         *     how many dates the approver changed at a Dates stop (eng_dates) before approving it,
+         *     "Approved with one date changed"; 0 for every other stop.
+         */
+        SimpleRunStopOut: {
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /** Kind */
+            kind: string;
+            /** Stop */
+            stop: string;
+            /** Outcome */
+            outcome: string;
+            /**
+             * Dates Changed
+             * @default 0
+             */
+            dates_changed: number;
+            /** Who */
+            who?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Day */
+            day?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Trail
+             * @default []
+             */
+            trail: components["schemas"]["SimpleRunStepOut"][];
         };
         /** SimpleSendIn */
         SimpleSendIn: {
@@ -39836,6 +40340,19 @@ export interface components {
             /** Default Attendee Ids */
             default_attendee_ids: string[];
         };
+        /**
+         * SimpleSubmitIn
+         * @description Send for approval's optional body (build-review): people the sender adds as
+         *     reviewers. The draft waits on them too, after the document's required reviewers; each
+         *     must be an active member who may approve (commenter and up).
+         */
+        SimpleSubmitIn: {
+            /**
+             * Reviewer Ids
+             * @default []
+             */
+            reviewer_ids: string[];
+        };
         /** SimpleSuggestJobOut */
         SimpleSuggestJobOut: {
             /** Goal Id */
@@ -39856,6 +40373,41 @@ export interface components {
         SimpleSuggestionRejectIn: {
             /** Reason */
             reason?: string | null;
+        };
+        /**
+         * SimpleTaskWaiting
+         * @description An open task waiting on the reader (Home's "Waiting for you"), with its item.
+         */
+        SimpleTaskWaiting: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "todo" | "doing" | "done" | "dropped";
+            owner?: components["schemas"]["SimplePersonRef"] | null;
+            /** Due Date */
+            due_date?: string | null;
+            /** Item Id */
+            item_id?: string | null;
+            /** Item Title */
+            item_title: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /**
+             * Late
+             * @default false
+             */
+            late: boolean;
         };
         /** SimpleTrackRef */
         SimpleTrackRef: {
@@ -58761,6 +59313,75 @@ export interface operations {
             };
         };
     };
+    get_agent_questions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentQuestionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_agent_question: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentAnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentQuestionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_run_artifact: {
         parameters: {
             query?: {
@@ -69491,7 +70112,9 @@ export interface operations {
     };
     list_simple_drafts: {
         parameters: {
-            query?: never;
+            query?: {
+                roadmap?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -69505,6 +70128,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleDraftOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -69549,7 +70181,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SimpleSubmitIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -69902,6 +70538,37 @@ export interface operations {
                 "application/json": components["schemas"]["SimpleSuggestionRejectIn"] | null;
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalSuggestion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_goal_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -70603,6 +71270,105 @@ export interface operations {
             header?: never;
             path: {
                 meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_simple_meeting_draft_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_simple_meeting_draft_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleDraftDatesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leave_out_simple_meeting_draft_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+                item_id: string;
             };
             cookie?: never;
         };

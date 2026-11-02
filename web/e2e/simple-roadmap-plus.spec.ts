@@ -1,4 +1,4 @@
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -41,13 +41,6 @@ async function openRoadmap(page: Page, format: "timeline" | "gantt" | "waterfall
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await page.getByTestId(`format-${format}`).click();
   await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
-}
-
-/** Opens an item's card from the Timeline: its pill on a desktop; on a phone (timeline-overlap B3, thin lanes) its row in its lane's list. */
-async function openFromTimeline(page: Page, phone: boolean, key: string, laneTitle: string) {
-  if (!phone) return body(page, key).click();
-  await page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: laneTitle }) }).click();
-  await page.locator(`[data-testid="lane-row"][data-item="${key}"]`).click();
 }
 
 /** A mouse drag of a bar by `dx` pixels from its middle. */
@@ -153,15 +146,17 @@ for (const [where, use] of [
 
       /**
        * Card roadmap-plus-key-dates-markers: protects = a roadmap's key dates show as
-       * labelled markers (a diamond and a thin line) on the timeline, the Gantt and the
-       * waterfall, and an item's card says "Near" a key date when it ends within 2 weeks of
+       * labelled markers (a diamond and a thin line) on the Gantt and the waterfall (the
+       * picked Timeline, mk-qa4-roadmap QR1 A, draws no milestones or key dates over its chart;
+       * its header still counts them), and an item's card says "Near" a key date when it ends within 2 weeks of
        * it (Alert rules engine ends 4 days before the Customer conference) and not otherwise;
        * fails_when = a format lacks the markers, the label is missing, or the near line is
        * wrong or shown for a far item; no_claim = the markers' pixels.
        */
       test("key dates draw on every dated format and in the card's near line", async ({ page }) => {
         await openRoadmap(page, "timeline", VIEWER);
-        for (const f of ["timeline", "gantt", "waterfall"] as const) {
+        await expect(page.getByTestId("key-dates-open")).toContainText("2");
+        for (const f of ["gantt", "waterfall"] as const) {
           await page.getByTestId(`format-${f}`).click();
           await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", f);
           await expect(marker(page, "Customer conference")).toHaveAttribute("data-date", "2026-11-14");
@@ -171,10 +166,10 @@ for (const [where, use] of [
         }
         await expect(page.getByTestId("legend")).toContainText("Key date");
         await page.getByTestId("format-timeline").click();
-        await openFromTimeline(page, where === "phone", "alert-rules", "Grow retention");
+        await openRoadmapItem(page, "alert-rules");
         await expect(page.getByTestId("card-near")).toHaveText("Customer conference (Nov 14): ends 4 days before");
         await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
-        await openFromTimeline(page, where === "phone", "alert-sso", "Grow retention");
+        await openRoadmapItem(page, "alert-sso");
         await expect(page.getByTestId("floating-card")).toBeVisible();
         await expect(page.getByTestId("card-near")).toHaveCount(0);
       });
@@ -187,7 +182,8 @@ for (const [where, use] of [
        * or Undo does not put the key date back; no_claim = publishing on approval (API tests).
        */
       test("an owner adds, edits and removes key dates, with Undo", async ({ page }) => {
-        await openRoadmap(page, "timeline");
+        // The Gantt draws the markers (the picked Timeline draws none).
+        await openRoadmap(page, "gantt");
         await page.getByTestId("key-dates-open").click();
         await expect(editor(page)).toHaveAttribute("data-sheet", where === "phone" ? "bottom" : "float");
         await expect(page.getByTestId("key-dates-hint")).toContainText("working draft");
@@ -273,7 +269,8 @@ for (const [where, use] of [
         const kd = (await select.locator("option", { hasText: "Customer conference" }).getAttribute("value"))!;
         await select.selectOption(kd);
         await expect(page).toHaveURL(new RegExp(`line=${encodeURIComponent(kd).replace(/%3A/i, "(:|%3A)")}`));
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss Customer conference · Nov 14, 2026");
+        // build-plan QP1: a line the plan's dates regroup the list at heads its two parts in place of the caption.
+        await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / })).first()).toContainText(/[Mm]iss(es)? Customer conference · Nov 14, 2026/);
         const rows = page.locator('[data-testid="prio-row"]');
         await expect(rows.first()).toBeVisible();
         for (const r of await rows.all()) {
@@ -291,7 +288,8 @@ for (const [where, use] of [
         // qa-simple-plan-1: a typed date applies with Apply (or Enter), never while typing.
         await page.getByRole("button", { name: "Apply" }).click();
         await expect(page).toHaveURL(/line=date(:|%3A)2026-12-31/);
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss Dec 31, 2026");
+        // build-plan QP1: a line the plan's dates regroup the list at heads its two parts in place of the caption.
+        await expect(page.getByTestId("line-caption").or(page.getByTestId("prio-part-head").filter({ hasText: /^Misses / })).first()).toContainText(/[Mm]iss(es)? Dec 31, 2026/);
         await page.getByRole("tab", { name: "Value / effort" }).click();
         const points = page.getByTestId("vxe-point");
         await expect(points.first()).toBeVisible();

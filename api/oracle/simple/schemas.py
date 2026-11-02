@@ -319,7 +319,9 @@ class SimpleRoadmapItem(BaseModel):
     )
 
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
-    decided_in: list[SimpleOpenDecision] = []
+    decided_in: list["SimpleDecidedRef"] = []
+    # walkc-roadmap-tasks: the work under the item (not dropped), in order.
+    tasks: list["SimpleItemTask"] = []
     # plan-model: one slice per milestone its feature spans in the PRD's plan, and those
     # milestones' codes.
     slices: list["SimpleSlice"] = []
@@ -374,6 +376,10 @@ class SimpleKeyDate(BaseModel):
     note: str | None = None
     # Added or changed in the roadmap's working draft (not published yet).
     in_draft: bool = False
+    # roadmap-keydates (the owner, Nov 1): a milestone of a PRD on the roadmap, read from the
+    # PRD's plan (its latest approved version): read-only, changed in the PRD. None: the
+    # roadmap's own key date.
+    prd: "SimpleDocRef | None" = None
 
 
 class SimpleKeyDateRoadmap(BaseModel):
@@ -534,6 +540,41 @@ class SimplePersonRef(BaseModel):
     name: str
 
 
+class SimpleMeetingRef(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleDecidedRef(SimpleOpenDecision):
+    """A decided decision naming the item: who decided, when, and (decided in a meeting)
+    the meeting and its minutes' page."""
+
+    decided_by: SimplePersonRef | None = None
+    decided_at: dt.datetime | None = None
+    meeting: SimpleMeetingRef | None = None
+    minutes_url: str | None = None
+
+
+class SimpleItemTask(BaseModel):
+    """A task under a roadmap item (oracle.simple.models.RoadmapItemTask): who does it, by
+    when."""
+
+    id: uuid.UUID
+    title: str
+    status: Literal["todo", "doing", "done", "dropped"]
+    owner: SimplePersonRef | None = None
+    due_date: dt.date | None = None
+
+
+class SimpleTaskWaiting(SimpleItemTask):
+    """An open task waiting on the reader (Home's "Waiting for you"), with its item."""
+
+    item_id: uuid.UUID | None = None
+    item_title: str
+    roadmap_id: uuid.UUID
+    late: bool = False
+
+
 class SimpleChangeOut(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID | None
@@ -634,6 +675,23 @@ class SimpleDraftChange(BaseModel):
     titles: list[str] = []
 
 
+class SimpleSubmitIn(BaseModel):
+    """Send for approval's optional body (build-review): people the sender adds as
+    reviewers. The draft waits on them too, after the document's required reviewers; each
+    must be an active member who may approve (commenter and up)."""
+
+    reviewer_ids: list[uuid.UUID] = []
+
+
+class SimpleDraftPrd(BaseModel):
+    """approved-prd-roadmap: what an approved PRD put in the draft."""
+
+    prd: SimpleDocRef
+    version: int | None = None
+    items: int
+    key_dates: int
+
+
 class SimpleDraftOut(BaseModel):
     """A working draft of one roadmap (S3b): its changes until submitted, then the version
     in review and who it waits on."""
@@ -664,8 +722,13 @@ class SimpleDraftOut(BaseModel):
     # D-d: every applied change it holds, not undone, oldest first (one shared draft per
     # roadmap: approving it publishes them all).
     change_log: list[SimpleDraftChange] = []
+    # walkb-roadmap review 5a: the roadmap has an approved version readers see; false for a
+    # roadmap built from a PRD and not approved yet (the banner claims no approved roadmap).
+    published: bool = True
     # The draft's author or the decider withdraws a submitted draft back to working.
     can_withdraw: bool = False
+    # approved-prd-roadmap: the items and key dates approved PRDs put in it.
+    from_prds: list[SimpleDraftPrd] = []
 
 
 class SimpleNotApproved(BaseModel):
@@ -955,6 +1018,9 @@ class SimpleLine(BaseModel):
     kind: Literal["now", "key_date", "milestone", "date"]
     label: str
     date: dt.date | None = None
+    # priorities-keydates: a key date read from a PRD's milestone (SimpleKeyDate.prd), marked
+    # "From the PRD"; None: any other line.
+    prd: SimpleDocRef | None = None
 
 
 class SimplePrioritiesOut(BaseModel):
@@ -1112,6 +1178,9 @@ class OnePagerDraft(BaseModel):
     # Approved in a meeting by the decider, waiting on required reviewers' approval.
     decider_approved: bool
     waiting_on: list[SimplePersonRef]
+    # A working draft: who approves it once sent (the PRD's required reviewers); the owner
+    # may add more when sending (build-review: Send for approval…).
+    reviewers: list[SimplePersonRef] = []
     can_submit: bool
     # Remind (owner, 2026-10-26): the last nudge to a waiting reviewer, and whether the
     # caller (the PRD's owners, its decider) may nudge one now (each at most once a day).
@@ -1170,6 +1239,20 @@ class SimplePlanStrip(BaseModel):
     past_edge: int = 0
 
 
+class OnePagerInReview(BaseModel):
+    """One change in review a reader may not see in full (build-review): a line change in
+    the PRD's draft or someone's proposal, in the same words its margin note would use."""
+
+    line_id: str
+    kind: Literal["change", "proposal"]
+    before: str
+    after: str
+    by_name: str
+    # A change: whom its submitted draft waits on (none while the draft is working); a
+    # proposal: whom it is routed to.
+    waiting_on: list[SimplePersonRef]
+
+
 class OnePagerOut(BaseModel):
     document: SimpleDocRef
     version: int
@@ -1195,6 +1278,9 @@ class OnePagerOut(BaseModel):
     draft: OnePagerDraft | None
     # Drafts and proposals the reader may not see (the count only).
     changes_in_review: int
+    # The same changes, one per line change or proposal (build-review); empty for people
+    # who see the draft itself.
+    in_review: list[OnePagerInReview] = []
     # Owners and the decider change lines directly (Undo); approvers and commenters
     # propose; viewers read.
     can_edit: bool
@@ -1302,7 +1388,8 @@ class SimpleSuggestionRejectIn(BaseModel):
 
 # --------------------------------------------------------------------------- S9 chat
 
-CardStatus = Literal["open", "applied", "proposed", "discarded", "undone"]
+# "declined" is read, never stored: a proposed card whose proposal was declined (chat.cards_out).
+CardStatus = Literal["open", "applied", "proposed", "declined", "discarded", "undone"]
 ChangeMode = Literal["everyone", "presenter", "named"]
 
 
@@ -1372,6 +1459,15 @@ class ChatCardOut(BaseModel):
     may_with_dependents: Literal["apply", "propose"] | None = None
     # qa4-simple-decide-1: an applied card the reader may undo (Apply's own rule).
     can_undo: bool = False
+    # walkc-meeting: who Propose asks (an open card the reader proposes), or who a proposed
+    # card went to, by name; in a meeting its deciders. ``asks_outside``: nobody in the
+    # meeting may decide, so Propose asks these people outside it.
+    asks: list[str] = []
+    asks_outside: bool = False
+    # walkc-meeting review: who "Propose: cut it and its dependents" asks, by every item
+    # it cuts (changes.cut_route), and whether that is outside the meeting.
+    asks_with_dependents: list[str] = []
+    asks_with_dependents_outside: bool = False
 
 
 class ChatChoiceOut(BaseModel):
@@ -1529,7 +1625,10 @@ class SimpleAttendee(BaseModel):
     name: str
     # What the person is to the PRD: decider, required reviewer, owner (its tracks').
     roles: list[Literal["decider", "reviewer", "owner", "presenter"]] = []
+    # The presenter's roll call: false once marked away.
     present: bool = True
+    # walkc-meeting r2 (5a): false while an invited attendee has not pressed Join.
+    joined: bool = True
 
 
 class SimpleDecidedFlow(BaseModel):
@@ -1681,6 +1780,40 @@ class SimpleAgenda(BaseModel):
     skipped: list[SimpleAgendaItem] = []
 
 
+class SimpleDraftRoadmapItem(BaseModel):
+    """An item of the run's draft roadmap with its dates: not on the roadmap yet."""
+
+    id: uuid.UUID
+    key: str
+    title: str
+    horizon: str
+    start: dt.date
+    end: dt.date
+
+
+class SimpleDraftRoadmap(BaseModel):
+    """The run's draft roadmap of the meeting's PRD (RP2, 'Meeting step as draft'): its
+    dated items, shown hatched in the Roadmap step until the meeting approves the dates."""
+
+    items: list[SimpleDraftRoadmapItem]
+    # Once this meeting approved the dates (no draft left): how many items it put on the
+    # roadmap, so the step says so after a reload too; null while the dates are draft.
+    approved: int | None = None
+
+
+class SimpleDraftDatesIn(BaseModel):
+    """Change dates on a draft item: it stays draft."""
+
+    start: dt.date
+    end: dt.date
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "SimpleDraftDatesIn":
+        if self.end < self.start:
+            raise ValueError("the end comes before the start")
+        return self
+
+
 class SimpleMeetingOut(SimpleMeetingBrief):
     session_id: uuid.UUID
     occurrence_id: uuid.UUID | None = None
@@ -1709,6 +1842,8 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     # chat-actions: the notes and open questions so far, and the agenda's changes.
     notes: list[SimpleMeetingNote] = []
     agenda: SimpleAgenda = SimpleAgenda()
+    # RP2: the run's draft roadmap of the PRD (dated, not approved); None without one.
+    draft_roadmap: SimpleDraftRoadmap | None = None
 
 
 class SimpleUpcomingMeeting(BaseModel):
@@ -1910,6 +2045,45 @@ class SimpleQuestion(BaseModel):
     undo_id: uuid.UUID | None = None
 
 
+class SimpleRunStepOut(BaseModel):
+    """One decision at a run's stop: what was done ("Sent back", "Approved"), by whom, the
+    day (the company's) and the note given."""
+
+    what: str
+    who: str | None = None
+    day: dt.date | None = None
+    note: str | None = None
+
+
+class SimpleRunStopOut(BaseModel):
+    """build-rundecide RD1 a: one stop of a run as a decision row: "Engineering check:
+    approved after a change", the person's name, their role, the note and the day. `trail`
+    lists every step when the stop was sent back before it was approved. `dates_changed`:
+    how many dates the approver changed at a Dates stop (eng_dates) before approving it,
+    "Approved with one date changed"; 0 for every other stop."""
+
+    checkpoint_id: uuid.UUID
+    kind: str
+    stop: str
+    outcome: str
+    dates_changed: int = 0
+    who: str | None = None
+    role: str | None = None
+    day: dt.date | None = None
+    note: str | None = None
+    trail: list[SimpleRunStepOut] = []
+
+
+class SimpleRunGroup(BaseModel):
+    """build-rundecide RD1 a: one run's decided stops, in order, under its name and PRD
+    ("Usage alerts plan · Usage alerts PRD · 5 decisions")."""
+
+    run_id: uuid.UUID
+    name: str
+    prd: SimpleFilterOption | None = None
+    stops: list[SimpleRunStopOut]
+
+
 class SimpleDecisionsOut(BaseModel):
     """Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
     them, newest first, then the decisions taken outside meetings. prd-questions: the
@@ -1930,6 +2104,8 @@ class SimpleDecisionsOut(BaseModel):
     # One of them, for the page's foot ("D-12 Approve Baseline confirm").
     approvals_example: str | None = None
     view: DecisionsView = "list"
+    # build-rundecide RD1 a: the runs' decided stops, one group per run, newest run first.
+    runs: list[SimpleRunGroup] = []
 
 
 class SimpleDecisionsWaitingOut(BaseModel):
@@ -1943,6 +2119,9 @@ class SimpleDecisionsWaitingOut(BaseModel):
     # Other product decisions (not a PRD's question) waiting for this person.
     others: int = 0
     approvals_waiting: int = 0
+    # walkc-roadmap-tasks: the open item tasks this person owns (due first; not counted in
+    # ``count``, which is decisions only).
+    tasks: list[SimpleTaskWaiting] = []
 
 
 class InboxSimpleMinutes(BaseModel):

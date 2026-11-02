@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -61,6 +61,7 @@ from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
+from oracle.docs.parser import DraftError as ImportRejected
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
 from oracle.simple.models import (
@@ -291,8 +292,9 @@ def sees(principal: Any, d: SimpleDraft, w: Who) -> bool:
         return False
     if has_role(principal.role, "owner") or me == d.created_by or me in (d.participant_ids or []):
         return True
-    if me in (d.waiting_on or []):
-        # A section's reviewer it waits on (their Inbox request), #723 review.
+    if me in (d.waiting_on or []) or me in added_ids(d):
+        # A section's reviewer it waits on (their Inbox request), #723 review; a reviewer
+        # its sender added (build-review), before and after their approval.
         return True
     doc = d.document_id
     return (
@@ -300,6 +302,48 @@ def sees(principal: Any, d: SimpleDraft, w: Who) -> bool:
         or me in w.reviewers.get(doc, [])
         or me in w.owners.get(doc, set())
     )
+
+
+def added_ids(d: SimpleDraft) -> list[uuid.UUID]:
+    """The reviewers the draft's sender added (build-review), in their order."""
+    return [uuid.UUID(r["id"]) for r in d.added_reviewers or []]
+
+
+def added_pending(d: SimpleDraft) -> list[uuid.UUID]:
+    """The added reviewers who have not approved yet: the draft waits on them."""
+    return [uuid.UUID(r["id"]) for r in d.added_reviewers or [] if not r.get("approved_at")]
+
+
+def _added_approve(d: SimpleDraft, ids: list[uuid.UUID]) -> None:
+    """Record the approval of each added reviewer in ``ids`` still to approve."""
+    marked = {str(i) for i in ids} & {str(i) for i in added_pending(d)}
+    if not marked:
+        return
+    at = company_time.now().isoformat()
+    d.added_reviewers = [
+        {**r, "approved_at": at} if r["id"] in marked else r for r in d.added_reviewers or []
+    ]
+
+
+async def _added_reviewers(
+    db: AsyncSession, ids: list[uuid.UUID], required: list[uuid.UUID]
+) -> list[dict[str, Any]]:
+    """Send for approval's added reviewers, checked: each an active member who may
+    approve (commenter and up); the required reviewers and repeats dropped."""
+    ids = [i for i in dict.fromkeys(ids) if i not in required]
+    if not ids:
+        return []
+    users = {u.id: u for u in await db.scalars(select(User).where(User.id.in_(ids)))}
+    if any(i not in users or users[i].disabled_at is not None for i in ids):
+        raise DraftError(422, "Each reviewer you add must be an active member of the company")
+    viewers = [
+        users[i].name or users[i].email for i in ids if not has_role(users[i].role, "commenter")
+    ]
+    if viewers:
+        raise DraftError(
+            422, f"{_people(viewers)} can only view, so cannot approve: pick someone else"
+        )
+    return [{"id": str(i), "approved_at": None} for i in ids]
 
 
 def _approver_of(principal: Any, d: SimpleDraft, w: Who) -> bool:
@@ -386,6 +430,13 @@ class Reader:
     overlays: dict[uuid.UUID, dict[str, Any]]
     visible: list[SimpleDraftBrief]
     changes_in_review: int
+    hidden_by_doc: dict[uuid.UUID, int] = field(default_factory=dict)
+
+    def of(self, doc: uuid.UUID | None) -> tuple[list[SimpleDraftBrief], int]:
+        """The drafts and the hidden count of one roadmap (every roadmap when None)."""
+        if doc is None:
+            return self.visible, self.changes_in_review
+        return [b for b in self.visible if b.document_id == doc], self.hidden_by_doc.get(doc, 0)
 
 
 async def reader(db: AsyncSession, principal: Any) -> Reader:
@@ -404,6 +455,7 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
     overlays: dict[uuid.UUID, dict[str, Any]] = {}
     visible: list[SimpleDraftBrief] = []
     hidden = 0
+    by_doc: dict[uuid.UUID, int] = {}
     seen_docs: set[uuid.UUID] = set()
     for d in ds:
         if sees(principal, d, w):
@@ -416,6 +468,7 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
             )  # type: ignore[arg-type]
         else:
             hidden += n[d.id]
+            by_doc[d.document_id] = by_doc.get(d.document_id, 0) + n[d.id]
     me = _me(principal)
     for doc, k in proposals.items():
         if doc in seen_docs:
@@ -428,7 +481,19 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
         )
         if not mine:
             hidden += k
-    return Reader(overlays, visible, hidden)
+            by_doc[doc] = by_doc.get(doc, 0) + k
+    return Reader(overlays, visible, hidden, by_doc)
+
+
+async def session_overlays(db: AsyncSession, session_id: uuid.UUID) -> dict[uuid.UUID, Any]:
+    """walkc-meeting: the open drafts a session (a meeting's) wrote, by roadmap: its
+    working state."""
+    rows = await db.scalars(
+        select(SimpleDraft)
+        .join(SimpleSessionDraft, SimpleSessionDraft.draft_id == SimpleDraft.id)
+        .where(SimpleSessionDraft.session_id == session_id, SimpleDraft.status.in_(OPEN))
+    )
+    return {d.document_id: d.overlay or {} for d in rows}
 
 
 async def overlays_for(db: AsyncSession, principal: Any) -> dict[uuid.UUID, dict[str, Any]]:
@@ -704,6 +769,21 @@ async def outs(
     docs, numbers = await _refs(db, ds)
     n = await counts(db, ds)
     logs = await _logs(db, ds)
+    from oracle.simple import prd_roadmap
+
+    sources = {d.id: await prd_roadmap.sources_out(db, d) for d in ds}
+    approved = (
+        set(
+            await db.scalars(
+                select(DocumentVersion.document_id).where(
+                    DocumentVersion.document_id.in_({d.document_id for d in ds}),
+                    DocumentVersion.approved_at.is_not(None),
+                )
+            )
+        )
+        if ds
+        else set()
+    )
     me = _me(principal)
     out = []
     for d in ds:
@@ -732,17 +812,32 @@ async def outs(
                 can_approve=d.status == "submitted"
                 and (_approver_of(principal, d, w) or me in (d.waiting_on or [])),
                 change_log=logs.get(d.id, []),
+                published=d.document_id in approved,
                 can_withdraw=d.status == "submitted"
                 and me is not None
                 and (me == d.created_by or _approver_of(principal, d, w)),
+                from_prds=sources.get(d.id, []),
             )
         )
     return out
 
 
-async def listing(db: AsyncSession, principal: Any) -> list[SimpleDraftOut]:
-    """The open drafts the caller may see, oldest first."""
+async def listing(
+    db: AsyncSession, principal: Any, roadmap: str | None = None
+) -> list[SimpleDraftOut]:
+    """The open drafts the caller may see, oldest first; with ``roadmap`` (its id or slug)
+    only that roadmap's (a working draft belongs to one roadmap)."""
     ds = await open_drafts(db)
+    if roadmap:
+        doc = await db.scalar(
+            select(Document).where(
+                Document.kind == "roadmap",
+                or_(Document.slug == roadmap, cast(Document.id, String) == roadmap),
+            )
+        )
+        if doc is None:
+            raise DraftError(404, "No such roadmap")
+        ds = [d for d in ds if d.document_id == doc.id]
     w = await who(db, {d.document_id for d in ds})
     return await outs(db, principal, [d for d in ds if sees(principal, d, w)])
 
@@ -809,9 +904,15 @@ async def _live_changes(db: AsyncSession, d: SimpleDraft) -> list[SimpleChange]:
     return [c for c in rows if c.id not in undone]
 
 
-async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) -> SimpleDraftOut:
+async def submit(
+    db: AsyncSession,
+    principal: Principal,
+    draft_id: uuid.UUID,
+    reviewer_ids: list[uuid.UUID] | None = None,
+) -> SimpleDraftOut:
     """The draft becomes the roadmap's next version, in review under its policy (the
-    caller commits)."""
+    caller commits). ``reviewer_ids``: people the sender adds as reviewers; the draft
+    waits on them too, after the required reviewers (build-review)."""
     from oracle.docs import service as docs_service
     from oracle.roadmap import changeset, schedule, views
     from oracle.roadmap import items as items_mod
@@ -824,8 +925,13 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
     if d.status != "working":
         raise DraftError(409, f"This draft is {d.status} already")
     live = await _live_changes(db, d)
-    if not live:
+    from oracle.simple import prd_roadmap
+
+    if not live and not prd_roadmap.has_sources(d):
         raise DraftError(422, "Nothing to submit: the draft has no changes")
+    d.added_reviewers = await _added_reviewers(
+        db, list(reviewer_ids or []), w.reviewers.get(d.document_id, [])
+    )
     document = await db.get(Document, d.document_id)
     if document.kind != "roadmap":
         return await _submit_sections(db, principal, d, document, live)
@@ -870,6 +976,8 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
             else titles.get(str(c.target.get("item_id")), "an item")
         )
         lines.append(f"- {OP_WORDS.get(c.op, c.op)} {what}")
+    for src in await prd_roadmap.sources_out(db, d):
+        lines.append(f"- Added from {src.prd.title} (version {src.version}): {src.items} items")
     markdown = await changeset._markdown(db, base, "\n".join(lines))
     result = await docs_service.import_draft(
         db,
@@ -985,7 +1093,7 @@ async def _in_review(
         now,
         principal.user_id,
     )
-    d.waiting_on = list(policy.mandatory_reviewer_ids)
+    d.waiting_on = list(dict.fromkeys([*policy.mandatory_reviewer_ids, *added_pending(d)]))
     d.reminders = {}
     for sd in await db.scalars(
         select(SimpleSessionDraft).where(SimpleSessionDraft.draft_id == d.id)
@@ -1178,6 +1286,8 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
             [
                 *(i for b in blockers if b.code == "mandatory_reviewer_pending" for i in b.ids),
                 *_section_people(blockers, states),
+                # The reviewers the sender added, until each approves (build-review).
+                *added_pending(d),
             ]
         )
     )
@@ -1224,6 +1334,8 @@ async def _approve(
     waited_on = actor.user_id in (d.waiting_on or [])
     if not is_approver and actor.user_id not in reviewers and not waited_on:
         raise DraftError(403, "Only the decider and the required reviewers approve this draft")
+    # An added reviewer's approval (build-review): theirs, and those present in a meeting.
+    _added_approve(d, [actor.user_id, *present])
     for r in dict.fromkeys([*([actor.user_id] if actor.user_id in reviewers else []), *present]):
         if r in reviewers:
             rp = actor if r == actor.user_id else await principal_for(db, tenant_id, r)
@@ -1302,11 +1414,16 @@ async def approve_in_meeting(
                 )
             )
             continue
-        if d.status == "working":
-            await submit(db, dp, d.id)
-        other = await _approve(
-            db, session.tenant_id, d, w, dp, list(present_reviewer_ids), session.id
-        )
+        try:
+            if d.status == "working":
+                await submit(db, dp, d.id)
+            other = await _approve(
+                db, session.tenant_id, d, w, dp, list(present_reviewer_ids), session.id
+            )
+        except ImportRejected as e:
+            # The refused draft's document: its problems name sections by its own headings.
+            e.document_id = d.document_id  # type: ignore[attr-defined]
+            raise
         out.extend(await outs(db, dp, [d], other))
     return SimpleMeetingApproval(drafts=out, not_approved=skipped)
 
@@ -1332,7 +1449,7 @@ async def _return_to_working(
         ]
     number = version.number if version is not None else None
     d.status, d.version_id, d.submitted_at, d.submitted_by = "working", None, None, None
-    d.decider_approval, d.waiting_on = None, []
+    d.decider_approval, d.waiting_on, d.added_reviewers = None, [], []
     for sd in await db.scalars(
         select(SimpleSessionDraft).where(SimpleSessionDraft.draft_id == d.id)
     ):

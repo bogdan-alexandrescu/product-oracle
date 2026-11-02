@@ -36,6 +36,8 @@ export interface DraftRow {
   depth: "quick" | "standard" | "deep";
   check: DraftRoadmapCheck | null;
   items: Item[];
+  /** approved-prd-roadmap: the Simple roadmap (slug) its items are for, when known. */
+  roadmap?: string | null;
 }
 
 export interface DraftRoadmapDb {

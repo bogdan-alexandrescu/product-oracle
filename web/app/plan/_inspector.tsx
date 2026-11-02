@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { AskTeammate } from "@/components/AskTeammate";
 import { DateBasisDialog, shortDay, useDateRights } from "@/components/DateBasisDialog";
 import { DiscussSubject, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
+import { DecidedWho } from "@/components/simple/DecidedWho";
 import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, Sheet, ToGo } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
 import { RequestSpecDialog, SPEC_STATE, specFor, specHref, useSpecs } from "@/components/RequestSpec";
@@ -18,6 +18,7 @@ import { acceptTrackAlertDate, alertDay, alertSentence, keepTrackAlert, listTrac
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { WaiveForm } from "../company/strategy/_components/DriftList";
+import { REPLAN, StartRunDialog } from "./_start-run";
 import { assess, type GoalView, type Point } from "../home/_goals";
 import { dateBasis, HORIZON_LABEL, nextSentence, roadmapHref, stateChip, type PlanDrift, type PlanItem } from "./_lib";
 
@@ -309,7 +310,6 @@ function discussionOf(a: TrackAlertOut, item: PlanItem): { subject: DiscussionSu
 }
 
 function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: PlanItem; links?: PlanLinks; onChanged: () => Promise<void> }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keeping, setKeeping] = useState(false);
@@ -321,6 +321,8 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
   const ref = typeof a.data.tracker_ref === "string" ? a.data.tracker_ref : undefined;
   const prdId = item.prd?.id;
   const discussion = discussionOf(a, item);
+  // QD2 a: Re-plan starts a paid run too, so it opens the same priced dialog as Draft roadmap.
+  const [replanning, setReplanning] = useState(false);
   async function run(call: () => Promise<unknown>, after?: (out: unknown) => void) {
     setBusy(true);
     setError(null);
@@ -383,18 +385,11 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
               </Button>
             )}
             {has("replan") && (
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  void run(
-                    () => unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", { params: { path: { track_id: a.track_id } } })),
-                    (r) => router.push(`/runs/${(r as { id: string }).id}`),
-                  )
-                }
-              >
-                Re-plan
+              <Button disabled={busy} data-testid="plan-replan" onClick={() => setReplanning(true)}>
+                Re-plan…
               </Button>
             )}
+            {replanning && <StartRunDialog action={REPLAN} trackId={a.track_id} prdTitle={a.prd.title} onClose={() => setReplanning(false)} />}
             {(has("review") || has("reconcile")) && (
               <Button
                 disabled={busy}
@@ -494,18 +489,31 @@ function DriftCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Pro
 /** H1 entry point: who may record a decision records one about this Plan item. */
 function RecordDecision({ item }: { item: PlanItem }) {
   const { can } = useMe();
-  if (!can("create_decision")) return null;
+  const decided = item.decisions ?? [];
+  // walkc-roadmap-tasks: the decisions taken about the item show to everyone who reads it;
+  // recording one stays with who may.
+  if (!can("create_decision") && !decided.length) return null;
   const subject = encodeURIComponent(`roadmap_item:${item.id}`);
   return (
     <InspectorSection label="Decisions" testId="plan-decisions">
-      <p className="flex flex-wrap gap-3 text-[15px]">
+      {decided.length > 0 && (
+        <ul className="mb-2 space-y-1.5 text-[15px]" data-testid="plan-decided">
+          {decided.map((d) => (
+            <li key={d.id}>
+              {d.title}
+              <DecidedWho d={d} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {can("create_decision") && <p className="flex flex-wrap gap-3 text-[15px]">
         <Link href={`/company/decisions?subject=${subject}&ref=${encodeURIComponent(item.title)}&propose=1`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline">
           Record a decision
         </Link>
         <Link href={`/company/decisions?subject=${subject}&class=all`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline">
           Decisions about this item
         </Link>
-      </p>
+      </p>}
     </InspectorSection>
   );
 }

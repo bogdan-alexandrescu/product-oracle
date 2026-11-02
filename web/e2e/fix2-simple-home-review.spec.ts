@@ -109,5 +109,12 @@ test("the Roadmap's goal cards count what Home's goal tiles count: a cut item is
   // fails_when: the goal card counts the cut 'In-app tour' Home's tile leaves out
   await signIn(page, ADMIN.email, null, "/simple/roadmap");
   const card = page.getByTestId("goal-counter").filter({ hasText: "Faster activation" });
-  await expect(card).toContainText("3 items");
+  await expect(card).toBeVisible();
+  // The Waterfall names each goal lane's count of live items (the cut one sits below the line).
+  await page.getByTestId("format-waterfall").click();
+  await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "waterfall");
+  await expect(page.getByTestId("below-the-line").first()).toBeAttached();
+  const drawn = (await page.getByTestId("chart-group").filter({ hasText: "Faster activation" }).getByTestId("lane-count").textContent())!.trim();
+  expect(drawn).toMatch(/^\d+ items?$/);
+  await expect(card).toContainText(new RegExp(`(^|\\D)${drawn}`));
 });

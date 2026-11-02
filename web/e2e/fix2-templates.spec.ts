@@ -11,26 +11,15 @@ async function expectNotClipped(box: Locator) {
 const LONG =
   "For launches that cross several teams, where marketing, support and sales each need their own part of the story told plainly before the date";
 
-test("qa-settings-10: a new template's key is checked, and the field says what a key may contain", async ({ page }) => {
+test("qa-settings-10: a new template's key is made from its name, and says so", async ({ page }) => {
   await login(page);
   await page.goto("/settings/templates/new");
-  const key = page.getByLabel("Key");
-  const hint = page.getByTestId("template-key-hint");
-  await expect(hint).toHaveText("Lowercase letters, digits and hyphens, starting with a letter or digit. It cannot change later.");
-  await page.getByLabel("Name").fill("Launch brief");
-
-  await key.fill("-launch");
-  // The browser checks the pattern now (a bare "-" made it invalid under the /v flag, so it was ignored).
-  expect(await key.evaluate((el) => (el as HTMLInputElement).validity.patternMismatch)).toBe(true);
-  await expect(key).toHaveAttribute("aria-invalid", "true");
-  await expect(hint).toHaveText(
-    "A key may contain only lowercase letters, digits and hyphens, and starts with a letter or digit.",
-  );
-  await expect(page.getByRole("button", { name: "Create template" })).toBeDisabled();
-
-  await key.fill("launch-brief");
-  expect(await key.evaluate((el) => (el as HTMLInputElement).validity.patternMismatch)).toBe(false);
-  await expect(key).not.toHaveAttribute("aria-invalid", "true");
+  // QD4 a: no Key field to get wrong; the key is shown, made from the name.
+  await expect(page.getByLabel("Key")).toHaveCount(0);
+  const key = page.getByTestId("template-key");
+  await expect(key).toHaveText("Its key is made from the name.");
+  await page.getByLabel("Name").fill("Launch brief!");
+  await expect(key).toHaveText("Saved as launch-brief, made from the name.");
 });
 
 test("qa-settings-10, qa-settings-34: a new theme's key is checked; a taken key is said under the field", async ({ page }) => {
@@ -52,9 +41,10 @@ test("qa-settings-10, qa-settings-34: a new theme's key is checked; a taken key 
   await expect(hint).toHaveText("Lowercase letters, digits and hyphens, starting with a letter or digit. It cannot change later.");
 });
 
-test("qa-settings-34: template problems read as sentences; a taken key is said under the Key field", async ({ page }) => {
+test("qa-settings-34: template problems read as sentences; a taken key is said under the name", async ({ page }) => {
   await login(page);
   await page.goto("/settings/templates/new");
+  await page.getByRole("button", { name: "Edit as Markdown" }).click();
   const body = page.getByLabel("Body");
   const original = await body.inputValue();
   await body.fill("Just some words, no headings.\n");
@@ -62,12 +52,11 @@ test("qa-settings-34: template problems read as sentences; a taken key is said u
   await expect(page.getByTestId("problems")).not.toContainText("level 1-3");
 
   await body.fill(original);
-  await page.getByLabel("Key").fill("one-pager");
-  await page.getByLabel("Name").fill("Another one-pager");
+  await page.getByLabel("Name").fill("One pager");
   const create = page.getByRole("button", { name: "Create template" });
   await expect(create).toBeEnabled();
   await create.click();
-  await expect(page.getByTestId("template-key-hint")).toHaveText(
+  await expect(page.getByTestId("template-key-error")).toHaveText(
     "A template with key one-pager already exists. Archived templates keep their keys.",
   );
   await expect(page.getByText("template 'one-pager' already exists")).toHaveCount(0);
@@ -97,7 +86,8 @@ test("qa-settings-31: a template shows when it is suggested, and its sections by
   );
 
   await page.goto("/settings/templates/new");
-  await expect(page.getByTestId("section-names")).toHaveText("Title, Problem, Solution, Sources and data points");
+  await page.getByRole("button", { name: "Edit as Markdown" }).click();
+  await expect(page.getByTestId("section-names")).toHaveText("Title, Problem, Solution, Launch plan, Sources and data points");
   await expect(page.getByTestId("brief-sections")).toHaveText("Problem, Solution");
 });
 
@@ -105,7 +95,8 @@ test("qa-settings-32: descriptions grow with their text on template and theme pa
   await login(page);
   for (const path of ["/settings/templates/new", "/settings/themes/new", "/settings/themes/clean-document", "/settings/templates/one-pager"]) {
     await page.goto(path);
-    const description = page.getByLabel("Description");
+    // QD4 a: a new template's description is its When to suggest it.
+    const description = page.getByLabel(path === "/settings/templates/new" ? "When to suggest it" : "Description");
     await expect(description, path).toBeVisible();
     expect(await description.evaluate((el) => el.tagName), path).toBe("TEXTAREA");
     const before = (await description.boundingBox())!.height;

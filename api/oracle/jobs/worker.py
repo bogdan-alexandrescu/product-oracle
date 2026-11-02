@@ -141,6 +141,10 @@ def _cost(usage: dict[str, Any]) -> Decimal | None:
     return None
 
 
+# Jobs claimed under their own row's lock whatever document they are filed under.
+OWN_LOCK_KINDS = frozenset({"meeting_minutes"})
+
+
 async def reclaim_stale(s: AsyncSession) -> int:
     cutoff = _now() - timedelta(seconds=get_worker_settings().stale_after_seconds)
     stale = list(
@@ -175,19 +179,26 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
                     LlmJob.scope_id,
                     LlmJob.request_id,
                     LlmJob.visual_id,
+                    LlmJob.kind,
                 )
                 .where(LlmJob.status == "queued")
-                .order_by(LlmJob.created_at, LlmJob.id)
+                # walkc-meeting: a meeting's minutes are waited for by everyone who was in
+                # it: claimed before the older chat reads, visuals and PRD jobs.
+                .order_by(LlmJob.kind != "meeting_minutes", LlmJob.created_at, LlmJob.id)
                 .limit(50)
             )
         ).all()
         busy: set[uuid.UUID] = set()
         for row in candidates:
             (job_id, document_id, intake_id, decision_id, interview_id, scope_id, request_id,
-             visual_id) = row  # fmt: skip
+             visual_id, kind) = row  # fmt: skip
             # A document's jobs run one at a time; so do an intake's, a decision's, an
             # interview's and a scope's (they have no document).
-            if document_id is not None:
+            if kind in OWN_LOCK_KINDS:
+                # walkc-meeting: the minutes write only their meeting's row, never the PRD
+                # they are filed under: they do not wait for the PRD's other jobs.
+                owner, model, column = job_id, LlmJob, LlmJob.id
+            elif document_id is not None:
                 owner, model, column = document_id, Document, LlmJob.document_id
             elif intake_id is not None:
                 owner, model, column = intake_id, ProductIntake, LlmJob.intake_id

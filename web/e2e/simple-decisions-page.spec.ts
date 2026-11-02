@@ -80,7 +80,7 @@ for (const phone of [false, true]) {
       test("a roadmap item and a one-pager line link to the decisions that changed them", async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("button", { name: "Start a review meeting" }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.getByRole("button", { name: "Edit “A sample project created on" }).click();

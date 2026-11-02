@@ -1,7 +1,7 @@
 import type { Schemas } from "../client";
 import { mockNowMs } from "./clock";
 import { companyDateInWords } from "./connections";
-import { stableUuid } from "./ids";
+import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 
 /**
  * prd-questions (mock): an invented PRD's open questions (Q1..Q16 of "Guided setup"), read
@@ -11,6 +11,13 @@ import { stableUuid } from "./ids";
  * other Simple ops: owners and the decider apply (with Undo), approvers and commenters
  * propose to the decider, viewers read. All data is invented.
  */
+
+/**
+ * vqa-simple-runs review: the scenario where a decision comes back applied but not undoable
+ * (can_undo false), as the API answers when the change's editing session is closed or idle.
+ */
+export const QUESTIONS_NO_UNDO_SCENARIO = "questions-no-undo";
+const noUndo = (): boolean => typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === QUESTIONS_NO_UNDO_SCENARIO;
 
 type Role = Schemas["Me"]["role"];
 type Question = Schemas["SimpleQuestion"];
@@ -200,14 +207,13 @@ export function decidedOutsideRows(ctx: QuestionsCtx, db: QuestionsDb, shown: Qu
 }
 
 /**
- * A review meeting's agenda (questions.due_for): the open questions blocking the milestone the
- * soonest one blocks, and those decided in this meeting (they stay, with Undo for who decided
+ * A review meeting's agenda (questions.due_for): every open question of its PRD, whoever owns it
+ * (build-rundecide RD3 a), and those decided in this meeting (they stay, with Undo for who decided
  * them while it runs); soonest first.
  */
 export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: string; session_id: string; live: boolean }): Question[] {
   const all = questionsOut(ctx, db);
   const open = all.filter((q) => q.status === "proposed");
-  const ms = open.find((q) => q.blocks?.milestone)?.blocks?.milestone ?? null;
   const here = new Set(db.questions.filter((q) => decided(q) && q.meeting_id === meeting.id).map((q) => stableUuid(`simple-question/${q.n}`)));
   const done = all
     .filter((q) => here.has(q.id))
@@ -219,13 +225,13 @@ export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: str
         : undefined;
       return { ...q, undo_id: c?.change.id ?? null };
     });
-  return [...open.filter((q) => !ms || q.blocks?.milestone === ms), ...done].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.number - b.number);
+  return [...open, ...done].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.number - b.number);
 }
 
 /** GET /v1/simple/decisions/waiting: `others` is the decision log's judgement calls waiting for me. */
 export function waitingOut(ctx: QuestionsCtx, db: QuestionsDb, others: number): Schemas["SimpleDecisionsWaitingOut"] {
   const c = questionsCounts(ctx, db);
-  return { count: c.waiting_count + others, late: c.late_count, questions: c.mine, others, approvals_waiting: c.approvals_waiting };
+  return { count: c.waiting_count + others, late: c.late_count, questions: c.mine, others, approvals_waiting: c.approvals_waiting, tasks: [] };
 }
 
 async function readBody(req: Request): Promise<Record<string, unknown>> {
@@ -289,7 +295,7 @@ export async function routeQuestionChanges(
     op: b.op, target: { decision_id: target.decision_id }, before: (b.before ?? {}) as Record<string, unknown>, after,
     status: applies ? "applied" : "proposed", by: ctx.me.id, by_name: nameOf(ctx, ctx.me.id), at: iso(mockNowMs()),
     decided_by: applies ? ctx.me.id : null, decided_at: applies ? iso(mockNowMs()) : null, reason: null, decision_reason: null,
-    routed_to: routed, undoes_id: null, undone: false, can_decide: false, can_undo: applies,
+    routed_to: routed, undoes_id: null, undone: false, can_decide: false, can_undo: applies && !noUndo(),
   };
   let meetingId: string | null = null;
   if (change.session_id) {

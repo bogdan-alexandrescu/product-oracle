@@ -11,6 +11,7 @@ item, merging a draft and keeping both are change-engine ops (``POST /v1/simple/
   owner, the goal roadmap's decider, with none its approving owners); an ``add_item`` on
   its goal, applied at once (with Undo).
 - ``POST /v1/simple/goal-suggestions/{id}/reject``: the same people, an optional reason.
+- ``POST /v1/simple/goal-suggestions/{id}/reopen``: the same people; Undo of a reject.
 """
 
 import uuid
@@ -95,5 +96,16 @@ async def reject_goal_suggestion(
         db,
         additions.reject(db, principal, suggestion_id, (body or SimpleSuggestionRejectIn()).reason),
     )
+    await db.commit()
+    return out
+
+
+@router.post("/goal-suggestions/{suggestion_id}/reopen", response_model=SimpleGoalSuggestion,
+             name="reopen_goal_suggestion")  # fmt: skip
+async def reopen_goal_suggestion(
+    suggestion_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> SimpleGoalSuggestion:
+    """Undo of a reject: the suggestion is open again."""
+    out = await _run(db, additions.reopen(db, principal, suggestion_id))
     await db.commit()
     return out

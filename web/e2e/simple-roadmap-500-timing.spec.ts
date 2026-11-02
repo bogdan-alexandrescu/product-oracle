@@ -9,11 +9,11 @@ import { expect, test, type Locator, type Page } from "./test";
  * API's pytest `timing` mark); E2E_TIMING=1 runs them, alone, after the parallel run:
  *   E2E_TIMING=1 npx playwright test --grep @timing --workers=1
  *
- * Card simple-roadmap-500-paint: protects = in every view of /simple/roadmap (goal-lanes
- * timeline, Gantt, Now/Next/Later board, waterfall and, on a phone, the timeline's lane list)
- * all of the items are drawn under 2 s from navigation (timed to the last item drawn, every view's
- * count checked inside the timed window), desktop 1440x900 and phone 390x844 (a desktop has no
- * list view: 4 views there, 5 on a phone);
+ * Card simple-roadmap-500-paint: protects = in every view of /simple/roadmap (the picked
+ * Timeline: a row per item by goal on a desktop, a list by quarter on a phone; Gantt,
+ * Now/Next/Later board and waterfall) all of the items are drawn under 2 s from navigation
+ * (timed to the last item drawn, every view's count checked inside the timed window), desktop
+ * 1440x900 and phone 390x844 (4 views on each);
  * fails_when = a view draws its 500 items slowly (re-laying out per item, drawing rows nobody
  * sees); no_claim = a real laptop's numbers (the mock in headless Chromium, best of three
  * loads so another worker's load does not count against the chart).
@@ -33,38 +33,28 @@ const FRAME = 1000 / 60;
 // No trace: its recorder snapshots the whole page on every mouse move, which is what it would time.
 test.use({ trace: "off" });
 
-type View = "timeline" | "gantt" | "board" | "waterfall" | "list";
+type View = "timeline" | "gantt" | "board" | "waterfall";
 
-/** What a view draws per item. */
+/** What a view draws per item: the Timeline a row per item (its day chart on a desktop, its
+ * list by quarter on a phone), the board a card, the Gantt and the waterfall a bar. */
 function itemsOf(page: Page, view: View, phone: boolean): Locator {
   if (view === "board") return page.getByTestId("board-card");
-  if (view === "list") return page.getByTestId("lane-row");
-  if (view === "timeline" && phone) return page.getByTestId("phone-lane");
+  if (view === "timeline")
+    return phone ? page.getByTestId("timeline-list").getByTestId("timeline-row") : page.getByTestId("timeline-row");
   return page.locator('g[data-testid="bar"]');
 }
 
-/**
- * What a view draws of the 500 items when it is all drawn: every item's bar or card, and on a
- * phone the timeline's 8 goal lanes and the first lane's 63 items.
- */
-function drawn(view: View, phone: boolean): number {
-  if (view === "list") return 63;
-  if (view === "timeline" && phone) return 8;
-  return 500;
-}
+/** What a view draws of the 500 items when it is all drawn: every item's row, bar or card. */
+const DRAWN = 500;
 
 /** Navigation to all of the view's items drawn (the clock stops at the last, not the first), in ms. */
 async function paint(page: Page, view: View, phone: boolean): Promise<number> {
   const t0 = Date.now();
   await page.goto(URL);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
-  if (view !== "timeline" && view !== "list") await page.getByTestId(`format-${view}`).click();
-  if (view === "list") {
-    await expect(page.getByTestId("phone-lane").first()).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("phone-lane").first().click();
-  }
+  if (view !== "timeline") await page.getByTestId(`format-${view}`).click();
   await expect(itemsOf(page, view, phone).first()).toBeVisible({ timeout: 15_000 });
-  await expect(itemsOf(page, view, phone)).toHaveCount(drawn(view, phone), { timeout: 15_000 });
+  await expect(itemsOf(page, view, phone)).toHaveCount(DRAWN, { timeout: 15_000 });
   return Date.now() - t0;
 }
 
@@ -129,6 +119,11 @@ async function mouseDrag(page: Page, target: Locator, dx: number, dy = 0) {
   const box = (await target.boundingBox())!;
   const x = box.x + Math.min(box.width / 2, 20);
   const y = box.y + box.height / 2;
+  // A row scrolled into sight is painted (content-visibility) a frame or two later: until it is,
+  // a press there lands on the row, not its bar, so wait for the bar under the pointer.
+  await expect
+    .poll(() => target.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y]))
+    .toBe(true);
   await page.mouse.move(x, y);
   await page.mouse.down();
   await recordFrames(page);
@@ -172,7 +167,7 @@ for (const [where, use] of [
       await login(page);
     });
 
-    const views: View[] = phone ? ["timeline", "list", "gantt", "board", "waterfall"] : ["timeline", "gantt", "board", "waterfall"];
+    const views: View[] = ["timeline", "gantt", "board", "waterfall"];
     for (const view of views) {
       test(`${view}: items drawn under 2 s @timing`, async ({ page }) => {
         // simple-roadmap-500-paint (see the file's cards).
@@ -190,12 +185,18 @@ for (const [where, use] of [
         if (view === "board") {
           const card = page.locator('[data-testid="board-card"][data-horizon="now"]').first();
           end = phone ? await touchDrag(page, card, card, 0, 120) : await mouseDrag(page, card, 400, 40);
+        } else if (view === "timeline") {
+          // A bar the viewer may move (its label says the arrows move it); its live dates show.
+          const bar = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]').first();
+          end = await mouseDrag(page, bar, 160);
         } else {
           const bar = page.locator('g[data-testid="bar"][data-kind="dated"]').first();
           const body = bar.locator("rect[data-body]");
           end = phone ? await touchDrag(page, bar, page.getByTestId("chart-svg"), 60) : await mouseDrag(page, body, 160);
         }
         const r = await stopFrames(page, `${where} ${view} drag`);
+        // Checked once the frames are counted, so its polling is not timed with the drag.
+        if (view === "timeline") await expect(page.getByTestId("drag-live")).toBeVisible();
         await end();
         expect(r.n).toBeGreaterThan(10);
         if (phone) expect(r.p95).toBeLessThanOrEqual(2 * FRAME + 0.01);

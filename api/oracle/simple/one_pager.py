@@ -64,6 +64,7 @@ from oracle.simple.one_pager_checks import resolved
 from oracle.simple.schemas import (
     OnePagerBlock,
     OnePagerDraft,
+    OnePagerInReview,
     OnePagerItem,
     OnePagerLine,
     OnePagerLook,
@@ -310,6 +311,14 @@ def _plain(text: str) -> str:
 def _words(text: str, n: int) -> str:
     w = text.split()
     return text if len(w) <= n else " ".join(w[:n]).rstrip(",;:") + "…"
+
+
+def _upto(text: str, chars: int) -> str:
+    """At most ``chars``, cut at a word with "…", never mid-word."""
+    if len(text) <= chars:
+        return text
+    head = text[: chars - 1]
+    return (head.rsplit(" ", 1)[0] if " " in head else head).rstrip(",;: ") + "…"
 
 
 def _uncomment(text: str) -> str:
@@ -563,9 +572,9 @@ def clean_answer(
             m = raw.get("metric")
             if spec.kind == "metrics" and isinstance(m, dict) and m.get("name") and m.get("to"):
                 line["metric"] = {
-                    "name": resolved(str(m["name"])).strip()[:120],
-                    "from": resolved(str(m.get("from") or "")).strip()[:40],
-                    "to": resolved(str(m["to"])).strip()[:40],
+                    "name": _upto(resolved(str(m["name"])).strip(), 120),
+                    "from": _upto(resolved(str(m.get("from") or "")).strip(), 60),
+                    "to": _upto(resolved(str(m["to"])).strip(), 80),
                 }
             lines.append(line)
         lines = lines[: spec.max_lines]
@@ -736,6 +745,32 @@ async def built(
                 pass  # turned off or observing: the quick read stays
         await db.flush()
     return Built(document, v, specs, secs, row)
+
+
+async def bet_flows(db: AsyncSession, document: Document) -> list[tuple[str, list[str], Any]]:
+    """walkb-roadmap review: each bet of the PRD's published one-pager with the flow drawn for
+    it (its words, its source sections, its ``SimpleFlow`` or None), as the page reads them: by
+    the bet's line, else by its words (0092_bet_flow_line_key). Nothing is written or queued."""
+    from oracle.simple import visuals
+
+    try:
+        b = await built(db, document, queue=False, persist=False)
+    except ChangeError:
+        return []
+    bets = [
+        x
+        for blk in b.row.blocks or []
+        for x in blk.get("lines") or []
+        if str(x.get("id", "")).startswith("bets-")
+    ]
+    subjects = [visuals.line_subject(document.id, visuals.bet_key(x)) for x in bets]
+    flows = await visuals.flows_for(db, "one_pager_line", subjects)
+    by_words = [visuals.words_subject(document.id, str(x.get("text") or "")) for x in bets]
+    flows.update(await visuals.flows_for(db, "one_pager_line", by_words))
+    return [
+        (str(x.get("text") or ""), list(x.get("source_keys") or []), flows.get(a) or flows.get(w))
+        for x, a, w in zip(bets, subjects, by_words, strict=True)
+    ]
 
 
 def _problem_names_no_one(answer: Any, sections: list[Section]) -> str | None:
@@ -957,6 +992,13 @@ async def document_owner(
     return None
 
 
+def span_words(start: date, end: date) -> str:
+    """A span as people read it, month first: "Nov 2 – Dec 23, 2026", "Nov 2, 2026 – Feb 26,
+    2027"; never ISO."""
+    first = company_time.calendar_day(start) + ("" if start.year == end.year else f", {start.year}")
+    return f"{first} – {company_time.calendar_day(end)}, {end.year}"
+
+
 def milestone_span(items: list[plan_strip.PlanItem]) -> tuple[date, date] | None:
     """The PRD's span in the header (P4): from the earliest start of its items that carry a
     dated milestone (or that milestone's date, when earlier) to its latest milestone date.
@@ -1045,6 +1087,9 @@ def sees_draft(principal: Any, d: SimpleDraft, w: Who) -> bool:
         or me in (d.participant_ids or [])
         or me in w.reviewers
         or me in w.track_owners
+        # Whom it waits on, and the reviewers its sender added (drafts.sees).
+        or me in (d.waiting_on or [])
+        or me in drafts.added_ids(d)
     )
 
 
@@ -1211,6 +1256,12 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
     hidden = (len(proposals) - len(shown)) + (
         0 if sees or d is None else (await drafts.counts(db, [d]))[d.id]
     )
+    # The changes behind that count, listed (build-review): the hidden draft's line changes
+    # and the proposals not shown. A counted draft change with no line (a change of another
+    # kind in the same draft) is skipped, so the list can be shorter than the count.
+    unseen = await drafts._live_changes(db, d) if d is not None and not sees else []
+    unseen = [c for c in unseen if c.op == "edit_line"]
+    not_shown = [c for c in proposals if not sees_change(principal, c)]
     live = [c for c in live if c.op == "edit_line"]
     sids = {c.session_id for c in live if c.session_id}
     sessions = (
@@ -1219,8 +1270,16 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         else {}
     )
     ids = {c.by for c in live + shown} | ({w.decider} if w.decider else set()) | set(w.track_owners)
+    ids |= {c.by for c in unseen + not_shown} | {i for c in not_shown for i in c.routed_to or []}
+    required: list[uuid.UUID] = []
     if d is not None:
         ids |= set(d.waiting_on or [])
+        if sees and d.status == "working":
+            # build-review: Send for approval names who approves before it is sent.
+            from oracle.review.state import effective_policy
+
+            required = list((await effective_policy(db, document)).mandatory_reviewer_ids)
+            ids |= set(required)
     owner_id = await document_owner(db, document, b.version, w)
     if owner_id:
         ids.add(owner_id)
@@ -1364,7 +1423,13 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         if i.status != "cut"
     ]
     plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
-    span = milestone_span(plan_items(slice_.items))
+    # A dated plan's span is the one its timeline draws (its milestones, or the dates the
+    # lead accepted); else the items' dated milestones.
+    view = (await plan_model.views(db, {document.id})).get(document.id)
+    if view is not None and view.dated and view.span:
+        span: tuple[date, date] | None = (view.span.start, view.span.end)
+    else:
+        span = milestone_span(plan_items(slice_.items))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
@@ -1384,6 +1449,7 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
             waiting_on=[
                 SimplePersonRef(id=i, name=names.get(i, "someone")) for i in d.waiting_on or []
             ],
+            reviewers=[SimplePersonRef(id=i, name=names.get(i, "someone")) for i in required],
             can_submit=d.status == "working" and decides(principal, w),
             reminded_at=reminded_at(d),
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
@@ -1400,6 +1466,20 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         if x.section_key in used
     ]
     person = lambda i: SimplePersonRef(id=i, name=names.get(i, "someone")) if i else None  # noqa: E731
+    waits = (
+        [person(i) for i in d.waiting_on or []] if d is not None and d.status == "submitted" else []
+    )
+
+    def in_review(c: SimpleChange, kind: str, waiting_on: list) -> OnePagerInReview:
+        return OnePagerInReview(
+            line_id=str(c.target.get("line_id")),
+            kind=kind,  # type: ignore[arg-type]
+            before=str(c.before.get("line") or ""),
+            after=str(c.after.get("line") or ""),
+            by_name=names.get(c.by, "someone"),
+            waiting_on=waiting_on,
+        )
+
     return OnePagerOut(
         document=SimpleDocRef(id=document.id, slug=document.slug, title=document.title),
         version=b.version.number,
@@ -1418,6 +1498,8 @@ async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True)
         notes=notes,
         draft=draft,
         changes_in_review=hidden,
+        in_review=[in_review(c, "change", waits) for c in unseen]
+        + [in_review(c, "proposal", [person(i) for i in c.routed_to or []]) for c in not_shown],
         can_edit=decides(principal, w),
         can_propose=not decides(principal, w)
         and _me(principal) is not None
@@ -2087,7 +2169,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     if out.decider:
         meta.append(f"decider {escape(out.decider.name)}")
     if out.span_start and out.span_end:
-        meta.append(f"{out.span_start.isoformat()} – {out.span_end.isoformat()}")
+        meta.append(span_words(out.span_start, out.span_end))
     parts.append(f"<div class='meta'>{' · '.join(meta)}</div>")
     published_lines = await _published_lines(db, out)
     for blk in out.blocks:

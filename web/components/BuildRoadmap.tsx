@@ -70,6 +70,7 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
   );
   const choice = useDraftChoice(ROADMAP);
   const { rec, templateKey, themeKey } = choice;
+  const ready = !!rec && !choice.themes.loading;
   const [target, setTarget] = useState("");
   const [slug, setSlug] = useState("");
   // E1 part B: the run reuses the approved version's draft items unless asked to derive them again,
@@ -144,6 +145,8 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
       size="lg"
       // fix4 qa-plan-24: taller than the window, the body scrolls and Start run stays in view.
       scrollBody
+      // walkb-review 5g: the templates load in after it opens; the footer stays where it was.
+      fullHeight
       testId="build-roadmap-dialog"
       head={
         <p className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -201,8 +204,10 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
       )}
 
       {choice.live.error && <Notice tone="error">{choice.live.error}</Notice>}
-      {!rec && !choice.live.error && <p className="text-text2">Loading…</p>}
-      {rec && (
+      {/* walkb-review 5g: the recommendation, templates and themes show together, so the theme
+          tiles are not pushed down under the pointer when the templates load in. */}
+      {!ready && !choice.live.error && <p className="text-text2">Loading…</p>}
+      {ready && rec && (
         <p
           className="flex flex-wrap items-center gap-2 rounded-button bg-accent-soft px-3 py-2 text-accent-ink"
           data-testid="recommendation"
@@ -215,7 +220,7 @@ export function BuildRoadmapDialog({ prd, onClose }: { prd: ApprovedPrd & { appr
           </InfoTip>
         </p>
       )}
-      <TemplateThemePicker choice={choice} />
+      {ready && <TemplateThemePicker choice={choice} />}
 
       {hasDraftItems && (
         <details className="text-[15px]" data-testid="build-roadmap-advanced">

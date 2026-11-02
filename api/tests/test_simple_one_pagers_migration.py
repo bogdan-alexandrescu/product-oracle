@@ -1,7 +1,7 @@
 """Migration 0080_simple_one_pagers (Simple S5, #723).
 
 Card: protects=simple_one_pagers and the llm_jobs kind one_pager come and go with the
-revision, chained on 0079_simple_drafts as the single head; fails_when=the table or the
+revision, chained on 0079_simple_drafts, with one head; fails_when=the table or the
 kind is missing, or the downgrade leaves either; no_claim=the routes' use
 (tests/test_simple_one_pager_api.py).
 
@@ -66,7 +66,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0096_api_token_removed_at"]
+    assert len(script.get_heads()) == 1
 
 
 def test_up_down_up(scratch_db):

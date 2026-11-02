@@ -134,7 +134,9 @@ test("qa-simple-home-6: Another answer keeps the recommended answer offered and 
   const answers = row.getByRole("group", { name: /^Answers for / });
   await expect(answers.getByRole("button")).toHaveText(["Noon", "Let each person pick", "Something else…"]);
   await answers.getByRole("button", { name: "Noon" }).click();
-  await expect(page.getByText("Decided Q5: Noon")).toBeVisible();
+  // vqa-simple-runs (RD3 a): on its PRD's card the decided row says so itself, with Undo.
+  await expect(row.getByTestId("question-decided")).toContainText("Noon · ");
+  await expect(row.getByRole("button", { name: "Undo" })).toBeVisible();
 });
 
 test("qa-simple-home-28: Another answer closes on Escape or a click elsewhere; the chosen chip shows chosen", async ({ page }) => {

@@ -44,6 +44,15 @@ async function expectDetailed(page: Page, path: string) {
   await expect(detailedRail(page)).toBeVisible();
 }
 
+/** The person's saved mode, as the landing reads it. */
+function savedMode(page: Page) {
+  return page.evaluate(async () => {
+    const mock = (globalThis as { __poMockFetch?: (r: Request) => Promise<Response> }).__poMockFetch!;
+    const res = await mock(new Request(new URL("/v1/me/preferences", location.origin)));
+    return ((await res.json()) as { experience?: string | null }).experience ?? null;
+  });
+}
+
 async function switchTo(page: Page, mode: "Simple" | "Detailed") {
   await modeSwitch(page).getByRole("radio", { name: mode }).click();
 }
@@ -232,6 +241,9 @@ test("a /simple link opens in Simple for an owner whose saved mode is Detailed",
   await expectSimple(page, "/simple");
   await switchTo(page, "Detailed");
   await expectDetailed(page, "/home");
+  // The switch opens Detailed at once and saves the choice meanwhile; the mock runs in the page,
+  // so leaving before its save lands would drop it. Wait for the saved Detailed.
+  await expect.poll(() => savedMode(page)).toBe("detailed");
 
   await page.goto("/simple/one-pagers");
   await expectSimple(page, "/simple/one-pagers");
@@ -296,7 +308,12 @@ test("Simple's Home: what waits on me, the next meeting and the plan this quarte
   await signIn(page, EMAILS.owner);
   await page.goto("/simple");
   await expectSimple(page, "/simple");
-  await expect(page.getByRole("heading", { level: 2, name: "Decisions waiting for you" })).toBeVisible();
+  // build-rundecide RD3 a: the questions of a PRD the owner owns wait in that PRD's own card;
+  // the Decisions card keeps the other judgement calls and, with none, is not drawn empty.
+  const waits = page.getByRole("region", { name: "Waiting for you: Guided setup", exact: true });
+  await expect(waits.getByRole("heading", { level: 2, name: "Waiting for you: Guided setup" })).toBeVisible();
+  await expect(waits.getByTestId("home-question").first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Decisions waiting for you" })).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 2, name: "Next review meeting" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "The plan this quarter" })).toBeVisible();
   await expect(page.getByTestId("home-plan").getByTestId("home-strip-row").first()).toBeVisible();

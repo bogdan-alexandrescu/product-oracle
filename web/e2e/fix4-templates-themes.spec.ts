@@ -91,11 +91,10 @@ test.describe("desktop", () => {
     let action = page.getByRole("button", { name: "Create template" });
     await expect(action).toBeDisabled();
     await expect(header().getByRole("button", { name: "Create template" })).toHaveCount(0);
-    await expect(page.getByTestId("create-template-reason")).toHaveText("Enter a key to create the template.");
-    await expect(action).toHaveAccessibleDescription("Enter a key to create the template.");
-    expect((await action.boundingBox())!.y).toBeGreaterThan((await page.getByLabel("Body").boundingBox())!.y);
-    await page.getByLabel("Key").fill("launch-brief");
+    // QD4 a: the key is made from the name, so the name is what it asks for first.
     await expect(page.getByTestId("create-template-reason")).toHaveText("Enter a name to create the template.");
+    await expect(action).toHaveAccessibleDescription("Enter a name to create the template.");
+    expect((await action.boundingBox())!.y).toBeGreaterThan((await page.getByTestId("template-sections").boundingBox())!.y);
     await page.getByLabel("Name").fill("Launch brief");
     await expect(action).toBeEnabled();
     await expect(page.getByTestId("create-template-reason")).toHaveCount(0);

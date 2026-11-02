@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
-import { ADMIN, login } from "./helpers";
+import { ADMIN, login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -37,23 +37,40 @@ async function open(page: Page, scheme: "light" | "dark", email = ADMIN.email) {
 }
 
 /**
- * Opens a planned piece's item card: its pill on a desktop; on a phone (timeline-overlap B3,
- * no pills) its row in the lane's list, the lane opened first.
+ * The items (their keys) in a lane of the Gantt (build-roadmap, 8ba0ac46: Group by and the
+ * slices live on the Gantt): the bars drawn between the lane's header and the next one's.
  */
-async function openPiece(page: Page, phone: boolean, code: string, laneTitle: string) {
-  if (!phone) {
-    await slice(page, code).scrollIntoViewIfNeeded();
-    await slice(page, code).click();
-    return;
-  }
-  await page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: new RegExp(`^${laneTitle}$`) }) }).click();
-  await page.locator(`[data-testid="lane-row"][data-code="${code}"]`).click();
+async function itemsIn(page: Page, title: string): Promise<string[]> {
+  const header = page.getByTestId("chart-group").filter({ has: page.locator("span", { hasText: new RegExp(`^${title}$`) }) });
+  await expect(header, `a lane "${title}"`).toHaveCount(1);
+  const top = (await header.boundingBox())!.y;
+  const tops = await page.locator('[data-testid="chart-group"], [data-testid="below-the-line"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
+  const next = Math.min(...tops.filter((t) => t > top + 1), Number.POSITIVE_INFINITY);
+  return page.locator('g[data-testid="bar"]').evaluateAll(
+    (els, [from, to]) =>
+      els
+        .filter((e) => {
+          const r = e.getBoundingClientRect();
+          const mid = r.top + r.height / 2;
+          return mid > from && mid < to;
+        })
+        .map((e) => e.getAttribute("data-item") ?? ""),
+    [top, next] as const,
+  );
 }
 
-/** The lane (its key) an item's pills sit in, and their row there (timeline-overlap B2). */
-async function placeOf(page: Page, key: string) {
-  const b = page.locator(`g[data-testid="bar"][data-item="${key}"]`);
-  return { lane: await b.getAttribute("data-lane"), row: Number(await b.getAttribute("data-row")) };
+/** The items (their keys) in a goal lane of a desktop's Timeline: the rows after its header, up to the next one. */
+async function timelineLane(page: Page, title: string): Promise<string[]> {
+  return page.locator('[data-testid="timeline-lane"], [data-testid="timeline-row"]').evaluateAll((els, t) => {
+    const at = els.findIndex((e) => e.getAttribute("data-testid") === "timeline-lane" && (e.textContent ?? "").startsWith(`${t} ·`));
+    if (at < 0) return [];
+    const out: string[] = [];
+    for (const e of els.slice(at + 1)) {
+      if (e.getAttribute("data-testid") === "timeline-lane") break;
+      out.push(e.getAttribute("data-item") ?? "");
+    }
+    return out;
+  }, title);
 }
 
 /** The row (y) and the span (x) a slice's bar takes on screen. */
@@ -68,8 +85,9 @@ for (const phone of [false, true]) {
     test.describe(where, () => {
       test.use({ ...(phone ? PHONE : DESKTOP), colorScheme: scheme });
 
-      // A phone's Timeline is timeline-overlap B3 (thin lanes, no pills): simple-roadmap-lanes.spec.
-      for (const format of phone ? (["gantt"] as const) : (["timeline", "gantt"] as const)) {
+      // build-roadmap (8ba0ac46): the slices, diamonds and grey weeks are the Gantt's; the new
+      // Timeline draws one bar per item (its own test below).
+      for (const format of ["gantt"] as const) {
         /**
          * Card gantt-slices: protects = Team invites (F-05) is drawn as two bars on ONE row,
          * F-05a inside M1 (9 Nov - 27 Nov) and F-05b inside M2 (30 Nov - 11 Dec); on the
@@ -85,10 +103,8 @@ for (const phone of [false, true]) {
          */
         test(`${format}: a two-slice feature on one row, the milestone diamonds and the no-work week (${where})`, async ({ page }) => {
           await open(page, scheme);
-          if (format === "gantt") {
-            await page.getByTestId("format-gantt").click();
-            await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
-          }
+          await page.getByTestId(`format-${format}`).click();
+          await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
           const a = slice(page, "F-05a");
           const b = slice(page, "F-05b");
           await expect(a).toHaveAttribute("data-start", "2026-11-09");
@@ -97,24 +113,13 @@ for (const phone of [false, true]) {
           await expect(b).toHaveAttribute("data-start", "2026-11-30");
           await expect(b).toHaveAttribute("data-end", "2026-12-11");
           await expect(b).toHaveAttribute("data-milestone", "M2");
-          // roadmap-milestones D: the Gantt draws every slice in the accent, with no connector;
-          // the Timeline (timeline-overlap B2) colours them by milestone, joined by a dotted line.
-          if (format === "gantt") expect(await a.getAttribute("data-colour")).toBe(await b.getAttribute("data-colour"));
-          else expect(await a.getAttribute("data-colour")).not.toBe(await b.getAttribute("data-colour"));
+          // roadmap-milestones D: the Gantt draws every slice in the accent, with no connector.
+          expect(await a.getAttribute("data-colour")).toBe(await b.getAttribute("data-colour"));
           await a.scrollIntoViewIfNeeded();
           const [ba, bb] = [await boxOf(a), await boxOf(b)];
           expect(Math.abs(ba.mid - bb.mid), "both slices on the same row").toBeLessThan(1);
           expect(ba.right).toBeLessThanOrEqual(bb.x + 1);
-          const link = page.locator('[data-testid="slice-connector"][data-feature="F-05"]');
-          if (format === "gantt") await expect(link).toHaveCount(0);
-          else if (bb.x - ba.right < 10) {
-            // timeline-overlap B2: a gap too short to show the dotted line draws none.
-            await expect(link).toHaveCount(0);
-          } else {
-            await expect(link).toHaveAttribute("stroke-dasharray", /\d/);
-            const lb = (await link.boundingBox())!;
-            expect(Math.abs(lb.y + lb.height / 2 - ba.mid)).toBeLessThan(2);
-          }
+          await expect(page.locator('[data-testid="slice-connector"][data-feature="F-05"]')).toHaveCount(0);
 
           const ends = page.getByTestId("milestone-end");
           await expect(ends).toHaveCount(3);
@@ -131,6 +136,21 @@ for (const phone of [false, true]) {
 
       if (!phone) {
         /**
+         * Card gantt-slices (Timeline): protects = on the Timeline Team invites (F-05) is ONE
+         * item on ONE row with one bar, in the Growth lane; fails_when = its slices become rows
+         * of their own; no_claim = the slices' dates and colours (the Gantt test above, the card).
+         */
+        test(`timeline: a two-slice feature is one item on one row (${where})`, async ({ page }) => {
+          // build-roadmap (8ba0ac46), the owner's picked Timeline (mk-qa4-roadmap QR1 A): one row
+          // and one bar per item, its slices listed in its card (below) and drawn on the Gantt.
+          await open(page, scheme);
+          const row = page.locator('[data-testid="timeline-row"][data-item="plan-f-05"]');
+          await expect(row).toHaveCount(1);
+          await expect(row.getByTestId("timeline-bar")).toHaveCount(1);
+          expect(await timelineLane(page, "Growth")).toContain("plan-f-05");
+        });
+
+        /**
          * Card gantt-goal-lanes: protects = by default the Timeline's lanes are the goals, each
          * header naming the goal and its item count ("Growth", "4 items": its PM-owned Launch
          * email sits in the PM-owned lane, timeline-overlap B2), the plan's features in the lane
@@ -143,29 +163,33 @@ for (const phone of [false, true]) {
          */
         test(`goal lanes stack parallel work, and Group by Milestone (${where})`, async ({ page }) => {
           await open(page, scheme);
-          const growth = lane(page, "Growth");
+          // build-roadmap (8ba0ac46): the Timeline's goal lanes are headers ("Growth · 4 items")
+          // over a row per item, so work that runs at the same time sits on rows of its own.
+          const growth = page.getByTestId("timeline-lane").filter({ hasText: /^Growth · \d+ items?$/ });
           await expect(growth).toHaveCount(1);
-          await expect(growth.getByTestId("lane-count")).toHaveText("4 items");
-          const f08 = await boxOf(slice(page, "F-08"));
-          const f12 = await boxOf(slice(page, "F-12a"));
-          expect(Math.abs(f08.mid - f12.mid), "two rows").toBeGreaterThan(10);
-          expect(f08.x < f12.right && f12.x < f08.right, "they overlap in time").toBe(true);
-          // Both sit in the Growth lane, on two of its rows.
-          const growthKey = await growth.getAttribute("data-lane");
-          const [usage, referral] = [await placeOf(page, "plan-f-08"), await placeOf(page, "plan-f-12")];
-          expect(usage.lane).toBe(growthKey);
-          expect(referral.lane).toBe(growthKey);
-          expect(usage.row).not.toBe(referral.row);
+          await expect(growth).toHaveText("Growth · 4 items");
+          const inGrowth = await timelineLane(page, "Growth");
+          expect(inGrowth).toContain("plan-f-08");
+          expect(inGrowth).toContain("plan-f-12");
+          const usage = page.locator('[data-testid="timeline-row"][data-item="plan-f-08"] [data-testid="timeline-bar"]');
+          const referral = page.locator('[data-testid="timeline-row"][data-item="plan-f-12"] [data-testid="timeline-bar"]');
+          await usage.scrollIntoViewIfNeeded();
+          const [u, r] = [(await usage.boundingBox())!, (await referral.boundingBox())!];
+          expect(Math.abs(u.y - r.y), "two rows").toBeGreaterThan(10);
+          expect(u.x < r.x + r.width && r.x < u.x + u.width, "they overlap in time").toBe(true);
+          // Every lane header has its count.
+          for (const t of await page.getByTestId("timeline-lane").allTextContents()) expect(t).toMatch(/ · \d+ items?$/);
 
+          // Group by is the Gantt's (the Timeline always groups by goal).
+          await page.getByTestId("format-gantt").click();
           await page.getByTestId("group-milestone").click();
           const m1 = lane(page, "M1 Prove it");
           await expect(m1).toHaveCount(1);
-          await expect(m1.getByTestId("lane-count")).toHaveText(/^\d+ items?$/);
           await expect(lane(page, "M2 Scale volume")).toHaveCount(1);
           await expect(lane(page, "M3 Open to all")).toHaveCount(1);
           await expect(slice(page, "F-05b")).toBeAttached();
-          expect((await placeOf(page, "plan-f-05")).lane).toBe(await m1.getAttribute("data-lane"));
-          expect((await placeOf(page, "plan-f-05")).lane).not.toBe(await lane(page, "M2 Scale volume").getAttribute("data-lane"));
+          expect(await itemsIn(page, "M1 Prove it")).toContain("plan-f-05");
+          expect(await itemsIn(page, "M2 Scale volume")).not.toContain("plan-f-05");
         });
       }
 
@@ -179,7 +203,8 @@ for (const phone of [false, true]) {
        */
       test(`the item card lists its slices (${where})`, async ({ page }) => {
         await open(page, scheme);
-        await openPiece(page, phone, "F-05a", "Growth");
+        // build-roadmap (8ba0ac46): an item opens from its Timeline row (a phone's list by quarter).
+        await openRoadmapItem(page, "plan-f-05");
         const card = page.getByTestId("floating-card");
         await expect(card).toBeVisible();
         await expect(card.getByTestId("card-milestone")).toHaveText("M1 Prove it, M2 Scale volume");
@@ -196,7 +221,7 @@ for (const phone of [false, true]) {
         await expect(rows.nth(1)).toContainText("2 engineer-weeks");
         await card.getByRole("button", { name: "Close" }).click();
 
-        await openPiece(page, phone, "F-10", "PM-owned");
+        await openRoadmapItem(page, "plan-f-10");
         await expect(page.getByTestId("card-slice")).toHaveCount(1);
         await expect(page.getByTestId("card-slice")).toContainText("PM-owned");
       });
@@ -228,8 +253,9 @@ for (const phone of [false, true]) {
         await row.getByRole("button", { name: "Accept" }).click();
         await expect(row).toHaveCount(0);
         await tray.getByRole("button", { name: "Close" }).click();
-        await openPiece(page, phone, "F-11a", "Revenue");
-        await expect(page.getByTestId("card-dates")).toContainText(/Dec 14 – Jan 22|14 Dec – 22 Jan/);
+        await openRoadmapItem(page, "plan-f-11");
+        // build-roadmap (8ba0ac46): the card's dates carry the year when it is not this one.
+        await expect(page.getByTestId("card-dates")).toContainText("Dec 14, 2026 – Jan 22, 2027");
       });
 
       if (phone) {

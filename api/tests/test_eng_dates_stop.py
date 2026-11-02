@@ -302,6 +302,43 @@ async def test_no_date_records_no_basis(client, owner, runtime):
         assert await s.scalar(select(func.count()).select_from(ScheduleBasis)) == 0
 
 
+async def _dates_row(client, auth, run) -> tuple[str, int]:
+    """The Dates stop's row on Simple's Decisions page: its outcome and dates changed."""
+    r = await client.get("/v1/simple/decisions", headers=auth)
+    assert r.status_code == 200, r.text
+    (stops,) = [g["stops"] for g in r.json()["runs"] if g["run_id"] == run["id"]]
+    (row,) = [x for x in stops if x["stop"] == "Dates"]
+    return row["outcome"], row["dates_changed"]
+
+
+@pytest.mark.parametrize(
+    ("body", "words"),
+    [
+        ({"kind": "accept"}, ("Approved", 0)),
+        ({"kind": "edit", "field": "estimate",
+          "value": {"kind": "commitment", "reference": "ENG-412", "supports_date": "2026-12-04"}},
+         ("Approved with one date changed", 1)),
+        ({"kind": "edit", "field": "no_date", "value": {"reason": "Waits on the new pricing"}},
+         ("Approved with one date changed", 1)),
+    ],
+    ids=["accept", "estimate", "no_date"],
+)  # fmt: skip
+async def test_the_decisions_page_counts_the_dates_the_approval_changed(
+    client, owner, runtime, body, words
+):
+    # protects=run-dates-changed review: the dates an approval at the stop records are the
+    # ones Simple's Decisions page counts, a proposed date changed to another or to No date
+    # alike; fails_when=an edit through the stop is not counted, No date on a proposed date
+    # reads "Approved", or an accepted date is counted; no_claim=the page's words for more
+    # than one date (tests.test_simple_decisions_runs).
+    tenant_id, auth = owner
+    run = await _at_dates(client, auth)
+    resp = await _act(client, auth, run, {"item_key": "price-early", **body})
+    assert resp.status_code in (200, 201), resp.text
+    assert (await _approve(client, auth, run)).status_code == 200
+    assert await _dates_row(client, auth, run) == words
+
+
 @pytest.mark.parametrize(
     ("body", "words"),
     [

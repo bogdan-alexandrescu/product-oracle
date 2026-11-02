@@ -85,7 +85,9 @@ test("held rewrites: a badge counts them; Accept applies the rewrite as the next
   const item = panel.getByTestId("held-rewrite");
   await expect(item).toHaveCount(1);
   await expect(item).toContainText("1. Goal trace");
-  await expect(item).toContainText("the approved text was kept");
+  // QD1 a: the intro says once why a rewrite is held; the card does not repeat it.
+  await expect(panel.getByTestId("held-intro")).toContainText("The approved text was kept");
+  await expect(item).not.toContainText("the approved text was kept");
   await expect(item.locator("ins")).toContainText(["An", "agent", "proposed"]);
   await item.getByLabel("Reason").fill("Reads better with the added sentence.");
   await item.getByRole("button", { name: "Accept" }).click();
@@ -109,6 +111,9 @@ test("held rewrites: Reject keeps the approved text and shows the reason", async
   await expect(item.getByRole("button", { name: "Accept" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true }).getByTestId("held-count")).toHaveCount(0);
   await expect(page).toHaveURL(/\/v\/2/);
+  // QD1 a: the drawer sits over the page; closing it shows the page as it was.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("held-drawer")).toHaveCount(0);
   const goal = await openSection(page, "goal-trace");
   await expect(goal).not.toContainText("An agent proposed this added sentence.");
 });

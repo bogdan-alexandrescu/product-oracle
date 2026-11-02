@@ -41,8 +41,8 @@ interface Picture {
 
 declare global {
   interface Window {
-    /** A spec sets it to an array to read what each export drew (its header and size). */
-    __poExports?: { kind: "png" | "pdf"; title: string; filters: string; brand: string | null; logo: boolean; width: number; height: number }[];
+    /** A spec sets it to an array to read what each export drew (its header, size and key-date markers). */
+    __poExports?: { kind: "png" | "pdf"; title: string; filters: string; brand: string | null; logo: boolean; width: number; height: number; keyDates: string[] }[];
   }
 }
 
@@ -260,9 +260,15 @@ export function pdfOf(jpeg: Uint8Array, w: number, h: number): Blob {
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
 
+/** The key-date markers a picture draws, by name (ah-prd-milestones-once review: the Timeline's export draws them from the goal lanes). */
+function keyDatesIn(pic: Picture): string[] {
+  const doc = new DOMParser().parseFromString(`<svg xmlns="${SVG_NS}">${pic.body}</svg>`, "image/svg+xml");
+  return [...doc.querySelectorAll('[data-testid="key-date-marker"]')].map((g) => g.getAttribute("data-name") ?? "");
+}
+
 export async function exportView(kind: "png" | "pdf", pic: Picture, head: ExportHead, today: string, name: string) {
   const page = framed(pic, head, today);
-  window.__poExports?.push({ kind, title: head.title, filters: head.filters, brand: head.brand?.name ?? null, logo: !!head.brand?.logo, width: page.width, height: page.height });
+  window.__poExports?.push({ kind, title: head.title, filters: head.filters, brand: head.brand?.name ?? null, logo: !!head.brand?.logo, width: page.width, height: page.height, keyDates: keyDatesIn(pic) });
   const canvas = await canvasOf(page);
   if (kind === "png") {
     const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, "image/png"));

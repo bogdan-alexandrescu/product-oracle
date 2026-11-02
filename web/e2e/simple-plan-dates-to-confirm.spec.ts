@@ -55,8 +55,9 @@ for (const [where, use] of [
         await login(page);
         await page.goto("/simple/roadmap");
         await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-        // A phone reads the item's bar on the Gantt: its Timeline (timeline-overlap B3) draws thin lanes, no bars.
-        if (where === "phone") await page.getByTestId("format-gantt").click();
+        // The item's bar is read on the Gantt, which draws a bar's kind and dates and floats its
+        // card: a phone's Timeline is a list by quarter, a desktop's is for reading (build-roadmap).
+        await page.getByTestId("format-gantt").click();
         await expect(bar(page, ITEM)).toHaveAttribute("data-kind", "estimated");
 
         await page.getByTestId("needs-decision").click();

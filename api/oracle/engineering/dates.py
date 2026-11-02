@@ -375,7 +375,23 @@ def decisions(cp: Checkpoint, actions: Iterable[Action]) -> dict[str, dict[str, 
             out[i["key"]] = {"decision": "changed", "estimate": _estimate(a.value)}
         else:
             out[i["key"]] = {"decision": "no_date", "reason": a.value["reason"]}
+            if i.get("proposed"):
+                # The approver took the proposed date away: a date the approval changed.
+                out[i["key"]]["removed"] = True
     return out
+
+
+def changed_count(payload: dict[str, Any] | None) -> int:
+    """How many dates an approval at the dates changed: the items it recorded as changed,
+    and the proposed dates it made No date."""
+    recorded = (payload or {}).get("dates")
+    if not isinstance(recorded, dict):
+        return 0
+    return sum(
+        1
+        for c in recorded.values()
+        if isinstance(c, dict) and (c.get("decision") == "changed" or c.get("removed"))
+    )
 
 
 async def _basis(

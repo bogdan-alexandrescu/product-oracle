@@ -94,7 +94,7 @@ for (const phone of [false, true]) {
         await expect(retention.getByTestId("home-goal-weight")).toHaveText(/^Counts for \d+% of each feature's score$/);
         await expect(retention.getByTestId("home-goal-path")).toHaveText("From 50 teams · now 100 teams · target 200 teams with weekly alerts on");
         await expect(retention.getByTestId("home-goal-status")).toHaveText("At risk");
-        await expect(retention.getByTestId("home-goal-need")).toContainText("need you");
+        await expect(retention.getByTestId("home-goal-need")).toContainText(/needs? you/);
         await expect(goals.filter({ hasText: "Faster activation" }).getByTestId("home-goal-status")).toHaveText("Not measured yet");
         const quiet = goals.filter({ hasText: "Keep alerts quiet" });
         await expect(quiet.getByTestId("home-goal-status")).toHaveText("Not counted yet");
@@ -142,12 +142,13 @@ for (const phone of [false, true]) {
         await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ })).toBeVisible();
 
         // Accept as risk asks for its one-line note.
-        const mobile = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Mobile alert push: / });
-        await mobile.getByRole("button", { name: "Accept as risk" }).click();
-        await mobile.getByLabel("Why the risk is acceptable").fill("Push ships behind a flag");
-        await mobile.getByRole("button", { name: "Accept as risk" }).click();
+        // walkb-roadmap: Mobile alert push no longer breaks a link on a made-up start; the digest still does.
+        const digest = card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ });
+        await digest.getByRole("button", { name: "Accept as risk" }).click();
+        await digest.getByLabel("Why the risk is acceptable").fill("Digest ships behind a flag");
+        await digest.getByRole("button", { name: "Accept as risk" }).click();
         await expect(page.getByText("Risk accepted in your working draft")).toBeVisible();
-        await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Mobile alert push: / })).toHaveCount(0);
+        await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: /^Weekly alert digest: [^]*which it depends on/ })).toHaveCount(0);
       });
 
       test(`an approver decides with the proposed option or chooses another (${where})`, async ({ page }) => {

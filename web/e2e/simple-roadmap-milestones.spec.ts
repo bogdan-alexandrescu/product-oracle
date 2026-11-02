@@ -123,15 +123,22 @@ for (const phone of [false, true]) {
       /**
        * Card milestones-d-apart: protects = with two key dates (Customer conference, Board
        * meeting), a track's Beta and the plan's milestone ends crowding the axis, no two of
-       * the axis's labels overlap on the Gantt, the Timeline or the Waterfall, and each label
-       * keeps its whole words; fails_when = any two labels touch, or a label is cut; no_claim
-       * = which row each label takes.
+       * the axis's labels overlap on the Gantt or the Waterfall, and each label keeps its whole
+       * words; the Timeline (mk-qa4-roadmap QR1 A, train AH's build-roadmap) draws no
+       * milestone, key date or track label over its chart, so none can cross its bars; fails_when
+       * = any two labels touch, a label is cut, or the Timeline draws a label over its chart;
+       * no_claim = which row each label takes.
        */
       test(`the axis's labels never overlap, in every dated view (${where})`, async ({ page }) => {
         await open(page, scheme, "default");
         for (const f of ["gantt", "timeline", "waterfall"] as const) {
           await page.getByTestId(`format-${f}`).click();
           await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", f);
+          if (f === "timeline") {
+            await expect(page.getByTestId("zoom-timeline")).toBeVisible();
+            await expect(page.locator('[data-testid="key-date-marker"], [data-testid="milestone-end"], [data-testid="track-milestone"]')).toHaveCount(0);
+            continue;
+          }
           await expect(page.locator('[data-testid="key-date-marker"][data-name="Customer conference"] [data-testid="key-date-label"]')).toHaveText("Customer conference");
           await expect(page.locator('[data-testid="key-date-marker"][data-name="Board meeting"] [data-testid="key-date-label"]')).toHaveText("Board meeting");
           await expectApart(page);

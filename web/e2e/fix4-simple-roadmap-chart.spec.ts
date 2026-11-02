@@ -5,13 +5,11 @@ import { expect, test, type Locator, type Page } from "./test";
 
 /*
  * fix4-simple-roadmap-chart: the roadmap chart's QA findings, driven through the UI on the mock.
- * Timeline (goal lanes, _lanes.tsx): broken-link callouts sit under their pill with their words
- * whole, in every Group by and with the Ask panel open (qa-1); every bar is named, inside or
- * beside it, a new item as "Draft · <title>", with no ids (qa-2, 15, 3); a track milestone's
- * diamond and a suggestion's outline and "?" never sit on a name (qa-4, 31); months read "Sep",
- * the first with its year (qa-30); a chat preview ghosts where it lands (qa-10); lanes keep
- * their height for every role (qa-52); the phone's lines stand clear of the edge and its list
- * counts what it draws (qa-45). Gantt and Waterfall (_timeline.tsx): the Gantt spans every
+ * Timeline (_zoom.tsx, mk-qa4-roadmap): broken links sit in the panel above the chart with
+ * their words whole, with the Ask panel open (qa-1); every row is named, a new item with its
+ * Draft tag, with no ids (qa-2, 15, 3); months read "Sep", the first in sight with its year
+ * (qa-30); lanes keep room for their name and count for every role (qa-52); the phone's list
+ * counts what it lists (qa-45). A chat preview ghosts where it lands on the Gantt (qa-10). Gantt and Waterfall (_timeline.tsx): the Gantt spans every
  * slice, a row whose bar is out of view says where it is and jumps there (qa-5); a phone's
  * Gantt reads by month and wraps names (qa-6); Today's words are 11 px, clear of the header (qa-54).
  */
@@ -38,19 +36,21 @@ type Box = { x: number; y: number; width: number; height: number };
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
 const boxes = async (l: Locator): Promise<Box[]> => (await Promise.all((await l.all()).map((x) => x.boundingBox()))).filter((b): b is Box => !!b);
 
-/** Every callout: under its pill, over no pill, its reason whole (not cut with an ellipsis). */
-async function calloutsClear(page: Page) {
-  const callouts = page.getByTestId("broken-callout");
-  await expect(callouts.first()).toBeVisible();
-  const pills = await boxes(page.locator('g[data-testid="bar"] rect[data-body], g[data-testid="slice-bar"] rect[data-slice-body]'));
-  for (const c of await callouts.all()) {
+/** The broken links' panel (mk-qa4-roadmap QR3 A): above the chart, over no bar, each reason whole. */
+async function conflictsClear(page: Page) {
+  const panel = page.getByTestId("conflicts");
+  const rows = panel.getByTestId("conflict");
+  await expect(rows.first()).toBeVisible();
+  const pb = (await panel.boundingBox())!;
+  const chart = (await page.getByTestId("timeline-scroll").boundingBox())!;
+  expect(pb.y + pb.height, "the panel sits above the chart").toBeLessThanOrEqual(chart.y + 1);
+  for (const b of await boxes(page.getByTestId("timeline-bar"))) expect(overlaps(pb, b), "the panel covers a bar").toBe(false);
+  for (const c of await rows.all()) {
     const key = await c.getAttribute("data-item");
-    const cb = (await c.boundingBox())!;
-    for (const p of pills) expect(overlaps(cb, p), `${key}'s callout covers a pill`).toBe(false);
-    const own = (await page.locator(`g[data-testid="bar"][data-item="${key}"] rect[data-body]`).first().boundingBox())!;
-    expect(cb.y, `${key}'s callout sits under its pill`).toBeGreaterThanOrEqual(own.y + own.height - 1);
-    const cut = await c.locator("span[title]").first().evaluate((el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
-    expect(cut, `${key}'s callout words are whole`).toBe(false);
+    const words = c.getByRole("button").first();
+    await expect(words).toHaveText(/\w{3}/);
+    const cut = await words.evaluate((el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
+    expect(cut, `${key}'s reason is whole`).toBe(false);
   }
 }
 
@@ -58,28 +58,31 @@ test.describe("desktop", () => {
   test.use(DESKTOP);
 
   for (const scheme of ["light", "dark"] as const) {
-    test(`qa-1: callouts sit under their pill, words whole, in every Group by and with the Ask panel open (${scheme})`, async ({ page }) => {
+    test(`qa-1: the broken links sit in the panel above the Timeline, words whole, with the Ask panel open (${scheme})`, async ({ page }) => {
       await open(page, scheme);
-      const svg = page.getByTestId("chart-svg");
-      const wide = (await svg.boundingBox())!.width;
+      await expect(async () => conflictsClear(page)).toPass({ timeout: 10_000 });
+      const scroll = page.getByTestId("timeline-scroll");
+      const wide = (await scroll.boundingBox())!.width;
       await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
       await expect(page.getByTestId("ask-chat").filter({ visible: true })).toBeVisible();
-      await expect.poll(async () => (await svg.boundingBox())!.width).toBeLessThan(wide - 100);
-      for (const group of ["goal", "track", "prd", "milestone"] as const) {
-        await page.getByTestId(`group-${group}`).click();
-        await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", group);
-        await expect(async () => calloutsClear(page)).toPass({ timeout: 10_000 });
-      }
+      await expect.poll(async () => (await scroll.boundingBox())!.width).toBeLessThan(wide - 100);
+      await expect(async () => conflictsClear(page)).toPass({ timeout: 10_000 });
     });
   }
 
-  test("qa-2, 3, 15: every Timeline bar is named (inside or beside it), never by an id; a new item reads 'Draft · <title>'", async ({ page }) => {
+  test("qa-2, 3, 15: every Timeline row is named, never by an id; a new item reads its title with a Draft tag", async ({ page }) => {
     await open(page);
-    for (const g of await page.locator('g[data-testid="bar"]').all()) {
-      const key = await g.getAttribute("data-item");
-      const words = (await g.locator('[data-testid="bar-label"], [data-testid="slice-label"]').allTextContents()).join(" ").trim();
-      expect(words.length, `${key} carries its name`).toBeGreaterThan(2);
-      expect(words, `${key}'s label has no id`).not.toMatch(/\b[A-Z]-\d{2}[a-z]?\b|#\d/);
+    const rows = page.getByTestId("timeline-row");
+    await expect(rows.first()).toBeVisible();
+    for (const r of await rows.all()) {
+      const key = await r.getAttribute("data-item");
+      const name = (await r.locator("button[title]").first().textContent())!.trim();
+      expect(name.length, `${key} carries its name`).toBeGreaterThan(2);
+      expect(name, `${key}'s name has no id`).not.toMatch(/\b[A-Z]-\d{2}[a-z]?\b|#\d/);
+      // The bar says its name too (to a screen reader), never an id.
+      const bar = await r.getByTestId("timeline-bar").getAttribute("aria-label");
+      expect(bar, `${key}'s bar is named`).toMatch(/^\S.{2,}, /);
+      expect(bar!).not.toMatch(/\b[A-Z]-\d{2}[a-z]?\b|#\d/);
     }
 
     const title = "Push notifications for alerts";
@@ -87,48 +90,40 @@ test.describe("desktop", () => {
     const roadmap = page.getByTestId("quick-add-roadmap");
     if (await roadmap.count()) await roadmap.selectOption({ label: "Alerts roadmap" });
     await page.getByLabel("Add an item").press("Enter");
-    const added = page.locator('g[data-testid="bar"]').filter({ has: page.locator("title", { hasText: `Draft · ${title}` }) });
+    const added = rows.filter({ has: page.locator(`button[title="${title}"]`) });
     await expect(added).toHaveCount(1);
-    await expect(added.getByTestId("bar-label")).toHaveText(/^Draft · Push/);
+    await expect(added.locator("button[title]").first()).toHaveText(/^Push notifications for alerts\s*Draft$/);
   });
 
-  test("qa-4, 31: a track milestone's diamond, a suggestion's outline and its '?' never sit on a bar's name", async ({ page }) => {
+  test("qa-30: the month axis reads three-letter months, the first in sight with its year", async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("item-milestone").first()).toBeAttached();
-    const labels = page.locator('[data-testid="bar-label"], [data-testid="slice-label"]');
-    const named = await boxes(labels);
-    expect(named.length).toBeGreaterThan(3);
-    for (const d of await boxes(page.getByTestId("item-milestone"))) for (const n of named) expect(overlaps(d, n), "a diamond sits on a name").toBe(false);
-    for (const q of await boxes(page.locator('[data-testid="suggestion-open"] circle'))) for (const n of named) expect(overlaps(q, n), "a '?' sits on a name").toBe(false);
-    // The outline is drawn under its own pill (the pill hides it there) and touches no other bar's name.
-    for (const o of await page.getByTestId("suggestion-outline").all()) {
-      const key = await o.getAttribute("data-item");
-      const ob = (await o.boundingBox())!;
-      const others = await boxes(page.locator(`g[data-testid="bar"]:not([data-item="${key}"])`).locator('[data-testid="bar-label"], [data-testid="slice-label"]'));
-      for (const n of others) expect(overlaps(ob, n), `${key}'s outline runs over another name`).toBe(false);
-      const under = await o.evaluate((el, k) => {
-        const bar = document.querySelector(`g[data-testid="bar"][data-item="${k}"]`)!;
-        return !!(el.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING);
-      }, key);
-      expect(under, `${key}'s outline is drawn under its pill`).toBe(true);
-    }
-  });
-
-  test("qa-30: the month axis reads three-letter months, the first with its year", async ({ page }) => {
-    await open(page);
-    const ticks = (await page.getByTestId("axis-tick").allTextContents()).map((t) => t.trim());
+    const scroll = page.getByTestId("timeline-scroll");
+    const months = scroll.locator("div.sticky.top-0 span");
+    await expect(months.first()).toBeAttached();
+    const ticks = (await months.allTextContents()).map((t) => t.trim());
     expect(ticks.length).toBeGreaterThan(2);
     for (const t of ticks) expect(t).toMatch(MONTH);
-    expect(ticks[0]).toMatch(/ \d{4}$/);
-    const xs = (await boxes(page.getByTestId("axis-tick"))).map((b) => b.x);
-    for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1], "ticks keep a month's room apart").toBeGreaterThan(60);
+    // The names column covers the chart's left 232 px: the first month right of it says its year.
+    const sb = (await scroll.boundingBox())!;
+    const seen = [];
+    for (const m of await months.all()) {
+      const b = (await m.boundingBox())!;
+      if (b.x >= sb.x + 230 && b.x < sb.x + sb.width) seen.push({ x: b.x, t: (await m.textContent())!.trim() });
+    }
+    seen.sort((a, b) => a.x - b.x);
+    expect(seen.length).toBeGreaterThan(2);
+    expect(seen[0].t).toMatch(/ \d{4}$/);
+    for (let i = 1; i < seen.length; i++) expect(seen[i].x - seen[i - 1].x, "months keep a month's room apart").toBeGreaterThan(60);
   });
 
   // fix4 review: a move years past the scenario's last date (Q4 2031; its span already ran to
   // late 2028), so only the preview's own days bring it in: without them the ghost was drawn
   // off the chart's right edge (x 1753 past a chart ending at 1015).
-  test("qa-10: the Ask panel's Preview ghosts the bar where it lands (Q4 2031), inside the Timeline", async ({ page }) => {
+  // mk-qa4-roadmap: the Timeline (QR1 A) draws no preview ghost; the Gantt's chart does.
+  test("qa-10: the Ask panel's Preview ghosts the bar where it lands (Q4 2031), inside the Gantt", async ({ page }) => {
     await open(page, "light", "simple-chat");
+    await page.getByTestId("format-gantt").click();
+    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
     await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
     const ask = page.getByTestId("ask-chat").filter({ visible: true });
     await ask.getByLabel("Message Oracle").fill("move Weekly alert digest to Q4 2031");
@@ -188,15 +183,16 @@ for (const who of ["commenter", "viewer"] as const) {
 
     test(`qa-52: the No goal and Below the line lanes keep room for their name and count (${who})`, async ({ page }) => {
       await open(page, "light", "default", `${who}@example.com`);
-      const lanes = page.locator('[data-testid="chart-group"], [data-testid="below-the-line"]');
+      const lanes = page.getByTestId("timeline-lane");
       await expect(lanes.first()).toBeVisible();
       for (const l of await lanes.all()) {
         const lb = (await l.boundingBox())!;
-        expect(lb.height).toBeGreaterThanOrEqual(43.5);
-        const name = (await l.locator("b").boundingBox())!;
-        const count = (await l.getByTestId("lane-count").boundingBox())!;
-        expect(name.y, "the name has room above it").toBeGreaterThanOrEqual(lb.y + 3);
-        expect(count.y + count.height, "the count has room below it").toBeLessThanOrEqual(lb.y + lb.height - 3);
+        expect(lb.height).toBeGreaterThanOrEqual(31.5);
+        await expect(l).toHaveText(/\S.* · \d+ items?$/);
+        const name = l.locator(":scope > div");
+        const nb = (await name.boundingBox())!;
+        expect(nb.y, "the name and count sit inside their lane").toBeGreaterThanOrEqual(lb.y - 0.5);
+        expect(nb.y + nb.height, "the name and count sit inside their lane").toBeLessThanOrEqual(lb.y + lb.height + 0.5);
       }
     });
   });
@@ -228,14 +224,20 @@ test.describe("phone", () => {
     });
   }
 
-  test("qa-45: the phone Timeline's Today line stands clear of the left edge; the lane list counts the bars drawn", async ({ page }) => {
+  test("qa-45: the phone Timeline is a list by quarter; today's quarter says Today; each quarter counts the items it lists", async ({ page }) => {
     await open(page);
-    await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-view", "lanes-phone");
-    const svg = (await page.getByTestId("chart-svg").boundingBox())!;
-    const line = (await page.getByTestId("today-line").boundingBox())!;
-    // Ten days before the first date: about 12 px on a phone (it sat 5 px from the edge before).
-    expect(line.x - svg.x, "Today's line is off the edge").toBeGreaterThan(10);
+    const list = page.getByTestId("timeline-list");
+    await expect(list).toBeVisible();
+    await expect(page.getByTestId("timeline-scroll")).toHaveCount(0);
+    const quarters = list.getByTestId("timeline-quarter");
+    expect(await quarters.count()).toBeGreaterThan(0);
+    await expect(quarters.filter({ has: page.locator("h3", { hasText: /Today (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}/ }) })).toHaveCount(1);
     // qa4-simple-roadmap-33: the count alone ("4 items"), no "up to 1 at once".
-    await expect(page.getByTestId("lane-list-count")).toHaveText(/^\d+ items?$/);
+    for (const q of await quarters.all()) {
+      const head = (await q.locator("h3").textContent())!;
+      const n = Number(/· (\d+) items/.exec(head)?.[1]);
+      expect(head).not.toMatch(/at once/);
+      await expect(q.getByTestId("timeline-row")).toHaveCount(n);
+    }
   });
 });

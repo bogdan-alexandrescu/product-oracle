@@ -11,8 +11,8 @@ import { login } from "./helpers";
  * rejects), no_claim (what green does not prove).
  */
 
-const SHARING =
-  "Filing shares this item: everyone who can see Requests will read your text, the item's title and link, and this excerpt";
+// QD3 a: File as request opens the New request form, saying where the item was found.
+const SHARING = "Found in #support thread. Filing shares this item: everyone who can see Requests reads its title, link and this excerpt.";
 
 /** From the rail, as a person gets there. */
 async function openRequests(page: Page) {
@@ -25,7 +25,7 @@ const found = (page: Page) => page.getByTestId("found-in-sources");
 const foundRow = (page: Page, title: string) => found(page).getByTestId("found-item").filter({ hasText: title });
 
 test("found in your sources: file one, seeing what filing shares", async ({ page }) => {
-  // protects=criteria 16 and 19c (the panel for its owner only; File as request opens Add
+  // protects=criteria 16 and 19c (the panel for its owner only; File as request opens New
   // request pre-filled with the sharing line and the 400-character excerpt; the count drops);
   // fails_when=the panel is missing, the dialog files without showing what it shares, or the
   // count stays; no_claim=the real API (tests/test_requests_triage.py) and the inspector (lane 2).
@@ -37,16 +37,16 @@ test("found in your sources: file one, seeing what filing shares", async ({ page
   await expect(row).toContainText("Support");
   await row.getByRole("button", { name: "File as request" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Add request" });
+  const dialog = page.getByRole("dialog", { name: "New request" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel("Title")).toHaveValue("Reorder last week's basket");
-  await expect(dialog.getByLabel("Where it came from")).toHaveValue("support");
+  await expect(dialog.getByLabel("Channel")).toHaveValue("support");
   await expect(dialog.getByTestId("filing-shares")).toContainText(SHARING);
   const excerpt = dialog.getByTestId("filing-excerpt");
   await expect(excerpt).toContainText("Could I reorder what I bought last week in one click?");
   expect(((await excerpt.textContent()) ?? "").length).toBeLessThanOrEqual(400);
   await dialog.getByLabel("Title").fill("Reorder a past basket in one click");
-  await dialog.getByRole("button", { name: "Add request" }).click();
+  await dialog.getByRole("button", { name: "File request" }).click();
 
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId("filed-notice")).toContainText("Reorder a past basket in one click");
@@ -181,7 +181,7 @@ test("phone: the found panel and the filing dialog fit 390 px", async ({ page })
   const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(await overflow()).toBeLessThanOrEqual(0);
   await foundRow(page, "Pick a delivery slot").getByRole("button", { name: "File as request" }).click();
-  const dialog = page.getByRole("dialog", { name: "Add request" });
+  const dialog = page.getByRole("dialog", { name: "New request" });
   await expect(dialog.getByTestId("filing-excerpt")).toBeVisible();
   const box = await dialog.boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0);

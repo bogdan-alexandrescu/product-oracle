@@ -151,7 +151,11 @@ test.describe("a browser a day ahead of the company", () => {
     const spans = page.getByTestId("roadmap-span");
     await expect(spans.first()).toBeVisible();
     const all = await spans.allTextContents();
-    expect(all.some((s) => /Dec \d+/.test(s))).toBe(true);
+    // walkb-roadmap (e4cdf478): Welcome video's estimate starts after In-app tour, keeping its
+    // length, so no span ends in Dec any more; the company's own year still reads with no year
+    // (Setup checklist, Oct 11 – Nov 15) and another year's dates still say theirs.
+    expect(all.some((s) => /^\w{3} [A-Z][a-z]{2} \d+ – \w{3} [A-Z][a-z]{2} \d+$/.test(s))).toBe(true);
+    expect(all.some((s) => s.includes(", 2027"))).toBe(true);
     expect(all.filter((s) => s.includes(", 2026"))).toEqual([]);
   });
 });
