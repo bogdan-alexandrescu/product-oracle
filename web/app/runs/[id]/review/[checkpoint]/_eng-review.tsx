@@ -72,16 +72,27 @@ export function EngReview({
   // Answers being typed, by feature and question: kept here, above the inspector, so a verdict
   // or size saved meanwhile (or another feature selected) never empties a box being typed in.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  // The decision bar's height: the sticky inspector stops above it and scrolls on its own, so
-  // a Feasibility button is never under the bar (a click there would land on the bar).
+  // The decision bar's height and where the list's top sits: the sticky list ends above the bar
+  // at rest and once scrolled, and scrolls on its own, so no row is ever under the bar (a click
+  // there would land on the bar).
   const barRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLElement>(null);
   const [barH, setBarH] = useState(72);
+  const [listTop, setListTop] = useState(16);
   useEffect(() => {
     const el = barRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => setBarH(el.offsetHeight));
     ro.observe(el);
-    return () => ro.disconnect();
+    const place = () => setListTop(Math.max(16, Math.round(listRef.current?.getBoundingClientRect().top ?? 16)));
+    place();
+    window.addEventListener("scroll", place, { passive: true });
+    window.addEventListener("resize", place);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("scroll", place);
+      window.removeEventListener("resize", place);
+    };
   }, []);
   const pending = cp.status === "pending";
   const stages = pending && review.can_stage;
@@ -200,12 +211,13 @@ export function EngReview({
           No code map of this run holds some cited ids, and the briefs do not say which repository they come from.
         </p>
       )}
-      <div style={{ "--bar-h": `${barH}px` } as CSSProperties} className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
+      <div style={{ "--bar-h": `${barH}px`, "--list-top": `${listTop}px` } as CSSProperties} className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
         {/* EC1 b (owner, Nov 1): the features in a list that scrolls on its own, the picked one at reading width beside it. */}
         <section
+          ref={listRef}
           aria-label="Features"
           data-testid="brief-list"
-          className={`sticky top-4 max-h-[calc(100dvh_-_var(--bar-h,72px)_-_2rem)] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:max-h-none ${
+          className={`sticky top-4 max-h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px)_-_1rem)] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:max-h-none ${
             reading ? "max-[900px]:hidden" : ""
           }`}
         >
