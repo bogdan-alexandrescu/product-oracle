@@ -24,6 +24,8 @@ async function open(page: Page, email?: string, scheme: "light" | "dark" = "ligh
   await page.goto(URL);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
   await expect(page.getByTestId("filters")).toBeVisible();
+  // The Timeline (mk-qa4-roadmap QR1 A) has no SVG bars: bars move and group on the Gantt.
+  await page.getByTestId("format-gantt").click();
 }
 
 /** Moves a bar one week later with the keyboard, then waits for the change to be sent. */
