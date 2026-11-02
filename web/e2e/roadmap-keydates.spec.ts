@@ -70,6 +70,9 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-keydates-uncoded"] as const);
       await login(page);
       await page.goto("/simple/roadmap?roadmap=onboarding-roadmap");
+      // build-roadmap (8ba0ac46): the picked Timeline draws no milestones or key dates; the Gantt does.
+      await page.getByTestId("format-gantt").click();
+      await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
       await expect(page.locator('[data-testid="track-milestone"]', { hasText: "Prove it" })).toHaveCount(1);
       await expect(page.locator('[data-testid="key-date-marker"][data-name="M2 · Scale volume"]')).toHaveCount(1);
       await expect(page.locator('[data-testid="key-date-marker"][data-name="M1 · Prove it"]')).toHaveCount(0);
