@@ -740,8 +740,8 @@ async def test_a_new_feature_is_scored_and_ranked_with_the_rest(client, owner, r
         ("activation", "Activation", 3, 2)
     ]
     assert e["steps"] == [
-        "Goal value = 3×2 (Activation) = 6",
-        "Score = 6 × 60% ÷ 2 = 1.80",
+        "goal value = 3×2 (Activation) = 6",
+        "score = 6 × 0.6 ÷ 2 = 1.8",
     ]
     resp = await client.get(f"/v1/priorities/snapshots/{snap.id}/compare", headers=auth)
     assert resp.status_code == 200, resp.text

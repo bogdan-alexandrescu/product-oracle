@@ -433,13 +433,16 @@ def new_feature(
                 "term": value,
             }
         )
+        # In the scorer's words (oracle.priorities.scoring), so the page shows them as every
+        # row's: confidence as a percent, the score to two decimals.
         steps.append(
-            f"Goal value = {_num(weight)}×{_num(contribution)} ({goal_title}) = {_num(value)}"
+            f"goal value = {_num(weight)}×{_num(contribution)} ({goal_title}) = {_num(value)}"
         )
         if confidence is not None and effort:
             score = round(value * confidence / effort, 4)
-            pct = f"{round(confidence * 100):g}%"
-            steps.append(f"Score = {_num(value)} × {pct} ÷ {_num(effort)} = {score:.2f}")
+            steps.append(
+                f"score = {_num(value)} × {_num(confidence)} ÷ {_num(effort)} = {_num(score)}"
+            )
     else:
         value = None
         missing.append("goal")

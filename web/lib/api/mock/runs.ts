@@ -1319,10 +1319,11 @@ function newFeature(o: OrderEntry, rank: number, method: Method, live: SnapshotR
   if (o.goal != null && o.weight != null && o.contribution != null) {
     value = o.weight * o.contribution;
     goals.push({ goal: o.goal, title: goalTitle, weight: o.weight, weight_assumed: false, contribution: o.contribution, contribution_assumed: false, link_status: "proposed", term: value });
-    steps.push(`Goal value = ${num(o.weight)}×${num(o.contribution)} (${goalTitle}) = ${num(value)}`);
+    // In the scorer's words, so the page shows them as every row's (confidence as a percent, two decimals).
+    steps.push(`goal value = ${num(o.weight)}×${num(o.contribution)} (${goalTitle}) = ${num(value)}`);
     if (o.confidence != null && o.effort) {
       score = Math.round((value * o.confidence * 10000) / o.effort) / 10000;
-      steps.push(`Score = ${num(value)} × ${Math.round(o.confidence * 100)}% ÷ ${num(o.effort)} = ${score.toFixed(2)}`);
+      steps.push(`score = ${num(value)} × ${num(o.confidence)} ÷ ${num(o.effort)} = ${num(score)}`);
     }
   } else missing.push("goal");
   if (o.confidence == null) missing.push("confidence");
