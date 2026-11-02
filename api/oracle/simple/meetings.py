@@ -2224,7 +2224,9 @@ async def _run_groups(
 
     out: list[SimpleRunGroup] = []
     for run in runs:
-        decided = await runs_service.list_decisions(db, run.id, principal)
+        # A stop turned off when the run started was not a person's decision.
+        decided = [d for d in await runs_service.list_decisions(db, run.id, principal)
+                   if d.status != "skipped"]  # fmt: skip
         stops: list[SimpleRunStopOut] = []
         by_kind: dict[tuple[int, str], list[Any]] = {}
         for d in decided:

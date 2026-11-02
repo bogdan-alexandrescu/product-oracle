@@ -74,6 +74,7 @@ import {
   scopeStop,
   seedEngCheckRun,
   seedEngCheckUnmappedRun,
+  seedRunDecisions,
   seedEngDatesRuns,
   seedBaselineReviewRun,
   seedEngReviewRun,
@@ -156,6 +157,7 @@ import {
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { seedGoalSuggestions, seedHeldGoalSuggestion } from "./simple-suggestions";
+import { runGroupsOut } from "./simple-runs";
 import { planSlice, routeOnePager, seedNeedsLookOnePager, seedNotInPrdOnePager, seedOnePager, seedRunPrdOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
@@ -1337,6 +1339,17 @@ function withAuthorName<T extends { author_id?: string | null }>(db: Db, f: T): 
  * A3 "eng-review" scenario: the default company with commenter@example.com named engineering
  * lead, and a run waiting at an Engineering review stop (./runs.ts).
  */
+/**
+ * build-rundecide "run-decisions" scenario: the default company with a Usage alerts run whose
+ * five stops people decided (its Engineering check sent back once); "-many": three more runs.
+ */
+function seedRunDecisionsScenario(many: boolean): Db {
+  const db = seed();
+  const id = (email: string) => db.members.find((x) => x.email === email)!.id;
+  seeded("run-decisions", () => seedRunDecisions(db.runs!, runsContext(db), { owner: id("admin@example.com"), approver: id("approver@example.com") }, many));
+  return db;
+}
+
 function seedEngReview(): Db {
   const db = seed();
   db.members.find((x) => x.email === "commenter@example.com")!.engineering_lead = true;
@@ -2837,6 +2850,8 @@ function load(): Db {
             ? seedEngReview
           : scenario === "eng-check"
             ? seedEngCheck
+          : scenario === "run-decisions" || scenario === "run-decisions-many"
+            ? () => seedRunDecisionsScenario(scenario === "run-decisions-many")
           : scenario === "eng-check-no-lead"
             ? seedEngCheckNoLead
           : scenario === "eng-check-unmapped"
@@ -5771,6 +5786,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
     meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
+    meetingsCtx.runs = (prd) => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const docs = db.documents.filter((d) => d.kind === "prd");
+      return runGroupsOut(db.runs.runs, docs, meetingsCtx.members, prd);
+    };
     meetingsCtx.othersWaiting = () => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
       const ctx = decisionsContext(db, me);
