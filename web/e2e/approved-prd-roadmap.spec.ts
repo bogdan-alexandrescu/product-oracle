@@ -45,6 +45,7 @@ async function givePrdItems(page: Page) {
       title: string,
       horizon: string,
       date: string | null,
+      start_date?: string,
     ) => ({
       id: crypto.randomUUID(),
       item_key: key,
@@ -52,7 +53,9 @@ async function givePrdItems(page: Page) {
       outcome: null,
       horizon,
       position: 0,
-      milestone: date ? { name: "Ready", date, basis_ids: [] } : null,
+      milestone: date
+        ? { name: "Ready", date, start_date, basis_ids: [] }
+        : null,
     });
     db.draft_roadmaps ??= { rows: [], off: [] };
     db.draft_roadmaps.rows.push({
@@ -70,9 +73,35 @@ async function givePrdItems(page: Page) {
       roadmap: "alerts-roadmap",
       items: [
         item("reminder-texts", "Reminder texts", "now", "2026-12-11"),
-        item("rebook-link", "Rebook link", "next", "2027-01-22"),
+        item("rebook-link", "Rebook link", "next", "2027-01-22", "2026-12-14"),
         item("reminder-settings", "Reminder settings", "later", null),
       ],
+    });
+    // The engineering lead accepted Dec 18 for Reminder texts: its end, not the item's own.
+    if (!db.roadmap) throw new Error("the mock's roadmap is not stored yet");
+    db.roadmap.bases.push({
+      id: crypto.randomUUID(),
+      kind: "estimate",
+      reference: "Lead estimate",
+      supports_date: "2026-12-18",
+      detail: null,
+      prd_document_id: doc.id,
+      item_key: "reminder-texts",
+      tracker_key: null,
+      tracker_record_id: null,
+      status: "verified",
+      note: null,
+      proposed_by: null,
+      proposed_at: null,
+      verified_by: null,
+      verified_at: "2026-10-12T09:00:00Z",
+      withdrawn_by: null,
+      withdrawn_at: null,
+      withdrawn_reason: null,
+      rejected_by: null,
+      rejected_at: null,
+      rejected_reason: null,
+      created_at: "2026-10-12T09:00:00Z",
     });
     localStorage.setItem("po-mock-db-v2", JSON.stringify(db));
   }, PRD);
@@ -139,6 +168,13 @@ for (const [label, use] of [
       await expect(boardCard(page, "reminder-texts")).toBeVisible();
       await expect(boardCard(page, "rebook-link")).toBeVisible();
       await expect(boardCard(page, "reminder-settings")).toHaveCount(0);
+      // The dates are the API's: the lead's accepted end, else the item's own start and end.
+      await expect(
+        boardCard(page, "reminder-texts").getByTestId("board-dates"),
+      ).toContainText("Dec 18");
+      await expect(
+        boardCard(page, "rebook-link").getByTestId("board-dates"),
+      ).toContainText("Dec 14");
 
       // Review narrows the roadmap to the PRD: its two items only.
       await from
