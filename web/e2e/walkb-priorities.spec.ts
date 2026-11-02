@@ -66,8 +66,8 @@ for (const phone of [false, true]) {
       await open(page, null);
       // Down: the pointer in the gap 4 px above the row two below, nearer it than the row above it.
       await moveTo(page, 0, 2, () => -4);
-      // Down: the pointer in the gap 4 px below the row three below, nearer it than the row under it.
-      await moveTo(page, 0, 3, (h) => h + 4);
+      // Up: the pointer in the gap 4 px below the first row, nearer it than the row under it.
+      await moveTo(page, 2, 0, (h) => h + 4);
     });
   });
 }
