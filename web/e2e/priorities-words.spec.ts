@@ -85,8 +85,13 @@ for (const width of [1280, 1440, 1512]) {
       await page.getByTestId("priority-row-F-7").getByTestId("feature-name").click();
       await expect(inspector).toContainText("Bulk export");
       expect(await cutWords(page), "a word is cut with another feature in the panel").toEqual([]);
-      // The long words are there to be cut: a goal name beside its code, a dependency's name.
-      await expect(page.getByTestId("priority-row-F-3").getByTestId("row-goals")).toContainText("Conversion");
+      // "Conversion" sits beside its code G-B, on the code's line: the column is sized for it.
+      const goal = page.getByTestId("priority-row-F-3").getByTestId("row-goals");
+      await expect(goal).toContainText("Conversion");
+      const tag = (await goal.getByTestId("code-tag").boundingBox())!;
+      const name = (await goal.getByTestId("code-name").boundingBox())!;
+      expect(name.x, "the name beside its code").toBeGreaterThan(tag.x + tag.width);
+      expect(Math.abs(name.y + name.height / 2 - (tag.y + tag.height / 2)), "on the code's line").toBeLessThan(4);
     });
   });
 }

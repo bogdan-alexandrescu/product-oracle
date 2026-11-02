@@ -198,7 +198,7 @@ function featureText(features: RankedFeature[], key: string): string {
  * its name need it, up to GOAL_MAX; past that the name goes under its code. px-2 each side.
  */
 const GOAL_MIN = 124;
-const GOAL_MAX = 132;
+const GOAL_MAX = 136;
 const CELL_PAD = 16;
 /** The Depends on column, and the room its 13 px text has. */
 const DEPS_WIDTH = 104;
