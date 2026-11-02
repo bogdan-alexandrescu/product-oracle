@@ -20,8 +20,8 @@ from oracle.auth.models import User
 from oracle.review.models import DocumentReviewPolicy
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
-from tests.test_simple_chat_actions import apply, say
-from tests.test_simple_meetings_api import start, uid, world
+from tests.test_simple_chat_actions import CARDS, apply, say
+from tests.test_simple_meetings_api import MEETINGS, start, uid, world
 
 
 async def _no_roadmap_decider(w) -> None:
@@ -178,3 +178,25 @@ async def test_a_task_on_an_item_whose_name_holds_for(client):
         assert card["op"] == "add_item_task"
         assert card["target"]["item_id"] == w.ids["Partner API"], line
         assert card["after"]["owner_id"] == owner, line
+
+
+async def test_a_card_reads_the_meetings_working_state(client):
+    """walkc-meeting: protects=an open card in a meeting checks its links on the meeting's
+    working state, so once a fix applied in the meeting clears a broken link, a card on
+    that item offers no fixes for it; fails_when=the card still offers the fixes of the
+    link the meeting already mended; no_claim=cards outside a meeting."""
+    w = await world()
+    mid = (await start(client, w, "owner", attendee_ids=[uid(w, "commenter")]))["id"]
+    # Cut B starts before Cut A ends: a broken link both cards see.
+    [later] = (await say(client, w, "commenter", "rename Cut B to Cut Y", mid))["cards"]
+    assert later["fixes"], later
+    [card] = (await say(client, w, "owner", "rename Cut A to Cut Q", mid))["cards"]
+    assert card["fixes"], card
+    r = await client.post(f"{CARDS}/{card['id']}/apply", json={"fix": 0},
+                          headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.get(f"{MEETINGS}/{mid}/chat", headers=w.ctx.as_("commenter"))
+    assert r.status_code == 200, r.text
+    cards = {c["id"]: c for m in r.json()["messages"] for c in m.get("cards") or []}
+    assert cards[later["id"]]["status"] == "open"
+    assert cards[later["id"]]["fixes"] == []
