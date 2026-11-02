@@ -976,13 +976,15 @@ function seedSimplePlanScenario(datedAll = false): Db {
   for (const [code, of] of byFeature) {
     const section = code.toLowerCase();
     const key = existing[code];
-    if (key) {
-      const s = rm.items.find((x) => x.key === key);
-      if (s) s.section = section;
-      continue;
-    }
     const start = of.map((x) => x.start_date!).sort()[0];
     const end = of.map((x) => x.end_date!).sort().at(-1)!;
+    if (key) {
+      const s = rm.items.find((x) => x.key === key);
+      // Planned: its dates are its slices' (as the API's accepted slice suggestions), so the
+      // Timeline draws it on the plan until it is moved (walkc-roadmap-tasks 2).
+      if (s) Object.assign(s, { section }, s.start != null ? { start: days(w[s.horizon][0], start), end: days(w[s.horizon][0], end) } : {});
+      continue;
+    }
     const horizon = start <= w.now[1] ? "now" : "next";
     const from = w[horizon][0];
     const k = `plan-${section}`;

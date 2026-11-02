@@ -1,3 +1,4 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -46,5 +47,49 @@ for (const where of ["desktop", "phone"] as const) {
     await expect(page.getByTestId("draft-banner")).toHaveCount(0);
     await page.goto(`${URL}?roadmap=alerts-roadmap`);
     await expect(page.getByTestId("draft-count")).toHaveText("1");
+  });
+}
+
+async function tap(l: Locator) {
+  await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await l.click();
+}
+
+/** A review of "Guided setup" on the plan scenario (its items dated by the PRD's slices). */
+async function startReview(page: Page) {
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
+  await login(page);
+  await page.goto("/simple/meetings");
+  await tap(page.getByRole("button", { name: /^Start review/ }).first());
+  const sheet = page.getByRole("dialog", { name: "Start a review" });
+  await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
+  await tap(sheet.getByRole("button", { name: "Start", exact: true }));
+  await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+}
+
+/**
+ * Card walkc-moved-drawn-where-it-moved: protects = after a review meeting moves "Sample data
+ * import" (F-02, dated by its PRD slice) to Later, the Timeline's and the Gantt's slice bars
+ * start where the Waterfall's bar does, the item's new dates, not the plan's Nov 9;
+ * fails_when = a moved item is drawn at its slice's old dates; no_claim = an estimated
+ * item's slices, which stay on the plan.
+ */
+for (const where of ["desktop", "phone"] as const) {
+  test(`a moved item is drawn where it moved (${where})`, async ({ page }) => {
+    await startReview(page);
+    await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));
+    await tap(page.getByRole("button", { name: "Move Sample data import to Later" }));
+    await expect(page.getByTestId("roadmap-said")).toHaveText("Moved Sample data import to Later.");
+    if (where === "phone") await page.setViewportSize(PHONE);
+    await page.goto(`${URL}?roadmap=onboarding-roadmap`);
+    await expect(page.getByTestId("simple-chart")).toBeVisible();
+    await page.getByTestId("format-waterfall").click();
+    const now = await bar(page, "setup-import").getAttribute("data-start");
+    expect(now).not.toBe("2026-11-09");
+    const formats = where === "phone" ? ["gantt"] : ["timeline", "gantt"];
+    for (const f of formats) {
+      await page.getByTestId(`format-${f}`).click();
+      await expect(page.locator('g[data-testid="slice-bar"][data-code="F-02"]').first(), f).toHaveAttribute("data-start", now!);
+    }
   });
 }

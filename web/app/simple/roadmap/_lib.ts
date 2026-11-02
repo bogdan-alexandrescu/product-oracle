@@ -389,6 +389,26 @@ export const whereAttr = (kind: Where["kind"], value: string): string => `${kind
 /** roadmap-gantt: what the rows sit under (Goal by default; Milestone is read from the items' slices). */
 export type Lane = "goal" | "milestone" | "track" | "prd";
 export type Slice = Schemas["SimpleSlice"];
+
+/**
+ * walkc-roadmap-tasks 2: an item's dated slices, drawn where the item now is. The plan's
+ * slice dates are where it was planned; once the item is dated (moved in a meeting, dragged,
+ * typed) and its span differs from its slices', the slices are laid onto its own dates in
+ * proportion, so the Timeline and the Gantt draw it where the Waterfall does. An estimated
+ * item keeps the plan's dates (its own span is only its horizon's window).
+ */
+export function placedSlices(i: Item): Slice[] {
+  const d = i.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : a.start_date! > b.start_date! ? 1 : 0));
+  if (!d.length || i.estimated || !i.start.date || !i.end.date) return d;
+  const s0 = d.map((x) => x.start_date!).reduce((a, b) => (a < b ? a : b));
+  const s1 = d.map((x) => x.end_date!).reduce((a, b) => (a > b ? a : b));
+  const [start, end] = barSpan(i);
+  if (s0 === start && s1 === end) return d;
+  const was = daysBetween(s0, s1);
+  const now = daysBetween(start, end);
+  const at = (day: string) => addDays(start, was > 0 ? Math.round((daysBetween(s0, day) * now) / was) : 0);
+  return d.map((x) => ({ ...x, start_date: at(x.start_date!), end_date: was > 0 ? at(x.end_date!) : end }));
+}
 export type Milestone = Roadmap["milestones"][number];
 
 /** A milestone's colour, by its code (M1, M2, M3, then round again). */
