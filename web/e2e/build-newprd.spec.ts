@@ -32,6 +32,8 @@ async function fillAndGo(page: Page) {
   const s = sheet(page);
   await expect(s.getByRole("heading", { name: "New PRD" })).toBeVisible();
   await expect(s.getByText("Then up to 6 short questions")).toBeVisible();
+  // The picked frame opens with no goal picked yet, "Not sure yet" included (vqa-review-newprd).
+  await expect(s.getByRole("group", { name: "The goal it helps" }).locator('[aria-pressed="true"]')).toHaveCount(0);
   // Next waits for a name and the problem.
   await expect(s.getByRole("button", { name: "Next" })).toHaveAttribute("aria-disabled", "true");
   await s.getByLabel("Name").fill(NAME);
