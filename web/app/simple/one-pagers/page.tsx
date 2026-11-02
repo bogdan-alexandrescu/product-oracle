@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { MadeRow, NewPrdButton, NewPrdSheet, useNp } from "@/components/simple/NewPrdMock"; // MOCK-HOOK
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { dmy } from "@/components/simple/PrdTimeline";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
@@ -14,6 +15,7 @@ import { useQuery } from "@/lib/use-query";
 export default function OnePagers() {
   const q = useQuery("simple|one-pagers", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const zone = useCompanyZone();
+  const np = useNp(); // MOCK-HOOK
   // qa-simple-prd-p3-30: newest first, by when each last changed (and the list says so).
   const rows = q.data ? [...q.data].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)) : null;
   return (
@@ -22,7 +24,12 @@ export default function OnePagers() {
       <SimpleSection
         title="PRDs"
         testId="simple-one-pagers"
-        action={rows && rows.length > 1 ? <span className="simple-small" data-testid="one-pagers-order">Newest first</span> : undefined}
+        action={ // MOCK-HOOK: New PRD beside "Newest first"
+          <span className="flex flex-wrap items-center gap-3"> {/* MOCK-HOOK */}
+            {rows && rows.length > 1 ? <span className="simple-small" data-testid="one-pagers-order">Newest first</span> : null}
+            <NewPrdButton np={np} from="one-pagers" /> {/* MOCK-HOOK */}
+          </span>
+        }
       >
         {q.error ? (
           <p className="simple-small">{q.error}</p>
@@ -39,6 +46,7 @@ export default function OnePagers() {
           // qa-simple-prd-p3-29: the whole row opens the one-pager, as its hover says: the title's
           // link stretches over the row (one link still, its name the title).
           <ul className="flex flex-col">
+            {np.made && <MadeRow />} {/* MOCK-HOOK */}
             {rows.map((d) => (
               <li key={d.id} data-testid="one-pager-row" className="relative flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line py-3 last:border-b-0 hover:bg-bg/50">
                 <Link href={`/simple/one-pagers/${d.slug}`} className="min-w-0 font-semibold break-words after:absolute after:inset-0 after:content-[''] hover:underline">
@@ -51,6 +59,7 @@ export default function OnePagers() {
           </ul>
         )}
       </SimpleSection>
+      <NewPrdSheet np={np} back="/simple/one-pagers" /> {/* MOCK-HOOK */}
     </SimplePage>
   );
 }

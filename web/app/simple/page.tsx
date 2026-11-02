@@ -14,6 +14,7 @@ import { usePhone } from "@/components/simple/FlowViews";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
+import { DraftingCard, GoalStart, NewPrdButton, NewPrdSheet, useNp } from "@/components/simple/NewPrdMock"; // MOCK-HOOK
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -123,6 +124,7 @@ export default function SimpleHome() {
   const [walking, setWalking] = useState(false);
   // qa4-simple-home-10: Done gives the focus back to "Walk me through it".
   const walkButton = useRef<HTMLButtonElement>(null);
+  const np = useNp(); // MOCK-HOOK
   const backToWalk = useRef(false);
   useEffect(() => {
     if (walking || !backToWalk.current) return;
@@ -444,6 +446,7 @@ export default function SimpleHome() {
 
   return (
     <SimplePage title="Home">
+      <NewPrdSheet np={np} back="/simple" /> {/* MOCK-HOOK */}
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
@@ -452,10 +455,11 @@ export default function SimpleHome() {
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
         {!walking && capsReady && !reads && counted && !nothingToWalk && (
-          <div>
+          <div className="flex flex-wrap gap-2"> {/* MOCK-HOOK: flex row for New PRD */}
             <button type="button" ref={walkButton} className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
               Walk me through it
             </button>
+            <NewPrdButton np={np} from="home" /> {/* MOCK-HOOK */}
           </div>
         )}
         {/* While the role or what waits is unknown the walk's slot keeps its height; a reader known has no walk and no gap. */}
@@ -478,6 +482,7 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
+      {np.np1 === "b" && np.made && <DraftingCard />} {/* MOCK-HOOK */}
       {/* qa-onboarding-6: an invited member's role welcome, in Simple too (dismissed in one mode, gone in both). */}
       <SimpleWelcome show={setupQ.data?.welcome === true} onDismissed={() => void setupQ.reload()} />
       {setupFirst && setup && (can("put_setting") || !setupQ.data?.welcome) && <SetupCard setup={setup} owner={can("put_setting")} onHide={() => void hideSetup()} />}
@@ -529,6 +534,7 @@ export default function SimpleHome() {
                       )}
                     </div>
                     <SuggestionsButton goal={{ id: g.id, key: g.id, title: g.name }} api={suggestions} onOpen={setGoalPanel} className="self-start" />
+                    <GoalStart np={np} goal={g.name} /> {/* MOCK-HOOK */}
                   </li>
                 ))}
               </ul>

@@ -16,6 +16,7 @@ import { errorMessage } from "@/lib/use-query";
 
 import { AnswerSources, AnswerText, Who, chatTime, type AnswerCite } from "./AskAnswer";
 import { ChatComposer, ChatLine, shownLines, useCorrections, usePendingPoll, type Typed } from "./ChatThread";
+import { ChatStarter, NewPrdChat, useNp } from "@/components/simple/NewPrdMock"; // MOCK-HOOK
 
 type AskMessage = Schemas["DiscussionMessageOut"];
 
@@ -532,6 +533,7 @@ function ChatView({
   // "Suggest from the chat": the words a goal's drawer typed in, taken once by the box a person sees.
   const waiting = useAskDraft();
   const [typed, setTyped] = useState<Typed>({ text: "", n: 0 });
+  const np = useNp(); // MOCK-HOOK
   const here = useRef<HTMLElement>(null);
   useEffect(() => {
     // Only the box a person sees takes them (the dock's panel is hidden on a phone): a DOM check.
@@ -550,6 +552,7 @@ function ChatView({
               {error}
             </p>
           )}
+          {np.np1 === "d" && np.open && <NewPrdChat np={np} />} {/* MOCK-HOOK */}
           <ol ref={list} className="flex flex-col gap-3" aria-label="Messages" data-testid="ask-chat-thread">
             {lines.map((l) =>
               l.plan ? (
@@ -559,12 +562,13 @@ function ChatView({
               ),
             )}
           </ol>
-          {lines.length === 0 && (
+          {lines.length === 0 && !(np.np1 === "d" && np.open) && ( // MOCK-HOOK: the condition's second half
             <p className="px-2 pt-7 pb-3 text-center text-text2" data-testid="hop-empty">
               <b className="mb-1 block text-[17px] leading-6 font-[650] text-text">Nothing yet</b>
               {changes ? `Ask about ${about}, or ask for a change.` : `Ask about ${about}.`}
             </p>
           )}
+          {lines.length === 0 && np.np1 === "d" && !np.open && <ChatStarter />} {/* MOCK-HOOK */}
         </div>
         {/* A phone's sheet fades the conversation into the box under it. */}
         <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-7 bg-linear-to-b from-transparent to-surface max-[600px]:block" />
