@@ -218,40 +218,43 @@ export function ZoomTimeline(props: TimelineProps) {
     : null;
   const side = !phone && !!openItem;
   return (
-    <div data-testid="zoom-timeline" className="mt-2">
-      <div className="mb-2 rounded-lg border border-line bg-surface px-3 py-2">
-        <Key data={data} />
-      </div>
-      <ConflictPanel {...props} onShow={onOpen} />
-      <div className={side ? "flex items-start gap-3" : ""}>
-        <div className="min-w-0 flex-1">
-          {phone ? <QuarterList {...props} /> : <DayChart {...props} />}
+    // The page reads its chart (and its format) by simple-chart, as the other formats give it.
+    <div data-testid="simple-chart" data-format="timeline" data-view="zoom">
+      <div data-testid="zoom-timeline" className="mt-2">
+        <div className="mb-2 rounded-lg border border-line bg-surface px-3 py-2">
+          <Key data={data} />
         </div>
-        {side && openItem && (
-          <aside
-            data-testid="item-panel"
-            aria-label={openItem.title}
-            className="sticky top-3 max-h-[calc(100dvh-24px)] w-[400px] flex-none overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
-          >
-            {props.card(
-              openItem,
-              {
-                position: "relative",
-                left: 0,
-                top: 0,
-                width: "100%",
-                border: 0,
-                boxShadow: "none",
-              },
-              false,
-              () => onOpen(null),
-            )}
-          </aside>
-        )}
+        <ConflictPanel {...props} onShow={onOpen} />
+        <div className={side ? "flex items-start gap-3" : ""}>
+          <div className="min-w-0 flex-1">
+            {phone ? <QuarterList {...props} /> : <DayChart {...props} />}
+          </div>
+          {side && openItem && (
+            <aside
+              data-testid="item-panel"
+              aria-label={openItem.title}
+              className="sticky top-3 max-h-[calc(100dvh-24px)] w-[400px] flex-none overflow-y-auto rounded-xl border border-line bg-surface shadow-tip"
+            >
+              {props.card(
+                openItem,
+                {
+                  position: "relative",
+                  left: 0,
+                  top: 0,
+                  width: "100%",
+                  border: 0,
+                  boxShadow: "none",
+                },
+                false,
+                () => onOpen(null),
+              )}
+            </aside>
+          )}
+        </div>
+        {phone &&
+          openItem &&
+          props.card(openItem, { height: "52dvh" }, true, () => onOpen(null))}
       </div>
-      {phone &&
-        openItem &&
-        props.card(openItem, { height: "52dvh" }, true, () => onOpen(null))}
     </div>
   );
 }
