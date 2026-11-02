@@ -186,4 +186,39 @@ test.describe("a dragged Timeline bar, desktop", () => {
     await expect(chart.locator(`[data-testid="timeline-bar"][data-bar-id="${id}"]`)).not.toHaveAttribute("data-start", was!);
     await expect(page.getByTestId("drag-live")).toBeHidden();
   });
+
+  // ah-timeline-timing review: the 500-item Timeline drag still missed frames, each one
+  // repainting all 500 rows. Counted, not timed: while a bar is dragged, the rows out of sight
+  // are not drawn (content-visibility skips them), the dragged bar and the rows in sight are.
+  test("timeline: a drag draws the rows in sight, not the 500", async ({ page }) => {
+    await page.goto(URL);
+    await expect(page.getByTestId("simple-roadmap")).toBeVisible({ timeout: 15_000 });
+    const rows = page.getByTestId("timeline-row");
+    await expect(rows).toHaveCount(500, { timeout: 15_000 });
+    const bar = page.locator('[data-testid="timeline-bar"][aria-label*="Arrows move it"]').first();
+    await bar.scrollIntoViewIfNeeded();
+    const box = (await bar.boundingBox())!;
+    const [x, y] = [box.x + Math.min(box.width / 2, 20), box.y + box.height / 2];
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 80, y, { steps: 8 });
+    await expect(page.getByTestId("drag-live")).toBeVisible();
+    const drawn = (b: Element) => b.checkVisibility({ contentVisibilityAuto: true });
+    expect(await bar.evaluate(drawn)).toBe(true);
+    const inSight = await rows.evaluateAll((rs) =>
+      rs
+        .filter((r) => r.getBoundingClientRect().top >= 0 && r.getBoundingClientRect().bottom <= innerHeight)
+        .map((r) => r.querySelector("[data-testid=timeline-bar]")!.checkVisibility({ contentVisibilityAuto: true })),
+    );
+    expect(inSight.length).toBeGreaterThan(5);
+    expect(inSight.every(Boolean)).toBe(true);
+    const far = await rows.evaluateAll((rs) => rs.filter((r) => r.getBoundingClientRect().top > 4 * innerHeight).length);
+    expect(far).toBeGreaterThan(300);
+    const farDrawn = await rows.evaluateAll((rs) =>
+      rs.filter((r) => r.getBoundingClientRect().top > 4 * innerHeight && r.querySelector("[data-testid=timeline-bar]")!.checkVisibility({ contentVisibilityAuto: true })).length,
+    );
+    expect(farDrawn).toBe(0);
+    await page.mouse.up();
+    await expect(page.getByTestId("drag-live")).toBeHidden();
+  });
 });
