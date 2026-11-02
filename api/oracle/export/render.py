@@ -736,7 +736,7 @@ def _day_in_words(m: re.Match[str]) -> str:
         d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     except ValueError:
         return m.group(0)
-    return f"{d:%b} {d.day}, {d.year}"
+    return f"{company_time.calendar_day(d)}, {d.year}"
 
 
 def days_in_words(text: str) -> str:
