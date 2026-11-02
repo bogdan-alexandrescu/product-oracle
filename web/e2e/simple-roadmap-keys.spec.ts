@@ -20,7 +20,7 @@ const column = (page: Page, h: "now" | "next" | "later"): Locator => page.locato
 const plus = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 /** Opens the roadmap; on a phone, its Gantt: the phone's Timeline (timeline-overlap B3) draws thin lanes with no bars to focus. */
-async function open(page: Page, email?: string, phone = false) {
+async function open(page: Page, email?: string) {
   await login(page, email);
   await page.goto(URL);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -110,7 +110,7 @@ for (const [where, use] of [
        * `before`; no_claim = the API's engine (api/tests/test_simple_changes_api.py).
        */
       test("two quick presses are one change, no 409, no snap back", async ({ page }) => {
-        await open(page, undefined, where === "phone");
+        await open(page);
         const b = bar(page, "alert-export");
         const start = (await b.getAttribute("data-start"))!;
         const end = (await b.getAttribute("data-end"))!;
@@ -138,7 +138,7 @@ for (const [where, use] of [
        * presses are silent until the change returns; no_claim = the toast's words.
        */
       test("the screen reader hears the pending dates", async ({ page }) => {
-        await open(page, undefined, where === "phone");
+        await open(page);
         const b = bar(page, "alert-export");
         await b.focus();
         await page.keyboard.press("ArrowRight");
@@ -153,7 +153,7 @@ for (const [where, use] of [
        * decides it (simple-roadmap.spec's tray test).
        */
       test("a commenter's held key is one proposal", async ({ page }) => {
-        await open(page, "commenter@example.com", where === "phone");
+        await open(page, "commenter@example.com");
         const b = bar(page, "alert-export");
         const start = (await b.getAttribute("data-start"))!;
         const had = await proposalsOn(page, b);
@@ -173,7 +173,7 @@ for (const [where, use] of [
        * sent already or the bar stays moved; no_claim = Undo after a send (simple-roadmap.spec).
        */
       test("Escape cancels the burst", async ({ page }) => {
-        await open(page, undefined, where === "phone");
+        await open(page);
         const b = bar(page, "alert-export");
         const start = (await b.getAttribute("data-start"))!;
         await b.focus();
@@ -195,7 +195,7 @@ for (const [where, use] of [
        * press sends (a 409 or two changes); no_claim = the drag's resize handles.
        */
       test("resize keys are one change too", async ({ page }) => {
-        await open(page, undefined, where === "phone");
+        await open(page);
         const b = bar(page, "alert-export");
         const start = (await b.getAttribute("data-start"))!;
         const end = (await b.getAttribute("data-end"))!;
@@ -218,7 +218,7 @@ for (const [where, use] of [
        * press sends at once; no_claim = the pause's exact length.
        */
       test("leaving the bar sends the burst", async ({ page }) => {
-        await open(page, undefined, where === "phone");
+        await open(page);
         const b = bar(page, "alert-export");
         const start = (await b.getAttribute("data-start"))!;
         await b.focus();
@@ -242,7 +242,7 @@ for (const [where, use] of [
        * late the network is.
        */
       test("a burst sent while the last is on its way does not snap back", async ({ page }) => {
-        await open(page, undefined, where === "phone");
+        await open(page);
         await slowChanges(page);
         const b = bar(page, "alert-export");
         const start = (await b.getAttribute("data-start"))!;
@@ -273,7 +273,7 @@ for (const [where, use] of [
        * too (the bar ends at the other tab's dates); no_claim = the first change's 409.
        */
       test("a burst after a failed change starts from the reload", async ({ page, context }) => {
-        await open(page, undefined, where === "phone");
+        await open(page);
         const other = await context.newPage();
         await other.goto(URL);
         if (where === "phone") await other.getByTestId("format-gantt").click();
@@ -307,7 +307,7 @@ for (const [where, use] of [
        */
       test("a press redraws only the pressed bar", async ({ page }) => {
         await countBarRenders(page);
-        await open(page, undefined, where === "phone");
+        await open(page);
         await page.waitForTimeout(300);
         const before = await page.evaluate(() => ({ ...(window as unknown as { __poBarRenders: Record<string, number> }).__poBarRenders }));
         expect(Object.keys(before).length).toBeGreaterThan(1);
@@ -384,7 +384,7 @@ test.describe("phone, long-press", () => {
    * drag sends per move or meets a pending burst's stale dates; no_claim = native scrolling.
    */
   test("a long-press drag is one change", async ({ page }) => {
-    await open(page, undefined, true);
+    await open(page);
     const body = bar(page, "alert-export").locator("rect[data-body]");
     const box = (await body.boundingBox())!;
     const x = box.x + box.width / 2;
