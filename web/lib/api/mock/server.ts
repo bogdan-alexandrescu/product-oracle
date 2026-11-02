@@ -552,6 +552,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
  * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
+ * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
  * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
@@ -1092,6 +1093,24 @@ function seedSimpleHomeMoveScenario(): Db {
   sr.own["alert-mobile"] = { start: mobile.start, end: mobile.end, source: "typed" };
   const len = digest.start && digest.end ? Math.round((Date.parse(digest.end) - Date.parse(digest.start)) / 86_400_000) : 40;
   seedSimpleProposal(sr, who, "shift_dependents", "alert-digest", { [sr.ids["alert-digest"]]: { start_date: digest.start, end_date: digest.end }, [sr.ids["alert-mobile"]]: { start_date: mobile.start, end_date: mobile.end } }, { [sr.ids["alert-digest"]]: { start_date: day(rulesEnd, 1), end_date: day(rulesEnd, 1 + len) }, [sr.ids["alert-mobile"]]: { start_date: day(rulesEnd, 1), end_date: day(rulesEnd, 51) } }, "2026-10-27T09:30:00Z", "Both start before Alert rules engine ends");
+  return db;
+}
+
+/**
+ * "simple-home-same-name": "simple-home" plus a second confirmed goal also named Grow retention
+ * (G-T, no items yet) and a commenter's proposal to change Alert rules engine's owner, so Home's
+ * goal cards filter Priorities by the goal itself, not its name, and every proposal row reads in
+ * words (build-plan review). Invented data.
+ */
+function seedSimpleHomeSameNameScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const template = db.baseline.entities.find((e) => e.key === "grow-retention")!;
+  db.baseline.entities.push({ ...template, id: stableUuid("simple-goal/grow-retention-teams"), key: "grow-retention-teams", title: "G-T Grow retention", attrs: { ...template.attrs, weight: 1 } });
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  seedSimpleProposal(db.simple_roadmap!, who, "set_owner", "alert-rules", { owner_id: null }, { owner_id: commenter.id }, "2026-10-27T10:00:00Z", "I can run it");
   return db;
 }
 
@@ -2904,6 +2923,8 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-move"
                 ? seedSimpleHomeMoveScenario
+              : scenario === "simple-home-same-name"
+                ? seedSimpleHomeSameNameScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
               : scenario === "simple-suggest-deciders"
