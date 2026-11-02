@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
+import { meetingMoment } from "@/components/simple/FlowVisual";
 import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
@@ -184,6 +185,24 @@ export default function SimpleHome() {
     { keepPrevious: true },
   );
   const questionActions = useQuestionActions(reloadAll);
+  // vqa-simple-runs (RD3 a, frame "done"): a question decided on its PRD's card stays in its row,
+  // with the answer, who and when, and Undo there (no toast), until Home is left.
+  const [decidedHere, setDecidedHere] = useState<Question[]>([]);
+  const prdActions: typeof questionActions = {
+    ...questionActions,
+    decide: async (q, a) => {
+      const r = await questionActions.decide(q, a, true);
+      if (r && r.change.status !== "proposed") {
+        const label = [r.words, me?.name, meetingMoment(new Date().toISOString(), zone)].filter(Boolean).join(" · ");
+        setDecidedHere((d) => [...d.filter((x) => x.id !== q.id), { ...q, column: "decided", chosen: r.words, decided_label: label, undo_id: r.change.id }]);
+      }
+      return r;
+    },
+    undo: async (id) => {
+      await questionActions.undo(id);
+      setDecidedHere((d) => d.filter((x) => x.undo_id !== id));
+    },
+  };
   // A4: a phone's Home shows the soonest two decisions, a desktop's three.
   const phone = usePhone();
   // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
@@ -302,7 +321,7 @@ export default function SimpleHome() {
   // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
   // build-rundecide RD3 a: the PRDs' questions I own wait in a card per PRD; this card keeps the other judgement calls.
   const decisionRows = waiting.data && decisions.data ? homeDecisionRows([], decisions.data) : undefined;
-  const prdWaiting = waitingByPrd(waiting.data?.questions ?? []);
+  const prdWaiting = waitingByPrd([...(waiting.data?.questions ?? []).filter((q) => !decidedHere.some((d) => d.id === q.id)), ...decidedHere]);
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
   const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0;
@@ -709,7 +728,7 @@ export default function SimpleHome() {
             </header>
             <div className="mt-3">
               <Top rows={questions} max={phone ? 2 : 3} more={`/simple/decisions?prd=${encodeURIComponent(prd.slug)}`} what={`of ${prd.title}'s decisions`}>
-                {(q) => <QuestionRow key={q.id} q={q} mode="list" testId="home-question" actions={questionActions} plain />}
+                {(q) => <QuestionRow key={q.id} q={q} mode={decidedHere.includes(q) ? "here" : "list"} testId="home-question" actions={prdActions} plain />}
               </Top>
             </div>
           </section>

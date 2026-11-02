@@ -31,12 +31,14 @@ export function useQuestionActions(onDone: () => unknown, sessionId?: string | n
     void onDone();
     waitingChanged();
   };
-  const run = async (body: Schemas["SimpleChangeIn"], applied: string, proposedTo: string) => {
+  /** `inRow`: the row itself shows the decision and its Undo (Home's PRD card), so no toast for it. */
+  const run = async (body: Schemas["SimpleChangeIn"], applied: string, proposedTo: string, inRow = false) => {
     setBusy(true);
     try {
       const r = await unwrap(api.POST("/v1/simple/changes", { body: sessionId ? { ...body, session_id: sessionId } : body }));
       const c = r.change;
       if (c.status === "proposed") toast({ message: `Sent to ${proposedTo} to decide` });
+      else if (inRow && c.can_undo) return c;
       else
         toast(
           c.can_undo
@@ -53,6 +55,7 @@ export function useQuestionActions(onDone: () => unknown, sessionId?: string | n
               }
             : { message: applied },
         );
+      return c;
     } catch (e) {
       toast({ message: errorMessage(e) });
     } finally {
@@ -60,13 +63,15 @@ export function useQuestionActions(onDone: () => unknown, sessionId?: string | n
       done();
     }
   };
-  const decide = (q: Question, a: Answer) => {
+  const decide = async (q: Question, a: Answer, inRow = false) => {
     const words = "option" in a ? (a.option === "recommended" ? q.recommendation : q.alternatives.find((o) => o.key === a.option)?.label) : a.answer;
-    return run(
+    const change = await run(
       { op: "decide_question", target: { decision_id: q.id }, before: { status: "proposed" }, after: a },
       `Decided ${q.code}: ${words ?? "your answer"}`,
       q.decider?.name ?? "the owners",
+      inRow,
     );
+    return change ? { change, words: words ?? "your answer" } : undefined;
   };
   const nameDecider = (q: Question, person: { id: string; name: string }) =>
     run(
@@ -260,7 +265,7 @@ export function PersonPicker({
   );
 }
 
-type Mode = "list" | "needs_input" | "recommended" | "decided" | "due";
+type Mode = "list" | "needs_input" | "recommended" | "decided" | "due" | "here";
 
 /**
  * One question as the mock-up's row (option A): the round flag icon; "<code> <title>"; the
@@ -343,7 +348,8 @@ export function QuestionRow({
       document.removeEventListener("click", onDown);
     };
   }, [open]);
-  const done = q.column === "decided" || mode === "decided";
+  // "here": decided in this row just now (Home's PRD card): its answer, who and when, and Undo (RD3 a).
+  const done = q.column === "decided" || mode === "decided" || mode === "here";
   const recommended = !!q.recommendation && writes && !done;
   // qa4-simple-decide-19: a meeting's one moment format ("Fri Oct 30, 8:18 PM"), no zone letters: the meeting names its zone.
   const at = q.decided_at ? meetingMoment(q.decided_at, zone) : null;
@@ -358,9 +364,9 @@ export function QuestionRow({
   // (List, Board, Home, a meeting's agenda); one primary button per row (qa-simple-decide-24).
   let buttons: ReactNode = null;
   if (done) {
-    if (mode === "due" && q.undo_id)
+    if ((mode === "due" || mode === "here") && q.undo_id)
       buttons = (
-        <button type="button" disabled={busy} className="simple-button" onClick={() => void undo(q.undo_id!)}>
+        <button type="button" disabled={busy} className={`simple-button ${mode === "here" ? "simple-button-quiet" : ""}`} onClick={() => void undo(q.undo_id!)}>
           Undo
         </button>
       );
@@ -435,6 +441,7 @@ export function QuestionRow({
         )}
         {done ? (
           mode !== "due" &&
+          mode !== "here" &&
           q.chosen && (
             <span className="simple-rec">
               <span className="simple-rec-label">Decided</span>{" "}
