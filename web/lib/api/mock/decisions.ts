@@ -496,10 +496,6 @@ function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
 }
 
 /**
- * H9 Decide (oracle.pricing.decide): the approved memo version's proposed decision, origin
- * pricing, the pricing owner its approver; the same one again on a repeat.
- */
-/**
  * runplan-r2: a decision taken in a Simple review meeting, as meetings.record_meeting_decision's
  * decisions row (origin meeting, decided by the caller, one option): Company > Decisions lists it.
  */
@@ -521,6 +517,10 @@ export function logMeetingDecision(
   });
 }
 
+/**
+ * H9 Decide (oracle.pricing.decide): the approved memo version's proposed decision, origin
+ * pricing, the pricing owner its approver; the same one again on a repeat.
+ */
 export function proposePricing(
   ctx: DecisionsContext,
   db: DecisionsDb,
