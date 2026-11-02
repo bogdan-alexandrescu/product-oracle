@@ -30,6 +30,8 @@ async function tap(l: Locator) {
 async function switchTo(page: Page, email: string) {
   const size = page.viewportSize()!;
   await page.setViewportSize({ width: 1366, height: 820 });
+  // The meeting screen covers the rail's account menu: sign out from Home.
+  await page.goto("/home");
   await signOut(page);
   await login(page, email);
   await page.setViewportSize(size);
