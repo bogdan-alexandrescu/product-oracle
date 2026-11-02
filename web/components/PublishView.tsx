@@ -172,7 +172,9 @@ const DATED_NOUN: Record<string, string> = { roadmap: "Roadmap", update: "Update
  */
 function onPublishLines(n: number, kind?: string) {
   const noun = kind ? DATED_NOUN[kind] : undefined;
-  if (noun) return [`Version v${n} published`, `${noun} status set to Published`, "Publishing recorded in the audit log"];
+  // build-review (QV4 a): one Publish step approves the version and makes it ready to share.
+  if (noun === "Roadmap") return [`Version v${n} approved`, `${noun} status set to Approved`, "Approval recorded in the audit log", `v${n} ready to share as a link`];
+  if (noun) return [`Version v${n} approved`, `${noun} status set to Approved`, "Approval recorded in the audit log"];
   return [`Version v${n} approved with its evidence`, "PRD status set to Approved", "Approval recorded in the audit log"];
 }
 
@@ -586,7 +588,14 @@ export function PublishView({ doc }: { doc: string }) {
   // page lists those, from the version the approve checks.
   const dated = d != null && DATED_KINDS.has(d.kind);
   const headings = new Map(sections.map((s) => [s.section_key, s.heading]));
-  const published = n != null && d?.approved_version === n;
+  const approved = n != null && d?.approved_version === n;
+  // build-review (QV4 a): a roadmap's Publish approves it and publishes it for sharing in one
+  // step, so it is published once its version is shared as a link's publication too.
+  const sharable = d?.kind === "roadmap";
+  const pubsQ = useQuery(`publications|${doc}|${sharable}`, () =>
+    sharable ? unwrap(api.GET("/v1/documents/{doc}/publications", { params: { path: { doc } } })).catch(() => undefined) : Promise.resolve(undefined),
+  );
+  const published = approved && (!sharable || !!pubsQ.data?.some((p) => p.version_number === n));
   // A published version has nothing left to block it: no blocks, even for a roadmap's dates.
   const blocks =
     readiness && n != null && !published
@@ -648,14 +657,30 @@ export function PublishView({ doc }: { doc: string }) {
         return;
       }
       // The API runs the publish checks itself and answers 409 naming the blocks.
-      const res = await api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } });
-      if (res.response.status === 409 && res.error && "blocking" in res.error) {
-        setRefusal(res.error);
-        void reloadReadiness();
-        void reloadStrategy();
-        return;
+      if (!approved) {
+        const res = await api.POST("/v1/documents/{doc}/versions/{n}/approve", { params: { path: { doc, n } } });
+        if (res.response.status === 409 && res.error && "blocking" in res.error) {
+          setRefusal(res.error);
+          void reloadReadiness();
+          void reloadStrategy();
+          return;
+        }
+        await unwrap(Promise.resolve(res));
       }
-      await unwrap(Promise.resolve(res));
+      // build-review (QV4 a): the same step publishes a roadmap's version for sharing.
+      if (sharable) {
+        const check = await unwrap(api.GET("/v1/documents/{doc}/versions/{n}/publish-check", { params: { path: { doc, n } } }));
+        const left = check.blockers.filter((b) => b.code !== "already_published");
+        if (left.length > 0) {
+          setRefusal({ detail: `Approved, but not ready to share: ${left.map((b) => b.message).join("; ")}`, blocking: [] });
+          void docQ.reload();
+          return;
+        }
+        if (check.can_publish) {
+          await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/publish", { params: { path: { doc, n } }, body: { content_hash: check.content_hash } }));
+        }
+        void pubsQ.reload();
+      }
       closeConfirm();
       // qa-docs-62: the header's "Published v2" chip confirms it; no notice repeats it.
       setNotice(null);
@@ -752,16 +777,29 @@ export function PublishView({ doc }: { doc: string }) {
       <PageHeader
         testId="publish-header"
         // qa-docs-31: the same crumb as the document's other pages: PRDs / <document> <status>.
-        // qa4-docs-share-22: the crumb's status says "Published", the word this page uses.
-        back={<DocCrumb doc={d} approvedLabel="Published" />}
+        // build-review: an approved version reads "Approved" in both modes; Publish stays the button's name.
+        back={<DocCrumb doc={d} />}
         title="Publish"
         suffix={d ? `${d.title}${n != null ? ` v${n}` : ""}` : undefined}
-        status={blocksChip}
+        status={sharable && published ? undefined : blocksChip}
         action={action}
       />
       {docQ.error && <ErrorNote>{docQ.error}</ErrorNote>}
       {readinessQ.error && <ErrorNote>{readinessQ.error}</ErrorNote>}
       {notice && <Notice tone="pass">{notice}</Notice>}
+      {sharable && n != null && d && (
+        // build-review (QV4 a): one line says what Publish does, and once published, Share a link.
+        <div data-testid="publish-share-note" className="mb-3 flex flex-wrap items-center gap-3 rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
+          <span className="min-w-0 flex-1">
+            {published ? `v${n} is published. You can share it as a link now.` : `Publish v${n} approves it and makes it ready to share, in one step.`}
+          </span>
+          {published && (
+            <LinkButton variant="primary" href={`/documents/${doc}?share=${d.audience ?? "team"}`}>
+              Share a link
+            </LinkButton>
+          )}
+        </div>
+      )}
       {d && n == null && <Notice>No version yet</Notice>}
 
       {readiness && n != null && (

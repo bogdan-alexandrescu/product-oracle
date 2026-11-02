@@ -363,7 +363,7 @@ function starts(ctx: OnePagerCtx): boolean {
 }
 
 function seesDraft(db: OnePagerDb, ctx: OnePagerCtx): boolean {
-  return ctx.role === "owner" || (db.draft?.participants.includes(ctx.id) ?? false) || (!!db.draft && ctx.reviewers.includes(ctx.id));
+  return ctx.role === "owner" || (db.draft?.participants.includes(ctx.id) ?? false) || (!!db.draft && ctx.reviewers.includes(ctx.id)) || (db.draft?.waiting_on ?? []).includes(ctx.id);
 }
 
 /** As one_pager.may_remind: the PRD's owners (a company owner, its track owners) and its decider. */
@@ -544,11 +544,27 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       ? {
           id: db.draft.id, status: db.draft.status ?? "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: !!db.approval, approved_in: db.approval?.approved_in ?? null, blocked_by: db.approval?.blocked_by ?? [],
           waiting_on: db.approval?.waiting_on ?? (db.draft.waiting_on ?? []).map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })),
+          // build-review: who approves once sent (the PRD's required reviewers), on a working draft.
+          reviewers: (db.draft.status ?? "working") === "working" ? ctx.reviewers.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })) : [],
           can_submit: (db.draft.status ?? "working") === "working" && decides(ctx) && liveChanges(db).length > 0,
           reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0,
         }
       : null,
     changes_in_review: hiddenDraft + (proposals.length - shown.length),
+    // build-review: the same changes, one each, for readers who do not see the draft.
+    in_review: sees ? [] : [
+      ...Object.entries(db.draft?.lines ?? {}).map(([id, after]) => {
+        const c = [...db.changes].reverse().find((x) => x.status !== "proposed" && x.status !== "undone" && String(x.target.line_id) === id);
+        return {
+          line_id: id, kind: "change" as const, before: seedLine(db, id)?.text ?? "", after, by_name: c?.by_name ?? ctx.names[ctx.owners[0]] ?? "an owner",
+          waiting_on: (db.draft?.status === "submitted" ? db.draft.waiting_on ?? [] : []).map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })),
+        };
+      }),
+      ...proposals.filter((c) => !shown.includes(c)).map((c) => ({
+        line_id: String(c.target.line_id), kind: "proposal" as const, before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), by_name: c.by_name,
+        waiting_on: c.routed_to.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })),
+      })),
+    ],
     can_edit: decides(ctx),
     can_propose: !decides(ctx) && RANK[ctx.role] >= RANK.commenter,
     can_start: starts(ctx),
@@ -590,8 +606,11 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   if (p[2] === "drafts" && p[4] === "submit" && m === "POST" && db.draft && p[3] === db.draft.id) {
     if (!decides(ctx)) return json(403, { detail: "Only an owner or the PRD's decider submits its draft" });
     if ((db.draft.status ?? "working") !== "working") return json(409, { detail: "This draft is submitted already" });
+    // build-review: Send for approval… may add reviewers (members only), after the required ones.
+    const added = ((await body(req)).reviewer_ids ?? []) as string[];
+    if (added.some((i) => !(i in ctx.names))) return json(422, { detail: "Each reviewer you add must be an active member of the company" });
     db.draft.status = "submitted";
-    db.draft.waiting_on = [...ctx.reviewers];
+    db.draft.waiting_on = [...new Set([...ctx.reviewers, ...added])];
     db.draft.reminders = {};
     db.changes.forEach((c) => (c.session_open = false));
     return json(200, { id: db.draft.id, status: "submitted", version: db.version + 1, waiting_on: db.draft.waiting_on });

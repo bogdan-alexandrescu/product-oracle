@@ -10,6 +10,7 @@ import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeli
 import { PrdStatus } from "@/components/simple/PrdStatus";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
+import { InReviewBar, PresentMenu, SendForApproval } from "@/components/simple/ReviewFlow";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
@@ -142,6 +143,10 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
   // 2026-10-30: the bets whose flow was asked for here ("Draw the flow"): their flow row shows while Oracle draws.
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
+  // build-review (QV3 a): with a working draft, what Present shows: the published version or the draft.
+  const [showing, setShowing] = useState<"draft" | "published" | null>(null);
+  // build-review (QV1 a): Send for approval… asks first, in a dialog.
+  const [sending, setSending] = useState(false);
   // e2e-pdf-export: what the download says ("PDF downloaded", and its pages past one).
   const [saved, setSaved] = useDownloadNote();
   // qa4-simple-prd-23: Export PDF says it is working while the file is made.
@@ -290,8 +295,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     });
   const decide = (n: Note, action: "accept" | "decline") =>
     act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: sessionId ? { session_id: sessionId } : {} })));
-  const submit = () =>
-    act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: v.draft!.id } } })));
+  const submit = (reviewerIds: string[]) =>
+    act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: v.draft!.id } }, body: { reviewer_ids: reviewerIds } })));
   // Remind (owner, 2026-10-26): each waiting reviewer gets an Inbox nudge, once a day at most.
   const remind = () =>
     act(() => unwrap(api.POST("/v1/simple/one-pagers/{doc}/remind", { params: { path: { doc } } })));
@@ -321,7 +326,8 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
     }
   }
 
-  async function present() {
+  async function present(show: "draft" | "published" | null = null) {
+    setShowing(show);
     setPresenting(true);
     await document.documentElement.requestFullscreen?.().catch(() => undefined);
   }
@@ -366,11 +372,17 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       {startWhy}
     </span>
   );
+  // build-review (QV3 a): presenting the published version, a changed line reads its published words.
+  const publishedWords = new Map(v.notes.filter((n) => n.kind === "change").map((n) => [n.line_id, n.before] as const).reverse());
   const actions = presenting ? (
     <button type="button" className={btn(phone)} onClick={stopPresenting}>Stop presenting</button>
   ) : (
     <>
-      <button type="button" className={btn(phone)} onClick={present}>{!phone && <Glyph d={PRESENT} />}Present</button>
+      {v.draft && v.draft.changes > 0 ? (
+        <PresentMenu v={v} btnClass={btn(phone)} label={<>{!phone && <Glyph d={PRESENT} />}Present</>} onPick={(show) => void present(show)} />
+      ) : (
+        <button type="button" className={btn(phone)} onClick={() => void present()}>{!phone && <Glyph d={PRESENT} />}Present</button>
+      )}
       <button type="button" className={`${btn(phone)} disabled:cursor-wait disabled:opacity-60`} onClick={exportPdf} disabled={exporting} aria-busy={exporting}>
         {!phone && <Glyph d={PDF} />}
         {exporting ? "Exporting…" : "Export PDF"}
@@ -386,7 +398,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
             aria-describedby={v.can_start ? undefined : "start-review-why"}
             onClick={() => setStarting(true)}
           >
-            {!phone && <Glyph d={REVIEW} />}Start review
+            {!phone && <Glyph d={REVIEW} />}Start a review meeting
           </button>
           {!phone && startWhyLine}
         </span>
@@ -420,10 +432,10 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
             <span>· Approved in {v.draft.approved_in ?? "the meeting"} · not yet published: {heldWords(v.draft)}</span>
           )}
           {v.draft.status === "submitted" && !v.draft.decider_approved && v.draft.waiting_on.length > 0 && (
-            <span data-testid="draft-waits-on">· Submitted · waiting on review from {v.draft.waiting_on.map((p) => p.name).join(", ")}</span>
+            <span data-testid="draft-waits-on">· Sent for approval · waiting on {v.draft.waiting_on.map((p) => p.name).join(", ")}</span>
           )}
           {v.draft.can_submit && (
-            <Button disabled={busy} onClick={() => void submit()}>Submit for review</Button>
+            <Button variant="primary" disabled={busy} onClick={() => setSending(true)}>Send for approval…</Button>
           )}
           {v.draft.status === "submitted" && v.draft.waiting_on.length > 0 && (v.draft.can_remind || v.draft.reminded_at) && (
             <span className="flex items-center gap-2">
@@ -437,11 +449,10 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           )}
         </div>
       )}
-      {!draftShown && v.changes_in_review > 0 && !presenting && (
-        <div role="status" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
-          {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · {v.published_at ? "you read the published version" : `you read version ${v.version}, not published yet`}
-        </div>
+      {sending && v.draft?.can_submit && (
+        <SendForApproval v={v} busy={busy} onClose={() => setSending(false)} onSend={(ids) => { setSending(false); void submit(ids); }} />
       )}
+      {!draftShown && v.changes_in_review > 0 && !presenting && <InReviewBar v={v} />}
       {/* oracle.simple.quality: Oracle's build failed its checks twice; the API names them to owners only. */}
       {heldChecks.length > 0 && !presenting && (
         <div role="note" aria-label="Needs a look" data-testid="needs-look" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
@@ -467,6 +478,12 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
       {/* qa-simple-prd-14/44, p3-16: the same header (title, status, version, owner, span) on both kinds. */}
       {/* qa4-simple-prd-5: presenting, the header sits over the page's own centred column. */}
       <div className={`mx-auto flex ${presenting && !planShown ? "max-w-[852px] px-4 max-[767px]:px-4" : sessionId ? "max-w-[1180px] px-0" : "max-w-[1180px] px-12 max-[767px]:px-4"} flex-col gap-5 pt-[26px] max-[767px]:gap-3.5 max-[767px]:pt-3.5 ${planShown ? "pb-12" : ""}`}>
+        {presenting && showing && (
+          // build-review (QV3 a): a line over the presented page says which it is.
+          <p data-testid="presenting-what" className="self-start rounded-full border border-line-strong bg-surface px-3 py-1 text-[15px] font-semibold text-text2">
+            {showing === "published" ? `Showing published v${v.draft?.base_version ?? v.version}` : `Showing the working draft · ${v.draft?.changes ?? 0} ${v.draft?.changes === 1 ? "change" : "changes"} not yet approved`}
+          </p>
+        )}
         <PrdHeader
           inMeeting={!!sessionId}
           v={v}
@@ -511,7 +528,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                 <ul className="mt-1 space-y-1">
                   {b.lines.map((l) => (
                     <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none" onPointerDown={(e) => { const touch = e.pointerType !== "mouse"; firstTap.current = touch && tapped !== l.id; if (touch) setTapped(l.id); }} onClick={() => { firstTap.current = false; }}>
-                      <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
+                      <div className={`rounded px-2 py-1 ${presenting && showing ? "" : TINT[l.state]}`}>
                         {editing === l.id ? (
                           <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
                             <label className="sr-only" htmlFor={`edit-${l.id}`}>New wording for {words.get(l.id)}</label>
@@ -559,7 +576,7 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
                             <span className={`min-w-0 flex-1 ${(v.can_edit || v.can_propose) && !presenting ? (v.can_edit ? "md:pr-10" : "md:pr-36") : ""}`}>
                               <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => { if (!firstTap.current) setOpen(open === l.id ? null : l.id); }} data-testid="one-pager-line-text">
                                 {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
-                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
+                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : presenting && showing === "published" && publishedWords.has(l.id) ? publishedWords.get(l.id) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
                               </button>
                               {l.full && !l.metric && foldAtSentence(l.full, l.text) !== l.full && (
                                 <button
@@ -793,7 +810,7 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
           </span>
         )}
         {/* qa-simple-prd-9: the same state the One-pagers list names. */}
-        {approved && draft && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
+        {approved && draft && !presenting && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
         {/* qa-simple-prd-p3-16: never approved, it shows the status the list shows ("In review", "Draft"). */}
         {!approved && summary && <span data-testid="one-pager-status"><PrdStatus d={summary} /></span>}
         <span>{phone && plan ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
