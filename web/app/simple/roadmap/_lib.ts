@@ -411,12 +411,16 @@ export const planMilestones = (data: Roadmap): Milestone[] =>
 
 /**
  * roadmap-keydates: the key dates the charts draw: the roadmap's own, and a PRD's milestone
- * unless the chart already draws it as a milestone (its code, on its day).
+ * unless the chart already draws it as a milestone (its code, or its name without the code
+ * as a track milestone "Prove it" for "M1 · Prove it", on its day).
  */
 export function drawnKeyDates(data: Roadmap): KeyDate[] {
   const code = (name: string) => name.split(/[\s·]/)[0];
-  const drawn = new Set(data.milestones.flatMap((m) => [m.end_date, m.date].filter(Boolean).map((d) => `${code(m.name)}|${d}`)));
-  return (data.key_dates ?? []).filter((k) => !k.prd || !drawn.has(`${code(k.name)}|${k.date}`));
+  const words = (name: string) => name.replace(/^[A-Z][A-Z0-9]*-?\d+[a-z]?\s*[·:.\-–—]?\s*/, "").trim().toLowerCase();
+  const drawn = new Set(
+    data.milestones.flatMap((m) => [m.end_date, m.date].filter(Boolean).flatMap((d) => [`${code(m.name)}|${d}`, `~${words(m.name)}|${d}`])),
+  );
+  return (data.key_dates ?? []).filter((k) => !k.prd || !(drawn.has(`${code(k.name)}|${k.date}`) || (!!words(k.name) && drawn.has(`~${words(k.name)}|${k.date}`))));
 }
 
 /** The milestone a person is in now: the one running today, else the next one, else the last. */
