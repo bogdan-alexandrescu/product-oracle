@@ -82,6 +82,8 @@ async def test_relative_times_move_dates(client, item, when, start, end):
     assert card["op"] == "move_dates"
     assert card["item_id"] == w.ids[item]
     assert card["after"] == {"start_date": start, "end_date": end}
+    # walkc-meeting r2 (5b): it also says the dates the item has now (``current``).
+    assert set(card["preview"].pop("current")) == {"start_date", "end_date", "source"}
     assert card["preview"] == {"kind": "dates", "item_id": w.ids[item],
                                "start_date": start, "end_date": end}  # fmt: skip
     assert await n_changes(ctx) == 0

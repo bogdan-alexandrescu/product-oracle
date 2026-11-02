@@ -271,3 +271,136 @@ async def test_a_cut_with_dependents_names_who_it_asks(client):
     assert card["may"] == "propose" and card["may_with_dependents"] == "propose"
     assert card["asks"] == ["Approver"]
     assert set(card["asks_with_dependents"]) == {"Owner", "Olive Second"}
+
+
+async def test_a_declined_card_proposal_says_declined(client):
+    """walkc-meeting r2 (5e): protects=a proposal made from a chat card in a meeting and
+    then declined there shows on the card as declined, by whom, and the meeting decision
+    says it was declined in the words of the proposal ("move ... to Later"), never "Moved";
+    fails_when=the card stays "proposed" or the decision reads "Moved ..."; no_claim=the
+    web's words (web spec)."""
+    from tests.test_simple_changes_api import CHANGES
+    from tests.test_simple_meetings_api import meeting_decisions
+
+    w = await world()
+    await _no_roadmap_decider(w)
+    m = await start(client, w, "owner", attendee_ids=[uid(w, "commenter")])
+    [card] = (await say(client, w, "commenter", "move Cut A to later", m["id"]))["cards"]
+    assert card["op"] == "change_horizon" and card["may"] == "propose", card
+    r = await apply(client, w, "commenter", card["id"])
+    assert r.status_code == 200, r.text
+    change_id = r.json()["result"]["change"]["id"]
+    r = await client.post(f"{CHANGES}/{change_id}/decline", json={"session_id": m["session_id"]},
+                          headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    r = await client.get(f"{MEETINGS}/{m['id']}/chat", headers=w.ctx.as_("commenter"))
+    assert r.status_code == 200, r.text
+    cards = {c["id"]: c for x in r.json()["messages"] for c in x.get("cards") or []}
+    assert cards[card["id"]]["status"] == "declined"
+    assert cards[card["id"]]["decided_by_name"] == "Owner"
+    who = w.ctx.users["commenter"].name or w.ctx.users["commenter"].email
+    titles = [d.title for d in await meeting_decisions(w)]
+    assert titles == [f"Declined {who}'s proposal: move Cut A to Later"]
+
+
+async def test_an_invited_attendee_has_not_joined_until_they_join(client):
+    """walkc-meeting r2 (5a): protects=an attendee the presenter invited reads as not
+    joined (``joined`` false) until they press Join; the presenter has joined from the
+    start; fails_when=every invited attendee reads as joined at once; no_claim=the
+    presenter's roll call (``present``, Mark away / Mark here)."""
+    from tests.test_simple_meetings_api import get
+
+    w = await world()
+    m = await start(client, w)
+    joined = {a["id"]: a["joined"] for a in (await get(client, w, m["id"]))["attendees"]}
+    assert joined == {uid(w, "decider"): True, uid(w, "approver"): False,
+                      uid(w, "commenter"): False}  # fmt: skip
+    r = await client.post(f"{MEETINGS}/{m['id']}/join", headers=w.ctx.as_("commenter"))
+    assert r.status_code == 200, r.text
+    joined = {a["id"]: a["joined"] for a in r.json()["attendees"]}
+    assert joined[uid(w, "commenter")] is True and joined[uid(w, "approver")] is False
+
+
+async def test_the_minutes_name_whom_a_working_draft_waits_on(client):
+    """walkc-meeting r2 (5j): protects=the minutes' "What still waits on whom" names the
+    person a working draft left by the meeting waits on (the PRD's decider, who approves
+    it); fails_when=the wait names nobody (``on`` empty); no_claim=drafts waiting on
+    reviewers (named already)."""
+    from tests.test_simple_meetings_walk import ended
+
+    w = await world()
+    m = await ended(client, w)
+    [wait] = [x for x in m["minutes"]["waits"] if "working draft" in x["what"]]
+    decider = w.ctx.users["decider"]
+    assert wait["on"] == [{"id": str(decider.id), "name": decider.name or decider.email}]
+
+
+def test_the_sent_minutes_say_when_the_meeting_was_in_words():
+    """walkc-meeting r2 (5j): protects=the minutes as emailed and posted to Slack say when
+    the meeting was, month first with its time and zone ("Oct 30, 2026, 2:49 PM PDT"), an
+    action item's due day in words ("by Nov 6"), and name whom each wait is on;
+    fails_when=they carry no time, or an ISO day; no_claim=the web's minutes (web spec)."""
+    import uuid
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from oracle.simple.meetings import _plain
+
+    ana = uuid.uuid4()
+    at = datetime(2026, 10, 30, 21, 49, tzinfo=UTC)
+    m = SimpleNamespace(title="Example review", started_at=at)
+    minutes = {"summary": "1 decision taken.", "open_questions": [],
+               "action_items": [{"title": "Send the example deck", "owner_id": str(ana),
+                                 "due_date": "2026-11-06"}],
+               "waits": [{"what": "Example: the working draft is not approved yet",
+                          "on": [{"id": str(ana), "name": "Ana Example"}]}]}  # fmt: skip
+    text = _plain(m, minutes, {ana: "Ana Example"}, "America/Los_Angeles")
+    assert "Oct 30, 2026, 2:49 PM PDT" in text
+    assert "2026-11-06" not in text and "(Ana Example by Nov 6)" in text
+    assert "- Example: the working draft is not approved yet (on Ana Example)" in text
+
+
+async def test_a_move_card_says_the_dates_the_item_has_now(client):
+    """walkc-meeting r2 (5b): protects=a move card on an item whose date comes from the
+    engineering lead (its milestone date, no dates of its own) carries the item's current
+    dates and their source in its preview (``current``), so its Before reads "Dates from
+    engineering", not "Estimated by Oracle"; fails_when=the card carries only the item's
+    own (empty) dates; no_claim=the web's words (walkc-meeting-r2-cards.spec.ts)."""
+    from oracle.roadmap.models import RoadmapItem
+
+    w = await world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        row = await s.get(RoadmapItem, w.ids["move_dates-u"])
+        row.milestone = {"name": "Beta", "date": "2026-12-01"}
+        await s.commit()
+    mid = (await start(client, w, "owner"))["id"]
+    m = await say(client, w, "owner", "move Move_Dates U to March 1", mid)
+    assert m["cards"], m["body"]
+    [card] = m["cards"]
+    assert card["before"] == {"start_date": None, "end_date": None}
+    current = card["preview"]["current"]
+    assert current["source"] == "engineering"
+    assert current["end_date"] == "2026-12-01"
+    assert current["start_date"] < current["end_date"]
+    # An item with its own dates says so too.
+    [card] = (await say(client, w, "owner", "move Move_Dates A to March 1", mid))["cards"]
+    assert card["preview"]["current"] == {"start_date": "2026-10-01", "end_date": "2026-11-15",
+                                          "source": "typed"}  # fmt: skip
+
+
+async def test_a_task_card_has_no_date_warning_and_no_preview_words(client):
+    """walkc-meeting r2 (5g): protects=a task line's card on an item with a broken link
+    carries none of the item's red flags or their fixes (adding a task moves no date), and
+    its line does not say "Preview it" (the card has no Preview); fails_when=the card shows
+    the item's dependency warning or the line asks to preview it; no_claim=move cards."""
+    w = await world()
+    mid = (await start(client, w, "owner"))["id"]
+    # Move_Dates B starts before Move_Dates A ends: a red dependency flag on B.
+    m = await say(client, w, "owner", "add a task 'Draft the FAQ' to Move_Dates B", mid)
+    [card] = m["cards"]
+    assert card["op"] == "add_item_task" and card["preview"] is None
+    assert card["flags"] == [] and card["fixes"] == []
+    assert "Preview" not in m["body"], m["body"]
+    # A move still asks to preview it and still carries its flags.
+    m = await say(client, w, "owner", "move Move_Dates B to March 1", mid)
+    assert "Preview it" in m["body"]

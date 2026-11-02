@@ -241,7 +241,7 @@ async def test_every_action_is_a_meeting_decision(client):
         "Proposed: Moved Change_Horizon A to Next",
         f"Accepted {who}'s proposal: Moved Change_Horizon A to Next",
         "Proposed: Cut Cut A",
-        f"Declined {who}'s proposal: Cut Cut A",
+        f"Declined {who}'s proposal: cut Cut A",
         "Undone: Renamed Edit_Title A",
     ]
     assert "Comment: Keep the beta" not in titles
