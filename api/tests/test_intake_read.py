@@ -16,9 +16,11 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
+from oracle import audit
 from oracle.config import get_settings
 from oracle.intake import read as intake_read
 from oracle.jobs.models import LlmJob
+from oracle.models import AuditEvent
 from oracle.runs.models import Run, RunSegment
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
 from oracle.swarm.runtime import RuntimeUnavailable
@@ -480,3 +482,80 @@ async def test_two_followers_of_a_refused_read_fall_back_once(client, monkeypatc
     [job] = await _jobs(ctx)
     assert read["path"] == "job" and read["job_id"] == str(job.id)
     assert read["fallback"]["code"] == "agent_unavailable"
+
+
+async def _refused(client, ctx, monkeypatch) -> uuid.UUID:
+    """An intake whose read's run SwarmCloud refused, not followed yet."""
+
+    class Refusing(FakeRuntime):
+        async def submit(self, spec):
+            raise RuntimeUnavailable("agent service unavailable", status=503)
+
+    set_runtime(Refusing())
+    monkeypatch.setattr(intake_read, "submit_later", lambda tenant_id, intake: None)
+    intake_id = uuid.UUID(await _new(client, ctx))
+    async with tenant_session(ctx.tenant_id) as s:
+        intake = await s.get(ProductIntake, intake_id)
+        await intake_read.submit(s, intake_read.current(intake))
+        await s.commit()
+    return intake_id
+
+
+async def _fallen_back(client, ctx, monkeypatch) -> uuid.UUID:
+    """An intake whose refused read fell back to the job, committed."""
+    intake_id = await _refused(client, ctx, monkeypatch)
+    async with tenant_session(ctx.tenant_id) as s:
+        intake = await s.get(ProductIntake, intake_id)
+        assert await intake_read.sync(s, intake) is True
+        await s.commit()
+    return intake_id
+
+
+# protects=binding-forgery-deflake review: two followers of one failed job both see the
+# read live; the one that writes second answers from the first's ending instead of failing
+# at its own commit on the stale intake row (a 500 on the summary or the tick);
+# fails_when=the second follower's commit raises or the failure is counted twice;
+# no_claim=which follower wins.
+async def test_two_followers_of_a_failed_job_end_the_read_once(client, monkeypatch):
+    ctx = await company()
+    intake_id = await _fallen_back(client, ctx, monkeypatch)
+    [job] = await _jobs(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(LlmJob, job.id)).status = "failed"
+        await s.commit()
+    async with tenant_session(ctx.tenant_id) as first, tenant_session(ctx.tenant_id) as second:
+        mine = await first.get(ProductIntake, intake_id)
+        theirs = await second.get(ProductIntake, intake_id)
+        assert intake_read.current(theirs)["state"] in intake_read.LIVE
+        assert await intake_read.sync(first, mine) is True
+        await first.commit()
+        assert await intake_read.sync(second, theirs) is False
+        await second.commit()
+        read = intake_read.current(theirs)
+        failures = theirs.analysis["extraction"]["failures"]
+    assert read["state"] == "failed"
+    assert failures == 1
+
+
+# protects=binding-forgery-deflake review: a follower that loses the race undoes only its
+# own changes; what its caller added to the session before following stays and is
+# committed; fails_when=the caller's earlier, uncommitted work is rolled back with the
+# follower's; no_claim=which follower wins.
+async def test_a_follower_that_loses_the_race_keeps_its_callers_work(client, monkeypatch):
+    ctx = await company()
+    intake_id = await _refused(client, ctx, monkeypatch)
+    async with tenant_session(ctx.tenant_id) as first, tenant_session(ctx.tenant_id) as second:
+        mine = await first.get(ProductIntake, intake_id)
+        theirs = await second.get(ProductIntake, intake_id)
+        assert await intake_read.sync(first, mine) is True
+        await first.commit()
+        await audit.record(second, audit.ORACLE, "example.before_follow", "intake", intake_id)
+        assert await intake_read.sync(second, theirs) is False
+        await second.commit()
+    async with tenant_session(ctx.tenant_id) as s:
+        actions = list(
+            await s.scalars(
+                select(AuditEvent.action).where(AuditEvent.action == "example.before_follow")
+            )
+        )
+    assert actions == ["example.before_follow"]
