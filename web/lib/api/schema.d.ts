@@ -36941,6 +36941,11 @@ export interface components {
              * @default []
              */
             words: components["schemas"]["WordOp"][];
+            /**
+             * Stock Rationale
+             * @description The rationale is the stock reason for a held rewrite, which the web says once.
+             */
+            readonly stock_rationale: boolean;
         };
         /** SectionPatchOut */
         SectionPatchOut: {
@@ -37006,6 +37011,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Stock Rationale
+             * @description The rationale is the stock reason for a held rewrite, which the web says once.
+             */
+            readonly stock_rationale: boolean;
         };
         /** SectionPatchReject */
         SectionPatchReject: {

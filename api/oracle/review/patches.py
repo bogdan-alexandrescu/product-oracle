@@ -22,7 +22,12 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import body_text
 from oracle.docs.service import ImportResult
 from oracle.review.models import SectionPatch, SectionReviewState
-from oracle.review.schemas import SectionPatchDetail, SectionPatchOut
+from oracle.review.schemas import (
+    HELD_REMOVE_REASON,
+    HELD_REWRITE_REASON,
+    SectionPatchDetail,
+    SectionPatchOut,
+)
 from oracle.review.state import effective_policy, now
 from oracle.v2.concurrency import expect_version, flush_or_conflict
 
@@ -73,13 +78,7 @@ async def propose_held(
             action=change.action,
             origin=origin if origin in ("run", "llm_job", "agent", "person") else "agent",
             run_id=run_id,
-            rationale=(
-                "An agent draft removed or renamed this approved section; the section was "
-                "kept. Accept to remove it."
-                if change.action == "remove"
-                else "An agent draft rewrote this approved section; the approved text was "
-                "kept. Review the rewrite as a diff."
-            ),
+            rationale=HELD_REMOVE_REASON if change.action == "remove" else HELD_REWRITE_REASON,
             status="open",
             created_by=principal.id if principal else None,
         )
