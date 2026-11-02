@@ -184,6 +184,8 @@ for (const phone of [false, true]) {
       await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Approved");
 
       await page.getByTestId("publish-share-note").getByRole("link", { name: "Share a link" }).click();
+      // The picked frame: the sheet opens with a green line saying v1 is ready (vqa-review-newprd).
+      await expect(page.getByTestId("share-ready")).toHaveText("v1 is published and ready to share.");
       await expect(page.getByTestId("share-shares")).toContainText("Shares the published v1");
       await expect(page.getByLabel("Label")).toBeVisible();
       await expect(page.getByRole("checkbox", { name: /Allow PDF download/ })).not.toBeChecked();

@@ -322,6 +322,9 @@ test.describe("desktop toast", () => {
     const toast = page.getByRole("status").filter({ hasText: "Moved to Trash" });
     await expect(toast).toBeVisible();
     const box = (await toast.boundingBox())!;
-    expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThan(4);
+    // Centred on the page, which keeps the scrollbar's room on a wide screen (qa4-docs-share-19),
+    // so the middle is half the page's width, not half the window's 1440 px.
+    const pageWidth = await page.evaluate(() => document.body.getBoundingClientRect().width);
+    expect(Math.abs(box.x + box.width / 2 - pageWidth / 2)).toBeLessThan(4);
   });
 });

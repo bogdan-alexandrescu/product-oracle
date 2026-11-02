@@ -124,7 +124,8 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
   const [name, setName] = useState("");
   const [problem, setProblem] = useState("");
   const [who, setWho] = useState("");
-  const [goal, setGoal] = useState<string | null>(null);
+  // undefined until a chip is pressed: the sheet opens with no goal picked, "Not sure yet" included.
+  const [goal, setGoal] = useState<string | null | undefined>(undefined);
   const [intake, setIntake] = useState<Intake | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [given, setGiven] = useState<Given[]>([]);
@@ -323,7 +324,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
           <legend className={`${LABEL} mb-1.5`}>The goal it helps</legend>
           <div className="flex flex-wrap gap-2">
             {[...goalList.map((g) => ({ id: g.id as string | null, name: g.title })), { id: null, name: "Not sure yet" }].map((g) => {
-              const on = goal === g.id && (g.id !== null || goal === null);
+              const on = goal === g.id;
               return (
                 <button
                   key={g.id ?? "none"}

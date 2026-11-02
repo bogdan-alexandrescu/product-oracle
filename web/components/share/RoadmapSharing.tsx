@@ -429,6 +429,10 @@ function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: n
       {pubs.data && !pub && <NotPublished doc={doc} n={n} onClose={onClose} />}
       {pub && (
         <>
+          {/* vqa-review-newprd (QV4 a): the sheet says first that the version is ready. */}
+          <p data-testid="share-ready" className="flex items-center gap-2 rounded-button bg-pass-bg px-3 py-2 text-sm font-medium text-pass">
+            <Icon name="check" size={16} />v{pub.version_number} is published and ready to share.
+          </p>
           <p className="text-text2" data-testid="share-shares">
             Shares the published v{pub.version_number} ({formatShortDate(pub.created_at)}).
           </p>
