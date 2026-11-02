@@ -54,6 +54,14 @@ async function phoneSwitch(page: Page, to: "Simple" | "Detailed") {
   }
 }
 
+/**
+ * Waits until the mock (which runs in the page) has saved the switch's choice: the switch opens
+ * the page at once and saves meanwhile (qa-shell-6), and a reload before the save lands drops it
+ * in the mock, where the API would already have it.
+ */
+const savedMode = (page: Page, email: string) =>
+  expect.poll(() => page.evaluate((e) => JSON.parse(localStorage.getItem("po-mock-db-v2") ?? "{}").preferences?.[e]?.experience ?? null, email));
+
 const path = (p: string) => new RegExp(`localhost:\\d+${p.replace(/\//g, "\\/")}$`);
 
 for (const [where, use] of [
@@ -173,6 +181,7 @@ test.describe("phone mode switch", () => {
     await expect(page).toHaveURL(path("/simple"));
     await phoneSwitch(page, "Detailed");
     await expect(page).toHaveURL(path("/home"));
+    await savedMode(page, "commenter@example.com").toBe("detailed");
     await page.reload();
     await expect(page).toHaveURL(path("/home"));
     await page.goto("/");
