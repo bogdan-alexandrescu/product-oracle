@@ -58,8 +58,10 @@ for (const phone of [false, true]) {
       if (phone) {
         // Phone: the button runs the card's full width, under its words.
         const card = (await review.boundingBox())!;
+        const words = (await review.getByText("A run waits on you to go on.").boundingBox())!;
         const btn = (await review.getByRole("link").boundingBox())!;
         expect(btn.width).toBeGreaterThan(card.width - 60);
+        expect(btn.y).toBeGreaterThanOrEqual(words.y + words.height);
       }
       await review.getByRole("link", { name: "Check the engineering review" }).click();
       await expect(page).toHaveURL(/\/runs\/[^/?]+/);
@@ -77,6 +79,24 @@ for (const phone of [false, true]) {
       await expect(page).toHaveURL(/\/runs\/[^/?]+/);
       await page.getByRole("button", { name: "Approve and continue" }).first().click();
       await expect(page.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
+      // Back, in the app: the card has gone at once, never shown again while Home reads the Inbox.
+      await page.evaluate(() => {
+        const w = window as unknown as { shownStops: number };
+        w.shownStops = 0;
+        const look = () => {
+          const shown = [...document.querySelectorAll<HTMLElement>('[data-testid="home-run-stop"]')].filter((el) => el.checkVisibility());
+          w.shownStops = Math.max(w.shownStops, shown.length);
+          requestAnimationFrame(look);
+        };
+        requestAnimationFrame(look);
+      });
+      await page.goBack();
+      await expect(page).toHaveURL(/\/simple$/);
+      await expect(page.getByTestId("home-sentence")).toBeVisible();
+      await page.waitForLoadState("networkidle");
+      await expect(stops(page)).toHaveCount(0);
+      expect(await page.evaluate(() => (window as unknown as { shownStops: number }).shownStops)).toBe(0);
+      await expect(page.getByTestId("home-sentence")).not.toContainText("run");
       await page.goto("/simple");
       await expect(page.getByTestId("home-sentence")).toBeVisible();
       await expect(page.getByTestId("home-sentence")).not.toContainText("run");
