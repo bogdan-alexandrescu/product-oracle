@@ -48,7 +48,7 @@ for (const [name, use] of [
       expect(today.x).toBeLessThan(view.x + view.width);
       // One row per item, under its goal.
       await expect(page.getByTestId("timeline-lane").filter({ hasText: "Below the line" })).toBeVisible();
-      const name = row(page, "alert-rules").getByRole("button", { name: "Alert rules engine" });
+      const name = row(page, "alert-rules").getByRole("button", { name: "Alert rules engine", exact: true });
       await expect(name).toBeVisible();
       const before = (await name.boundingBox())!.x;
       // Scrolled sideways into next year: the names stay on the left.
@@ -72,7 +72,14 @@ for (const [name, use] of [
       const key = page.getByTestId("timeline-key");
       await expect(key).toBeVisible();
       expect((await key.boundingBox())!.y).toBeLessThan((await box(page, "timeline-scroll")).y);
-      for (const words of ["Dated", "Draft", "⚠ Broken link", "Cut, below the line", "Today Oct 22"]) await expect(key.getByText(words, { exact: true })).toBeVisible();
+      for (const [k, words] of [
+        ["dated", "Dated"],
+        ["draft", "Draft"],
+        ["broken", "⚠ Broken link"],
+        ["cut", "Cut, below the line"],
+        ["today", "Today Oct 22"],
+      ])
+        await expect(key.locator(`li[data-key="${k}"]`)).toContainText(words);
       // Today is purple, never red.
       await expect(page.getByTestId("today-line")).toHaveCSS("background-color", "rgb(124, 58, 237)");
       // A draft is grey and dashed, with its word.
@@ -155,7 +162,7 @@ for (const [name, use] of [
       await scroll.evaluate((el) => (el.scrollLeft += 500));
       await expect.poll(() => scroll.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
       // Clicking another item's name swaps the panel, no closing first.
-      await row(page, "setup-checklist").getByRole("button", { name: "Setup checklist" }).click();
+      await row(page, "setup-checklist").getByRole("button", { name: "Setup checklist", exact: true }).click();
       await expect(side.getByTestId("floating-card")).toContainText("Setup checklist");
       await expect(row(page, "setup-checklist")).toHaveAttribute("data-open", "true");
       await expect(row(page, "alert-rules")).not.toHaveAttribute("data-open", "true");
