@@ -82,3 +82,20 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     });
   });
 }
+
+// roadmap-keydates review: a roadmap item added from another approved PRD (Starter templates,
+// from Team templates) brings that PRD's milestones too, each naming its own PRD, as the API
+// reads each item's own PRD ("roadmap-keydates-two-prds" scenario, invented data).
+test("an item from another PRD brings that PRD's milestones as key dates", async ({ page }) => {
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "roadmap-keydates-two-prds"] as const);
+  await login(page);
+  await openKeyDates(page);
+  await expect(page.getByTestId("key-dates-open")).toContainText("Key dates · 4");
+  const first = row(page, "M1 · First templates");
+  await expect(first.getByTestId("key-date-day")).toHaveText("· Dec 11");
+  await expect(first.getByTestId("key-date-from-prd")).toHaveText("From the PRD");
+  await expect(first.getByTestId("key-date-where")).toHaveText("Change it in the PRD, Team templates");
+  await expect(first.getByRole("link", { name: "Team templates" })).toHaveAttribute("href", "/documents/team-templates");
+  // The roadmap's own PRD's milestones stay, named by theirs.
+  await expect(row(page, "M1 · Prove it").getByTestId("key-date-where")).toHaveText("Change it in the PRD, Guided setup");
+});
