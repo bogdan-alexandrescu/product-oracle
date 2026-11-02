@@ -1196,7 +1196,9 @@ export function SimpleRoadmap() {
         {/* A phone's header bar names the page (D3): the H1 is for screen readers there. */}
         <h1 className={phone ? "sr-only" : "text-2xl font-semibold"}>Roadmap</h1>
         {data.roadmap ? (
-          <span data-testid="roadmap-scope" className="rounded-full bg-accent-soft px-3 py-0.5 text-[15px] font-semibold whitespace-nowrap text-accent-ink">
+          // walkb-roadmap review 5f: a long name (a PRD's) wraps inside the page, never cut off; a
+          // one-line chip stays a pill (its radius is over half its height).
+          <span data-testid="roadmap-scope" className="max-w-full rounded-2xl bg-accent-soft px-3 py-0.5 text-[15px] font-semibold break-words text-accent-ink">
             {data.roadmap.title}
           </span>
         ) : (
