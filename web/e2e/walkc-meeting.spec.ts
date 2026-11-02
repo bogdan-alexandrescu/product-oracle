@@ -40,6 +40,12 @@ import { expect, test, type BrowserContext, type Locator, type Page } from "./te
  * fix buttons, even after the page is opened again; fails_when = the earlier card still
  * offers the fixes it had when it was made; no_claim = the fixes' dates (api
  * tests/test_walkc_meeting.py reads the meeting's working state).
+ *
+ * Card cut-with-dependents-asks (the "simple-chat" scenario's Weekly plan review, everyone
+ * may change things): protects = a commenter's cut card with dependents says who "Propose:
+ * cut it and its dependents" asks, besides who Propose asks; fails_when = the card names
+ * only who the cut alone asks; no_claim = who that is when the items' deciders differ (api
+ * tests/test_walkc_meeting.py works it out from every item cut).
  */
 
 async function flags(context: BrowserContext, value: string) {
@@ -179,6 +185,21 @@ for (const phone of [false, true]) {
       await owner.reload();
       await expect(earlier.getByRole("button", { name: "Apply", exact: true })).toBeVisible();
       await expect(earlier.getByTestId("chat-card-fix")).toHaveCount(0);
+    });
+
+    test(`a cut card says who its cut with dependents asks (${where})`, async ({ page, context }) => {
+      await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
+      const owner = await attend(page, ADMIN.email, true);
+      await owner.getByLabel("Who changes things").selectOption("everyone");
+      await expect(owner.getByLabel("Who changes things")).toHaveValue("everyone");
+      const theo = await attend(page, "commenter@example.com", false);
+      const chat = theo.getByTestId("meeting-chat");
+      await chat.getByLabel("Message Oracle").fill("cut Alert rules engine");
+      await tap(chat.getByRole("button", { name: "Send" }));
+      const card = chat.getByTestId("chat-card").filter({ hasText: "Cut Alert rules engine" });
+      await expect(card.getByRole("button", { name: "Propose: cut it and its dependents" })).toBeEnabled();
+      await expect(card.getByTestId("chat-card-asks")).toHaveText("Propose asks Avery Stone to decide.");
+      await expect(card.getByTestId("chat-card-asks-dependents")).toHaveText("Cutting it with its dependents asks Avery Stone to decide.");
     });
   });
 }
