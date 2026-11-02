@@ -956,11 +956,8 @@ function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: st
  */
 function prdKeyDates(db: SimpleDb, slug: string, roadmap: Schemas["SimpleDocRef"]): Schemas["SimpleKeyDate"][] {
   const hidden = new Set(db.plan?.hidden ?? []);
-  const prds = [...new Set(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap).map((s) => s.roadmap))].map((rm) => ({
-    id: stableUuid(`simple-prd/${rm}`),
-    slug: ROADMAPS[rm].prd.toLowerCase().replace(/ /g, "-"),
-    title: ROADMAPS[rm].prd,
-  }));
+  // roadmap-keydates review: every PRD the roadmap's items come from, as the API reads them.
+  const prds = [...new Map(db.items.filter((s) => s.roadmap === slug && !s.draft_roadmap).map((s) => [itemPrd(s).id, itemPrd(s)])).values()];
   return prds
     .filter((p) => !hidden.has(p.slug))
     .sort((a, b) => a.title.localeCompare(b.title))
