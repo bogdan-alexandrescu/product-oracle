@@ -216,7 +216,10 @@ test("qa-simple-home-26: Decided lately is newest first and each row opens its d
 test("qa-simple-home-27: each card's All link is named for its card and big enough to tap", async ({ page }) => {
   // fails_when: four links are all named "All ->", or smaller than 24 px
   await signIn(page, EMAILS.owner);
-  for (const name of ["All decisions", "All proposals", "All meetings", "All of the roadmap"]) {
+  // build-rundecide RD3 a: with only PRD questions waiting, they show in each PRD's own card, not under Decisions.
+  await expect(page.getByTestId("home-prd-waiting").first()).toBeVisible();
+  const decisionsCard = (await page.getByTestId("home-decisions").count()) > 0;
+  for (const name of [...(decisionsCard ? ["All decisions"] : []), "All proposals", "All meetings", "All of the roadmap"]) {
     const link = page.getByRole("link", { name, exact: true });
     await expect(link).toBeVisible();
     expect((await link.boundingBox())!.height, name).toBeGreaterThanOrEqual(24);
