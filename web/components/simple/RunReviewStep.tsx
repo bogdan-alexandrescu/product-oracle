@@ -108,7 +108,7 @@ export function RunReviewStep({ doc, title, n, approved, onState, onApproved }: 
           <span className="simple-rb">
             <b className="font-[650]">You approved the PRD, version {n}.</b>
             <span className="simple-meta">
-              Second of two steps · {name} goes on · {you} · {dayWords(done, zone)}
+              Second of two steps · {name} goes on to its dates · {you} · {dayWords(done, zone)}
             </span>
           </span>
         </p>
