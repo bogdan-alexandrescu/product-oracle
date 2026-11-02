@@ -551,7 +551,9 @@ function DayChart(props: TimelineProps) {
             />
             <div className="relative" style={{ width: trackW }}>
               {months
-                .filter((m) => !fit || x(m.day) < trackW - 64)
+                // A month that starts left of the view would peek out from under the names
+                // column cut short; the picked frames show only months that start in sight.
+                .filter((m) => (fit ? x(m.day) < trackW - 64 : x(m.day) >= sl - 2))
                 .map((m) => (
                   <span
                     key={m.day}
