@@ -177,3 +177,11 @@ def test_needs_a_look_only_for_real_disagreement():
     assert [x.text for x in checks.numbers([real])] == [
         "“four features” says 4, but “Features by milestone” shows 2 items."
     ]
+
+
+# The one-pager PDF's header printed its span as "2026-11-02 – 2027-02-26".
+def test_pdf_span_reads_month_first():
+    from datetime import date
+
+    assert one_pager.span_words(date(2026, 11, 2), date(2027, 2, 26)) == "Nov 2, 2026 – Feb 26, 2027"
+    assert one_pager.span_words(date(2026, 11, 2), date(2026, 12, 23)) == "Nov 2 – Dec 23, 2026"
