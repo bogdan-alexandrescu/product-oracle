@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { copyOf, setupOpen } from "@/app/home/_setup";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ds/Dialog";
 import { setToastPlace, toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { usePhone } from "@/components/simple/FlowViews";
+import { meetingMoment } from "@/components/simple/FlowVisual";
 import { NewPrdButton, NewPrdSheet, StartedCard, useCanStartPrd, useStartedPrds } from "@/components/simple/NewPrd";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
@@ -150,6 +151,29 @@ export default function SimpleHome() {
   };
 
   const inbox = useQuery(k("inbox"), loadInbox, { keepPrevious: true });
+  // vqa-simple-runs: Back to Home shows the page as it was left (cacheComponents keeps its
+  // state): read everything again, and draw no run stop until the Inbox is read, so a stop just
+  // approved on the run's page never shows again. Before paint, so nothing stale flashes.
+  // vqa-simple-runs (RD3 a, frame "done"): a question decided on its PRD's card stays in its row,
+  // with the answer, who and when, and Undo there (no toast), until Home is left: coming
+  // back reads the questions again, so a row decided before shows as the API now has it.
+  const [decidedHere, setDecidedHere] = useState<Question[]>([]);
+  const shownBefore = useRef(false);
+  const [revisit, setRevisit] = useState(false);
+  useLayoutEffect(() => {
+    if (shownBefore.current) {
+      invalidateWaiting();
+      setDecidedHere([]);
+      setRevisit(true);
+      setStamp((s) => s + 1);
+    }
+    shownBefore.current = true;
+  }, []);
+  useEffect(() => {
+    // Once the Inbox is read again: a later reload (a decision on Home) keeps the cards it has.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (revisit && !inbox.loading) setRevisit(false);
+  }, [revisit, inbox.loading]);
   const roadmap = useQuery(k("roadmap"), () => unwrap(api.GET("/v1/simple/roadmap")), { keepPrevious: true });
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
   const changes = useQuery(k("changes"), () => unwrap(api.GET("/v1/simple/changes")), { keepPrevious: true });
@@ -168,6 +192,22 @@ export default function SimpleHome() {
     { keepPrevious: true },
   );
   const questionActions = useQuestionActions(reloadAll);
+  const prdActions: typeof questionActions = {
+    ...questionActions,
+    decide: async (q, a) => {
+      const r = await questionActions.decide(q, a, true);
+      // Only when it can be undone: otherwise the toast says it and the row goes as on any list.
+      if (r && r.change.status !== "proposed" && r.change.can_undo) {
+        const label = [r.words, me?.name, meetingMoment(new Date().toISOString(), zone)].filter(Boolean).join(" · ");
+        setDecidedHere((d) => [...d.filter((x) => x.id !== q.id), { ...q, column: "decided", chosen: r.words, decided_label: label, undo_id: r.change.id }]);
+      }
+      return r;
+    },
+    undo: async (id) => {
+      await questionActions.undo(id);
+      setDecidedHere((d) => d.filter((x) => x.undo_id !== id));
+    },
+  };
   // A4: a phone's Home shows the soonest two decisions, a desktop's three.
   const phone = usePhone();
   // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
@@ -257,7 +297,7 @@ export default function SimpleHome() {
   const firstName = (me?.name ?? "").trim().split(/\s/)[0];
   const decisionCount = waiting.data?.count ?? 0;
   // SW1: the run stops that wait on me, a card each under the summary (their work is on the run's page).
-  const runStops = runStopsOf(inbox.data);
+  const runStops = revisit && inbox.loading ? undefined : runStopsOf(inbox.data);
   const stopCount = runStops?.length ?? 0;
   // walkc-roadmap-tasks: the open tasks on roadmap items that wait on me.
   const myTasks = waiting.data?.tasks ?? [];
@@ -286,10 +326,10 @@ export default function SimpleHome() {
   // An empty section alone is not shown either (its tile neither): the cards that wait on me lead.
   // build-rundecide RD3 a: the PRDs' questions I own wait in a card per PRD; this card keeps the other judgement calls.
   const decisionRows = waiting.data && decisions.data ? homeDecisionRows([], decisions.data) : undefined;
-  const prdWaiting = waitingByPrd(waiting.data?.questions ?? []);
+  const prdWaiting = waitingByPrd([...(waiting.data?.questions ?? []).filter((q) => !decidedHere.some((d) => d.id === q.id)), ...decidedHere]);
   const decisionsEmpty = decisionRows !== undefined && decisionRows.length === 0;
   const proposalsEmpty = !!changes.data && proposalRows.length === 0;
-  const quiet = decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0;
+  const quiet = !(revisit && inbox.loading) && decisionsEmpty && prdWaiting.length === 0 && proposalsEmpty && mineApart.length === 0 && stopCount === 0 && myTasks.length === 0;
   // qa-onboarding-21: a tile that cannot apply yet (no roadmap items, so no links to break) is not shown.
   const tilesShown = (
     [
@@ -693,7 +733,7 @@ export default function SimpleHome() {
             </header>
             <div className="mt-3">
               <Top rows={questions} max={phone ? 2 : 3} more={`/simple/decisions?prd=${encodeURIComponent(prd.slug)}`} what={`of ${prd.title}'s decisions`}>
-                {(q) => <QuestionRow key={q.id} q={q} mode="list" testId="home-question" actions={questionActions} plain />}
+                {(q) => <QuestionRow key={q.id} q={q} mode={decidedHere.includes(q) ? "here" : "list"} testId="home-question" actions={prdActions} plain />}
               </Top>
             </div>
           </section>

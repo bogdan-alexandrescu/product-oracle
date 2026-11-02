@@ -1,7 +1,7 @@
 import type { Schemas } from "../client";
 import { mockNowMs } from "./clock";
 import { companyDateInWords } from "./connections";
-import { stableUuid } from "./ids";
+import { MOCK_SCENARIO_KEY, stableUuid } from "./ids";
 
 /**
  * prd-questions (mock): an invented PRD's open questions (Q1..Q16 of "Guided setup"), read
@@ -11,6 +11,13 @@ import { stableUuid } from "./ids";
  * other Simple ops: owners and the decider apply (with Undo), approvers and commenters
  * propose to the decider, viewers read. All data is invented.
  */
+
+/**
+ * vqa-simple-runs review: the scenario where a decision comes back applied but not undoable
+ * (can_undo false), as the API answers when the change's editing session is closed or idle.
+ */
+export const QUESTIONS_NO_UNDO_SCENARIO = "questions-no-undo";
+const noUndo = (): boolean => typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === QUESTIONS_NO_UNDO_SCENARIO;
 
 type Role = Schemas["Me"]["role"];
 type Question = Schemas["SimpleQuestion"];
@@ -288,7 +295,7 @@ export async function routeQuestionChanges(
     op: b.op, target: { decision_id: target.decision_id }, before: (b.before ?? {}) as Record<string, unknown>, after,
     status: applies ? "applied" : "proposed", by: ctx.me.id, by_name: nameOf(ctx, ctx.me.id), at: iso(mockNowMs()),
     decided_by: applies ? ctx.me.id : null, decided_at: applies ? iso(mockNowMs()) : null, reason: null, decision_reason: null,
-    routed_to: routed, undoes_id: null, undone: false, can_decide: false, can_undo: applies,
+    routed_to: routed, undoes_id: null, undone: false, can_decide: false, can_undo: applies && !noUndo(),
   };
   let meetingId: string | null = null;
   if (change.session_id) {

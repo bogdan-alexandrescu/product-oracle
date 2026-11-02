@@ -24,7 +24,7 @@ const BOX = "rounded-[14px] border border-line bg-surface p-4 shadow-sm";
  * build-rundecide RD2 b "Separate Approve step": a run's PRD review on the Simple PRD page.
  * Approving the review lets the run go on (an optional note the run's next steps read); right
  * after, the run's next stop asks to approve the PRD as its own step ("Approve the PRD"), and the
- * status by the title then reads Approved. To change the PRD first, Start review stays above.
+ * status by the title then reads Approved. To change the PRD first, Start a review meeting stays above.
  * Shown to whoever decides the review, then to whoever may approve the PRD; hidden otherwise.
  */
 export function RunReviewStep({ doc, title, n, approved, onState, onApproved }: { doc: string; title: string; n: number; approved: boolean; onState?: (s: "waiting" | "done" | null) => void; onApproved: () => void }) {
@@ -130,7 +130,7 @@ export function RunReviewStep({ doc, title, n, approved, onState, onApproved }: 
           </span>
         </p>
         <h2 className="simple-h2 mt-2">Next stop: approve the PRD</h2>
-        <p className="simple-small">Approving makes version {n} the PRD everyone builds from. To change it first, use Start review above.</p>
+        <p className="simple-small">Approving makes version {n} the PRD everyone builds from. To change it first, use Start a review meeting above.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className="simple-button simple-button-primary" disabled={saving} onClick={() => void approvePrd()}>
             Approve the PRD

@@ -103,6 +103,29 @@ for (const phone of [false, true]) {
       await expect(stops(page)).toHaveCount(0);
     });
 
+    // vqa-simple-runs: Back to Home shows the page as it was left (cacheComponents keeps it).
+    // The mock answers on a timer: with the page clock paused nothing is read again, so a card
+    // drawn now is the stale one of the stop just confirmed.
+    test(`back to Home after confirming: the confirmed stop's card is not drawn from before (${where})`, async ({ page }) => {
+      await signIn(page, ADMIN.email);
+      await expect(stops(page)).toHaveCount(1);
+      await stops(page).getByRole("link", { name: "Confirm the baseline" }).click();
+      await expect(page).toHaveURL(/\/runs\/[^/?]+/);
+      await page.getByRole("button", { name: "Approve and continue" }).first().click();
+      await expect(page.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
+      await page.waitForLoadState("networkidle");
+      const now = await page.evaluate(() => Date.now());
+      await page.clock.pauseAt(now + 2000);
+      await page.goBack();
+      await expect(page).toHaveURL(/\/simple$/);
+      await expect(page.getByTestId("home-sentence")).toBeVisible();
+      await expect(stops(page)).toHaveCount(0);
+      await page.clock.resume();
+      await page.waitForLoadState("networkidle");
+      await expect(page.getByTestId("home-sentence")).not.toContainText("run");
+      await expect(stops(page)).toHaveCount(0);
+    });
+
     test(`no card for a stop I may not decide (${where})`, async ({ page }) => {
       await signIn(page, "viewer@example.com", "simple-waits");
       await expect(page.getByTestId("home-greeting")).toBeVisible();

@@ -11,7 +11,7 @@ import { expect, test, type Page } from "./test";
  *
  * Card run-approve-step: protects = the bar names the run and the version and says approving the
  * PRD is its own step; Approve opens a note and says the PRD is asked next; Approve review turns
- * the bar into "Next stop: approve the PRD" (the review approved by you, Start review still
+ * the bar into "Next stop: approve the PRD" (the review approved by you, Start a review meeting still
  * above) while the PRD stays In review; Approve the PRD makes it read Approved; fails_when =
  * approving the review approves the PRD too, the second step is missing, or the status does not
  * change; no_claim = the detailed version page's run review bar (run-review*.spec.ts).
@@ -50,10 +50,11 @@ for (const phone of [false, true]) {
 
       await expect(step.getByRole("heading", { name: "Next stop: approve the PRD" })).toBeVisible();
       await expect(step.getByTestId("run-review-approved")).toContainText(/^Run review approved by you \(Avery Stone\) · \w{3} \w{3} \d{1,2}$/);
-      await expect(step).toContainText("Approving makes version 2 the PRD everyone builds from. To change it first, use Start review above.");
+      await expect(step).toContainText("Approving makes version 2 the PRD everyone builds from. To change it first, use Start a review meeting above.");
+      // vqa-simple-runs: the words name the button above as it reads (merged as "Start a review meeting").
       // The PRD is not approved by the review: it still reads In review, and Start review stays.
       await expect(status).toHaveText("In review");
-      await expect(page.getByRole("button", { name: "Start review" }).first()).toBeAttached();
+      await expect(page.getByRole("button", { name: "Start a review meeting" }).first()).toBeAttached();
 
       await step.getByRole("button", { name: "Approve the PRD" }).click();
       await expect(step).toContainText("You approved the PRD, version 2.");
