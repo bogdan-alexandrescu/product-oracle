@@ -29,7 +29,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
           expect.stringMatching(/^Key date: Board meeting · [A-Z][a-z]{2} \d{1,2}, \d{4}$/),
         ]),
       );
-      const m1 = select.locator("option", { hasText: "M1 · Prove it" });
+      const m1 = select.locator("option", { hasText: "Key date: M1 · Prove it" });
       await expect(m1).toHaveAttribute("title", "Change it in the PRD, Guided setup");
 
       // Picking it draws the line on its day.
