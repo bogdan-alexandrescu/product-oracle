@@ -401,7 +401,8 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
 /**
  * oracle.simple.dates.after_dependencies (walkb-roadmap): an item dated only by its end starts
  * the day after what it depends on ends (the end itself when that is later); a fully estimated
- * bar stays its window's estimate. Dependencies first; changes `all` in place.
+ * bar (walkb-roadmap review) moves to start that day, keeping its length. Dependencies first;
+ * changes `all` in place.
  */
 function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>): void {
   const done = new Set<string>();
@@ -413,8 +414,13 @@ function afterDependencies(all: Map<string, { s: SeedItem; r: { start: Dated; en
     deps.forEach(visit);
     const ends = deps.map((k) => all.get(k)!.r.end.date).sort();
     const latest = ends[ends.length - 1];
-    if (!x.r.start.estimated || x.r.end.estimated || !latest || latest < x.r.start.date) return;
+    if (!x.r.start.estimated || !latest || latest < x.r.start.date) return;
     const day = addDays(latest, 1);
+    if (x.r.end.estimated) {
+      const end = addDays(day, span(x.r.start.date, x.r.end.date) - 1);
+      x.r = { start: { date: day, source: "estimated", estimated: true }, end: { date: end, source: "estimated", estimated: true } };
+      return;
+    }
     x.r = { start: { date: day < x.r.end.date ? day : x.r.end.date, source: "estimated", estimated: true }, end: x.r.end };
   };
   [...all.keys()].forEach(visit);

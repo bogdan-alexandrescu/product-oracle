@@ -29,5 +29,23 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
         expect(mobile.x).toBeGreaterThanOrEqual(rules.x + rules.width - 1);
       }
     });
+
+    // Card entry (walkb-roadmap review): protects = a fully estimated item (Alert routing by
+    // team, no dates typed) starts after what it depends on (Alert history export, a real
+    // end) and has no broken link; fails_when = its bar stays at its window's start, before
+    // its dependency's end; no_claim = the bar's length.
+    test("a fully estimated item starts after its dependency", async ({ page }) => {
+      await login(page);
+      await page.goto("/simple/roadmap");
+      await expect(page.getByTestId("simple-chart")).toBeVisible();
+      await expect(page.getByRole("main")).not.toContainText(/‘Alert routing by team’ starts/);
+      await expect(page.locator('[data-testid="broken-callout"][data-item="alert-sso"]')).toHaveCount(0);
+      if (viewport.width > 600) {
+        await expect(bar(page, "alert-sso")).toHaveAttribute("data-kind", "estimated");
+        const exp = (await body(page, "alert-export").boundingBox())!;
+        const sso = (await body(page, "alert-sso").boundingBox())!;
+        expect(sso.x).toBeGreaterThanOrEqual(exp.x + exp.width - 1);
+      }
+    });
   });
 }
