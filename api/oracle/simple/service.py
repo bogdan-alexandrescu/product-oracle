@@ -1027,10 +1027,6 @@ async def build(
     # One roadmap chosen: its key dates; all roadmaps: every readable roadmap's, even when
     # the other filters hide its items (the Key dates editor lists and targets them all).
     kd_docs = {chosen.id: chosen} if chosen is not None else readable
-    kds, kd_roadmaps = await key_dates.roadmap_key_dates(db, principal, kd_docs)
-    all_roadmaps = kd_roadmaps
-    if chosen is not None:
-        _, all_roadmaps = await key_dates.roadmap_key_dates(db, principal, readable)
     from oracle.simple import visuals
 
     flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])
@@ -1044,35 +1040,21 @@ async def build(
     await _bet_flows(db, principal, shown, items)
     # plan-model: each item's slices and milestones from its PRD's plan; the track
     # milestones dated by the plan of their track's PRD.
-    from oracle.docs import visibility
     from oracle.simple import plan as plans
 
     track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
-    # roadmap-keydates: the PRDs on the roadmaps whose key dates are read, by title.
-    kd_prds: dict[uuid.UUID, dict[uuid.UUID, Document]] = {}
-    for e in read.entries:
-        if (
-            e.roadmap.id in kd_docs
-            and e.prd is not None
-            and visibility.can_see(principal, e.prd)
-            and not getattr(e.prd, "deleted_at", None)
-        ):
-            kd_prds.setdefault(e.roadmap.id, {})[e.prd.id] = e.prd
+    # roadmap-keydates: the key dates read with the PRDs' milestones, as priorities reads them.
+    kd_prds = key_dates.key_date_prds(principal, kd_docs, read.entries)
     views = await plans.views(
         db,
         {e.prd.id for e in shown if e.prd}
         | set(track_prd.values())
-        | {p for of in kd_prds.values() for p in of},
+        | {p.id for of in kd_prds.values() for p in of},
     )
-    kds = sorted(
-        kds
-        + key_dates.prd_key_dates(
-            kd_docs,
-            {r: sorted(of.values(), key=lambda d: d.title) for r, of in kd_prds.items()},
-            views,
-        ),
-        key=lambda k: (k.date, k.name),
-    )
+    kds, kd_roadmaps = await key_dates.read_key_dates(db, principal, kd_docs, read.entries, views)
+    all_roadmaps = kd_roadmaps
+    if chosen is not None:
+        _, all_roadmaps = await key_dates.roadmap_key_dates(db, principal, readable)
     for it in items:
         view = views.get(it.prd.id) if it.prd else None
         if view is None:

@@ -460,13 +460,19 @@ NOW_LINE = SimpleLine(key="now", kind="now", label="This quarter (Now)")
 async def lines(db: AsyncSession, principal: Any, read_: service.Read) -> list[SimpleLine]:
     """The lines offered: Now, each key date and each dated milestone the reader sees."""
     docs = {e.roadmap.id: e.roadmap for e in read_.entries}
-    kds, _ = await key_dates.roadmap_key_dates(db, principal, docs)
+    # priorities-keydates: the roadmap's key dates as Simple › Roadmap reads them, its PRDs'
+    # milestones with them.
+    kds, _ = await key_dates.read_key_dates(db, principal, docs, read_.entries)
     tracks = {e.track.id for e in read_.entries if e.track is not None}
     out = [NOW_LINE]
     out += [
         SimpleLine(
-            key=f"key_date:{k.id}", kind="key_date", label=f"{k.name} · {_day(k.date)}", date=k.date
-        )  # fmt: skip
+            key=f"key_date:{k.id}",
+            kind="key_date",
+            label=f"{k.name} · {_day(k.date)}",
+            date=k.date,
+            prd=k.prd,
+        )
         for k in kds
     ]
     out += [

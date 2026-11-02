@@ -282,6 +282,47 @@ def prd_key_dates(
     return out
 
 
+async def read_key_dates(
+    db: AsyncSession,
+    principal: Any,
+    docs: dict[uuid.UUID, Document],
+    entries: list[Any],
+    views: dict[uuid.UUID, Any] | None = None,
+) -> tuple[list[SimpleKeyDate], list[SimpleKeyDateRoadmap]]:
+    """The key dates Simple › Roadmap and Simple › Priorities read (priorities-keydates, the
+    owner, Nov 2: "the same way"): these roadmaps' own (:func:`roadmap_key_dates`) and each
+    dated milestone of the PRDs their items come from that the reader may see
+    (:func:`prd_key_dates`), in date order. ``views``: the PRDs' plans when the caller has
+    read them already (:func:`key_date_prds` names the PRDs), else read here."""
+    from oracle.simple import plan as plans
+
+    own, roadmaps = await roadmap_key_dates(db, principal, docs)
+    prds = key_date_prds(principal, docs, entries)
+    if views is None:
+        views = await plans.views(db, {p.id for of in prds.values() for p in of})
+    out = sorted(own + prd_key_dates(docs, prds, views), key=lambda k: (k.date, k.name))
+    return out, roadmaps
+
+
+def key_date_prds(
+    principal: Any, docs: dict[uuid.UUID, Document], entries: list[Any]
+) -> dict[uuid.UUID, list[Document]]:
+    """roadmap-keydates: per roadmap, the PRDs its items come from that the reader may see,
+    by title."""
+    from oracle.docs import visibility
+
+    found: dict[uuid.UUID, dict[uuid.UUID, Document]] = {}
+    for e in entries:
+        if (
+            e.roadmap.id in docs
+            and e.prd is not None
+            and visibility.can_see(principal, e.prd)
+            and not getattr(e.prd, "deleted_at", None)
+        ):
+            found.setdefault(e.roadmap.id, {})[e.prd.id] = e.prd
+    return {r: sorted(of.values(), key=lambda d: d.title) for r, of in found.items()}
+
+
 async def _current(
     db: AsyncSession, principal: Any, doc: uuid.UUID, kd_id: str
 ) -> dict[str, Any] | None:

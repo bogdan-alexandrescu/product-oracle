@@ -57,7 +57,7 @@ async def test_default_line_is_this_quarter(client):
     w = await world()
     out = await read(client, w)
     assert out["line"] == {"key": "now", "kind": "now", "label": "This quarter (Now)",
-                           "date": None}  # fmt: skip
+                           "date": None, "prd": None}  # fmt: skip
     assert above(out) == {"pay-1": True, "pay-2": False, "pay-3": True, "pay-4": False}
     assert [(x["key"], x["date"]) for x in out["lines"]] == [
         ("now", None),
@@ -83,7 +83,7 @@ async def test_date_lines_use_the_planned_end(client):
     assert above(out) == {"pay-1": True, "pay-2": True, "pay-3": True, "pay-4": False}
     out = await read(client, w, "date:2026-12-31")
     assert out["line"] == {"key": "date:2026-12-31", "kind": "date", "label": "By Dec 31, 2026",
-                           "date": "2026-12-31"}  # fmt: skip
+                           "date": "2026-12-31", "prd": None}  # fmt: skip
     assert above(out) == {"pay-1": True, "pay-2": False, "pay-3": True, "pay-4": False}
     for junk in (f"key_date:{uuid.uuid4()}", "date:soon", "nonsense"):
         assert (await read(client, w, junk))["line"]["key"] == "now", junk

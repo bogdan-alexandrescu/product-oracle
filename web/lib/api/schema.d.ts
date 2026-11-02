@@ -38400,6 +38400,7 @@ export interface components {
             label: string;
             /** Date */
             date?: string | null;
+            prd?: components["schemas"]["SimpleDocRef"] | null;
         };
         /** SimpleMatch */
         SimpleMatch: {

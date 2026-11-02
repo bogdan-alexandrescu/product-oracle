@@ -962,6 +962,9 @@ class SimpleLine(BaseModel):
     kind: Literal["now", "key_date", "milestone", "date"]
     label: str
     date: dt.date | None = None
+    # priorities-keydates: a key date read from a PRD's milestone (SimpleKeyDate.prd), marked
+    # "From the PRD"; None: any other line.
+    prd: SimpleDocRef | None = None
 
 
 class SimplePrioritiesOut(BaseModel):

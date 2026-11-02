@@ -115506,6 +115506,16 @@
               }
             ],
             "title": "Date"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
