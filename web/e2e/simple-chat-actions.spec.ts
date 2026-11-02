@@ -37,7 +37,7 @@ async function signIn(page: Page, email: string, to: string) {
 /** The owner starts a review of Guided setup (S8's sheet) and lands on its live meeting screen. */
 async function startReview(page: Page) {
   await signIn(page, EMAILS.owner, "/simple/prds/guided-setup");
-  await tap(page.getByRole("button", { name: "Start review" }));
+  await tap(page.getByRole("button", { name: "Start a review meeting" }));
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await tap(sheet.getByRole("button", { name: "Start", exact: true }));
@@ -255,6 +255,9 @@ for (const [phone, dark] of [
       // over the page with a backdrop (the shell's), so the person closes it to reach the rail.
       await tab.addLocatorHandler(tab.getByTestId("hop-backdrop"), (b) => b.click({ position: { x: 5, y: 5 } }));
       await tab.goto("/home");
+      // The remembered panel opens once the page knows who is signed in (the account button
+      // then names them); open the account menu only after that, or the panel opens over it.
+      await expect(tab.getByTestId("user-menu")).toHaveAccessibleName(/^Account \S/);
       await signOut(tab);
       if (phone) await tab.setViewportSize({ width: 390, height: 844 });
       await signIn(tab, EMAILS.viewer, `/simple/meetings/${CHAT_MEETING_ID}/chat`);

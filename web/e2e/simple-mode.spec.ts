@@ -296,7 +296,12 @@ test("Simple's Home: what waits on me, the next meeting and the plan this quarte
   await signIn(page, EMAILS.owner);
   await page.goto("/simple");
   await expectSimple(page, "/simple");
-  await expect(page.getByRole("heading", { level: 2, name: "Decisions waiting for you" })).toBeVisible();
+  // build-rundecide RD3 a: the questions of a PRD the owner owns wait in that PRD's own card;
+  // the Decisions card keeps the other judgement calls and, with none, is not drawn empty.
+  const waits = page.getByRole("region", { name: "Waiting for you: Guided setup", exact: true });
+  await expect(waits.getByRole("heading", { level: 2, name: "Waiting for you: Guided setup" })).toBeVisible();
+  await expect(waits.getByTestId("home-question").first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Decisions waiting for you" })).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 2, name: "Next review meeting" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "The plan this quarter" })).toBeVisible();
   await expect(page.getByTestId("home-plan").getByTestId("home-strip-row").first()).toBeVisible();
