@@ -3809,7 +3809,7 @@ function datesInvalid(cp: CheckpointOut, a: Schemas["ActionIn"]): string | null 
   return "edit takes the field estimate or no_date";
 }
 
-type DateDecision = { decision: "accepted" | "changed"; estimate: DateBasis } | { decision: "no_date"; reason: string };
+type DateDecision = { decision: "accepted" | "changed"; estimate: DateBasis } | { decision: "no_date"; reason: string; removed?: true };
 
 /**
  * As oracle.engineering.dates.decisions, on Approve: each item's last staged choice (a
@@ -3826,7 +3826,7 @@ function approveEngDates(cp: CheckpointOut, staged: DraftActionRow[]) {
       if (i.no_date_reason) dates[i.key] = { decision: "no_date", reason: i.no_date_reason };
     } else if (a.kind === "accept" && i.proposed) dates[i.key] = { decision: "accepted", estimate: i.proposed };
     else if (a.field === "estimate") dates[i.key] = { decision: "changed", estimate: a.value as DateBasis };
-    else if (a.field === "no_date") dates[i.key] = { decision: "no_date", reason: (a.value as { reason: string }).reason };
+    else if (a.field === "no_date") dates[i.key] = { decision: "no_date", reason: (a.value as { reason: string }).reason, ...(i.proposed ? { removed: true as const } : {}) };
   }
   cp.payload = { ...cp.payload, dates };
 }

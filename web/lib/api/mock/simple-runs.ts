@@ -16,9 +16,9 @@ const STOP_WORDS: Record<string, string> = {
 };
 const STEP_WORDS: Record<string, string> = { approved: "Approved", changes_requested: "Sent back", skipped: "Skipped" };
 
-/** As the API's eng_dates.changed_count: the dates an approval at the Dates stop changed. */
+/** As the API's eng_dates.changed_count: the dates an approval at the Dates stop changed, a proposed date made No date among them. */
 const datesChanged = (c: RunOut["checkpoints"][number]) =>
-  c.kind === "eng_dates" && c.status === "approved" ? Object.values((c.payload.dates ?? {}) as Record<string, { decision?: string }>).filter((d) => d?.decision === "changed").length : 0;
+  c.kind === "eng_dates" && c.status === "approved" ? Object.values((c.payload.dates ?? {}) as Record<string, { decision?: string; removed?: boolean }>).filter((d) => d?.decision === "changed" || d?.removed).length : 0;
 /** As the API's _approved_words: "Approved with one date changed". */
 const stepWords = (c: RunOut["checkpoints"][number]) => {
   const n = datesChanged(c);
