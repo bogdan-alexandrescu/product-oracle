@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, safe_yaml
 from oracle.auth.deps import Principal
-from oracle.authz import has_role
 from oracle.runs import flows, service
 from oracle.runs.models import AgentAnswer, Checkpoint, Run, RunSegment
 from oracle.runs.schemas import (
@@ -143,12 +142,17 @@ async def _stop(db: AsyncSession, run_id: uuid.UUID, checkpoint_id: uuid.UUID):
 async def read(
     db: AsyncSession, principal: Principal, run_id: uuid.UUID, checkpoint_id: uuid.UUID
 ) -> AgentQuestionsOut:
-    """The stop's agent questions with their answers, any member."""
+    """The stop's agent questions with their answers, any member; ``can_answer`` is who
+    may stage there (an engineering stop with a lead named goes to its leads and owners)."""
+    from oracle.runs.actions import _may_stage
+
     run, cp = await _stop(db, run_id, checkpoint_id)
     return AgentQuestionsOut(
         questions=await _answered(db, principal, run, cp),
         next_step=await _next_step(db, run, cp),
-        can_answer=cp.status == "pending" and has_role(principal.role, cp.approver_role),  # type: ignore[arg-type]
+        can_answer=cp.status == "pending"
+        and await _may_stage(db, principal, run, cp)
+        and not principal.read_only,
     )
 
 
