@@ -54,6 +54,9 @@ async function openCheck(page: Page, scenario: string) {
 }
 
 async function select(page: Page, key: string) {
+  // On a phone the open feature fills the screen (EC1 b): back to the list first, as a person does.
+  const back = inspector(page).getByRole("button", { name: "‹ All features" });
+  if (await back.isVisible()) await back.click();
   await briefRow(page, key).getByRole("button").first().click();
   await expect(page.locator(`[data-testid="brief-row"][data-feature="${key}"][aria-current="true"]`)).toHaveCount(1);
 }
