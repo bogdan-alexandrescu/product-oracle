@@ -107,6 +107,8 @@ const OUTSIDE_NOW = "dated milestones belong only in now; the date was dropped";
 export const ITEMS_SCENARIO = "roadmap-items";
 /** F3 Date bases: commenter@example.com is the engineering lead, a basis waits for them. */
 export const DATE_BASES_SCENARIO = "date-bases";
+/** walkb-roadmap review 5e: a verified basis on the Simple roadmap's "alert-rules" item, as an engineering dates run records one for a roadmap built from a PRD. */
+export const SIMPLE_ITEM_BASIS_SCENARIO = "simple-item-basis";
 /** #396: the default company, GA's date with no basis, and usage-alerts-roadmap v1 carrying the API's date and citation warnings. */
 export const VERSION_WARNINGS_SCENARIO = "version-warnings";
 /** The mock scenario whose usage-alerts-roadmap v2 moved, added and dropped one item each since the approved v1 (E3). */
@@ -210,7 +212,8 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
   const withDiff = scenario === DIFF_SCENARIO;
   const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO;
   const planStale = scenario === PLAN_STALE_SCENARIO;
-  const key = withItems || withDiff || noGaBasis || planStale ? `roadmap:${scenario}` : "roadmap";
+  const simpleItemBasis = scenario === SIMPLE_ITEM_BASIS_SCENARIO;
+  const key = withItems || withDiff || noGaBasis || planStale || simpleItemBasis ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
@@ -243,6 +246,7 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts:
     const all: (readonly [reference: string, day: string, status: "verified" | "proposed" | "withdrawn", itemKey?: string])[] = [
       ...seeds,
       ...(track.plan ? ([["ENG-402", "2026-11-20", "verified", "threshold-alerts"]] as const) : []),
+      ...(simpleItemBasis ? ([["ENG-450", "2026-12-04", "verified", "alert-rules"]] as const) : []),
     ];
     for (const [reference, day, status, itemKey] of all) {
       const proposed = status === "proposed";
