@@ -8,6 +8,7 @@ import { clock, FlowPanel, meetingMoment } from "@/components/simple/FlowVisual"
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { dmy, ew, PrdPlan, TAP44, usePhone } from "@/components/simple/PrdTimeline";
 import { PrdStatus } from "@/components/simple/PrdStatus";
+import { RunReviewStep } from "@/components/simple/RunReviewStep";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { quoteLine } from "@/components/simple/quote-line";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -476,6 +477,10 @@ export function OnePager({ doc, sessionId, meetingDecisionIds = [], refresh, onC
           presenting={presenting}
           draft={draftShown || v.changes_in_review > 0}
           actions={actions}
+          onRunApproved={() => {
+            void reloadDoc();
+            onChanged?.();
+          }}
         />
         {toast}
         {error && <ErrorNote>{error}</ErrorNote>}
@@ -757,7 +762,7 @@ function Glyph({ d }: { d: string }) {
  * A phone (D2) keeps the title, the facts and the actions, smaller; its header bar names
  * the page (One-pagers), so the title there is a level-1 heading that is not an H1.
  */
-function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeeting = false }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; phone: boolean; presenting: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean }) {
+function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeeting = false, onRunApproved }: { v: View; plan: Schemas["SimplePlanOut"] | null; summary: Schemas["DocumentSummary"] | null; phone: boolean; presenting: boolean; draft: boolean; actions: ReactNode; inMeeting?: boolean; onRunApproved?: () => void }) {
   // qa-simple-prd-3: the plan's own span only; with no dated milestone the header says so.
   // qa-simple-prd-p3-16: a PRD without a plan heads its one-pager the same way, with its own span.
   const span = plan ? (plan.span ? { start: plan.span.start, end: plan.span.end } : null) : v.span_start && v.span_end ? { start: v.span_start, end: v.span_end } : null;
@@ -765,7 +770,10 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
   const total = caps.length ? caps.reduce((a, b) => a + b, 0) : null;
   const published = v.published_at ? dmy(v.published_at.slice(0, 10)) : null;
   // qa-simple-prd-p3-16: "Approved" only where the One-pagers list says so too (one summary for both).
-  const approved = !!published && (!summary || !!summary.approved_version || summary.status === "approved");
+  // build-rundecide RD2 b: approving the PRD after its run's review makes the latest version the approved one.
+  const approved =
+    (!!published && (!summary || !!summary.approved_version || summary.status === "approved")) ||
+    (!!summary?.approved_version && summary.approved_version === summary.latest_version && summary.status === "approved");
   // qa-simple-prd-47: separators at the meta line's own 4.5:1 colour.
   const sep = phone ? null : <span aria-hidden className="text-text2">·</span>;
   return (
@@ -817,6 +825,9 @@ function PrdHeader({ v, plan, summary, phone, presenting, draft, actions, inMeet
         )}
       </div>
       {phone && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {!inMeeting && !presenting && summary?.latest_version != null && (
+        <RunReviewStep doc={v.document.slug} title={v.document.title} n={summary.latest_version} approved={approved} onApproved={() => onRunApproved?.()} />
+      )}
     </div>
   );
 }
