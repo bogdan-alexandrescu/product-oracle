@@ -253,7 +253,13 @@ export async function routeGoalSuggestions(
   const s = rows.find((x) => x.id === p[3]);
   if (!s) return json(404, { detail: "No such suggestion" });
   const body = (await req.json().catch(() => ({}))) as { roadmap_id?: string | null; session_id?: string | null; reason?: string | null };
-  if ((p[4] === "reject" || p[4] === "accept") && !goalDecider(db, s.goal, ctx).mine) return json(403, { detail: "Only the decider accepts or rejects suggestions" });
+  if ((p[4] === "reject" || p[4] === "accept" || p[4] === "reopen") && !goalDecider(db, s.goal, ctx).mine) return json(403, { detail: "Only the decider accepts or rejects suggestions" });
+  // Undo of a decline: a rejected suggestion is open again (as the API's reopen).
+  if (p[4] === "reopen") {
+    if (s.status !== "rejected") return json(409, { detail: `This suggestion is ${s.status} already` });
+    Object.assign(s, { status: "open", reason: null, decided_by_name: null, decided_at: null });
+    return json(200, out(db, s, ctx));
+  }
   if (p[4] === "reject") {
     if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
     const reason = (body.reason ?? "").trim();

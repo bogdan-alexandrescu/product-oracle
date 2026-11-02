@@ -53,6 +53,8 @@ export interface GoalSuggestionsApi {
   suggest: (goal: GoalBrief) => Promise<void>;
   accept: (s: GoalSuggestion) => Promise<void>;
   reject: (s: GoalSuggestion, reason: string) => Promise<void>;
+  /** Declines it as the same as a feature it looks like (with Undo). */
+  duplicate: (s: GoalSuggestion, m: GoalSuggestion["looks_like"][number]) => Promise<void>;
 }
 
 /** Every goal's open suggestions; polls while a goal's suggest job runs. `onChanged` runs after an accept or its undo. */
@@ -70,6 +72,15 @@ export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsAp
     await q.reload();
     await onChanged?.();
   };
+  // Undo of a decline: the suggestion is open again.
+  const undo = (s: GoalSuggestion) => ({
+    label: "Undo",
+    onClick: () =>
+      void api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reopen", { params: { path: { suggestion_id: s.id } } }).then(async (r) => {
+        if (!r.data) toast({ message: detailOf(r.error) });
+        await q.reload();
+      }),
+  });
 
   return {
     data: q.data,
@@ -110,9 +121,15 @@ export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsAp
       }
       await after();
     },
+    duplicate: async (s, m) => {
+      const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: `Same as ${lookName(m)}` } });
+      toast({ place: "rail", message: r.data ? `Declined ${s.title} as a duplicate of ${lookName(m)}` : detailOf(r.error), action: r.data ? undo(s) : undefined });
+      await q.reload();
+    },
     reject: async (s, reason) => {
       const r = await api.POST("/v1/simple/goal-suggestions/{suggestion_id}/reject", { params: { path: { suggestion_id: s.id } }, body: { reason: reason.trim() || null } });
-      toast({ message: r.data ? `Rejected ${s.title}: Oracle will not suggest it again` : detailOf(r.error) });
+      // Every decline can be undone; the message sits top left, clear of an open drawer.
+      toast({ place: "rail", message: r.data ? `Rejected ${s.title}: Oracle will not suggest it again` : detailOf(r.error), action: r.data ? undo(s) : undefined });
       await q.reload();
     },
   };
@@ -231,7 +248,7 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
             </ul>
           )}
           {s.looks_like.map((m) => (
-            <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}`))} />
+            <LooksLike key={m.id} s={s} m={m} merges={rejects} busy={busy} onDecline={() => void run(() => a.duplicate(s, m))} />
           ))}
         </div>
         {(accepts || rejects || s.flow) && (
@@ -287,23 +304,41 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
  * there), and for whoever decides "Same as this: decline the suggestion" (it is declined as the
  * same as that feature; nothing is merged).
  */
-function LooksLike({ m, merges, busy, onMerge }: { m: GoalSuggestion["looks_like"][number]; merges: boolean; busy: boolean; onMerge: () => void }) {
+/** A look-alike line: its name, and "Duplicate", which asks in place before it declines the suggestion. */
+function LooksLike({ s, m, merges, busy, onDecline }: { s: GoalSuggestion; m: GoalSuggestion["looks_like"][number]; merges: boolean; busy: boolean; onDecline: () => void }) {
+  const [asking, setAsking] = useState(false);
   return (
-    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-warn" data-testid="suggestion-looks-like">
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-warn" data-testid="suggestion-looks-like">
       <span>
         Looks like{" "}
-        <Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold text-accent-ink underline" data-testid="looks-like-link">
-          {`${m.code} ${m.title}`.trim()}
+        <Link href={`/simple/priorities?tab=ranked&show=${encodeURIComponent(m.id)}`} className="font-semibold underline" data-testid="looks-like-link">
+          {lookName(m)}
         </Link>
       </span>
-      {merges && (
-        <button type="button" disabled={busy} onClick={onMerge} className="font-semibold text-accent-ink underline" data-testid="looks-like-merge">
-          Same as this: decline the suggestion
-        </button>
+      {merges && !asking && (
+        <Button disabled={busy} onClick={() => setAsking(true)} data-testid="looks-like-duplicate">
+          Duplicate
+        </Button>
       )}
-    </p>
+      {asking && (
+        <span role="group" aria-label="Confirm" data-testid="looks-like-confirm" className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-warn bg-warn-bg px-2 py-1.5 text-text">
+          <span>
+            Decline {s.title} as a duplicate of {lookName(m)}?
+          </span>
+          <Button variant="danger" disabled={busy} onClick={onDecline}>
+            Decline as duplicate
+          </Button>
+          <Button variant="ghost" onClick={() => setAsking(false)}>
+            Cancel
+          </Button>
+        </span>
+      )}
+    </div>
   );
 }
+
+/** A look-alike's name: its code and title. */
+const lookName = (m: GoalSuggestion["looks_like"][number]) => `${m.code} ${m.title}`.trim();
 
 /** A goal's open suggestions: people's (origin "person") and Oracle's. */
 export function goalRows(a: GoalSuggestionsApi, goal: GoalBrief): { people: GoalSuggestion[]; oracle: GoalSuggestion[] } {
@@ -428,7 +463,7 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
             From {s.proposed_by_name ?? "someone"} · {zoneDateTime(s.created_at, zone)}
           </p>
           {s.looks_like.map((m) => (
-            <LooksLike key={m.id} m={m} merges={rejects} busy={busy} onMerge={() => void run(() => a.reject(s, `Same as ${`${m.code} ${m.title}`.trim()}`))} />
+            <LooksLike key={m.id} s={s} m={m} merges={rejects} busy={busy} onDecline={() => void run(() => a.duplicate(s, m))} />
           ))}
         </div>
         {(accepts || rejects) && (
@@ -476,29 +511,52 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
   // can open the same form.
   const [formOpen, setFormOpen] = useState(() => !(start !== "form" && !!state?.can_decide));
   const suggests = can("create_goal_suggestion");
+  const more = async () => {
+    setTab("oracle");
+    setAsking(true);
+    try {
+      await a.suggest(state?.goal ?? goal);
+    } finally {
+      setAsking(false);
+    }
+  };
   const tabs = [
     { key: "people" as const, label: `People · ${people.length}` },
     { key: "oracle" as const, label: `✦ Oracle · ${oracle.length}` },
   ];
   return (
     <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
+      {/* One row at the top: three actions that each look different. */}
       {suggests && (
         <>
-          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open={formOpen} onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={async () => {
-            await a.reload();
-            setTab("people");
-          }} />
-          <Button
-            variant="secondary"
-            data-testid="suggest-from-chat"
-            onClick={() => {
-              onChat?.();
-              askWith(`Suggest a feature for ${(state?.goal ?? goal).title}: `);
-            }}
-            className="self-start"
-          >
-            Ask Oracle in the chat
-          </Button>
+          <div className="flex flex-wrap items-center gap-2" data-testid="suggest-actions">
+            {!formOpen && (
+              <Button variant="secondary" data-testid="suggest-form-open" onClick={() => setFormOpen(true)}>
+                + Suggest a feature
+              </Button>
+            )}
+            <Button variant="secondary" data-testid="suggest-more" disabled={asking || !!state?.pending} onClick={() => void more()}>
+              ✦ Get more from Oracle
+            </Button>
+            <button
+              type="button"
+              data-testid="suggest-from-chat"
+              onClick={() => {
+                onChat?.();
+                askWith(`Suggest a feature for ${(state?.goal ?? goal).title}: `);
+              }}
+              className="text-[length:var(--simple-small)] text-text2 underline hover:text-text"
+            >
+              Ask in the chat
+            </button>
+          </div>
+          {formOpen && (
+            <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} decides={!!state?.can_decide} open onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={async () => {
+              await a.reload();
+              setTab("people");
+              setFormOpen(false);
+            }} />
+          )}
         </>
       )}
       <div role="tablist" aria-label="Who suggested" className="flex gap-1 border-b border-line">
@@ -533,22 +591,6 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
         </div>
       ) : (
         <div role="tabpanel" aria-label="Oracle's suggestions" className="flex flex-col gap-2">
-          {suggests && (
-            <Button
-              className="self-start"
-              disabled={asking || !!state?.pending}
-              onClick={async () => {
-                setAsking(true);
-                try {
-                  await a.suggest(state?.goal ?? goal);
-                } finally {
-                  setAsking(false);
-                }
-              }}
-            >
-              ✦ Ask Oracle for more
-            </Button>
-          )}
           {state?.pending && (
             <p role="status" data-testid="suggest-pending" className="simple-small text-accent-ink">
               Oracle is suggesting features…

@@ -62,12 +62,12 @@ test.describe("QA pass 4: simple-plan, phone", () => {
     await open(page);
     const label = (await page.locator("#prio-line option").allTextContents()).find((o) => o.startsWith("Milestone: Beta"))!;
     await lineSelect(page).selectOption({ label });
-    await expect(page.locator('[data-testid="prio-misses"][data-own="true"]').first()).toBeVisible();
+    // build-plan QP1: two headed parts in place of the pills and the divider; the headings wrap, the page does not scroll sideways.
+    const heads = page.getByTestId("prio-part-head");
+    await expect(heads).toHaveCount(2);
+    await expect(heads.nth(1)).toContainText("Misses Beta");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-    const divider = page.getByTestId("line-divider");
-    await expect(divider).toHaveCount(1);
-    expect((await divider.boundingBox())!.height).toBeLessThan(44);
-    await expect(divider).toContainText("everything below misses it");
+    await expect(page.getByLabel("Ranked list").getByTestId("prio-misses")).toHaveCount(0);
   });
 
   /* qa4-simple-plan-9: no mark sits on a quadrant's name or a middle line's words. */
@@ -246,6 +246,7 @@ test.describe("QA pass 4: simple-plan, desktop", () => {
     const link = drawer.getByTestId("looks-like-link").first();
     await expect(link).toBeVisible();
     const colour = (l: Locator) => l.evaluate((e) => getComputedStyle(e).color);
-    expect(await colour(link)).toBe(await colour(page.getByRole("link", { name: "Open the detailed view" })));
+    // build-plan QP3: the look-alike's name reads in its line's colour, as the picked frame shows.
+    expect(await colour(link)).toBe(await colour(drawer.getByTestId("suggestion-looks-like").first()));
   });
 });

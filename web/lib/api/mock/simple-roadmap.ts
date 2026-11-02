@@ -398,6 +398,12 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   return { start, end };
 }
 
+/** The dates the roadmap shows for an item (stored, typed or estimated), as its bar draws them. */
+export function shownDates(db: SimpleDb, key: string): { start: string; end: string } {
+  const s = db.items.find((x) => x.key === key)!;
+  const r = resolve(db, s, simpleWindows(companyToday())[s.horizon]);
+  return { start: r.start.date, end: r.end.date };
+}
 /** A milestone no plan dates (the new SimpleMilestone fields, empty). */
 const UNDATED = { start_date: null, end_date: null, effort_weeks: null, done_when: [] as string[], targets: [] as { goal: string; target: string }[] };
 

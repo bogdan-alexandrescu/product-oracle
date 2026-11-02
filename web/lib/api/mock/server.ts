@@ -165,6 +165,7 @@ import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedStrayReply, seedRightPrd, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { itemSubjectName, knowManyPlans, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
+import { shownDates, storedDates } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -555,6 +556,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
+ * "simple-home-move" as "simple-home" plus a "Move the dependents" proposal Home's Accept confirms.
+ * "simple-home-same-name" as "simple-home" plus a second goal named Grow retention and a proposal to change an owner.
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4, dod-perf:
  * 12 more roadmaps each from its own PRD, 8 goals, 6 tracks, dated and undated, with dependencies).
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
@@ -1072,6 +1075,47 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * "simple-home-move": "simple-home" plus a commenter's "Move the dependents" proposal on Weekly
+ * alert digest (keyed by item id, as the engine keys it), so Home's Accept lists what it moves
+ * with old and new dates (build-plan, Home's "Confirm, filtered list"). Invented data.
+ */
+function seedSimpleHomeMoveScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  // Mobile alert push keeps the dates its bar shows, stored, so the proposal's before is what the engine reads.
+  const sr = db.simple_roadmap!;
+  const day = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const rulesEnd = storedDates(sr, "alert-rules").end ?? "2026-11-10";
+  const digest = storedDates(sr, "alert-digest");
+  const mobile = shownDates(sr, "alert-mobile");
+  sr.own["alert-mobile"] = { start: mobile.start, end: mobile.end, source: "typed" };
+  const len = digest.start && digest.end ? Math.round((Date.parse(digest.end) - Date.parse(digest.start)) / 86_400_000) : 40;
+  seedSimpleProposal(sr, who, "shift_dependents", "alert-digest", { [sr.ids["alert-digest"]]: { start_date: digest.start, end_date: digest.end }, [sr.ids["alert-mobile"]]: { start_date: mobile.start, end_date: mobile.end } }, { [sr.ids["alert-digest"]]: { start_date: day(rulesEnd, 1), end_date: day(rulesEnd, 1 + len) }, [sr.ids["alert-mobile"]]: { start_date: day(rulesEnd, 1), end_date: day(rulesEnd, 51) } }, "2026-10-27T09:30:00Z", "Both start before Alert rules engine ends");
+  return db;
+}
+
+/**
+ * "simple-home-same-name": "simple-home" plus a second confirmed goal also named Grow retention
+ * (G-T, no items yet) and a commenter's proposal to change Alert rules engine's owner, so Home's
+ * goal cards filter Priorities by the goal itself, not its name, and every proposal row reads in
+ * words (build-plan review). Invented data.
+ */
+function seedSimpleHomeSameNameScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const template = db.baseline.entities.find((e) => e.key === "grow-retention")!;
+  db.baseline.entities.push({ ...template, id: stableUuid("simple-goal/grow-retention-teams"), key: "grow-retention-teams", title: "G-T Grow retention", attrs: { ...template.attrs, weight: 1 } });
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
+  seedSimpleProposal(db.simple_roadmap!, who, "set_owner", "alert-rules", { owner_id: null }, { owner_id: commenter.id }, "2026-10-27T10:00:00Z", "I can run it");
   return db;
 }
 
@@ -2921,6 +2965,10 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
+              : scenario === "simple-home-move"
+                ? seedSimpleHomeMoveScenario
+              : scenario === "simple-home-same-name"
+                ? seedSimpleHomeSameNameScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
               : scenario === "simple-suggest-deciders"

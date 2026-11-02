@@ -96,8 +96,9 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
       await open(page);
       const digest = row(page, "alert-digest");
       const numbers = digest.getByTestId("prio-numbers");
-      await expect(numbers).toHaveText("value 5 · 2 wk · score 1.25");
-      expect(await numbers.evaluate((e) => getComputedStyle(e).whiteSpace)).toBe("nowrap");
+      // build-plan QP2 "Numbers, no bar": value · confidence · weeks · score, each number kept whole.
+      await expect(numbers).toHaveText(/^·value 5·confidence [\d.]+·2 wk·score 1\.25$/);
+      expect(await numbers.locator(":scope > span > span").evaluateAll((els) => els.every((e) => getComputedStyle(e).whiteSpace === "nowrap"))).toBe(true);
       const box = (await numbers.boundingBox())!;
       expect(box.height).toBeLessThan(30);
       // One chip style: a below-the-line row's chip keeps its edge.
@@ -105,7 +106,8 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
       const chip = below.getByTestId("prio-code");
       expect(await chip.evaluate((e) => parseFloat(getComputedStyle(e).borderTopWidth))).toBeGreaterThan(0);
       expect(await chip.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
-      await expect(page.getByTestId("prio-misses").first()).toHaveText("Misses this quarter");
+      // build-plan QP1: no row carries a Misses pill.
+      await expect(page.getByLabel("Ranked list").getByTestId("prio-misses")).toHaveCount(0);
       await expect(page.getByTestId("prio-subtitle")).toContainText("depends on");
       await page.getByRole("tab", { name: "Goal buckets" }).click();
       await expect(page.getByTestId("prio-subtitle")).not.toContainText("depends on");
@@ -126,7 +128,7 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     await expect(page.locator("#prio-line")).toContainText("Date: Nov 20, 2026");
     await expect(page.getByTestId("line-caption")).toContainText(/miss Nov 20, 2026/);
     await expect(page.getByTestId("line-caption")).not.toContainText("miss By");
-    await expect(page.getByTestId("prio-misses").first()).toHaveText("Misses Nov 20, 2026");
+    await expect(page.getByLabel("Ranked list").getByTestId("prio-misses")).toHaveCount(0);
   });
 
   /* qa-simple-plan-10, -24: the draft shows no slug; one Merge toggles, one Merge confirms. */
@@ -153,7 +155,9 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     await open(page);
     const rows = page.getByTestId("prio-row");
     await expect(rows.first()).toBeVisible();
-    await expect(page.getByTestId("line-divider")).toHaveCount(1);
+    // build-plan QP1: two headed parts, Makes and Misses, in place of the divider.
+    await expect(page.getByTestId("prio-part-head")).toHaveCount(2);
+    await expect(page.getByTestId("line-divider")).toHaveCount(0);
     const above = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
     const first = above.indexOf("false");
     expect(first).toBeGreaterThan(0);
@@ -237,8 +241,9 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     await page.getByRole("button", { name: "Suggestions for Grow retention" }).click();
     const drawer = page.getByTestId("goal-panel");
     await expect(page.getByTestId("goal-panel-backdrop")).toBeVisible();
-    await expect(drawer.getByTestId("suggest-from-chat")).toHaveClass(/font-semibold/);
-    await expect(drawer.getByTestId("suggest-from-chat")).not.toHaveClass(/(^| )underline/);
+    // build-plan QP3: "Ask in the chat" is the row's plain link, beside its two buttons.
+    await expect(drawer.getByTestId("suggest-from-chat")).toHaveText("Ask in the chat");
+    await expect(drawer.getByTestId("suggest-from-chat")).toHaveClass(/(^| )underline/);
     await drawer.getByRole("tab", { name: /Oracle/ }).click();
     const card = drawer.getByTestId("goal-suggestion").first();
     await expect(card.getByTestId("flow-thumb")).toHaveCount(0);
@@ -296,6 +301,6 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     await expect(page.getByTestId("prio-subtitle")).toContainText("Nov 2 – Feb 12");
     const r = page.getByTestId("prio-row").filter({ has: page.getByTestId("prio-code").getByText(code, { exact: true }) });
     await expect(r.getByTestId("prio-goal")).toHaveText("Revenue");
-    await expect(page.getByTestId("prio-misses").first()).not.toContainText("(Now)");
+    await expect(page.getByTestId("prio-part-head").first()).not.toContainText("(Now)");
   });
 });

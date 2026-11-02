@@ -12738,6 +12738,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goal-suggestions/{suggestion_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Goal Suggestion
+         * @description Undo of a reject: the suggestion is open again.
+         */
+        post: operations["reopen_goal_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/chat": {
         parameters: {
             query?: never;
@@ -70209,6 +70229,37 @@ export interface operations {
                 "application/json": components["schemas"]["SimpleSuggestionRejectIn"] | null;
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalSuggestion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_goal_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

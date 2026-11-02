@@ -113,7 +113,9 @@ for (const [device, width, height] of [["desktop", 1440, 900], ["phone", 390, 84
       await page.locator("#prio-line").selectOption("pick");
       await page.getByLabel("The line's date").fill("2026-11-16");
       await page.getByRole("button", { name: "Apply" }).click();
-      await expect(page.getByTestId("line-caption")).toContainText(/^\d+ of \d+ miss Nov 16, 2026/);
+      // build-plan QP1: the parts' headings say what makes and misses the line.
+      await expect(page.getByTestId("prio-part-head").first()).toContainText("Makes Nov 16, 2026");
+      await expect(page.getByTestId("prio-part-count").first()).toHaveText("2 features, in rank order");
       const list = await listed(page);
       expect(list.filter((r) => r.above).length).toBe(2);
       // QA pass 3 (qa-simple-plan-2): the list is split at the line, the two that make it first.
