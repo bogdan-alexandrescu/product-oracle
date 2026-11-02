@@ -205,15 +205,33 @@ test("a roadmap date whose basis was withdrawn is marked in the version view; th
   await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
   const item = await openSection(page, "item-behaviour");
   const body = item.locator('[data-section-body="item-behaviour"]');
-  await expect(body).toContainText("Beta by 2026-11-30 (ENG-412 estimate)");
+  // Days in a body read month first (walk-docs-priorities); the day as written stays in a
+  // hidden span for comment anchors, so read what a person sees, hears and copies.
+  await expect(body).toContainText("Beta by Nov 30, 2026 (ENG-412 estimate)", { useInnerText: true });
+  await expect(body).not.toContainText("2026-11-30", { useInnerText: true });
+  const heard = await body.ariaSnapshot();
+  expect(heard).toContain("Beta by Nov 30, 2026 (ENG-412 estimate)");
+  expect(heard).not.toContain("2026-11-30");
+  const copied = await body.evaluate((el) => {
+    const sel = window.getSelection()!;
+    sel.selectAllChildren(el);
+    const text = sel.toString();
+    sel.removeAllRanges();
+    return text;
+  });
+  expect(copied).toContain("Beta by Nov 30, 2026 (ENG-412 estimate)");
+  expect(copied).not.toContain("2026-11-30");
   const marks = body.locator(".date-mark");
   await expect(marks).toHaveCount(1);
   await expect(marks.first()).toHaveText("date withdrawn");
   await expect(marks.first()).toHaveAttribute("data-date-mark", "withdrawn");
   await expect(marks.first()).toHaveAttribute("title", /ENG-413/);
   // The marker sits right after the date it marks, outside the anchored text.
-  const before = await marks.first().evaluate((el) => el.previousSibling?.textContent ?? "");
-  expect(before.endsWith("2026-12-15")).toBe(true);
+  const before = await marks.first().evaluate((el) => {
+    const prev = el.previousSibling;
+    return prev instanceof HTMLElement ? prev.innerText : (prev?.textContent ?? "");
+  });
+  expect(before.endsWith("Dec 15, 2026")).toBe(true);
   await expect(marks.first()).toHaveAttribute("data-anchor-ignore", "");
 });
 

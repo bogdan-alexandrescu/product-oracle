@@ -72,9 +72,15 @@ async function say(box: Locator, text: string) {
 
 const kind = (page: Page, key: string) => page.locator(`g[data-testid="bar"][data-item="${key}"]`).first();
 
-/** A phone's lane rows: the lane that holds the items, opened, and whether each row is struck (cut). */
+/**
+ * A phone's lane rows: the lane that holds the items, opened, and whether each row is struck
+ * (cut). A cut item moves to "Below the line" and back on Undo: wait for it to get there before
+ * reading whether its lane is open (read at once, it was still the goal lane, open, under load).
+ */
 async function struck(page: Page, keys: string[], cut: boolean) {
   const lane = page.locator(`[data-testid="phone-lane"][data-items~="${keys[0]}"]`);
+  if (cut) await expect(lane).toHaveAttribute("data-lane", "below-the-line");
+  else await expect(lane).not.toHaveAttribute("data-lane", "below-the-line");
   if ((await lane.getAttribute("data-open")) !== "true") await lane.click();
   for (const key of keys) {
     const name = page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().locator("span.min-w-0");

@@ -27,7 +27,7 @@ import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
 import { mockName as displayName } from "./people";
 import { baselineReviewStatus } from "./baseline";
 import { companyDayIso, mockSettingValue } from "./connections";
-import { templateNameOf } from "./lane-f";
+import { DEFAULT_THEME, templateNameOf } from "./lane-f";
 import type { V2Db } from "./v2";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
@@ -362,10 +362,11 @@ function summary(db: V2Db, intake: Intake, userId: string, ctx?: IntakeContext):
     top_uncertainties: open.slice(0, 5),
     gaps: out,
     next_actions: gaps.filter((g) => g.importance === "critical").flatMap(nextActions),
-    // As the API (production minors 23): the template the brief chose, else the recommendation.
+    // As the API (production minors 23): the template the brief chose, else the recommendation
+    // with its theme (a Continue sent before the recommendation came back has neither).
     template: chosenName
       ? { key: intake.template!, name: chosenName, reason: "The template chosen for this PRD.", theme: intake.theme ?? null, modules }
-      : { key: "oracle-default", name: "Goal-traced PRD", reason: "A cross-functional build: the goal-traced PRD agrees the problem, then the prioritized solution, then launch.", theme: null, modules },
+      : { key: "oracle-default", name: "Goal-traced PRD", reason: "A cross-functional build: the goal-traced PRD agrees the problem, then the prioritized solution, then launch.", theme: DEFAULT_THEME.prd, modules },
     readiness: { open_critical: critical.length, blocking_gap_ids: blocking, gate: blocking.length ? "blocked" : "clear", private_blocking_gap_ids: [] },
     batch: {
       current: batches.length ? Math.max(...batches) : null,
