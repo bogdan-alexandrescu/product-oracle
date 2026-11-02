@@ -13,8 +13,8 @@ import { ADMIN } from "./helpers";
  * test runs on desktop and on a phone (390 px).
  */
 
-async function signIn(page: Page, email: string, scenario: string) {
-  await page.context().addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario] as const);
+async function signIn(page: Page, email: string, scenario?: string) {
+  if (scenario) await page.context().addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario] as const);
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(ADMIN.password);
@@ -67,16 +67,18 @@ for (const phone of [false, true]) {
     });
 
     test(`one stop: one card, the greeting says a run waits (${where})`, async ({ page }) => {
-      await signIn(page, ADMIN.email, "feature-set");
+      // The default company: one run waits on the owner to confirm its baseline.
+      await signIn(page, ADMIN.email);
       await expect(stops(page)).toHaveCount(1);
-      await expect(stops(page).getByRole("link")).toHaveText("Check the feature set");
-      await expect(page.getByTestId("home-sentence")).toContainText("a run wait");
+      await expect(page.getByRole("region", { name: "Confirm the baseline: Team onboarding PRD" }).getByRole("link")).toHaveText("Confirm the baseline");
+      await expect(page.getByTestId("home-sentence")).toContainText("a run wait on you.");
     });
 
     test(`no card for a stop I may not decide (${where})`, async ({ page }) => {
       await signIn(page, "viewer@example.com", "simple-waits");
       await expect(page.getByTestId("home-greeting")).toBeVisible();
-      await expect(page.getByRole("heading", { name: /Goals|Plan/ }).first()).toBeVisible();
+      await expect(page.getByTestId("home-sentence")).toHaveText("Here is where the plan stands.");
+      await page.waitForLoadState("networkidle");
       await expect(stops(page)).toHaveCount(0);
     });
   });

@@ -1488,6 +1488,8 @@ function seedSimpleWaits(): Db {
   seeded("sw-feature-set", () => seedFeatureSetRun(db.runs!, runsContext(db)));
   seeded("sw-eng-review", () => seedEngReviewRun(db.runs!, runsContext(db)));
   seeded("sw-eng-dates", () => seedEngDatesRuns(db.runs!, runsContext(db)));
+  // Only these three wait on the owner: the default seed's run at its baseline does not.
+  db.runs!.runs = db.runs!.runs.filter((r) => !(r.status === "awaiting_checkpoint" && r.waiting_on === "baseline_confirm"));
   return db;
 }
 
