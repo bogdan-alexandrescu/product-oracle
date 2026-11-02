@@ -131,12 +131,23 @@ def by_key(out: dict) -> dict[str, dict]:
     return {i["key"]: i for i in out["items"]}
 
 
+def assert_milestones_once(out: dict, expected: list[tuple[str, str]]) -> None:
+    """ah-prd-milestones-once (the owner's pick: 'Read-only from the PRD'): no own key date
+    comes from the PRD; each milestone is there once, read-only, naming the PRD."""
+    assert [k for k in out["key_dates"] if k["prd"] is None] == []
+    got = sorted((k["name"], k["date"]) for k in out["key_dates"])
+    assert got == sorted(expected)
+    assert all(k["prd"]["slug"] == PRD and not k["in_draft"] for k in out["key_dates"])
+
+
 async def test_approval_writes_the_prds_dated_items_and_key_dates_into_the_draft(client):
     """protects=approving a PRD version adds its dated items (the lead's accepted date,
-    end-only kept end-only) and its milestones as key dates to its roadmap's working draft,
-    marked as from the PRD, and the draft says how many; fails_when=approval writes nothing
-    (only a Build roadmap run reaches the roadmap), an undated item is added, an end-only item
-    gets a typed start, or an unchanged published item is added again."""
+    end-only kept end-only) to its roadmap's working draft, marked as from the PRD, and the
+    draft says how many; its milestones show once each, read-only from the PRD, never as
+    the draft's own key dates; fails_when=approval writes nothing (only a Build roadmap run
+    reaches the roadmap), an undated item is added, an end-only item gets a typed start, an
+    unchanged published item is added again, or a milestone is copied into the draft as an
+    editable key date beside the read-only one."""
     ctx, ids = await world()
     await approve(client, ctx, 1)
     out = await read(client, ctx)
@@ -149,13 +160,13 @@ async def test_approval_writes_the_prds_dated_items_and_key_dates_into_the_draft
     assert items["trip-reports"]["end"]["date"] == "2027-01-15"
     for k in ("route-search", "trip-reports"):
         assert items[k]["prd"]["slug"] == PRD, k
-    kds = {k["name"]: k for k in out["key_dates"]}
-    assert kds["Private beta"]["date"] == "2026-12-04" and kds["Private beta"]["in_draft"]
-    assert kds["Launch"]["date"] == "2027-01-29" and kds["Launch"]["in_draft"]
+    assert_milestones_once(
+        out, [("M1 · Private beta", "2026-12-04"), ("M2 · Launch", "2027-01-29")]
+    )
     drafts = (await client.get(DRAFTS, headers=ctx.as_("owner"))).json()
     [d] = [d for d in drafts if d["document"]["id"] == str(ids["roadmap"])]
     [src] = d["from_prds"]
-    assert src["prd"]["slug"] == PRD and src["items"] == 2 and src["key_dates"] == 2
+    assert src["prd"]["slug"] == PRD and src["items"] == 2 and src["key_dates"] == 0
     assert d["can_submit"] is True
     # A viewer reads the published roadmap: none of the draft's additions.
     r = await client.get(ROADMAP, headers=ctx.as_("viewer"))
@@ -185,18 +196,14 @@ async def test_reapproval_replaces_the_prds_items_rather_than_adding_them_again(
     assert sorted(i["key"] for i in out["items"]) == ["offline-sync", "route-search"]
     assert items["offline-sync"]["end"]["date"] == "2026-12-22"
     assert items["route-search"]["end"]["date"] == "2027-01-08"
-    # The roadmap's own key dates; the PRD's milestones (roadmap-keydates) come beside them.
-    own = [k for k in out["key_dates"] if k["prd"] is None]
-    assert sorted((k["name"], k["date"]) for k in own) == [
-        ("Launch", "2027-02-05"),
-        ("Private beta", "2026-12-04"),
-    ]
-    milestones = {(k["name"], k["date"]) for k in out["key_dates"] if k["prd"] is not None}
-    assert ("M2 · Launch", "2027-02-05") in milestones
+    # The PRD's milestones once each, read-only and as version 2 has them; no own copies.
+    assert_milestones_once(
+        out, [("M1 · Private beta", "2026-12-04"), ("M2 · Launch", "2027-02-05")]
+    )
     drafts = (await client.get(DRAFTS, headers=ctx.as_("owner"))).json()
     [d] = [d for d in drafts if d["document"]["id"] == str(ids["roadmap"])]
     [src] = d["from_prds"]
-    assert src["items"] == 2 and src["key_dates"] == 2 and src["version"] == 2
+    assert src["items"] == 2 and src["key_dates"] == 0 and src["version"] == 2
     async with tenant_session(ctx.tenant_id) as s:
         added = list(
             await s.scalars(
@@ -213,7 +220,9 @@ async def test_reapproval_replaces_the_prds_items_rather_than_adding_them_again(
     await approve(client, ctx, 2)
     again = await read(client, ctx)
     assert sorted(i["key"] for i in again["items"]) == ["offline-sync", "route-search"]
-    assert len([k for k in again["key_dates"] if k["prd"] is None]) == 2
+    assert_milestones_once(
+        again, [("M1 · Private beta", "2026-12-04"), ("M2 · Launch", "2027-02-05")]
+    )
 
 
 CHANGES = "/v1/simple/changes"
@@ -291,20 +300,74 @@ async def test_first_approval_keeps_the_owners_earlier_edit_to_a_published_item(
 
 
 async def test_the_banner_counts_only_what_is_still_in_the_draft(client):
-    """protects=the draft's 'came from <PRD>' counts leave out an added item the owner cut
-    and a key date the owner removed; fails_when=the counts stay as at approval."""
+    """protects=the draft's 'came from <PRD>' counts leave out an added item the owner cut,
+    and count no key dates (the milestones are read-only from the PRD); fails_when=the counts
+    stay as at approval."""
     ctx, ids = await world()
     await approve(client, ctx, 1)
     out = await read(client, ctx)
     trips = by_key(out)["trip-reports"]
     await change(client, ctx, "cut", {"item_id": trips["id"]}, {"cut": False}, {"cut": True})
-    [launch] = [k for k in out["key_dates"] if k["name"] == "Launch"]
-    seen = {"name": "Launch", "date": launch["date"], "note": launch["note"]}
-    await change(client, ctx, "remove_key_date",
-                 {"document_id": str(ids["roadmap"]), "key_date_id": launch["id"]},
-                 {"key_date": seen}, {"key_date": None})  # fmt: skip
     [src] = (await source(client, ctx, ids["roadmap"]))["from_prds"]
-    assert (src["items"], src["key_dates"]) == (1, 1)
+    assert (src["items"], src["key_dates"]) == (1, 0)
+
+
+async def _old_copies(ctx: Ctx, ids: dict) -> list[str]:
+    """A draft made before ah-prd-milestones-once: approval also copied each milestone into
+    it as an own key date ('From <PRD>', id uuid5(roadmap, prd:code))."""
+    rm, prd = ids["roadmap"], ids["prd"]
+    copies = {
+        str(uuid.uuid5(rm, f"{prd}:M1")): {"name": "Private beta", "date": "2026-12-04",
+                                            "note": "From Trail maps"},
+        str(uuid.uuid5(rm, f"{prd}:M2")): {"name": "Launch", "date": "2027-01-29",
+                                            "note": "From Trail maps"},
+    }  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft).where(SimpleDraft.status == "working"))
+        assert d is not None
+        ov = dict(d.overlay or {})
+        src = dict(ov["from_prds"][str(prd)])
+        src["key_dates"] = list(copies)
+        src["wrote"] = {**(src.get("wrote") or {}), **copies}
+        ov["from_prds"] = {**ov["from_prds"], str(prd): src}
+        ov["key_dates"] = {**(ov.get("key_dates") or {}), **copies}
+        d.overlay = ov
+        await s.commit()
+    return list(copies)
+
+
+async def test_an_older_drafts_copied_milestones_show_once(client):
+    """protects=a draft that already holds the PRD's milestones copied as own key dates
+    shows each milestone once, read-only, on Simple › Roadmap and in the Priorities line
+    picker; its banner counts no key dates; approving the PRD again drops the copies, and
+    publishing the draft writes none; fails_when=the copies show beside the read-only
+    milestones, or are published as the roadmap's key dates."""
+    ctx, ids = await world()
+    await approve(client, ctx, 1)
+    await _old_copies(ctx, ids)
+    expected = [("M1 · Private beta", "2026-12-04"), ("M2 · Launch", "2027-01-29")]
+    assert_milestones_once(await read(client, ctx), expected)
+    [src] = (await source(client, ctx, ids["roadmap"]))["from_prds"]
+    assert src["key_dates"] == 0
+    r = await client.get("/v1/simple/priorities", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    picker = [x["label"] for x in r.json()["lines"] if x["kind"] == "key_date"]
+    assert sorted(picker) == ["M1 · Private beta · Dec 4, 2026", "M2 · Launch · Jan 29, 2027"]
+    await approve(client, ctx, 1)
+    assert_milestones_once(await read(client, ctx), expected)
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft).where(SimpleDraft.status == "working"))
+        assert d is not None and not (d.overlay or {}).get("key_dates")
+    await _old_copies(ctx, ids)
+    d = await source(client, ctx, ids["roadmap"])
+    r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        assert list(await s.scalars(select(RoadmapKeyDate))) == []
+    out = (await client.get(ROADMAP, headers=ctx.as_("viewer"))).json()
+    assert sorted((k["name"], k["date"]) for k in out["key_dates"]) == sorted(expected)
 
 
 async def test_an_approver_who_cannot_edit_the_roadmap_does_not_own_its_new_draft(client):
@@ -327,9 +390,9 @@ async def approve_as(client, ctx: Ctx, n: int, who: str) -> None:
 
 async def test_a_draft_holding_only_the_prds_additions_submits_and_publishes(client):
     """protects=a draft whose only content is what an approved PRD added submits, and its
-    approval publishes the PRD's items and writes its milestones as the roadmap's key dates;
-    fails_when=submit says there is nothing to submit, or publishing drops the items or the
-    key dates."""
+    approval publishes the PRD's items and no key dates (the milestones stay read-only from
+    the PRD); fails_when=submit says there is nothing to submit, publishing drops the items,
+    or writes the milestones as the roadmap's own key dates."""
     ctx, ids = await world()
     await approve(client, ctx, 1)
     d = await source(client, ctx, ids["roadmap"])
@@ -341,8 +404,7 @@ async def test_a_draft_holding_only_the_prds_additions_submits_and_publishes(cli
     assert set(by_key(out)) == {"offline-sync", "route-search", "trip-reports"}
     async with tenant_session(ctx.tenant_id) as s:
         rows = list(await s.scalars(select(RoadmapKeyDate).order_by(RoadmapKeyDate.on_date)))
-        assert [(r.name, r.on_date) for r in rows] == [
-            ("Private beta", date(2026, 12, 4)),
-            ("Launch", date(2027, 1, 29)),
-        ]
-        assert all(r.roadmap_document_id == ids["roadmap"] for r in rows)
+        assert rows == []
+    assert_milestones_once(
+        out, [("M1 · Private beta", "2026-12-04"), ("M2 · Launch", "2027-01-29")]
+    )
