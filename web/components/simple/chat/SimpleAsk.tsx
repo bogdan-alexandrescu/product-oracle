@@ -144,13 +144,17 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
     setRecent(null);
   };
   const trigger = useRef<HTMLButtonElement>(null);
+  // The chats fill the menu only while it is still open: closed before they come (Escape, a
+  // tap outside), it stays closed.
   const openRecent = async () => {
     setRecent([]);
+    let rows: ChatSummary[] = [];
     try {
-      setRecent(await recentChats());
+      rows = await recentChats();
     } catch {
-      setRecent([]);
+      // An empty menu: "No chats yet."
     }
+    setRecent((r) => (r === null ? null : rows));
   };
   const changes = can("create_simple_change");
   // qa-simple-home-20: closed, the panel gives focus back to what opened it (Ask Oracle, a decision's Ask Oracle).
