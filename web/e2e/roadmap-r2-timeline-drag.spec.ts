@@ -157,3 +157,59 @@ test.describe("phone", () => {
     await expect(bar(page, "alert-export")).not.toHaveAttribute("data-start", /./);
   });
 });
+
+/** roadmap-r2 review: a cancelled drag, a finger on a touch tablet, and the keys a bar names. */
+test.describe("roadmap-r2 review", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("a drag the browser cancels moves nothing, and the next click on a bar still opens it", async ({ page }) => {
+    await open(page);
+    const b = bar(page, "alert-export");
+    await b.scrollIntoViewIfNeeded();
+    const [s0] = await span(b);
+    const box = (await b.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    const ev = { pointerId: 7, pointerType: "mouse", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
+    await b.dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
+    for (const n of [10, 30, 60]) await b.dispatchEvent("pointermove", { ...ev, clientX: x + n, clientY: y });
+    await expect(page.getByTestId("drag-live")).toBeVisible();
+    await b.dispatchEvent("pointercancel", { ...ev, buttons: 0, clientX: x + 60, clientY: y });
+    await expect(page.getByTestId("drag-live")).toBeHidden();
+    await expect(b).toHaveAttribute("data-start", s0);
+    // No click followed the cancel: the next one is the person's and opens the item.
+    await b.click();
+    await expect(page.getByTestId("item-panel")).toBeVisible();
+  });
+
+  test("a movable bar names its keys", async ({ page }) => {
+    await open(page);
+    await expect(bar(page, "alert-export")).toHaveAttribute("aria-label", /Arrows move it a week, Shift\+arrows a month; Escape cancels$/);
+  });
+
+  test("a viewer's bar names no keys", async ({ page }) => {
+    await open(page, "viewer@example.com");
+    await expect(bar(page, "alert-export")).not.toHaveAttribute("aria-label", /Arrows/);
+  });
+});
+
+test.describe("roadmap-r2 review, a touch tablet", () => {
+  test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: false });
+
+  test("a long press picks a Timeline bar up and a finger drags it", async ({ page }) => {
+    await open(page);
+    const b = bar(page, "alert-export");
+    await b.scrollIntoViewIfNeeded();
+    const [s0] = await span(b);
+    const box = (await b.boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    const ev = { pointerId: 9, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
+    await b.dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
+    await page.waitForTimeout(650);
+    for (let n = 1; n <= 12; n++) await b.dispatchEvent("pointermove", { ...ev, clientX: x + n * 10, clientY: y });
+    await b.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x + 120, clientY: y });
+    await expect(page.getByText(/Moved 'Alert history export' to .* in your working draft/)).toBeVisible();
+    await expect(b).not.toHaveAttribute("data-start", s0);
+  });
+});
