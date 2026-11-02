@@ -1,6 +1,5 @@
 import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
