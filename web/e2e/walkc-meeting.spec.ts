@@ -55,7 +55,6 @@ async function flags(context: BrowserContext, value: string) {
 async function startWithAnEdit(page: Page) {
   await login(page);
   await page.goto("/simple/prds/guided-setup");
-  // build-review (f0834a8b) names the PRD page's button "Start a review meeting".
   await page.getByRole("button", { name: "Start a review meeting" }).click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByRole("checkbox", { name: "Theo Brandt" }).check();

@@ -427,3 +427,16 @@ export async function seedDecidedRun(page: Page): Promise<string> {
     });
   }, DECIDED_RUN);
 }
+
+/**
+ * /sources: search for these words. Words typed before the page is ready can be lost,
+ * leaving Search off: type them until Search takes them.
+ */
+export async function searchSources(page: Page, words: string) {
+  const button = page.getByRole("button", { name: "Search" });
+  await expect(async () => {
+    await page.getByLabel("Search", { exact: true }).fill(words);
+    await expect(button).toBeEnabled({ timeout: 1000 });
+  }).toPass();
+  await button.click();
+}

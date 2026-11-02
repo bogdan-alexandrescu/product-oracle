@@ -1,6 +1,8 @@
+import { MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+
 import { expect, test } from "./test";
 
-import { login } from "./helpers";
+import { login, searchSources } from "./helpers";
 
 test("settings › sources: my sources, status and last error, sync, allowlist, pause", async ({ page }) => {
   await login(page);
@@ -100,9 +102,7 @@ test("/sources: search ranks by confidence and explains the badge", async ({ pag
   await login(page);
   await page.goto("/sources");
   await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
-
-  await page.getByLabel("Search", { exact: true }).fill("onboarding checklist");
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchSources(page, "onboarding checklist");
   const hits = page.getByTestId("search-hit");
   await expect(hits).toHaveCount(2);
   // The README (fresh, from code) outranks the older chat thread.
@@ -129,4 +129,34 @@ test("/sources: search ranks by confidence and explains the badge", async ({ pag
   await page.getByLabel("Search", { exact: true }).fill("nothing matches this");
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByText("Nothing in your sources matches")).toBeVisible();
+});
+
+test("/sources: the search box keeps its focus while coverage loads", async ({ page }) => {
+  // Coverage is slow to come: a person types while it loads.
+  await page.addInitScript(
+    ([k, v, mk, ms]) => {
+      localStorage.setItem(k, v);
+      localStorage.setItem(mk, ms);
+    },
+    [MOCK_SLOW_KEY, "/v1/sources/coverage", MOCK_SLOW_MS_KEY, "3000"] as const,
+  );
+  await login(page);
+  await page.goto("/sources");
+  // The source picker is filled: the page is live, coverage not in yet.
+  await expect(page.getByRole("combobox", { name: /^Source/ }).getByRole("option", { name: "Product chat" })).toBeAttached();
+  await expect(page.getByRole("row", { name: /Product chat/ })).toHaveCount(0);
+
+  const box = page.getByLabel("Search", { exact: true });
+  await box.click();
+  await page.keyboard.type("onboarding");
+  await expect(box).toHaveValue("onboarding");
+
+  // Coverage comes in, with its side panel, while the person is typing: the box keeps its
+  // focus, so the rest of the words land in it too.
+  await expect(page.getByRole("row", { name: /Product chat/ })).toBeVisible({ timeout: 10_000 });
+  await expect(box).toBeFocused();
+  await page.keyboard.type(" checklist");
+  await expect(box).toHaveValue("onboarding checklist");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("search-hit")).toHaveCount(2);
 });

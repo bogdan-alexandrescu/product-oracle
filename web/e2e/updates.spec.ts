@@ -1,6 +1,6 @@
 import { expect, test, type Page, mockNow } from "./test";
 
-import { login, openSection, section, selectText, signOut } from "./helpers";
+import { login, openSection, searchSources, section, selectText, signOut } from "./helpers";
 
 /*
  * H8 Board and investor drafts (issue #198, criterion 10): Company › Updates, the New update
@@ -176,8 +176,7 @@ test("10d: an approver sees and comments on updates without verdicts or Approve;
   await expect(page.getByRole("heading", { level: 1, name: "Document not found" })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Board update · October 2026" })).toHaveCount(0);
   await page.goto("/sources");
-  await page.getByLabel("Search", { exact: true }).fill("Larkspur");
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchSources(page, "Larkspur");
   await expect(page.getByText("Nothing in your sources matches “Larkspur”.")).toBeVisible();
   await expect(page.getByTestId("search-hit")).toHaveCount(0);
 });
