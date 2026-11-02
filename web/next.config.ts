@@ -43,8 +43,6 @@ const APP_CSP = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
-  typescript: { ignoreBuildErrors: true }, // LOCAL ONLY, never committed
-  experimental: { cpus: 2 }, // LOCAL ONLY, never committed
   // The Playwright suites build into their own directories (.next-mock, .next-e2e) and
   // serve them with `next start`; the default build (Docker image) is standalone.
   distDir: process.env.NEXT_DIST_DIR || ".next",
