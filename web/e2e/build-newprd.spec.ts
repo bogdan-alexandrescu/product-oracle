@@ -99,6 +99,10 @@ for (const [label, size] of [
       await question(page).getByRole("button", { name: "Ask Priya Raman" }).click();
       await expect(sheet(page).getByText("Asked of Priya Raman. The draft starts without it.")).toBeVisible();
       await expect(question(page).getByText("Question 6 of 6")).toBeVisible();
+      // The question's buttons stay in view as the answered ones stack up.
+      await expect(question(page).getByRole("button", { name: "I don't know" })).toBeInViewport();
+      // Home lists a PRD once it drafts, not while its questions are asked.
+      await expect(simple(page).getByTestId("np-started")).toHaveCount(0);
 
       // Draft at question 6, with what was given.
       await sheet(page).getByRole("button", { name: "Draft with what I gave" }).click();

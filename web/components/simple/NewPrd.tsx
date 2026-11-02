@@ -162,7 +162,7 @@ export function NewPrdSheet({ onClose, onStarted }: { onClose: () => void; onSta
   const asked = given.length;
   useEffect(() => {
     if (!intake) return;
-    panel.current?.querySelector('[data-testid="np-question"]')?.scrollIntoView({ block: "nearest" });
+    panel.current?.querySelector('[data-testid="np-question"]')?.scrollIntoView({ block: "end" });
   }, [intake, asked, asking]);
 
   const at = given.length; // the question on screen, from 0
@@ -533,8 +533,10 @@ function waitsOn(s: Started): string | null {
   return `${plural(later.length, "question")} ${later.length === 1 ? "waits" : "wait"} on ${names.join(" and ")}`;
 }
 
-/** Home's "PRDs you started" card: each one, how far its questions got, what is open. */
-export function StartedCard({ started }: { started: Started[] }) {
+/** Home's "PRDs you started" card: each one drafting, how far its questions got, what is open. */
+export function StartedCard({ started: all }: { started: Started[] }) {
+  // Home lists the ones drafting; a brief not drafted yet waits on One-pagers (and in Detailed).
+  const started = all.filter(drafting);
   if (started.length === 0) return null;
   return (
     <section aria-label="PRDs you started" data-testid="np-started" className="simple-card">
@@ -562,18 +564,17 @@ export function StartedCard({ started }: { started: Started[] }) {
               <li>
                 {answered} of {plural(s.questions.length, "question")} answered.{goal ? ` The draft is for ${goal}.` : ""}
               </li>
-              {!drafting(s) && <li>Not drafted yet: open it in Detailed › PRDs to go on.</li>}
-              {drafting(s) && unknown.map((q) => (
+              {unknown.map((q) => (
                 <li key={q.id}>&ldquo;{q.prompt}&rdquo; you did not know: the draft marks it as open.</li>
               ))}
               {s.questions
-                .filter((q) => drafting(s) && q.status === "delegated")
+                .filter((q) => q.status === "delegated")
                 .map((q) => (
                   <li key={q.id}>
                     &ldquo;{q.prompt}&rdquo; waits on {(q.asked_to && s.people.get(q.asked_to)?.name) || "someone"}; the draft updates when they answer.
                   </li>
                 ))}
-              {drafting(s) && notYet.map((q) => (
+              {notYet.map((q) => (
                 <li key={q.id}>&ldquo;{q.prompt}&rdquo; was not answered yet: the draft marks it as open.</li>
               ))}
             </ul>
