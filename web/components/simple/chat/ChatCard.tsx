@@ -58,6 +58,11 @@ function ghostWords(p: ChatPreview, title: string): string | null {
   return null;
 }
 
+/** "Ann", "Ann and Bo", "Ann, Bo and Cy". */
+function listWords(names: string[]): string {
+  return names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 const proposedWords = (to: string) => `Proposed to ${to}; they decide`;
 
 /** roadmap-talk: Correct's labelled fields. */
@@ -300,6 +305,15 @@ export function ChatCard({
           ))}
         </div>
       )}
+      {open && card.may === "propose" && (card.asks ?? []).length > 0 && (
+        // walkc-meeting: who Propose asks, said before Propose; in a meeting its deciders,
+        // and when nobody in it may decide, that it goes outside the meeting.
+        <p className={`simple-small ${card.asks_outside ? "text-warn" : "text-text2"}`} data-testid="chat-card-asks">
+          {card.asks_outside
+            ? `Nobody in this meeting may decide this. Propose asks ${listWords(card.asks ?? [])}, who ${(card.asks ?? []).length === 1 ? "is" : "are"} not here.`
+            : `Propose asks ${listWords(card.asks ?? [])} to decide.`}
+        </p>
+      )}
       {open ? (
         // qa-simple-roadmap-45: on a phone this row can hold four buttons (Preview, Apply,
         // Discard, Correct); a plain wrap leaves the last one alone on its own row, so narrow
@@ -369,7 +383,7 @@ export function ChatCard({
             {card.status === "proposed" &&
               (action?.kind === "decision" && action.proposed_to
                 ? proposedWords(action.proposed_to)
-                : `Proposed to ${routedTo?.length ? routedTo.join(", ") : "the decider"} by ${mine ? "you" : (card.decided_by_name ?? "someone")}`)}
+                : `Proposed to ${routedTo?.length ? listWords(routedTo) : card.asks?.length ? listWords(card.asks) : "the decider"} by ${mine ? "you" : (card.decided_by_name ?? "someone")}`)}
             {card.status === "discarded" && (correct ? "Rejected: nothing changed" : "Discarded: nothing changed")}
             {card.status === "undone" && "Undone"}
           </span>

@@ -21,7 +21,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { newCompany, stableUuid } from "./ids";
 import { changePhrase } from "./simple-change-words";
-import { CUT_ALL, cutDependents, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
+import { CUT_ALL, MEETING_PROPOSALS, cutDependents, meetingRoute, proposalRoute, routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
@@ -1344,6 +1344,9 @@ function undoBar(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): strin
 
 function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   const check = c.flag !== undefined ? { flags: c.flag ? [c.flag] : [] } : asIf(db, c);
+  // walkc-meeting (chat.cards_out): an open card's fixes are checked again on each read, on
+  // the working state (the meeting's applied changes), never kept from when it was made.
+  if (c.status === "open" && "fixes" in check) c.fixes = check.fixes;
   const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, decided_by: _by, ...rest } = c;
   void _undo;
   void _by;
@@ -1357,7 +1360,18 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   // Review major (chat.cards_out): "Cut it and its dependents" applies only when the reader decides every item it cuts.
   const allMine = [c.item_id, ...waiting.map((i) => i.id)].every((id) => !!items.find((i) => i.id === id)?.can_decide);
   const may_with_dependents = waiting.length && may.may ? (allMine ? "apply" : "propose") : null;
-  return { change_words: null, correct: null, ...rest, ...may, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
+  // walkc-meeting (chat.cards_out): who Propose asks, and who a proposed card went to.
+  const m = meetingOf(chat, c);
+  let asks: string[] = [];
+  let here = true;
+  if (may.may === "propose" && c.item_id && c.op !== "add_item") {
+    const route = proposalRoute(db, ctx, c.item_id);
+    ({ ids: asks, here } = m ? meetingRoute(m.attendee_ids, ctx, route) : { ids: route, here: true });
+  } else if (c.status === "proposed" && c.change_id) {
+    asks = db.changes?.find((x) => x.id === c.change_id)?.routed_to ?? [];
+  }
+  const asksOut = { asks: asks.map((i) => ctx.names[i] ?? "someone"), asks_outside: !here };
+  return { change_words: null, correct: null, ...rest, ...may, ...asksOut, flags: check.flags, dependents: waiting.map((i) => i.title), dependent_ids: waiting.map((i) => i.id), may_with_dependents, can_undo: c.status === "applied" && !undoBar(db, chat, c, ctx) };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -1505,6 +1519,15 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
     return res;
   }
   const result = (await res.json()) as Schemas["SimpleChangeResult"];
+  const inMeeting = meetingOf(chat, c);
+  if (inMeeting && result.change.status === "proposed") {
+    // walkc-meeting (changes.create): a proposal made in a meeting goes to its deciders.
+    const stored = db.changes?.find((x) => x.id === result.change.id);
+    const routed = meetingRoute(inMeeting.attendee_ids, ctx, result.change.routed_to).ids;
+    if (stored) stored.routed_to = routed;
+    result.change.routed_to = routed;
+    MEETING_PROPOSALS.add(result.change.id);
+  }
   afterApplied(db, c, result);
   if (withDependents) {
     const t = result.change.target as Record<string, unknown>;

@@ -70,6 +70,9 @@ export type ChatCard = {
   may_with_dependents?: "apply" | "propose" | null;
   /** qa4-simple-decide-1: an applied card the reader may undo (its Apply's rule). */
   can_undo?: boolean;
+  /** walkc-meeting: who Propose asks (or a proposed card went to), by name; asks_outside: nobody in the meeting may decide. */
+  asks?: string[];
+  asks_outside?: boolean;
 };
 
 export type ChangeWords = { before: string; after: string };
