@@ -318,12 +318,14 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit, titleOf }: { dr
   const log = working.flatMap((d) => d.change_log).sort((a, b) => (a.at < b.at ? -1 : 1));
   const last = [...log].reverse().find((c) => c.by === meId);
   const submittable = working.filter((d) => d.status === "working" && d.can_submit && d.changes > 0);
+  // walkb-roadmap review 5a: a roadmap built from a PRD and not approved yet has no approved roadmap to keep published.
+  const published = working.every((d) => d.published);
   return (
     <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
         <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
-          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · the approved roadmap stays published until review passes
+          <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · {published ? "the approved roadmap stays published until review passes" : "no approved version yet: it is published once review passes"}
         </p>
         <Button variant="ghost" disabled={!last} onClick={() => last && onUndo(last.id)}>
           Undo
@@ -1183,7 +1185,7 @@ export function SimpleRoadmap() {
           const r = await api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: d.id } } });
           if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
         }
-        toast({ message: "Sent for review: the approved roadmap stays published until it passes" });
+        toast({ message: ds.every((d) => d.published) ? "Sent for review: the approved roadmap stays published until it passes" : "Sent for review: the roadmap is published once it passes" });
         await reload();
       }}
     />

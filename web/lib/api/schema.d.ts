@@ -37947,6 +37947,11 @@ export interface components {
              */
             change_log: components["schemas"]["SimpleDraftChange"][];
             /**
+             * Published
+             * @default true
+             */
+            published: boolean;
+            /**
              * Can Withdraw
              * @default false
              */

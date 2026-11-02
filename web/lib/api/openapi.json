@@ -114341,6 +114341,11 @@
             "title": "Change Log",
             "default": []
           },
+          "published": {
+            "type": "boolean",
+            "title": "Published",
+            "default": true
+          },
           "can_withdraw": {
             "type": "boolean",
             "title": "Can Withdraw",

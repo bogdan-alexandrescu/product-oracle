@@ -558,6 +558,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * meeting's chat (meet-chat-kind).
  * "meet-chat-right-prd" as "simple-chat" with the meeting reviewing Guided setup, whose features
  * are only on its draft roadmap (Setup checklist, Setup reminders).
+ * "simple-unapproved-roadmap" as the default company with Simple's Alerts roadmap built from its
+ * PRD and not approved yet (walkb-roadmap review 5a).
  */
 export { MOCK_SCENARIO_KEY };
 /**
@@ -2894,6 +2896,13 @@ function load(): Db {
                     // walkb-roadmap review 5f: a roadmap built from a PRD with a long title.
                     const db = seedSimpleWalkScenario();
                     db.simple_roadmap!.titles = { "onboarding-roadmap": "Guided setup for new workspace admins and their first teams roadmap" };
+                    return db;
+                  }
+              : scenario === "simple-unapproved-roadmap"
+                ? () => {
+                    // walkb-roadmap review 5a: the Alerts roadmap was built from its PRD and has no approved version yet.
+                    const db = seed();
+                    (db.simple_roadmap = seedSimpleRoadmap()).unapproved = ["alerts-roadmap"];
                     return db;
                   }
               : scenario === "simple-plan"

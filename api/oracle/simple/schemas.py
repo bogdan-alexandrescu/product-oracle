@@ -664,6 +664,9 @@ class SimpleDraftOut(BaseModel):
     # D-d: every applied change it holds, not undone, oldest first (one shared draft per
     # roadmap: approving it publishes them all).
     change_log: list[SimpleDraftChange] = []
+    # walkb-roadmap review 5a: the roadmap has an approved version readers see; false for a
+    # roadmap built from a PRD and not approved yet (the banner claims no approved roadmap).
+    published: bool = True
     # The draft's author or the decider withdraws a submitted draft back to working.
     can_withdraw: bool = False
 
