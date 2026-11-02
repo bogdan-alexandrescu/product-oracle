@@ -94,3 +94,57 @@ async def test_approve_says_each_problem_in_plain_words(client, monkeypatch):
         {"what": said[0].upper() + said[1:] + ".", "where": None, "times": 2},
         {"what": "A source is cited twice; drop one.", "where": None, "times": 1},
     ]
+
+
+async def test_a_stalled_minutes_job_fails_with_draft_again(client):
+    """walkc-meeting: protects=a minutes job still queued past MINUTES_STUCK reads
+    "failed" with Draft again (never "drafting" on), and Draft again cancels it and
+    queues a new one; fails_when=it stays "slow" with no way out; no_claim=the job's
+    own answer."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from oracle.jobs.models import LlmJob
+    from tests.test_simple_meetings_api import get
+    from tests.test_simple_meetings_walk import ended, set_job
+
+    w = await world()
+    m = await ended(client, w)
+    await set_job(w, updated_at=datetime.now(UTC) - timedelta(minutes=13))
+    out = await get(client, w, m["id"])
+    assert out["minutes_job"] == "failed" and out["can"]["redraft"]
+    r = await client.post(f"/v1/simple/meetings/{m['id']}/minutes/redraft",
+                          headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["minutes_job"] == "drafting"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        jobs = list(await s.scalars(select(LlmJob).where(LlmJob.kind == "meeting_minutes")
+                                    .order_by(LlmJob.created_at)))  # fmt: skip
+        assert [j.status for j in jobs] == ["cancelled", "queued"]
+
+
+async def test_minutes_do_not_wait_for_the_prds_other_jobs(client):
+    """walkc-meeting: protects=the worker claims a queued minutes job while another job on
+    the same PRD runs and an older one waits; fails_when=the minutes wait behind the PRD's
+    jobs (the walk's 13-15 minutes of "drafting"); no_claim=other kinds' order."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from oracle.jobs import worker
+    from oracle.jobs.models import LlmJob
+    from tests.test_simple_meetings_walk import ended
+
+    w = await world()
+    await ended(client, w)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        minutes = await s.scalar(select(LlmJob).where(LlmJob.kind == "meeting_minutes"))
+        old = datetime.now(UTC) - timedelta(minutes=5)
+        for status in ("running", "queued"):
+            s.add(LlmJob(kind="one_pager", document_id=minutes.document_id, status=status,
+                         input={}, created_at=old, updated_at=old,
+                         started_at=old if status == "running" else None))  # fmt: skip
+        await s.commit()
+        minutes_id = minutes.id
+    assert await worker.claim_next(w.ctx.tenant_id) == minutes_id
