@@ -420,9 +420,9 @@ def test_approve_problems_name_dates_month_first():
     def problem(text: str, *days: date) -> ImportProblem:
         mark = Mark(section_key="timeline", text=text, day=days[0], status="unverified",
                     line=3, bases=[], days=days)  # fmt: skip
+        said = f"the date {text} is not backed by a confirmed schedule"
         return ImportProblem(code="unverified_date", section_key="timeline",
-                             refs=problem_refs(mark, "guided-setup"),
-                             message=f"the date {text} is not backed by a confirmed schedule")  # fmt: skip
+                             refs=problem_refs(mark, "guided-setup"), message=said)  # fmt: skip
 
     out = approve_problems([
         problem("2026-11-30", date(2026, 11, 30)),

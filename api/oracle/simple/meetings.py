@@ -56,7 +56,7 @@ from oracle import audit, company_time, wording
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
-from oracle.docs.models import Document
+from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.docs.parser import DraftError as ImportRejected
 from oracle.models import AuditEvent
 from oracle.roadmap.models import RoadmapItem
@@ -814,24 +814,29 @@ def _sentence(text: str) -> str:
     return text if text.endswith((".", "?", "!")) else text + "."
 
 
-def _section(key: str | None) -> str | None:
-    """A section's name from its id ("what-we-build" -> "What we build")."""
-    return key.replace("-", " ").replace("_", " ").strip().capitalize() or None if key else None
+def _section(key: str | None, headings: dict[str, str] | None = None) -> str | None:
+    """A section's name: its own heading (walkc-meeting-r2: "Sources and data points" for
+    "sources"), else made from its id ("what-we-build" -> "What we build")."""
+    if not key:
+        return None
+    if headings and headings.get(key):
+        return headings[key]
+    return key.replace("-", " ").replace("_", " ").strip().capitalize() or None
 
 
 _RAW = [
-    (re.compile(r"\[c:[^\]]*\]"), "a citation"),
-    (re.compile(r"\s*\(\{#[^}]*\}\)"), ""),
-    (re.compile(r"\{#[^}]*\}"), "a section label"),
-    (re.compile(r"section id '([^']*)'"), lambda m: f"the section name “{_section(m[1])}”"),
-    (re.compile(r"section '([^']*)'"), lambda m: f"the section “{_section(m[1])}”"),
+    (re.compile(r"\[c:[^\]]*\]"), lambda m, h: "a citation"),
+    (re.compile(r"\s*\(\{#[^}]*\}\)"), lambda m, h: ""),
+    (re.compile(r"\{#[^}]*\}"), lambda m, h: "a section label"),
+    (re.compile(r"section id '([^']*)'"), lambda m, h: f"the section name “{_section(m[1], h)}”"),
+    (re.compile(r"section '([^']*)'"), lambda m, h: f"the section “{_section(m[1], h)}”"),
 ]
 
 
-def _plain_words(message: str) -> str:
+def _plain_words(message: str, headings: dict[str, str] | None = None) -> str:
     """An importer message without its raw tokens ([c:key], {#sources}, section ids)."""
     for pattern, put in _RAW:
-        message = pattern.sub(put, message)
+        message = pattern.sub(lambda m, put=put: put(m, headings), message)
     return _sentence(message)
 
 
@@ -839,7 +844,13 @@ def _days(days: list[str]) -> str:
     return days[0] if len(days) == 1 else ", ".join(days[:-1]) + " and " + days[-1]
 
 
-def approve_problems(problems: list[Any]) -> dict[str, Any]:
+def _shown_date(p: Any) -> str:
+    """walkc-meeting-r2: a date problem's date as people read it (doc_dates.problem_refs'
+    ``shown``), never as the document wrote it ("2026-11-30")."""
+    return p.refs.get("shown") or p.refs["date"]
+
+
+def approve_problems(problems: list[Any], headings: dict[str, str] | None = None) -> dict[str, Any]:
     """walkc-meeting: why the meeting's Approve could not publish, as a short list a person
     reads: each problem said once, in plain words (what to do is in its message), where it
     is (the section's name), and how many times it came up; a section's dates without a
@@ -847,12 +858,12 @@ def approve_problems(problems: list[Any]) -> dict[str, Any]:
     seen: dict[tuple[str, str | None], dict[str, Any]] = {}
     dates: dict[str | None, list[Any]] = {}
     for p in problems:
-        where = _section(getattr(p, "section_key", None))
+        where = _section(getattr(p, "section_key", None), headings)
         refs = getattr(p, "refs", None) or {}
         if getattr(p, "code", None) == "unverified_date" and isinstance(refs.get("date"), str):
             dates.setdefault(where, []).append(p)
             continue
-        what = _plain_words(str(getattr(p, "message", "") or ""))
+        what = _plain_words(str(getattr(p, "message", "") or ""), headings)
         key = (what, where)
         if key in seen:
             seen[key]["times"] += 1
@@ -860,9 +871,9 @@ def approve_problems(problems: list[Any]) -> dict[str, Any]:
             seen[key] = {"what": what, "where": where, "times": 1}
     out = list(seen.values())
     for where, group in dates.items():
-        days = list(dict.fromkeys(p.refs["date"] for p in group))
+        days = list(dict.fromkeys(_shown_date(p) for p in group))
         if len(days) == 1:
-            what = _plain_words(str(group[0].message))
+            what = _plain_words(str(group[0].message), headings)
         else:
             what = (
                 f"{len(days)} dates are not backed by a confirmed schedule: {_days(days)}; "
@@ -878,6 +889,20 @@ def approve_problems(problems: list[Any]) -> dict[str, Any]:
     return {"code": "draft_problems", "message": message, "problems": out}
 
 
+async def _headings(db: AsyncSession, document_ids: set[uuid.UUID]) -> dict[str, str]:
+    """Each section's heading by its key, in the documents' latest versions."""
+    if not document_ids:
+        return {}
+    await db.rollback()
+    rows = await db.execute(
+        select(Section.section_key, Section.heading)
+        .join(DocumentVersion, DocumentVersion.id == Section.version_id)
+        .where(DocumentVersion.document_id.in_(document_ids))
+        .order_by(DocumentVersion.number)
+    )
+    return {key: heading for key, heading in rows.tuples() if heading}
+
+
 async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     """The decider's Approve: every draft the meeting worked on, with the required
     reviewers present approving too (oracle.simple.drafts.approve_in_meeting); the
@@ -891,6 +916,13 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
         raise MeetingError(403, "Only the PRD's decider (or an owner) approves in the meeting")
     session = await db.get(SimpleSession, m.session_id)
     present = [i for i in m.attendee_ids if i not in m.absent_ids and i != me]
+    # The PRD and every document the meeting drafted, read before the importer can roll
+    # the session back: a refused problem names its section by these documents' headings.
+    documents = {m.prd_document_id, *await db.scalars(
+        select(SimpleDraft.document_id)
+        .join(SimpleSessionDraft, SimpleSessionDraft.draft_id == SimpleDraft.id)
+        .where(SimpleSessionDraft.session_id == m.session_id)
+    )} - {None}  # fmt: skip
     try:
         result = await drafts.approve_in_meeting(db, session, me, present)
     except drafts.DraftError as e:
@@ -898,7 +930,8 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     except ImportRejected as e:
         # walkc-meeting: never the raw "draft rejected: 38 problem(s)": each problem in
         # plain words, with what to do about it and where.
-        raise MeetingError(422, approve_problems(e.problems)) from e
+        headings = await _headings(db, documents)
+        raise MeetingError(422, approve_problems(e.problems, headings=headings)) from e
     if not result.drafts:
         if result.not_approved:
             return result
