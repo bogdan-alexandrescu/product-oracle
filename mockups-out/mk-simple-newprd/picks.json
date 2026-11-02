@@ -30,11 +30,11 @@
       },
       {
        "file": "frames/np1-a-brief.html",
-       "caption": "Continue pressed: the brief opens in Detailed, with Oracle's 5 questions and the Before drafting panel."
+       "caption": "Continue pressed: the brief opens in Detailed for Raise activation, with Oracle's 5 questions and the Before drafting panel. They are asked of you, so the Inbox goes from 13 to 18."
       },
       {
        "file": "frames/np1-a-hard-1512.html",
-       "caption": "Hard case at 1512, started from One-pagers: answering a question in Detailed offers Send answer, I don't know, Defer, Ask someone and Research this."
+       "caption": "Hard case at 1512, the same brief: the metric question answered I don't know (kept open), and who it is for sent to Priya Raman with Ask someone."
       },
       {
        "file": "frames/np1-a-result.html",
@@ -77,7 +77,7 @@
       },
       {
        "file": "frames/np1-b-hard.html",
-       "caption": "Hard case: the date question was answered I don't know (marked as open); question 5 goes to Priya Raman to answer later."
+       "caption": "Hard case: the date question was answered I don't know (marked as open); question 5 goes to Priya Raman to answer later. The footer counts 3 answered, 1 not known, 2 left."
       },
       {
        "file": "frames/np1-b-hard-1512.html",
@@ -85,7 +85,7 @@
       },
       {
        "file": "frames/np1-b-result.html",
-       "caption": "Result: Draft with what I gave pressed. Home shows PRDs you started: Drafting, with what is open and who it waits on."
+       "caption": "Result: Draft with what I gave pressed at question 5. Home shows PRDs you started: Drafting, 3 of 6 answered, what is open and who it waits on."
       },
       {
        "file": "frames/np1-b-result-list.html",
@@ -131,7 +131,7 @@
       },
       {
        "file": "frames/np1-c-result.html",
-       "caption": "Result: Start the draft pressed. The Raise activation card shows Shared shopping lists as Drafting."
+       "caption": "Result: Start the draft pressed. The Raise activation card shows Shared shopping lists as Drafting; Start a PRD for this goal stays for the next one."
       },
       {
        "file": "frames/np1-c-phone.html",
@@ -153,7 +153,7 @@
       },
       {
        "file": "frames/np1-d-open.html",
-       "caption": "Message sent: Oracle shows the name, problem, who and goal it took, with Looks right and Change it."
+       "caption": "Start a PRD pressed, then one line typed and sent: Oracle shows the name, problem, who and goal it took, with Looks right and Change it."
       },
       {
        "file": "frames/np1-d-mid.html",
@@ -161,7 +161,7 @@
       },
       {
        "file": "frames/np1-d-hard-1512.html",
-       "caption": "Hard case at 1512: I don't know for the date, then Ask someone later; Oracle asks who should answer."
+       "caption": "Hard case at 1512: I don't know for the date, then Ask someone later; Oracle asks who should answer, from the same 5 people as the other proposals."
       },
       {
        "file": "frames/np1-d-result.html",
@@ -169,7 +169,7 @@
       },
       {
        "file": "frames/np1-d-phone.html",
-       "caption": "Phone 390: the chat fills the screen; question 1 with its quick answers."
+       "caption": "Phone 390: the chat fills the screen; question 1 with its quick answers, whole above the box."
       }
      ]
     }

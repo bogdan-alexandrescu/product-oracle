@@ -14,7 +14,7 @@ import { usePhone } from "@/components/simple/FlowViews";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
-import { DraftingCard, GoalStart, NewPrdButton, NewPrdSheet, useNp } from "@/components/simple/NewPrdMock"; // MOCK-HOOK
+import { DraftingCard, GoalMade, GoalStart, NewPrdButton, NewPrdSheet, useNp } from "@/components/simple/NewPrdMock"; // MOCK-HOOK
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -523,6 +523,7 @@ export default function SimpleHome() {
                         {g.path}
                       </span>
                     )}
+                    <GoalMade np={np} goal={g.name} /> {/* MOCK-HOOK */}
                     <div className="mt-auto flex flex-wrap items-center gap-2">
                       <span data-testid="home-goal-status" title={g.why ?? undefined} className={`simple-status ${STATUS_TONE[g.status]}`}>
                         {g.status}

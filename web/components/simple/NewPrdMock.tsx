@@ -75,16 +75,16 @@ export function DraftingCard() {
           <Chip kind="warn" dot>Drafting</Chip>
           <span className="simple-small">{NEWPRD.made.eta}</span>
         </div>
-        <div aria-hidden className="h-2 overflow-hidden rounded-full bg-surface2">
-          <div className="h-full w-[35%] rounded-full bg-accent" />
-        </div>
         <ul className="simple-small flex flex-col gap-1">
-          <li>4 of 6 questions answered. The draft is for {NEWPRD.goal}.</li>
+          <li>3 of 6 questions answered. The draft is for {NEWPRD.goal}.</li>
           <li>
             &ldquo;{NEWPRD.questions[3].text}&rdquo; you did not know: the draft marks it as open.
           </li>
           <li>
             &ldquo;{NEWPRD.questions[4].text}&rdquo; waits on {NEWPRD.questions[4].later}; the draft updates when she answers.
+          </li>
+          <li>
+            &ldquo;{NEWPRD.questions[5].text}&rdquo; was not asked yet: the draft marks it as open.
           </li>
         </ul>
       </div>
@@ -175,7 +175,7 @@ export function NewPrdSheet({ np, back }: { np: NpState; back: string }) {
     );
     foot = (
       <>
-        <span className="simple-small mr-auto">{phase === "ask" ? "1 answered" : "3 answered · 1 not known"}</span>
+        <span className="simple-small mr-auto">{phase === "ask" ? "1 answered" : "3 answered · 1 not known · 2 left"}</span>
         <Link href={`${back}?np1=b&made=1`} className="simple-button">
           Draft with what I gave
         </Link>
@@ -202,7 +202,8 @@ export function NewPrdSheet({ np, back }: { np: NpState; back: string }) {
           <legend className={`${LABEL} mb-1.5`}>The goal it helps</legend>
           <div className="flex flex-wrap gap-2">
             {["Raise activation", "Grow paid conversion", "Not sure yet"].map((g) => (
-              <span key={g} className={`simple-chip ${filled && g === NEWPRD.goal ? "border-accent! bg-accent-soft! text-accent-ink!" : ""}`}>
+              <span key={g} className={`simple-chip ${filled && g === NEWPRD.goal ? "border-accent! bg-accent! font-semibold text-on-accent!" : ""}`}>
+                {filled && g === NEWPRD.goal && <Icon name="check" size={16} />}
                 {g}
               </span>
             ))}
@@ -221,6 +222,7 @@ export function NewPrdSheet({ np, back }: { np: NpState; back: string }) {
   }
   return (
     <>
+      <style>{"html, body { overflow: hidden; }"}</style>
       <div aria-hidden className="fixed inset-0 z-40 bg-black/40" />
       <aside role="dialog" aria-modal="true" aria-label="New PRD" data-testid="np-sheet" className="fixed top-0 right-0 bottom-0 z-50 flex w-[520px] max-w-full flex-col border-l border-line bg-surface text-text shadow-tip max-[600px]:w-full">
         <header className="flex items-center gap-2 border-b border-line px-5 py-4">
@@ -239,17 +241,21 @@ export function NewPrdSheet({ np, back }: { np: NpState; back: string }) {
 /** c: "Start a PRD" on a goal card, and what it started there. */
 export function GoalStart({ np, goal }: { np: NpState; goal: string }) {
   if (np.np1 !== "c") return null;
-  if (np.made && goal === NEWPRD.goal)
-    return (
-      <p className="simple-small flex flex-wrap items-center gap-2" data-testid="np-goal-made">
-        <span className="font-semibold text-text">{NEWPRD.title}</span>
-        <Chip kind="warn" dot>Drafting</Chip>
-      </p>
-    );
   return (
     <Link href={`/simple/new-prd?np1=c&goal=${encodeURIComponent(goal)}`} data-testid="np-goal-start" className="simple-link inline-flex items-center gap-1 self-start">
       <Icon name="plus" size={16} /> Start a PRD for this goal
     </Link>
+  );
+}
+
+/** c: the PRD started from this goal, drafting, above the goal's status. */
+export function GoalMade({ np, goal }: { np: NpState; goal: string }) {
+  if (np.np1 !== "c" || !np.made || goal !== NEWPRD.goal) return null;
+  return (
+    <p className="simple-small flex flex-wrap items-center gap-2" data-testid="np-goal-made">
+      <span className="font-semibold text-text">{NEWPRD.title}</span>
+      <Chip kind="warn" dot>Drafting</Chip>
+    </p>
   );
 }
 
@@ -358,7 +364,7 @@ export function ChatStarter() {
   return (
     <div className="flex flex-col items-center gap-2 px-2 pb-3" data-testid="np-chat-starter">
       <span className="simple-small">Or start something:</span>
-      <span className="simple-chip">Start a PRD</span>
+      <Link href="/simple?np1=d&open=1" data-testid="np-chat-start" className="simple-chip">Start a PRD</Link>
     </div>
   );
 }
@@ -391,6 +397,12 @@ export function NewPrdChat({ np }: { np: NpState }) {
   const phase = np.phase;
   const q = NEWPRD.questions;
   const lines: ReactNode[] = [
+    <Bubble key="start" me at="2:09 PM">
+      <p>Start a PRD</p>
+    </Bubble>,
+    <Bubble key="what" at="2:09 PM">
+      <p>{NEWPRD.chat.what}</p>
+    </Bubble>,
     <Bubble key="ask" me at="2:10 PM">
       <p>{NEWPRD.chat.ask}</p>
     </Bubble>,
@@ -436,7 +448,7 @@ export function NewPrdChat({ np }: { np: NpState }) {
           </Bubble>,
           <Bubble key="who" at={at(i)}>
             <p>Who should answer it? I keep drafting, and add the answer when it comes.</p>
-            <Chips items={NEWPRD.people.slice(0, 4)} />
+            <Chips items={NEWPRD.people} />
           </Bubble>,
         );
         continue;
@@ -471,7 +483,7 @@ export function NewPrdChat({ np }: { np: NpState }) {
       );
   }
   return (
-    <ol className="flex flex-col gap-3" aria-label="Messages" data-testid="np-chat">
+    <ol className="flex flex-col gap-3 max-[600px]:pb-14" aria-label="Messages" data-testid="np-chat">
       {lines}
     </ol>
   );

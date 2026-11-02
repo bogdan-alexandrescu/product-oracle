@@ -50,21 +50,11 @@
  },
  {
   "file": "np1-a-brief",
-  "url": "/documents/new?kind=prd&from=simple",
+  "url": null,
   "w": 1440,
   "h": 900,
   "settle": 3000,
   "steps": [
-   [
-    "label",
-    "Title",
-    "Shared shopping lists"
-   ],
-   [
-    "fill",
-    "form textarea",
-    "People who shop for a household keep separate lists, so they buy the same things twice and forget others."
-   ],
    [
     "click",
     "form button[type=submit]"
@@ -77,48 +67,64 @@
  },
  {
   "file": "np1-a-hard-1512",
-  "url": "/simple/one-pagers?np1=a",
+  "url": null,
   "w": 1512,
   "h": 900,
   "steps": [
    [
-    "click",
-    "[data-testid=np-new-prd]"
-   ],
-   [
-    "waitfor",
-    "form textarea"
-   ],
-   [
-    "wait",
-    2000
-   ],
-   [
-    "label",
-    "Title",
-    "Shared shopping lists"
-   ],
-   [
-    "fill",
-    "form textarea",
-    "People who shop for a household keep separate lists, so they buy the same things twice and forget others."
-   ],
-   [
-    "click",
-    "form button[type=submit]"
+    "nth",
+    "button",
+    "Answer",
+    1
    ],
    [
     "wait",
-    6000
+    800
    ],
    [
     "role",
     "button",
-    "Answer"
+    "I don't know"
    ],
    [
     "wait",
     1200
+   ],
+   [
+    "wait",
+    800
+   ],
+   [
+    "nth",
+    "button",
+    "Answer",
+    2
+   ],
+   [
+    "nth",
+    "button",
+    "Ask someone ▾",
+    0
+   ],
+   [
+    "wait",
+    800
+   ],
+   [
+    "option",
+    "Priya Raman"
+   ],
+   [
+    "wait",
+    1500
+   ],
+   [
+    "into",
+    "text=Waiting on Priya Raman"
+   ],
+   [
+    "winscroll_by",
+    -260
    ]
   ]
  },
@@ -317,7 +323,7 @@
  },
  {
   "file": "np1-d-open",
-  "url": "/simple?np1=d&open=1",
+  "url": "/simple?np1=d",
   "w": 1440,
   "h": 900,
   "steps": [
@@ -327,7 +333,24 @@
    ],
    [
     "waitfor",
+    "[data-testid=np-chat-start]"
+   ],
+   [
+    "click",
+    "[data-testid=np-chat-start]"
+   ],
+   [
+    "wait",
+    1500
+   ],
+   [
+    "waitfor",
     "[data-testid=np-chat]"
+   ],
+   [
+    "scroll",
+    "[data-testid=ask-chat] > div > div",
+    "end"
    ]
   ]
  },
@@ -469,9 +492,9 @@
     800
    ],
    [
-    "scroll",
+    "chatfit",
     "[data-testid=ask-chat]:visible > div > div",
-    "end"
+    48
    ]
   ]
  }

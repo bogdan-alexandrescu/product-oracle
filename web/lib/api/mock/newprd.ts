@@ -73,8 +73,9 @@ export const NEWPRD = {
   },
   /** What the chat (option d) says. */
   chat: {
+    what: "What should it be about? Say it in a line or two, and I fill in the rest.",
     ask: "Start a PRD for shared shopping lists, so a household keeps one list.",
     guess:
-      "I can start that PRD. Here is what I took from your message and the goal it fits. Change anything that is wrong, then I ask six short questions before I draft.",
+      "Here is what I took from your message. Change what is wrong; then I ask six short questions and draft.",
   },
 };

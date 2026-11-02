@@ -6,7 +6,9 @@ Each frame: {"file": "np1-b-open", "url": "/simple?np1=b&open=1", "w": 1440, "h"
              "scenario": "before-drafting" (optional)}
 """
 
+import glob
 import json
+import os
 import pathlib
 import re
 import sys
@@ -23,6 +25,8 @@ CAPTURE = r"""
 () => {
   document.querySelectorAll('input').forEach(i => i.setAttribute('value', i.value));
   document.querySelectorAll('textarea').forEach(t => { t.textContent = t.value; });
+  document.querySelectorAll('input[type=checkbox], input[type=radio]').forEach(i => i.toggleAttribute('checked', i.checked));
+  document.querySelectorAll('option').forEach(o => o.toggleAttribute('selected', o.selected));
   document.querySelectorAll('*').forEach(n => { if (n.scrollTop > 0) n.setAttribute('data-mk-scroll', String(n.scrollTop)); });
   const css = [];
   for (const sh of document.styleSheets) { try { css.push([...sh.cssRules].map(r => r.cssText).join('\n')); } catch (e) {} }
@@ -36,7 +40,8 @@ CAPTURE = r"""
 
 HOOK = """<script>/* mock-up hooks: ?theme=light|dark, and each scrolled part back where it was */
 (function(){var t=new URLSearchParams(location.search).get('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);
-addEventListener('DOMContentLoaded',function(){document.querySelectorAll('[data-mk-scroll]').forEach(function(n){n.scrollTop=+n.getAttribute('data-mk-scroll')});window.scrollTo(0,SCROLLY);});})();</script>"""
+function f(){document.querySelectorAll('[data-mk-scroll]').forEach(function(n){n.scrollTop=+n.getAttribute('data-mk-scroll')});window.scrollTo(0,SCROLLY);}
+addEventListener('DOMContentLoaded',f);addEventListener('load',f);if(document.fonts)document.fonts.ready.then(f);})();</script>"""
 
 
 def fonts(css: str, page) -> str:
@@ -55,14 +60,20 @@ def fonts(css: str, page) -> str:
     return re.sub(r"url\(([^)]+)\)", swap, css)
 
 
+LOCAL = False
+
+
 def shoot(page, f):
+    if LOCAL:
+        page.set_viewport_size({"width": f["w"], "height": f["h"]})
     # The live browser's size is the gate's (desktop 1440x900 or phone-390, by preset): 1512 is
     # laid out at 1512 CSS px by zooming the page to 1440/1512; the html file has no zoom.
-    page.evaluate("() => localStorage.setItem('oracle.hop-panel.open', '0')")
-    page.goto(BASE + f["url"])
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(f.get("settle", 1500))
-    zoom = 1440 / 1512 if f["w"] == 1512 else 1
+    if f.get("url"):  # no url: go on from the page the frame before left (one story)
+        page.evaluate("() => localStorage.setItem('oracle.hop-panel.open', '0')")
+        page.goto(BASE + f["url"])
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(f.get("settle", 1500))
+    zoom = 1440 / 1512 if f["w"] == 1512 and not LOCAL else 1
     if zoom != 1:
         page.evaluate("z => { document.documentElement.style.zoom = String(z); }", zoom)
         page.wait_for_timeout(500)
@@ -83,8 +94,34 @@ def shoot(page, f):
             page.evaluate("([s, to]) => { const n = [...document.querySelectorAll(s.replace(':visible',''))].find(e => e.getClientRects().length); n.scrollTop = to === 'end' ? n.scrollHeight : +to; }", [st[1], st[2]])
         elif st[0] == "winscroll":
             page.evaluate("y => window.scrollTo(0, y)", st[1])
+        elif st[0] == "chatfit":
+            # The chat scrolled so its last message sits whole above the box's bottom fade
+            # (st[2] px), and the first message shown starts at the top: nothing cut.
+            page.evaluate("""([s, pad]) => {
+              const n = [...document.querySelectorAll(s.replace(':visible',''))].find(e => e.getClientRects().length);
+              const top = n.getBoundingClientRect().top - n.scrollTop;
+              const items = [...n.querySelectorAll('[data-testid=np-chat] > li')];
+              const last = items[items.length - 1].getBoundingClientRect().bottom - top;
+              const need = last + pad - n.clientHeight;
+              const t = items.map(i => i.getBoundingClientRect().top - top).find(y => y >= need - 1);
+              n.scrollTop = Math.max(0, (t ?? need) - 12);
+              return [need, t, n.scrollTop, n.scrollHeight - n.clientHeight, n.clientHeight, last, items.map(i => Math.round(i.getBoundingClientRect().top - top))];
+            }""", [st[1], st[2]]) and print("chatfit", page.evaluate("""([s, pad]) => {
+              const n = [...document.querySelectorAll(s.replace(':visible',''))].find(e => e.getClientRects().length);
+              const top = n.getBoundingClientRect().top - n.scrollTop;
+              const items = [...n.querySelectorAll('[data-testid=np-chat] > li')];
+              return [n.scrollTop, n.scrollHeight - n.clientHeight, n.clientHeight, items.map(i => Math.round(i.getBoundingClientRect().top - top))];
+            }""", [st[1], st[2]]))
+        elif st[0] == "winscroll_by":
+            page.evaluate("y => window.scrollBy(0, y)", st[1])
         elif st[0] == "into":
             page.locator(st[1]).first.scroll_into_view_if_needed()
+        elif st[0] == "nth":
+            page.get_by_role(st[1], name=st[2]).nth(st[3]).click()
+        elif st[0] == "option":
+            page.get_by_role("option", name=st[1]).first.click()
+        elif st[0] == "key":
+            page.keyboard.press(st[1])
         elif st[0] == "wait":
             page.wait_for_timeout(st[1])
         page.wait_for_timeout(400)
@@ -108,7 +145,22 @@ def main():
     only = sys.argv[2] if len(sys.argv) > 2 else ""
     FRAMES.mkdir(parents=True, exist_ok=True)
     ASSETS.mkdir(parents=True, exist_ok=True)
-    pw, browser, context = live()
+    phone_run = len(sys.argv) > 3 and sys.argv[3] == "phone"
+    try:
+        pw, browser, context = live()
+    except Exception:
+        # The live browser is gone for this attempt: a Chromium of our own (the repo's pinned
+        # one, run under swarm-test-browsers), scrollbars shown, at each frame's own size.
+        global LOCAL
+        LOCAL = True
+        from playwright.sync_api import sync_playwright
+        exe = glob.glob(os.environ["SWARM_TEST_BROWSERS_PATH"] + "/chromium-*/chrome-linux*/chrome")[0]
+        pw = sync_playwright().start()
+        browser = pw.chromium.launch(executable_path=exe, ignore_default_args=["--hide-scrollbars"])
+        context = browser.new_context(
+            viewport={"width": 390, "height": 844} if phone_run else {"width": 1440, "height": 900},
+            is_mobile=phone_run, has_touch=phone_run, device_scale_factor=1,
+        )
     page = context.new_page()
     try:
         # Fresh mock data in the "before-drafting" scenario (a brief in Detailed for option a), signed in as the owner.
@@ -125,6 +177,8 @@ def main():
                 shoot(page, f)
     finally:
         page.close()
+        if LOCAL:
+            browser.close()
         pw.stop()
 
 
