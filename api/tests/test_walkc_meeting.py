@@ -404,3 +404,104 @@ async def test_a_task_card_has_no_date_warning_and_no_preview_words(client):
     # A move still asks to preview it and still carries its flags.
     m = await say(client, w, "owner", "move Move_Dates B to March 1", mid)
     assert "Preview it" in m["body"]
+
+
+def test_approve_problems_name_dates_month_first():
+    """walkc-meeting-r2: protects=a section's dates written year first ("2026-11-30") are
+    listed as people read them ("Nov 30, 2026"), and an ambiguous "03/04" keeps its
+    "reads as" note; fails_when=the grouped line lists the dates as the document wrote
+    them; no_claim=the importer's own single-date message."""
+    from datetime import date
+
+    from oracle.docs.schemas import ImportProblem
+    from oracle.roadmap.doc_dates import Mark, problem_refs
+    from oracle.simple.meetings import approve_problems
+
+    def problem(text: str, *days: date) -> ImportProblem:
+        mark = Mark(section_key="timeline", text=text, day=days[0], status="unverified",
+                    line=3, bases=[], days=days)  # fmt: skip
+        return ImportProblem(code="unverified_date", section_key="timeline",
+                             refs=problem_refs(mark, "guided-setup"),
+                             message=f"the date {text} is not backed by a confirmed schedule")  # fmt: skip
+
+    out = approve_problems([
+        problem("2026-11-30", date(2026, 11, 30)),
+        problem("2026-12-15", date(2026, 12, 15)),
+    ])  # fmt: skip
+    [only] = out["problems"]
+    assert "Nov 30, 2026 and Dec 15, 2026" in only["what"], only["what"]
+    assert "2026-11-30" not in only["what"] and "2026-12-15" not in only["what"]
+
+    out = approve_problems([
+        problem("03/04", date(2026, 3, 4), date(2026, 4, 3)),
+        problem("2026-12-15", date(2026, 12, 15)),
+    ])  # fmt: skip
+    [only] = out["problems"]
+    assert "03/04 (it reads as Mar 4, 2026 or Apr 3, 2026)" in only["what"], only["what"]
+    assert "Dec 15, 2026" in only["what"]
+
+
+def test_approve_problems_name_a_section_by_its_heading():
+    """walkc-meeting-r2: protects=a refused Approve's problem names its section by the
+    section's own heading ("Sources and data points" for "sources"), falling back to its
+    key only when the heading is unknown; fails_when="where" reads "Sources";
+    no_claim=the importer's messages."""
+    from oracle.docs.schemas import ImportProblem
+    from oracle.simple.meetings import approve_problems
+
+    out = approve_problems(
+        [
+            ImportProblem(
+                code="unknown_citation",
+                section_key="sources",
+                message="[c:old-survey] in section 'sources' is not a known source",
+            ),
+            ImportProblem(
+                code="duplicate_section_id",
+                section_key="goals",
+                message="section id 'goals' is used more than once",
+            ),
+        ],  # fmt: skip
+        headings={"sources": "Sources and data points"},
+    )
+    assert out["problems"][0]["where"] == "Sources and data points"
+    assert "the section “Sources and data points”" in out["problems"][0]["what"]
+    assert out["problems"][1]["where"] == "Goals"
+
+
+async def test_a_refused_approve_names_sections_by_their_headings(client, monkeypatch):
+    """walkc-meeting-r2: protects=the meeting's Approve names a refused problem's section by
+    that section's heading in the document; fails_when="where" is made from its key;
+    no_claim=sections no version holds."""
+    from sqlalchemy import select
+
+    from oracle.docs.models import Document, DocumentVersion, Section
+    from oracle.docs.parser import DraftError
+    from oracle.docs.schemas import ImportProblem
+    from oracle.simple import drafts
+    from tests.test_simple_meetings_api import PRD
+
+    w = await world()
+    key = "sources"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        version = await s.scalar(
+            select(DocumentVersion)
+            .join(Document, Document.id == DocumentVersion.document_id)
+            .where(Document.slug == PRD)
+            .order_by(DocumentVersion.number.desc())
+            .limit(1)
+        )
+        s.add(Section(version_id=version.id, section_key=key, ordinal=9, level=2,
+                      heading="Sources and data points", content_hash="x"))  # fmt: skip
+        await s.commit()
+
+    async def refuse(*_a, **_k):
+        raise DraftError([ImportProblem(code="unknown_citation", section_key=key,
+                                        message="a source is not known")])  # fmt: skip
+
+    monkeypatch.setattr(drafts, "approve_in_meeting", refuse)
+    mid = (await start(client, w))["id"]
+    r = await client.post(f"/v1/simple/meetings/{mid}/approve", headers=w.ctx.as_("decider"))
+    assert r.status_code == 422, r.text
+    [problem] = r.json()["detail"]["problems"]
+    assert problem["where"] == "Sources and data points"
