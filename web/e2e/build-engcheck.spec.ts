@@ -27,7 +27,7 @@ import { login } from "./helpers";
  *   ("Blocking question unanswered"); fails_when=the row drops the gate's per-feature reasons.
  * - "questions beside the verdict" (EC2 b): protects=the questions sit right under the verdict
  *   and size, above the approach; an answered one shrinks to a tick, the question, the answer,
- *   who gave it and Change, no box, shorter than it was open on desktop and phone; the count moves in the pane and the row; fails_when=the
+ *   who gave it and Change, no answer box, in its card as in the frame, shorter than it was open on desktop; the count moves in the pane and the row; fails_when=the
  *   questions sit under the approach, or an answered one keeps its box.
  */
 
@@ -184,8 +184,15 @@ for (const [name, viewport] of [
     await expect(answered.getByTestId("answer")).toContainText("Yes in 11 of our 14 regions; the other 3 fall back to the address slip.");
     await expect(answered.getByRole("button", { name: `Change the answer: ${REGIONS}` })).toHaveText("Change");
     await expect(pane(page).getByText("Architect's questions · 1 of 3 answered")).toBeVisible();
-    // Shorter than it was open with its box, on a phone too.
-    expect((await box(answered)).height).toBeLessThan(open.height);
+    // Shorter than it was open with its box on a desktop; on a phone the answer wraps to no
+    // more than three lines, and its card is at most a few pixels taller, as in the picked
+    // frame (ec2-b-phone-390: 136px answered, 130px open).
+    if (name === "desktop") expect((await box(answered)).height).toBeLessThan(open.height);
+    else {
+      const line = await answered.getByTestId("answer").evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+      expect((await box(answered.getByTestId("answer"))).height).toBeLessThanOrEqual(3 * line + 1);
+      expect((await box(answered)).height).toBeLessThanOrEqual(open.height + 8);
+    }
     await expect(row(page, RETURNS).getByTestId("brief-questions")).toHaveText("1 blocking1 of 3 answered");
     await expect(bar(page).getByTestId("eng-tally")).toContainText("3 blocking questions");
 

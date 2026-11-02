@@ -73,9 +73,9 @@ export function EngReview({
   // Answers being typed, by feature and question: kept here, above the inspector, so a verdict
   // or size saved meanwhile (or another feature selected) never empties a box being typed in.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  // The decision bar's height and where the list's top sits: the sticky list ends above the bar
-  // at rest and once scrolled, and scrolls on its own, so no row is ever under the bar (a click
-  // there would land on the bar).
+  // The decision bar's height and where the list's top sits: the sticky list runs down to the
+  // bar's top edge (as in the picked frame) at rest and once scrolled, and scrolls on its own,
+  // so no row is ever under the bar (a click there would land on the bar).
   const barRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLElement>(null);
   const [barH, setBarH] = useState(72);
@@ -219,7 +219,7 @@ export function EngReview({
           ref={listRef}
           aria-label="Features"
           data-testid="brief-list"
-          className={`sticky top-4 max-h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px)_-_1rem)] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:max-h-none ${
+          className={`sticky top-4 max-h-[calc(100dvh_-_var(--bar-h,72px)_-_var(--list-top,16px))] min-w-0 overflow-y-auto overscroll-contain rounded-panel border border-line bg-surface max-[900px]:static max-[900px]:max-h-none ${
             reading ? "max-[900px]:hidden" : ""
           }`}
         >
@@ -248,7 +248,7 @@ export function EngReview({
                       </span>
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span data-testid="brief-verdict">
+                      <span className="flex" data-testid="brief-verdict">
                         {v ? (
                           <Chip kind={VERDICT_KIND[v.verdict]} wrap>
                             {VERDICT_WORDS[v.verdict]}
@@ -589,7 +589,7 @@ function BriefPane({
               const open = writes && (!answer || editing[q.id]);
               const done = !!answer && !open;
               return (
-                <li key={q.id} data-testid="brief-question" data-answered={answer ? "true" : "false"} className={done ? "px-3 py-1" : "rounded-md border border-line px-3 py-2.5"}>
+                <li key={q.id} data-testid="brief-question" data-answered={answer ? "true" : "false"} className="rounded-md border border-line px-3 py-2.5">
                   <p className="flex items-start gap-1.5">
                     {done ? (
                       <span className="mt-0.5 text-pass" aria-label="Answered">
