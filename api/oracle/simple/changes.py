@@ -68,6 +68,7 @@ Ops and the fields they write (``before`` must name the key fields):
 import uuid
 from collections import deque
 from datetime import date, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import select, text, update
@@ -355,6 +356,46 @@ async def routed_to(db: AsyncSession, entry: service.Entry, read_: service.Read)
     return service.decider_ids(entry, read_.deciders) or await _company_owners(db)
 
 
+async def meeting_deciders(
+    db: AsyncSession, attendee_ids: list[uuid.UUID], entries: list[service.Entry], deciders: dict
+) -> list[uuid.UUID]:
+    """walkc-meeting: the meeting's deciders for these items: its attendees who may decide
+    every one of them (service.can_decide), in the meeting's order."""
+    if not attendee_ids or not entries:
+        return []
+    users = {
+        u.id: u
+        for u in await db.scalars(
+            select(User).where(User.id.in_(attendee_ids), User.disabled_at.is_(None))
+        )
+    }
+    out = []
+    for i in attendee_ids:
+        u = users.get(i)
+        if u is not None and i not in out:
+            if decides_all(SimpleNamespace(role=u.role, user_id=u.id), entries, deciders):
+                out.append(i)
+    return out
+
+
+async def meeting_route(
+    db: AsyncSession,
+    rules: Any,
+    entries: list[service.Entry],
+    deciders: dict,
+    route: list[uuid.UUID],
+) -> tuple[list[uuid.UUID], bool]:
+    """walkc-meeting: who a proposal made in a meeting goes to, and whether that is someone
+    in it. In a meeting a proposal goes to the meeting's deciders (those of ``route`` in
+    it, else every attendee who may decide), never to someone outside it; only when nobody
+    in it may decide does it go to ``route`` (the card says so before Propose)."""
+    if rules is None:
+        return route, True
+    inside = await meeting_deciders(db, list(rules.attendee_ids), entries, deciders)
+    here = [i for i in route if i in inside] or inside
+    return (here, True) if here else (route, False)
+
+
 def decides_all(principal: Any, entries: list[service.Entry], deciders: dict) -> bool:
     """Review major: a cut with its dependents is the caller's to apply (or accept) only when
     they decide every item it cuts (service.can_decide, item by item)."""
@@ -390,6 +431,7 @@ def current_route(
     deciders: dict,
     owners: list,
     questions: dict | None = None,
+    in_meeting: bool = False,
 ) -> list[uuid.UUID]:
     """An open proposal's decider now (S3a-minor: the decider may have changed since it
     was made); its stored route when its item is not read. A PRD question's proposal
@@ -413,7 +455,8 @@ def current_route(
         e = by_id.get(uuid.UUID(str(item_id)))
     except ValueError:
         e = None
-    if e is None:
+    if e is None or (in_meeting and c.routed_to):
+        # walkc-meeting: a proposal made in a meeting stays with the meeting's deciders.
         return list(c.routed_to or [])
     return service.decider_ids(e, deciders) or list(owners)
 
@@ -910,6 +953,18 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     )
     session = await _session_for_change(db, me, body.session_id, applies, now)
     entry, target, before, after = await _plan(db, principal, body, read_)
+    route: list[uuid.UUID] = []
+    if not applies:
+        route = (
+            (cut_route(cut, read_.deciders) or await _company_owners(db))
+            if cut is not None
+            else await routed_to(db, entry, read_)
+        )
+        if session is not None and session.kind == "meeting":
+            from oracle.simple import meetings
+
+            rules = await meetings.rules_for_session(db, session.id)
+            route, _ = await meeting_route(db, rules, cut or [entry], read_.deciders, route)
     c = SimpleChange(
         session_id=session.id if session else None,
         document_id=entry.roadmap.id,
@@ -921,11 +976,7 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
         by=me,
         at=now,
         reason=body.reason,
-        routed_to=[]
-        if applies
-        else (cut_route(cut, read_.deciders) or await _company_owners(db))
-        if cut is not None
-        else await routed_to(db, entry, read_),
+        routed_to=route,
     )
     if applies:
         await _apply(db, c, after, principal, session)  # type: ignore[arg-type]
@@ -1119,7 +1170,9 @@ class _View:
         self.questions: dict[str, Any] = {}
 
     def route(self, c: SimpleChange) -> list[uuid.UUID]:
-        return current_route(c, self.by_id, self.deciders, self.company_owners, self.questions)
+        s = self.sessions.get(c.session_id) if c.session_id else None
+        return current_route(c, self.by_id, self.deciders, self.company_owners, self.questions,
+                             s is not None and s.kind == "meeting")  # fmt: skip
 
     def entry(self, c: SimpleChange) -> service.Entry | None:
         try:
@@ -1312,7 +1365,19 @@ async def inbox_rows(
         owners = await _company_owners(db)
         by_id = read_.by_id()
         qs = await _questions(db, waiting)
-        waiting = [c for c in waiting if me in current_route(c, by_id, read_.deciders, owners, qs)]
+        met = set(
+            await db.scalars(
+                select(SimpleSession.id).where(
+                    SimpleSession.id.in_({c.session_id for c in waiting if c.session_id}),
+                    SimpleSession.kind == "meeting",
+                )
+            )
+        )
+        waiting = [
+            c
+            for c in waiting
+            if me in current_route(c, by_id, read_.deciders, owners, qs, c.session_id in met)
+        ]
     decided = [c for c in rows if c.status != "proposed"]
     if not waiting and not decided:
         return [], []

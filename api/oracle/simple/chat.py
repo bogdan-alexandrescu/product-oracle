@@ -1956,16 +1956,32 @@ def _fixes(e: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> list[Chat
             for x in _flag_fixes(e, f, by_id)]  # fmt: skip
 
 
+async def _routes(db: AsyncSession, cards: list[SimpleChatCard]) -> dict[uuid.UUID, list]:
+    """Who each proposed card's change went to (walkc-meeting: "Proposed to ...")."""
+    ids = {c.change_id for c in cards if c.status == "proposed" and c.change_id}
+    if not ids:
+        return {}
+    rows = await db.scalars(select(SimpleChange).where(SimpleChange.id.in_(ids)))
+    return {r.id: list(r.routed_to or []) for r in rows}
+
+
 async def cards_out(
     db: AsyncSession, principal: Any, cards: list[SimpleChatCard], rules: Any = None
 ) -> list[ChatCardOut]:
     if not cards:
         return []
     overlays = await drafts.overlays_for(db, principal)
+    # walkc-meeting: a meeting's cards are checked on the meeting's working state (the
+    # changes applied in it), not only on the drafts the reader sees.
+    if getattr(rules, "session_id", None) is not None:
+        overlays = {**overlays, **await drafts.session_overlays(db, rules.session_id)}
     read_ = await service.load(db, overlays)
     # A meeting's cards may be on its PRD's draft-roadmap items (meet-chat-right-prd).
     await meeting_prd(db, read_, rules)
-    names = await _names(db, {c.decided_by for c in cards if c.decided_by})
+    routes = await _routes(db, cards)
+    names = await _names(db, {c.decided_by for c in cards if c.decided_by}
+                          | {i for ids in routes.values() for i in ids})  # fmt: skip
+    owners: list[uuid.UUID] | None = None
     outs: list[ChatCardOut] = []
     for c in cards:
         e = read_.by_id().get(c.item_id) if c.item_id else None
@@ -2020,6 +2036,20 @@ async def cards_out(
                         if changes.decides_all(principal, cut, read_.deciders)
                         else "propose"
                     )
+        asks: list[uuid.UUID] = []
+        here = True
+        if may == "propose" and e is not None and c.op != "add_item":
+            # walkc-meeting: who Propose asks, said before Propose; in a meeting its
+            # deciders, and when nobody in it may decide, who outside it would be asked.
+            asks = service.decider_ids(e, read_.deciders)
+            if not asks:
+                owners = owners if owners is not None else await changes._company_owners(db)
+                asks = owners
+            if rules is not None:
+                asks, here = await changes.meeting_route(db, rules, [e], read_.deciders, asks)
+            names.update(await _names(db, {i for i in asks if i not in names}))
+        elif c.status == "proposed":
+            asks = routes.get(c.change_id, []) if c.change_id else []
         outs.append(ChatCardOut(
             id=c.id, message_id=c.message_id, op=c.op, target=c.target,  # type: ignore[arg-type]
             before=c.before, after=c.after, summary=c.summary, item_id=c.item_id,
@@ -2032,6 +2062,7 @@ async def cards_out(
             dependents=[x.row.title for x in waiting], dependent_ids=[x.row.id for x in waiting],
             may_with_dependents=may_all,  # type: ignore[arg-type]
             can_undo=c.status == "applied" and _undo_bar(principal, c, rules, read_) is None,
+            asks=[names[i] for i in asks if i in names], asks_outside=not here,
         ))  # fmt: skip
     return outs
 

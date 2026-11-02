@@ -1372,6 +1372,11 @@ class ChatCardOut(BaseModel):
     may_with_dependents: Literal["apply", "propose"] | None = None
     # qa4-simple-decide-1: an applied card the reader may undo (Apply's own rule).
     can_undo: bool = False
+    # walkc-meeting: who Propose asks (an open card the reader proposes), or who a proposed
+    # card went to, by name; in a meeting its deciders. ``asks_outside``: nobody in the
+    # meeting may decide, so Propose asks these people outside it.
+    asks: list[str] = []
+    asks_outside: bool = False
 
 
 class ChatChoiceOut(BaseModel):

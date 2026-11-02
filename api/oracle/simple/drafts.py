@@ -431,6 +431,17 @@ async def reader(db: AsyncSession, principal: Any) -> Reader:
     return Reader(overlays, visible, hidden)
 
 
+async def session_overlays(db: AsyncSession, session_id: uuid.UUID) -> dict[uuid.UUID, Any]:
+    """walkc-meeting: the open drafts a session (a meeting's) wrote, by roadmap: its
+    working state."""
+    rows = await db.scalars(
+        select(SimpleDraft)
+        .join(SimpleSessionDraft, SimpleSessionDraft.draft_id == SimpleDraft.id)
+        .where(SimpleSessionDraft.session_id == session_id, SimpleDraft.status.in_(OPEN))
+    )
+    return {d.document_id: d.overlay or {} for d in rows}
+
+
 async def overlays_for(db: AsyncSession, principal: Any) -> dict[uuid.UUID, dict[str, Any]]:
     return (await reader(db, principal)).overlays
 
