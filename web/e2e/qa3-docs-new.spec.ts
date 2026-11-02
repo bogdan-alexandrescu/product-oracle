@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "./test";
+import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
@@ -38,7 +38,29 @@ async function newPrdFromHome(page: Page) {
 }
 
 const title = (page: Page) => page.getByRole("textbox", { name: "Title" });
+
 const leave = (page: Page) => page.getByRole("dialog", { name: "Discard your changes?" });
+
+/**
+ * The button's fill once its colour transition has ended: no animation is running and two
+ * reads 100 ms apart agree. The first probe only records a read, so every comparison spans
+ * a full interval.
+ */
+async function settledFill(button: Locator) {
+  let last = "";
+  let fill = "";
+  await expect
+    .poll(async () => {
+      const read = await button.evaluate((el) => ({
+        fill: getComputedStyle(el).backgroundColor,
+        running: el.getAnimations().length,
+      }));
+      [last, fill] = [fill, read.fill];
+      return last !== "" && fill === last && read.running === 0;
+    }, { intervals: [100] })
+    .toBe(true);
+  return fill;
+}
 
 for (const [name, viewport, home] of [
   ["desktop", DESKTOP, "nav-home"],
@@ -153,11 +175,12 @@ test.describe("desktop", () => {
     await expect(create).toBeEnabled();
     await expect(create).toHaveAttribute("data-variant", "primary");
     // Filled with the accent, as New PRD's Continue.
-    const fill = await create.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const fill = await settledFill(create);
     await page.goto("/documents/new?kind=prd");
     // walk-brief: Continue is disabled until the form is ready; compare the ready button.
-    await expect(page.getByRole("button", { name: "Continue" }).first()).toBeEnabled();
-    const cont = await page.getByRole("button", { name: "Continue" }).first().evaluate((el) => getComputedStyle(el).backgroundColor);
+    const continueButton = page.getByRole("button", { name: "Continue" }).first();
+    await expect(continueButton).toBeEnabled();
+    const cont = await settledFill(continueButton);
     expect(fill).toBe(cont);
 
     await page.goto("/documents/new?kind=roadmap");
