@@ -37749,6 +37749,11 @@ export interface components {
              * @enum {string}
              */
             view: "list" | "board" | "meetings";
+            /**
+             * Runs
+             * @default []
+             */
+            runs: components["schemas"]["SimpleRunGroup"][];
         };
         /**
          * SimpleDecisionsWaitingOut
@@ -39694,6 +39699,70 @@ export interface components {
             roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
             roadmap?: components["schemas"]["SimpleDocRef"] | null;
             span?: components["schemas"]["SimplePlanSpan"] | null;
+        };
+        /**
+         * SimpleRunGroup
+         * @description build-rundecide RD1 a: one run's decided stops, in order, under its name and PRD
+         *     ("Usage alerts plan · Usage alerts PRD · 5 decisions").
+         */
+        SimpleRunGroup: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Name */
+            name: string;
+            prd?: components["schemas"]["SimpleFilterOption"] | null;
+            /** Stops */
+            stops: components["schemas"]["SimpleRunStopOut"][];
+        };
+        /**
+         * SimpleRunStepOut
+         * @description One decision at a run's stop: what was done ("Sent back", "Approved"), by whom, the
+         *     day (the company's) and the note given.
+         */
+        SimpleRunStepOut: {
+            /** What */
+            what: string;
+            /** Who */
+            who?: string | null;
+            /** Day */
+            day?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * SimpleRunStopOut
+         * @description build-rundecide RD1 a: one stop of a run as a decision row: "Engineering check:
+         *     approved after a change", the person's name, their role, the note and the day. `trail`
+         *     lists every step when the stop was sent back before it was approved.
+         */
+        SimpleRunStopOut: {
+            /**
+             * Checkpoint Id
+             * Format: uuid
+             */
+            checkpoint_id: string;
+            /** Kind */
+            kind: string;
+            /** Stop */
+            stop: string;
+            /** Outcome */
+            outcome: string;
+            /** Who */
+            who?: string | null;
+            /** Role */
+            role?: string | null;
+            /** Day */
+            day?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Trail
+             * @default []
+             */
+            trail: components["schemas"]["SimpleRunStepOut"][];
         };
         /** SimpleSendIn */
         SimpleSendIn: {

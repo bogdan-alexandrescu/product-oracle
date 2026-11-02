@@ -93,6 +93,9 @@ from oracle.simple.schemas import (
     SimpleMinutesIn,
     SimpleOpenDecision,
     SimplePersonRef,
+    SimpleRunGroup,
+    SimpleRunStepOut,
+    SimpleRunStopOut,
     SimpleSendIn,
     SimpleSlackState,
     SimpleStartMember,
@@ -2162,6 +2165,11 @@ async def decisions_page(
             if e.prd is not None and e.goal is not None and e.goal.id == goal_ent.id
         }
     only = {d.id for _, d in links.get(meeting, [])} if meeting is not None else None
+    run_groups = (
+        []
+        if meeting is not None or goal_ent is not None
+        else await _run_groups(db, principal, {i: docs[i] for i in qdocs})
+    )
     return SimpleDecisionsOut(
         **await questions.page_fields(db, principal, qdocs, only),
         meetings=groups,
@@ -2172,7 +2180,78 @@ async def decisions_page(
                for g in sorted(goals.values(), key=lambda g: g.key)],
         meeting_options=[SimpleFilterOption(id=str(m.id), title=_meeting_option_title(m))
                          for m in ms],  # fmt: skip
+        runs=run_groups,
     )  # fmt: skip
+
+
+# build-rundecide RD1 a: a run's stops as people name them in Simple.
+_STOP_WORDS = {
+    "baseline_confirm": "Baseline",
+    "feature_set": "Feature set",
+    "eng_review": "Engineering check",
+    "priority_order": "Order",
+    "prd_review": "PRD review",
+    "eng_dates": "Dates",
+    "roadmap_items": "Roadmap items",
+    "roadmap_review": "Roadmap review",
+}
+_STEP_WORDS = {"approved": "Approved", "changes_requested": "Sent back", "skipped": "Skipped"}
+
+
+def _run_name(doc: Document) -> str:
+    """ "Usage alerts plan" for the Usage alerts PRD."""
+    title = re.sub(r"\s+PRD$", "", doc.title.strip(), flags=re.I)
+    return f"{title} plan"
+
+
+async def _run_groups(
+    db: AsyncSession, principal: Any, docs: dict[uuid.UUID, Document]
+) -> list[SimpleRunGroup]:
+    """Each run on a readable PRD with a decided stop, newest first: its stops in order,
+    one row per stop; a stop sent back and then approved is one row with its steps."""
+    from oracle.runs import service as runs_service
+    from oracle.runs.models import Run
+
+    if not docs:
+        return []
+    runs = list(await db.scalars(
+        select(Run).where(Run.document_id.in_(docs), Run.deleted_at.is_(None))
+        .order_by(Run.created_at.desc()).limit(20)))  # fmt: skip
+    zone = await company_time.company_time_zone(db)
+
+    def on(at: datetime | None) -> date | None:
+        return company_time.day(at, zone) if at else None
+
+    out: list[SimpleRunGroup] = []
+    for run in runs:
+        decided = await runs_service.list_decisions(db, run.id, principal)
+        stops: list[SimpleRunStopOut] = []
+        by_kind: dict[tuple[int, str], list[Any]] = {}
+        for d in decided:
+            by_kind.setdefault((d.segment_seq or 0, d.kind), []).append(d)
+        for (_, kind), steps in by_kind.items():
+            last = steps[-1]
+            sent_back = any(s.status == "changes_requested" for s in steps[:-1])
+            outcome = _STEP_WORDS.get(last.status, last.status)
+            if last.status == "approved" and sent_back:
+                outcome = "Approved after a change"
+            stops.append(SimpleRunStopOut(
+                checkpoint_id=last.checkpoint_id, kind=kind,
+                stop=_STOP_WORDS.get(kind, kind.replace("_", " ").capitalize()),
+                outcome=outcome, who=last.decided_by_name,
+                role=(last.decided_by_role or "").replace("_", " ") or None,
+                day=on(last.decided_at), note=last.note,
+                trail=[SimpleRunStepOut(what=_STEP_WORDS.get(s.status, s.status),
+                                        who=s.decided_by_name, day=on(s.decided_at), note=s.note)
+                       for s in steps] if len(steps) > 1 else [],
+            ))  # fmt: skip
+        if not stops:
+            continue
+        doc = docs[run.document_id]  # type: ignore[index]
+        out.append(SimpleRunGroup(
+            run_id=run.id, name=_run_name(doc),
+            prd=SimpleFilterOption(id=doc.slug, title=doc.title), stops=stops))  # fmt: skip
+    return out
 
 
 async def _named(db: AsyncSession, minutes: SimpleMinutes) -> SimpleMinutes:
