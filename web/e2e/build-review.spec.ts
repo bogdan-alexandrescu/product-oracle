@@ -1,4 +1,4 @@
-import { DATE_BASES_SCENARIO } from "../lib/api/mock/roadmap";
+import { TWO_WAY_DATES_SCENARIO } from "../lib/api/mock/roadmap";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login, openSection, signOut } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -139,7 +139,9 @@ for (const phone of [false, true]) {
     });
 
     test("QV4: one Publish step approves and readies a roadmap whose dates are verified; Share a link opens the form", async ({ page }) => {
-      await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, DATE_BASES_SCENARIO] as const);
+      // Walk 1: v1 was never approved, and its GA date 03/04/2027 reads two ways (Mar 4 or
+      // Apr 3, 2027); ENG-413 backs Mar 4 only.
+      await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, TWO_WAY_DATES_SCENARIO] as const);
       await login(page);
       // Before: Share roadmap lists everything left, each with its fix link.
       await page.goto("/documents/usage-alerts-roadmap");
@@ -148,19 +150,21 @@ for (const phone of [false, true]) {
       const left = page.getByTestId("share-left");
       await expect(left.nth(0)).toContainText("Pick where dates come from: 1 date has no source yet");
       await expect(left.nth(0).getByRole("link", { name: "Fix in Plan › Dates" })).toHaveAttribute("href", "/plan/dates");
-      // This roadmap's v1 is approved already, so the row does not add "(this approves it too)".
-      await expect(left.nth(1)).toHaveText("Publish v1Fix on Publish page");
       await expect(left.nth(1).getByRole("link", { name: "Fix on Publish page" })).toHaveAttribute("href", "/documents/usage-alerts-roadmap/publish");
 
-      // The date gets a verified source, as a person records it.
+      // The date's other reading gets a verified source, as a person records it.
       await page.goto("/documents/usage-alerts-roadmap/v/1");
       await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
       const item = await openSection(page, "item-behaviour");
       await item.locator('[data-date-mark="unverified"]').click();
-      await page.getByTestId("date-mark-popover").getByRole("button", { name: "Add a date source" }).click();
+      const popover = page.getByTestId("date-mark-popover");
+      await expect(popover).toContainText("It reads as Mar 4, 2027 or Apr 3, 2027, so each needs a date source. Apr 3, 2027 has none yet.");
+      await popover.getByRole("button", { name: "Add a date source" }).click();
       const basis = page.getByTestId("date-basis-dialog");
+      await expect(basis.locator('input[type="date"]')).toHaveValue("2027-04-03");
       await basis.getByRole("button", { name: "Record and verify" }).click();
       await expect(basis).toBeHidden();
+      await expect(item.locator("[data-date-mark]")).toHaveCount(0);
 
       await page.goto("/documents/usage-alerts-roadmap/publish");
       await expect(page.getByTestId("publish-share-note")).toHaveText("Publish v1 approves it and makes it ready to share, in one step.");

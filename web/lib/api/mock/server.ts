@@ -135,7 +135,7 @@ import {
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { ALERTS_APPROVED_SCENARIO, ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, TWO_WAY_DATES_SCENARIO, TWO_WAY_GA, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, reportTracks, routePlan, routeRoadmap, sectionItems, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecPerson, type SpecsDb } from "./specs";
 import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { seedImpact } from "./impact";
@@ -2833,7 +2833,7 @@ function load(): Db {
             ? () => seedBaselineReview(scenario === "baseline-review-console")
           : scenario === "scope-review" || scenario === "scope-review-kept"
             ? () => seedScopeReview(scenario === "scope-review-kept")
-          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO
+          : scenario === "eng-review" || scenario === DATE_BASES_SCENARIO || scenario === TWO_WAY_DATES_SCENARIO
             ? seedEngReview
           : scenario === "eng-check"
             ? seedEngCheck
@@ -2975,6 +2975,12 @@ function load(): Db {
       v1.approved_at = "2026-10-05T09:00:00Z";
       roadmap.status = "approved";
     }
+  }
+  // "two-way-dates": v1 stays in review, its GA date written as one that reads two ways.
+  if (scenario === TWO_WAY_DATES_SCENARIO) {
+    const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
+    for (const v of db.versions.filter((x) => x.document_id === roadmap?.id && x.number === 1))
+      for (const x of v.sections) x.body_md = x.body_md.replace("GA by 2026-12-15", `GA by ${TWO_WAY_GA.written}`);
   }
   // H9 Pricing input: a second owner, two pricing memos and made-up deals in the "pricing" scenario.
   if (scenario === "pricing") seedPricingScenario(db);
