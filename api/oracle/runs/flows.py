@@ -423,6 +423,17 @@ PLAIN_PROSE = (
     "citation ids such as [c:c4]."
 )
 
+# AQ1: questions for the person deciding the stop, shown as cards atop its review page
+# (oracle.runs.agent_questions); the answers come back with the decision (list_decisions).
+AGENT_QUESTIONS_LINE = (
+    "When only the owner can settle a choice, write it to agent_questions.yaml instead of "
+    "guessing: questions: [{id: q1, role: analyst | architect, feature: <feature key or "
+    "null for the whole set>, question, why, options: [{key, label, detail}], recommended: "
+    "<the option key you would pick>}]. Ask only what changes the set or the design; the "
+    "answers, or your pick where nobody answered, come back with the stop's decision "
+    "(list_decisions) and are settled. "
+)
+
 # F5-1: the tech briefs an Engineering check segment writes (oracle.engineering.briefs);
 # F4 adds that segment, its Engineering dates stop reads the same file later in the run.
 BRIEFS_FILE = briefs.FILE
@@ -584,6 +595,7 @@ FLOWS: dict[str, FlowDef] = {
                     "Write the set to feature_set.yaml in this format (YAML, version 1):\n"
                     + FEATURE_SET_FORMAT
                     + "Write a high-level design to design.md. "
+                    + AGENT_QUESTIONS_LINE
                     + DECLINED_LINE
                     + STRATEGY_FLAG,
                     tools=(

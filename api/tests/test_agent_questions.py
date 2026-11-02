@@ -70,9 +70,7 @@ async def qs(r: Review, who: str = "viewer", expect: int = 200) -> dict:
 
 
 async def answer(r: Review, who: str, qid: str, expect: int = 200, **body) -> dict:
-    resp = await r.client.put(
-        f"{r.base}/agent-questions/{qid}/answer", json=body, headers=r.h(who)
-    )
+    resp = await r.client.put(f"{r.base}/agent-questions/{qid}/answer", json=body, headers=r.h(who))
     assert resp.status_code == expect, resp.text
     return resp.json()
 
@@ -121,7 +119,7 @@ async def test_answers_go_with_the_decision_and_unanswered_ones_with_the_agents_
     or a decided stop still takes answers; no_claim=the next segment's prompt."""
     await asked(review)
     await answer(review, "owner", "q1", option="build", note="Owned from Nov 16")
-    await review.decide("owner", decision="approved")
+    await review.decide("owner", decision="changes_requested", note="Look again")
     async with tenant_session(review.tenant_id) as s:
         d = await s.scalar(select(Decision).where(Decision.source_id == uuid.UUID(review.cp["id"])))
     assert d is not None and d.context

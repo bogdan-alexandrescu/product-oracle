@@ -22282,6 +22282,151 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Agent Questions",
+        "description": "AQ1: the questions the run's agents asked at this stop (``agent_questions.yaml`` of\nthe segment it reviews), any member: each with its options, the agent's pick and the\nanswer given, who and when; the step the answers go to; whether I may answer.",
+        "operationId": "get_agent_questions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentQuestionsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions/{question_id}/answer": {
+      "put": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Answer Agent Question",
+        "description": "Answer one agent question (the stop's approver role or above): answering again\nreplaces it. The answers go to the next step with the stop's decision. 422 for an\noption the question does not offer; 409 once the stop is decided.",
+        "operationId": "answer_agent_question",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "checkpoint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Checkpoint Id"
+            }
+          },
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentAnswerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentQuestionsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
       "get": {
         "tags": [
@@ -50808,6 +50953,78 @@
         "title": "AdvisoryIn",
         "description": "An advisory signal for a conditional module (AI analysis or a priority score)."
       },
+      "AgentAnswerIn": {
+        "properties": {
+          "option": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Option"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "option"
+        ],
+        "title": "AgentAnswerIn"
+      },
+      "AgentAnswerOut": {
+        "properties": {
+          "option": {
+            "type": "string",
+            "title": "Option"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "mine": {
+            "type": "boolean",
+            "title": "Mine",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "option",
+          "at"
+        ],
+        "title": "AgentAnswerOut"
+      },
       "AgentItem": {
         "properties": {
           "feedback_id": {
@@ -50861,6 +51078,141 @@
         ],
         "title": "AgentItem",
         "description": "D12: a feedback item an approver staged for the agents (no section text to accept)."
+      },
+      "AgentOptionOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "AgentOptionOut"
+      },
+      "AgentQuestionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/AgentOptionOut"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "recommended": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentAnswerOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "question",
+          "options"
+        ],
+        "title": "AgentQuestionOut"
+      },
+      "AgentQuestionsOut": {
+        "properties": {
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/AgentQuestionOut"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
+          },
+          "can_answer": {
+            "type": "boolean",
+            "title": "Can Answer",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "questions"
+        ],
+        "title": "AgentQuestionsOut"
       },
       "AgentRoleOut": {
         "properties": {

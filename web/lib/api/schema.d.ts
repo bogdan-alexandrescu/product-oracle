@@ -6508,6 +6508,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Questions
+         * @description AQ1: the questions the run's agents asked at this stop (``agent_questions.yaml`` of
+         *     the segment it reviews), any member: each with its options, the agent's pick and the
+         *     answer given, who and when; the step the answers go to; whether I may answer.
+         */
+        get: operations["get_agent_questions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/checkpoints/{checkpoint_id}/agent-questions/{question_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Answer Agent Question
+         * @description Answer one agent question (the stop's approver role or above): answering again
+         *     replaces it. The answers go to the next step with the stop's decision. 422 for an
+         *     option the question does not offer; 409 once the stop is decided.
+         */
+        put: operations["answer_agent_question"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/segments/{seq}/artifacts/{name}": {
         parameters: {
             query?: never;
@@ -15034,6 +15078,31 @@ export interface components {
             /** Rationale */
             rationale: string;
         };
+        /** AgentAnswerIn */
+        AgentAnswerIn: {
+            /** Option */
+            option: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** AgentAnswerOut */
+        AgentAnswerOut: {
+            /** Option */
+            option: string;
+            /** Note */
+            note?: string | null;
+            by?: components["schemas"]["ReviewPerson"] | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Mine
+             * @default false
+             */
+            mine: boolean;
+        };
         /**
          * AgentItem
          * @description D12: a feedback item an approver staged for the agents (no section text to accept).
@@ -15052,6 +15121,45 @@ export interface components {
             staged_by_name?: string | null;
             /** Staged At */
             staged_at?: string | null;
+        };
+        /** AgentOptionOut */
+        AgentOptionOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Detail */
+            detail?: string | null;
+        };
+        /** AgentQuestionOut */
+        AgentQuestionOut: {
+            /** Id */
+            id: string;
+            /** Role */
+            role: string;
+            /** Feature */
+            feature?: string | null;
+            /** Question */
+            question: string;
+            /** Why */
+            why?: string | null;
+            /** Options */
+            options: components["schemas"]["AgentOptionOut"][];
+            /** Recommended */
+            recommended?: string | null;
+            answer?: components["schemas"]["AgentAnswerOut"] | null;
+        };
+        /** AgentQuestionsOut */
+        AgentQuestionsOut: {
+            /** Questions */
+            questions: components["schemas"]["AgentQuestionOut"][];
+            /** Next Step */
+            next_step?: string | null;
+            /**
+             * Can Answer
+             * @default false
+             */
+            can_answer: boolean;
         };
         /** AgentRoleOut */
         AgentRoleOut: {
@@ -58748,6 +58856,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckpointReview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_questions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentQuestionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_agent_question: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                checkpoint_id: string;
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentAnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentQuestionsOut"];
                 };
             };
             /** @description Validation Error */
