@@ -155,8 +155,13 @@ test("check now, push to tracker and draft a roadmap from the track", async ({
   await expect(
     t.getByRole("button", { name: "Push to tracker" }),
   ).toHaveAccessibleDescription(/Two-way tracker sync is off/);
+  // QD2 a: Draft roadmap opens a dialog that prices the run; Start for its price starts it.
   await t
-    .getByRole("button", { name: "Draft roadmap from this track" })
+    .getByRole("button", { name: "Draft roadmap from this track…" })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Draft a roadmap from this track" })
+    .getByRole("button", { name: /^Start for \$/ })
     .click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 });

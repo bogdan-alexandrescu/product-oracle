@@ -45,9 +45,8 @@ test("qa4-settings-42: a template created from the starter saves no placeholder 
   await page.goto("/settings/templates");
   await page.getByRole("link", { name: "New template" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "New template" })).toBeVisible();
-  await page.getByLabel("Key").fill("travel-brief");
   await page.getByLabel("Name").fill("Travel brief");
-  await expect(page.getByTestId("validation-ok")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create template" })).toBeEnabled();
   await page.getByRole("button", { name: "Create template" }).click();
   await expect(page).toHaveURL(/\/settings\/templates\/travel-brief$/);
   await expect(page.getByRole("heading", { level: 1, name: "Travel brief" })).toBeVisible();
@@ -58,8 +57,8 @@ test("qa4-settings-42: a template created from the starter saves no placeholder 
 
 test("qa4-settings-43: Key and Name placeholders read as examples", async ({ page }) => {
   await login(page);
+  // QD4 a: a new template's key is made from its name, so it has no Key field.
   await page.goto("/settings/templates/new");
-  await expect(page.getByLabel("Key")).toHaveAttribute("placeholder", "e.g. launch-brief");
   await expect(page.getByLabel("Name")).toHaveAttribute("placeholder", "e.g. Launch brief");
   await page.goto("/settings/themes/new");
   await expect(page.getByLabel("Key")).toHaveAttribute("placeholder", "e.g. company-brand");

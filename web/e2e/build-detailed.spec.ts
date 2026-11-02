@@ -43,7 +43,12 @@ for (const size of SIZES) {
       await page.goto("/documents/checkout-redesign/v/2");
       await expect(page.getByTestId("document-sections")).toBeVisible();
       const layout = page.getByTestId("prd-layout");
-      const before = phone ? null : await layout.boundingBox();
+      // Where the page's panels sit in the document (scroll aside).
+      const place = () => layout.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y + window.scrollY, width: r.width, height: r.height };
+      });
+      const before = await place();
 
       const open = page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true });
       await expect(open.getByTestId("held-count")).toHaveText("1");
@@ -51,13 +56,21 @@ for (const size of SIZES) {
       const drawer = page.getByRole("dialog", { name: "Held rewrites" });
       await expect(drawer).toBeVisible();
       const box = (await drawer.boundingBox())!;
-      expect(box.height).toBeGreaterThan(size.viewport.height * (phone ? 0.75 : 0.95));
-      if (phone) expect(box.width).toBeGreaterThan(size.viewport.width * 0.95);
-      else {
+      if (phone) {
+        // From the bottom, the full width; it grows with its rewrites up to near the top.
+        expect(box.width).toBeGreaterThan(size.viewport.width * 0.95);
+        expect(box.y + box.height).toBeGreaterThan(size.viewport.height - 2);
+      } else {
+        // From the right, the window's full height, a readable width.
+        expect(box.height).toBeGreaterThan(size.viewport.height * 0.95);
         expect(box.x + box.width).toBeGreaterThan(size.viewport.width - 2);
         expect(box.width).toBeLessThan(size.viewport.width * 0.6);
-        // The page behind keeps its layout.
-        expect(await layout.boundingBox()).toEqual(before);
+        // The page behind keeps its layout: the same panels in the same place, give or take the
+        // window's scrollbar, which the drawer locks (its width can rewrap a line above them).
+        const after = await place();
+        expect(Math.abs(after.x - before.x)).toBeLessThan(2);
+        expect(Math.abs(after.y - before.y)).toBeLessThan(16);
+        expect(Math.abs(after.width - before.width)).toBeLessThan(20);
       }
 
       const item = drawer.getByTestId("held-rewrite");
@@ -136,8 +149,7 @@ for (const size of SIZES) {
       // and opens selected at the top of All requests; New request opens the same form blank;
       // fails_when=a second, different form opens; no_claim=the API's filing (test_requests_triage.py).
       await login(page);
-      await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
-      await expect(page).toHaveURL(/\/requests$/);
+      await page.goto("/requests");
       const found = page.getByTestId("found-in-sources");
       await expect(found).toContainText("Oracle found 2 possible requests in your sources");
       await found.getByTestId("found-item").filter({ hasText: "Reorder last week's basket" }).getByRole("button", { name: "File as request" }).click();
@@ -218,7 +230,7 @@ for (const size of SIZES) {
       await page.getByLabel("Section 4 guide").fill("Who answers the first questions, and with what.");
 
       await page.getByRole("button", { name: "Edit as Markdown" }).click();
-      await expect(page.getByLabel("Template body")).toHaveValue(/## Support readiness \{#support-readiness\}/);
+      await expect(page.getByLabel("Body", { exact: true })).toHaveValue(/## Support readiness \{#support-readiness\}/);
       await expect(page.getByTestId("validation-ok")).toContainText("Support readiness");
       await page.getByRole("button", { name: "Create template" }).click();
       await expect(page).toHaveURL(/\/settings\/templates\/launch-brief$/);

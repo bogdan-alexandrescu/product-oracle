@@ -150,7 +150,7 @@ function Requests({ view }: { view: RequestsView }) {
         </Panel>
       ) : (
         <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-          {findable && <FoundInSources found={found} />}
+          {findable && <FoundInSources found={found} onFiled={filed} />}
           {view === "themes" ? (
             <Panel title="Themes" count={liveThemes.length}>
               {themes.error && (

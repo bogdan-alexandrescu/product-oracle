@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -18,6 +17,7 @@ import { acceptTrackAlertDate, alertDay, alertSentence, keepTrackAlert, listTrac
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { WaiveForm } from "../company/strategy/_components/DriftList";
+import { REPLAN, StartRunDialog } from "./_start-run";
 import { assess, type GoalView, type Point } from "../home/_goals";
 import { dateBasis, HORIZON_LABEL, nextSentence, roadmapHref, stateChip, type PlanDrift, type PlanItem } from "./_lib";
 
@@ -309,7 +309,6 @@ function discussionOf(a: TrackAlertOut, item: PlanItem): { subject: DiscussionSu
 }
 
 function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: PlanItem; links?: PlanLinks; onChanged: () => Promise<void> }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keeping, setKeeping] = useState(false);
@@ -321,6 +320,8 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
   const ref = typeof a.data.tracker_ref === "string" ? a.data.tracker_ref : undefined;
   const prdId = item.prd?.id;
   const discussion = discussionOf(a, item);
+  // QD2 a: Re-plan starts a paid run too, so it opens the same priced dialog as Draft roadmap.
+  const [replanning, setReplanning] = useState(false);
   async function run(call: () => Promise<unknown>, after?: (out: unknown) => void) {
     setBusy(true);
     setError(null);
@@ -383,18 +384,11 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
               </Button>
             )}
             {has("replan") && (
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  void run(
-                    () => unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", { params: { path: { track_id: a.track_id } } })),
-                    (r) => router.push(`/runs/${(r as { id: string }).id}`),
-                  )
-                }
-              >
-                Re-plan
+              <Button disabled={busy} data-testid="plan-replan" onClick={() => setReplanning(true)}>
+                Re-plan…
               </Button>
             )}
+            {replanning && <StartRunDialog action={REPLAN} trackId={a.track_id} prdTitle={a.prd.title} onClose={() => setReplanning(false)} />}
             {(has("review") || has("reconcile")) && (
               <Button
                 disabled={busy}
