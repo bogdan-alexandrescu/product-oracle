@@ -63,20 +63,25 @@ type Row =
   | { kind: "lane"; key: string; title: string; count: number }
   | { kind: "item"; item: Item };
 
-/** Items by goal (a lane per goal, then No goal, then Below the line), each item its own row. */
+/** Items by goal (a lane per goal, then No goal, then Below the line), each item its own row.
+ * The lanes are the data's goal groups (oneLane(lanes(data, "goal"))), as the goal cards, the
+ * Gantt, the Waterfall and Now / Next / Later count them: a plan's slices put an item with no
+ * goal of its own in its plan goal's lane, and PM-owned work has a lane of its own. */
 function rowsOf(data: Roadmap): Row[] {
+  const byId = new Map(data.items.map((i) => [i.id, i]));
   const lanes = new Map<string, { title: string; items: Item[] }>();
   const below: Item[] = [];
-  for (const i of data.items) {
-    if (closedItem(i)) {
-      below.push(i);
-      continue;
+  for (const g of data.groups)
+    for (const id of g.item_ids) {
+      const i = byId.get(id);
+      if (!i) continue;
+      if (closedItem(i)) {
+        below.push(i);
+        continue;
+      }
+      if (!lanes.has(g.key)) lanes.set(g.key, { title: g.title, items: [] });
+      lanes.get(g.key)!.items.push(i);
     }
-    const k = i.goal?.id ?? "none";
-    if (!lanes.has(k))
-      lanes.set(k, { title: i.goal?.title ?? "No goal", items: [] });
-    lanes.get(k)!.items.push(i);
-  }
   const order = [...lanes.entries()].sort(([a], [b]) =>
     a === "none" ? 1 : b === "none" ? -1 : 0,
   );

@@ -733,6 +733,8 @@ export function SimpleRoadmap() {
   const data = roadmap.data;
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
   const laned = useMemo(() => (data ? oneLane(lanes(data, f.group), f.group) : null), [data, f.group]);
+  // The Timeline always draws goal lanes, the same groups the goal cards count.
+  const goalLaned = useMemo(() => (data ? oneLane(lanes(data, "goal"), "goal") : null), [data]);
   const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
   // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
   const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, async () =>
@@ -1305,7 +1307,7 @@ export function SimpleRoadmap() {
           // mk-qa4-roadmap QR1 A..QR4 A: six months around today, the key and the broken links
           // above, an open item in a panel at the right (a sheet on a phone).
           <ZoomTimeline
-            data={laned ?? data}
+            data={goalLaned ?? data}
             phone={phone}
             act={act}
             canChange={canChange}
