@@ -37,7 +37,7 @@ function months(bars: Bar[]): { first: number; end: number; cols: { name: string
   const first = Date.UTC(y, mo, 1);
   for (;;) {
     const next = Date.UTC(y, mo + 1, 1);
-    cols.push({ name: new Date(Date.UTC(y, mo, 1)).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }), days: (next - Date.UTC(y, mo, 1)) / DAY });
+    cols.push({ name: calendarDay(`${y}-${String(mo + 1).padStart(2, "0")}-01`, { month: "short" }), days: (next - Date.UTC(y, mo, 1)) / DAY });
     if (next > hi.getTime()) return { first, end: next, cols };
     mo += 1;
     if (mo === 12) [y, mo] = [y + 1, 0];
