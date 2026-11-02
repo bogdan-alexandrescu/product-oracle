@@ -33,7 +33,7 @@ import {
   type Roadmap,
   whereAttr,
 } from "./_lib";
-import { planned } from "./_timeline";
+import { DRAG_PX, grabAt, LONG_PRESS_MS, planned } from "./_timeline";
 
 type Zoom = "6m" | "1y" | "all";
 
@@ -406,13 +406,14 @@ function DayChart(props: TimelineProps) {
   const firstSeen = fit
     ? months[0]?.day
     : months.find((m) => x(m.day) >= sl - 2)?.day;
-  // roadmap-r2: the Gantt's moves. A drag past 4 px moves the bar by whole days (an end
-  // within 10 px of the bar's edge moves only that end); a shorter one is a click. The
-  // arrow keys move a focused bar a week, Shift+arrow a month; each move is the Gantt's
-  // change. Cut and planned items, and a viewer's bars, do not move.
+  // roadmap-r2: the Gantt's moves. A drag past DRAG_PX moves the bar by whole days (an end
+  // grabbed near the bar's edge, grabAt, moves only that end); a shorter one is a click. A
+  // finger picks a bar up with the Gantt's long press first. The arrow keys move a focused
+  // bar a week, Shift+arrow a month; each move is the Gantt's change. Cut and planned items,
+  // and a viewer's bars, do not move.
   const { canChange, moved, onMove, onKeyMove, onKeyEnd, onKeyCancel } = props;
   const fixed = (i: Item) => !canChange || closedItem(i) || planned(i);
-  const drag = useRef<{ item: Item; mode: "move" | "start" | "end"; x0: number; start: string; end: string; moved: boolean; pointer: number } | null>(null);
+  const drag = useRef<{ item: Item; mode: "move" | "start" | "end"; x0: number; start: string; end: string; moved: boolean; pointer: number; armed: boolean; timer: number | null } | null>(null);
   const clicked = useRef(false);
   const [live, setLive] = useState<{ id: string; start: string; end: string } | null>(null);
   const spanOf = (i: Item): [string, string] =>
@@ -426,12 +427,18 @@ function DayChart(props: TimelineProps) {
     return a > b ? [b, a] : [a, b];
   };
   const onDown = (e: ReactPointerEvent<HTMLButtonElement>, i: Item) => {
-    if (e.button !== 0 || e.pointerType === "touch" || fixed(i)) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const edge = Math.min(10, r.width / 4);
+    if (e.button !== 0 || fixed(i)) return;
     const [start, end] = moved[i.id] ?? barSpan(i);
-    const mode = e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
-    drag.current = { item: i, mode, x0: e.clientX, start, end, moved: false, pointer: e.pointerId };
+    const mode = grabAt(e.currentTarget.getBoundingClientRect(), e.clientX);
+    const touch = e.pointerType === "touch";
+    const d = { item: i, mode, x0: e.clientX, start, end, moved: false, pointer: e.pointerId, armed: !touch, timer: null as number | null };
+    drag.current = d;
+    // A finger: a long press picks the bar up, as on the Gantt.
+    if (touch)
+      d.timer = window.setTimeout(() => {
+        d.armed = true;
+        navigator.vibrate?.(10);
+      }, LONG_PRESS_MS);
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -442,23 +449,37 @@ function DayChart(props: TimelineProps) {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointer) return;
     const dx = e.clientX - d.x0;
-    if (!d.moved && Math.abs(dx) < 4) return;
+    if (!d.armed) {
+      // A finger that moves before the long press is not a drag.
+      if (Math.abs(dx) > 8) stopDrag();
+      return;
+    }
+    if (!d.moved && Math.abs(dx) < DRAG_PX) return;
     e.preventDefault();
     d.moved = true;
     const to = dragTo(dx)!;
     if (live?.start !== to[0] || live?.end !== to[1] || live?.id !== d.item.id)
       setLive({ id: d.item.id, start: to[0], end: to[1] });
   };
+  /** The drag over: no bar in hand, no live dates. */
+  const stopDrag = () => {
+    if (drag.current?.timer) clearTimeout(drag.current.timer);
+    drag.current = null;
+    setLive(null);
+  };
   const onUp = (e: ReactPointerEvent) => {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointer) return;
     const [s, en] = dragTo(e.clientX - d.x0)!;
-    drag.current = null;
-    setLive(null);
+    stopDrag();
     if (!d.moved) return;
     // A drag is no click: the click that follows the release opens nothing.
     clicked.current = true;
     if (s !== d.start || en !== d.end) onMove(d.item, s, en);
+  };
+  // A cancelled drag (the browser took the pointer) moves nothing, and no click follows it to swallow.
+  const onCancel = (e: ReactPointerEvent) => {
+    if (drag.current && e.pointerId === drag.current.pointer) stopDrag();
   };
   const keyMove = (i: Item, dir: 1 | -1, month: boolean) => {
     if (fixed(i)) return;
@@ -649,7 +670,7 @@ function DayChart(props: TimelineProps) {
                       data-start={ds}
                       data-end={de}
                       data-live={live?.id === i.id ? (liveWarn.length ? "broken" : "ok") : undefined}
-                      aria-label={`${i.title}, ${spanWords(ds, de, data.today)}`}
+                      aria-label={`${i.title}, ${spanWords(ds, de, data.today)}${still ? "" : ". Arrows move it a week, Shift+arrows a month; Escape cancels"}`}
                       onClick={() => {
                         if (clicked.current) clicked.current = false;
                         else onOpen(sel ? null : i.key);
@@ -657,7 +678,7 @@ function DayChart(props: TimelineProps) {
                       onPointerDown={(e) => onDown(e, i)}
                       onPointerMove={onDragMove}
                       onPointerUp={onUp}
-                      onPointerCancel={onUp}
+                      onPointerCancel={onCancel}
                       onKeyDown={(e) => {
                         if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
                           e.preventDefault();

@@ -60,7 +60,15 @@ const TICK_H = 36;
 const MARK_ROW = 16;
 const headerHeight = (markRows: number) => TICK_H + Math.max(1, markRows) * MARK_ROW + 8;
 const AXIS_H = headerHeight(1);
-const LONG_PRESS_MS = 450;
+export const LONG_PRESS_MS = 450;
+/** A drag starts past this many px; a shorter one is a click. */
+export const DRAG_PX = 4;
+/** Which part of a bar a press at `x` takes: an end within 10 px of the bar's edge (a quarter of
+ * a short bar), else the whole bar. The Gantt's and the Timeline's drags read it. */
+export function grabAt(r: { left: number; right: number; width: number }, x: number): "start" | "end" | "move" {
+  const edge = Math.min(10, r.width / 4);
+  return x - r.left < edge ? "start" : r.right - x < edge ? "end" : "move";
+}
 /** A bar's narrowest width, however short its span or far the scale is zoomed out: it stays a
  * visible, clickable shape beside its label rather than a blob a few pixels wide (finding 11). */
 const MIN_BAR_W = 24;
@@ -524,9 +532,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     if (e.button !== 0) return;
     const [start, end] = moved[item.id] ?? barSpan(item);
     const r = (e.currentTarget.querySelector("rect[data-body]") as SVGRectElement).getBoundingClientRect();
-    const edge = Math.min(10, r.width / 4);
     // The waterfall moves the whole item (its phases follow); the timeline and Gantt also stretch an end.
-    const mode = !canDrag || closedItem(item) || planned(item) || format === "waterfall" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
+    const mode = !canDrag || closedItem(item) || planned(item) || format === "waterfall" ? "move" : grabAt(r, e.clientX);
     const touch = e.pointerType === "touch";
     // React clears currentTarget once the handler returns: keep the bar for the timeout.
     const target = e.currentTarget;
@@ -555,7 +562,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     }
     const it0 = items.get(d.id);
     if (!canDrag || (it0 && (closedItem(it0) || planned(it0)))) return;
-    if (!d.moved && Math.abs(dx) < 4) return;
+    if (!d.moved && Math.abs(dx) < DRAG_PX) return;
     e.preventDefault();
     if (!d.moved) {
       d.moved = true;
