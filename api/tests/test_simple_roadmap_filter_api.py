@@ -206,3 +206,32 @@ async def test_prd_goal_and_track_are_remembered_per_person(client):
     for junk in ({"prd": "x" * 300}, {"group": "goal"}, {"goal": "G1;drop"}):
         r = await client.patch(PREFS, json={"simple_filters": junk}, headers=w.ctx.as_("viewer"))
         assert r.status_code == 422, (junk, r.text)
+
+
+async def test_a_working_draft_belongs_to_one_roadmap(client):
+    """protects=each roadmap's read and ``GET /v1/simple/drafts?roadmap=`` carry only that
+    roadmap's working draft, and ``changes_in_review`` counts only that roadmap's hidden
+    changes; fails_when=a change staged on one roadmap shows on another roadmap's page
+    (one person's draft carrying every roadmap's changes); no_claim=the unfiltered read,
+    which lists every roadmap's drafts."""
+    w = await world()
+    rm = await more_roadmaps(w)
+    for rid in (w.roadmap_id, rm["growth"], rm["growth"]):
+        r = await client.post(CHANGES, headers=w.ctx.as_("owner"), json={
+            "op": "add_key_date", "target": {"roadmap_id": rid},
+            "before": {"key_date": None}, "after": LAUNCH})  # fmt: skip
+        assert r.status_code == 201, r.text
+    everything = await client.get("/v1/simple/drafts", headers=w.ctx.as_("owner"))
+    assert {d["document"]["id"] for d in everything.json()} == {w.roadmap_id, rm["growth"]}
+    for given, rid, n in ((rm["growth"], rm["growth"], 2), ("payments", w.roadmap_id, 1)):
+        r = await client.get("/v1/simple/drafts", params={"roadmap": given},
+                             headers=w.ctx.as_("owner"))  # fmt: skip
+        assert r.status_code == 200, r.text
+        assert [(d["document"]["id"], d["changes"]) for d in r.json()] == [(rid, n)], given
+        one = await read(client, w, "owner", roadmap=given)
+        assert [(d["document_id"], d["changes"]) for d in one["drafts"]] == [(rid, n)], given
+        assert (await read(client, w, "viewer", roadmap=given))["changes_in_review"] == n
+    assert (await read(client, w, "owner", roadmap="board"))["drafts"] == []
+    r = await client.get("/v1/simple/drafts", params={"roadmap": "nope"},
+                         headers=w.ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 404, r.text
