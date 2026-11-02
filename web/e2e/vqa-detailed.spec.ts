@@ -58,3 +58,31 @@ test("QD1 a: a held rewrite's card does not repeat the drawer's intro", async ({
   await expect(drawer.getByTestId("held-rewrite")).toContainText("Goal trace");
   await expect(drawer.getByTestId("held-rewrite")).not.toContainText("Review the rewrite as a diff");
 });
+
+for (const [where, use] of [
+  ["desktop", { viewport: { width: 1440, height: 900 } }],
+  ["phone", { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }],
+] as const) {
+  test.describe(where, () => {
+    test.use(use);
+
+    test(`roadmap key dates: a name keeps its words whole beside Edit and Remove (${where})`, async ({ page }) => {
+      // protects=a key date's name reads as words; fails_when=its day, badge and buttons squeeze
+      // it to a letter or two a line ("conferenc" / "e"); no_claim=the dates themselves.
+      await login(page);
+      await page.goto("/simple/roadmap?roadmap=alerts-roadmap");
+      await page.getByTestId("key-dates-open").click();
+      const row = page.getByTestId("key-dates-editor").locator('[data-testid="key-date-row"][data-name="Customer conference"]');
+      await expect(row.getByRole("button", { name: "Edit Customer conference" })).toBeVisible();
+      const lines = await row.getByTitle("Customer conference").evaluate((el) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        return new Set([...r.getClientRects()].map((b) => Math.round(b.top))).size;
+      });
+      expect(lines).toBe(1);
+      const day = (await row.getByTestId("key-date-day").boundingBox())!;
+      const name = (await row.getByTitle("Customer conference").boundingBox())!;
+      expect(Math.abs(day.y - name.y)).toBeLessThanOrEqual(1);
+    });
+  });
+}
