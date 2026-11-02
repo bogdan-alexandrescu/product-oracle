@@ -52,7 +52,7 @@ from typing import Any, Literal
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit, company_time
+from oracle import audit, company_time, wording
 from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
@@ -776,27 +776,68 @@ def _sentence(text: str) -> str:
     return text if text.endswith((".", "?", "!")) else text + "."
 
 
+def _section(key: str | None) -> str | None:
+    """A section's name from its id ("what-we-build" -> "What we build")."""
+    return key.replace("-", " ").replace("_", " ").strip().capitalize() or None if key else None
+
+
+_RAW = [
+    (re.compile(r"\[c:[^\]]*\]"), "a citation"),
+    (re.compile(r"\s*\(\{#[^}]*\}\)"), ""),
+    (re.compile(r"\{#[^}]*\}"), "a section label"),
+    (re.compile(r"section id '([^']*)'"), lambda m: f"the section name “{_section(m[1])}”"),
+    (re.compile(r"section '([^']*)'"), lambda m: f"the section “{_section(m[1])}”"),
+]
+
+
+def _plain_words(message: str) -> str:
+    """An importer message without its raw tokens ([c:key], {#sources}, section ids)."""
+    for pattern, put in _RAW:
+        message = pattern.sub(put, message)
+    return _sentence(message)
+
+
+def _days(days: list[str]) -> str:
+    return days[0] if len(days) == 1 else ", ".join(days[:-1]) + " and " + days[-1]
+
+
 def approve_problems(problems: list[Any]) -> dict[str, Any]:
     """walkc-meeting: why the meeting's Approve could not publish, as a short list a person
     reads: each problem said once, in plain words (what to do is in its message), where it
-    is (the section's name), and how many times it came up. No codes or raw lines."""
+    is (the section's name), and how many times it came up; a section's dates without a
+    confirmed schedule in one line that lists them. No codes, ids or raw lines."""
     seen: dict[tuple[str, str | None], dict[str, Any]] = {}
+    dates: dict[str | None, list[Any]] = {}
     for p in problems:
-        what = _sentence(str(getattr(p, "message", "") or ""))
+        where = _section(getattr(p, "section_key", None))
         refs = getattr(p, "refs", None) or {}
-        where = refs.get("section") if isinstance(refs.get("section"), str) else None
+        if getattr(p, "code", None) == "unverified_date" and isinstance(refs.get("date"), str):
+            dates.setdefault(where, []).append(p)
+            continue
+        what = _plain_words(str(getattr(p, "message", "") or ""))
         key = (what, where)
         if key in seen:
             seen[key]["times"] += 1
         else:
             seen[key] = {"what": what, "where": where, "times": 1}
+    out = list(seen.values())
+    for where, group in dates.items():
+        days = list(dict.fromkeys(p.refs["date"] for p in group))
+        if len(days) == 1:
+            what = _plain_words(str(group[0].message))
+        else:
+            what = (
+                f"{len(days)} dates are not backed by a confirmed schedule: {_days(days)}; "
+                f"{wording.RECORD_DATE_BASIS} or drop them."
+            )
+        out.insert(0, {"what": what, "where": where, "times": len(group)})
     n = len(problems)
     message = (
         "Not approved: the draft has 1 problem to fix first."
         if n == 1
         else f"Not approved: the draft has {n} problems to fix first."
     )
-    return {"code": "draft_problems", "message": message, "problems": list(seen.values())}
+    return {"code": "draft_problems", "message": message, "problems": out}
 
 
 async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):

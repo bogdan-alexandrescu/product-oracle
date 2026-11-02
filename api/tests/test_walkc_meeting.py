@@ -249,6 +249,6 @@ def test_approve_problems_group_a_sections_dates():
     assert only["times"] == 5
     assert only["where"] == "What we build"
     assert only["what"].startswith(
-        "5 dates are not backed by a confirmed schedule: Nov 20, Dec 3, Jan 4, Feb 9 and Mar 2."
+        "5 dates are not backed by a confirmed schedule: Nov 20, Dec 3, Jan 4, Feb 9 and Mar 2;"
     )
     assert "record a date basis" in only["what"]
