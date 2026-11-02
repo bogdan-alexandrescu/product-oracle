@@ -904,8 +904,8 @@ function seedSimplePrioritiesLongMilestonesScenario(): Db {
   const db = seed();
   const rm = (db.simple_roadmap = seedSimpleRoadmap());
   const names = [
-    "M1 · Guided setup ready for the first paying teams on the new plan (F-30a); F-30b follows in the same release",
-    "M2 · Alert rules, digests and the mobile push all reach every workspace (F-31a); F-31b and F-31c follow",
+    "M1 · Guided setup ready for the first paying teams on the new plan (F-30a Team invites); F-30b Billing page follows in the same release",
+    "M2 · Alert rules, digests and the mobile push all reach every workspace (F-31a Alert rules); F-31b Daily digest and F-31c Mobile push follow",
   ];
   rm.items.forEach((i, n) => {
     if (i.horizon === "now") i.milestone = { name: names[n % names.length], day: i.end ?? 60 };
