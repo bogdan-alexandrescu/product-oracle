@@ -102,13 +102,7 @@ test("/sources: search ranks by confidence and explains the badge", async ({ pag
   await login(page);
   await page.goto("/sources");
   await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
-  // The source picker lists my sources once the page has loaded them: typed earlier, the
-  // search box's words could be lost, leaving Search off.
-  await expect(page.getByRole("combobox", { name: /^Source/ }).getByRole("option", { name: "Product chat" })).toBeAttached();
-
-  await page.getByLabel("Search", { exact: true }).fill("onboarding checklist");
-  await expect(page.getByRole("button", { name: "Search" })).toBeEnabled();
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchSources(page, "onboarding checklist");
   const hits = page.getByTestId("search-hit");
   await expect(hits).toHaveCount(2);
   // The README (fresh, from code) outranks the older chat thread.
