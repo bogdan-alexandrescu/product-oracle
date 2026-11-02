@@ -20,7 +20,8 @@ import { login, openSection } from "./helpers";
  * - "not decided" (12): protects=a row with no verdict reads "Not decided" as text; fails_when=a
  *   "Decide" button that only selects the row.
  * - "answer draft" (13): protects=an answer being typed survives a verdict saved meanwhile and a
- *   visit to another feature; fails_when=the box is emptied.
+ *   visit to another feature, every letter at the caret, even through a slow save; fails_when=the
+ *   box is emptied, or a letter lands away from the caret (a box re-set from the saved draft).
  * - "priority order" (14): protects=goal chips wrap between words only, the header counts the
  *   run's own list; fails_when=a word breaks across lines or the header counts the live ranking.
  * - "dates change" (15): protects=Change is a centred dialog on a desktop, a bottom sheet on a
@@ -51,6 +52,18 @@ async function openCheck(page: Page, scenario: string) {
   await line.getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+$/);
   await expect(bar(page)).toBeVisible();
+}
+
+/**
+ * Taps a box past its text, as a person does to add to what they typed: the caret lands after
+ * the last letter. Not End: on a Mac, End scrolls the page and leaves the caret where the tap
+ * put it, inside the text on a phone-wide box.
+ */
+async function tapAtEnd(input: Locator) {
+  const b = await box(input);
+  await input.click({ position: { x: b.width - 8, y: b.height / 2 } });
+  const [start, end, length] = await input.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd, el.value.length]);
+  expect([start, end], "the caret after the last letter").toEqual([length, length]);
 }
 
 async function select(page: Page, key: string) {
@@ -144,8 +157,7 @@ for (const [name, viewport] of [
       await answer.fill("Yes, the checklist");
       await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
       // Back in the box, as a person does, and on typing while the verdict saves.
-      await answer.click();
-      await answer.press("End");
+      await tapAtEnd(answer);
       await answer.pressSequentially(" shows on phones too.");
       await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
       await expect(answer).toHaveValue("Yes, the checklist shows on phones too.");
@@ -154,6 +166,35 @@ for (const [name, viewport] of [
       await select(page, "f.sample-data");
       await select(page, "f.guided-setup");
       await expect(inspector(page).getByRole("textbox", { name: `Answer: ${PHONES}` })).toHaveValue("Yes, the checklist shows on phones too.");
+    });
+
+    test("answer draft: letters typed during a slow verdict save all land at the caret, in order", async ({ page }) => {
+      await openCheck(page, "eng-check");
+      await select(page, "f.guided-setup");
+      // The verdict's save answers late (the mock's slow knob), so the letters below are typed while it runs.
+      const checkpoint = new URL(page.url()).pathname.split("/").pop();
+      await page.evaluate(
+        ([path]) => {
+          localStorage.setItem("po-mock-slow", path);
+          localStorage.setItem("po-mock-slow-ms", "2500");
+        },
+        [`POST /v1/runs/${ENG_CHECK_RUN}/checkpoints/${checkpoint}/actions`],
+      );
+      const answer = inspector(page).getByRole("textbox", { name: `Answer: ${PHONES}` });
+      await answer.fill("Yes, the checklist");
+      await inspector(page).getByRole("group", { name: "Verdict" }).getByRole("button", { name: "Feasible", exact: true }).click();
+      await tapAtEnd(answer);
+      await answer.pressSequentially(" shows");
+      // Still saving: the row has no verdict yet.
+      await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Not decided");
+      await answer.pressSequentially(" on phones", { delay: 250 });
+      await answer.pressSequentially(" too, every letter", { delay: 100 });
+      await expect(briefRow(page, "f.guided-setup").getByTestId("brief-verdict")).toHaveText("Feasible");
+      await answer.pressSequentially(".");
+      const typed = "Yes, the checklist shows on phones too, every letter.";
+      await expect(answer).toHaveValue(typed);
+      await expect(answer).toBeFocused();
+      expect(await answer.evaluate((el: HTMLInputElement) => el.selectionStart)).toBe(typed.length);
     });
 
     test("priority order: goal chips never break inside a word; the header counts the run's list", async ({ page }) => {
