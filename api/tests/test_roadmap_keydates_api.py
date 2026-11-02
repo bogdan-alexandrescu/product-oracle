@@ -21,19 +21,23 @@ Test cards (protects / fails_when / no_claim):
   builds the one-pager of a PRD with no drawn bet, and builds it once for a PRD with one,
   however many of its items wait for a flow; fails_when=every read rebuilds every PRD's
   one-pager; no_claim=the one-pager page's own reads.
+- test_bet_drawn_without_its_prd_still_gives_its_item_a_flow: protects=an item built from a
+  PRD takes its bet's flow when the bet's visual was stored with no PRD (``document_id``
+  null); fails_when=the read skips the PRD as having no drawn bet; no_claim=how such a row
+  came to be (every writer today names the PRD).
 """
 
 import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 import tests.test_simple_one_pager_api as op
 from oracle import company_time
 from oracle.docs.models import Document, DocumentVersion
 from oracle.simple import one_pager
-from oracle.simple.models import RoadmapKeyDate
+from oracle.simple.models import RoadmapKeyDate, SimpleVisual
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.test_simple_line_visuals_api import ask
@@ -163,3 +167,17 @@ async def test_roadmap_read_builds_a_one_pager_only_for_a_drawn_bet(client, monk
     monkeypatch.setattr(one_pager, "built", counted)
     await get(client, ctx, "owner")
     assert len(calls) == 1, "the one-pager was built more than once in one read"
+
+
+async def test_bet_drawn_without_its_prd_still_gives_its_item_a_flow(client, monkeypatch):
+    ctx, sids = await _drawn(client, monkeypatch, "bets-2")
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(SimpleVisual)
+            .where(SimpleVisual.subject_id == uuid.UUID(sids["bets-2"]))
+            .values(document_id=None)
+        )
+        await s.commit()
+    await _items(ctx, ("alerts", "Alerts", "f-02"))
+    flow = by_key(await get(client, ctx, "owner"))["alerts"]["flow"]
+    assert flow is not None and flow["subject_id"] == sids["bets-2"], "its bet's flow is lost"
