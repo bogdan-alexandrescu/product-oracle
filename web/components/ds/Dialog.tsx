@@ -74,6 +74,9 @@ export function Dialog({
   const id = useId();
   const panel = useRef<HTMLDivElement>(null);
   const [asking, setAsking] = useState(false);
+  // vqa-detailed: a dialog opened from an open Sheet (Re-plan… in a plan item's sheet on a
+  // phone) sits above that sheet, not under it.
+  const [overSheet] = useState(() => typeof document !== "undefined" && !!document.querySelector("[data-sheet]"));
   /** Where focus was when the question opened: Keep editing puts it back. */
   const before = useRef<HTMLElement | null>(null);
 
@@ -146,7 +149,7 @@ export function Dialog({
     <div
       data-testid="dialog-backdrop"
       data-backdrop=""
-      className={`fixed inset-0 z-[45] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 ${phoneSheet ? "max-[600px]:p-0" : "max-[600px]:px-2 max-[600px]:py-4"}`}
+      className={`fixed inset-0 ${overSheet ? "z-[55]" : "z-[45]"} flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 ${phoneSheet ? "max-[600px]:p-0" : "max-[600px]:px-2 max-[600px]:py-4"}`}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.key !== "Escape" && e.key !== "Tab" && e.stopPropagation()}
       onMouseDown={(e) => {

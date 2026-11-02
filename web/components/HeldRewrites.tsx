@@ -9,6 +9,10 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
 
+// vqa-detailed (QD1 a): the drawer's intro says once why a rewrite is held; a card shows only
+// its own reason, so the API's stock reason for a held rewrite is not drawn on every card.
+const HELD_REWRITE_WHY = "An agent draft rewrote this approved section; the approved text was kept. Review the rewrite as a diff.";
+
 type Patch = Schemas["SectionPatchOut"];
 
 /** The document's section patches: agent rewrites held because their section was approved. */
@@ -173,7 +177,7 @@ function HeldRewrite({
         {patch.action === "remove" && <Chip kind="crit">Removes the section</Chip>}
         {!isOpen && <Chip kind={patch.status === "accepted" ? "pass" : "na"}>{DECIDED[patch.status as keyof typeof DECIDED]}</Chip>}
       </div>
-      {patch.rationale && <p className="mt-1 text-sm text-text2">{patch.rationale}</p>}
+      {patch.rationale && patch.rationale !== HELD_REWRITE_WHY && <p className="mt-1 text-sm text-text2">{patch.rationale}</p>}
       {!isOpen && patch.decision_note && (
         <p className="mt-1 text-sm text-text">
           <span className="font-semibold">Reason:</span> {patch.decision_note}
