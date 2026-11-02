@@ -142,7 +142,8 @@ async def create_intake(body: IntakeCreate, principal: Commenter, db: TenantDB) 
     except service.IntakeError as e:
         raise _http(e) from e
     await db.commit()
-    await intake_read.submit(db, intake_read.current(intake))
+    # Submitted after the response: SwarmCloud's calls would hold Continue for seconds.
+    intake_read.submit_later(principal.tenant_id, intake)
     return await _summary(db, intake, principal, "create_intake")
 
 

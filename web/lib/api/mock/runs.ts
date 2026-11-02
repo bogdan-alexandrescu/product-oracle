@@ -5,7 +5,7 @@
  * estimate, as the API's FakeRuntime does.
  */
 import type { Schemas } from "@/lib/api/client";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
 import { companyDayInWords, companyDayIso, companyStamp } from "./connections";
@@ -100,7 +100,7 @@ export interface RunsContext {
   userRole?: Schemas["Me"]["role"] | null;
   /** D8: the signed-in member (who stages or suggests), and every member by id (names). */
   member?: { id: string; email: string; role: Schemas["Me"]["role"] } | null;
-  members?: { id: string; email: string; role: Schemas["Me"]["role"] }[];
+  members?: { id: string; email: string; role: Schemas["Me"]["role"]; name?: string | null }[];
   /**
    * D8: a test's "another reviewer changed the draft" (MOCK_REVIEW_CHANGE_KEY): the email of
    * who changed it, read once (the key is cleared). The next decide bumps the draft by one
@@ -939,7 +939,7 @@ export function approveRunReview(ctx: RunsContext, runId: string, checkpointId: 
   const cp = r?.checkpoints.find((c) => c.id === checkpointId);
   if (!r || !cp || cp.status !== "pending" || r.status !== "awaiting_checkpoint") return;
   Object.assign(cp, { status: "approved", note: null, decided_by: ctx.userId, decided_at: ctx.now() });
-  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle" } };
+  cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: "oracle", by: ctx.userId } };
   next(ctx, r, r.segments.find((x) => x.seq === cp.segment_seq)!);
   refresh(r);
 }
@@ -1225,11 +1225,14 @@ function checkOrder(spec: OrderSpec, scope: PrdScopeOut["features"] | null): Pri
   return { method: spec.method, features: order.length, problems, order };
 }
 
-/** The PRD a run's order is for: its document, else the slug the run writes. */
+/**
+ * The PRD a run's order is for: its document (by id, else the one its slug names), else the
+ * slug the run writes with the brief's title, the title the import gives it.
+ */
 function orderDocument(ctx: Pick<RunsContext, "documents">, r: RunOut): SnapshotRow["document"] {
-  const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : undefined;
+  const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : ctx.documents.find((d) => d.slug === r.document_slug);
   if (doc) return { id: doc.id, slug: doc.slug, title: doc.title };
-  return r.document_slug ? { id: null, slug: r.document_slug, title: null } : null;
+  return r.document_slug ? { id: null, slug: r.document_slug, title: r.document_title ?? null } : null;
 }
 
 /**
@@ -1251,6 +1254,7 @@ function proposeOrder(ctx: Pick<RunsContext, "db" | "uuid" | "now" | "documents"
     note: null,
     feature_count: rows.length,
     top: rows.slice(0, 5).map((f) => f.key),
+    top_titles: rows.slice(0, 5).map((f) => f.title),
     status: "proposed",
     run_id: r.id,
     document: orderDocument(ctx, r),
@@ -2151,6 +2155,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     const scopeEdited = cp.kind === "feature_set" ? scopeEdits(ctx.db, r.id) : 0;
     if (decision === "changes_requested" && !text && !reviewed && !sent.length && !scopeEdited) return fail(422, "Stage a change, ask a question, or write a note to send back.");
     const status = confirming ? "approved" : (decision as "approved" | "changes_requested");
+    // A confirmed console answer is its author's, as the API names it, not the confirmer's.
+    const answerer = confirming ? (ctx.members ?? []).find((x) => x.email === cp.console?.answered_by) : undefined;
+    const author = confirming ? (answerer?.id ?? null) : ctx.userId;
     Object.assign(cp, { status, note: text, decided_by: ctx.userId, decided_at: ctx.now(), console: null });
     if (decision === "changes_requested") cp.review = reviewed ? documentReview(ctx, r, cp, reviewed, text) : buildReview(ctx, r, cp, staged, text);
     if (edited) {
@@ -2179,7 +2186,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     if (cp.kind === "priority_order" && (decision === "approved" || decision === "changes_requested")) decideOrder(ctx, r, cp, decision, ctx.userId);
     if (cp.kind === "eng_review" && decision === "approved") approveEngCheck(ctx, r, cp, staged);
     if (cp.kind === "eng_dates" && decision === "approved") approveEngDates(cp, staged);
-    cp.payload = { ...cp.payload, decided: { role: ctx.userRole ?? null, via: confirming ? "swarmcloud_console" : "oracle" } };
+    cp.payload = { ...cp.payload, decided: { role: (confirming ? answerer?.role : ctx.userRole) ?? null, via: confirming ? "swarmcloud_console" : "oracle", by: author } };
     if (ctx.undelivered) {
       // Recorded, and final; SwarmCloud did not take it: the tick delivers it.
       const at = ctx.now();
@@ -2216,7 +2223,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     review.payload = { ...review.payload, import: s.draft_import };
     return done();
   }
-  if (action === "decisions" && m === "GET") return json(200, decisionsOf(r));
+  if (action === "decisions" && m === "GET") return json(200, decisionsOf(ctx, r));
   if (action === "segments" && p[5] === "artifacts" && m === "GET") {
     const s = r.segments.find((x) => x.seq === Number(p[4]));
     const raw = new URL(req.url).searchParams.get("attempt");
@@ -2328,7 +2335,9 @@ const CHECKPOINT_TITLES: Record<CheckpointOut["kind"], string> = {
 
 function decisionSummary(d: Omit<RunDecision, "summary">): string {
   let what = d.status.replace("_", " ");
-  if (d.decided_by_role) what += ` by ${/^[aeiou]/.test(d.decided_by_role) ? "an" : "a"} ${d.decided_by_role}`;
+  const role = d.decided_by_role ? `${/^[aeiou]/.test(d.decided_by_role) ? "an" : "a"} ${d.decided_by_role}` : null;
+  if (d.decided_by_name) what += role ? ` by ${d.decided_by_name}, ${role}` : ` by ${d.decided_by_name}`;
+  else if (role) what += ` by ${role}`;
   if (d.via === "swarmcloud_console") what += " in SwarmCloud's console";
   const parts = [CHECKPOINT_TITLES[d.kind] ?? d.kind, what];
   if (d.note) parts.push(`note: ${d.note}`);
@@ -2336,13 +2345,18 @@ function decisionSummary(d: Omit<RunDecision, "summary">): string {
   return parts.join(" · ");
 }
 
-/** The run's decided checkpoints, by segment then decided time; pending ones are not listed. */
-function decisionsOf(r: RunOut): RunDecision[] {
+/**
+ * The run's decided checkpoints, by segment then decided time; pending ones are not listed.
+ * Who decided is named as the API names them: the member's name, else their email.
+ */
+function decisionsOf(ctx: RunsContext, r: RunOut): RunDecision[] {
   const flow = FLOW_CATALOG.flows.find((f) => f.key === r.flow);
+  const people = new Map((ctx.members ?? []).map((x) => [x.id, x.name?.trim() || x.email]));
   const out = r.checkpoints
     .filter((c) => c.status !== "pending")
     .map((c) => {
-      const decided = c.payload.decided as { role?: RunDecision["decided_by_role"]; via?: RunDecision["via"] } | undefined;
+      const decided = c.payload.decided as { role?: RunDecision["decided_by_role"]; via?: RunDecision["via"]; by?: string | null } | undefined;
+      const by = decided && "by" in decided ? decided.by : c.decided_by;
       const extra = (c.payload.review ?? {}) as { edits?: RunDecision["edits"]; review?: RunDecision["review"] };
       const d: Omit<RunDecision, "summary"> = {
         checkpoint_id: c.id,
@@ -2353,6 +2367,7 @@ function decisionsOf(r: RunOut): RunDecision[] {
         status: c.status as RunDecision["status"],
         decided_at: c.decided_at ?? null,
         decided_by_role: decided?.role ?? null,
+        decided_by_name: (by && people.get(by)) || null,
         via: decided?.via ?? "oracle",
         note: c.note ?? null,
         edits: extra.edits ?? null,
@@ -2872,13 +2887,15 @@ const USAGE_ALERTS_ORDER: OrderSpec = {
 };
 
 /** A Baseline to PRD run for `document`, its baseline and feature set approved, waiting at the priority stop with `spec`. */
-function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec): RunOut {
+function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, document: string, created_at: string, spec: OrderSpec, briefTitle?: string): RunOut {
   const { from, now } = seedClock();
   // Its own runs list, so the ticks below move this run only.
   const own: RunsDb = { runs: [], artifacts: db.artifacts, scopes: (db.scopes ??= {}), priority_snapshots: (db.priority_snapshots ??= []) };
   const full = { ...ctx, db: own, now };
   const r = seedRun(ctx, own, "baseline_to_prd", document, {}, created_at);
   r.id = id;
+  // A PRD not imported yet: the brief's title, the one the import gives it (as the API's).
+  if (briefTitle) r.document_title = briefTitle;
   from(r.created_at);
   launch(full, r);
   for (const seq of [1, 2]) {
@@ -2911,7 +2928,8 @@ function seedAtPriority(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, do
  */
 export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
   seedAtPriority(db, ctx, PRIORITY_RUN, "saved-addresses", "2026-10-18T09:00:00Z", SAVED_ADDRESSES_ORDER);
-  seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER);
+  // Its PRD is not imported yet (no document has the slug): the order names it by the brief's title.
+  seedAtPriority(db, ctx, PRIORITY_BLOCKED_RUN, "usage-alerts-pilot", "2026-10-18T10:00:00Z", USAGE_ALERTS_ORDER, "Example Co · Usage alerts");
   const checkout = ctx.documents.find((d) => d.slug === "checkout-redesign");
   const earlier = db.runs.find((r) => r.document_slug === "checkout-redesign") ?? db.runs[0];
   const spec: OrderSpec = { method: "goal_weighted", order: ranking("goal_weighted").features.slice(0, 4).map((f) => ({ key: f.key, score: f.score ?? 0, explanation: "As the live ranking" })) };
@@ -2924,6 +2942,11 @@ export function seedPriorityRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
     decided_at: "2026-10-12T10:00:00Z",
     document: checkout ? { id: checkout.id, slug: checkout.slug, title: checkout.title } : null,
   });
+  // A feature dropped from the feature set since: in no ranking on screen, so its Top names
+  // it from the snapshot's own ranking (top_titles), as the API's (walk-docs-priorities 3).
+  const dropped = { ...snap.ranking[snap.ranking.length - 1], key: "F-41", title: "Gift wrap at checkout", rank: snap.ranking.length + 1 };
+  snap.ranking = [...snap.ranking, dropped];
+  Object.assign(snap, { feature_count: snap.ranking.length, top: snap.ranking.slice(0, 5).map((f) => f.key), top_titles: snap.ranking.slice(0, 5).map((f) => f.title) });
 }
 
 /**
@@ -3193,7 +3216,7 @@ function consoleHeldRun(): RunOut {
   cp.run_id = run.id;
   cp.payload = { ...cp.payload, items_check: items.items_check };
   cp.console = {
-    answered_by: "lead@example.com",
+    answered_by: "approver@example.com",
     answered_at: "2026-10-20T10:00:00Z",
     via: null,
     verdict: "MERGE",
@@ -4443,7 +4466,7 @@ const EDIT: SpecFeature = {
   goals: [{ key: "g.early-churn", contribution: 1 }],
   depends_on: ["saved-addresses"],
   confidence: 0.7,
-  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout", ["Changes apply to this order"])],
+  requirements: [req("address-edit-inline", "A saved address is edited in place at checkout and ships in stage 2 of rollout (proposed in stage 3, awaiting the founder, stage 3 Q8.)", ["Changes apply to this order"])],
 };
 const NOTES: SpecFeature = {
   key: "delivery-notes",
@@ -4453,6 +4476,15 @@ const NOTES: SpecFeature = {
   depends_on: ["saved-addresses"],
   confidence: 0.7,
   requirements: [req("delivery-notes-text", "A saved address keeps a note for the courier", ["Notes are 140 characters at most"])],
+};
+/** The goals the baseline links the rows left out to (walk-eng-check 5). */
+const SCOPE_BASELINE_GOALS: Record<string, string[]> = { "address-book-export": ["g.activation"], "address-sharing": ["g.paid-conversion"] };
+/** Evidence by its source's name (walk-eng-check 6). */
+const SCOPE_EVIDENCE: Record<string, { id: string; title: string; url: string | null }[]> = {
+  "saved-addresses": [
+    { id: "58a87cc0-0000-4000-8000-0000000000e1", title: "Checkout interviews, September", url: "https://example.com/research/checkout-interviews" },
+    { id: "58a87cc0-0000-4000-8000-0000000000e2", title: "Support tickets: retyped addresses", url: null },
+  ],
 };
 const EXPORT_OUT = { key: "address-book-export", reason: "not_now" };
 const SHARING_OUT = { key: "address-sharing", reason: "out_of_scope" };
@@ -4512,6 +4544,12 @@ function seedScopeRun(db: RunsDb, ctx: Omit<RunsContext, "db">, id: string, slug
     // A row the set leaves out reads as a name ("Address book export"), as the agents titled it.
     if (f.title === f.key) f.title = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/-/g, " ");
     f.flags = [...(flags[f.key] ?? [])];
+    // walk-eng-check 5, 6: a row left out keeps the goal it serves in the baseline; evidence by its source's name.
+    const served = SCOPE_BASELINE_GOALS[f.key];
+    f.baseline_goals = served && !f.goals.length ? served.map((key) => ({ key, goal_id: goals.get(key) ?? null, contribution: null })) : [];
+    const ev = SCOPE_EVIDENCE[f.key];
+    f.evidence = ev ?? [];
+    f.evidence_ids = (ev ?? []).map((e) => e.id);
   }
   prepareScope(scope);
   const cp = r.checkpoints.find((c) => c.kind === "feature_set")!;

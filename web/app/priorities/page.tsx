@@ -484,6 +484,7 @@ function FeatureInspector({
             ))}
           </>
         }
+        fitStats
         stats={[
           {
             label: "Rank",
@@ -660,11 +661,11 @@ function FeatureInspector({
 
 /**
  * A tile's figure in the Numeral's face, sized to its length so it never runs past the
- * tile: 34 px up to four characters, then smaller; a very long one wraps, never cut.
+ * tile: 34 px up to four characters, then smaller; never broken inside (its tile fits it).
  */
 function TileFigure({ text }: { text: string }) {
   const size = text.length <= 4 ? "text-[34px] leading-9" : text.length <= 6 ? "text-[26px] leading-9" : "text-xl leading-9";
-  return <span className={`tnum block font-display font-bold tracking-[-0.03em] break-all ${size}`}>{text}</span>;
+  return <span className={`tnum block font-display font-bold tracking-[-0.03em] whitespace-nowrap ${size}`}>{text}</span>;
 }
 
 /** A panel's count as neutral text: the panel's own count is accent blue, which reads as a link (qa-plan-27). */
@@ -745,7 +746,7 @@ function Snapshots({
               )}
               <span className="tnum text-text2">{plural(s.feature_count, "feature")}</span>
               <span className="min-w-0 break-words text-text2">
-                Top: {s.top.map((k) => featureText(features, k)).join(", ") || "—"}
+                Top: {(s.top_titles.length ? s.top_titles : s.top.map((k) => featureText(features, k))).join(", ") || "—"}
               </span>
               {s.note && <span className="min-w-0 break-words text-text2">“{s.note}”</span>}
             </li>
@@ -956,7 +957,10 @@ function Priorities() {
   const current = features.find((f) => f.key === selected) ?? features[0];
   const inspectorId = "priority-inspector";
   const anyOverride = withChanges && features.some((f) => f.override);
-  const nameOf: NameOf = (key) => featureName(features, key);
+  // Run mode: a feature the run's order leaves out (outside the PRD's scope) by its name in
+  // the live ranking, never its key.
+  const known = cmp ? [...features, ...(r?.features ?? [])] : features;
+  const nameOf: NameOf = (key) => featureName(known, key);
   // qa4-plan-15: who made a change by name, from the people list; the email on hover.
   const people = useQuery("priorities|people", () => unwrap(api.GET("/v1/people", { params: { query: { limit: 500 } } })));
   const who: WhoOf = (by) => {
@@ -1107,7 +1111,8 @@ function Priorities() {
       // between words, never inside one ("Scalin g"); no wider, so the Feature column keeps its
       // room beside the docked inspector and an approver's move column (qa-plan-5).
       width: "124px",
-      // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
+      // Every goal whole (prod-4, qa-plan-42): one per line, a long name on as many lines as it
+      // needs, wrapped between words and never cut (qa5-plan-at-risk).
       wrap: true,
       cell: (f) =>
         f.explanation.goals.length === 0 ? (
@@ -1115,7 +1120,7 @@ function Priorities() {
         ) : (
           <span className="flex min-w-0 flex-col items-start gap-1 py-0.5 max-[600px]:flex-row max-[600px]:flex-wrap" data-testid="row-goals">
             {f.explanation.goals.map((g) => (
-              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap />
+              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap whole />
             ))}
           </span>
         ),
@@ -1171,10 +1176,23 @@ function Priorities() {
       narrow: anyOverride ? "mid" : "laptop",
       wrap: true,
       cell: (f) => {
-        const text = f.depends_on.map((k) => featureName(features, k)).join(", ");
+        const text = f.depends_on.map((k) => featureName(known, k)).join(", ");
+        // Run mode: a dependency the feature set left out is not in this PRD; say so.
+        const outside = cmp ? f.depends_on.filter((k) => !features.some((x) => x.key === k)) : [];
+        const note =
+          outside.length === 0
+            ? null
+            : outside.length === f.depends_on.length
+              ? "Outside this PRD's scope"
+              : `${outside.map((k) => featureName(known, k)).join(", ")}: outside this PRD's scope`;
         return (
-          <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={text || undefined}>
+          <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={[text, note].filter(Boolean).join(". ") || undefined}>
             {text || "—"}
+            {note && (
+              <span data-testid="row-deps-outside" className="block text-[12px] leading-4 text-warn">
+                {note}
+              </span>
+            )}
           </span>
         );
       },
@@ -1261,7 +1279,7 @@ function Priorities() {
     <FeatureInspector
       key={current.key}
       f={current}
-      features={features}
+      features={known}
       id={inspectorId}
       run={cmp ? byKey.get(current.key) : undefined}
       change={
@@ -1386,7 +1404,7 @@ function Priorities() {
                 {r.cycles.map((c, i) => (
                   <span key={i} className="font-medium">
                     {i > 0 && "; "}
-                    {c.map((k) => featureText(features, k)).join(" → ")}
+                    {c.map((k) => featureText(known, k)).join(" → ")}
                   </span>
                 ))}
                 <InfoTip label="Dependency cycle" align="start">

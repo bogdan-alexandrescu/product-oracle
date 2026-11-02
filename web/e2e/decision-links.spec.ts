@@ -41,7 +41,7 @@ test("a proposal names the baseline items, evidence and document it is about; th
   await dialog.getByLabel("Decision", { exact: true }).fill("Point new accounts to payment setup first");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Checklist first");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Sample data first");
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Priya Raman · ${APPROVER}` });
 
   const evidence = dialog.getByRole("group", { name: "Evidence" });
   await expect(evidence).toContainText("Link a baseline item to pick from its evidence");

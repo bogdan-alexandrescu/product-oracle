@@ -165,7 +165,7 @@ test("Inspector: decline Oracle's suggestion; it stays declined, with who and wh
   const declinedOn = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(mockNow());
   await inspector(page).getByTestId("request-suggestion").getByRole("button", { name: "Decline" }).click();
   const suggestion = inspector(page).getByTestId("request-suggestion");
-  await expect(suggestion).toContainText(`Declined by Admin, ${declinedOn}`);
+  await expect(suggestion).toContainText(`Declined by Avery Stone, ${declinedOn}`);
   await expect(suggestion.getByRole("button")).toHaveCount(0);
   await expect(row(page, "Save my card for the next order").getByTestId("goal-chip")).toHaveCount(0);
 
@@ -174,7 +174,7 @@ test("Inspector: decline Oracle's suggestion; it stays declined, with who and wh
   await expect(page.getByTestId("triage-status")).toContainText(/suggestions on \d+ requests? and found/, { timeout: 15_000 });
   await page.reload();
   await pick(page, "Save my card for the next order");
-  await expect(inspector(page).getByTestId("request-suggestion")).toContainText(`Declined by Admin, ${declinedOn}`);
+  await expect(inspector(page).getByTestId("request-suggestion")).toContainText(`Declined by Avery Stone, ${declinedOn}`);
   await expect(inspector(page).getByRole("button", { name: "Accept suggestion" })).toHaveCount(0);
   await expect(row(page, "Save my card for the next order").getByTestId("goal-chip")).toHaveCount(0);
 });

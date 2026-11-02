@@ -82,7 +82,7 @@ test("a changelog link opens in a new tab from the preview, the audience view an
 
   await rows.filter({ hasText: "Northwind bulk import" }).getByRole("button", { name: "Exclude" }).click();
   await page.getByRole("button", { name: "Mark as checked" }).click();
-  await expect(page.getByTestId("public-check")).toContainText("Checked by Admin");
+  await expect(page.getByTestId("public-check")).toContainText("Checked by Avery Stone");
 
   await page.getByRole("link", { name: "Back to the roadmap" }).click();
   await page.getByRole("radiogroup", { name: "Audience" }).getByRole("radio", { name: "Public" }).click();

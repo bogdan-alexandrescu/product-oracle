@@ -70,7 +70,7 @@ test("a commenter's goal tiles count no broken link as needing them", async ({ p
 test("people by name; Start meeting stays in Simple and opens the start sheet", async ({ page }) => {
   await signIn(page, "simple-home", ADMIN.email);
   const next = page.getByTestId("home-meeting-next");
-  await expect(next).toContainText("Admin");
+  await expect(next).toContainText("Avery Stone");
   await expect(next).not.toContainText(/\badmin\b/);
   // fix4 (qa-simple-home-27): days before the meeting, the start says it is early.
   const start = next.getByRole("link", { name: "Start now" });

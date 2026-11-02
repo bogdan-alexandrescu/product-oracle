@@ -736,7 +736,7 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
 
   if (refused)
     return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+      <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
         <div role="dialog" aria-modal="true" aria-label={`Why move ${nameOf(row)}`} className="w-full max-w-md rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
           <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">{nameOf(row)} stays #{row.rank}</h2>
           <p className="mt-1 text-[length:var(--simple-small)] text-text2" data-testid="move-refused">
@@ -753,7 +753,7 @@ function MoveDialog({ move, rows, dated, onClose, changed }: { move: { row: Row;
 
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+    <div data-backdrop="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"

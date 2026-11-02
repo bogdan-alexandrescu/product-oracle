@@ -533,10 +533,14 @@ async def _acted_as(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]
 
 
 async def select_tokens(session: AsyncSession, user_id: uuid.UUID) -> list[ApiToken]:
-    """Their active API tokens: a disable revokes them."""
+    """Their active API tokens: a disable revokes them (a removed one is left as it is)."""
     return list(
         await session.scalars(
-            select(ApiToken).where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+            select(ApiToken).where(
+                ApiToken.user_id == user_id,
+                ApiToken.revoked_at.is_(None),
+                ApiToken.removed_at.is_(None),
+            )
         )
     )
 
@@ -969,7 +973,11 @@ async def _left_over(
 
     tokens = list(
         await session.scalars(
-            select(ApiToken.id).where(ApiToken.user_id == user_id, ApiToken.revoked_at.is_(None))
+            select(ApiToken.id).where(
+                ApiToken.user_id == user_id,
+                ApiToken.revoked_at.is_(None),
+                ApiToken.removed_at.is_(None),
+            )
         )
     )
     grants = list(
@@ -1446,7 +1454,11 @@ async def restore_member(session: AsyncSession, principal: "Principal", user_id:
 
 
 async def list_api_tokens(session: AsyncSession) -> list[ApiToken]:
-    return list(await session.scalars(select(ApiToken).order_by(ApiToken.created_at)))
+    return list(
+        await session.scalars(
+            select(ApiToken).where(ApiToken.removed_at.is_(None)).order_by(ApiToken.created_at)
+        )
+    )
 
 
 async def revoke_api_token(
@@ -1509,6 +1521,31 @@ async def revoke_any_token(
     if not found:
         raise MemberError("not_found", f"Token {token_id} not found")
     await tokens.revoke_grant(session, principal, found[0], "revoked by an owner")
+
+
+async def remove_expired_token(
+    session: AsyncSession, principal: "Principal", token_id: uuid.UUID
+) -> None:
+    """qa4-settings-39: remove an expired API token from Settings > API tokens (owners,
+    as Revoke). An active or revoked one is refused. The row is kept, hidden from every
+    list, so the approvals and decisions made with it keep its name."""
+    await _gate(session, principal)
+    token = await session.get(ApiToken, token_id, with_for_update=True)
+    if token is None or token.removed_at is not None:
+        raise MemberError("not_found", f"API token {token_id} not found")
+    now = datetime.now(UTC)
+    if token.revoked_at is not None or token.expires_at is None or token.expires_at > now:
+        raise MemberError("conflict", "Only an expired token can be removed; revoke it instead")
+    token.removed_at = now
+    await session.flush()
+    await audit.record(
+        session,
+        principal,
+        "api_token.remove",
+        "api_token",
+        token.id,
+        {"name": token.name, "user_id": str(token.user_id) if token.user_id else None},
+    )
 
 
 async def token_approvals(

@@ -283,6 +283,22 @@ async def revoke_api_token(token_id: uuid.UUID, principal: Owner, db: TenantDB) 
     await db.commit()
 
 
+@router.post(
+    "/api-tokens/{token_id}/remove",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        404: {"description": "No such API token, or already removed"},
+        409: {"description": "The token is active or revoked, not expired"},
+    },
+)
+async def remove_api_token(token_id: uuid.UUID, principal: Owner, db: TenantDB) -> None:
+    """Remove an expired API token from the list (qa4-settings-39). Owners only, as
+    Revoke; an active or revoked token is refused (409). It no longer works already;
+    what was done with it (approvals, decisions) keeps its name."""
+    await _call(service.remove_expired_token(db, principal, token_id))
+    await db.commit()
+
+
 @router.get(
     "/api-tokens/{token_id}/approvals",
     response_model=list[TokenApprovalOut],

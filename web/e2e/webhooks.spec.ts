@@ -160,7 +160,7 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await stubReceiver(page);
   await openWebhooks(page);
   const deploy = page.getByTestId("webhook-row").filter({ hasText: "Deploy notifier" });
-  await expect(deploy).toContainText("Approver");
+  await expect(deploy).toContainText("Priya Raman");
   await expect(deploy).toContainText("Paused: failing");
   // Last delivery reads how long ago, not a day.
   await expect(deploy).toContainText("✕ 500 · 4 h ago");
@@ -190,7 +190,7 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await inspector.getByLabel("Status").selectOption("failed");
   await expect(inspector.getByTestId("delivery-row")).toHaveCount(2);
   await inspector.getByRole("button", { name: "Take over" }).click();
-  await expect(deploy).toContainText("Admin");
+  await expect(deploy).toContainText("Avery Stone");
   await expect(inspector.getByRole("button", { name: "Take over" })).toHaveCount(0);
 });
 
@@ -223,7 +223,7 @@ test("webhooks: the Inbox rows: failing (Open, Resume), a changed address, and p
   const rows = page.getByTestId("inbox-webhooks");
   const failing = rows.getByRole("row").filter({ hasText: "Webhook Deploy notifier paused: failing for 3 days" });
   await expect(failing).toBeVisible();
-  await expect(rows).toContainText("Approver changed where webhook Deploy notifier sends");
+  await expect(rows).toContainText("Priya Raman changed where webhook Deploy notifier sends");
   await failing.getByRole("button", { name: "Resume" }).click();
   await expect(failing).toHaveCount(0);
   await page.getByRole("tab", { name: /Done/ }).click();
@@ -239,7 +239,7 @@ test("webhooks: an approver's Inbox says an owner paused their webhook", async (
   await scenario(page, WEBHOOKS_SCENARIO);
   await login(page, "approver@example.com");
   await page.goto("/inbox");
-  await expect(page.getByTestId("inbox-webhooks")).toContainText("Admin paused your webhook Release notes");
+  await expect(page.getByTestId("inbox-webhooks")).toContainText("Avery Stone paused your webhook Release notes");
 });
 
 test("webhooks: on a phone the table shows Name and Status, and the sheet stacks", async ({ page }) => {
@@ -322,7 +322,7 @@ test("webhooks: an approver re-points their webhook and the owner's Inbox says s
   await signOut(page);
   await login(page);
   await page.goto("/inbox");
-  const row = page.getByTestId("inbox-webhooks").getByRole("row").filter({ hasText: "Approver changed where webhook Release notes sends" });
+  const row = page.getByTestId("inbox-webhooks").getByRole("row").filter({ hasText: "Priya Raman changed where webhook Release notes sends" });
   await expect(row).toBeVisible();
   await row.getByRole("link", { name: "Open" }).click();
   await expect(page.getByTestId("webhook-inspector")).toContainText("relay.example.test");

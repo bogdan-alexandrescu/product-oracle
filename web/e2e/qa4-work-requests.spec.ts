@@ -161,7 +161,7 @@ test.describe("desktop", () => {
     await expect(inspector(page).getByText("From A shop owner")).toHaveCount(0);
     await page.getByRole("button", { name: "New request" }).filter({ visible: true }).first().click();
     const dialog = page.getByRole("dialog", { name: "New request" });
-    await expect(dialog.getByLabel("Asked by")).toHaveValue("Admin");
+    await expect(dialog.getByLabel("Asked by")).toHaveValue("Avery Stone");
     await expect(dialog.getByText("Requester", { exact: true })).toHaveCount(0);
   });
 

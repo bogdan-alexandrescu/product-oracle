@@ -68,7 +68,7 @@ test("the creator edits every field of a proposal; the inspector and a reload sh
   await expect(ins).toContainText("Hard to reverse");
   await expect(ins).toContainText("Spend incidents drop below 2 a month");
   await expect(ins).toContainText("spend incidents per month: 6 → 2");
-  await expect(ins).toContainText(/Informed[^]*Approver/);
+  await expect(ins).toContainText(/Informed[^]*Priya Raman/);
 
   await page.reload();
   await chip(page, "Any state").click();

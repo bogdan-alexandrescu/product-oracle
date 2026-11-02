@@ -252,7 +252,7 @@ test("qa-work-44: interview rows look clickable; the interview's page has one wa
   const about = page.getByTestId("interview-about");
   await expect(about.getByTestId("interview-link-made")).toBeVisible();
   // Created by names who; the day is the link's, once.
-  await expect(about).toContainText(/Created by\s*Admin\s*Link made/);
+  await expect(about).toContainText(/Created by\s*Avery Stone\s*Link made/);
 });
 
 test.describe("phone", () => {

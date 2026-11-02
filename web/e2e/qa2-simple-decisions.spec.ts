@@ -108,8 +108,8 @@ test.describe("desktop · Decisions", () => {
     await q2.getByRole("button", { name: "Name a decider" }).click();
     const people = q2.getByTestId("question-people");
     await expect(people).toContainText("Only the people who may decide are listed.");
-    await expect(people.getByRole("button", { name: "Approver" })).toBeVisible();
-    await expect(people.getByRole("button", { name: "Viewer" })).toHaveCount(0);
+    await expect(people.getByRole("button", { name: "Priya Raman" })).toBeVisible();
+    await expect(people.getByRole("button", { name: "Lena Ortiz" })).toHaveCount(0);
     await expect(q2.getByRole("button", { name: "Name a decider" })).toHaveCount(0);
     const q3 = row(page, "Q3");
     await q3.getByRole("button", { name: "Ask someone to answer" }).click();
@@ -120,10 +120,10 @@ test.describe("desktop · Decisions", () => {
   test("filters: Clear filters when nothing matches; a filtered meeting says so", async ({ page }) => {
     await decisions(page, "meetings");
     await page.getByRole("combobox", { name: "Goal" }).selectOption({ index: 1 });
-    // Wait for the filter to settle: a filtered meeting says so, or nothing matches (no count read mid-render).
+    // Once the filter settles a filtered meeting says so, or nothing matches: one retried
+    // check, so a re-render between reading which one is drawn and checking it cannot fail it.
     const filtered = page.getByTestId("meeting-group").first().getByTestId("meeting-group-filtered");
-    await expect(filtered.or(page.getByTestId("decisions-empty"))).toBeVisible();
-    if (await filtered.count()) await expect(filtered).toContainText(/of this meeting match(es)?\./);
+    await expect(filtered.or(page.getByTestId("decisions-empty"))).toContainText(/of this meeting match(es)?\.|No decision matches\./);
     await page.getByRole("combobox", { name: "Goal" }).selectOption({ index: 0 });
     await page.getByRole("combobox", { name: "PRD" }).selectOption({ label: "Guided setup" });
     await page.getByRole("combobox", { name: "Meeting" }).selectOption({ index: 1 });

@@ -65,7 +65,7 @@ test("qa-work-38: daily triage is one switch that says its own state", async ({ 
   await expect(daily).not.toBeChecked();
   await expect(page.getByText("Daily triage is off")).toHaveCount(0);
   await daily.click();
-  await expect(page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM PT\s*On, runs as Admin$/ })).toBeChecked();
+  await expect(page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM PT\s*On, runs as Avery Stone$/ })).toBeChecked();
 });
 
 test("qa-work-35, qa-work-36: every row has a checkbox slot and its fields in one labelled order", async ({ page }) => {

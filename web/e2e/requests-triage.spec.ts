@@ -150,11 +150,11 @@ test("daily triage: an owner turns it on and sees who it runs as", async ({ page
   await expect(said).toHaveText("Off");
   await dailySwitch(page).click();
   await expect(dailySwitch(page)).toBeChecked();
-  await expect(said).toHaveText("On, runs as Admin");
+  await expect(said).toHaveText("On, runs as Avery Stone");
   await page.reload();
   await openTriage(page);
   await expect(dailySwitch(page)).toBeChecked();
-  await expect(said).toContainText("runs as Admin");
+  await expect(said).toContainText("runs as Avery Stone");
   await dailySwitch(page).click();
   await expect(dailySwitch(page)).not.toBeChecked();
   await expect(said).toHaveText("Off");

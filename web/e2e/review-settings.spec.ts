@@ -24,13 +24,13 @@ test("an owner sets the decider, mandatory reviewers, required sections and re-r
 
   await sheet.getByRole("button", { name: "Choose the decider" }).click();
   await sheet.getByRole("option", { name: /approver@example\.com/ }).click();
-  await expect(sheet.getByTestId("decider")).toContainText("Approver");
+  await expect(sheet.getByTestId("decider")).toContainText("Priya Raman");
 
   await sheet.getByRole("button", { name: "Add a mandatory reviewer" }).click();
   // Only approvers and owners can approve: a commenter is not offered.
   await expect(sheet.getByRole("option", { name: /commenter@example\.com/ })).toHaveCount(0);
   await sheet.getByRole("option", { name: /admin@example\.com/ }).click();
-  await expect(sheet.getByTestId("mandatory-reviewers")).toContainText("Admin");
+  await expect(sheet.getByTestId("mandatory-reviewers")).toContainText("Avery Stone");
 
   await sheet.getByRole("checkbox", { name: "2. Problem" }).check();
   await sheet.getByRole("checkbox", { name: /Ask for re-review/ }).uncheck();
@@ -41,13 +41,13 @@ test("an owner sets the decider, mandatory reviewers, required sections and re-r
   await page.reload();
   await page.getByRole("button", { name: "Review settings" }).click();
   await expect(sheet).toContainText("Set for this document");
-  await expect(sheet.getByTestId("decider")).toContainText("Approver");
-  await expect(sheet.getByTestId("mandatory-reviewers")).toContainText("Admin");
+  await expect(sheet.getByTestId("decider")).toContainText("Priya Raman");
+  await expect(sheet.getByTestId("mandatory-reviewers")).toContainText("Avery Stone");
   await expect(sheet.getByRole("checkbox", { name: "2. Problem" })).toBeChecked();
   await expect(sheet.getByRole("checkbox", { name: /Ask for re-review/ })).not.toBeChecked();
 
   // A decider can be cleared again.
-  await sheet.getByRole("button", { name: "Remove Approver" }).click();
+  await sheet.getByRole("button", { name: "Remove Priya Raman" }).click();
   await sheet.getByRole("button", { name: "Save review settings" }).click();
   await expect(sheet).toHaveCount(0);
   await page.getByRole("button", { name: "Review settings", exact: true }).click();
@@ -61,7 +61,7 @@ test("an approver sets a section's owner, reviewers and due date in place", asyn
   const panel = page.getByTestId("section-assignments");
   // Seeded: goal-trace is owned by the signed-in member, due Oct 24.
   const seeded = panel.locator('[data-section-key="goal-trace"]');
-  await expect(seeded).toContainText("Owner Admin");
+  await expect(seeded).toContainText("Owner Avery Stone");
   await expect(seeded).toContainText("Due Oct 24");
 
   // Sections with no owner fold into one line (qa-docs-45); Assign lists them.
@@ -75,12 +75,12 @@ test("an approver sets a section's owner, reviewers and due date in place", asyn
   await row.getByRole("option", { name: /approver@example\.com/ }).click();
   await row.getByLabel("Due date").fill("2026-11-02");
   await row.getByRole("button", { name: "Save" }).click();
-  await expect(row).toContainText("Owner Commenter");
-  await expect(row).toContainText("Approver");
+  await expect(row).toContainText("Owner Theo Brandt");
+  await expect(row).toContainText("Priya Raman");
   await expect(row).toContainText("Due Nov 2");
 
   await page.reload();
-  await expect(panel.locator('[data-section-key="problem"]')).toContainText("Owner Commenter");
+  await expect(panel.locator('[data-section-key="problem"]')).toContainText("Owner Theo Brandt");
   await expect(panel.locator('[data-section-key="problem"]')).toContainText("Due Nov 2");
 });
 
@@ -125,7 +125,7 @@ test("a viewer reads the review setup with no controls they can never use (#370 
   await sheet.getByRole("button", { name: "Close Review settings" }).click();
 
   const sections = page.getByTestId("section-assignments");
-  await expect(sections.locator('[data-section-key="goal-trace"]')).toContainText("Owner Admin");
+  await expect(sections.locator('[data-section-key="goal-trace"]')).toContainText("Owner Avery Stone");
   await expect(sections.getByTestId("review-reason")).toHaveCount(0);
   await expect(sections.getByRole("button", { name: /^Edit owner and reviewers of / })).toHaveCount(0);
   const campaigns = page.getByTestId("campaigns");
@@ -201,7 +201,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto(DOC);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const sections = page.getByTestId("section-assignments");
-    await expect(sections.locator('[data-section-key="goal-trace"]')).toContainText("Owner Admin");
+    await expect(sections.locator('[data-section-key="goal-trace"]')).toContainText("Owner Avery Stone");
     await expect(page.getByTestId("campaigns")).toContainText("Company-wide feedback");
     // Sections with no owner fold into one line (qa-docs-45); Assign lists them.
     await sections.getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
@@ -251,20 +251,20 @@ test("after a 409 on a section's assignment the form shows the other person's ch
   await theirs.getByRole("button", { name: "Choose the owner" }).click();
   await theirs.getByRole("option", { name: /approver@example\.com/ }).click();
   await theirs.getByRole("button", { name: "Save" }).click();
-  await expect(theirs).toContainText("Owner Approver");
+  await expect(theirs).toContainText("Owner Priya Raman");
 
   await mine.getByRole("button", { name: "Save" }).click();
   await expect(mine).toContainText("Someone else changed this");
   // The form now holds what is saved, and says what changed.
-  await expect(mine.getByRole("button", { name: "Remove Approver" })).toBeVisible();
-  await expect(mine.getByRole("button", { name: "Remove Commenter" })).toHaveCount(0);
-  await expect(mine.getByTestId("assignment-changed")).toContainText("Owner: Approver (was No owner)");
+  await expect(mine.getByRole("button", { name: "Remove Priya Raman" })).toBeVisible();
+  await expect(mine.getByRole("button", { name: "Remove Theo Brandt" })).toHaveCount(0);
+  await expect(mine.getByTestId("assignment-changed")).toContainText("Owner: Priya Raman (was No owner)");
 
   // Saving again keeps the other person's owner.
   await mine.getByRole("button", { name: "Save" }).click();
-  await expect(mine).toContainText("Owner Approver");
+  await expect(mine).toContainText("Owner Priya Raman");
   await other.reload();
-  await expect(other.getByTestId("section-assignments").locator('[data-section-key="problem"]')).toContainText("Owner Approver");
+  await expect(other.getByTestId("section-assignments").locator('[data-section-key="problem"]')).toContainText("Owner Priya Raman");
 });
 
 test("a double click on Close closes the campaign once, with no conflict", async ({ page }) => {

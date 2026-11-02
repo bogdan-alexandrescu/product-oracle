@@ -163,15 +163,15 @@ test("people are named: the approver menu and the inspector's People read names"
   await login(page);
   await page.goto("/company/decisions?state=all");
   await row(page, CAPS).click();
-  await expect(peopleRow(page, "Approver")).toContainText("Approver");
+  await expect(peopleRow(page, "Approver")).toContainText("Priya Raman");
   await expect(peopleRow(page, "Approver")).not.toContainText("@");
-  await expect(peopleRow(page, "Contributors")).toContainText("Commenter");
+  await expect(peopleRow(page, "Contributors")).toContainText("Theo Brandt");
   await expect(peopleRow(page, "Contributors")).not.toContainText("@");
 
   await page.getByRole("button", { name: "Propose decision" }).click();
   const dialog = page.getByRole("dialog", { name: "Propose decision" });
-  await expect(dialog.getByLabel("Approver", { exact: true }).locator("option", { hasText: APPROVER })).toHaveText(`Approver · ${APPROVER}`);
-  await expect(dialog.getByRole("group", { name: "Contributors" })).toContainText("Commenter");
+  await expect(dialog.getByLabel("Approver", { exact: true }).locator("option", { hasText: APPROVER })).toHaveText(`Priya Raman · ${APPROVER}`);
+  await expect(dialog.getByRole("group", { name: "Contributors" })).toContainText("Theo Brandt");
 });
 
 // prod-3, qa-company-22: a decision the owner took is driven by the owner, its About names the
@@ -181,7 +181,7 @@ test("a decision the owner took: Driver is the owner, About names the document, 
   await page.goto("/company/decisions?state=all");
   await row(page, PUBLISH).click();
   await expect(inspector(page)).toContainText(PUBLISH);
-  await expect(peopleRow(page, "Driver")).toContainText("Admin");
+  await expect(peopleRow(page, "Driver")).toContainText("Avery Stone");
   await expect(peopleRow(page, "Driver")).not.toContainText("Oracle");
   await expect(
     inspector(page).getByRole("link", {
@@ -245,4 +245,20 @@ test.describe("phone", () => {
     await expect(approver).toBeInViewport();
     await expect(approver).toHaveAttribute("aria-invalid", "true");
   });
+});
+
+// qa5-mock-people review: a member whose name an owner clears reads by their email again, as the API names them.
+test("people are named: a cleared name reads by the email, not the old name", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/members");
+  await page.getByTestId("member-row").filter({ hasText: APPROVER }).getByTestId("member-open").click();
+  const member = page.getByTestId("member-inspector");
+  await member.getByLabel("Name", { exact: true }).fill("");
+  await member.getByRole("button", { name: "Save" }).click();
+  await expect(member.getByRole("button", { name: "Saved" })).toBeVisible();
+
+  await page.goto("/company/decisions?state=all");
+  await row(page, CAPS).click();
+  await expect(peopleRow(page, "Approver")).toHaveText(/^Approver\s*Approver$/);
+  await expect(peopleRow(page, "Approver")).not.toContainText("Priya Raman");
 });

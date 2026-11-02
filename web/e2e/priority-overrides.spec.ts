@@ -78,7 +78,7 @@ test("move up with a reason: the row moves, shows who moved it and Oracle's rank
   await expect(s).toBeHidden();
 
   await expectOrder(page, ["F-5", "F-1", "F-2", "F-7", "F-8", "F-4", "F-3", "F-6"]);
-  await expect(row.getByTestId("override-chip")).toHaveText("Moved by Approver");
+  await expect(row.getByTestId("override-chip")).toHaveText("Moved by Priya Raman");
   await expect(row.getByTestId("formula-rank")).toHaveText("3");
   await expect(page.getByRole("columnheader", { name: "Oracle #" })).toBeVisible();
 });
@@ -106,7 +106,7 @@ test("pushback on a pin: take Oracle's advice, then keep my change", async ({ pa
   await expect(sheet(page)).toBeHidden();
   await expectOrder(page, ["F-6", "F-5", "F-2", "F-1", "F-7", "F-8", "F-4", "F-3"]);
   await expect(page.getByTestId("priority-row-F-6").getByTestId("override-chip")).toHaveText(
-    "Pinned #1 by Approver",
+    "Pinned #1 by Priya Raman",
   );
   const log = page.getByTestId("change-log");
   await expect(log.getByRole("listitem")).toHaveCount(1);
@@ -124,7 +124,7 @@ test("remove my change in the inspector; the log keeps it as removed", async ({ 
   await page.getByTestId("priority-row-F-7").getByRole("button", { name: "Bulk export" }).click();
   const change = page.getByTestId("your-change");
   await expect(change).toContainText("Support load doubles without it");
-  await expect(change).toContainText("Approver");
+  await expect(change).toContainText("Priya Raman");
   await change.getByRole("button", { name: "Remove my change" }).click();
   await expectOrder(page, FORMULA);
   await expect(page.getByTestId("priority-row-F-7").getByTestId("override-chip")).toHaveCount(0);
@@ -165,7 +165,7 @@ test("a commenter sees the changes but cannot move or pin", async ({ page }) => 
   await login(page, "commenter@example.com");
   await page.goto("/priorities");
   const row = page.getByTestId("priority-row-F-1");
-  await expect(row.getByTestId("override-chip")).toHaveText("Moved by Approver");
+  await expect(row.getByTestId("override-chip")).toHaveText("Moved by Priya Raman");
   await row.hover();
   await expect(page.getByRole("button", { name: /^Move (up|down)$/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "More actions" })).toHaveCount(0);

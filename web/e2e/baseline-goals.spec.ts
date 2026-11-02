@@ -42,7 +42,7 @@ test("goals table: typed target, horizon and owner; a Not measurable chip on a g
   await expect(activation.locator('[data-attr="target"]')).toHaveText("≥ 45%");
   await expect(activation.locator('[data-attr="target"]')).toHaveAttribute("title", "At least 45%");
   await expect(activation.locator('[data-attr="horizon"]')).toHaveText("Short · Dec 31");
-  await expect(activation.locator('[data-attr="owner"]')).toHaveText("Approver");
+  await expect(activation.locator('[data-attr="owner"]')).toHaveText("Priya Raman");
   await expect(activation.locator('[data-attr="owner"]')).toHaveAttribute("title", "approver@example.com");
   await expect(activation.getByTestId("not-measurable")).toHaveCount(0);
 
@@ -91,13 +91,13 @@ test("owner picker: pick a member, save, and the table shows their name", async 
   const form = await editGoal(page, "g.paid-conversion", "Grow paid conversion");
   await form.getByLabel("Owner", { exact: true }).fill("comm");
   const options = form.getByRole("listbox", { name: "Members" }).getByRole("option");
-  await expect(options).toHaveText([/Commenter/]);
+  await expect(options).toHaveText([/Theo Brandt/]);
   await options.first().click();
-  await expect(form.getByTestId("owner-picked")).toContainText("Commenter");
+  await expect(form.getByTestId("owner-picked")).toContainText("Theo Brandt");
   await form.getByRole("button", { name: "Save" }).click();
   await expect(form).toHaveCount(0);
   const paid = page.getByTestId("goal-g.paid-conversion");
-  await expect(paid.locator('[data-attr="owner"]')).toHaveText("Commenter");
+  await expect(paid.locator('[data-attr="owner"]')).toHaveText("Theo Brandt");
   await expect(paid.getByTestId("not-measurable")).toHaveCount(0);
 });
 

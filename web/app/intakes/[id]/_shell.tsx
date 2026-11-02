@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
@@ -64,6 +64,7 @@ type Tab = "questions" | "gaps" | "proposals" | "findings";
 export function BeforeDrafting({ id }: { id: string }) {
   const { me, role, can } = useMe();
   const router = useRouter();
+  const pathname = usePathname();
   const phone = useIsPhone();
   const [version, setVersion] = useState(0);
   const [tab, setTab] = useState<Tab>("questions");
@@ -157,8 +158,11 @@ export function BeforeDrafting({ id }: { id: string }) {
       </Page>
     );
   }
-  if (!s) {
-    return <Page>{summaryQ.error ? <ErrorNote>{summaryQ.error}</ErrorNote> : <Loading />}</Page>;
+  // walk-brief: the router may keep this page up a moment under another brief's address;
+  // it never shows its brief's title and counts there.
+  const elsewhere = pathname.startsWith("/intakes/") && pathname.split("/")[2] !== id;
+  if (!s || elsewhere || s.intake.id !== id) {
+    return <Page>{summaryQ.error && !elsewhere ? <ErrorNote>{summaryQ.error}</ErrorNote> : <Loading />}</Page>;
   }
 
   const gate = s.readiness;

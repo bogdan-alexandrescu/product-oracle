@@ -1692,7 +1692,7 @@ export function recommendRoadmap(a: RoadmapAnswers, confirmed: number) {
 
 const CONFIRMED_GOALS = new Set(FEATURES.flatMap((f) => f.goals.map((g) => g.goal))).size;
 const DEFAULT_TEMPLATE: Record<Kind, string> = { prd: "oracle-default", roadmap: "now-next-later" };
-const DEFAULT_THEME: Record<Kind, string> = { prd: "clean-document", roadmap: "roadmap-board" };
+export const DEFAULT_THEME: Record<Kind, string> = { prd: "clean-document", roadmap: "roadmap-board" };
 
 function recommend(st: LaneFState, input: Schemas["RecommendIn"]): Response {
   const kind = input.kind;
@@ -2051,6 +2051,7 @@ export async function laneF(
           note: input.note ?? null,
           feature_count: r.features.length,
           top: r.features.slice(0, 5).map((f) => f.key),
+          top_titles: r.features.slice(0, 5).map((f) => f.title),
           status: "saved",
           run_id: null,
           document: null,

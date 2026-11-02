@@ -59,7 +59,7 @@ test("an approver researches a question and Oracle's answer comes back into the 
   await question(page).getByRole("button", { name: "Research this" }).click();
   await thread(page).getByTestId("research-confirm").getByRole("button", { name: "Start research" }).click();
   const line = thread(page).getByTestId("research-line");
-  await expect(line).toContainText("Approver asked Oracle to research this");
+  await expect(line).toContainText("Priya Raman asked Oracle to research this");
   await expect(line).toContainText("Oracle is researching…");
   await expect(line.getByRole("link", { name: "See the run" })).toHaveAttribute("href", /^\/runs\//);
   await expect(question(page).getByRole("button", { name: "Research this" })).toBeHidden();

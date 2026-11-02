@@ -182,7 +182,19 @@ function revokeConsequences(t: ApiToken): Consequence[] {
   ];
 }
 
-/** Settings > API tokens (owners): every credential of the company, filter by member and kind, revoke. */
+/** qa4-settings-39: an expired API token (personal or service) may be removed from the list; run tokens and MCP clients stay. */
+const removable = (t: ApiToken) => tokenState(t) === "expired" && (t.kind === "personal" || t.kind === "service");
+
+/** What removing an expired API token does, for the confirm dialog. */
+function removeConsequences(t: ApiToken): Consequence[] {
+  return [
+    { icon: "lock", text: `It stopped working ${formatDate(t.expires_at!)}; removing it changes nothing it can do.` },
+    { icon: "check", text: "Approvals and decisions made with it keep its name." },
+    { icon: "doc", text: "It leaves this list and its member's My account for good." },
+  ];
+}
+
+/** Settings > API tokens (owners): every credential of the company, filter by member and kind, revoke, remove an expired one. */
 export function ApiTokensSettings({ initialMember }: { initialMember: string | null }) {
   const { can } = useMe();
   // #370: the page reads every token (GET /v1/api-tokens); Settings never opens it for anyone else.
@@ -203,6 +215,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
     ),
   );
   const [confirming, setConfirming] = useState<ApiToken | null>(null);
+  const [removing, setRemoving] = useState<ApiToken | null>(null);
   const [pending, setPending] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const acts = useActed();
@@ -216,6 +229,21 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       tokensQ.setData((prev) => prev?.map((x) => (x.id === t.id ? { ...x, revoked_at: x.revoked_at ?? at } : x)));
       setConfirming(null);
       acts.mark({ key: t.id, outcome: "Revoked" });
+    } catch (e) {
+      setConfirmError(errorMessage(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function remove(t: ApiToken) {
+    setPending(true);
+    setConfirmError(null);
+    try {
+      await unwrap(api.POST("/v1/api-tokens/{token_id}/remove", { params: { path: { token_id: t.id } } }));
+      setRemoving(null);
+      // The row shows Removed, then leaves the list.
+      acts.mark({ key: t.id, outcome: "Removed" }, () => tokensQ.setData((prev) => prev?.filter((x) => x.id !== t.id)));
     } catch (e) {
       setConfirmError(errorMessage(e));
     } finally {
@@ -277,6 +305,16 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
             }}
           >
             Revoke
+          </Button>
+        ) : removable(t) ? (
+          <Button
+            aria-label={`Remove ${t.name}`}
+            onClick={() => {
+              setConfirmError(null);
+              setRemoving(t);
+            }}
+          >
+            Remove
           </Button>
         ) : null,
     },
@@ -379,6 +417,19 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
         onClose={() => setConfirming(null)}
         onConfirm={() => confirming && revoke(confirming)}
         consequences={confirming ? revokeConsequences(confirming) : []}
+      />
+      <ConfirmDialog
+        open={!!removing}
+        title="Remove this expired token?"
+        subject={removing ? `${removing.name} · ${removing.owner_email ?? "no one"}` : undefined}
+        testId="remove-dialog"
+        confirmLabel="Remove"
+        pendingLabel="Removing…"
+        pending={pending}
+        error={confirmError}
+        onClose={() => setRemoving(null)}
+        onConfirm={() => removing && remove(removing)}
+        consequences={removing ? removeConsequences(removing) : []}
       />
     </>
   );

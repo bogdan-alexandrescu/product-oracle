@@ -99,7 +99,7 @@ test("baseline: the feature drawer shows links, evidence and the lock", async ({
   await expect(d.getByRole("list", { name: "Blocks" })).toHaveText(/Saved carts/);
 
   // Lock: who and when, with Unlock for approvers.
-  await expect(d.getByTestId("lock-note")).toContainText("Locked by Approver");
+  await expect(d.getByTestId("lock-note")).toContainText("Locked by Priya Raman");
   await expect(d.getByTestId("lock-note")).toContainText("Oct 15");
   await expect(d.getByRole("button", { name: "Unlock" })).toBeVisible();
 
@@ -497,7 +497,7 @@ test("baseline: each proposal says who made it", async ({ page, browser }) => {
   await openProposals(page);
   const rows = page.getByTestId("proposal");
   const invites = rows.filter({ hasText: "Team invites" }).getByTestId("proposal-by");
-  await expect(invites).toHaveText(/^Commenter · Oct \d+/);
+  await expect(invites).toHaveText(/^Theo Brandt · Oct \d+/);
   await expect(invites).toHaveAttribute("title", "commenter@example.com");
   await expect(rows.filter({ hasText: "Guided setup" }).getByRole("link", { name: `From run · ${RUN_LABEL}` })).toBeVisible();
   expect(await page.getByRole("list", { name: "Proposals" }).innerText()).not.toContain("user:");

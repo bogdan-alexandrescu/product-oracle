@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { Button, Chip, Inspector, InspectorSection, Page, PageHeader, SegmentedControl, Split } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
@@ -70,6 +70,17 @@ export function EngReview({
   // Answers being typed, by feature and question: kept here, above the inspector, so a verdict
   // or size saved meanwhile (or another feature selected) never empties a box being typed in.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // The decision bar's height: the sticky inspector stops above it and scrolls on its own, so
+  // a Feasibility button is never under the bar (a click there would land on the bar).
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barH, setBarH] = useState(72);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBarH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const pending = cp.status === "pending";
   const stages = pending && review.can_stage;
   // Choices from whoever does not stage are suggestions a decider stages (AC6). Train N (owner
@@ -179,101 +190,106 @@ export function EngReview({
           No code map of this run holds some cited ids, and the briefs do not say which repository they come from.
         </p>
       )}
-      <Split
-        inspector={
-          feature && (
-            <BriefInspector
-              key={feature.key}
-              feature={feature}
-              codeMap={check.code_map_used}
-              titleOf={(key) => check.features.find((x) => x.key === key)?.title ?? key.replace(/^f\./, "").replace(/[-_]+/g, " ")}
-              acts={actionsOf(review, feature.key)}
-              stages={stages}
-              suggests={suggests}
-              busy={busy}
-              onAct={act}
-              onStage={stage}
-              drafts={drafts}
-              onDraft={(qid, text) => setDrafts((all) => ({ ...all, [`${feature.key}:${qid}`]: text }))}
-              onAsk={(text) => {
-                setNote((n) => (n.trim() ? `${n.trim()}\n${text}` : text));
-                setSending(true);
-              }}
-            />
-          )
-        }
-      >
-        <section aria-label="Features" className="min-w-0 rounded-panel border border-line bg-surface">
-          <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_minmax(0,1.2fr)_64px_minmax(0,1fr)_minmax(0,1.4fr)] gap-3 border-b border-line px-4 py-2 text-[13px] font-semibold tracking-[0.02em] text-text2 max-[900px]:hidden">
-            <span>Feature</span>
-            <span>Approach</span>
-            <span>Feasibility</span>
-            <span>Size</span>
-            <span>Questions</span>
-            <span>Needs you because</span>
-          </div>
-          <ul>
-            {check.features.map((f) => {
-              const acts = actionsOf(review, f.key);
-              const v = verdictOf(acts.filter((a) => a.state === "staged"));
-              const size = (edit(acts.filter((a) => a.state === "staged"), "size")?.value as string | undefined) ?? f.size;
-              const blocking = f.questions.filter((q) => q.blocking).length;
-              const reasons = reasonsOf(f.key);
-              const confirm = [
-                !check.code_map_used ? NO_CODE_MAP : null,
-                f.depends_on.some((d) => notFeasible.has(d)) ? "Depends on a feature judged not feasible" : null,
-              ].filter((x): x is string => !!x);
-              return (
-                <li
-                  key={f.key}
-                  data-testid="brief-row"
-                  data-feature={f.key}
-                  aria-current={f.key === selected ? "true" : undefined}
-                  className={`grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_minmax(0,1.2fr)_64px_minmax(0,1fr)_minmax(0,1.4fr)] items-start gap-3 border-b border-line px-4 py-3 last:border-b-0 max-[900px]:grid-cols-1 max-[900px]:gap-1.5 max-[600px]:m-2 max-[600px]:rounded-panel max-[600px]:border ${
-                    f.key === selected ? "bg-accent-soft" : ""
-                  }`}
-                >
-                  <button type="button" className="min-w-0 text-left font-semibold hover:underline" onClick={() => setSelected(f.key)}>
-                    {/* qa4-work-53: the feature's name only; its key is never shown. */}
-                    {f.title}
-                  </button>
-                  <span className="min-w-0 text-text2">{f.approach}</span>
-                  <span data-testid="brief-verdict">
-                    {v ? (
-                      <Chip kind={VERDICT_KIND[v.verdict]} wrap>
-                        {VERDICT_WORDS[v.verdict]}
-                      </Chip>
-                    ) : (
-                      <span className="text-sm text-text2">Not decided</span>
-                    )}
-                  </span>
-                  <span className="tnum font-semibold" data-testid="brief-size">
-                    <span className="mr-1 font-normal text-text2 min-[901px]:sr-only">Size</span>
-                    {size.toUpperCase()}
-                  </span>
-                  <span className="text-sm" data-testid="brief-questions">
-                    {f.questions.length ? `${f.questions.length} open${blocking ? ` · ${blocking} blocking` : ""}` : "None"}
-                  </span>
-                  <span className="flex min-w-0 flex-wrap gap-1.5" data-testid="brief-reasons">
-                    {reasons.map((x, i) => (
-                      <Chip key={`${x.code}-${i}`} kind="crit" wrap>
-                        {x.label}
-                      </Chip>
-                    ))}
-                    {confirm.map((c) => (
-                      <Chip key={c} kind="warn" wrap>
-                        {c}
-                      </Chip>
-                    ))}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      </Split>
+      <div style={{ "--bar-h": `${barH}px` } as CSSProperties}>
+        <Split
+          inspector={
+            feature && (
+              <BriefInspector
+                key={feature.key}
+                feature={feature}
+                codeMap={check.code_map_used}
+                titleOf={(key) => check.features.find((x) => x.key === key)?.title ?? key.replace(/^f\./, "").replace(/[-_]+/g, " ")}
+                acts={actionsOf(review, feature.key)}
+                stages={stages}
+                suggests={suggests}
+                busy={busy}
+                onAct={act}
+                onStage={stage}
+                drafts={drafts}
+                onDraft={(qid, text) => setDrafts((all) => ({ ...all, [`${feature.key}:${qid}`]: text }))}
+                onAsk={(text) => {
+                  setNote((n) => (n.trim() ? `${n.trim()}\n${text}` : text));
+                  setSending(true);
+                }}
+              />
+            )
+          }
+        >
+          <section aria-label="Features" className="min-w-0 rounded-panel border border-line bg-surface">
+            <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_minmax(0,1.2fr)_64px_minmax(0,1fr)_minmax(0,1.4fr)] gap-3 border-b border-line px-4 py-2 text-[13px] font-semibold tracking-[0.02em] text-text2 max-[900px]:hidden">
+              <span>Feature</span>
+              <span>Approach</span>
+              <span>Feasibility</span>
+              <span>Size</span>
+              <span>Questions</span>
+              <span>Needs you because</span>
+            </div>
+            <ul>
+              {check.features.map((f) => {
+                const acts = actionsOf(review, f.key);
+                const v = verdictOf(acts.filter((a) => a.state === "staged"));
+                const size = (edit(acts.filter((a) => a.state === "staged"), "size")?.value as string | undefined) ?? f.size;
+                // A question with a staged answer is answered; only the rest are open.
+                const unanswered = f.questions.filter((q) => !acts.some((a) => a.state === "staged" && a.kind === "edit" && a.field === `answer:${q.id}`));
+                const blocking = unanswered.filter((q) => q.blocking).length;
+                const reasons = reasonsOf(f.key);
+                const confirm = [
+                  !check.code_map_used ? NO_CODE_MAP : null,
+                  f.depends_on.some((d) => notFeasible.has(d)) ? "Depends on a feature judged not feasible" : null,
+                ].filter((x): x is string => !!x);
+                return (
+                  <li
+                    key={f.key}
+                    data-testid="brief-row"
+                    data-feature={f.key}
+                    aria-current={f.key === selected ? "true" : undefined}
+                    className={`grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_minmax(0,1.2fr)_64px_minmax(0,1fr)_minmax(0,1.4fr)] items-start gap-3 border-b border-line px-4 py-3 last:border-b-0 max-[900px]:grid-cols-1 max-[900px]:gap-1.5 max-[600px]:m-2 max-[600px]:rounded-panel max-[600px]:border ${
+                      f.key === selected ? "bg-accent-soft" : ""
+                    }`}
+                  >
+                    <button type="button" className="min-w-0 text-left font-semibold hover:underline" onClick={() => setSelected(f.key)}>
+                      {/* qa4-work-53: the feature's name only; its key is never shown. */}
+                      {f.title}
+                    </button>
+                    <span className="min-w-0 text-text2">{f.approach}</span>
+                    <span data-testid="brief-verdict">
+                      {v ? (
+                        <Chip kind={VERDICT_KIND[v.verdict]} wrap>
+                          {VERDICT_WORDS[v.verdict]}
+                        </Chip>
+                      ) : (
+                        <span className="text-sm text-text2">Not decided</span>
+                      )}
+                    </span>
+                    <span className="tnum font-semibold" data-testid="brief-size">
+                      <span className="mr-1 font-normal text-text2 min-[901px]:sr-only">Size</span>
+                      {size.toUpperCase()}
+                    </span>
+                    <span className="text-sm" data-testid="brief-questions">
+                      {!f.questions.length ? "None" : unanswered.length ? `${unanswered.length} open${blocking ? ` · ${blocking} blocking` : ""}` : "Answered"}
+                    </span>
+                    <span className="flex min-w-0 flex-wrap gap-1.5" data-testid="brief-reasons">
+                      {reasons.map((x, i) => (
+                        <Chip key={`${x.code}-${i}`} kind="crit" wrap>
+                          {x.label}
+                        </Chip>
+                      ))}
+                      {confirm.map((c) => (
+                        <Chip key={c} kind="warn" wrap>
+                          {c}
+                        </Chip>
+                      ))}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        </Split>
+      </div>
 
       <div
+        ref={barRef}
         data-testid="decision-bar"
         className="sticky bottom-0 z-30 -mx-6 mt-4 border-t border-line bg-surface px-6 py-3 shadow-tip max-[600px]:bottom-[68px] max-[600px]:-mx-2.5 max-[600px]:px-3"
       >
@@ -373,7 +389,13 @@ function BriefInspector({
   };
 
   return (
-    <Inspector eyebrow="Feature · selected" title={f.title} label={`Brief: ${f.title}`} testId="brief-inspector">
+    <Inspector
+      eyebrow="Feature · selected"
+      title={f.title}
+      label={`Brief: ${f.title}`}
+      testId="brief-inspector"
+      className="xl:max-h-[calc(100dvh_-_var(--bar-h,72px)_-_2rem)] xl:overflow-y-auto xl:overscroll-contain"
+    >
       <InspectorSection label="Approach">
         <p>{f.approach}</p>
         <p className="mt-1.5 text-sm text-text2">{codeMap ? "Oracle read the code for this approach" : NO_CODE_MAP}</p>

@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 
-import { displayName } from "../lib/names";
+import { mockName } from "../lib/api/mock/people";
 
 import { ADMIN, login } from "./helpers";
 
@@ -137,10 +137,10 @@ test("qa-company-26/28: names first in the Owner picker and attendees; Length an
   await openRituals(page);
   await ritualRow(page, "Weekly goals check-in").click();
   const panel = inspector(page);
-  const owner = displayName(ADMIN.email);
+  const owner = mockName(ADMIN.email);
   await expect(ritualRow(page, "Weekly goals check-in")).toContainText(owner);
   await expect(panel.getByLabel("Owner").locator("option:checked")).toHaveText(`${owner} · ${ADMIN.email}`);
-  await expect(panel.getByRole("group", { name: "Attendees" })).toContainText(displayName(APPROVER));
+  await expect(panel.getByRole("group", { name: "Attendees" })).toContainText(mockName(APPROVER));
   const length = await panel.getByLabel("Length (minutes)").boundingBox();
   const lead = await panel.getByLabel("Pre-read lead time (hours)").boundingBox();
   expect(length && lead).toBeTruthy();

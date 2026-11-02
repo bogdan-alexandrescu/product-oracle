@@ -178,7 +178,7 @@ async def test_prd_codes_on_priorities(client):
         out = await w.read(client, who)
         codes = {r["code"]: r["short_code"] for r in out["rows"]}
         assert codes["delivery-integrity"] == "F-06", who
-        assert codes["pay-1"] == "LE", who  # no PRD code: initials
+        assert codes["pay-1"] == "PA1", who  # no PRD code: its name's letters (Pay 1)
 
 
 async def test_item_card_names_the_prd_section(client):
@@ -202,6 +202,34 @@ async def test_item_card_names_the_prd_section(client):
     assert "From Guards Prd (draft 1): Other." in reasons["other"]
     assert service.prd_section_label("f-06", None) == "F-06"
     assert service.prd_section_label("f-06", "Loop guards") == "F-06 Loop guards"
+
+
+async def test_roadmap_codes_never_read_shown_names(client, monkeypatch):
+    """protects=review minor of codes-from-names: the roadmap shows only real codes (F-12,
+    a PRD's F-06), never a name's letters, so a roadmap load skips the shown-name lookup
+    (four queries) that only Priorities' letters need; fails_when=a roadmap load reads shown
+    names, or a feature's PRD code drops off its card; no_claim=Priorities' codes."""
+    from oracle.simple import priorities
+
+    async with tenant_session((ctx := await make_people()).tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("guards")
+        f = await seed.entity("feature", "delivery-integrity", effort=1)
+        g = await seed.entity("feature", "setup-ideas", effort=1)
+        await seed.item(rv, pv, "delivery-integrity", feature_id=f.id, prd_section_key="f-06")
+        await seed.item(rv, pv, "setup-ideas", feature_id=g.id, position=1)
+        await s.commit()
+
+    async def no_names(*_a, **_k):
+        raise AssertionError("a roadmap load read shown names")
+
+    monkeypatch.setattr(priorities, "_shown_names", no_names)
+    r = await client.get("/v1/simple/roadmap", headers=ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    assert {i["key"]: i["code"] for i in r.json()["items"]} == {
+        "delivery-integrity": "F-06",
+        "setup-ideas": None,
+    }
 
 
 # --------------------------------------------------------------------------- attendees

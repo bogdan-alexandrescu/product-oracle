@@ -38,7 +38,7 @@ test("a commenter suggests; the approver stages the suggestion", async ({ page }
   await login(page, "approver@example.com");
   await page.goto(SCREEN);
   const suggested = row(page, "slack-alerts").getByTestId("suggested-by");
-  await expect(suggested).toHaveText(/Suggested by Commenter: Remove date/);
+  await expect(suggested).toHaveText(/Suggested by Theo Brandt: Remove date/);
   await expect(row(page, "slack-alerts").getByRole("button", { name: "Dismiss" })).toBeVisible();
   await row(page, "slack-alerts").getByRole("button", { name: "Stage" }).click();
   await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/✓ Date removed/);
@@ -70,7 +70,7 @@ test("an approver's open review shows a commenter's suggestion within one poll",
   await expect(theirs.getByTestId("suggested-by")).toHaveText(/Suggested by you/);
 
   // The approver's page was never reloaded: the next poll brings the suggestion.
-  await expect(mine.getByTestId("suggested-by")).toHaveText(/Suggested by Commenter: Remove date/, { timeout: 12_000 });
+  await expect(mine.getByTestId("suggested-by")).toHaveText(/Suggested by Theo Brandt: Remove date/, { timeout: 12_000 });
   await expect(mine.getByRole("button", { name: "Dismiss" })).toBeVisible();
   await mine.getByRole("button", { name: "Stage" }).click();
   await expect(mine.getByTestId("row-done")).toHaveText(/✓ Date removed/);
@@ -91,11 +91,11 @@ test("Ask a teammate: the row shows who was asked; the member answers from the I
   await row(page, "cost-forecast").getByRole("button", { name: "More actions for Cost forecast" }).click();
   await page.getByRole("menuitem", { name: "Ask a teammate…" }).click();
   const form = page.getByTestId("form-ask");
-  await form.getByLabel("Ask", { exact: true }).selectOption({ label: "Commenter" });
+  await form.getByLabel("Ask", { exact: true }).selectOption({ label: "Theo Brandt" });
   await form.getByLabel("Question").fill("Can the forecast wait for Next?");
   await form.getByRole("button", { name: "Ask", exact: true }).click();
-  await expect(row(page, "cost-forecast").getByTestId("asked-chip")).toHaveText("Asked Commenter");
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("1 waiting on Commenter");
+  await expect(row(page, "cost-forecast").getByTestId("asked-chip")).toHaveText("Asked Theo Brandt");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("1 waiting on Theo Brandt");
 
   // The asked member's Inbox: the existing questions row, answered in place.
   await signOut(page);

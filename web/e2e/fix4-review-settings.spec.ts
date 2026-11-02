@@ -22,7 +22,7 @@ test("pricing owner: with none chosen, the hint names who decides instead of ask
   await page.goto("/settings/company");
   const pricing = page.getByTestId("pricing-owner-panel");
   await expect(pricing.getByRole("button", { name: "Save" })).toBeDisabled();
-  await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveText("Not chosen yet: the earliest owner, Admin, decides until you pick someone else.");
+  await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveText("Not chosen yet: the earliest owner, Avery Stone, decides until you pick someone else.");
   // Once chosen, the hint asks for another owner.
   await pricing.getByRole("combobox", { name: "Decides prices" }).selectOption({ label: "Riley Park" });
   await pricing.getByRole("button", { name: "Save" }).click();
@@ -36,7 +36,7 @@ test("pricing owner: the only owner is told how to choose someone else", async (
   await page.goto("/settings/company");
   const pricing = page.getByTestId("pricing-owner-panel");
   await expect(pricing.getByRole("button", { name: "Save" })).toBeDisabled();
-  await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveText("Admin is the only owner: make another member an owner to choose someone else.");
+  await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveText("Avery Stone is the only owner: make another member an owner to choose someone else.");
 });
 
 test("Connections: the Slack card says what the app does once installed, beside Not installed", async ({ page }) => {
@@ -116,7 +116,7 @@ test("qa-settings-37: a tab a role cannot open names the owners and says where i
   await page.goto("/settings/trash");
   const gate = page.getByTestId("not-for-role");
   await expect(gate).toContainText("Not available for your role");
-  await expect(gate).toContainText("Ask an owner (Admin) if you need it.");
+  await expect(gate).toContainText("Ask an owner (Avery Stone) if you need it.");
   await expect(gate.getByRole("link", { name: "Open Settings" })).toHaveCount(0);
   await gate.getByRole("link", { name: "Open Members" }).click();
   await expect(page).toHaveURL(/\/settings\/members$/);

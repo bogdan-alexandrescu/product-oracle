@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { AppShell } from "@/components/ds/AppShell";
 import { MODE_SCRIPT } from "@/components/ds/ModeSwitch";
+import { ScrollbarRoom } from "@/components/ds/ScrollbarRoom";
 import { MeProvider, MeSync } from "@/lib/me";
 import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: MODE_SCRIPT }} />
       </head>
       <body className="min-h-full">
+        <ScrollbarRoom />
         <MeProvider>
           <Suspense fallback={null}>
             <MeSync />

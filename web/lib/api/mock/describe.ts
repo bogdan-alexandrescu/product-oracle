@@ -4,7 +4,7 @@
  * both together; web/e2e/baseline.spec.ts checks this port against the API's strings.
  */
 import type { Schemas } from "@/lib/api/client";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 
 import { companyDayInWords } from "./connections";
 

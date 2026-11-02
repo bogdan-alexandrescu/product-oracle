@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { ADMIN } from "./helpers";
+import { ADMIN, clearName } from "./helpers";
 
 /*
  * QA pass 4 fixes on Simple Home (mock-backed, desktop 1512 and phone 390), as the owner, a
@@ -205,6 +205,9 @@ test.describe("a commenter", () => {
 test.describe("a viewer", () => {
   test("qa4-simple-home-21, -16, -20: who fixes the broken links, no unsent change called in review, the email on one line", async ({ page }) => {
     // fails_when: no line says who fixes the broken links, the notice says "2 changes are in review" for an unsent draft, or the email breaks at its "@"
+    // A viewer with no name of their own: on the Simple Home scenario the owner clears their invented one first.
+    await page.context().addInitScript((key) => localStorage.setItem(key, "simple-home"), MOCK_SCENARIO_KEY);
+    await clearName(page, VIEWER);
     await signIn(page, VIEWER);
     await expect(home(page).getByTestId("home-broken-readers")).toHaveText(/^.+ (fix|fixes) these; you can't change the roadmap\.$/);
     const notice = home(page).getByTestId("home-in-review");

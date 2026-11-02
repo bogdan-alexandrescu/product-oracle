@@ -1,4 +1,5 @@
 import type { Schemas } from "@/lib/api/client";
+import { datesInWords, ISO_DAY_SOURCE } from "@/lib/dates";
 import { formatCount, formatDate, plural } from "@/lib/format";
 
 export type Review = Schemas["CheckpointReview"];
@@ -21,18 +22,8 @@ export { plural };
 /** "Nov 30, 2026". */
 export const day = (d: string) => formatDate(d);
 
-/** A calendar day as the API writes it ("2026-11-30", or "2026-11-30T…" with a time). */
-const ISO_DAY_SOURCE = String.raw`\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?`;
-/** Such a day standing alone in a sentence: never one inside a key, a slug or a path ("launch-2026-11-30"). */
-const ISO_DAY = new RegExp(String.raw`(?<![\w./-])${ISO_DAY_SOURCE}(?![\w/-])`, "g");
 /** A value that is a day and nothing else. */
 const ONLY_DAY = new RegExp(`^${ISO_DAY_SOURCE}$`);
-/**
- * A sentence of the API's (a reason's text) with its dates in words: "… supports 2026-11-30."
- * reads "… supports Nov 30, 2026." (qa-work-19). A date inside a key stays as it is:
- * "launch-2026-11-30" is a name, not a date.
- */
-export const datesInWords = (text: string) => text.replace(ISO_DAY, (d) => formatDate(d));
 
 /**
  * Who decides a stop, in words: "Approvers and owners decide" (the role ladder: viewer < commenter < approver < owner).

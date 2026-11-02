@@ -270,6 +270,7 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("GET", "/v1/api-tokens", "owner", {}),
     ("DELETE", "/v1/api-tokens/{token_id}", "owner", {}),
     ("GET", "/v1/api-tokens/{token_id}/approvals", "owner", {}),
+    ("POST", "/v1/api-tokens/{token_id}/remove", "owner", {}),
     # A5: approvers invite too (viewers and commenters, their own invites only).
     ("GET", "/v1/invites", "approver", {}),
     ("POST", "/v1/invites", "approver", {"json": {"email": "x@example.com", "role": "viewer"}}),
@@ -291,6 +292,8 @@ PAST_THE_ROLE = {
     ("DELETE", "/v1/invites/{invite_id}"): {"approver": 404},
     ("POST", "/v1/invites/{invite_id}/resend"): {"approver": 404},
     ("POST", "/v1/access-requests/{request_id}/reopen"): {"approver": 409, "owner": 409},
+    # Only an expired token is removed; the world's is active.
+    ("POST", "/v1/api-tokens/{token_id}/remove"): {"owner": 409},
 }
 
 

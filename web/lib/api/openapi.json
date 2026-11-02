@@ -9265,6 +9265,58 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/api-tokens/{token_id}/remove": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Remove Api Token",
+        "description": "Remove an expired API token from the list (qa4-settings-39). Owners only, as\nRevoke; an active or revoked token is refused (409). It no longer works already;\nwhat was done with it (approvals, decisions) keeps its name.",
+        "operationId": "remove_api_token",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such API token, or already removed"
+          },
+          "409": {
+            "description": "The token is active or revoked, not expired"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
     "/v1/api-tokens/{token_id}/approvals": {
       "get": {
         "tags": [
@@ -95951,6 +96003,14 @@
             "type": "array",
             "title": "Top"
           },
+          "top_titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top Titles",
+            "default": []
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -96123,6 +96183,14 @@
             },
             "type": "array",
             "title": "Top"
+          },
+          "top_titles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top Titles",
+            "default": []
           },
           "status": {
             "type": "string",
@@ -106432,6 +106500,17 @@
             ],
             "title": "Decided By Role"
           },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
           "via": {
             "type": "string",
             "enum": [
@@ -106494,7 +106573,7 @@
           "summary"
         ],
         "title": "RunDecision",
-        "description": "A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):\nwho decided by role only (no names reach the agents), when, and what. A console\nanswer is a decision once it is followed: one held for an approver is still pending\nand not listed."
+        "description": "A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):\nwho decided (the person's name beside their role), when, and what. A console\nanswer is a decision once it is followed: one held for an approver is still pending\nand not listed."
       },
       "RunDiscussion": {
         "properties": {
@@ -108509,6 +108588,37 @@
         "type": "object",
         "title": "ScopeEnhanceIn"
       },
+      "ScopeEvidence": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ScopeEvidence",
+        "description": "A feature's evidence by its source's name (walk-eng-check 6): never a bare id."
+      },
       "ScopeFeatureOut": {
         "properties": {
           "id": {
@@ -109406,6 +109516,22 @@
             },
             "type": "array",
             "title": "Evidence Ids",
+            "default": []
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeEvidence"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
+          },
+          "baseline_goals": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeGoal"
+            },
+            "type": "array",
+            "title": "Baseline Goals",
             "default": []
           },
           "edited": {
@@ -115665,6 +115791,14 @@
             "type": "array",
             "title": "Decisions"
           },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingNote"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
           "delivery": {
             "anyOf": [
               {
@@ -118808,6 +118942,30 @@
         "title": "SimpleSlice",
         "description": "plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;\nan item in one milestone has one slice, F-05). Its dates are Oracle's placement inside\nthe milestone by the PRD's order words (``estimated``)."
       },
+      "SimpleStartMember": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "can_change"
+        ],
+        "title": "SimpleStartMember"
+      },
       "SimpleStartOptions": {
         "properties": {
           "prds": {
@@ -118819,7 +118977,7 @@
           },
           "members": {
             "items": {
-              "$ref": "#/components/schemas/SimplePersonRef"
+              "$ref": "#/components/schemas/SimpleStartMember"
             },
             "type": "array",
             "title": "Members"

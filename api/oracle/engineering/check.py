@@ -26,8 +26,10 @@ reads on the checkpoint (``payload["briefs_check"]``, :func:`summarize`):
 - **Approve** (:func:`on_approved`, in the decision's transaction): the staged verdicts and
   answers are recorded on the checkpoint (``payload["briefs"]``, what F5-1's registration
   reads), each changed size becomes a person's locked ``attrs.effort`` on the feature, and
-  the verdicts reach the later segments' prompts (:func:`prompt_lines`). Nothing leaves the
-  scope: scope stays the product approvers' call.
+  the verdicts and the answers, each quoted with its question, reach the prioritizer's,
+  the PRD writer's and the dates architect's prompts (:func:`prompt_lines`), whether the
+  check was approved in Oracle or by a counted console answer. Nothing leaves the scope:
+  scope stays the product approvers' call.
 """
 
 import re
@@ -351,7 +353,9 @@ def decisions(cp: Checkpoint, actions: Iterable[Action]) -> dict[str, Any]:
         sizes[key] = size.value if size is not None else f.get("size")
         for q in f.get("questions") or []:
             if (a := staged.get((key, ANSWER + q["id"]))) is not None:
-                answers.setdefault(key, []).append({"question_id": q["id"], "answer": a.value})
+                answers.setdefault(key, []).append(
+                    {"question_id": q["id"], "question": q.get("question"), "answer": a.value}
+                )
     return {"verdicts": verdicts, "answers": answers, "sizes": sizes}
 
 
@@ -386,10 +390,56 @@ async def on_approved(
         )  # fmt: skip
 
 
+# The later segments that read the approved check: the prioritizer, the PRD writer and
+# the dates architect (walk-eng-check: each reads the lead's answers as answered).
+READERS = ("priority", "prd_draft", "eng_dates")
+
+
+async def _recorded(db: AsyncSession, cp: Checkpoint) -> dict[str, Any]:
+    """What the approved check recorded (``payload["briefs"]``), else (a check approved
+    before it was recorded on every path) the same read from its staged actions."""
+    from oracle.runs.models import CheckpointAction
+
+    recorded = (cp.payload or {}).get("briefs")
+    if isinstance(recorded, dict):
+        return recorded
+    staged = await db.scalars(
+        select(CheckpointAction).where(
+            CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged"
+        )
+    )
+    return decisions(cp, list(staged))
+
+
+def answer_lines(cp: Checkpoint, recorded: dict[str, Any]) -> list[str]:
+    """Each answer the lead gave, quoted with its question and its feature's name."""
+    features = {f["key"]: f for f in _features(cp)}
+    lines: list[str] = []
+    for key, listed in (recorded.get("answers") or {}).items():
+        feature = features.get(key) or {}
+        asked = {q.get("id"): q.get("question") for q in feature.get("questions") or []}
+        title = feature.get("title")
+        name = f"{key} {title}" if title and title != key else key
+        for a in listed:
+            question = a.get("question") or asked.get(a.get("question_id"))
+            quoted = f'"{question}"' if question else f"question {a.get('question_id')}"
+            lines.append(f'- {name}: {quoted} Answered: "{a.get("answer")}"')
+    if lines:
+        lines.insert(
+            0,
+            "The engineering lead answered these questions of the tech briefs at the "
+            "Engineering check: they are answered, never open. Use each answer as given, "
+            "quote it where it matters, and never list these questions as open or "
+            "unanswered:",
+        )
+    return lines
+
+
 async def prompt_lines(db: AsyncSession, run_id: uuid.UUID, segment: str) -> list[str]:
-    """What the approved check tells the priority and PRD draft segments: each feature's
-    verdict and size, the not-feasible ones with the lead's reason, and the answers."""
-    if segment not in ("priority", "prd_draft"):
+    """What the approved check tells the later segments (:data:`READERS`): each feature's
+    verdict and size, the not-feasible ones with the lead's reason, and the answers, each
+    quoted with its question."""
+    if segment not in READERS:
         return []
     cp = await db.scalar(
         select(Checkpoint)
@@ -398,9 +448,9 @@ async def prompt_lines(db: AsyncSession, run_id: uuid.UUID, segment: str) -> lis
         .order_by(Checkpoint.decided_at.desc())
         .limit(1)
     )  # fmt: skip
-    recorded = (cp.payload or {}).get("briefs") if cp is not None else None
-    if not isinstance(recorded, dict):
+    if cp is None:
         return []
+    recorded = await _recorded(db, cp)
     verdicts = recorded.get("verdicts") or {}
     lines = ["Engineering check (decided by the engineering lead):"]
     for key, size in (recorded.get("sizes") or {}).items():
@@ -408,9 +458,7 @@ async def prompt_lines(db: AsyncSession, run_id: uuid.UUID, segment: str) -> lis
         word = VERDICT_WORDS.get(v.get("value"), "No verdict")
         note = f": {v['note']}" if v.get("note") else ""
         lines.append(f"- {key}: {word}{note}; size {str(size).upper()}")
-    for key, listed in (recorded.get("answers") or {}).items():
-        for a in listed:
-            lines.append(f"- {key} question {a['question_id']} answered: {a['answer']}")
+    lines += answer_lines(cp, recorded)
     blocked = [k for k, v in verdicts.items() if v.get("value") == "not_feasible"]
     if segment == "priority" and blocked:
         lines.append(

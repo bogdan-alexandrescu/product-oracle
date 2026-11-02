@@ -155,7 +155,7 @@ test("a commenter suggests leave out; the approver accepts it", async ({ page })
   const labels = row(page, "Address labels");
   await labels.getByRole("button", { name: "Suggest Leave out" }).click();
   await labels.getByRole("group", { name: "Why leave it out?" }).getByRole("button", { name: "Not now" }).click();
-  await expect(labels.getByTestId("suggested-by")).toHaveText("Suggested by Commenter: Leave out · Not now");
+  await expect(labels.getByTestId("suggested-by")).toHaveText("Suggested by Theo Brandt: Leave out · Not now");
   // A suggestion changes nothing: the row still needs a person.
   await expect(labels.getByTestId("row-done")).toHaveCount(0);
   await expect(labels.getByTestId("row-reasons")).toContainText("No confirmed goal");
@@ -164,14 +164,14 @@ test("a commenter suggests leave out; the approver accepts it", async ({ page })
   await login(page, APPROVER);
   await openReview(page, "saved-addresses");
   const again = row(page, "Address labels");
-  await expect(again.getByTestId("suggested-by")).toHaveText("Suggested by Commenter: Leave out · Not now");
+  await expect(again.getByTestId("suggested-by")).toHaveText("Suggested by Theo Brandt: Leave out · Not now");
   await again.getByTestId("feature-title").click();
   const suggestions = page.getByTestId("scope-inspector").getByTestId("inspector-suggestions");
   await suggestions.getByRole("button", { name: "Accept" }).click();
   await expect(again.getByTestId("row-done")).toContainText("✓ Left out · Not now");
   await expect(again.getByTestId("suggested-by")).toHaveCount(0);
   await again.getByTestId("feature-title").click();
-  await expect(page.getByTestId("scope-inspector").getByTestId("history")).toContainText("Changed by Approver");
+  await expect(page.getByTestId("scope-inspector").getByTestId("history")).toContainText("Changed by Priya Raman");
 });
 
 // Card c16 (criterion 16): protects = the Changed filter on attempt 2 lists the rows whose

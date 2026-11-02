@@ -53,7 +53,7 @@ test.describe("at 1440 px", () => {
       // The "you" chip sits under the name, so the name keeps its width.
       const name = memberRow(page, "admin@example.com").getByTestId("member-name");
       expect((await name.boundingBox())!.width).toBeGreaterThan(30);
-      await expect(name).toHaveText("Admin");
+      await expect(name).toHaveText("Avery Stone");
       // "Commenter" fits its select.
       expect(await selectRoom(page.getByLabel("Role for commenter@example.com"))).toBeGreaterThanOrEqual(0);
     };

@@ -36,7 +36,7 @@ test("a role refusal says who can act, not a status", async ({ page, context }) 
   await owner.goto("/settings/members");
   await owner.getByLabel("Role for approver@example.com").selectOption("commenter");
   const dialog = owner.getByTestId("role-dialog");
-  await dialog.getByLabel("Hand over Decides document reviews").selectOption({ label: "Admin" });
+  await dialog.getByLabel("Hand over Decides document reviews").selectOption({ label: "Avery Stone" });
   await dialog.getByRole("button", { name: "Change role" }).click();
   await expect(owner.getByLabel("Role for approver@example.com")).toHaveValue("commenter");
   await owner.close();

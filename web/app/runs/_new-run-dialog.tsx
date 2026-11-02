@@ -134,7 +134,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
   const legendCls = "mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2";
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
       <div
         role="dialog"
         aria-modal="true"

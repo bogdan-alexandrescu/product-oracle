@@ -422,7 +422,12 @@ async def test_a_runs_unsafe_baseline_yaml_fails_the_import_visibly(client, runt
 # --- the repo's own YAML parses as it did ----------------------------------------------------
 
 _YAML_FENCE = re.compile(r"^```ya?ml[ \t]*\n(.*?)^```", re.S | re.M)
-_SKIP_DIRS = {".git", ".github", "private", "node_modules", ".venv", ".next", "__pycache__"}
+# test-results and playwright-report: a failed mock spec's error-context.md holds a deep yaml
+# page snapshot, written while the API tests may be running.
+_SKIP_DIRS = {
+    ".git", ".github", "private", "node_modules", ".venv", ".next", "__pycache__",
+    "test-results", "playwright-report",
+}  # fmt: skip
 
 
 def _repo_yaml() -> list[tuple[str, str]]:

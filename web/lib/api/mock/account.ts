@@ -15,6 +15,8 @@ export interface AccountDb {
   passwords: Record<string, string>;
   /** Wrong current passwords, by email: ISO times (the rate limit's window). */
   failures: Record<string, string[]>;
+  /** qa4-settings-39: expired API tokens an owner removed: kept for their names, never listed. */
+  removed?: string[];
 }
 
 export type AccountContext = {
@@ -193,7 +195,7 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
       const user = q.get("user_id");
       if (kind && !["personal", "service", "run", "mcp_client"].includes(kind)) return json(422, { detail: "kind" });
       const rows = db.tokens
-        .filter((t) => (!kind || t.kind === kind) && (!user || t.user_id === user))
+        .filter((t) => !db.removed?.includes(t.id) && (!kind || t.kind === kind) && (!user || t.user_id === user))
         .sort((a, b) => a.created_at.localeCompare(b.created_at));
       return json(200, rows);
     }
@@ -203,11 +205,22 @@ export async function accountRoute(ctx: AccountContext, req: Request, p: string[
       token.revoked_at ??= ctx.now();
       return json(204);
     }
+    if (m === "POST" && p[3] === "remove") {
+      // members.service.remove_expired_token: API tokens only, expired and never revoked.
+      if ((token.kind !== "personal" && token.kind !== "service") || db.removed?.includes(token.id)) {
+        return json(404, { detail: `API token ${p[2]} not found` });
+      }
+      if (token.revoked_at || !token.expires_at || token.expires_at > ctx.now()) {
+        return json(409, { detail: "Only an expired token can be removed; revoke it instead" });
+      }
+      (db.removed ??= []).push(token.id);
+      return json(204);
+    }
     return null;
   }
   if (p[1] !== "me" || !p[2] || p[2] === "preferences") return null;
 
-  const mine = (kind: TokenRow["kind"]) => db.tokens.filter((t) => t.user_id === me.id && t.kind === kind);
+  const mine = (kind: TokenRow["kind"]) => db.tokens.filter((t) => t.user_id === me.id && t.kind === kind && !db.removed?.includes(t.id));
   /** A password change and sign out everywhere revoke every live credential acting as me (AC1). */
   const revokeMine = (at: string) => {
     const revoke = (kind: TokenRow["kind"]) => {

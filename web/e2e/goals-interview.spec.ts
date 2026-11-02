@@ -97,13 +97,13 @@ test("approver: owner set with Edit, Use version 1, Propose, Accept now: measura
   const edit = card.getByTestId("version-edit");
   await expect(edit.getByLabel("Value", { exact: true })).toHaveValue("8");
   await edit.getByLabel("Owner", { exact: true }).fill("appr");
-  await edit.getByRole("listbox", { name: "Members" }).getByRole("option", { name: /Approver/ }).click();
-  await expect(edit.getByTestId("owner-picked")).toContainText("Approver");
+  await edit.getByRole("listbox", { name: "Members" }).getByRole("option", { name: /Priya/ }).click();
+  await expect(edit.getByTestId("owner-picked")).toContainText("Priya Raman");
 
   await discuss(page).getByTestId("quick-replies").getByRole("button", { name: "Use version 1" }).click();
   const said = thread(page).locator('[data-testid="discussion-message"][data-author-kind="person"]');
   await expect(said).toHaveCount(1);
-  await expect(said).toContainText("Approver");
+  await expect(said).toContainText("Priya Raman");
   await expect(said).toContainText("Use version 1");
   await expect(thread(page).getByTestId("oracle-reply").last()).toContainText("Version 1 it is.");
 
@@ -118,13 +118,13 @@ test("approver: owner set with Edit, Use version 1, Propose, Accept now: measura
   await expect(thread(page).getByTestId("discussion-message").last()).toContainText("“Cut early churn” is measurable now");
   await expect(thread(page)).toContainText("This discussion is closed.");
   await expect(churnRow(page).locator('[data-attr="target"]')).toHaveText("< 8%");
-  await expect(churnRow(page).locator('[data-attr="owner"]')).toHaveText("Approver");
+  await expect(churnRow(page).locator('[data-attr="owner"]')).toHaveText("Priya Raman");
   await expect(churnRow(page).getByTestId("not-measurable")).toHaveCount(0);
 });
 
 // protects=criterion 10.3 and c6: a commenter proposes but does not accept: the card offers
 // Propose (no Dismiss), then says waiting for an approver, and the Proposals tab lists the
-// proposal as "Suggested by Commenter"; fails_when=a commenter sees Accept now or Dismiss, or the
+// proposal as "Suggested by Theo Brandt"; fails_when=a commenter sees Accept now or Dismiss, or the
 // proposal is missing or unattributed; no_claim=the approver's Inbox row.
 test("commenter: Propose, then waiting for an approver, and the Proposals tab says Suggested by", async ({ page }) => {
   await openBaseline(page, COMMENTER);
@@ -136,7 +136,7 @@ test("commenter: Propose, then waiting for an approver, and the Proposals tab sa
   await expect(card.getByRole("button", { name: "Accept now" })).toHaveCount(0);
 
   await page.getByRole("tab", { name: /^Proposals/ }).click();
-  const row = page.getByTestId("proposal").filter({ hasText: "Suggested by Commenter" });
+  const row = page.getByTestId("proposal").filter({ hasText: "Suggested by Theo Brandt" });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("From discussion Make “Cut early churn” measurable");
 });

@@ -8,7 +8,7 @@ import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
 import { citationHref, formatDate, formatDay } from "@/lib/format";
 import { parseBlocks, plainText, type Inline } from "@/lib/markdown";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 
 import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, readMetricIntoGoal, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
@@ -573,7 +573,7 @@ export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
 export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
-/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). */
+/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). A path ending in "*" slows every GET under it. */
 export const MOCK_SLOW_KEY = "po-mock-slow";
 export const MOCK_SLOW_MS = 1500;
 /** A test may hold the slow call longer (ms, in localStorage). */
@@ -1063,7 +1063,7 @@ function seedSimpleHomeScenario(): Db {
   const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
   const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
   const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
-  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
@@ -1119,7 +1119,7 @@ function seedSimpleHomeDecidersScenario(): Db {
   const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
   const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
   const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
-  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  const who = { id: commenter.id, name: commenter.name ?? commenter.email, owners, roles };
   seedSimpleProposal(db.simple_roadmap!, who, "edit_title", "price-tiers", { title: "New plan tiers" }, { title: "New plan tiers, yearly" }, "2026-10-26T15:00:00Z");
   return db;
 }
@@ -2594,7 +2594,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     member: member ? { id: member.id, email: member.email, role: withMockRole(member).role } : null,
     reviewDecider: (c) => runReviewDecider(db, c),
     draftRefusal: (flow, kind) => draftRefusal((db.autonomy ??= emptyAutonomy()), flow, kind),
-    members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role })),
+    members: db.members.map((x) => ({ id: x.id, email: x.email, role: x.role, name: x.name })),
     scopeApproved: (scope, by) => scopeToBaseline(db, scope, by),
     ask: (q) => {
       const at = now();
@@ -3933,10 +3933,11 @@ const VIEWER_REFUSED = "A viewer can't be the engineering lead. Make them a comm
 
 /**
  * GET /v1/setup (A1), as oracle.setup: the caller's steps from the mock's own stores. The
- * connections and sources stores are the company's in the mock, not each person's.
+ * sources store is the company's in the mock, not each person's; of the connections, the
+ * seeded ones are the owner's alone (./connections.ts).
  */
 function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
-  const facts = setupFacts();
+  const facts = setupFacts(me.email);
   const sources = sourceCount();
   const people = db.members.filter((x) => x.status !== "disabled").length;
   // qa4-settings-3: as oracle.setup, an expired invite is not open (nobody can join through it).
@@ -5280,7 +5281,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const browse = sourceBrowseRoute(req, p, q);
   if (browse) return browse;
-  const connections = await connectionsRoute(req, p, me.role);
+  const connections = await connectionsRoute(req, p, me.role, me.email);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
@@ -5467,6 +5468,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         return {
           slug: doc.slug,
           title: doc.title,
+          status: doc.status,
           latest: latest.number,
           heading: (key) => latest.sections.find((x) => x.section_key === key)?.heading ?? null,
         };
@@ -5492,6 +5494,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       return routeRuns({ ...runsContext(db), db: db.runs! }, patch, ["v1", "runs", id]).then((r) => r ?? notFound("Route"));
     };
     const confirmedGoals = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.title]));
+    const goalKeys = () => new Map(db.baseline.entities.filter((e) => e.type === "goal" && e.status === "confirmed").map((e) => [e.id, e.key]));
     const lockedSections = (ref: string) => {
       const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
       const latest = doc && db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => b.number - a.number)[0];
@@ -5556,7 +5559,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const intake = await routeIntake(
       v2db,
-      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
+      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, goalKeys, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
       req,
       p,
       q,
@@ -6403,7 +6406,8 @@ export async function mockFetch(req: Request): Promise<Response> {
   });
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
-  if ((req.method === "GET" && url.pathname === slow) || slow === `${req.method} ${url.pathname}`) {
+  const prefix = slow?.endsWith("*") ? slow.slice(0, -1) : null;
+  if ((req.method === "GET" && (url.pathname === slow || (prefix?.startsWith("/") && url.pathname.startsWith(prefix)))) || slow === `${req.method} ${url.pathname}`) {
     const ms = Number(localStorage.getItem(MOCK_SLOW_MS_KEY)) || MOCK_SLOW_MS;
     return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), ms)));
   }

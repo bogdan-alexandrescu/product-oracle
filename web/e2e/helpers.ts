@@ -77,6 +77,21 @@ export async function selectText(page: Page, key: string, text: string) {
   );
 }
 
+/**
+ * A member with no name of their own (qa5-mock-people gave every mock member an invented one):
+ * the owner clears `email`'s name in Settings › Members, then signs out.
+ */
+export async function clearName(page: Page, email: string) {
+  await login(page);
+  await page.goto("/settings/members");
+  await page.getByTestId("member-row").filter({ hasText: email }).getByTestId("member-open").click();
+  const member = page.getByTestId("member-inspector");
+  await member.getByLabel("Name", { exact: true }).fill("");
+  await member.getByRole("button", { name: "Save" }).click();
+  await expect(member.getByRole("button", { name: "Saved" })).toBeVisible();
+  await signOut(page);
+}
+
 /** Signs out from the user menu. */
 export async function signOut(page: Page) {
   await page.getByTestId("user-menu").click();

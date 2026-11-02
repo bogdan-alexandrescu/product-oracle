@@ -9,7 +9,7 @@ export function Modal({ id, title, testId, onClose, children }: { id: string; ti
   const panel = useRef<HTMLDivElement>(null);
   useFocusTrap(panel, true, onClose);
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
       <div
         ref={panel}
         role="dialog"

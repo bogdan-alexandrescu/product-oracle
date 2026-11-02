@@ -5,6 +5,7 @@ Synthetic placeholders only.
 
 from typing import Any
 
+from oracle.intake import read as intake_read
 from tests.baseline_helpers import Ctx, make_ctx, make_item
 from tests.conftest import seed_company
 
@@ -54,6 +55,8 @@ async def create_intake(
     await seed_company(ctx.tenant_id)
     resp = await client.post("/v1/intakes", json=body, headers=ctx.as_(who))
     assert resp.status_code == expect, resp.text
+    # Oracle's read is submitted after the response (walk-brief): wait for it here.
+    await intake_read.drain()
     return resp.json()
 
 

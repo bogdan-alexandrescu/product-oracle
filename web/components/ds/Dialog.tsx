@@ -145,6 +145,7 @@ export function Dialog({
     // a Sheet (z-50) still sits above it.
     <div
       data-testid="dialog-backdrop"
+      data-backdrop=""
       className={`fixed inset-0 z-[45] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 ${phoneSheet ? "max-[600px]:p-0" : "max-[600px]:px-2 max-[600px]:py-4"}`}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.key !== "Escape" && e.key !== "Tab" && e.stopPropagation()}

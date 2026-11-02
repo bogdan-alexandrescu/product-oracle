@@ -403,22 +403,81 @@ def test_short_codes_feature_code_initials_and_clashes():
     no_claim=the web's drawing."""
     from oracle.simple.priorities import short_codes
 
-    # In creation order: data-ingest came after delivery-integrity, pay-10 after pay-2.
+    # In creation order: data-ingest came after delivery-integrity; pay-10 and pay-3 keep
+    # their numbers.
     keys = ["pay-10", "delivery-integrity", "data-ingest", "F-12", "pricing", "a-b-c-d", "x",
             "pay-3"]  # fmt: skip
-    assert short_codes(keys) == ["PA", "DI", "DI2", "F-12", "PR", "ABC", "XX", "PA2"]
+    assert short_codes(keys) == ["PA10", "DI", "DI2", "F-12", "PR", "ABC", "XX", "PA3"]
+
+
+def test_short_codes_take_the_letters_of_the_shown_name():
+    """protects=qa4-simple-plan-11: a feature with no real code reads the initials of its
+    shown name, never of its internal key (Team invite nudges TIN, not SI from
+    setup-ideas); a one-word name its first two letters; a clash a digit in creation order
+    (Saved carts SC, Saved cards SC2); a real code unchanged; fails_when=the key's initials
+    show, a clash repeats a code, or a real code reads letters; no_claim=the web."""
+    from oracle.simple.priorities import short_codes
+
+    keys = ["setup-ideas", "saved-carts", "saved-cards", "F-12", "price-tiers", "pay-1"]
+    names = {"setup-ideas": "Team invite nudges", "saved-carts": "Saved carts",
+             "saved-cards": "Saved cards", "F-12": "Bulk import", "price-tiers": "Pricing",
+             "pay-1": "Pay 1"}  # fmt: skip
+    assert short_codes(keys, names=names) == ["TIN", "SC", "SC2", "F-12", "PR", "PA1"]
+
+
+def test_short_codes_keep_the_number_in_a_name():
+    """protects=review minor of codes-from-names: a shown name with a number keeps it after
+    its letters (Pay 1 PA1, Pay 4 PA4, Team plan 2 TP2), so names that differ only by their
+    number read their own numbers, never a clash digit by creation order (Pay 3 read PA2);
+    a clash of such a code takes a dot (Pay 1 again PA1.2), never a run of digits (PA12);
+    fails_when=the number is dropped, a numbered code takes a bare clash digit, or a plain
+    clash changes (SC, SC2); no_claim=the web."""
+    from oracle.simple.priorities import short_codes
+
+    keys = ["p4", "p3", "p1", "p2", "tp", "p1b", "sc", "sc2"]
+    names = {"p4": "Pay 4", "p3": "Pay 3", "p1": "Pay 1", "p2": "Pay 2", "tp": "Team plan 2",
+             "p1b": "Pay 1", "sc": "Saved carts", "sc2": "Saved cards"}  # fmt: skip
+    assert short_codes(keys, names=names) == ["PA4", "PA3", "PA1", "PA2", "TP2", "PA1.2", "SC",
+                                              "SC2"]  # fmt: skip
+
+
+async def test_short_codes_follow_a_rename(client):
+    """protects=a feature's code comes from its item's shown name on a roadmap every reader
+    sees, so a renamed item reads its new name's letters (Team invite nudges TIN, then
+    First-run tour FRT), the same for every reader; fails_when=the code stays on the old
+    name or comes from the key (SI); no_claim=the web's rename flow."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, pv, _, rv = await seed.roadmap("onboarding")
+        f = await seed.entity("feature", "setup-ideas", effort=1)
+        row = await seed.item(rv, pv, "onb-1", feature_id=f.id, title="Team invite nudges")
+        await s.commit()
+        item_id = row.id
+
+    def code(out: dict) -> str:
+        return next(r["short_code"] for r in out["rows"] if r["feature_id"] == str(f.id))
+
+    for who in ("owner", "commenter"):
+        assert code(await w.read(client, who)) == "TIN", who
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, item_id)).title = "First-run tour"
+        await s.commit()
+    for who in ("owner", "commenter"):
+        assert code(await w.read(client, who)) == "FRT", who
 
 
 async def test_short_codes_stay_when_the_rank_moves(client):
     """protects=each priorities row carries a short code computed once on the API (its
-    feature's key's initials: ledger LE for pay-1, sync SY for pay-2, ...), and a re-estimate
+    feature's shown name's letters and number, Pay 1 ... Pay 4 PA1 ... PA4), and a re-estimate
     that moves pay-2 from rank 2 to rank 1 leaves every code where it was; fails_when=a row has
     no short code, two rows share one, or a code follows the rank; no_claim=the web's highlight
     of the moved row."""
     ctx = await make_people()
     w = await World(ctx).build()
     before = {r["code"]: r["short_code"] for r in (await w.read(client))["rows"]}
-    assert before == {"pay-1": "LE", "pay-2": "SY", "pay-3": "EX", "pay-4": "CH",
+    assert before == {"pay-1": "PA1", "pay-2": "PA2", "pay-3": "PA3", "pay-4": "PA4",
                       "insights": "IN", "widgets": "WI"}  # fmt: skip
     r = await w.change(client, "owner", "estimate_feature", "pay-2",
                        {"goal_value": None, "effort": 8}, {"goal_value": 20})  # fmt: skip

@@ -89,18 +89,18 @@ test.describe("desktop", () => {
     await expect(decision.getByRole("button", { name: "Include", exact: true })).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("qa-work-11: a long goal name ends in an ellipsis with the full name on hover", async ({ page }) => {
+  test("qa-work-11, walk-eng-check 5: a long goal name shows whole, wrapping in its cell, the full name on hover too", async ({ page }) => {
     await seeded(page);
     await openReview(page);
     const chip = row(page, "Saved addresses").getByTestId("goal-chip");
     await expect(chip).toHaveAttribute("title", "A goal not in the baseline");
+    await expect(chip).toHaveText("A goal not in the baseline");
     const fits = await chip.evaluate((el) => {
-      const text = el.querySelector("span") as HTMLElement;
       const cell = el.parentElement!.getBoundingClientRect();
       const box = el.getBoundingClientRect();
-      return { ellipsis: getComputedStyle(text).textOverflow === "ellipsis", inside: box.right <= cell.right + 1 };
+      return { whole: el.scrollWidth <= el.clientWidth + 1, inside: box.right <= cell.right + 1 };
     });
-    expect(fits).toEqual({ ellipsis: true, inside: true });
+    expect(fits).toEqual({ whole: true, inside: true });
   });
 
   test("qa-work-12: the dependency fix is a short one-line button; the reason chip names the dependency", async ({ page }) => {

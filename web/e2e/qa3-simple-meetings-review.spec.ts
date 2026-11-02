@@ -27,7 +27,7 @@ async function startReview(page: Page) {
   await tap(page.getByRole("button", { name: "Start review" }).first());
   const s = sheet(page);
   await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
-  await s.getByRole("checkbox", { name: "Commenter" }).check();
+  await s.getByRole("checkbox", { name: "Theo Brandt" }).check();
   await expect(s.getByRole("radio", { name: "Presenter plus one or two people" })).toBeVisible();
   await tap(s.getByRole("button", { name: "Start", exact: true }));
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
@@ -90,7 +90,7 @@ for (const phone of [false, true]) {
           expect(await height(page.getByRole("button", { name: "End meeting" }))).toBeGreaterThanOrEqual(44);
           // qa-simple-decide-29: the attendees fold into one row on a phone.
           await page.getByTestId("meeting-people-toggle").click();
-          expect(await height(page.getByRole("button", { name: "Mark Commenter away" }))).toBeGreaterThanOrEqual(44);
+          expect(await height(page.getByRole("button", { name: "Mark Theo Brandt away" }))).toBeGreaterThanOrEqual(44);
           // The one-pager names a line by its first words (qa-simple-prd), not its number.
           await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
           await page.getByLabel("New wording for").fill("A checklist that names the next step");

@@ -493,6 +493,44 @@ function ReviewRow({ reviewed, total, href }: { reviewed: number; total: number;
   );
 }
 
+/**
+ * walk-docs-priorities 10: accepted changes staged for the next draft are not in this version;
+ * Publish says so, so nobody publishes thinking an accepted change is in it.
+ */
+function StagedSection({ staged, n }: { staged: Schemas["StagedChanges"]; n: number }) {
+  const rows = [
+    ...staged.items.map((i) => ({ id: i.suggestion_id, heading: i.section_heading, what: i.feedback_summary || i.text, who: i.accepted_by_name, verb: "Accepted" })),
+    ...(staged.next_draft_changes ?? []).map((c) => ({ id: c.id, heading: c.section_heading, what: c.instruction, who: c.staged_by_name, verb: "Staged" })),
+    ...staged.agent_items.map((a) => ({ id: a.feedback_id, heading: "General", what: a.summary, who: a.staged_by_name, verb: "Staged" })),
+  ];
+  if (!rows.length) return null;
+  return (
+    <section aria-label="Staged for the next draft" data-testid="publish-staged">
+      <SubHead title="Staged for the next draft" count={rows.length} muted>
+        <span data-testid="staged-note" className="text-sm text-text2">
+          Not in version {n}: {rows.length === 1 ? "it goes" : "they go"} into draft {staged.next_version}
+        </span>
+      </SubHead>
+      <ul>
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            data-testid="publish-staged-item"
+            className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)] items-center gap-x-2 border-t border-line px-4 max-[600px]:px-3"
+          >
+            <Icon name="alert" size={16} className="text-warn" />
+            <span className="min-w-0 py-2 break-words">
+              <span className="font-medium">{r.heading}</span>
+              {r.what ? <>: {r.what}</> : null}
+              {r.who ? <span className="text-sm text-text2"> · {r.verb} by {r.who}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** "20 of 20 sections are not reviewed": the one count the headline, the checklist and the dialog use. */
 export function unreviewedText(unreviewed: number, total: number): string {
   return `${unreviewed} of ${plural(total, "section")} ${unreviewed === 1 ? "is" : "are"} not reviewed`;
@@ -522,6 +560,9 @@ export function PublishView({ doc }: { doc: string }) {
   // Optional reads: without them the blocks fall back to the verdict's own rows.
   const strategyQ = useQuery(`blocker-strategy|${doc}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/blocker-strategy", { params: { path: { doc } } })).catch(() => undefined),
+  );
+  const stagedQ = useQuery(`staged|${doc}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}/staged-changes", { params: { path: { doc } } })).catch(() => undefined),
   );
   const questionsQ = useQuery(`questions|${d?.id}`, async () => {
     if (!d) return undefined;
@@ -832,12 +873,14 @@ export function PublishView({ doc }: { doc: string }) {
               </div>
             </section>
             )}
+
+            {stagedQ.data && n != null && <StagedSection staged={stagedQ.data} n={n} />}
           </Panel>
         </Split>
       )}
 
       {confirming && n != null && (
-        <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
+        <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
           <div
             ref={dialogRef}
             role="dialog"

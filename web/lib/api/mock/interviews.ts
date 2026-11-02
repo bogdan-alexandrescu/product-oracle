@@ -21,7 +21,7 @@
  * Seed: one invited interview of the fixture's customer, Ana Lima of Example Co, whose link
  * token is `i-mock-token`. Synthetic placeholders only.
  */
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 import type {
   GuideItem,
   InterviewMessage,

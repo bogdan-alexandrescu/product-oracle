@@ -665,3 +665,30 @@ async def test_existing_checkpoints_of_other_kinds_are_not_gated(client, owner):
     assert _cannot_approve(cp) is None
     cp.payload = {"priority_check": {"problems": [{"code": "no_goal", "blocking": False}]}}
     assert _cannot_approve(cp) is None
+
+
+async def test_a_proposed_order_names_its_prd_by_title_before_the_import(client, owner, runtime):  # noqa: F811
+    """walk-docs-priorities 1: before the draft is imported the snapshot names its PRD by
+    the brief's title (the title the import gives it), never by words made from its slug."""
+    from oracle.v2.models import ProductIntake
+
+    tenant_id, auth = owner
+    run = await at_priority(client, owner, runtime)
+    async with tenant_session(tenant_id) as s:
+        intake = ProductIntake(
+            title="E2E test · Saved replies", brief="Agents retype the same answers.",
+            author_id=uuid.uuid4(),
+        )  # fmt: skip
+        s.add(intake)
+        await s.flush()
+        r = await s.get(Run, uuid.UUID(run["id"]))
+        assert r.document_id is None
+        r.knobs = {**(r.knobs or {}), "intake_id": str(intake.id)}
+        await s.commit()
+    (row,) = (
+        await client.get("/v1/priorities/snapshots", params={"status": "all"}, headers=auth)
+    ).json()
+    assert row["document"] == {"id": None, "slug": DOC, "title": "E2E test · Saved replies"}
+    (snap,) = await snapshots(tenant_id, run["id"])
+    cmp = (await client.get(f"/v1/priorities/snapshots/{snap.id}/compare", headers=auth)).json()
+    assert cmp["snapshot"]["document"]["title"] == "E2E test · Saved replies"

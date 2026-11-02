@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
-import { ADMIN } from "./helpers";
+import { ADMIN, clearName } from "./helpers";
 
 /*
  * QA fixes on Simple's shell, Home and the plan strip (qa-simple-home-1, 2, 11, 12, 25, 29, 30,
@@ -216,6 +216,8 @@ test("qa-simple-home-32: the phone header's logo is a 44 px target, the mark whe
 
 test("qa-simple-home-25: the rail shows a person's email in full", async ({ page }) => {
   await setUp(page, "simple-home");
+  // A member with no name of their own: the owner clears the viewer's invented one first.
+  await clearName(page, EMAILS.viewer);
   await signIn(page, EMAILS.viewer);
   const name = page.getByTestId("simple-person-name");
   await expect(name).toHaveText("viewer@example.com");

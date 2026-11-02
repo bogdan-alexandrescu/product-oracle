@@ -42,14 +42,14 @@ test("sign-in: an invite the owner revoked is refused in words, naming who to as
 
   await signInAs(page, "vi.viewer@example.com");
   const alert = page.getByRole("alert").filter({ hasText: /\S/ });
-  await expect(alert).toHaveText("Your invite was withdrawn. Ask Admin to invite you again.");
+  await expect(alert).toHaveText("Your invite was withdrawn. Ask Avery Stone to invite you again.");
   await expect(page.getByText("Invalid email or password.")).toHaveCount(0);
   await expect(page).toHaveURL(/\/login/);
 });
 
 test("sign-in: an expired invite is refused in words, with its date", async ({ page }) => {
   await signInAs(page, "old.invite@example.com");
-  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText("Your invite expired on Oct 4. Ask Admin to resend it.");
+  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText("Your invite expired on Oct 4. Ask Avery Stone to resend it.");
   await expect(page).toHaveURL(/\/login/);
 });
 

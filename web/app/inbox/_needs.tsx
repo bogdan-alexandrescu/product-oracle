@@ -27,7 +27,7 @@ import {
   type TrackAlertOut,
 } from "@/lib/api/track-alerts";
 
-import { calendarDay } from "@/lib/dates";
+import { calendarDay, datesInWords } from "@/lib/dates";
 
 import { InboxActions, SuggestionPeek, type OnActed } from "./_actions";
 import {
@@ -1033,11 +1033,13 @@ function checkpointSummary(c: InboxOut["checkpoints"][number]): string {
       .join(" · ");
   }
   const check = briefsCheck(c);
-  if (!check) return CHECKPOINT_LABEL[c.kind];
-  if (check.problems.length) return [c.segment_title ?? CHECKPOINT_LABEL[c.kind], c.document_slug, "the briefs could not be read"].filter(Boolean).join(" · ");
+  // Several runs wait at the same stop: each row names its PRD by its title, as PRD review rows do.
+  const doc = c.document_title?.trim() || (c.document_slug ? runLabel({ ...c, flow_title: "" }).replace(/ · $/, "") : null);
+  if (!check) return [CHECKPOINT_LABEL[c.kind], doc].filter(Boolean).join(" · ");
+  if (check.problems.length) return [c.segment_title ?? CHECKPOINT_LABEL[c.kind], doc, "the briefs could not be read"].filter(Boolean).join(" · ");
   const n = check.features.length;
   const blocking = (c.gate?.left ?? []).filter((x) => x.code === "blocking_question").length;
-  return [c.segment_title ?? CHECKPOINT_LABEL[c.kind], c.document_slug, `${n} feature${n === 1 ? "" : "s"}`, ...(blocking ? [`${blocking} blocking`] : [])]
+  return [c.segment_title ?? CHECKPOINT_LABEL[c.kind], doc, `${n} feature${n === 1 ? "" : "s"}`, ...(blocking ? [`${blocking} blocking`] : [])]
     .filter(Boolean)
     .join(" · ");
 }
@@ -1114,14 +1116,15 @@ function childNeeds(c: InboxCheckpointRow, summary: InboxSummary, busy: string |
         <span className="truncate" data-testid="child-title" title={child.title ?? child.item}>
           {child.title ?? child.item}
         </span>
-        <Chip kind={child.reason.severity === "blocking" ? "crit" : "warn"} title={child.reason.text}>
+        <Chip kind={child.reason.severity === "blocking" ? "crit" : "warn"} title={datesInWords(child.reason.text)}>
           {child.reason.label}
         </Chip>
       </>
     ),
+    // A reason's dates month first ("… supports Nov 13, 2026."), as the review page reads them.
     context: (
-      <span className="block truncate text-[14px] text-text2" title={child.reason.text}>
-        {child.reason.text}
+      <span className="block truncate text-[14px] text-text2" title={datesInWords(child.reason.text)} data-testid="child-reason">
+        {datesInWords(child.reason.text)}
       </span>
     ),
     action: <ChildActions key={`${child.item}-${child.staged?.id ?? ""}`} c={c} child={child} at={at} busy={busy} act={act} fixed={fixed} />,

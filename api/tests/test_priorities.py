@@ -308,6 +308,8 @@ async def test_snapshots_need_an_approver_and_store_the_ranking(client, tenant_i
     listed = (await client.get("/v1/priorities/snapshots", headers=viewer)).json()
     assert [s["id"] for s in listed] == [snap["id"]]
     assert listed[0]["top"] == ["usage-alerts", "checkout", "dark-mode"]
+    # walk-docs-priorities 3: the top features by name, as the snapshot ranked them.
+    assert listed[0]["top_titles"] == [r["title"] for r in snap["ranking"]]
     got = await client.get(f"/v1/priorities/snapshots/{snap['id']}", headers=viewer)
     assert got.status_code == 200
     assert got.json()["ranking"][1]["explanation"]["confidence"]["value"] == 0.7

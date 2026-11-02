@@ -248,9 +248,9 @@ test("setup: with every step done the checklist is not drawn", async ({ page }) 
   // protects=a finished setup leaves Home alone; fails_when=the panel or the chip still
   // draws; no_claim=a step going back to open later (covered by the Reset test).
   await login(page);
-  // The default company's baseline was built before: invite, domains and Build baseline done.
-  await expect(panel(page).getByTestId("panel-count")).toHaveText("4 of 8");
-  await connectFromSetup(page);
+  // The default company's baseline was built before and its tools are connected: invite,
+  // domains, Build baseline and Connect tools done.
+  await expect(panel(page).getByTestId("panel-count")).toHaveText("5 of 8");
   await nameLeadFromSetup(page);
   await confirmHorizonsFromSetup(page);
   await setZoneFromSetup(page);

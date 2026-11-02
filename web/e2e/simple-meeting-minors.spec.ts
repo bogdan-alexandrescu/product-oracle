@@ -5,7 +5,7 @@ import { ADMIN } from "./helpers";
 /*
  * Simple meetings say what happened to a meeting and to a question (the end-to-end pass of
  * 2026-10-30). A live review of Guided setup, started through the UI by the mock's owner
- * (Admin), 60 minutes long:
+ * (Avery Stone), 60 minutes long:
  * - past its length the clock reads "Over by 30 min" and the page offers to end it;
  * - left alone past the idle limit (4 hours without a change), it has ended when opened;
  * - a question typed in its chat ("Kept as a question for the minutes…") shows under

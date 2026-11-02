@@ -116,8 +116,9 @@ test.describe("at 1440", () => {
     await expect(build).toHaveAttribute("data-done", "true");
     await expect(build.getByTestId("setup-action")).toHaveText("Review");
     await expect(build.getByTestId("setup-action")).toHaveAttribute("href", "/baseline?from=setup");
-    // A step still to do keeps Open.
-    await expect(page.getByTestId("setup-row-connect").getByTestId("setup-action")).toHaveText("Open");
+    // A step still to do keeps Open (the default company's tools are connected; its horizons are not confirmed).
+    await expect(page.getByTestId("setup-row-horizons")).toHaveAttribute("data-done", "false");
+    await expect(page.getByTestId("setup-row-horizons").getByTestId("setup-action")).toHaveText("Open");
   });
 });
 

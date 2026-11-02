@@ -9,7 +9,7 @@
  * checkpoint's D8 draft revision.
  */
 import type { Schemas } from "@/lib/api/client";
-import { displayName } from "@/lib/names";
+import { mockName as displayName } from "./people";
 
 import type { DraftRow, RunsContext, RunsDb } from "./runs";
 
@@ -30,6 +30,8 @@ type Meta = {
   decided_by?: string | null;
   decided_at?: string | null;
   evidence_ids?: string[];
+  evidence?: Schemas["ScopeEvidence"][];
+  baseline_goals?: Schemas["ScopeGoal"][];
 };
 export type ScopeRequirement = RequirementOut & Meta;
 export type ScopeFeature = Omit<FeatureOut, "requirements"> & Meta & { requirements: ScopeRequirement[] };
@@ -257,6 +259,8 @@ function reviewOf(ctx: Ctx, scope: StoredScope): Schemas["PrdScopeReview"] {
           position: f.position ?? 0,
           lock_version: f.lock_version ?? 1,
           evidence_ids: f.evidence_ids ?? [],
+          evidence: f.evidence ?? [],
+          baseline_goals: f.goals.length ? [] : (f.baseline_goals ?? []),
           edited: edited(f),
           reasons: mine,
           needs_you: mine.some((r) => !r.answered),

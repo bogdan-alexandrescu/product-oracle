@@ -40,7 +40,7 @@ export function Modal({
     );
   }
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10">
+    <div data-backdrop="" className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10">
       <div
         ref={dialog}
         role="dialog"

@@ -80,6 +80,8 @@ function subtree(sections: SectionOut[], key: string): SectionOut[] {
 const PHONE = "(max-width: 639px)";
 /** e2e-review-live: how often an open run review re-reads the review state (as the meeting chat does). */
 const LIVE_POLL_MS = 5_000;
+/** How often an open version page reads its document's status again (walk-docs-priorities 8). */
+const STATUS_POLL_MS = 15_000;
 function subscribePhone(cb: () => void) {
   const mq = window.matchMedia(PHONE);
   mq.addEventListener("change", cb);
@@ -388,6 +390,10 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     onDocument && runReviewOpen ? LIVE_POLL_MS : null,
     rootRef,
   );
+  // walk-docs-priorities 8: the header's status is the document's one status for everyone,
+  // kept live: read again every STATUS_POLL_MS while the page is shown, not only on focus, so
+  // a page left open never says "Draft" once someone's review has made it "In review".
+  useLiveRefresh(() => void docQ.reload(), STATUS_POLL_MS, rootRef);
   // G7 3.3: the panel is about the open section, else the document.
   useScreenSubject(
     document_ ? (openSection ? { kind: "section", subject: { document_id: document_.id, version: n, section_key: openSection.section_key } } : { kind: "document", subject: { document_id: document_.id, version: n } }) : null,
@@ -599,14 +605,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
   const onVerdict = useCallback(
     async (key: string, verdict: Verdict, note: string) => {
+      const from = window.location.hash;
       await unwrap(
         api.PUT("/v1/documents/{doc}/versions/{n}/sections/{key}/review", {
           params: { path: { doc, n, key } },
           body: { verdict, note: note || null },
         }),
       );
-      // Stay on the section just reviewed (without a hash, the first unreviewed one opens).
-      setHash(`#${key}`);
+      // Stay on the section just reviewed (without a hash, the first unreviewed one opens),
+      // unless the reader opened another section while the verdict was saving.
+      if (window.location.hash === from) setHash(`#${key}`);
       await Promise.all([verQ.reload(), docQ.reload()]);
       bump();
     },

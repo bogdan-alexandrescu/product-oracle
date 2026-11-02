@@ -2697,6 +2697,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api-tokens/{token_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Api Token
+         * @description Remove an expired API token from the list (qa4-settings-39). Owners only, as
+         *     Revoke; an active or revoked token is refused (409). It no longer works already;
+         *     what was done with it (approvals, decisions) keeps its name.
+         */
+        post: operations["remove_api_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/api-tokens/{token_id}/approvals": {
         parameters: {
             query?: never;
@@ -31405,6 +31427,11 @@ export interface components {
             /** Top */
             top: string[];
             /**
+             * Top Titles
+             * @default []
+             */
+            top_titles: string[];
+            /**
              * Status
              * @default saved
              * @enum {string}
@@ -31454,6 +31481,11 @@ export interface components {
             feature_count: number;
             /** Top */
             top: string[];
+            /**
+             * Top Titles
+             * @default []
+             */
+            top_titles: string[];
             /**
              * Status
              * @default saved
@@ -35026,7 +35058,7 @@ export interface components {
         /**
          * RunDecision
          * @description A decided checkpoint of a run, as its agents read it (``get_checkpoint_review``):
-         *     who decided by role only (no names reach the agents), when, and what. A console
+         *     who decided (the person's name beside their role), when, and what. A console
          *     answer is a decision once it is followed: one held for an approver is still pending
          *     and not listed.
          */
@@ -35056,6 +35088,8 @@ export interface components {
             decided_at?: string | null;
             /** Decided By Role */
             decided_by_role?: ("viewer" | "commenter" | "approver" | "owner") | null;
+            /** Decided By Name */
+            decided_by_name?: string | null;
             /**
              * Via
              * @default oracle
@@ -35716,6 +35750,21 @@ export interface components {
             /** Instruction */
             instruction?: string | null;
         };
+        /**
+         * ScopeEvidence
+         * @description A feature's evidence by its source's name (walk-eng-check 6): never a bare id.
+         */
+        ScopeEvidence: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+        };
         /** ScopeFeatureOut */
         ScopeFeatureOut: {
             /**
@@ -36091,6 +36140,16 @@ export interface components {
              * @default []
              */
             evidence_ids: string[];
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["ScopeEvidence"][];
+            /**
+             * Baseline Goals
+             * @default []
+             */
+            baseline_goals: components["schemas"]["ScopeGoal"][];
             /**
              * Edited
              * @default false
@@ -38459,6 +38518,11 @@ export interface components {
             minutes: components["schemas"]["SimpleMinutes"] | null;
             /** Decisions */
             decisions: components["schemas"]["SimpleDecisionRow"][];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["SimpleMeetingNote"][];
             delivery?: components["schemas"]["SimpleDelivery"] | null;
             /**
              * Can Retry Delivery
@@ -39736,12 +39800,24 @@ export interface components {
              */
             flow_steps: string[];
         };
+        /** SimpleStartMember */
+        SimpleStartMember: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Can Change */
+            can_change: boolean;
+        };
         /** SimpleStartOptions */
         SimpleStartOptions: {
             /** Prds */
             prds: components["schemas"]["SimpleStartPrd"][];
             /** Members */
-            members: components["schemas"]["SimplePersonRef"][];
+            members: components["schemas"]["SimpleStartMember"][];
             /**
              * Length Min
              * @default 60
@@ -50679,6 +50755,49 @@ export interface operations {
             };
             /** @description No such token */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_api_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such API token, or already removed */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The token is active or revoked, not expired */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

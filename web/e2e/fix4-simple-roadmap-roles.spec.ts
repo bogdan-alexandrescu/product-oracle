@@ -1,5 +1,5 @@
 import { THEME_KEY } from "../lib/theme";
-import { login, openRoadmapItem, signOut } from "./helpers";
+import { clearName, login, openRoadmapItem, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -103,6 +103,8 @@ test.describe("desktop", () => {
   }
 
   test("qa-simple-roadmap-51: the viewer's email wraps before its @, never mid-word", async ({ page }) => {
+    // A viewer with no name of their own: the owner clears their invented one first.
+    await clearName(page, "viewer@example.com");
     await openRoadmap(page, "viewer@example.com");
     const name = page.getByTestId("simple-person-name");
     await expect(name).toHaveText("viewer@example.com");

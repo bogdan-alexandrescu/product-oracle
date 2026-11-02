@@ -447,6 +447,8 @@ export function publishOnePager(db: OnePagerDb) {
   for (const b of db.blocks) for (const l of b.lines) if (d.lines[l.id] !== undefined) l.text = d.lines[l.id];
   for (const sec of db.sections) if (d.sections[sec.key] !== undefined) sec.body = d.sections[sec.key];
   db.version += 1;
+  // qa4-simple-decide-25: as the API (the new version's approved_at), the header's day moves on.
+  db.published_at = new Date(mockNowMs()).toISOString();
   db.draft = null;
   db.approval = null;
   db.changes = db.changes.filter((c) => c.status === "proposed");

@@ -27,8 +27,8 @@ const discussionChip = (page: Page) => panel(page).getByTestId("feedback-discuss
 const rows = (page: Page) => panel(page).getByTestId("discussion-row");
 const thread = (page: Page) => page.getByTestId("discussion-thread").filter({ visible: true });
 
-/** Starts a discussion on the open section of DOC from its ⋯ menu; private with `people` when given. */
-async function discussProblem(page: Page, opts: { private?: string[]; first?: string } = {}) {
+/** Starts a discussion on the open section of DOC from its ⋯ menu; private with the people given (found by email, picked by name). */
+async function discussProblem(page: Page, opts: { private?: { email: string; name: string }[]; first?: string } = {}) {
   await page.goto(DOC);
   const s = await openSection(page, "problem");
   await sectionAction(s, "2. Problem", "Start a discussion");
@@ -38,8 +38,8 @@ async function discussProblem(page: Page, opts: { private?: string[]; first?: st
     await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
     await expect(form).toContainText("Only the people you pick can read it. Everyone else sees that a private discussion exists.");
     for (const who of opts.private) {
-      await form.getByRole("searchbox", { name: "Find a person" }).fill(who.toLowerCase());
-      await form.getByRole("option", { name: new RegExp(who) }).click();
+      await form.getByRole("searchbox", { name: "Find a person" }).fill(who.email);
+      await form.getByRole("option", { name: new RegExp(who.name) }).click();
     }
   }
   if (opts.first) await form.getByRole("textbox", { name: "First message" }).fill(opts.first);
@@ -83,12 +83,12 @@ test("discuss a section: the mention shows as a chip, the Discussion chip counts
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveText("Open");
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveAttribute("title", "Everyone who can see this can read it");
   await expect(thread(page).getByRole("textbox", { name: "Message" })).toHaveAttribute("placeholder", "Reply to Oracle and the team");
-  await mention(page, "appr", "Approver");
+  await mention(page, "appr", "Priya Raman");
   await thread(page).getByRole("textbox", { name: "Message" }).pressSequentially("can you check the drop-off numbers?");
   await thread(page).getByRole("button", { name: "Send" }).click();
   const message = thread(page).getByTestId("discussion-message").filter({ hasText: "can you check the drop-off numbers?" });
   await expect(message).toHaveCount(1);
-  await expect(message.getByTestId("mention-chip")).toHaveText("@Approver");
+  await expect(message.getByTestId("mention-chip")).toHaveText("@Priya Raman");
   await expect(thread(page).getByTestId("discussion-people")).toHaveText("2 people");
 
   await thread(page).getByRole("button", { name: "All feedback" }).click();
@@ -122,7 +122,7 @@ test("a viewer opening the discussion reads it and has no composer", async ({ pa
 test("a private discussion is one locked row for the owner, and opening it says it is private", async ({ page }) => {
   await withScenario(page);
   await login(page, COMMENTER);
-  await discussProblem(page, { private: ["Approver"], first: "Between us: is the shipping step the real problem?" });
+  await discussProblem(page, { private: [{ email: "approver", name: "Priya Raman" }], first: "Between us: is the shipping step the real problem?" });
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveText("Private");
   await expect(thread(page).getByTestId("discussion-visibility")).toHaveAttribute("title", "Only the people in it can read it");
   await signOut(page);
@@ -148,14 +148,14 @@ test("in a private discussion, the approver mentioning the owner is stopped with
   await login(page, APPROVER);
   await page.goto(SEEDED);
   await openDiscussion(page, SEEDED_TITLE);
-  await mention(page, "adm", "Admin");
-  const chip = thread(page).getByTestId("draft-mention").filter({ hasText: "Admin" });
+  await mention(page, "adm", "Avery Stone");
+  const chip = thread(page).getByTestId("draft-mention").filter({ hasText: "Avery Stone" });
   await expect(chip).toHaveAttribute("data-blocked", "true");
   await expect(thread(page)).toContainText("Only the starter can add people to a private discussion");
   await thread(page).getByRole("textbox", { name: "Message" }).pressSequentially("what do you think?");
   await expect(thread(page).getByRole("button", { name: "Send" })).toBeDisabled();
   // Removing the mention lets the message go.
-  await chip.getByRole("button", { name: "Remove Admin" }).click();
+  await chip.getByRole("button", { name: "Remove Avery Stone" }).click();
   await expect(thread(page).getByRole("button", { name: "Send" })).toBeEnabled();
 });
 
@@ -243,7 +243,7 @@ test("make open: only the starter, after a warning with the counts; then the own
   await thread(page).getByRole("menuitem", { name: "Make open" }).click();
   await page.getByTestId("make-open-warning").getByRole("button", { name: "Make open" }).click();
   await expect(chip).toHaveText("Open");
-  await expect(thread(page).getByTestId("discussion-system-line")).toContainText(/^Commenter made this discussion open on [A-Z][a-z]{2} \d{1,2}$/);
+  await expect(thread(page).getByTestId("discussion-system-line")).toContainText(/^Theo Brandt made this discussion open on [A-Z][a-z]{2} \d{1,2}$/);
   await signOut(page);
 
   await login(page);

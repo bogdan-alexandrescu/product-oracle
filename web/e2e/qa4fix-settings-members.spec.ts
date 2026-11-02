@@ -56,7 +56,7 @@ test.describe("at 1512 px", () => {
     await openMembers(page);
     await memberRow(page, "commenter@example.com").getByTestId("member-open").click();
     const panel = page.getByTestId("member-inspector");
-    await expect(panel.getByTestId("member-holds-nothing")).toHaveText("Commenter holds nothing: no approvals and no responsibilities.");
+    await expect(panel.getByTestId("member-holds-nothing")).toHaveText("Theo Brandt holds nothing: no approvals and no responsibilities.");
     await expect(panel).not.toContainText("Nothing assigned");
     await expect(panel.getByTestId("member-responsibilities")).toHaveCount(0);
   });
@@ -66,8 +66,8 @@ test.describe("at 1512 px", () => {
     await page.getByLabel("Role for approver@example.com").selectOption("commenter");
     const dialog = page.getByTestId("role-dialog");
     const needs = dialog.getByTestId("preview-needs-holder");
-    await expect(needs).toContainText("Approver can no longer decide 1 document review.");
-    await expect(needs).not.toContainText("needs Approver");
+    await expect(needs).toContainText("Priya Raman can no longer decide 1 document review.");
+    await expect(needs).not.toContainText("needs Priya Raman");
     await expect(needs).not.toContainText("Decides document reviews");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();

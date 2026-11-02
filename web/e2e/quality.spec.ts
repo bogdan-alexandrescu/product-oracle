@@ -7,7 +7,7 @@ import { login } from "./helpers";
 // until you pick" in the rating form, B's report list as History). Team workspaces v2 in
 // the mock; the "quality" scenario adds a stored rules snapshot, a model review (7 of 10
 // criteria) and two people's ratings, all invented. MOCK_ROLE_KEY changes the signed-in
-// member's role, not who they are: their own reports read "Admin".
+// member's role, not who they are: their own reports read "Avery Stone".
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 const URL = "/documents/team-workspaces/v/2/quality";
@@ -62,8 +62,8 @@ test("owner: thirteen criteria with rules, model, people and agreement side by s
   await expect(said.nth(0)).toContainText("Rules");
   await expect(said.nth(1)).toContainText("Model");
   await expect(said.nth(1)).toContainText("Acceptance criteria describe intent");
-  await expect(insp.getByTestId("evaluator").filter({ hasText: "Approver" })).toContainText("AC-4 cannot be tested.");
-  await expect(insp.getByTestId("evaluator").filter({ hasText: "Commenter" })).toContainText("Warning");
+  await expect(insp.getByTestId("evaluator").filter({ hasText: "Priya Raman" })).toContainText("AC-4 cannot be tested.");
+  await expect(insp.getByTestId("evaluator").filter({ hasText: "Theo Brandt" })).toContainText("Warning");
   await expect(insp.getByTestId("rating-form")).toBeVisible();
 });
 
@@ -109,7 +109,7 @@ test("commenter rates a criterion: one human report, the row and History update"
 
   await expect(page.getByTestId("rating-stored")).toContainText("Rating saved at");
   await expect(row(page, "alternatives_tradeoffs").getByTestId("people-cell")).toHaveText("1 warning");
-  await expect(history(page).getByTestId("history-row").first()).toContainText("Human rating · Admin");
+  await expect(history(page).getByTestId("history-row").first()).toContainText("Human rating · Avery Stone");
 });
 
 test("hide rules, model and other people until the rater picks a status", async ({ page }) => {
@@ -255,7 +255,7 @@ test("History: empty, then a stored rules snapshot", async ({ page }) => {
   await expect(history(page)).toContainText("No evaluation reports for v2 yet");
   await page.getByRole("button", { name: "Save this check" }).click();
   await expect(history(page).getByTestId("history-row")).toHaveCount(1);
-  await expect(history(page).getByTestId("history-row")).toContainText("Saved check · Admin");
+  await expect(history(page).getByTestId("history-row")).toContainText("Saved check · Avery Stone");
   await expect(page.getByTestId("latest-report")).toContainText("Last saved check");
 });
 

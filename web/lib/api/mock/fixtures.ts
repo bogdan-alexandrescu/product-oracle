@@ -734,7 +734,7 @@ export const DOCUMENTS: DocumentSeed[] = [
     template: "oracle-default",
     template_version: "1",
     versions: [
-      { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [], by: { id: "5e6b65ac-0d1f-4c2a-9b7e-3f8a1c2d4e01", name: "Approver" } },
+      { number: 1, created_at: "2026-10-14T09:00:00Z", sections: DEPOSITS_V1, citations: [], by: { id: "5e6b65ac-0d1f-4c2a-9b7e-3f8a1c2d4e01", name: "Priya Raman" } },
       { number: 2, created_at: "2026-10-15T09:00:00Z", sections: DEPOSITS_V2, citations: [] },
       // A run's draft: imported for the person who started the run, named Oracle.
       { number: 3, created_at: "2026-10-16T09:00:00Z", sections: DEPOSITS_V3, citations: [], by: { id: "9c2f4b1d-7a3e-4f60-8d15-b2e9a0c7f312", name: "Oracle" } },
@@ -808,13 +808,13 @@ export const DOCUMENTS: DocumentSeed[] = [
 const MOCK_PASS = ["de", "mo"].join("");
 export const MOCK_LOGIN = { email: "admin@example.com", password: MOCK_PASS };
 
-/** Mock members, one per role; each signs in with the mock password. A5: the viewer has no name (the email-derived one shows). */
+/** Mock members, one per role; each signs in with the mock password. Each has an invented person's name (qa5-mock-people). */
 export const MOCK_MEMBERS = [
   // A3: nobody is the engineering lead in the default company (the "eng-review" scenario names one).
-  { email: "admin@example.com", name: "Admin", role: "owner", engineering_lead: false, created_at: "2026-09-01T09:00:00Z", last_sign_in_at: "2026-10-20T07:30:00Z" },
-  { email: "approver@example.com", name: "Approver", role: "approver", engineering_lead: false, created_at: "2026-09-02T09:00:00Z", last_sign_in_at: "2026-10-19T16:00:00Z" },
-  { email: "commenter@example.com", name: "Commenter", role: "commenter", engineering_lead: false, created_at: "2026-09-03T09:00:00Z", last_sign_in_at: "2026-10-12T10:15:00Z" },
-  { email: "viewer@example.com", name: null, role: "viewer", engineering_lead: false, created_at: "2026-09-04T09:00:00Z", last_sign_in_at: null },
+  { email: "admin@example.com", name: "Avery Stone", role: "owner", engineering_lead: false, created_at: "2026-09-01T09:00:00Z", last_sign_in_at: "2026-10-20T07:30:00Z" },
+  { email: "approver@example.com", name: "Priya Raman", role: "approver", engineering_lead: false, created_at: "2026-09-02T09:00:00Z", last_sign_in_at: "2026-10-19T16:00:00Z" },
+  { email: "commenter@example.com", name: "Theo Brandt", role: "commenter", engineering_lead: false, created_at: "2026-09-03T09:00:00Z", last_sign_in_at: "2026-10-12T10:15:00Z" },
+  { email: "viewer@example.com", name: "Lena Ortiz", role: "viewer", engineering_lead: false, created_at: "2026-09-04T09:00:00Z", last_sign_in_at: null },
 ] as const;
 
 /** A member an owner removed (disabled, C2); their tokens were revoked with it. */
