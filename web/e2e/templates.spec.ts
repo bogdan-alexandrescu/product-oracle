@@ -66,14 +66,14 @@ test("templates: view a version, live validation, save a new version, archive an
   await expect(page.getByRole("button", { name: "Archive" })).toBeVisible();
 });
 
-test("templates: create a new one from the skeleton", async ({ page }) => {
+test("templates: create a new one from the starting sections", async ({ page }) => {
   await login(page);
   await page.goto("/settings/templates");
   await page.getByRole("link", { name: "New template" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "New template" })).toBeVisible();
-  await page.getByLabel("Key").fill("launch-brief");
   await page.getByLabel("Name").fill("Launch brief");
-  await expect(page.getByTestId("validation-ok")).toContainText("Title, Problem, Solution, Sources and data points");
+  await page.getByRole("button", { name: "Edit as Markdown" }).click();
+  await expect(page.getByTestId("validation-ok")).toContainText("Title, Problem, Solution, Launch plan, Sources and data points");
   await page.getByRole("button", { name: "Create template" }).click();
   await expect(page).toHaveURL(/\/settings\/templates\/launch-brief$/);
   await expect(page.getByRole("heading", { level: 1, name: "Launch brief" })).toBeVisible();

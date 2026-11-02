@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, type Column, DataTable, Notice, Sheet } from "@/components/ds";
+import { Button, Notice, Sheet } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { Field, SELECT_FIELD } from "@/app/settings/_components/fields";
 import { api, unwrap } from "@/lib/api/client";
@@ -21,8 +21,9 @@ const STATUSES: { value: Delivery["status"]; label: string }[] = [
 ];
 
 /**
- * A webhook's Delivery log, newest first: When · Event · Status · HTTP · Time, filtered by
- * status and event type. A row opens the body sent, the headers (the signature truncated)
+ * A webhook's Delivery log, newest first, filtered by status and event type. QD4 a (cards and
+ * fields): each delivery is a two-line card that fits the side panel, what happened in words
+ * with its status, then the time, HTTP code and time taken. A card opens the body sent, the headers (the signature truncated)
  * and the response, with Redeliver. Times are in the Company time zone.
  */
 export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: Webhook; eventTypes: EventType[]; version: number; onChanged: () => void }) {
@@ -36,25 +37,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
       }),
     ),
   );
-  const columns: Column<Delivery>[] = [
-    { key: "when", header: "When", width: "34%", cell: (d) => <span className="tnum truncate">{formatDateTime(d.last_at ?? d.created_at)}</span> },
-    // qa4-settings-26: the event's plain label, as the form shows it.
-    { key: "event", header: "Event", cell: (d) => <span className="block truncate" title={eventLabel(d.event_type, eventTypes)}>{eventLabel(d.event_type, eventTypes)}</span> },
-    { key: "status", header: "Status", width: "88px", cell: (d) => <Outcome d={d} /> },
-    {
-      key: "http",
-      header: "HTTP",
-      width: "56px",
-      align: "right",
-      hideOnPhone: true,
-      cell: (d) => (
-        <span className="tnum text-text2" data-testid="delivery-http">
-          {d.http_status ?? "–"}
-        </span>
-      ),
-    },
-    { key: "time", header: "Time", width: "64px", align: "right", hideOnPhone: true, cell: (d) => <span className="tnum text-text2">{d.duration_ms != null ? `${d.duration_ms} ms` : "–"}</span> },
-  ];
+  const rows = q.data?.items;
   return (
     <div className="flex flex-col gap-2" data-testid="delivery-log">
       <div className="grid grid-cols-2 gap-2">
@@ -84,16 +67,39 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
       {q.error ? (
         <Notice tone="error">{q.error}</Notice>
       ) : (
-        <DataTable
-          label="Delivery log"
-          columns={columns}
-          rows={q.data?.items}
-          loading={q.loading && !q.data}
-          rowKey={(d) => d.id}
-          onSelect={(_, d) => setOpen(d)}
-          rowProps={() => ({ "data-testid": "delivery-row" })}
-          empty="No deliveries yet"
-        />
+        <ul aria-label="Delivery log" data-testid="delivery-cards" className="flex flex-col divide-y divide-line rounded-lg border border-line">
+          {!rows ? (
+            <li className="px-3 py-2.5 text-sm text-text2">Loading deliveries…</li>
+          ) : rows.length === 0 ? (
+            <li className="px-3 py-2.5 text-sm text-text2">No deliveries yet</li>
+          ) : (
+            rows.map((d) => (
+              <li key={d.id}>
+                <button
+                  type="button"
+                  data-testid="delivery-row"
+                  onClick={() => setOpen(d)}
+                  className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-accent"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 font-semibold break-words">{eventLabel(d.event_type, eventTypes)}</span>
+                    <Outcome d={d} />
+                  </span>
+                  <span className="tnum text-sm text-text2" data-testid="delivery-facts">
+                    {formatDateTime(d.last_at ?? d.created_at)}
+                    {d.http_status != null && (
+                      <>
+                        {" · HTTP "}
+                        <span data-testid="delivery-http">{d.http_status}</span>
+                      </>
+                    )}
+                    {d.duration_ms != null ? ` · ${d.duration_ms} ms` : ""}
+                  </span>
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
       )}
       <OnTop>
         <DeliverySheet

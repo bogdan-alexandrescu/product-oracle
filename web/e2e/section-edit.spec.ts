@@ -109,6 +109,9 @@ test("held rewrites: Reject keeps the approved text and shows the reason", async
   await expect(item.getByRole("button", { name: "Accept" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Held rewrites/ }).filter({ visible: true }).getByTestId("held-count")).toHaveCount(0);
   await expect(page).toHaveURL(/\/v\/2/);
+  // QD1 a: the drawer sits over the page; closing it shows the page as it was.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("held-drawer")).toHaveCount(0);
   const goal = await openSection(page, "goal-trace");
   await expect(goal).not.toContainText("An agent proposed this added sentence.");
 });

@@ -310,8 +310,9 @@ test("diff: each section says its layer, and the brief can be compared alone", a
 test("templates: the editor shows the brief sections and refuses a template without any", async ({ page }) => {
   await login(page);
   await page.goto("/settings/templates/new");
-  await page.getByLabel("Key").fill("no-brief");
+  // QD4 a: the key is made from the name; the Markdown is under Edit as Markdown.
   await page.getByLabel("Name").fill("No brief");
+  await page.getByRole("button", { name: "Edit as Markdown" }).click();
   const body = page.getByLabel("Body");
   const create = page.getByRole("button", { name: "Create template" });
   await expect(page.getByTestId("brief-sections")).toHaveText("Problem, Solution");

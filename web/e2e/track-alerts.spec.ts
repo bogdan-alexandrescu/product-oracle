@@ -169,17 +169,18 @@ test("an approver outside the alert's audience is not offered Keep watching; the
   await expect(card(page).getByRole("button", { name: "Keep watching" })).toBeVisible();
 });
 
-// protects = Re-plan on the slip card drafts a roadmap run from the track and opens it, in
-// Draft; fails_when = nothing happens, an error shows, or the run opens in another state;
-// no_claim = the run's estimate and cost gates (runs specs).
-test("Re-plan opens a draft roadmap run for the track", async ({ page }) => {
+// protects = Re-plan… on the slip card opens the priced dialog (QD2 a); Start for its price
+// starts a roadmap run from the track and opens it; fails_when = nothing happens, an error
+// shows, or the run starts with no price shown; no_claim = the cost gates (runs specs).
+test("Re-plan opens a priced dialog that starts a roadmap run for the track", async ({ page }) => {
   await withSlip(page);
   await login(page);
   await openPlan(page);
   await selectSlip(page);
-  await card(page).getByRole("button", { name: "Re-plan" }).click();
+  await card(page).getByRole("button", { name: "Re-plan…" }).click();
+  await page.getByRole("dialog", { name: "Re-plan this track" }).getByRole("button", { name: /^Start for \$/ }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByTestId("run-status").filter({ visible: true }).first()).toHaveText("Draft");
+  await expect(page.getByTestId("run-status").filter({ visible: true }).first()).not.toHaveText("Draft");
 });
 
 // protects = at 390 px the Track row and its child row render as cards, their actions usable,

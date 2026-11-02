@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { peopleByIds, PersonPicker } from "@/components/PersonPicker";
@@ -22,6 +21,7 @@ import { formatShortDate, plural } from "@/lib/format";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
 import { HORIZON_LABEL, HORIZONS, trackHealth, type Horizon } from "./_lib";
+import { StartRunDialog } from "./_start-run";
 
 export type Track = Schemas["TrackOverview"];
 type Milestone = Schemas["MilestoneOut"];
@@ -152,7 +152,6 @@ export function TrackPanel({
   onPick: (pick: MilestonePick) => void;
   onChange: (t: Track) => void;
 }) {
-  const router = useRouter();
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(track.title);
   // qa-plan-30: Escape cancels the rename and goes no further. React listens on the document
@@ -196,6 +195,8 @@ export function TrackPanel({
   const health = trackHealth(track.health);
   const off = busy;
   const actions = may.check || may.draftRoadmap || may.push;
+  // QD2 a: Draft roadmap opens a dialog that prices the run before it starts.
+  const [starting, setStarting] = useState(false);
 
   async function act<T>(call: () => Promise<T>, done: (out: T) => void) {
     setBusy(true);
@@ -462,19 +463,11 @@ export function TrackPanel({
                 </Button>
               )}
               {may.draftRoadmap && (
-                <Button
-                  disabled={off}
-                  onClick={() =>
-                    void act(
-                      () =>
-                        unwrap(api.POST("/v1/tracks/{track_id}/roadmap-run", path)),
-                      (run) => router.push(`/runs/${run.id}`),
-                    )
-                  }
-                >
-                  Draft roadmap from this track
+                <Button disabled={off} data-testid="track-draft-roadmap" onClick={() => setStarting(true)}>
+                  Draft roadmap from this track…
                 </Button>
               )}
+              {starting && <StartRunDialog trackId={track.id} prdTitle={track.title} onClose={() => setStarting(false)} />}
               {may.push && pushOff && (
                 <span className="flex basis-full flex-wrap items-center gap-2">
                   <Button disabled aria-describedby={pushWhy} data-testid="track-push">

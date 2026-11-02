@@ -182,9 +182,10 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await deploy.click();
   const inspector = page.getByTestId("webhook-inspector");
   await expect(inspector.getByTestId("delivery-row").first()).toContainText("500");
-  // The log: When · Event · Status · HTTP · Time, its times in Company time.
+  // QD4 a: the log is cards (event, status, then when, HTTP and time), its times in Company time.
   const log = inspector.getByTestId("delivery-log");
-  await expect(log.getByRole("columnheader")).toHaveText(["When", "Event", "Status", "HTTP", "Time"]);
+  await expect(log.getByRole("columnheader")).toHaveCount(0);
+  await expect(log.getByRole("list", { name: "Delivery log" })).toBeVisible();
   await expect(log.getByTestId("delivery-row").first().getByTestId("delivery-http")).toHaveText("500");
   await expect(log).toContainText("Times are in Company time");
   await inspector.getByLabel("Status").selectOption("failed");
