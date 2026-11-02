@@ -57,8 +57,9 @@ async def test_prd_milestones_are_read_only_key_dates(client):
     ids = await seed(ctx, items=("f-01", "f-03"))
     async with tenant_session(ctx.tenant_id) as s:
         rm = await s.scalar(select(Document).where(Document.slug == "setup-roadmap"))
+        owner = ctx.users["owner"].id
         s.add(RoadmapKeyDate(roadmap_document_id=rm.id, name="Launch week",
-                             on_date=date(2026, 11, 20), created_by=ctx.users["owner"].id))  # fmt: skip
+                             on_date=date(2026, 11, 20), created_by=owner))  # fmt: skip
         await s.commit()
     want = [
         ("Launch week", "2026-11-20", None),
