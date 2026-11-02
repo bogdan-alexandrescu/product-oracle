@@ -97,9 +97,13 @@ for (const [where, use] of [
           // fix4 qa-simple-roadmap-3: the return queue's place is on hover ("1st to come back"), not a "#1" on the bar.
           // The Gantt (mk-qa4-roadmap) says the cut item's place in the return queue in words.
           await expect(page.getByTestId("return-place").first()).toHaveText("1st to return");
-          // B2: the lanes name their goal and count their items.
-          await expect(page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getByTestId("lane-count")).toHaveText("4 items");
-          expect(await bar(page, "alert-digest").getAttribute("data-lane")).toBe(await page.getByTestId("chart-group").filter({ hasText: "Grow retention" }).getAttribute("data-lane"));
+          // The Timeline's lanes (mk-qa4-roadmap QR1 A) name their goal and count their items; the digest sits in its goal's lane.
+          await page.getByTestId("format-timeline").click();
+          await expect(page.getByTestId("timeline-lane").filter({ hasText: "Grow retention" })).toContainText("4 items");
+          const lanes = await page.locator('[data-testid="timeline-lane"], [data-testid="timeline-row"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-item") ?? `lane:${e.textContent}`));
+          const at = lanes.indexOf("alert-digest");
+          expect(lanes.slice(0, at).filter((l) => l.startsWith("lane:")).pop()).toContain("Grow retention");
+          await page.getByTestId("format-gantt").click();
         } else {
           // B3: a thin lane per goal (and below the line), the open lane's pieces listed under the chart.
           // mk-qa4-roadmap QR1 A: a phone's Timeline is a list by quarter (the picked frame has

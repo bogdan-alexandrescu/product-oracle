@@ -623,7 +623,7 @@ function DayChart(props: TimelineProps) {
                       {i.title}
                     </span>
                     {lk.chip && (
-                      <span className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2">
+                      <span data-testid="draft-tag" className="flex-none rounded-full bg-surface2 px-1.5 text-[11px] text-text2">
                         {lk.chip}
                       </span>
                     )}

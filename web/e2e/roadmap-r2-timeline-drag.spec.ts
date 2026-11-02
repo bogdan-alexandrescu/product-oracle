@@ -73,11 +73,11 @@ for (const width of [1440, 1024]) {
 
     test("a drag of an end changes only that end", async ({ page }) => {
       await open(page);
-      const b = bar(page, "alert-export");
+      const b = bar(page, "alert-digest");
       const [s0, e0] = await span(b);
       // The right end: the start stays.
       await drag(page, b, 90, 0.99);
-      await expect(page.getByText(/Moved 'Alert history export'/)).toBeVisible();
+      await expect(page.getByText(/Moved 'Weekly alert digest'/)).toBeVisible();
       await expect(b).not.toHaveAttribute("data-end", e0);
       await expect(b).toHaveAttribute("data-start", s0);
       const [, e1] = await span(b);

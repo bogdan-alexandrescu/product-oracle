@@ -103,12 +103,15 @@ for (const scheme of ["light", "dark"] as const) {
      */
     test("an owner drags a quick add onto a quarter, sees Oracle draft it, and undoes it", async ({ page }) => {
       await openRoadmap(page);
+      // Quick add drops on the Timeline's quarters (mk-qa4-roadmap); the drawn bar is then read on the Gantt.
+      await page.getByTestId("format-timeline").click();
       await dragAdd(page, "Quiet hours setting", page.locator('[data-testid="quarter-drop"][data-add-where="quarter:2027-Q1"]'), "top");
       await expect(toastWith(page, "Added Quiet hours setting as a draft")).toBeVisible();
+      // The draft's row on the Timeline says so (its Draft chip by the name).
+      await expect(page.locator('[data-testid="timeline-row"][data-item="quiet-hours-setting"]').getByTestId("draft-tag")).toHaveText("Draft");
+      await page.getByTestId("format-gantt").click();
       const b = bar(page, "quiet-hours-setting");
       await expect(b).toHaveAttribute("data-kind", "draft");
-      // B2: the draft's pill says so ("Draft · Quiet hours setting").
-      await expect(b.getByTestId("draft-tag")).toHaveText("Draft");
       await toastWith(page, "Added Quiet hours setting as a draft").getByRole("button", { name: "Undo" }).click();
       await expect(b).toHaveCount(0);
 
